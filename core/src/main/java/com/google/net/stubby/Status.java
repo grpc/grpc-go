@@ -102,4 +102,18 @@ public class Status {
       return status;
     }
   }
+
+  @Override
+  public String toString() {
+    StringBuilder builder = new StringBuilder();
+    builder.append("[").append(code);
+    if (description != null) {
+      builder.append(";").append(description);
+    }
+    if (cause != null) {
+      builder.append(";").append(cause);
+    }
+    builder.append("]");
+    return builder.toString();
+  }
 }

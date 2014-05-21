@@ -79,6 +79,9 @@ public interface Operation {
    *
    * @return this object
    */
+  // TODO(user): We need to decide whether we should have nextPhase. It's a bit confusing because
+  // even if we specify nextPhase=CLOSED here, we still need to call close() for the actual state
+  // transition.
   public Operation addPayload(InputStream payload, Phase nextPhase);
 
   /**
