@@ -1,6 +1,5 @@
 package com.google.net.stubby.spdy.okhttp;
 
-import com.google.net.stubby.Operation;
 import com.google.net.stubby.Response;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Framer;
@@ -28,16 +27,6 @@ public class SpdyResponse extends SpdyOperation implements Response {
         return new SpdyResponse(id, framewriter, framer);
       }
     };
-  }
-
-  @Override
-  public Operation close(Status status) {
-    boolean alreadyClosed = getPhase() == Phase.CLOSED;
-    super.close(status);
-    if (!alreadyClosed) {
-      framer.writeStatus(status, true, this);
-    }
-    return this;
   }
 
   private SpdyResponse(int id, FrameWriter frameWriter, Framer framer) {

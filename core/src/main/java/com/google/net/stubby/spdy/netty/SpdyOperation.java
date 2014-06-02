@@ -45,6 +45,16 @@ abstract class SpdyOperation extends AbstractOperation implements Framer.Sink {
   }
 
   @Override
+  public Operation close(Status status) {
+    boolean alreadyClosed = getPhase() == Phase.CLOSED;
+    super.close(status);
+    if (!alreadyClosed) {
+      framer.writeStatus(status, true, this);
+    }
+    return this;
+  }
+
+  @Override
   public void deliverFrame(ByteBuffer frame, boolean endOfMessage) {
     boolean closed = getPhase() == Phase.CLOSED;
     DefaultSpdyDataFrame dataFrame = new DefaultSpdyDataFrame(getId(),

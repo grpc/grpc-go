@@ -1,6 +1,7 @@
 package com.google.net.stubby;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 import com.google.net.stubby.transport.Transport;
 
 import javax.annotation.Nullable;
@@ -13,6 +14,18 @@ import javax.annotation.concurrent.Immutable;
 public class Status {
 
   public static final Status OK = new Status(Transport.Code.OK);
+
+  public static Status fromThrowable(Throwable t) {
+    for (Throwable cause : Throwables.getCausalChain(t)) {
+      if (cause instanceof OperationException) {
+        return ((Status.OperationException) cause).getStatus();
+      } else if (cause instanceof  OperationRuntimeException) {
+        return ((Status.OperationRuntimeException) cause).getStatus();
+      }
+    }
+    // Couldn't find a cause with a Status
+    return new Status(Transport.Code.INTERNAL, t);
+  }
 
   private final Transport.Code code;
   private final String description;

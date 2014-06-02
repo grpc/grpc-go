@@ -72,9 +72,22 @@ public class UrlConnectionClientSession implements Session {
     }
 
     @Override
+    public Operation close(Status status) {
+      // TODO(user): This is broken but necessary to get test passing with the introduction
+      // of Channel as now for most calls the close() call is decoupled from the last call to
+      // addPayload. The real fix is to remove 'nextPhase' from the Operation interface and
+      // clean up Framer. For a follow up CL.
+      boolean alreadyClosed = getPhase() == Phase.CLOSED;
+      super.close(status);
+      if (!alreadyClosed) {
+        framer.writeStatus(status, true, this);
+      }
+      return this;
+    }
+
+    @Override
     public void deliverFrame(ByteBuffer frame, boolean endOfMessage) {
       boolean closed = getPhase() == Phase.CLOSED;
-
       try {
         ByteBuffers.asByteSource(frame).copyTo(outputStream);
         if (closed && endOfMessage) {
@@ -87,12 +100,7 @@ public class UrlConnectionClientSession implements Session {
         }
       } catch (IOException ioe) {
         close(new Status(Transport.Code.INTERNAL, ioe));
-      } finally {
-        if (closed && endOfMessage) {
-          framer.close();
-        }
       }
     }
   }
 }
-

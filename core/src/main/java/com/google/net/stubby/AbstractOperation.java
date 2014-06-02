@@ -49,6 +49,9 @@ public abstract class AbstractOperation implements Operation {
           "Canot move to " + desiredPhase.name() + " from " + phase.name()));
     } else {
       phase = desiredPhase;
+      if (phase == Phase.CLOSED) {
+        status = Status.OK;
+      }
     }
     return this;
   }
@@ -90,8 +93,9 @@ public abstract class AbstractOperation implements Operation {
       logger.severefmt(status.getCause(),
           "Attempting to override status of already closed operation from %s to %s",
         this.status.getCode(), status.getCode());
+    } else {
+      this.status = status;
     }
-    this.status = status;
     return this;
   }
 

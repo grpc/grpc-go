@@ -1,8 +1,6 @@
 package com.google.net.stubby.http2.netty;
 
-import com.google.net.stubby.Operation;
 import com.google.net.stubby.Response;
-import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Framer;
 
 import io.netty.channel.Channel;
@@ -24,16 +22,6 @@ class Http2Response extends Http2Operation implements Response {
         return new Http2Response(id, channel, framer);
       }
     };
-  }
-
-  @Override
-  public Operation close(Status status) {
-    boolean alreadyClosed = getPhase() == Phase.CLOSED;
-    super.close(status);
-    if (!alreadyClosed) {
-      framer.writeStatus(status, true, this);
-    }
-    return this;
   }
 
   private Http2Response(int id, Channel channel, Framer framer) {
