@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * An implementation of {@link Session} that can be used by clients to start
  * a {@link Request}
  */
-class Http2Session implements Session {
+public class Http2Session implements Session {
 
   public static final String PROTORPC = "application/protorpc";
 

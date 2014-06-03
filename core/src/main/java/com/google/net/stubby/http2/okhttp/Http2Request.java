@@ -1,4 +1,4 @@
-package com.google.net.stubby.spdy.okhttp;
+package com.google.net.stubby.http2.okhttp;
 
 import com.google.net.stubby.Request;
 import com.google.net.stubby.RequestRegistry;
@@ -12,12 +12,12 @@ import com.squareup.okhttp.internal.spdy.FrameWriter;
 import java.io.IOException;
 
 /**
- * A SPDY based implementation of {@link Request}
+ * A HTTP2 based implementation of {@link Request}
  */
-public class SpdyRequest extends SpdyOperation implements Request {
+public class Http2Request extends Http2Operation implements Request {
   private final Response response;
 
-  public SpdyRequest(FrameWriter frameWriter, String operationName,
+  public Http2Request(FrameWriter frameWriter, String operationName,
                      Response response, RequestRegistry requestRegistry,
                      Framer framer) {
     super(response.getId(), frameWriter, framer);

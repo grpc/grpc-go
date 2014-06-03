@@ -1,4 +1,4 @@
-package com.google.net.stubby.spdy.okhttp;
+package com.google.net.stubby.http2.okhttp;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
@@ -16,7 +16,6 @@ import com.google.net.stubby.transport.MessageFramer;
 import com.google.net.stubby.transport.Transport;
 import com.google.net.stubby.transport.Transport.Code;
 
-import com.squareup.okhttp.Protocol;
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
 import com.squareup.okhttp.internal.spdy.FrameWriter;
@@ -24,7 +23,6 @@ import com.squareup.okhttp.internal.spdy.Header;
 import com.squareup.okhttp.internal.spdy.HeadersMode;
 import com.squareup.okhttp.internal.spdy.Http20Draft10;
 import com.squareup.okhttp.internal.spdy.Settings;
-import com.squareup.okhttp.internal.spdy.Spdy3;
 import com.squareup.okhttp.internal.spdy.Variant;
 
 import okio.BufferedSink;
@@ -64,19 +62,19 @@ public class OkHttpSession implements Session {
           new Status(Transport.Code.PERMISSION_DENIED, "Invalid credentials"))
       .build();
 
-  public static Session startClient(Protocol protocol, Socket socket,
-      RequestRegistry requestRegistry, Executor executor) {
+  public static Session startClient(Socket socket, RequestRegistry requestRegistry,
+                                    Executor executor) {
     try {
-      return new OkHttpSession(protocol, socket, requestRegistry, executor);
+      return new OkHttpSession(socket, requestRegistry, executor);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
   }
 
-  public static Session startServer(Protocol protocol, Socket socket, Session server,
-      RequestRegistry requestRegistry, Executor executor) {
+  public static Session startServer(Socket socket, Session server, RequestRegistry requestRegistry,
+                                    Executor executor) {
     try {
-      return new OkHttpSession(protocol, socket, server, requestRegistry, executor);
+      return new OkHttpSession(socket, server, requestRegistry, executor);
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
@@ -93,9 +91,9 @@ public class OkHttpSession implements Session {
   /**
    * Construct a client-side session
    */
-  private OkHttpSession(Protocol protocol, Socket socket, RequestRegistry requestRegistry,
+  private OkHttpSession(Socket socket, RequestRegistry requestRegistry,
       Executor executor) throws IOException {
-    Variant variant = getProtocolVariant(protocol);
+    Variant variant = new Http20Draft10();
     // TODO(user): use Okio.buffer(Socket)
     countingInputStream = new CountingInputStream(socket.getInputStream());
     countingOutputStream = new CountingOutputStream(socket.getOutputStream());
@@ -114,9 +112,9 @@ public class OkHttpSession implements Session {
   /**
    * Construct a server-side session
    */
-  private OkHttpSession(Protocol protocol, Socket socket, Session server,
+  private OkHttpSession(Socket socket, Session server,
       RequestRegistry requestRegistry, Executor executor) throws IOException {
-    Variant variant = getProtocolVariant(protocol);
+    Variant variant = new Http20Draft10();
     // TODO(user): use Okio.buffer(Socket)
     countingInputStream = new CountingInputStream(socket.getInputStream());
     countingOutputStream = new CountingOutputStream(socket.getOutputStream());
@@ -137,17 +135,6 @@ public class OkHttpSession implements Session {
     return "in=" + countingInputStream.getCount() + ";out=" + countingOutputStream.getCount();
   }
 
-  private Variant getProtocolVariant(Protocol protocol) {
-    switch (protocol) {
-      case HTTP_2:
-        return new Http20Draft10();
-      case SPDY_3:
-        return new Spdy3();
-      default:
-        throw new IllegalArgumentException("Unsupported protocol: " + protocol);
-    }
-  }
-
   private int getNextStreamId() {
     // Client initiated streams are odd, server initiated ones are even
     // We start clients at 3 to avoid conflicting with HTTP negotiation
@@ -162,9 +149,9 @@ public class OkHttpSession implements Session {
   public Request startRequest(String operationName, Response.ResponseBuilder responseBuilder) {
     int nextStreamId = getNextStreamId();
     Response response = responseBuilder.build(nextStreamId);
-    SpdyRequest spdyRequest = new SpdyRequest(frameWriter, operationName, response, requestRegistry,
-        new MessageFramer(4096));
-    return spdyRequest;
+    Http2Request request = new Http2Request(frameWriter, operationName, response,
+        requestRegistry, new MessageFramer(4096));
+    return request;
   }
 
   /**
@@ -219,7 +206,7 @@ public class OkHttpSession implements Session {
 
 
     /**
-     * Handle a SPDY DATA frame
+     * Handle a HTTP2 DATA frame
      */
     @Override
     public void data(boolean inFinished, int streamId, BufferedSource in, int length)
@@ -246,7 +233,7 @@ public class OkHttpSession implements Session {
     }
 
     /**
-     * Called when a SPDY stream is closed.
+     * Called when a HTTP2 stream is closed.
      */
     private void finish(int streamId) {
       Request request = requestRegistry.remove(streamId);
@@ -256,7 +243,7 @@ public class OkHttpSession implements Session {
     }
 
     /**
-     * Handle a SPDY HEADER or SYN_STREAM frame
+     * Handle HTTP2 HEADER & CONTINUATION frames
      */
     @Override
     public void headers(boolean arg0,
@@ -269,12 +256,11 @@ public class OkHttpSession implements Session {
       Operation op = getOperation(streamId);
 
       // Start an Operation for SYN_STREAM
-      if (op == null && (headersMode == HeadersMode.SPDY_SYN_STREAM
-          || headersMode == HeadersMode.HTTP_20_HEADERS)) {
+      if (op == null && headersMode == HeadersMode.HTTP_20_HEADERS) {
         for (Header header : headers) {
           if (header.name.equals(Header.TARGET_PATH)) {
             Request request = serverSession.startRequest(header.value.utf8(),
-                SpdyResponse.builder(streamId, frameWriter, new MessageFramer(4096)));
+                Http2Response.builder(streamId, frameWriter, new MessageFramer(4096)));
             requestRegistry.register(request);
             op = request;
             break;

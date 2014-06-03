@@ -15,9 +15,6 @@ import java.nio.ByteOrder;
 
 /**
  * Parse a sequence of {@link ByteBuf} instances that represent the frames of a GRPC call
- *
- * TODO(user): This is essentially a duplicate of the spdy deframer. Should find a way to
- * share common code.
  */
 public class ByteBufDeframer extends Deframer<ByteBuf> {
 

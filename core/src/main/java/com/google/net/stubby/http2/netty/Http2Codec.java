@@ -1,9 +1,11 @@
 package com.google.net.stubby.http2.netty;
 
+import com.google.net.stubby.NoOpRequest;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Operation.Phase;
 import com.google.net.stubby.Request;
 import com.google.net.stubby.RequestRegistry;
+import com.google.net.stubby.Response;
 import com.google.net.stubby.Session;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.MessageFramer;
@@ -66,7 +68,8 @@ public class Http2Codec extends ChannelHandlerAdapter {
     }
     this.alloc = ctx.alloc();
     Http2StreamFrame frame = (Http2StreamFrame) msg;
-    Request operation = requestRegistry.lookup(frame.getStreamId());
+    int streamId = frame.getStreamId();
+    Request operation = requestRegistry.lookup(streamId);
     try {
       if (operation == null) {
         if (client) {
@@ -75,8 +78,8 @@ public class Http2Codec extends ChannelHandlerAdapter {
         } else {
           operation = serverStart(ctx, frame);
           if (operation == null) {
-            // Unknown operation, refuse the stream
-            sendRstStream(ctx, frame.getStreamId(), Http2Error.REFUSED_STREAM);
+            closeWithError(new NoOpRequest(createResponse(ctx, streamId).build()),
+                new Status(Code.NOT_FOUND));
           }
         }
       } else {
@@ -84,22 +87,33 @@ public class Http2Codec extends ChannelHandlerAdapter {
         progress(client ? operation.getResponse() : operation, frame);
       }
     } catch (Throwable e) {
-      closeWithInternalError(operation, e);
-      sendRstStream(ctx, frame.getStreamId(), Http2Error.INTERNAL_ERROR);
-      throw e;
+      Status status = Status.fromThrowable(e);
+      if (operation == null) {
+        // Create a no-op request so we can use common error handling
+        operation = new NoOpRequest(createResponse(ctx, streamId).build());
+      }
+      closeWithError(operation, status);
+    }
+  }
+
+
+  /**
+   * Closes the request and its associated response with an internal error.
+   */
+  private void closeWithError(Request request, Status status) {
+    try {
+      request.close(status);
+      request.getResponse().close(status);
+    } finally {
+      requestRegistry.remove(request.getId());
     }
   }
 
   /**
-   * Closes the request and its associate response with an internal error.
+   * Create an HTTP2 response handler
    */
-  private void closeWithInternalError(Request request, Throwable e) {
-    if (request != null) {
-      Status status = new Status(Code.INTERNAL, e);
-      request.close(status);
-      request.getResponse().close(status);
-      requestRegistry.remove(request.getId());
-    }
+  private Response.ResponseBuilder createResponse(ChannelHandlerContext ctx, int streamId) {
+    return Http2Response.builder(streamId, ctx.channel(), new MessageFramer(4096));
   }
 
   /**
@@ -130,8 +144,7 @@ public class Http2Codec extends ChannelHandlerAdapter {
       return null;
     }
     // Create the operation and bind a HTTP2 response operation
-    Request op = session.startRequest(operationName,
-        Http2Response.builder(frame.getStreamId(), ctx.channel(), new MessageFramer(4096)));
+    Request op = session.startRequest(operationName, createResponse(ctx, frame.getStreamId()));
     if (op == null) {
       return null;
     }
@@ -157,11 +170,11 @@ public class Http2Codec extends ChannelHandlerAdapter {
       progressPayload(operation, (Http2DataFrame) frame);
     } else if (frame instanceof Http2RstStreamFrame) {
       // Cancel
-      operation.close(null);
+      operation.close(new Status(Code.ABORTED, "HTTP2 stream reset"));
       finish(operation);
     } else {
       // TODO(user): More refined handling for PING, GO_AWAY, SYN_STREAM, WINDOW_UPDATE, SETTINGS
-      operation.close(null);
+      operation.close(Status.OK);
       finish(operation);
     }
   }

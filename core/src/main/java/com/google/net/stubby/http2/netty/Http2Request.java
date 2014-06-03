@@ -13,7 +13,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 /**
- * A SPDY based implementation of {@link Request}
+ * A HTTP2 based implementation of {@link Request}
  */
 class Http2Request extends Http2Operation implements Request {
 

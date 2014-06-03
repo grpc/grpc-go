@@ -15,7 +15,7 @@ import java.util.logging.Logger;
 import java.util.zip.Deflater;
 
 /**
- * Compression framer for SPDY and HTTP/2 transport frames, for use in both compression and
+ * Compression framer for HTTP/2 transport frames, for use in both compression and
  * non-compression scenarios. Receives message-stream as input. It is able to change compression
  * configuration on-the-fly, but will not actually begin using the new configuration until the next
  * full frame.

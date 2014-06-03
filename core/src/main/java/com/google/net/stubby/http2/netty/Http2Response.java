@@ -6,7 +6,7 @@ import com.google.net.stubby.transport.Framer;
 import io.netty.channel.Channel;
 
 /**
- * A SPDY based implementation of a {@link Response}.
+ * A HTTP2 based implementation of a {@link Response}.
  */
 class Http2Response extends Http2Operation implements Response {
 

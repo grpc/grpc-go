@@ -1,4 +1,4 @@
-package com.google.net.stubby.spdy.okhttp;
+package com.google.net.stubby.http2.okhttp;
 
 import com.google.net.stubby.Response;
 import com.google.net.stubby.Status;
@@ -10,9 +10,9 @@ import com.squareup.okhttp.internal.spdy.FrameWriter;
 import java.io.IOException;
 
 /**
- * A SPDY based implementation of a {@link Response}.
+ * A HTTP2 based implementation of a {@link Response}.
  */
-public class SpdyResponse extends SpdyOperation implements Response {
+public class Http2Response extends Http2Operation implements Response {
 
   public static ResponseBuilder builder(final int id, final FrameWriter framewriter,
                                         final Framer framer) {
@@ -24,12 +24,12 @@ public class SpdyResponse extends SpdyOperation implements Response {
 
       @Override
       public Response build() {
-        return new SpdyResponse(id, framewriter, framer);
+        return new Http2Response(id, framewriter, framer);
       }
     };
   }
 
-  private SpdyResponse(int id, FrameWriter frameWriter, Framer framer) {
+  private Http2Response(int id, FrameWriter frameWriter, Framer framer) {
     super(id, frameWriter, framer);
     try {
       frameWriter.synStream(false, false, getId(), 0, 0, 0, Headers.createResponseHeaders());

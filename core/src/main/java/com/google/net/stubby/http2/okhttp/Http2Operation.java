@@ -1,33 +1,32 @@
-package com.google.net.stubby.spdy.netty;
+package com.google.net.stubby.http2.okhttp;
 
+import com.google.common.io.ByteBuffers;
 import com.google.net.stubby.AbstractOperation;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Framer;
 import com.google.net.stubby.transport.Transport;
 
-import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.handler.codec.spdy.DefaultSpdyDataFrame;
-import io.netty.handler.codec.spdy.SpdyHeadersFrame;
+import com.squareup.okhttp.internal.spdy.FrameWriter;
 
+import okio.Buffer;
+
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 /**
- * Base implementation of {@link Operation} that writes SPDY frames
+ * Base implementation of {@link Operation} that writes HTTP2 frames
  */
-abstract class SpdyOperation extends AbstractOperation implements Framer.Sink {
+abstract class Http2Operation extends AbstractOperation implements Framer.Sink {
 
   protected final Framer framer;
-  private final Channel channel;
+  private final FrameWriter frameWriter;
 
-  SpdyOperation(SpdyHeadersFrame headersFrame, Channel channel, Framer framer) {
-    super(headersFrame.getStreamId());
-    this.channel = channel;
+  Http2Operation(int id, FrameWriter frameWriter, Framer framer) {
+    super(id);
+    this.frameWriter = frameWriter;
     this.framer = framer;
-    channel.write(headersFrame);
   }
 
   @Override
@@ -57,20 +56,18 @@ abstract class SpdyOperation extends AbstractOperation implements Framer.Sink {
   @Override
   public void deliverFrame(ByteBuffer frame, boolean endOfMessage) {
     boolean closed = getPhase() == Phase.CLOSED;
-    DefaultSpdyDataFrame dataFrame = new DefaultSpdyDataFrame(getId(),
-        Unpooled.wrappedBuffer(frame));
-    boolean streamClosed = closed && endOfMessage;
-    dataFrame.setLast(streamClosed);
     try {
-      ChannelFuture channelFuture = channel.writeAndFlush(dataFrame);
-      if (!streamClosed) {
-        // Sync for all except the last frame to prevent buffer corruption.
-        channelFuture.get();
-      }
-    } catch (Exception e) {
-      close(new Status(Transport.Code.INTERNAL, e));
+      // Read the data into a buffer.
+      // TODO(user): swap to NIO buffers or zero-copy if/when okhttp/okio supports it
+      Buffer buffer = new Buffer().readFrom(ByteBuffers.newConsumingInputStream(frame));
+
+      // Write the data to the remote endpoint.
+      frameWriter.data(closed && endOfMessage, getId(), buffer);
+      frameWriter.flush();
+    } catch (IOException ioe) {
+      close(new Status(Transport.Code.INTERNAL, ioe));
     } finally {
-      if (streamClosed) {
+      if (closed && endOfMessage) {
         framer.close();
       }
     }
