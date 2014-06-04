@@ -6,16 +6,16 @@ import com.google.net.stubby.transport.Transport.Status;
 import java.io.InputStream;
 
 /**
- * An observer of {@link Stream} events.
+ * An observer of {@link Stream} events. It is guaranteed to only have one concurrent callback at a
+ * time.
  */
 public interface StreamListener {
 
   /**
    * Called upon receiving context information from the remote end-point. The {@link InputStream} is
    * non-blocking and contains the entire context.
-   * <p>
-   * This method is called within the context of the transport thread. It is guaranteed to only have
-   * one concurrent callback at a time.
+   *
+   * <p>This method should return quickly, as the same thread may be used to process other streams.
    *
    * @param name the unique name of the context
    * @param value the value of the context.
@@ -29,9 +29,8 @@ public interface StreamListener {
   /**
    * Called upon receiving a message from the remote end-point. The {@link InputStream} is
    * non-blocking and contains the entire message.
-   * <p>
-   * This method is called within the context of the transport thread. It is guaranteed to only have
-   * one concurrent callback at a time.
+   *
+   * <p>This method should return quickly, as the same thread may be used to process other streams.
    *
    * @param message the bytes of the message.
    * @param length the length of the message {@link InputStream}.
@@ -47,9 +46,8 @@ public interface StreamListener {
    * remote side of the stream (i.e. half-closed). Any other value implies abnormal termination. If
    * the remote end-point was abnormally terminated, no further messages will be received on the
    * stream.
-   * <p>
-   * This method is called within the context of the transport thread. It is guaranteed to only have
-   * one concurrent callback at a time.
+   *
+   * <p>This method should return quickly, as the same thread may be used to process other streams.
    *
    * @param status details of the remote stream closure.
    */

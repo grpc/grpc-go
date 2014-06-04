@@ -7,35 +7,30 @@ package com.google.net.stubby.stub;
 // public ListenableFuture<Void> onValue(V value). Do we layer it in here or as an additional
 // interface? Interaction with flow control can be done by blocking here.
 public interface StreamObserver<V>  {
-
   /**
    * Receive a value from the stream.
-   * <p>
-   * Can be called many times but is never called after onError or onCompleted are called.
-   * </p>
-   * <p>
-   * If an exception is thrown by an implementation the caller is expected to terminate the
+   *
+   * <p>Can be called many times but is never called after onError or onCompleted are called.
+   *
+   * <p>If an exception is thrown by an implementation the caller is expected to terminate the
    * stream by calling {@linkplain #onError(Throwable)} with the caught exception prior to
    * propagating it.
-   * </p>
    */
   public void onValue(V value);
 
   /**
    * Receive a terminating error from the stream.
-   * <p>
-   * May only be called once and is never called after onCompleted. In particular if an exception
+   *
+   * <p>May only be called once and is never called after onCompleted. In particular if an exception
    * is thrown by an implementation of onError no further calls to any method are allowed.
-   * </p>
    */
   public void onError(Throwable t);
 
   /**
    * Notifies successful stream completion.
-   * <p>
-   * May only be called once and is never called after onError. In particular if an exception is
+   *
+   * <p>May only be called once and is never called after onError. In particular if an exception is
    * thrown by an implementation of onCompleted no further calls to any method are allowed.
-   * </p>
    */
   public void onCompleted();
 }
