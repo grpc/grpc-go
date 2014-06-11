@@ -1,4 +1,4 @@
-package com.google.net.stubby.stub;
+package com.google.net.stubby;
 
 import java.io.InputStream;
 

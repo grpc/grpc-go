@@ -1,6 +1,7 @@
 package com.google.net.stubby.stub;
 
 import com.google.common.collect.ImmutableList;
+import com.google.net.stubby.MethodDescriptor;
 
 import java.util.Map;
 

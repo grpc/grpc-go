@@ -1,7 +1,7 @@
 package com.google.net.stubby.newtransport;
 
 import com.google.common.util.concurrent.Service;
-import com.google.net.stubby.stub.MethodDescriptor;
+import com.google.net.stubby.MethodDescriptor;
 
 /**
  * The client-side transport encapsulating a single connection to a remote server. Allows creation

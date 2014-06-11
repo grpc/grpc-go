@@ -1,6 +1,7 @@
 package com.google.net.stubby.stub;
 
 import com.google.net.stubby.DeferredProtoInputStream;
+import com.google.net.stubby.Marshaller;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 import com.google.protobuf.InvalidProtocolBufferException;

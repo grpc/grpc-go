@@ -63,6 +63,10 @@ public class Status {
     return cause;
   }
 
+  public boolean isOk() {
+    return OK.getCode() == getCode();
+  }
+
   /**
    * Override this status with another if allowed.
    */

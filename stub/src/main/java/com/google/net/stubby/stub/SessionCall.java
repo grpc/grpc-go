@@ -1,11 +1,15 @@
 package com.google.net.stubby.stub;
 
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.AbstractResponse;
+import com.google.net.stubby.Call;
+import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Request;
 import com.google.net.stubby.Response;
 import com.google.net.stubby.Session;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.transport.Transport;
 
 import java.io.InputStream;
 
@@ -14,15 +18,13 @@ import java.io.InputStream;
  * new transport layer is created.
  */
 // TODO(user): Delete this class when new transport interfaces are introduced
-public class SessionCall<RequestT, ResponseT>
-    extends CallContext implements Call<RequestT, ResponseT> {
-
+public class SessionCall<RequestT, ResponseT> extends Call<RequestT, ResponseT> {
   /**
    * The {@link Request} used by the stub to dispatch the call
    */
   private Request request;
 
-  private StreamObserver<ResponseT> responseObserver;
+  private Listener<ResponseT> responseListener;
 
   private final MethodDescriptor<RequestT, ResponseT> methodDescriptor;
   private final Session session;
@@ -34,7 +36,7 @@ public class SessionCall<RequestT, ResponseT>
   }
 
   @Override
-  public void start(StreamObserver<ResponseT> responseObserver) {
+  public void start(Listener<ResponseT> responseListener) {
     request = session.startRequest(methodDescriptor.getName(), new Response.ResponseBuilder() {
       @Override
       public Response build(int id) {
@@ -46,12 +48,23 @@ public class SessionCall<RequestT, ResponseT>
         return new CallResponse(-1);
       }
     });
-    this.responseObserver = responseObserver;
+    this.responseListener = responseListener;
   }
 
   @Override
-  public void onValue(RequestT value) {
+  public void sendPayload(RequestT value, SettableFuture<Void> future) {
     request.addPayload(methodDescriptor.streamRequest(value), Operation.Phase.PAYLOAD);
+    if (future != null) {
+      future.set(null);
+    }
+  }
+
+  @Override
+  public void sendContext(String name, InputStream value, SettableFuture<Void> future) {
+    request.addContext(name, value, Operation.Phase.HEADERS);
+    if (future != null) {
+      future.set(null);
+    }
   }
 
   /**
@@ -59,13 +72,12 @@ public class SessionCall<RequestT, ResponseT>
    * and close the response stream.
    */
   @Override
-  public void onError(Throwable t) {
-    request.close(Status.fromThrowable(t));
-    this.responseObserver.onError(t);
+  public void cancel() {
+    request.close(new Status(Transport.Code.CANCELLED));
   }
 
   @Override
-  public void onCompleted() {
+  public void halfClose() {
     request.close(Status.OK);
   }
 
@@ -82,7 +94,7 @@ public class SessionCall<RequestT, ResponseT>
     @Override
     public Operation addContext(String type, InputStream message, Phase nextPhase) {
       try {
-        SessionCall.this.addResponseContext(type, message);
+        responseListener.onContext(type, message);
         return super.addContext(type, message, nextPhase);
       } finally {
         if (getPhase() == Phase.CLOSED) {
@@ -94,7 +106,7 @@ public class SessionCall<RequestT, ResponseT>
     @Override
     public Operation addPayload(InputStream payload, Phase nextPhase) {
       try {
-        SessionCall.this.responseObserver.onValue(methodDescriptor.parseResponse(payload));
+        responseListener.onPayload(methodDescriptor.parseResponse(payload));
         return super.addPayload(payload, nextPhase);
       } finally {
         if (getPhase() == Phase.CLOSED) {
@@ -113,11 +125,7 @@ public class SessionCall<RequestT, ResponseT>
     }
 
     private void propagateClosed() {
-      if (Status.OK.getCode() == getStatus().getCode()) {
-        SessionCall.this.responseObserver.onCompleted();
-      } else {
-        SessionCall.this.responseObserver.onError(getStatus().asRuntimeException());
-      }
+      responseListener.onClose(getStatus());
     }
   }
 }

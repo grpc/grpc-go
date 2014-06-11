@@ -1,9 +1,11 @@
 package com.google.net.stubby.stub;
 
+import com.google.net.stubby.Channel;
+import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Session;
 
 /**
- * This class is a shim between Session & Channel. Will be removed when the new transport
+ * This class is a shim between Session &amp; Channel. Will be removed when the new transport
  * API is introduced.
  */
 public class SessionChannel implements Channel {
@@ -14,7 +16,7 @@ public class SessionChannel implements Channel {
   }
 
   @Override
-  public <ReqT, RespT> SessionCall<ReqT, RespT> prepare(MethodDescriptor<ReqT, RespT> method) {
+  public <ReqT, RespT> SessionCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
     return new SessionCall<ReqT, RespT>(method, session);
   }
 }

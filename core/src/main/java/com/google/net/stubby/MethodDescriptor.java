@@ -1,4 +1,4 @@
-package com.google.net.stubby.stub;
+package com.google.net.stubby;
 
 import com.google.common.base.Preconditions;
 
@@ -13,7 +13,6 @@ import javax.annotation.concurrent.Immutable;
 @Immutable
 public class MethodDescriptor<RequestT, ResponseT> {
   private final String name;
-  // TODO(user): Make more generic than just proto? Use Function?
   private final Marshaller<RequestT> requestMarshaller;
   private final Marshaller<ResponseT> responseMarshaller;
   private final long timeoutMicros;
@@ -68,7 +67,7 @@ public class MethodDescriptor<RequestT, ResponseT> {
    * Create a new descriptor with a different timeout
    */
   public MethodDescriptor withTimeout(long timeout, TimeUnit unit) {
-    return new MethodDescriptor(name , unit.toMicros(timeout),
+    return new MethodDescriptor<RequestT, ResponseT>(name, unit.toMicros(timeout),
         requestMarshaller, responseMarshaller);
   }
 }

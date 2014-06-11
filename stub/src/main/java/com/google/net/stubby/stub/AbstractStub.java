@@ -1,6 +1,8 @@
 package com.google.net.stubby.stub;
 
 import com.google.common.collect.Maps;
+import com.google.net.stubby.Channel;
+import com.google.net.stubby.MethodDescriptor;
 
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
