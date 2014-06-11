@@ -7,7 +7,7 @@ import javax.annotation.Nullable;
 /**
  * A single stream of communication between two end-points within a transport.
  */
-public interface Stream<T extends Stream<T>> {
+public interface Stream {
 
   /**
    * Gets the current state of this stream.
@@ -39,7 +39,7 @@ public interface Stream<T extends Stream<T>> {
    * @param accepted an optional callback for when the transport has accepted the write.
    * @return this stream instance.
    */
-  T writeContext(String name, InputStream value, int length, @Nullable Runnable accepted);
+  void writeContext(String name, InputStream value, int length, @Nullable Runnable accepted);
 
   /**
    * Writes a message payload to the remote end-point. The bytes from the stream are immediate read
@@ -58,10 +58,10 @@ public interface Stream<T extends Stream<T>> {
    * @param accepted an optional callback for when the transport has accepted the write.
    * @return this stream instance.
    */
-  T writeMessage(InputStream message, int length, @Nullable Runnable accepted);
+  void writeMessage(InputStream message, int length, @Nullable Runnable accepted);
 
   /**
    * Flushes any internally buffered messages to the remote end-point.
    */
-  T flush();
+  void flush();
 }

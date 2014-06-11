@@ -4,7 +4,7 @@ package com.google.net.stubby.newtransport;
 /**
  * Extension of {@link Stream} to support client-side termination semantics.
  */
-public interface ClientStream extends Stream<ClientStream> {
+public interface ClientStream extends Stream {
 
   /**
    * Used to abnormally terminate the stream. Any internally buffered messages are dropped. After

@@ -6,7 +6,7 @@ import com.google.net.stubby.Status;
 /**
  * Extension of {@link Stream} to support server-side termination semantics.
  */
-public interface ServerStream extends Stream<ServerStream> {
+public interface ServerStream extends Stream {
 
   /**
    * Closes the local side of this stream. A status code of
