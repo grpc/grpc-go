@@ -4,13 +4,11 @@ import com.google.net.stubby.Request;
 import com.google.net.stubby.Response;
 import com.google.net.stubby.transport.Framer;
 
-import io.netty.channel.Channel;
-import io.netty.handler.codec.http2.draft10.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.draft10.Http2Headers;
-import io.netty.handler.codec.http2.draft10.frame.DefaultHttp2HeadersFrame;
-
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+
+import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.Http2Headers;
 
 /**
  * A HTTP2 based implementation of {@link Request}
@@ -29,22 +27,19 @@ class Http2Request extends Http2Operation implements Request {
     HOST_NAME = hostName;
   }
 
-  private static DefaultHttp2HeadersFrame createHeadersFrame(int id, String operationName) {
-    Http2Headers headers = DefaultHttp2Headers.newBuilder()
-        .setMethod("POST")
-        .setPath("/" + operationName)
-        .setAuthority(HOST_NAME)
-        .setScheme("https")
-        .add("content-type", Http2Session.PROTORPC)
-        .build();
-    return new DefaultHttp2HeadersFrame.Builder().setStreamId(id).setHeaders(headers).build();
-  }
-
   private final Response response;
 
-  public Http2Request(Response response, Channel channel, String operationName, Framer framer) {
-    super(response.getId(), channel, framer);
-    channel.write(createHeadersFrame(response.getId(), operationName));
+  public Http2Request(Response response, String operationName,
+                      Http2Codec.Http2Writer writer, Framer framer) {
+    super(response.getId(), writer, framer);
+    Http2Headers headers = DefaultHttp2Headers.newBuilder()
+        .method("POST")
+        .path("/" + operationName)
+        .authority(HOST_NAME)
+        .scheme("https")
+        .add("content-type", Http2Session.PROTORPC)
+        .build();
+    writer.writeHeaders(response.getId(), headers, false, true);
     this.response = response;
   }
 

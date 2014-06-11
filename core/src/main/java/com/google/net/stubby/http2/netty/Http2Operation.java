@@ -6,25 +6,23 @@ import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Framer;
 import com.google.net.stubby.transport.Transport;
 
-import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.handler.codec.http2.draft10.frame.DefaultHttp2DataFrame;
-
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelFuture;
 
 /**
  * Base implementation of {@link Operation} that writes HTTP2 frames
  */
 abstract class Http2Operation extends AbstractOperation implements Framer.Sink {
 
-  protected final Framer framer;
-  private final Channel channel;
+  private final Framer framer;
+  private final Http2Codec.Http2Writer writer;
 
-  Http2Operation(int streamId, Channel channel, Framer framer) {
+  Http2Operation(int streamId, Http2Codec.Http2Writer writer, Framer framer) {
     super(streamId);
-    this.channel = channel;
+    this.writer = writer;
     this.framer = framer;
   }
 
@@ -55,10 +53,10 @@ abstract class Http2Operation extends AbstractOperation implements Framer.Sink {
   @Override
   public void deliverFrame(ByteBuffer frame, boolean endOfMessage) {
     boolean closed = getPhase() == Phase.CLOSED;
-    DefaultHttp2DataFrame dataFrame = new DefaultHttp2DataFrame.Builder().setStreamId(getId())
-        .setContent(Unpooled.wrappedBuffer(frame)).setEndOfStream(closed).build();
+
     try {
-      ChannelFuture channelFuture = channel.writeAndFlush(dataFrame);
+      ChannelFuture channelFuture = writer.writeData(getId(),
+          Unpooled.wrappedBuffer(frame), closed, closed, false);
       if (!closed) {
         // Sync for all except the last frame to prevent buffer corruption.
         channelFuture.get();

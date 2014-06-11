@@ -13,7 +13,6 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.handler.codec.http2.draft10.frame.Http2FrameCodec;
 
 /**
  * Simple server connection startup that attaches a {@link Session} implementation to a connection.
@@ -42,7 +41,7 @@ public class Http2Server implements Runnable {
           .childHandler(new ChannelInitializer<SocketChannel>() { // (4)
             @Override
             public void initChannel(SocketChannel ch) throws Exception {
-              ch.pipeline().addLast(new Http2FrameCodec(), new Http2Codec(session, operations));
+              ch.pipeline().addLast(new Http2Codec(session, operations));
             }
           }).option(ChannelOption.SO_BACKLOG, 128) // (5)
           .childOption(ChannelOption.SO_KEEPALIVE, true); // (6)

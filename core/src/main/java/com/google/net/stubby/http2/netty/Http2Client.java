@@ -13,7 +13,6 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http2.draft10.frame.Http2FrameCodec;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.util.concurrent.GenericFutureListener;
 
@@ -28,7 +27,6 @@ public class Http2Client {
   private final String host;
   private final int port;
   private final RequestRegistry requestRegistry;
-  private ChannelFuture channelFuture;
   private final SSLEngine sslEngine;
 
   public Http2Client(String host, int port, RequestRegistry requestRegistry) {
@@ -56,6 +54,7 @@ public class Http2Client {
       b.option(ChannelOption.SO_KEEPALIVE, true); // (4)
       // TODO(user): Evaluate use of pooled allocator
       b.option(ChannelOption.ALLOCATOR, UnpooledByteBufAllocator.DEFAULT);
+      final Http2Codec http2Codec = new Http2Codec(requestRegistry);
       b.handler(new ChannelInitializer<SocketChannel>() {
         @Override
         public void initChannel(SocketChannel ch) throws Exception {
@@ -63,18 +62,16 @@ public class Http2Client {
             // Assume TLS when using SSL
             ch.pipeline().addLast(new SslHandler(sslEngine, false));
           }
-          ch.pipeline().addLast(
-              new Http2FrameCodec(),
-              new Http2Codec(requestRegistry));
+          ch.pipeline().addLast(http2Codec);
         }
       });
       // Start the client.
-      channelFuture = b.connect(host, port);
+      ChannelFuture channelFuture = b.connect(host, port);
       // Wait for the connection
       channelFuture.sync(); // (5)
       ChannelFuture closeFuture = channelFuture.channel().closeFuture();
       closeFuture.addListener(new WorkerCleanupListener(workerGroup));
-      return new Http2Session(channelFuture.channel(), requestRegistry);
+      return new Http2Session(http2Codec.getWriter(), requestRegistry);
     } catch (Throwable t) {
       workerGroup.shutdownGracefully();
       throw Throwables.propagate(t);

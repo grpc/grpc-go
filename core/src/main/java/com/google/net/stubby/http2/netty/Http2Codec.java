@@ -9,36 +9,35 @@ import com.google.net.stubby.Response;
 import com.google.net.stubby.Session;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.MessageFramer;
-import com.google.net.stubby.transport.Transport;
 import com.google.net.stubby.transport.Transport.Code;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
-import io.netty.channel.ChannelHandlerAdapter;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http2.draft10.Http2Error;
-import io.netty.handler.codec.http2.draft10.Http2Headers;
-import io.netty.handler.codec.http2.draft10.frame.DefaultHttp2RstStreamFrame;
-import io.netty.handler.codec.http2.draft10.frame.Http2DataFrame;
-import io.netty.handler.codec.http2.draft10.frame.Http2HeadersFrame;
-import io.netty.handler.codec.http2.draft10.frame.Http2RstStreamFrame;
-import io.netty.handler.codec.http2.draft10.frame.Http2StreamFrame;
+import io.netty.handler.codec.http2.AbstractHttp2ConnectionHandler;
+import io.netty.handler.codec.http2.Http2Error;
+import io.netty.handler.codec.http2.Http2Exception;
+import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2Settings;
 
 /**
  * Codec used by clients and servers to interpret HTTP2 frames in the context of an ongoing
  * request-response dialog
  */
-public class Http2Codec extends ChannelHandlerAdapter {
+public class Http2Codec extends AbstractHttp2ConnectionHandler {
 
+  public static final int PADDING = 0;
   private final boolean client;
   private final RequestRegistry requestRegistry;
   private final Session session;
-  private ByteBufAllocator alloc;
+  private Http2Codec.Http2Writer http2Writer;
 
   /**
    * Constructor used by servers, takes a session which will receive operation events.
    */
   public Http2Codec(Session session, RequestRegistry requestRegistry) {
+    super(true, true);
+    // TODO(user): Use connection.isServer when not private in base class
     this.client = false;
     this.session = session;
     this.requestRegistry = requestRegistry;
@@ -48,54 +47,140 @@ public class Http2Codec extends ChannelHandlerAdapter {
    * Constructor used by clients to send operations to a remote server
    */
   public Http2Codec(RequestRegistry requestRegistry) {
+    super(false, true);
     this.client = true;
     this.session = null;
     this.requestRegistry = requestRegistry;
   }
 
   @Override
-  public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-    // Abort any active requests.
-    requestRegistry.drainAllRequests(new Status(Transport.Code.ABORTED));
+  public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+    http2Writer = new Http2Writer(ctx);
+  }
 
-    super.channelInactive(ctx);
+  public Http2Writer getWriter() {
+    return http2Writer;
   }
 
   @Override
-  public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-    if (!(msg instanceof Http2StreamFrame)) {
-      return;
+  public void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
+                  boolean endOfStream, boolean endOfSegment, boolean compressed)
+      throws Http2Exception {
+    Request request = requestRegistry.lookup(streamId);
+    if (request == null) {
+      // Stream may have been terminated already or this is just plain spurious
+        throw Http2Exception.format(Http2Error.STREAM_CLOSED, "Stream does not exist");
     }
-    this.alloc = ctx.alloc();
-    Http2StreamFrame frame = (Http2StreamFrame) msg;
-    int streamId = frame.getStreamId();
-    Request operation = requestRegistry.lookup(streamId);
+    Operation operation = client ? request.getResponse() : request;
     try {
-      if (operation == null) {
-        if (client) {
-          // For clients an operation must already exist in the registry
-          throw new IllegalStateException("Response operation must already be bound");
-        } else {
-          operation = serverStart(ctx, frame);
-          if (operation == null) {
-            closeWithError(new NoOpRequest(createResponse(ctx, streamId).build()),
-                new Status(Code.NOT_FOUND));
-          }
-        }
-      } else {
-        // Consume the frame
-        progress(client ? operation.getResponse() : operation, frame);
+      ByteBufDeframer deframer = getOrCreateDeframer(operation, ctx);
+      deframer.deframe(data, operation);
+      if (endOfStream) {
+        finish(operation);
       }
     } catch (Throwable e) {
+      // TODO(user): Need to disambiguate between stream corruption as well as client/server
+      // generated errors. For stream corruption we always just send reset stream. For
+      // clients we will also generally reset-stream on error, servers may send a more detailed
+      // status.
       Status status = Status.fromThrowable(e);
-      if (operation == null) {
-        // Create a no-op request so we can use common error handling
-        operation = new NoOpRequest(createResponse(ctx, streamId).build());
-      }
-      closeWithError(operation, status);
+      closeWithError(request, status);
     }
   }
 
+  @Override
+  public void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers,
+                   int padding, boolean endStream, boolean endSegment) throws Http2Exception {
+    Request operation = requestRegistry.lookup(streamId);
+    if (operation == null) {
+      if (client) {
+        // For clients an operation must already exist in the registry
+        throw Http2Exception.format(Http2Error.REFUSED_STREAM, "Stream does not exist");
+      } else {
+        operation = serverStart(ctx, streamId, headers);
+        if (operation == null) {
+          closeWithError(new NoOpRequest(createResponse(new Http2Writer(ctx), streamId).build()),
+              new Status(Code.NOT_FOUND));
+        }
+      }
+    }
+    if (endStream) {
+      finish(client ? operation.getResponse() : operation);
+    }
+  }
+
+  @Override
+  public void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers,
+                     int streamDependency, short weight, boolean exclusive, int padding,
+                     boolean endStream, boolean endSegment) throws Http2Exception {
+    onHeadersRead(ctx, streamId, headers, padding, endStream, endSegment);
+  }
+
+  @Override
+  public void onPriorityRead(ChannelHandlerContext ctx, int streamId, int streamDependency,
+                      short weight, boolean exclusive) throws Http2Exception {
+    // TODO
+  }
+
+  @Override
+  public void onRstStreamRead(ChannelHandlerContext ctx, int streamId, long errorCode)
+      throws Http2Exception {
+    Request request = requestRegistry.lookup(streamId);
+    if (request != null) {
+      closeWithError(request, new Status(Code.CANCELLED, "Stream reset"));
+      requestRegistry.remove(streamId);
+    }
+  }
+
+  @Override
+  public void onSettingsAckRead(ChannelHandlerContext ctx) throws Http2Exception {
+    // TOOD
+  }
+
+  @Override
+  public void onSettingsRead(ChannelHandlerContext ctx, Http2Settings settings)
+      throws Http2Exception {
+    // TOOD
+  }
+
+  @Override
+  public void onPingRead(ChannelHandlerContext ctx, ByteBuf data) throws Http2Exception {
+    // TODO
+  }
+
+  @Override
+  public void onPingAckRead(ChannelHandlerContext ctx, ByteBuf data) throws Http2Exception {
+    // TODO
+  }
+
+  @Override
+  public void onPushPromiseRead(ChannelHandlerContext ctx, int streamId, int promisedStreamId,
+                         Http2Headers headers, int padding) throws Http2Exception {
+    // TODO
+  }
+
+  @Override
+  public void onGoAwayRead(ChannelHandlerContext ctx, int lastStreamId, long errorCode,
+                           ByteBuf debugData) throws Http2Exception {
+    // TODO
+  }
+
+  @Override
+  public void onWindowUpdateRead(ChannelHandlerContext ctx, int streamId, int windowSizeIncrement)
+      throws Http2Exception {
+    // TODO
+  }
+
+  @Override
+  public void onAltSvcRead(ChannelHandlerContext ctx, int streamId, long maxAge, int port,
+                    ByteBuf protocolId, String host, String origin) throws Http2Exception {
+    // TODO
+  }
+
+  @Override
+  public void onBlockedRead(ChannelHandlerContext ctx, int streamId) throws Http2Exception {
+    // TODO
+  }
 
   /**
    * Closes the request and its associated response with an internal error.
@@ -106,108 +191,43 @@ public class Http2Codec extends ChannelHandlerAdapter {
       request.getResponse().close(status);
     } finally {
       requestRegistry.remove(request.getId());
+      disposeDeframer(request);
     }
   }
 
   /**
    * Create an HTTP2 response handler
    */
-  private Response.ResponseBuilder createResponse(ChannelHandlerContext ctx, int streamId) {
-    return Http2Response.builder(streamId, ctx.channel(), new MessageFramer(4096));
-  }
-
-  /**
-   * Writes the HTTP/2 RST Stream frame to the remote endpoint, indicating a stream failure.
-   */
-  private void sendRstStream(ChannelHandlerContext ctx, int streamId, Http2Error error) {
-    DefaultHttp2RstStreamFrame frame = new DefaultHttp2RstStreamFrame.Builder()
-        .setStreamId(streamId).setErrorCode(error.getCode()).build();
-    ctx.writeAndFlush(frame);
+  private Response.ResponseBuilder createResponse(Http2Writer writer, int streamId) {
+    return Http2Response.builder(streamId, writer, new MessageFramer(4096));
   }
 
   /**
    * Start the Request operation on the server
    */
-  private Request serverStart(ChannelHandlerContext ctx, Http2StreamFrame frame) {
-    if (!(frame instanceof Http2HeadersFrame)) {
-      // TODO(user): Better error detail to client here
-      return null;
-    }
-    Http2HeadersFrame headers = (Http2HeadersFrame) frame;
-    if (!Http2Session.PROTORPC.equals(headers.getHeaders().get("content-type"))) {
+  private Request serverStart(ChannelHandlerContext ctx, int streamId, Http2Headers headers) {
+    if (!Http2Session.PROTORPC.equals(headers.get("content-type"))) {
       return null;
     }
     // Use Path to specify the operation
     String operationName =
-        normalizeOperationName(headers.getHeaders().get(Http2Headers.HttpName.PATH.value()));
+        normalizeOperationName(headers.get(Http2Headers.HttpName.PATH.value()));
     if (operationName == null) {
       return null;
     }
     // Create the operation and bind a HTTP2 response operation
-    Request op = session.startRequest(operationName, createResponse(ctx, frame.getStreamId()));
+    Request op = session.startRequest(operationName, createResponse(new Http2Writer(ctx),
+        streamId));
     if (op == null) {
       return null;
     }
     requestRegistry.register(op);
-    // Immediately deframe the remaining headers in the frame
-    progressHeaders(op, (Http2HeadersFrame) frame);
     return op;
   }
 
   // TODO(user): This needs proper namespacing support, this is currently just a hack
   private static String normalizeOperationName(String path) {
     return path.substring(1);
-  }
-
-
-  /**
-   * Consume a received frame
-   */
-  private void progress(Operation operation, Http2StreamFrame frame) {
-    if (frame instanceof Http2HeadersFrame) {
-      progressHeaders(operation, (Http2HeadersFrame) frame);
-    } else if (frame instanceof Http2DataFrame) {
-      progressPayload(operation, (Http2DataFrame) frame);
-    } else if (frame instanceof Http2RstStreamFrame) {
-      // Cancel
-      operation.close(new Status(Code.ABORTED, "HTTP2 stream reset"));
-      finish(operation);
-    } else {
-      // TODO(user): More refined handling for PING, GO_AWAY, SYN_STREAM, WINDOW_UPDATE, SETTINGS
-      operation.close(Status.OK);
-      finish(operation);
-    }
-  }
-
-  /**
-   * Consume headers in the frame. Any header starting with ':' is considered reserved
-   */
-  private void progressHeaders(Operation operation, Http2HeadersFrame frame) {
-    // TODO(user): Currently we do not do anything with HTTP2 headers
-    if (frame.isEndOfStream()) {
-      finish(operation);
-    }
-  }
-
-  private void progressPayload(Operation operation, Http2DataFrame frame) {
-    try {
-
-      // Copy the data buffer.
-      // TODO(user): Need to decide whether to use pooling or not.
-      ByteBuf dataCopy = frame.content().copy();
-
-      if (operation == null) {
-        return;
-      }
-      ByteBufDeframer deframer = getOrCreateDeframer(operation);
-      deframer.deframe(dataCopy, operation);
-      if (frame.isEndOfStream()) {
-        finish(operation);
-      }
-
-    } finally {
-      frame.release();
-    }
   }
 
   /**
@@ -221,10 +241,10 @@ public class Http2Codec extends ChannelHandlerAdapter {
     }
   }
 
-  public ByteBufDeframer getOrCreateDeframer(Operation operation) {
+  public ByteBufDeframer getOrCreateDeframer(Operation operation, ChannelHandlerContext ctx) {
     ByteBufDeframer deframer = operation.get(ByteBufDeframer.class);
     if (deframer == null) {
-      deframer = new ByteBufDeframer(alloc);
+      deframer = new ByteBufDeframer(ctx.alloc());
       operation.put(ByteBufDeframer.class, deframer);
     }
     return deframer;
@@ -234,6 +254,41 @@ public class Http2Codec extends ChannelHandlerAdapter {
     ByteBufDeframer deframer = operation.remove(ByteBufDeframer.class);
     if (deframer != null) {
       deframer.dispose();
+    }
+  }
+
+  public class Http2Writer {
+    private final ChannelHandlerContext ctx;
+
+    public Http2Writer(ChannelHandlerContext ctx) {
+      this.ctx = ctx;
+    }
+
+    public ChannelFuture writeData(int streamId, ByteBuf data, boolean endStream,
+                                   boolean endSegment, boolean compressed) {
+      return Http2Codec.this.writeData(ctx, ctx.newPromise(),
+          streamId, data, PADDING, endStream, endSegment, compressed);
+    }
+
+    public ChannelFuture writeHeaders(int streamId,
+                                      Http2Headers headers,
+                                      boolean endStream, boolean endSegment) {
+
+      return Http2Codec.this.writeHeaders(ctx, ctx.newPromise(), streamId,
+          headers, PADDING, endStream, endSegment);
+    }
+
+    public ChannelFuture writeHeaders(int streamId, Http2Headers headers, int streamDependency,
+                                      short weight, boolean exclusive,
+                                      boolean endStream, boolean endSegment) {
+      return Http2Codec.this.writeHeaders(ctx, ctx.newPromise(), streamId,
+          headers, streamDependency, weight, exclusive, PADDING, endStream, endSegment);
+    }
+
+    public ChannelFuture writeRstStream(int streamId, long errorCode) {
+      return Http2Codec.this.writeRstStream(ctx, ctx.newPromise(),
+          streamId,
+          errorCode);
     }
   }
 }

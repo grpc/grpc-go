@@ -6,9 +6,9 @@ import com.google.net.stubby.Response;
 import com.google.net.stubby.Session;
 import com.google.net.stubby.transport.MessageFramer;
 
-import io.netty.channel.Channel;
-
 import java.util.concurrent.atomic.AtomicInteger;
+
+import io.netty.channel.ChannelHandlerContext;
 
 /**
  * An implementation of {@link Session} that can be used by clients to start
@@ -18,12 +18,12 @@ public class Http2Session implements Session {
 
   public static final String PROTORPC = "application/protorpc";
 
-  private final Channel channel;
+  private final Http2Codec.Http2Writer writer;
   private final RequestRegistry requestRegistry;
-  private AtomicInteger streamId;
+  private final AtomicInteger streamId;
 
-  public Http2Session(Channel channel, RequestRegistry requestRegistry) {
-    this.channel = channel;
+  public Http2Session(Http2Codec.Http2Writer writer, RequestRegistry requestRegistry) {
+    this.writer = writer;
     this.requestRegistry = requestRegistry;
     // Clients are odd numbers starting at 3. A value of 1 is reserved for the upgrade protocol.
     streamId = new AtomicInteger(3);
@@ -36,8 +36,8 @@ public class Http2Session implements Session {
   @Override
   public Request startRequest(String operationName, Response.ResponseBuilder response) {
     int nextSessionId = getNextStreamId();
-    Request operation = new Http2Request(response.build(nextSessionId), channel, operationName,
-        new MessageFramer(4096));
+    Request operation = new Http2Request(response.build(nextSessionId), operationName,
+        writer, new MessageFramer(4096));
     requestRegistry.register(operation);
     return operation;
   }

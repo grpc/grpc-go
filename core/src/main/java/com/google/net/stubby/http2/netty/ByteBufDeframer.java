@@ -60,6 +60,8 @@ public class ByteBufDeframer extends Deframer<ByteBuf> {
           + frameLength + ", readableBytes=" + frame.readableBytes());
     }
     if (TransportFrameUtil.isNotCompressed(compressionType)) {
+      // Need to retain the frame as we may be holding it over channel events
+      frame.retain();
       return frame;
     }
     throw new IOException("Unknown compression type " + compressionType);
