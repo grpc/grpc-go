@@ -1,6 +1,6 @@
 package com.google.net.stubby.newtransport;
 
-import com.google.net.stubby.transport.Transport.Status;
+import com.google.net.stubby.Status;
 
 
 /**

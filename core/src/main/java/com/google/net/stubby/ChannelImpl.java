@@ -11,7 +11,6 @@ import com.google.net.stubby.newtransport.ClientStream;
 import com.google.net.stubby.newtransport.ClientTransport;
 import com.google.net.stubby.newtransport.ClientTransportFactory;
 import com.google.net.stubby.newtransport.StreamListener;
-import com.google.net.stubby.transport.Transport;
 
 import java.io.InputStream;
 import java.io.IOException;
@@ -248,7 +247,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
       }
 
       @Override
-      public void closed(final Transport.Status status) {
+      public void closed(final Status status) {
         for (SettableFuture<Void> future : inProcessFutures) {
           future.cancel(false);
         }
@@ -256,7 +255,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
         executor.execute(new Runnable() {
           @Override
           public void run() {
-            observer.onClose(new com.google.net.stubby.Status(status.getCode()));
+            observer.onClose(status);
           }
         });
       }

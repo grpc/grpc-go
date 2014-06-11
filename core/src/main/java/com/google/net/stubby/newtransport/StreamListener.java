@@ -1,7 +1,7 @@
 package com.google.net.stubby.newtransport;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.net.stubby.transport.Transport.Status;
+import com.google.net.stubby.Status;
 
 import java.io.InputStream;
 
