@@ -43,6 +43,8 @@ public final class ChannelImpl extends AbstractService implements Channel {
   public ChannelImpl(ClientTransportFactory transportFactory, ExecutorService executor) {
     this.transportFactory = transportFactory;
     this.executor = executor;
+    // FIXME(ejona): Remove once we have our top-level lifecycle.
+    startAsync();
   }
 
   @Override
