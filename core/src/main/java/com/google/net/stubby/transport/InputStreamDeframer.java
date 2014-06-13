@@ -22,15 +22,17 @@ public class InputStreamDeframer extends Deframer<InputStream> {
 
   /**
    * Deframing a single input stream that contains multiple GRPC frames
+   *
+   * @return the number of unconsumed bytes remaining in the buffer
    */
   @Override
   public int deframe(InputStream frame, Operation target) {
     try {
-      int read = 0;
-      while (frame.available() > 0) {
-        read += super.deframe(frame, target);
-      }
-      return read;
+      int remaining;
+      do {
+        remaining = super.deframe(frame, target);
+      } while (frame.available() > 0);
+      return remaining;
     } catch (IOException ioe) {
       throw new RuntimeException(ioe);
     }
