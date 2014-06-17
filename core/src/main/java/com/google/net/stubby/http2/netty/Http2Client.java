@@ -6,6 +6,7 @@ import com.google.net.stubby.Session;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -28,6 +29,7 @@ public class Http2Client {
   private final int port;
   private final RequestRegistry requestRegistry;
   private final SSLEngine sslEngine;
+  private Channel channel;
 
   public Http2Client(String host, int port, RequestRegistry requestRegistry) {
     this(host, port, requestRegistry, null);
@@ -69,13 +71,25 @@ public class Http2Client {
       ChannelFuture channelFuture = b.connect(host, port);
       // Wait for the connection
       channelFuture.sync(); // (5)
-      ChannelFuture closeFuture = channelFuture.channel().closeFuture();
+      channel = channelFuture.channel();
+      ChannelFuture closeFuture = channel.closeFuture();
       closeFuture.addListener(new WorkerCleanupListener(workerGroup));
       return new Http2Session(http2Codec.getWriter(), requestRegistry);
     } catch (Throwable t) {
       workerGroup.shutdownGracefully();
       throw Throwables.propagate(t);
     }
+  }
+
+  public void stop() {
+    if (channel != null && channel.isOpen()) {
+      try {
+        channel.close().get();
+      } catch (Exception e) {
+        throw Throwables.propagate(e);
+      }
+    }
+    channel = null;
   }
 
   private static class WorkerCleanupListener

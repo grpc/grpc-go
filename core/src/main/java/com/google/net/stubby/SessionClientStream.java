@@ -19,7 +19,7 @@ import java.io.IOException;
  * new transport layer is created.
  */
 // TODO(user): Delete this class when new transport interfaces are introduced
-class SessionClientStream implements ClientStream {
+public class SessionClientStream implements ClientStream {
   private final StreamListener listener;
   /**
    * The {@link Request} used by the stub to dispatch the call
