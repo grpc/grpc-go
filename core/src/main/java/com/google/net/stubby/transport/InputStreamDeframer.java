@@ -88,21 +88,28 @@ public class InputStreamDeframer extends Deframer<InputStream> {
       if (remainingSuffix == 0) {
         // No suffix so clear
         suffix = null;
-      } else if (buffer == null || remainingSuffix > buffer.length - bufferIndex) {
-        // Suffix exceeds current buffer size
-        buffer = ByteStreams.toByteArray(suffix);
+        return;
+      }
+      int bufferLength = buffer == null ? 0 : buffer.length;
+      int bytesInBuffer = bufferLength - bufferIndex;
+      // Shift existing bytes
+      if (bufferLength < bytesInBuffer + remainingSuffix) {
+        // Buffer too small, so create a new buffer before copying in the suffix
+        byte[] newBuffer = new byte[bytesInBuffer + remainingSuffix];
+        if (bytesInBuffer > 0) {
+          System.arraycopy(buffer, bufferIndex, newBuffer, 0, bytesInBuffer);
+        }
+        buffer = newBuffer;
         bufferIndex = 0;
-      } else if (buffer.length == bufferIndex) {
-        // Buffer has been fully consumed, copy suffix into it
-        ByteStreams.readFully(suffix, buffer, buffer.length - remainingSuffix, remainingSuffix);
-        bufferIndex = buffer.length - remainingSuffix;
       } else {
-        // Buffer has been partially consumed so shift the buffer before copying in the suffix
-        System.arraycopy(buffer, bufferIndex, buffer, bufferIndex - remainingSuffix,
-            buffer.length - bufferIndex);
-        ByteStreams.readFully(suffix, buffer, buffer.length - remainingSuffix, remainingSuffix);
+        // Enough space is in buffer, so shift the existing bytes to open up exactly enough bytes
+        // for the suffix at the end.
+        System.arraycopy(buffer, bufferIndex, buffer, bufferIndex - remainingSuffix, bytesInBuffer);
         bufferIndex -= remainingSuffix;
       }
+      // Write suffix to buffer
+      ByteStreams.readFully(suffix, buffer, buffer.length - remainingSuffix, remainingSuffix);
+      suffix = null;
     }
 
     @Override

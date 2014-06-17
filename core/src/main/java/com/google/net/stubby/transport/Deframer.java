@@ -5,6 +5,7 @@ import com.google.net.stubby.GrpcFramingUtil;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Status;
 
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -62,6 +63,9 @@ public abstract class Deframer<F> {
           return consolidate();
         }
         if (GrpcFramingUtil.isPayloadFrame(currentFlags)) {
+          // Advance stream now, because target.addPayload() may not or may process the frame on
+          // another thread.
+          framedChunk = new ByteArrayInputStream(ByteStreams.toByteArray(framedChunk));
           try {
             // Report payload to the receiving operation
             target.addPayload(framedChunk, Operation.Phase.PAYLOAD);
@@ -75,18 +79,28 @@ public abstract class Deframer<F> {
           // Writing a custom parser would have to do varint handling and potentially
           // deal with out-of-order tags etc.
           Transport.ContextValue contextValue = Transport.ContextValue.parseFrom(framedChunk);
-          target.addContext(contextValue.getKey(),
-              contextValue.getValue().newInput(),
-              target.getPhase());
+          try {
+            target.addContext(contextValue.getKey(),
+                contextValue.getValue().newInput(),
+                target.getPhase());
+          } finally {
+            currentLength = LENGTH_NOT_SET;
+            inFrame = false;
+          }
         } else if (GrpcFramingUtil.isStatusFrame(currentFlags)) {
           int status = framedChunk.read() << 8 | framedChunk.read();
           Transport.Code code = Transport.Code.valueOf(status);
           // TODO(user): Resolve what to do with remainder of framedChunk
-          if (code == null) {
-            // Log for unknown code
-            target.close(new Status(Transport.Code.UNKNOWN, "Unknown status code " + status));
-          } else {
-            target.close(new Status(code));
+          try {
+            if (code == null) {
+              // Log for unknown code
+              target.close(new Status(Transport.Code.UNKNOWN, "Unknown status code " + status));
+            } else {
+              target.close(new Status(code));
+            }
+          } finally {
+            currentLength = LENGTH_NOT_SET;
+            inFrame = false;
           }
         }
         if (grpcStream.available() == 0) {
