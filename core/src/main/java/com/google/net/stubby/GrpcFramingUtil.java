@@ -27,8 +27,8 @@ public class GrpcFramingUtil {
   // Flags
   public static final byte PAYLOAD_FRAME = 0x0;
   public static final byte CONTEXT_VALUE_FRAME =  0x1;
-  public static final byte STATUS_FRAME = 0x2;
-  public static final byte RESERVED_FRAME = 0x3;
+  public static final byte CALL_HEADER_FRAME = 0x2;
+  public static final byte STATUS_FRAME = 0x3;
   public static final byte FRAME_TYPE_MASK = 0x3;
 
   /**
