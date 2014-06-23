@@ -90,7 +90,8 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
 
   @Override
   public void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers,
-                   int padding, boolean endStream, boolean endSegment) throws Http2Exception {
+                     int streamDependency, short weight, boolean exclusive, int padding,
+                     boolean endStream, boolean endSegment) throws Http2Exception {
     Request operation = requestRegistry.lookup(streamId);
     if (operation == null) {
       if (client) {
@@ -107,13 +108,6 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     if (endStream) {
       finish(client ? operation.getResponse() : operation);
     }
-  }
-
-  @Override
-  public void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers,
-                     int streamDependency, short weight, boolean exclusive, int padding,
-                     boolean endStream, boolean endSegment) throws Http2Exception {
-    onHeadersRead(ctx, streamId, headers, padding, endStream, endSegment);
   }
 
   @Override
