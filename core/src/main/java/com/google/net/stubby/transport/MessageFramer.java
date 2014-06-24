@@ -139,7 +139,7 @@ public class MessageFramer implements Framer  {
 
   @Override
   public void writeStatus(Status status, boolean flush, Sink sink) {
-    short code = (short) status.getCode().ordinal();
+    short code = (short) status.getCode().getNumber();
     scratch.clear();
     scratch.put(GrpcFramingUtil.STATUS_FRAME);
     int length = 2;
