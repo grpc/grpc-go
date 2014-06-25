@@ -18,7 +18,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 
-
 /**
  * Utility functions for processing different call idioms. We have one-to-one correspondence
  * between utilities in this class and the potential signatures in a generated stub class so

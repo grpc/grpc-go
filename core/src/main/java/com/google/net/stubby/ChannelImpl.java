@@ -52,9 +52,13 @@ public final class ChannelImpl extends AbstractService implements Channel {
 
   @Override
   protected synchronized void doStop() {
-    activeTransport.stopAsync();
-    activeTransport = null;
-    // The last TransportListener will call notifyStopped().
+    if (activeTransport != null) {
+      activeTransport.stopAsync();
+      activeTransport = null;
+      // The last TransportListener will call notifyStopped().
+    } else {
+      notifyStopped();
+    }
   }
 
   @Override
@@ -115,7 +119,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
 
   private class CallImpl<ReqT, RespT> extends Call<ReqT, RespT> {
     private final MethodDescriptor<ReqT, RespT> method;
-    private final SerializingExecutor executor;
+    private final SerializingExecutor callExecutor;
     // TODO(user): Consider moving flow control notification/management to Call itself.
     private final Collection<SettableFuture<Void>> inProcessFutures
         = Collections.synchronizedSet(new HashSet<SettableFuture<Void>>());
@@ -123,7 +127,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
 
     public CallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor) {
       this.method = method;
-      this.executor = executor;
+      this.callExecutor = executor;
     }
 
     @Override
@@ -134,8 +138,11 @@ public final class ChannelImpl extends AbstractService implements Channel {
 
     @Override
     public void cancel() {
-      Preconditions.checkState(stream != null, "Not started");
-      stream.cancel();
+      // Cancel is called in exception handling cases, so it may be the case that the
+      // stream was never successfully created.
+      if (stream != null) {
+        stream.cancel();
+      }
     }
 
     @Override
@@ -200,7 +207,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
       private ListenableFuture<Void> dispatchCallable(
           final Callable<ListenableFuture<Void>> callable) {
         final SettableFuture<Void> ours = SettableFuture.create();
-        executor.execute(new Runnable() {
+        callExecutor.execute(new Runnable() {
           @Override
           public void run() {
             try {
@@ -252,7 +259,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
           future.cancel(false);
         }
         inProcessFutures.clear();
-        executor.execute(new Runnable() {
+        callExecutor.execute(new Runnable() {
           @Override
           public void run() {
             observer.onClose(status);
