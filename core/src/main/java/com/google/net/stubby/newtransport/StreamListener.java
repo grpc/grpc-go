@@ -5,6 +5,8 @@ import com.google.net.stubby.Status;
 
 import java.io.InputStream;
 
+import javax.annotation.Nullable;
+
 /**
  * An observer of {@link Stream} events. It is guaranteed to only have one concurrent callback at a
  * time.
@@ -24,6 +26,7 @@ public interface StreamListener {
    *         processed by the application. If {@code null}, processing of this context is assumed to
    *         be complete upon returning from this method.
    */
+  @Nullable
   ListenableFuture<Void> contextRead(String name, InputStream value, int length);
 
   /**
@@ -38,6 +41,7 @@ public interface StreamListener {
    *         processed by the application. If {@code null}, processing of this message is assumed to
    *         be complete upon returning from this method.
    */
+  @Nullable
   ListenableFuture<Void> messageRead(InputStream message, int length);
 
   /**

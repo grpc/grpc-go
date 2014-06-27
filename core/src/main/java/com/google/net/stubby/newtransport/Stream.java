@@ -37,7 +37,6 @@ public interface Stream {
    * @param value the value of the context property.
    * @param length the length of the {@link InputStream}.
    * @param accepted an optional callback for when the transport has accepted the write.
-   * @return this stream instance.
    */
   void writeContext(String name, InputStream value, int length, @Nullable Runnable accepted);
 
@@ -56,7 +55,6 @@ public interface Stream {
    * @param message stream containing the serialized message to be sent
    * @param length the length of the {@link InputStream}.
    * @param accepted an optional callback for when the transport has accepted the write.
-   * @return this stream instance.
    */
   void writeMessage(InputStream message, int length, @Nullable Runnable accepted);
 

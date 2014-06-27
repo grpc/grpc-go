@@ -2,8 +2,18 @@ package com.google.net.stubby.newtransport;
 
 /**
  * The state of a single {@link Stream} within a transport.
+ *
+ * <p>Client state transitions:<br>
+ * OPEN->READ_ONLY->CLOSED (no-error case)<br>
+ * OPEN->CLOSED (error) <br>
+ * STARTING->CLOSED (Failed creation) <br>
+ *
+ * <p>Server state transitions:<br>
+ * OPEN->WRITE_ONLY->CLOSED (no-error case) <br>
+ * OPEN->CLOSED (error case) <br>
  */
 public enum StreamState {
+
   /**
    * The stream is open for write by both endpoints.
    */
