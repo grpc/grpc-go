@@ -224,6 +224,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
                 }, MoreExecutors.sameThreadExecutor());
               }
             } catch (Throwable t) {
+              ours.set(null);
               CallImpl.this.cancel();
               Throwables.propagate(t);
             }

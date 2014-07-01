@@ -31,13 +31,19 @@ public abstract class Call<RequestT, ResponseT> {
   public abstract static class Listener<T> {
     /**
      * A response context has been received. Any context messages will precede payload messages.
+     *
+     * <p>The {@code value} {@link InputStream} will be closed when the returned future completes.
+     * If no future is returned, the stream will be closed immediately after returning from this
+     * method.
      */
+    @Nullable
     public abstract ListenableFuture<Void> onContext(String name, InputStream value);
 
     /**
      * A response payload has been received. For streaming calls, there may be zero payload
      * messages.
      */
+    @Nullable
     public abstract ListenableFuture<Void> onPayload(T payload);
 
     /**
