@@ -14,7 +14,14 @@ import com.google.net.stubby.transport.Transport.Code;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.AbstractHttp2ConnectionHandler;
+import io.netty.handler.codec.http2.DefaultHttp2Connection;
+import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
+import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
+import io.netty.handler.codec.http2.DefaultHttp2OutboundFlowController;
+import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
@@ -36,20 +43,28 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
    * Constructor used by servers, takes a session which will receive operation events.
    */
   public Http2Codec(Session session, RequestRegistry requestRegistry) {
-    super(true, true);
-    // TODO(user): Use connection.isServer when not private in base class
-    this.client = false;
-    this.session = session;
-    this.requestRegistry = requestRegistry;
+    this(new DefaultHttp2Connection(true, false), false, session, requestRegistry);
   }
 
   /**
    * Constructor used by clients to send operations to a remote server
    */
   public Http2Codec(RequestRegistry requestRegistry) {
-    super(false, true);
-    this.client = true;
-    this.session = null;
+    this(new DefaultHttp2Connection(false, false), true, null, requestRegistry);
+  }
+
+  /**
+   * Constructor used by servers, takes a session which will receive operation events.
+   */
+  private Http2Codec(Http2Connection connection, boolean client,
+                     Session session,
+                     RequestRegistry requestRegistry) {
+    super(connection, new DefaultHttp2FrameReader(),
+        new SuppressCompressionSettingsWriter(), new DefaultHttp2InboundFlowController(connection),
+        new DefaultHttp2OutboundFlowController(connection));
+    // TODO(user): Use connection.isServer when not private in base class
+    this.client = client;
+    this.session = session;
     this.requestRegistry = requestRegistry;
   }
 
@@ -248,6 +263,28 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     ByteBufDeframer deframer = operation.remove(ByteBufDeframer.class);
     if (deframer != null) {
       deframer.dispose();
+    }
+  }
+
+  // TODO(user): Remove this once fixes are done in netty too
+  private static class SuppressCompressionSettingsWriter extends DefaultHttp2FrameWriter {
+    @Override
+    public ChannelFuture writeSettings(ChannelHandlerContext ctx, ChannelPromise promise,
+                                       Http2Settings settings) {
+      Http2Settings newSettings = new Http2Settings();
+      if (settings.hasInitialWindowSize()) {
+        newSettings.initialWindowSize(settings.initialWindowSize());
+      }
+      if (settings.hasMaxConcurrentStreams()) {
+        newSettings.maxConcurrentStreams(settings.maxConcurrentStreams());
+      }
+      if (settings.hasMaxHeaderTableSize()) {
+        newSettings.maxHeaderTableSize(settings.maxHeaderTableSize());
+      }
+      if (settings.hasPushEnabled()) {
+        newSettings.pushEnabled(settings.pushEnabled());
+      }
+      return super.writeSettings(ctx, promise, newSettings);
     }
   }
 
