@@ -3,8 +3,8 @@ package com.google.net.stubby.newtransport.netty;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.AbstractService;
 import com.google.net.stubby.MethodDescriptor;
+import com.google.net.stubby.newtransport.AbstractClientTransport;
 import com.google.net.stubby.newtransport.ClientStream;
 import com.google.net.stubby.newtransport.ClientTransport;
 import com.google.net.stubby.newtransport.StreamListener;
@@ -25,7 +25,7 @@ import java.util.concurrent.ExecutionException;
 /**
  * A Netty-based {@link ClientTransport} implementation.
  */
-class NettyClientTransport extends AbstractService implements ClientTransport {
+class NettyClientTransport extends AbstractClientTransport {
 
   private final String host;
   private final int port;
@@ -58,22 +58,7 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
   }
 
   @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, StreamListener listener) {
-    Preconditions.checkNotNull(method, "method");
-    Preconditions.checkNotNull(listener, "listener");
-    switch (state()) {
-      case STARTING:
-        // Wait until the transport is running before creating the new stream.
-        awaitRunning();
-        break;
-      case NEW:
-      case TERMINATED:
-      case FAILED:
-        throw new IllegalStateException("Unable to create new stream in state: " + state());
-      default:
-        break;
-    }
-
+  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method, StreamListener listener) {
     // Create the stream.
     NettyClientStream stream = new NettyClientStream(listener, channel);
 
