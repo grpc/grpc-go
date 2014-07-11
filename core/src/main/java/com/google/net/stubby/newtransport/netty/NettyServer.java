@@ -3,6 +3,7 @@ package com.google.net.stubby.newtransport.netty;
 import static io.netty.channel.ChannelOption.SO_BACKLOG;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
+import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.AbstractService;
 
 import io.netty.bootstrap.ServerBootstrap;
@@ -22,20 +23,28 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 public class NettyServer extends AbstractService {
   private final int port;
   private final ChannelInitializer<SocketChannel> channelInitializer;
+  private final EventLoopGroup bossGroup;
+  private final EventLoopGroup workerGroup;
   private Channel channel;
-  private EventLoopGroup bossGroup;
-  private EventLoopGroup workerGroup;
 
   public NettyServer(int port, ChannelInitializer<SocketChannel> channelInitializer) {
+    this(port, channelInitializer, new NioEventLoopGroup(), new NioEventLoopGroup());
+  }
+
+  public NettyServer(int port, ChannelInitializer<SocketChannel> channelInitializer,
+      EventLoopGroup bossGroup, EventLoopGroup workerGroup) {
+    Preconditions.checkNotNull(channelInitializer, "channelInitializer");
+    Preconditions.checkNotNull(bossGroup, "bossGroup");
+    Preconditions.checkNotNull(workerGroup, "workerGroup");
+    Preconditions.checkArgument(port >= 0, "port must be positive");
     this.port = port;
     this.channelInitializer = channelInitializer;
+    this.bossGroup = bossGroup;
+    this.workerGroup = workerGroup;
   }
 
   @Override
   protected void doStart() {
-    bossGroup = new NioEventLoopGroup();
-    workerGroup = new NioEventLoopGroup();
-
     ServerBootstrap b = new ServerBootstrap();
     b.group(bossGroup, workerGroup);
     b.channel(NioServerSocketChannel.class);

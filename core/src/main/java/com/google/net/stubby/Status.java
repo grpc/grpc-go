@@ -14,6 +14,7 @@ import javax.annotation.concurrent.Immutable;
 public class Status {
 
   public static final Status OK = new Status(Transport.Code.OK);
+  public static final Status CANCELLED = new Status(Transport.Code.CANCELLED);
 
   public static Status fromThrowable(Throwable t) {
     for (Throwable cause : Throwables.getCausalChain(t)) {

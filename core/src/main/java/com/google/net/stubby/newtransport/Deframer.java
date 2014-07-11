@@ -5,6 +5,7 @@ import com.google.net.stubby.GrpcFramingUtil;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
+import com.google.protobuf.ByteString;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -26,6 +27,7 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
   private boolean inFrame;
   private byte currentFlags;
   private int currentLength = LENGTH_NOT_SET;
+  private boolean statusDelivered;
 
   public Deframer(Framer target) {
     this.target = target;
@@ -34,8 +36,12 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
   @Override
   public void deliverFrame(F frame, boolean endOfStream) {
     int remaining = internalDeliverFrame(frame);
-    if (endOfStream && remaining > 0) {
-      target.writeStatus(new Status(Transport.Code.UNKNOWN, "EOF on incomplete frame"));
+    if (endOfStream) {
+      if (remaining > 0) {
+        writeStatus(new Status(Transport.Code.UNKNOWN, "EOF on incomplete frame"));
+      } else if (!statusDelivered) {
+        writeStatus(Status.OK);
+      }
     }
   }
 
@@ -91,8 +97,8 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
           // deal with out-of-order tags etc.
           Transport.ContextValue contextValue = Transport.ContextValue.parseFrom(framedChunk);
           try {
-            target.writeContext(contextValue.getKey(),
-                contextValue.getValue().newInput(), currentLength);
+            ByteString value = contextValue.getValue();
+            target.writeContext(contextValue.getKey(), value.newInput(), value.size());
           } finally {
             currentLength = LENGTH_NOT_SET;
             inFrame = false;
@@ -104,10 +110,9 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
           try {
             if (code == null) {
               // Log for unknown code
-              target.writeStatus(
-                  new Status(Transport.Code.UNKNOWN, "Unknown status code " + status));
+              writeStatus(new Status(Transport.Code.UNKNOWN, "Unknown status code " + status));
             } else {
-              target.writeStatus(new Status(code));
+              writeStatus(new Status(code));
             }
           } finally {
             currentLength = LENGTH_NOT_SET;
@@ -121,7 +126,7 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
       }
     } catch (IOException ioe) {
       Status status = new Status(Transport.Code.UNKNOWN, ioe);
-      target.writeStatus(status);
+      writeStatus(status);
       throw status.asRuntimeException();
     }
   }
@@ -146,6 +151,11 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
    */
   private boolean ensure(InputStream input, int len) throws IOException {
     return (input.available() >= len);
+  }
+
+  private void writeStatus(Status status) {
+    target.writeStatus(status);
+    statusDelivered = true;
   }
 
   /**

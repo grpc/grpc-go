@@ -67,6 +67,7 @@ public class MessageFramer implements Framer {
    * Sets whether compression is encouraged.
    */
   public void setAllowCompression(boolean enable) {
+    verifyNotClosed();
     framer.setAllowCompression(enable);
   }
 
@@ -76,11 +77,13 @@ public class MessageFramer implements Framer {
    * @see java.util.zip.Deflater#setLevel
    */
   public void setCompressionLevel(int level) {
+    verifyNotClosed();
     framer.setCompressionLevel(level);
   }
 
   @Override
   public void writePayload(InputStream message, int messageLength) {
+    verifyNotClosed();
     try {
       scratch.clear();
       scratch.put(GrpcFramingUtil.PAYLOAD_FRAME);
@@ -98,6 +101,7 @@ public class MessageFramer implements Framer {
 
   @Override
   public void writeContext(String key, InputStream message, int messageLen) {
+    verifyNotClosed();
     try {
       scratch.clear();
       scratch.put(GrpcFramingUtil.CONTEXT_VALUE_FRAME);
@@ -132,6 +136,7 @@ public class MessageFramer implements Framer {
 
   @Override
   public void writeStatus(Status status) {
+    verifyNotClosed();
     short code = (short) status.getCode().getNumber();
     scratch.clear();
     scratch.put(GrpcFramingUtil.STATUS_FRAME);
@@ -144,20 +149,34 @@ public class MessageFramer implements Framer {
 
   @Override
   public void flush() {
+    verifyNotClosed();
     framer.flush();
   }
 
   @Override
+  public boolean isClosed() {
+    return framer == null;
+  }
+
+  @Override
   public void close() {
-    // TODO(user): Returning buffer to a pool would go here
-    framer.close();
-    framer = null;
+    if (!isClosed()) {
+      // TODO(user): Returning buffer to a pool would go here
+      framer.close();
+      framer = null;
+    }
   }
 
   @Override
   public void dispose() {
     // TODO(user): Returning buffer to a pool would go here
     framer = null;
+  }
+
+  private void verifyNotClosed() {
+    if (isClosed()) {
+      throw new IllegalStateException("Framer already closed");
+    }
   }
 
   /**

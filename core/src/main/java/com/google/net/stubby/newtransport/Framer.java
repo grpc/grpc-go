@@ -11,12 +11,12 @@ import java.io.InputStream;
 public interface Framer {
 
   /**
-   * Sink implemented by the transport layer to receive frames and forward them to their
-   * destination
+   * Sink implemented by the transport layer to receive frames and forward them to their destination
    */
   public interface Sink<T> {
     /**
      * Deliver a frame via the transport.
+     *
      * @param frame the contents of the frame to deliver
      * @param endOfStream whether the frame is the last one for the GRPC stream
      */
@@ -47,12 +47,20 @@ public interface Framer {
   public void flush();
 
   /**
-   * Flushes and closes the framer and releases any buffers.
+   * Indicates whether or not this {@link Framer} has been closed via a call to either
+   * {@link #close()} or {@link #dispose()}.
+   */
+  public boolean isClosed();
+
+  /**
+   * Flushes and closes the framer and releases any buffers. After the {@link Framer} is closed or
+   * disposed, additional calls to this method will have no affect.
    */
   public void close();
 
   /**
-   * Closes the framer and releases any buffers, but does not flush.
+   * Closes the framer and releases any buffers, but does not flush. After the {@link Framer} is
+   * closed or disposed, additional calls to this method will have no affect.
    */
   public void dispose();
 }
