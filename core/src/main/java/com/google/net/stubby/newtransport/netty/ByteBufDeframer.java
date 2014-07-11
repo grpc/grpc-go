@@ -54,6 +54,10 @@ public class ByteBufDeframer extends Deframer<ByteBuf> {
 
   @Override
   protected ByteBuf decompress(ByteBuf frame) throws IOException {
+    if (frame.readableBytes() == 0) {
+      frame.retain();
+      return frame;
+    }
     frame = frame.order(ByteOrder.BIG_ENDIAN);
     int compressionType = frame.readUnsignedByte();
     int frameLength = frame.readUnsignedMedium();
