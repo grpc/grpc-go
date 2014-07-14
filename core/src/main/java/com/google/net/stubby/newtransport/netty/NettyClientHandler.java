@@ -22,7 +22,6 @@ import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
-import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamException;
 import io.netty.handler.codec.http2.Http2StreamRemovalPolicy;
@@ -30,6 +29,7 @@ import io.netty.handler.codec.http2.Http2StreamRemovalPolicy;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
+import java.util.Map;
 
 /**
  * Client-side Netty handler for GRPC processing. All event handlers are executed entirely within
@@ -310,15 +310,20 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
       // Finish creation of the stream by writing a headers frame.
       final PendingStream pendingStream = pendingStreams.remove();
       // TODO(user): Change Netty to not send priority, just use default.
-      Http2Headers headers = DefaultHttp2Headers
-          .newBuilder()
+      DefaultHttp2Headers.Builder headersBuilder = DefaultHttp2Headers.newBuilder();
+      // Add custom headers from the method descriptor
+      for (Map.Entry<String, String> entry : pendingStream.method.getHeaders().entrySet()) {
+        headersBuilder.add(entry.getKey(), entry.getValue());
+      }
+      headersBuilder
           .method(HTTP_METHOD)
           .authority(host)
           .scheme(scheme)
           .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC)
           .path("/" + pendingStream.method.getName())
           .build();
-      writeHeaders(ctx(), ctx().newPromise(), streamId, headers, 0, false, false).addListener(
+      writeHeaders(ctx(), ctx().newPromise(), streamId, headersBuilder.build(),
+          0, false, false).addListener(
           new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {

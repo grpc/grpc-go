@@ -1,5 +1,7 @@
 package com.google.net.stubby;
 
+import java.util.Map;
+
 /**
  * Session interface to be bound to the transport layer which is used by the higher-level
  * layers to dispatch calls.
@@ -15,5 +17,7 @@ public interface Session {
   /**
    * Start a request in the context of this session.
    */
-  public Request startRequest(String operationName, Response.ResponseBuilder responseBuilder);
+  public Request startRequest(String operationName,
+                              Map<String, String> headers,
+                              Response.ResponseBuilder responseBuilder);
 }

@@ -15,6 +15,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.StreamState;
@@ -97,6 +98,7 @@ public class NettyClientHandlerTest {
     mockFuture(true);
 
     when(method.getName()).thenReturn("fakemethod");
+    when(method.getHeaders()).thenReturn(ImmutableMap.of("auth", "sometoken"));
     when(stream.state()).thenReturn(StreamState.OPEN);
 
     // Simulate activation of the handler to force writing of the initial settings
@@ -137,6 +139,7 @@ public class NettyClientHandlerTest {
     assertEquals("www.fake.com", headers.authority());
     assertEquals(CONTENT_TYPE_PROTORPC, headers.get(CONTENT_TYPE_HEADER));
     assertEquals("/fakemethod", headers.path());
+    assertEquals("sometoken", headers.get("auth"));
   }
 
   @Test

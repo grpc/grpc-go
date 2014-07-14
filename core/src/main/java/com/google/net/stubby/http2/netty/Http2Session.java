@@ -6,9 +6,8 @@ import com.google.net.stubby.Response;
 import com.google.net.stubby.Session;
 import com.google.net.stubby.transport.MessageFramer;
 
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import io.netty.channel.ChannelHandlerContext;
 
 /**
  * An implementation of {@link Session} that can be used by clients to start
@@ -34,10 +33,11 @@ public class Http2Session implements Session {
   }
 
   @Override
-  public Request startRequest(String operationName, Response.ResponseBuilder response) {
+  public Request startRequest(String operationName, Map<String, String> headers,
+                              Response.ResponseBuilder response) {
     int nextSessionId = getNextStreamId();
     Request operation = new Http2Request(response.build(nextSessionId), operationName,
-        writer, new MessageFramer(4096));
+        headers, writer, new MessageFramer(4096));
     requestRegistry.register(operation);
     return operation;
   }

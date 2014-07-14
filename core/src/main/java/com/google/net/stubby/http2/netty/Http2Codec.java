@@ -1,5 +1,6 @@
 package com.google.net.stubby.http2.netty;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.net.stubby.NoOpRequest;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Operation.Phase;
@@ -10,6 +11,8 @@ import com.google.net.stubby.Session;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.MessageFramer;
 import com.google.net.stubby.transport.Transport.Code;
+
+import java.util.Map;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
@@ -224,8 +227,13 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     if (operationName == null) {
       return null;
     }
+    ImmutableMap.Builder<String, String> headerMap = ImmutableMap.builder();
+    for (Map.Entry<String, String> header : headers) {
+      headerMap.put(header);
+    }
     // Create the operation and bind a HTTP2 response operation
-    Request op = session.startRequest(operationName, createResponse(new Http2Writer(ctx),
+    Request op = session.startRequest(operationName, headerMap.build(),
+        createResponse(new Http2Writer(ctx),
         streamId));
     if (op == null) {
       return null;

@@ -1,5 +1,6 @@
 package com.google.net.stubby.http;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteBuffers;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -19,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.Enumeration;
 import java.util.concurrent.Executor;
 
 import javax.servlet.ServletException;
@@ -79,6 +81,7 @@ public class ServletSession extends HttpServlet {
   /**
    * Start the Request operation on the server
    */
+  @SuppressWarnings("unchecked")
   private Request startRequest(HttpServletRequest req, HttpServletResponse resp,
       ResponseStream responseStream) throws IOException {
     // TODO(user): Move into shared utility
@@ -93,8 +96,17 @@ public class ServletSession extends HttpServlet {
       resp.sendError(HttpServletResponse.SC_NOT_FOUND);
       return null;
     }
+
+    ImmutableMap.Builder<String, String> headerMapBuilder = ImmutableMap.builder();
+    Enumeration headerNames = req.getHeaderNames();
+    while (headerNames.hasMoreElements()) {
+      String name = headerNames.nextElement().toString();
+      headerMapBuilder.put(name, req.getHeader(name));
+    }
+
     // Create the operation and bind an HTTP response operation
-    Request op = session.startRequest(operationName, HttpResponseOperation.builder(responseStream));
+    Request op = session.startRequest(operationName, headerMapBuilder.build(),
+        HttpResponseOperation.builder(responseStream));
     if (op == null) {
       // TODO(user): Unify error handling once spec finalized
       resp.sendError(HttpServletResponse.SC_NOT_FOUND, "Unknown RPC operation");

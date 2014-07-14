@@ -25,16 +25,17 @@ import com.squareup.okhttp.internal.spdy.Http20Draft10;
 import com.squareup.okhttp.internal.spdy.Settings;
 import com.squareup.okhttp.internal.spdy.Variant;
 
+import java.io.IOException;
+import java.net.Socket;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import okio.BufferedSink;
 import okio.BufferedSource;
 import okio.ByteString;
 import okio.Okio;
-
-import java.io.IOException;
-import java.net.Socket;
-import java.util.List;
-import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Basic implementation of {@link Session} using OkHttp
@@ -146,10 +147,11 @@ public class OkHttpSession implements Session {
   }
 
   @Override
-  public Request startRequest(String operationName, Response.ResponseBuilder responseBuilder) {
+  public Request startRequest(String operationName, Map<String, String> headers,
+                              Response.ResponseBuilder responseBuilder) {
     int nextStreamId = getNextStreamId();
     Response response = responseBuilder.build(nextStreamId);
-    Http2Request request = new Http2Request(frameWriter, operationName, response,
+    Http2Request request = new Http2Request(frameWriter, operationName, headers, response,
         requestRegistry, new MessageFramer(4096));
     return request;
   }
@@ -255,16 +257,21 @@ public class OkHttpSession implements Session {
         HeadersMode headersMode) {
       Operation op = getOperation(streamId);
 
+      ImmutableMap.Builder<String, String> mapBuilder = ImmutableMap.builder();
+      for (Header header : headers) {
+        mapBuilder.put(header.name.utf8(), header.value.utf8());
+      }
+      Map<String, String> headersMap = mapBuilder.build();
+
       // Start an Operation for SYN_STREAM
       if (op == null && headersMode == HeadersMode.HTTP_20_HEADERS) {
-        for (Header header : headers) {
-          if (header.name.equals(Header.TARGET_PATH)) {
-            Request request = serverSession.startRequest(header.value.utf8(),
-                Http2Response.builder(streamId, frameWriter, new MessageFramer(4096)));
-            requestRegistry.register(request);
-            op = request;
-            break;
-          }
+        String path = headersMap.get(Header.TARGET_PATH.utf8());
+        if (path != null) {
+          Request request = serverSession.startRequest(path,
+              headersMap,
+              Http2Response.builder(streamId, frameWriter, new MessageFramer(4096)));
+          requestRegistry.register(request);
+          op = request;
         }
       }
       if (op == null) {

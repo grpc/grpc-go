@@ -7,6 +7,8 @@ import com.google.net.stubby.MethodDescriptor;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import javax.inject.Provider;
+
 /**
  * Common base type for stub implementations. Allows for reconfiguration.
  */
@@ -53,22 +55,22 @@ public abstract class AbstractStub<S extends AbstractStub, C extends AbstractSer
     }
 
     /**
-     * Set a timeout for all methods in the stub.
+     * Set a header provider for all methods in the stub.
      */
-    public StubConfigBuilder setTimeout(long timeout, TimeUnit unit) {
-      for (MethodDescriptor methodDescriptor : methodMap.values()) {
-        setTimeout(methodDescriptor, timeout, unit);
+    public StubConfigBuilder setHeader(String headerName, Provider<String> headerValueProvider) {
+      for (Map.Entry<String, MethodDescriptor> entry : methodMap.entrySet()) {
+        entry.setValue(entry.getValue().withHeader(headerName, headerValueProvider));
       }
       return this;
     }
 
     /**
-     * Set the timeout for the specified method in microseconds.
+     * Set a timeout for all methods in the stub.
      */
-    private StubConfigBuilder setTimeout(MethodDescriptor method, long timeout, TimeUnit unit) {
-      // This is the pattern we would use for per-method configuration but currently
-      // no strong use-cases for it, hence private here
-      methodMap.put(method.getName(), method.withTimeout(timeout, unit));
+    public StubConfigBuilder setTimeout(long timeout, TimeUnit unit) {
+      for (Map.Entry<String, MethodDescriptor> entry : methodMap.entrySet()) {
+        entry.setValue(entry.getValue().withTimeout(timeout, unit));
+      }
       return this;
     }
 

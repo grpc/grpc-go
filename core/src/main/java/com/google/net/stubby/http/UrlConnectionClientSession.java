@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 /**
  * Implementation of {@link Session} using {@link HttpURLConnection} for clients. Services
@@ -30,8 +31,9 @@ public class UrlConnectionClientSession implements Session {
   }
 
   @Override
-  public Request startRequest(String operationName, Response.ResponseBuilder responseBuilder) {
-    return new Request(base.resolve(operationName), responseBuilder.build());
+  public Request startRequest(String operationName, Map<String, String> headers,
+                              Response.ResponseBuilder responseBuilder) {
+    return new Request(base.resolve(operationName), headers, responseBuilder.build());
   }
 
   private class Request extends AbstractRequest implements Framer.Sink {
@@ -40,7 +42,7 @@ public class UrlConnectionClientSession implements Session {
     private final DataOutputStream outputStream;
     private final MessageFramer framer;
 
-    private Request(URI uri, Response response) {
+    private Request(URI uri, Map<String, String> headers, Response response) {
       super(response);
       try {
         connection = (HttpURLConnection) uri.toURL().openConnection();
@@ -48,6 +50,9 @@ public class UrlConnectionClientSession implements Session {
         connection.setDoInput(true);
         connection.setRequestMethod("POST");
         connection.setRequestProperty("Content-Type", "application/protorpc");
+        for (Map.Entry<String, String> header : headers.entrySet()) {
+          connection.setRequestProperty(header.getKey(), header.getValue());
+        }
         outputStream = new DataOutputStream(connection.getOutputStream());
       } catch (IOException t) {
         throw new RuntimeException(t);
