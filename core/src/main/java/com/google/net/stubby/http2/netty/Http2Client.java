@@ -8,6 +8,8 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.RequestRegistry;
 import com.google.net.stubby.Session;
 
+import io.netty.handler.codec.http2.Http2OrHttpChooser;
+
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.Channel;
@@ -46,8 +48,8 @@ import javax.net.ssl.SSLEngine;
  * with protocol bindings.
  */
 public class Http2Client {
-  /** HTTP2 draft 12 protocol name. */
-  public static final String HTTP_VERSION_NAME = "h2-12";
+  public static final String HTTP_VERSION_NAME =
+      Http2OrHttpChooser.SelectedProtocol.HTTP_2.protocolName();
 
   private static final String[] JETTY_TLS_NEGOTIATION_IMPL = {
       "org.eclipse.jetty.alpn.ALPN", // Prefer ALPN to NPN so try it first

@@ -60,7 +60,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
 
   public NettyClientHandler(String host, boolean ssl,
       Http2StreamRemovalPolicy streamRemovalPolicy) {
-    this(host, ssl, new DefaultHttp2Connection(false, false, streamRemovalPolicy));
+    this(host, ssl, new DefaultHttp2Connection(false, streamRemovalPolicy));
   }
 
   private NettyClientHandler(String host, boolean ssl, Http2Connection connection) {
@@ -121,8 +121,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
       ByteBuf data,
       int padding,
       boolean endOfStream,
-      boolean endOfSegment,
-      boolean compressed) throws Http2Exception {
+      boolean endOfSegment) throws Http2Exception {
     NettyClientStream stream = clientStream(connection().requireStream(streamId));
 
     // TODO(user): update flow controller to use a promise.

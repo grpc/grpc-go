@@ -239,7 +239,7 @@ public class NettyClientHandlerTest {
     // Need to retain the content since the frameWriter releases it.
     content.retain();
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeData(ctx, newPromise(), streamId, content, 0, endStream, false, false);
+    frameWriter.writeData(ctx, newPromise(), streamId, content, 0, endStream, false);
     return captureWrite(ctx);
   }
 
