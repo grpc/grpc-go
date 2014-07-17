@@ -14,7 +14,7 @@ import com.google.net.stubby.testing.integration.Test.Payload;
 import com.google.net.stubby.testing.integration.Test.PayloadType;
 import com.google.net.stubby.testing.integration.Test.SimpleRequest;
 import com.google.net.stubby.testing.integration.Test.SimpleResponse;
-import com.google.net.stubby.testing.integration.grpcapi.TestService;
+import com.google.net.stubby.testing.integration.TestServiceGrpc;
 import com.google.protobuf.ByteString;
 
 import org.hamcrest.BaseMatcher;
@@ -70,8 +70,8 @@ public class ContextExchangeChannelTest {
         exchange.receive("auth", Marshallers.forProto(SimpleResponse.PARSER));
     // Should be null, nothing has happened
     assertNull(auth.get());
-    TestService.TestServiceBlockingStub stub =
-        TestService.blockingClient(exchange);
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        TestServiceGrpc.newBlockingStub(exchange);
     callStub(stub);
     assertEquals(RESP, auth.get());
     exchange.clearLastReceived();
@@ -82,8 +82,8 @@ public class ContextExchangeChannelTest {
   public void testSend() throws Exception {
     ContextExchangeChannel exchange = new ContextExchangeChannel(channel);
     exchange.send("auth", RESP, Marshallers.forProto(SimpleResponse.PARSER));
-    TestService.TestServiceBlockingStub stub =
-        TestService.blockingClient(exchange);
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        TestServiceGrpc.newBlockingStub(exchange);
     callStub(stub);
     verify(call).sendContext(eq("auth"),
         argThat(new BaseMatcher<InputStream>() {
@@ -105,7 +105,7 @@ public class ContextExchangeChannelTest {
   }
 
   @SuppressWarnings("unchecked")
-  private void callStub(final TestService.TestServiceBlockingStub stub) throws Exception {
+  private void callStub(final TestServiceGrpc.TestServiceBlockingStub stub) throws Exception {
     when(channel.newCall(Mockito.<MethodDescriptor>any())).thenReturn(call);
 
     // execute the call in another thread so we don't deadlock waiting for the
