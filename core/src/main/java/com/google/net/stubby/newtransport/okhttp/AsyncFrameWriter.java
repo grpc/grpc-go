@@ -28,11 +28,11 @@ class AsyncFrameWriter implements FrameWriter {
   }
 
   @Override
-  public void connectionHeader() {
+  public void connectionPreface() {
     executor.execute(new WriteRunnable() {
       @Override
       public void doRun() throws IOException {
-        frameWriter.connectionHeader();
+        frameWriter.connectionPreface();
       }
     });
   }
@@ -70,13 +70,11 @@ class AsyncFrameWriter implements FrameWriter {
 
   @Override
   public void synStream(final boolean outFinished, final boolean inFinished, final int streamId,
-      final int associatedStreamId, final int priority, final int slot,
-      final List<Header> headerBlock) {
+      final int associatedStreamId, final List<Header> headerBlock) {
     executor.execute(new WriteRunnable() {
       @Override
       public void doRun() throws IOException {
-        frameWriter.synStream(outFinished, inFinished, streamId, associatedStreamId, priority,
-          slot, headerBlock);
+        frameWriter.synStream(outFinished, inFinished, streamId, associatedStreamId, headerBlock);
       }
     });
   }

@@ -32,7 +32,7 @@ public class Http2Response extends Http2Operation implements Response {
   private Http2Response(int id, FrameWriter frameWriter, Framer framer) {
     super(id, frameWriter, framer);
     try {
-      frameWriter.synStream(false, false, getId(), 0, 0, 0, Headers.createResponseHeaders());
+      frameWriter.synStream(false, false, getId(), 0, Headers.createResponseHeaders());
     } catch (IOException ioe) {
       close(new Status(Transport.Code.INTERNAL, ioe));
     }

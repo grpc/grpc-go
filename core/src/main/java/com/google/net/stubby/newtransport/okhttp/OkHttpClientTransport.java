@@ -20,7 +20,7 @@ import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
 import com.squareup.okhttp.internal.spdy.Header;
 import com.squareup.okhttp.internal.spdy.HeadersMode;
-import com.squareup.okhttp.internal.spdy.Http20Draft10;
+import com.squareup.okhttp.internal.spdy.Http20Draft12;
 import com.squareup.okhttp.internal.spdy.Settings;
 import com.squareup.okhttp.internal.spdy.Variant;
 
@@ -107,7 +107,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-    Variant variant = new Http20Draft10();
+    Variant variant = new Http20Draft12();
     frameReader = variant.newReader(source, true);
     frameWriter = new AsyncFrameWriter(variant.newWriter(sink, true), this, executor);
 
@@ -222,8 +222,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
         boolean inFinished,
         int streamId,
         int associatedStreamId,
-        int priority,
-        List<Header> headers,
+        List<Header> headerBlock,
         HeadersMode headersMode) {
       // TODO(user): handle received headers.
     }
@@ -273,9 +272,15 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     }
 
     @Override
-    public void priority(int streamId, int priority) {
+    public void priority(int streamId, int streamDependency, int weight, boolean exclusive) {
       // Ignore priority change.
       // TODO(user): log
+    }
+
+    @Override
+    public void alternateService(int streamId, String origin, ByteString protocol, String host,
+        int port, long maxAge) {
+      // TODO(user): Deal with alternateService propagation
     }
   }
 
@@ -294,7 +299,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
         streamId = nextStreamId;
         nextStreamId += 2;
         streams.put(streamId, this);
-        frameWriter.synStream(false, false, streamId, 0, 0, 0,
+        frameWriter.synStream(false, false, streamId, 0,
             Headers.createRequestHeaders(method.getName()));
       }
       deframer = new InputStreamDeframer(inboundMessageHandler());

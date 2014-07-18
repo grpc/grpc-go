@@ -34,13 +34,7 @@ public class Http2Request extends Http2Operation implements Request {
       for (Map.Entry<String, String> entry : headers.entrySet()) {
         requestHeaders.add(new Header(entry.getKey(), entry.getValue()));
       }
-      frameWriter.synStream(false,
-          false,
-          getId(),
-          0,
-          0,
-          0,
-          requestHeaders);
+      frameWriter.synStream(false, false, getId(), 0, requestHeaders);
     } catch (IOException ioe) {
       close(new Status(Transport.Code.UNKNOWN, ioe));
     }
