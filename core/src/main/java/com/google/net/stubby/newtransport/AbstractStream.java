@@ -258,6 +258,6 @@ public abstract class AbstractStream implements Stream {
       public void run() {
         Closeables.closeQuietly(input);
       }
-    }, MoreExecutors.sameThreadExecutor());
+    }, MoreExecutors.directExecutor());
   }
 }

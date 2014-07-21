@@ -73,7 +73,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
       }
       activeTransport = transportFactory.newClientTransport();
       activeTransport.addListener(
-          new TransportListener(activeTransport), MoreExecutors.sameThreadExecutor());
+          new TransportListener(activeTransport), MoreExecutors.directExecutor());
       transports.add(activeTransport);
       activeTransport.startAsync();
     }
@@ -221,7 +221,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
                     // TODO(user): If their Future fails, should we Call.cancel()?
                     ours.set(null);
                   }
-                }, MoreExecutors.sameThreadExecutor());
+                }, MoreExecutors.directExecutor());
               }
             } catch (Throwable t) {
               ours.set(null);
