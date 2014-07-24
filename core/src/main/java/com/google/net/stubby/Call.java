@@ -15,6 +15,8 @@ import javax.annotation.Nullable;
  *
  * <p>{@link #start} is required to be the first of any methods called.
  *
+ * <p>Any contexts must be sent before any payloads, which must be sent before half closing.
+ *
  * <p>No generic method for determining message receipt or providing acknowlegement is provided.
  * Applications are expected to utilize normal payload messages for such signals, as a response
  * natually acknowledges its request.
@@ -25,6 +27,9 @@ public abstract class Call<RequestT, ResponseT> {
   /**
    * Callbacks for consuming incoming RPC messages.
    *
+   * <p>Any contexts are guaranteed to arrive before any payloads, which are guaranteed before
+   * close.
+   *
    * <p>Implementations are free to block for extended periods of time. Implementations are not
    * required to be thread-safe.
    */
@@ -33,7 +38,7 @@ public abstract class Call<RequestT, ResponseT> {
      * A response context has been received. Any context messages will precede payload messages.
      *
      * <p>The {@code value} {@link InputStream} will be closed when the returned future completes.
-     * If no future is returned, the stream will be closed immediately after returning from this
+     * If no future is returned, the value will be closed immediately after returning from this
      * method.
      */
     @Nullable
@@ -81,7 +86,8 @@ public abstract class Call<RequestT, ResponseT> {
    *
    * @param name key identifier of context
    * @param value context value bytes
-   * @throws IllegalStateException if call is {@link #halfClose}d or {@link #cancel}ed
+   * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed,
+   *     or after {@link #sendPayload}
    */
   public void sendContext(String name, InputStream value) {
     sendContext(name, value, null);
@@ -99,7 +105,8 @@ public abstract class Call<RequestT, ResponseT> {
    * @param name key identifier of context
    * @param value context value bytes
    * @param accepted notification for adhering to flow control, or {@code null}
-   * @throws IllegalStateException if call is {@link #halfClose}d or {@link #cancel}ed
+   * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed,
+   *     or after {@link #sendPayload}
    */
   public abstract void sendContext(String name, InputStream value,
       @Nullable SettableFuture<Void> accepted);
@@ -109,7 +116,7 @@ public abstract class Call<RequestT, ResponseT> {
    * RPCs. Multiple payload messages may exist for streaming calls.
    *
    * @param payload message
-   * @throws IllegalStateException if call is {@link #halfClose}d or {@link #cancel}ed
+   * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed
    */
   public void sendPayload(RequestT payload) {
     sendPayload(payload, null);
