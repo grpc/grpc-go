@@ -107,7 +107,7 @@ public abstract class AbstractStream implements Stream {
   }
 
   @Override
-  public final void close() {
+  public final void halfClose() {
     outboundPhase(Phase.STATUS);
     synchronized (stateLock) {
       state = state == OPEN ? READ_ONLY : CLOSED;

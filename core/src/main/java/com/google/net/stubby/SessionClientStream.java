@@ -67,7 +67,7 @@ public class SessionClientStream implements ClientStream {
   }
 
   @Override
-  public void close() {
+  public void halfClose() {
     request.close(Status.OK);
   }
 

@@ -148,7 +148,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
     @Override
     public void halfClose() {
       Preconditions.checkState(stream != null, "Not started");
-      stream.close();
+      stream.halfClose();
     }
 
     private int available(InputStream is) {

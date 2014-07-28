@@ -95,7 +95,7 @@ public class NettyClientStreamTest {
   public void closeShouldSucceed() {
     // Force stream creation.
     stream.id(1);
-    stream.close();
+    stream.halfClose();
     assertEquals(StreamState.READ_ONLY, stream.state());
   }
 
