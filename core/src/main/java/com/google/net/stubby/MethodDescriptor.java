@@ -112,7 +112,7 @@ public class MethodDescriptor<RequestT, ResponseT> {
   /**
    * Create a new descriptor with a different timeout
    */
-  public MethodDescriptor withTimeout(long timeout, TimeUnit unit) {
+  public MethodDescriptor<RequestT, ResponseT> withTimeout(long timeout, TimeUnit unit) {
     return new MethodDescriptor<RequestT, ResponseT>(type, name, unit.toMicros(timeout),
         requestMarshaller, responseMarshaller, headers);
   }
@@ -120,7 +120,8 @@ public class MethodDescriptor<RequestT, ResponseT> {
   /**
    * Create a new descriptor with an additional bound header.
    */
-  public MethodDescriptor withHeader(String headerName, Provider<String> headerValueProvider) {
+  public MethodDescriptor<RequestT, ResponseT> withHeader(String headerName,
+      Provider<String> headerValueProvider) {
     return new MethodDescriptor<RequestT, ResponseT>(type, name, timeoutMicros,
         requestMarshaller, responseMarshaller,
         ImmutableMap.<String, Provider<String>>builder().
