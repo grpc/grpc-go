@@ -1,7 +1,7 @@
 package com.google.net.stubby.newtransport.netty;
 
 import com.google.net.stubby.newtransport.Deframer;
-import com.google.net.stubby.newtransport.Framer;
+import com.google.net.stubby.newtransport.GrpcMessageListener;
 import com.google.net.stubby.newtransport.TransportFrameUtil;
 
 import io.netty.buffer.ByteBuf;
@@ -21,11 +21,11 @@ public class ByteBufDeframer extends Deframer<ByteBuf> {
 
   private final CompositeByteBuf buffer;
 
-  public ByteBufDeframer(Framer target) {
+  public ByteBufDeframer(GrpcMessageListener target) {
     this(UnpooledByteBufAllocator.DEFAULT, target);
   }
 
-  public ByteBufDeframer(ByteBufAllocator alloc, Framer target) {
+  public ByteBufDeframer(ByteBufAllocator alloc, GrpcMessageListener target) {
     super(target);
     buffer = alloc.compositeBuffer();
   }

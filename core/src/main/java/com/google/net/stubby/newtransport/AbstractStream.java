@@ -49,9 +49,9 @@ public abstract class AbstractStream implements Stream {
   /**
    * Handler for Deframer output.
    */
-  private final Framer inboundMessageHandler = new Framer() {
+  private final GrpcMessageListener inboundMessageHandler = new GrpcMessageListener() {
     @Override
-    public void writeContext(String name, InputStream value, int length) {
+    public void onContext(String name, InputStream value, int length) {
       ListenableFuture<Void> future = null;
       try {
         inboundPhase(Phase.CONTEXT);
@@ -62,7 +62,7 @@ public abstract class AbstractStream implements Stream {
     }
 
     @Override
-    public void writePayload(InputStream input, int length) {
+    public void onPayload(InputStream input, int length) {
       ListenableFuture<Void> future = null;
       try {
         inboundPhase(Phase.MESSAGE);
@@ -73,24 +73,10 @@ public abstract class AbstractStream implements Stream {
     }
 
     @Override
-    public void writeStatus(Status status) {
+    public void onStatus(Status status) {
       inboundPhase(Phase.STATUS);
       setStatus(status);
     }
-
-    @Override
-    public void flush() {}
-
-    @Override
-    public boolean isClosed() {
-      return false;
-    }
-
-    @Override
-    public void close() {}
-
-    @Override
-    public void dispose() {}
   };
 
   protected AbstractStream(StreamListener listener) {
@@ -213,7 +199,7 @@ public abstract class AbstractStream implements Stream {
    * Gets the handler for inbound messages. Subclasses must use this as the target for a
    * {@link com.google.net.stubby.newtransport.Deframer}.
    */
-  protected final Framer inboundMessageHandler() {
+  protected final GrpcMessageListener inboundMessageHandler() {
     return inboundMessageHandler;
   }
 
