@@ -1,7 +1,8 @@
 package com.google.net.stubby.newtransport.okhttp;
 
 import com.google.common.util.concurrent.SerializingExecutor;
-import com.google.common.util.concurrent.Service;
+import com.google.net.stubby.Status;
+import com.google.net.stubby.transport.Transport.Code;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameWriter;
@@ -17,9 +18,10 @@ import java.util.concurrent.Executor;
 class AsyncFrameWriter implements FrameWriter {
   private final FrameWriter frameWriter;
   private final Executor executor;
-  private final Service transport;
+  private final OkHttpClientTransport transport;
 
-  public AsyncFrameWriter(FrameWriter frameWriter, Service transport, Executor executor) {
+  public AsyncFrameWriter(FrameWriter frameWriter, OkHttpClientTransport transport,
+      Executor executor) {
     this.frameWriter = frameWriter;
     this.transport = transport;
     // Although writes are thread-safe, we serialize them to prevent consuming many Threads that are
@@ -158,6 +160,8 @@ class AsyncFrameWriter implements FrameWriter {
       @Override
       public void doRun() throws IOException {
         frameWriter.goAway(lastGoodStreamId, errorCode, debugData);
+        // Flush it since after goAway, we are likely to close this writer.
+        frameWriter.flush();
       }
     });
   }
@@ -188,7 +192,7 @@ class AsyncFrameWriter implements FrameWriter {
       try {
         doRun();
       } catch (IOException ex) {
-        transport.stopAsync();
+        transport.abort(Status.fromThrowable(ex));
         throw new RuntimeException(ex);
       }
     }
