@@ -8,19 +8,21 @@ import com.google.net.stubby.newtransport.AbstractClientTransport;
 import com.google.net.stubby.newtransport.ClientStream;
 import com.google.net.stubby.newtransport.ClientTransport;
 import com.google.net.stubby.newtransport.StreamListener;
+import com.google.net.stubby.newtransport.netty.NettyClientTransportFactory.NegotiationType;
+import com.google.net.stubby.testing.utils.ssl.SslContextFactory;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http2.DefaultHttp2StreamRemovalPolicy;
 
 import java.util.concurrent.ExecutionException;
+
+import javax.net.ssl.SSLEngine;
 
 /**
  * A Netty-based {@link ClientTransport} implementation.
@@ -30,31 +32,41 @@ class NettyClientTransport extends AbstractClientTransport {
   private final String host;
   private final int port;
   private final EventLoopGroup eventGroup;
-  private final ChannelInitializer<SocketChannel> channelInitializer;
+  private final Http2Negotiator.Negotiation negotiation;
   private Channel channel;
 
-  NettyClientTransport(String host, int port, boolean ssl) {
-    this(host, port, ssl, new NioEventLoopGroup());
+  NettyClientTransport(String host, int port, NegotiationType negotiationType) {
+    this(host, port, negotiationType, new NioEventLoopGroup());
   }
 
-  NettyClientTransport(String host, int port, boolean ssl, EventLoopGroup eventGroup) {
+  NettyClientTransport(String host, int port, NegotiationType negotiationType,
+      EventLoopGroup eventGroup) {
     Preconditions.checkNotNull(host, "host");
     Preconditions.checkArgument(port >= 0, "port must be positive");
     Preconditions.checkNotNull(eventGroup, "eventGroup");
+    Preconditions.checkNotNull(negotiationType, "negotiationType");
     this.host = host;
     this.port = port;
     this.eventGroup = eventGroup;
     final DefaultHttp2StreamRemovalPolicy streamRemovalPolicy =
         new DefaultHttp2StreamRemovalPolicy();
-    final NettyClientHandler handler = new NettyClientHandler(host, ssl, streamRemovalPolicy);
-    // TODO(user): handle SSL.
-    channelInitializer = new ChannelInitializer<SocketChannel>() {
-      @Override
-      protected void initChannel(SocketChannel ch) throws Exception {
-        ch.pipeline().addLast(streamRemovalPolicy);
-        ch.pipeline().addLast(handler);
-      }
-    };
+    final NettyClientHandler handler =
+        new NettyClientHandler(host, negotiationType == NegotiationType.TLS, streamRemovalPolicy);
+    switch (negotiationType) {
+      case PLAINTEXT:
+        negotiation = Http2Negotiator.plaintext(handler);
+        break;
+      case PLAINTEXT_UPGRADE:
+        negotiation = Http2Negotiator.plaintextUpgrade(handler);
+        break;
+      case TLS:
+        SSLEngine sslEngine = SslContextFactory.getClientContext().createSSLEngine();
+        sslEngine.setUseClientMode(true);
+        negotiation = Http2Negotiator.tls(handler, sslEngine);
+        break;
+      default:
+        throw new IllegalArgumentException("Unsupported negotiationType: " + negotiationType);
+    }
   }
 
   @Override
@@ -84,7 +96,7 @@ class NettyClientTransport extends AbstractClientTransport {
     b.group(eventGroup);
     b.channel(NioSocketChannel.class);
     b.option(SO_KEEPALIVE, true);
-    b.handler(channelInitializer);
+    b.handler(negotiation.initializer());
 
     // Start the connection operation to the server.
     b.connect(host, port).addListener(new ChannelFutureListener() {

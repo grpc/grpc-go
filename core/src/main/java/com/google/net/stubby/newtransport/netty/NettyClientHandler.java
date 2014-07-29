@@ -22,6 +22,7 @@ import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
+import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamException;
 import io.netty.handler.codec.http2.Http2StreamRemovalPolicy;
@@ -110,6 +111,21 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
     } catch (Throwable t) {
       promise.setFailure(t);
     }
+  }
+
+  @Override
+  public void onHeadersRead(ChannelHandlerContext ctx,
+      int streamId,
+      Http2Headers headers,
+      int streamDependency,
+      short weight,
+      boolean exclusive,
+      int padding,
+      boolean endStream,
+      boolean endSegment) throws Http2Exception {
+    // TODO(user): Assuming that all headers fit in a single HEADERS frame.
+    NettyClientStream stream = clientStream(connection().requireStream(streamId));
+    stream.inboundHeadersRecieved(headers);
   }
 
   /**
@@ -321,9 +337,8 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
           .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC)
           .path("/" + pendingStream.method.getName())
           .build();
-      writeHeaders(ctx(), ctx().newPromise(), streamId, headersBuilder.build(),
-          0, false, false).addListener(
-          new ChannelFutureListener() {
+      writeHeaders(ctx(), ctx().newPromise(), streamId, headersBuilder.build(), 0, false, false)
+          .addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {
               if (future.isSuccess()) {

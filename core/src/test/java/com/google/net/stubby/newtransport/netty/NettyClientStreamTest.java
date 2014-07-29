@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
@@ -30,6 +31,8 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
@@ -167,6 +170,9 @@ public class NettyClientStreamTest {
 
   @Test
   public void inboundContextShouldCallListener() throws Exception {
+    // Receive headers first so that it's a valid GRPC response.
+    stream.inboundHeadersRecieved(grpcResponseHeaders());
+
     stream.inboundDataReceived(contextFrame(), false, promise);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
     verify(listener).contextRead(eq(CONTEXT_KEY), captor.capture(), eq(MESSAGE.length()));
@@ -176,6 +182,9 @@ public class NettyClientStreamTest {
 
   @Test
   public void inboundMessageShouldCallListener() throws Exception {
+    // Receive headers first so that it's a valid GRPC response.
+    stream.inboundHeadersRecieved(grpcResponseHeaders());
+
     stream.inboundDataReceived(messageFrame(), false, promise);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
     verify(listener).messageRead(captor.capture(), eq(MESSAGE.length()));
@@ -186,12 +195,24 @@ public class NettyClientStreamTest {
   @Test
   public void inboundStatusShouldSetStatus() throws Exception {
     stream.id(1);
+
+    // Receive headers first so that it's a valid GRPC response.
+    stream.inboundHeadersRecieved(grpcResponseHeaders());
+
     stream.inboundDataReceived(statusFrame(), false, promise);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture());
     assertEquals(Transport.Code.INTERNAL, captor.getValue().getCode());
     verify(promise).setSuccess();
     assertEquals(StreamState.CLOSED, stream.state());
+  }
+
+  @Test
+  public void nonGrpcResponseShouldSetStatus() throws Exception {
+    stream.inboundDataReceived(Unpooled.copiedBuffer(MESSAGE, UTF_8), true, promise);
+    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
+    verify(listener).closed(captor.capture());
+    assertEquals(MESSAGE, captor.getValue().getDescription());
   }
 
   private String toString(InputStream in) throws Exception {
@@ -201,8 +222,12 @@ public class NettyClientStreamTest {
   }
 
   private ByteBuf contextFrame() throws Exception {
-    byte[] body = ContextValue.newBuilder().setKey(CONTEXT_KEY)
-        .setValue(ByteString.copyFromUtf8(MESSAGE)).build().toByteArray();
+    byte[] body = ContextValue
+        .newBuilder()
+        .setKey(CONTEXT_KEY)
+        .setValue(ByteString.copyFromUtf8(MESSAGE))
+        .build()
+        .toByteArray();
     ByteArrayOutputStream os = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(os);
     dos.write(CONTEXT_VALUE_FRAME);
@@ -244,6 +269,11 @@ public class NettyClientStreamTest {
     buf.writeInt(data.length);
     buf.writeBytes(data);
     return buf;
+  }
+
+  private Http2Headers grpcResponseHeaders() {
+    return DefaultHttp2Headers.newBuilder().status("200")
+        .set(HttpUtil.CONTENT_TYPE_HEADER, HttpUtil.CONTENT_TYPE_PROTORPC).build();
   }
 
   private void mockChannelFuture(boolean succeeded) {

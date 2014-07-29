@@ -18,6 +18,7 @@ import static org.mockito.Mockito.when;
 import com.google.common.collect.ImmutableMap;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
@@ -33,6 +34,7 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
@@ -177,6 +179,18 @@ public class NettyClientHandlerTest {
   }
 
   @Test
+  public void inboundHeadersShouldForwardToStream() throws Exception {
+    createStream();
+
+    // Read a headers frame first.
+    Http2Headers headers = DefaultHttp2Headers.newBuilder().status("200")
+        .set(HttpUtil.CONTENT_TYPE_HEADER, HttpUtil.CONTENT_TYPE_PROTORPC).build();
+    ByteBuf headersFrame = headersFrame(3, headers);
+    handler.channelRead(this.ctx, headersFrame);
+    verify(stream).inboundHeadersRecieved(headers);
+  }
+
+  @Test
   public void inboundDataShouldForwardToStream() throws Exception {
     createStream();
 
@@ -233,6 +247,12 @@ public class NettyClientHandlerTest {
     handler.channelRead(ctx, serializedSettings);
     // Reset the context to clear this write.
     mockContext();
+  }
+
+  private ByteBuf headersFrame(int streamId, Http2Headers headers) {
+    ChannelHandlerContext ctx = newContext();
+    frameWriter.writeHeaders(ctx, promise, streamId, headers, 0, false, false);
+    return captureWrite(ctx);
   }
 
   private ByteBuf dataFrame(int streamId, boolean endStream) {
