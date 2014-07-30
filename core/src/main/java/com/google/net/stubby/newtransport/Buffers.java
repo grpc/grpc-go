@@ -35,6 +35,13 @@ public final class Buffers {
   }
 
   /**
+   * Shortcut for {@code wrap(bytes, 0, bytes.length}.
+   */
+  public static Buffer wrap(byte[] bytes) {
+    return new ByteArrayWrapper(bytes, 0, bytes.length);
+  }
+
+  /**
    * Creates a new {@link Buffer} that is backed by the given byte array.
    *
    * @param bytes the byte array being wrapped.
@@ -109,9 +116,27 @@ public final class Buffers {
    * Creates a new {@link InputStream} backed by the given buffer. Any read taken on the stream will
    * automatically increment the read position of this buffer. Closing the stream, however, does not
    * affect the original buffer.
+   *
+   * @param buffer the buffer backing the new {@link InputStream}.
+   * @param owner if {@code true}, the returned stream will close the buffer when closed.
    */
-  public static InputStream openStream(Buffer buffer) {
-    return new BufferInputStream(buffer);
+  public static InputStream openStream(Buffer buffer, boolean owner) {
+    return new BufferInputStream(owner ? buffer : ignoreClose(buffer));
+  }
+
+  /**
+   * Decorates the given {@link Buffer} to ignore calls to {@link Buffer#close}.
+   *
+   * @param buffer the buffer to be decorated.
+   * @return a wrapper around {@code buffer} that ignores calls to {@link Buffer#close}.
+   */
+  public static Buffer ignoreClose(Buffer buffer) {
+    return new ForwardingBuffer(buffer) {
+      @Override
+      public void close() {
+        // Ignore.
+      }
+    };
   }
 
   /**
