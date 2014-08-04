@@ -35,6 +35,10 @@ public abstract class AbstractStub<S extends AbstractStub, C extends AbstractSer
     return new StubConfigBuilder();
   }
 
+  public Channel getChannel() {
+    return channel;
+  }
+
   /**
    * Returns a new stub configuration for the provided method configurations.
    */
@@ -46,8 +50,10 @@ public abstract class AbstractStub<S extends AbstractStub, C extends AbstractSer
   public class StubConfigBuilder {
 
     private final Map<String, MethodDescriptor> methodMap;
+    private Channel channel;
 
     private StubConfigBuilder() {
+      this.channel = AbstractStub.this.channel;
       methodMap = Maps.newHashMapWithExpectedSize(config.methods().size());
       for (MethodDescriptor method : AbstractStub.this.config.methods()) {
         methodMap.put(method.getName(), method);
@@ -71,6 +77,14 @@ public abstract class AbstractStub<S extends AbstractStub, C extends AbstractSer
       for (Map.Entry<String, MethodDescriptor> entry : methodMap.entrySet()) {
         entry.setValue(entry.getValue().withTimeout(timeout, unit));
       }
+      return this;
+    }
+
+    /**
+     * Set the channel to be used by the stub.
+     */
+    public StubConfigBuilder setChannel(Channel channel) {
+      this.channel = channel;
       return this;
     }
 

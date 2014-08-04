@@ -2,6 +2,8 @@ package com.google.net.stubby.newtransport;
 
 import com.google.net.stubby.transport.Transport;
 
+import java.net.HttpURLConnection;
+
 /**
  * Constants for GRPC-over-HTTP (or HTTP/2)
  */
@@ -32,6 +34,15 @@ public final class HttpUtil {
    * Maps HTTP error response status codes to transport codes.
    */
   public static Transport.Code httpStatusToTransportCode(int httpStatusCode) {
+    // Specific HTTP code handling.
+    switch (httpStatusCode) {
+      case HttpURLConnection.HTTP_UNAUTHORIZED: // 401
+        return Transport.Code.UNAUTHENTICATED;
+      case HttpURLConnection.HTTP_FORBIDDEN: // 403
+        return Transport.Code.PERMISSION_DENIED;
+      default:
+    }
+    // Generic HTTP code handling.
     if (httpStatusCode < 300) {
       return Transport.Code.OK;
     }

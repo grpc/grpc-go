@@ -125,7 +125,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
       boolean endSegment) throws Http2Exception {
     // TODO(user): Assuming that all headers fit in a single HEADERS frame.
     NettyClientStream stream = clientStream(connection().requireStream(streamId));
-    stream.inboundHeadersRecieved(headers);
+    stream.inboundHeadersRecieved(headers, endStream);
   }
 
   /**

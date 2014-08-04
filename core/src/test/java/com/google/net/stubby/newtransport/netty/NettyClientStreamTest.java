@@ -171,7 +171,7 @@ public class NettyClientStreamTest {
   @Test
   public void inboundContextShouldCallListener() throws Exception {
     // Receive headers first so that it's a valid GRPC response.
-    stream.inboundHeadersRecieved(grpcResponseHeaders());
+    stream.inboundHeadersRecieved(grpcResponseHeaders(), false);
 
     stream.inboundDataReceived(contextFrame(), false, promise);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
@@ -183,7 +183,7 @@ public class NettyClientStreamTest {
   @Test
   public void inboundMessageShouldCallListener() throws Exception {
     // Receive headers first so that it's a valid GRPC response.
-    stream.inboundHeadersRecieved(grpcResponseHeaders());
+    stream.inboundHeadersRecieved(grpcResponseHeaders(), false);
 
     stream.inboundDataReceived(messageFrame(), false, promise);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
@@ -197,7 +197,7 @@ public class NettyClientStreamTest {
     stream.id(1);
 
     // Receive headers first so that it's a valid GRPC response.
-    stream.inboundHeadersRecieved(grpcResponseHeaders());
+    stream.inboundHeadersRecieved(grpcResponseHeaders(), false);
 
     stream.inboundDataReceived(statusFrame(), false, promise);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);

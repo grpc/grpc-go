@@ -61,9 +61,12 @@ class NettyClientStream extends AbstractStream implements ClientStream {
   /**
    * Called in the channel thread to process headers received from the server.
    */
-  public void inboundHeadersRecieved(Http2Headers headers) {
+  public void inboundHeadersRecieved(Http2Headers headers, boolean endOfStream) {
     responseCode = responseCode(headers);
     isGrpcResponse = isGrpcResponse(headers, responseCode);
+    if (!isGrpcResponse && endOfStream) {
+      setStatus(new Status(responseCode));
+    }
   }
 
   /**

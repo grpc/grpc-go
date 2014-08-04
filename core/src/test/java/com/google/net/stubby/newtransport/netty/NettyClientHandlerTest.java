@@ -187,7 +187,7 @@ public class NettyClientHandlerTest {
         .set(HttpUtil.CONTENT_TYPE_HEADER, HttpUtil.CONTENT_TYPE_PROTORPC).build();
     ByteBuf headersFrame = headersFrame(3, headers);
     handler.channelRead(this.ctx, headersFrame);
-    verify(stream).inboundHeadersRecieved(headers);
+    verify(stream).inboundHeadersRecieved(headers, false);
   }
 
   @Test
