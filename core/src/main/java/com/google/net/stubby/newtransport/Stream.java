@@ -6,6 +6,8 @@ import javax.annotation.Nullable;
 
 /**
  * A single stream of communication between two end-points within a transport.
+ *
+ * <p>An implementation doesn't need to be thread-safe.
  */
 public interface Stream {
 
