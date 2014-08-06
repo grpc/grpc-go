@@ -40,8 +40,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 import javax.annotation.concurrent.GuardedBy;
 
@@ -83,7 +82,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   private int nextStreamId;
   private final Map<Integer, OkHttpClientStream> streams =
       Collections.synchronizedMap(new HashMap<Integer, OkHttpClientStream>());
-  private final ExecutorService executor = Executors.newCachedThreadPool();
+  private final Executor executor;
   private int unacknowledgedBytesRead;
   private ClientFrameHandler clientFrameHandler;
   // The status used to finish all active streams when the transport is closed.
@@ -92,9 +91,10 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   @GuardedBy("lock")
   private Status goAwayStatus;
 
-  public OkHttpClientTransport(String host, int port) {
+  OkHttpClientTransport(String host, int port, Executor executor) {
     this.host = Preconditions.checkNotNull(host);
     this.port = port;
+    this.executor = Preconditions.checkNotNull(executor);
     // Client initiated streams are odd, server initiated ones are even. Server should not need to
     // use it. We start clients at 3 to avoid conflicting with HTTP negotiation.
     nextStreamId = 3;
@@ -104,12 +104,14 @@ public class OkHttpClientTransport extends AbstractClientTransport {
    * Create a transport connected to a fake peer for test.
    */
   @VisibleForTesting
-  OkHttpClientTransport(FrameReader frameReader, AsyncFrameWriter frameWriter, int nextStreamId) {
+  OkHttpClientTransport(Executor executor, FrameReader frameReader, AsyncFrameWriter frameWriter,
+      int nextStreamId) {
     host = null;
     port = -1;
+    this.executor = Preconditions.checkNotNull(executor);
+    this.frameReader = Preconditions.checkNotNull(frameReader);
+    this.frameWriter = Preconditions.checkNotNull(frameWriter);
     this.nextStreamId = nextStreamId;
-    this.frameReader = frameReader;
-    this.frameWriter = frameWriter;
   }
 
   @Override
@@ -227,7 +229,6 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-      executor.shutdown();
       notifyStopped();
     }
   }

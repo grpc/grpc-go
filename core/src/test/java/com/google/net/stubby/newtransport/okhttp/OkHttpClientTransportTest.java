@@ -49,6 +49,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -72,13 +74,15 @@ public class OkHttpClientTransportTest {
   private MockFrameReader frameReader;
   private Map<Integer, OkHttpClientStream> streams;
   private ClientFrameHandler frameHandler;
+  private ExecutorService executor;
 
   @Before
   public void setup() {
     MockitoAnnotations.initMocks(this);
     streams = new HashMap<Integer, OkHttpClientStream>();
     frameReader = new MockFrameReader();
-    clientTransport = new OkHttpClientTransport(frameReader, frameWriter, 3);
+    executor = Executors.newCachedThreadPool();
+    clientTransport = new OkHttpClientTransport(executor, frameReader, frameWriter, 3);
     clientTransport.startAsync();
     frameHandler = clientTransport.getHandler();
     streams = clientTransport.getStreams();
@@ -90,6 +94,7 @@ public class OkHttpClientTransportTest {
     clientTransport.stopAsync();
     assertTrue(frameReader.closed);
     verify(frameWriter).close();
+    executor.shutdown();
   }
 
   /**
@@ -370,7 +375,7 @@ public class OkHttpClientTransportTest {
     int startId = Integer.MAX_VALUE - 2;
     AsyncFrameWriter writer =  mock(AsyncFrameWriter.class);
     OkHttpClientTransport transport =
-        new OkHttpClientTransport(frameReader, writer, startId);
+        new OkHttpClientTransport(executor, frameReader, writer, startId);
     transport.startAsync();
     streams = transport.getStreams();
 
