@@ -14,6 +14,7 @@ import com.google.net.stubby.newtransport.ClientStream;
 import com.google.net.stubby.newtransport.ClientTransport;
 import com.google.net.stubby.newtransport.InputStreamDeframer;
 import com.google.net.stubby.newtransport.StreamListener;
+import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 import com.google.net.stubby.transport.Transport.Code;
 
@@ -425,7 +426,10 @@ public class OkHttpClientTransport extends AbstractClientTransport {
 
     @Override
     public void cancel() {
-      Preconditions.checkState(streamId != 0, "streamId should be set");
+      if (streamId == 0) {
+        // This should only happens when the stream was failed in constructor.
+        Preconditions.checkState(state() == StreamState.CLOSED, "A unclosed stream has no id");
+      }
       outboundPhase = Phase.STATUS;
       if (finishStream(streamId, toGrpcStatus(ErrorCode.CANCEL))) {
         frameWriter.rstStream(streamId, ErrorCode.CANCEL);
