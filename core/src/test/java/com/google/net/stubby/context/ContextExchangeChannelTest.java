@@ -10,10 +10,10 @@ import com.google.net.stubby.Channel;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.stub.Marshallers;
-import com.google.net.stubby.testing.integration.Test.Payload;
-import com.google.net.stubby.testing.integration.Test.PayloadType;
-import com.google.net.stubby.testing.integration.Test.SimpleRequest;
-import com.google.net.stubby.testing.integration.Test.SimpleResponse;
+import com.google.net.stubby.testing.integration.Messages.Payload;
+import com.google.net.stubby.testing.integration.Messages.PayloadType;
+import com.google.net.stubby.testing.integration.Messages.SimpleRequest;
+import com.google.net.stubby.testing.integration.Messages.SimpleResponse;
 import com.google.net.stubby.testing.integration.TestServiceGrpc;
 import com.google.protobuf.ByteString;
 
