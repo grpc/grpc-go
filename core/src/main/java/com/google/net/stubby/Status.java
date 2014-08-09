@@ -95,7 +95,7 @@ public class Status {
     private final Status status;
 
     public OperationException(Status status) {
-      super(status.getDescription(), status.getCause());
+      super(status.getCode() + ": " + status.getDescription(), status.getCause());
       this.status = status;
     }
 
@@ -112,7 +112,7 @@ public class Status {
     private final Status status;
 
     public OperationRuntimeException(Status status) {
-      super(status.getDescription(), status.getCause());
+      super(status.getCode() + ": " + status.getDescription(), status.getCause());
       this.status = status;
     }
 
