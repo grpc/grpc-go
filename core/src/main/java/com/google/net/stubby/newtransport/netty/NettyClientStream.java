@@ -7,16 +7,16 @@ import com.google.common.base.Preconditions;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractStream;
 import com.google.net.stubby.newtransport.ClientStream;
-import com.google.net.stubby.newtransport.Deframer;
+import com.google.net.stubby.newtransport.GrpcDeframer;
 import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.transport.Transport;
 
-import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http2.Http2Headers;
 
 import java.nio.ByteBuffer;
 
@@ -28,7 +28,7 @@ class NettyClientStream extends AbstractStream implements ClientStream {
 
   private volatile int id = PENDING_STREAM_ID;
   private final Channel channel;
-  private final Deframer<ByteBuf> deframer;
+  private final GrpcDeframer deframer;
   private Transport.Code responseCode = Transport.Code.UNKNOWN;
   private boolean isGrpcResponse;
   private StringBuilder nonGrpcErrorMessage = new StringBuilder();
@@ -36,7 +36,8 @@ class NettyClientStream extends AbstractStream implements ClientStream {
   NettyClientStream(StreamListener listener, Channel channel) {
     super(listener);
     this.channel = Preconditions.checkNotNull(channel, "channel");
-    this.deframer = new ByteBufDeframer(channel.alloc(), inboundMessageHandler());
+    this.deframer =
+        new GrpcDeframer(new NettyDecompressor(channel.alloc()), inboundMessageHandler());
   }
 
   /**
@@ -86,7 +87,7 @@ class NettyClientStream extends AbstractStream implements ClientStream {
 
     if (isGrpcResponse) {
       // Retain the ByteBuf until it is released by the deframer.
-      deframer.deliverFrame(frame.retain(), endOfStream);
+      deframer.deframe(new NettyBuffer(frame.retain()), endOfStream);
 
       // TODO(user): add flow control.
       promise.setSuccess();
