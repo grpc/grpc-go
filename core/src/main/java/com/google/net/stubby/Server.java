@@ -1,10 +1,14 @@
 package com.google.net.stubby;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
 
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
@@ -15,24 +19,21 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public interface Server extends Service {
-  /** Builder that Servers are expected to provide for constructing new instances. */
-  abstract class Builder {
-    public abstract Builder addService(ServiceDef service);
-    public abstract Server build();
-  }
-
   /** Definition of a service to be exposed via a Server. */
-  final class ServiceDef {
-    public static ServiceDef.Builder builder(String serviceName) {
-      return new ServiceDef.Builder(serviceName);
+  final class ServiceDefinition {
+    public static ServiceDefinition.Builder builder(String serviceName) {
+      return new ServiceDefinition.Builder(serviceName);
     }
 
     private final String name;
-    private final ImmutableList<MethodDef> methods;
+    private final ImmutableList<MethodDefinition> methods;
+    private final ImmutableMap<String, MethodDefinition> methodLookup;
 
-    private ServiceDef(String name, ImmutableList<MethodDef> methods) {
+    private ServiceDefinition(String name, ImmutableList<MethodDefinition> methods,
+        Map<String, MethodDefinition> methodLookup) {
       this.name = name;
       this.methods = methods;
+      this.methodLookup = ImmutableMap.copyOf(methodLookup);
     }
 
     /** Simple name of the service. It is not an absolute path. */
@@ -40,14 +41,20 @@ public interface Server extends Service {
       return name;
     }
 
-    public ImmutableList<MethodDef> getMethods() {
+    public ImmutableList<MethodDefinition> getMethods() {
       return methods;
+    }
+
+    public MethodDefinition getMethod(String name) {
+      return methodLookup.get(name);
     }
 
     /** Builder for constructing Service instances. */
     public static final class Builder {
       private final String serviceName;
-      private final ImmutableList.Builder<MethodDef> methods = ImmutableList.builder();
+      private final ImmutableList.Builder<MethodDefinition> methods = ImmutableList.builder();
+      private final Map<String, MethodDefinition> methodLookup
+          = new HashMap<String, MethodDefinition>();
 
       private Builder(String serviceName) {
         this.serviceName = serviceName;
@@ -63,29 +70,36 @@ public interface Server extends Service {
        */
       public <ReqT, RespT> Builder addMethod(String name, Marshaller<ReqT> requestMarshaller,
           Marshaller<RespT> responseMarshaller, CallHandler<ReqT, RespT> handler) {
-        methods.add(
-            new MethodDef<ReqT, RespT>(name, requestMarshaller, responseMarshaller, handler));
+        Preconditions.checkNotNull(name, "name must not be null");
+        if (methodLookup.containsKey(name)) {
+          throw new IllegalStateException("Method by same name already registered");
+        }
+        MethodDefinition def = new MethodDefinition<ReqT, RespT>(name,
+            Preconditions.checkNotNull(requestMarshaller, "requestMarshaller must not be null"),
+            Preconditions.checkNotNull(responseMarshaller, "responseMarshaller must not be null"),
+            Preconditions.checkNotNull(handler, "handler must not be null"));
+        methodLookup.put(name, def);
+        methods.add(def);
         return this;
       }
 
-      /** Construct new ServiceDef. */
-      public ServiceDef build() {
-        return new ServiceDef(serviceName, methods.build());
+      /** Construct new ServiceDefinition. */
+      public ServiceDefinition build() {
+        return new ServiceDefinition(serviceName, methods.build(), methodLookup);
       }
     }
   }
 
   /** Definition of a method supported by a service. */
-  final class MethodDef<RequestT, ResponseT> {
+  final class MethodDefinition<RequestT, ResponseT> {
     private final String name;
     private final Marshaller<RequestT> requestMarshaller;
     private final Marshaller<ResponseT> responseMarshaller;
     private final CallHandler<RequestT, ResponseT> handler;
 
-    // MethodDef has no way of public creation, because all parameters are required. A builder
-    // wouldn't have any methods other than build(). addMethod() can be overriden if we ever need to
-    // extend what MethodDef contains or if we add a Builder or similar.
-    private MethodDef(String name, Marshaller<RequestT> requestMarshaller,
+    // MethodDefinition has no form of public construction. It is only created within the context of
+    // a ServiceDefinition.Builder.
+    private MethodDefinition(String name, Marshaller<RequestT> requestMarshaller,
         Marshaller<ResponseT> responseMarshaller, CallHandler<RequestT, ResponseT> handler) {
       this.name = name;
       this.requestMarshaller = requestMarshaller;
@@ -115,24 +129,47 @@ public interface Server extends Service {
   }
 
   /**
-   * Class to begin processing incoming RPCs. Advanced applications and generated code implement
+   * Interface for intercepting incoming RPCs before the handler receives them.
+   */
+  @ThreadSafe
+  interface Interceptor {
+    /**
+     * Intercept a new call. General semantics of {@link Server.CallHandler#startCall} apply. {@code
+     * next} may only be called once. Returned listener must not be {@code null}.
+     *
+     * <p>If the implementation throws an exception, {@code call} will be closed with an error.
+     * Implementations must not throw an exception if they started processing that may use {@code
+     * call} on another thread.
+     *
+     * @param method metadata concerning the call
+     * @param call object for responding
+     * @param next next processor in the interceptor chain
+     * @return listener for processing incoming messages for {@code call}
+     */
+    <ReqT, RespT> Server.Call.Listener<ReqT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+        Server.Call<ReqT, RespT> call, CallHandler<ReqT, RespT> next);
+  }
+
+  /**
+   * Interface to begin processing incoming RPCs. Advanced applications and generated code implement
    * this interface to implement service methods.
    */
   @ThreadSafe
   interface CallHandler<ReqT, RespT> {
     /**
-     * Produce a listener for the incoming call. Implementations are free to call methods on {@code
-     * call} before this method has returned.
+     * Produce a non-{@code null} listener for the incoming call. Implementations are free to call
+     * methods on {@code call} before this method has returned.
      *
-     * <p>If the implementation throws an exception or returns {@code null}, {@code call} will be
-     * closed with an error.
+     * <p>If the implementation throws an exception, {@code call} will be closed with an error.
+     * Implementations must not throw an exception if they started processing that may use {@code
+     * call} on another thread.
      *
-     * @param call object for responding
      * @param method metadata concerning the call
+     * @param call object for responding
      * @return listener for processing incoming messages for {@code call}
      */
-    Server.Call.Listener<ReqT> startCall(Server.Call<ReqT, RespT> call,
-        MethodDescriptor<ReqT, RespT> method);
+    Server.Call.Listener<ReqT> startCall(MethodDescriptor<ReqT, RespT> method,
+        Server.Call<ReqT, RespT> call);
   }
 
   /**
