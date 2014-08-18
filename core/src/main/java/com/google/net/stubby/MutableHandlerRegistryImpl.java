@@ -1,7 +1,7 @@
 package com.google.net.stubby;
 
-import com.google.net.stubby.Server.MethodDefinition;
-import com.google.net.stubby.Server.ServiceDefinition;
+import com.google.net.stubby.ServerMethodDefinition;
+import com.google.net.stubby.ServerServiceDefinition;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,17 +13,17 @@ import javax.annotation.concurrent.ThreadSafe;
 /** Mutable registry implementation of services and their methods for dispatching incoming calls. */
 @ThreadSafe
 public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
-  private final ConcurrentMap<String, ServiceDefinition> services
-      = new ConcurrentHashMap<String, ServiceDefinition>();
+  private final ConcurrentMap<String, ServerServiceDefinition> services
+      = new ConcurrentHashMap<String, ServerServiceDefinition>();
 
   @Override
   @Nullable
-  public ServiceDefinition addService(ServiceDefinition service) {
+  public ServerServiceDefinition addService(ServerServiceDefinition service) {
     return services.put(service.getName(), service);
   }
 
   @Override
-  public boolean removeService(ServiceDefinition service) {
+  public boolean removeService(ServerServiceDefinition service) {
     return services.remove(service.getName(), service);
   }
 
@@ -39,11 +39,11 @@ public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
     if (index == -1) {
       return null;
     }
-    ServiceDefinition service = services.get(methodName.substring(0, index));
+    ServerServiceDefinition service = services.get(methodName.substring(0, index));
     if (service == null) {
       return null;
     }
-    MethodDefinition method = service.getMethod(methodName.substring(index + 1));
+    ServerMethodDefinition method = service.getMethod(methodName.substring(index + 1));
     if (method == null) {
       return null;
     }

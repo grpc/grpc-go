@@ -7,9 +7,9 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
-import com.google.net.stubby.Server.CallHandler;
-import com.google.net.stubby.Server.MethodDefinition;
-import com.google.net.stubby.Server.ServiceDefinition;
+import com.google.net.stubby.ServerMethodDefinition;
+import com.google.net.stubby.ServerCallHandler;
+import com.google.net.stubby.ServerServiceDefinition;
 import com.google.net.stubby.HandlerRegistry.Method;
 
 import org.junit.After;
@@ -24,15 +24,16 @@ public class MutableHandlerRegistryImplTest {
   private MutableHandlerRegistry registry = new MutableHandlerRegistryImpl();
   private Marshaller<String> requestMarshaller = mock(Marshaller.class);
   private Marshaller<Integer> responseMarshaller = mock(Marshaller.class);
-  private CallHandler<String, Integer> handler = mock(CallHandler.class);
-  private ServiceDefinition basicServiceDefinition = ServiceDefinition.builder("basic")
+  private ServerCallHandler<String, Integer> handler = mock(ServerCallHandler.class);
+  private ServerServiceDefinition basicServiceDefinition = ServerServiceDefinition.builder("basic")
         .addMethod("flow", requestMarshaller, responseMarshaller, handler).build();
-  private MethodDefinition flowMethodDefinition = basicServiceDefinition.getMethods().get(0);
-  private ServiceDefinition multiServiceDefinition = ServiceDefinition.builder("multi")
+  private ServerMethodDefinition flowMethodDefinition = basicServiceDefinition.getMethods().get(0);
+  private ServerServiceDefinition multiServiceDefinition = ServerServiceDefinition.builder("multi")
         .addMethod("couple", requestMarshaller, responseMarshaller, handler)
         .addMethod("few", requestMarshaller, responseMarshaller, handler).build();
-  private MethodDefinition coupleMethodDefinition = multiServiceDefinition.getMethod("couple");
-  private MethodDefinition fewMethodDefinition = multiServiceDefinition.getMethod("few");
+  private ServerMethodDefinition coupleMethodDefinition
+      = multiServiceDefinition.getMethod("couple");
+  private ServerMethodDefinition fewMethodDefinition = multiServiceDefinition.getMethod("few");
 
   @After
   public void makeSureMocksUnused() {
@@ -90,9 +91,9 @@ public class MutableHandlerRegistryImplTest {
   public void replaceAndLookup() {
     assertNull(registry.addService(basicServiceDefinition));
     assertNotNull(registry.lookupMethod("/basic.flow"));
-    ServiceDefinition replaceServiceDefinition = ServiceDefinition.builder("basic")
+    ServerServiceDefinition replaceServiceDefinition = ServerServiceDefinition.builder("basic")
         .addMethod("another", requestMarshaller, responseMarshaller, handler).build();
-    MethodDefinition anotherMethodDefinition = replaceServiceDefinition.getMethods().get(0);
+    ServerMethodDefinition anotherMethodDefinition = replaceServiceDefinition.getMethods().get(0);
     assertSame(basicServiceDefinition, registry.addService(replaceServiceDefinition));
 
     assertNull(registry.lookupMethod("/basic.flow"));
@@ -122,7 +123,7 @@ public class MutableHandlerRegistryImplTest {
   @Test
   public void removeMissingNameConflictFails() {
     assertNull(registry.addService(basicServiceDefinition));
-    assertFalse(registry.removeService(ServiceDefinition.builder("basic").build()));
+    assertFalse(registry.removeService(ServerServiceDefinition.builder("basic").build()));
   }
 
   @Test
@@ -142,6 +143,6 @@ public class MutableHandlerRegistryImplTest {
   public void addReturnsPrevious() {
     assertNull(registry.addService(basicServiceDefinition));
     assertSame(basicServiceDefinition,
-        registry.addService(ServiceDefinition.builder("basic").build()));
+        registry.addService(ServerServiceDefinition.builder("basic").build()));
   }
 }

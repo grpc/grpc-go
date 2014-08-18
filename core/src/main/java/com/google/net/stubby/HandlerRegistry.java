@@ -1,7 +1,7 @@
 package com.google.net.stubby;
 
-import com.google.net.stubby.Server.MethodDefinition;
-import com.google.net.stubby.Server.ServiceDefinition;
+import com.google.net.stubby.ServerMethodDefinition;
+import com.google.net.stubby.ServerServiceDefinition;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
@@ -15,19 +15,19 @@ public abstract class HandlerRegistry {
 
   /** A method definition and its parent's service definition. */
   public static final class Method {
-    private final ServiceDefinition serviceDef;
-    private final MethodDefinition methodDef;
+    private final ServerServiceDefinition serviceDef;
+    private final ServerMethodDefinition methodDef;
 
-    public Method(ServiceDefinition serviceDef, MethodDefinition methodDef) {
+    public Method(ServerServiceDefinition serviceDef, ServerMethodDefinition methodDef) {
       this.serviceDef = serviceDef;
       this.methodDef = methodDef;
     }
 
-    public ServiceDefinition getServiceDefinition() {
+    public ServerServiceDefinition getServiceDefinition() {
       return serviceDef;
     }
 
-    public MethodDefinition getMethodDefinition() {
+    public ServerMethodDefinition getMethodDefinition() {
       return methodDef;
     }
   }
