@@ -14,11 +14,11 @@ public final class ServerServiceDefinition {
   }
 
   private final String name;
-  private final ImmutableList<ServerMethodDefinition> methods;
-  private final ImmutableMap<String, ServerMethodDefinition> methodLookup;
+  private final ImmutableList<ServerMethodDefinition<?, ?>> methods;
+  private final ImmutableMap<String, ServerMethodDefinition<?, ?>> methodLookup;
 
-  private ServerServiceDefinition(String name, ImmutableList<ServerMethodDefinition> methods,
-      Map<String, ServerMethodDefinition> methodLookup) {
+  private ServerServiceDefinition(String name, ImmutableList<ServerMethodDefinition<?, ?>> methods,
+      Map<String, ServerMethodDefinition<?, ?>> methodLookup) {
     this.name = name;
     this.methods = methods;
     this.methodLookup = ImmutableMap.copyOf(methodLookup);
@@ -29,20 +29,21 @@ public final class ServerServiceDefinition {
     return name;
   }
 
-  public ImmutableList<ServerMethodDefinition> getMethods() {
+  public ImmutableList<ServerMethodDefinition<?, ?>> getMethods() {
     return methods;
   }
 
-  public ServerMethodDefinition getMethod(String name) {
+  public ServerMethodDefinition<?, ?> getMethod(String name) {
     return methodLookup.get(name);
   }
 
   /** Builder for constructing Service instances. */
   public static final class Builder {
     private final String serviceName;
-    private final ImmutableList.Builder<ServerMethodDefinition> methods = ImmutableList.builder();
-    private final Map<String, ServerMethodDefinition> methodLookup
-        = new HashMap<String, ServerMethodDefinition>();
+    private final ImmutableList.Builder<ServerMethodDefinition<?, ?>> methods
+        = ImmutableList.builder();
+    private final Map<String, ServerMethodDefinition<?, ?>> methodLookup
+        = new HashMap<String, ServerMethodDefinition<?, ?>>();
 
     private Builder(String serviceName) {
       this.serviceName = serviceName;
@@ -62,7 +63,7 @@ public final class ServerServiceDefinition {
       if (methodLookup.containsKey(name)) {
         throw new IllegalStateException("Method by same name already registered");
       }
-      ServerMethodDefinition def = new ServerMethodDefinition<ReqT, RespT>(name,
+      ServerMethodDefinition<ReqT, RespT> def = new ServerMethodDefinition<ReqT, RespT>(name,
           Preconditions.checkNotNull(requestMarshaller, "requestMarshaller must not be null"),
           Preconditions.checkNotNull(responseMarshaller, "responseMarshaller must not be null"),
           Preconditions.checkNotNull(handler, "handler must not be null"));

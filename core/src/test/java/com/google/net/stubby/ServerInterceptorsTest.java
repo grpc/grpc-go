@@ -79,13 +79,13 @@ public class ServerInterceptorsTest {
     ServerServiceDefinition intercepted
         = ServerInterceptors.intercept(serviceDefinition, Arrays.asList(interceptor));
     assertSame(listener,
-        intercepted.getMethods().get(0).getServerCallHandler().startCall(methodDescriptor, call));
+        getSoleMethod(intercepted).getServerCallHandler().startCall(methodDescriptor, call));
     verify(interceptor).interceptCall(same(methodDescriptor), same(call), anyCallHandler());
     verify(handler).startCall(methodDescriptor, call);
     verifyNoMoreInteractions(interceptor, handler);
 
     assertSame(listener,
-        intercepted.getMethods().get(0).getServerCallHandler().startCall(methodDescriptor, call));
+        getSoleMethod(intercepted).getServerCallHandler().startCall(methodDescriptor, call));
     verify(interceptor, times(2))
         .interceptCall(same(methodDescriptor), same(call), anyCallHandler());
     verify(handler, times(2)).startCall(methodDescriptor, call);
@@ -100,12 +100,12 @@ public class ServerInterceptorsTest {
         .addMethod("flow2", requestMarshaller, responseMarshaller, handler2).build();
     ServerServiceDefinition intercepted = ServerInterceptors.intercept(
         serviceDefinition, Arrays.<ServerInterceptor>asList(new NoopInterceptor()));
-    intercepted.getMethod("flow").getServerCallHandler().startCall(methodDescriptor, call);
+    getMethod(intercepted, "flow").getServerCallHandler().startCall(methodDescriptor, call);
     verify(handler).startCall(methodDescriptor, call);
     verifyNoMoreInteractions(handler);
     verifyZeroInteractions(handler2);
 
-    intercepted.getMethod("flow2").getServerCallHandler().startCall(methodDescriptor, call);
+    getMethod(intercepted, "flow2").getServerCallHandler().startCall(methodDescriptor, call);
     verify(handler2).startCall(methodDescriptor, call);
     verifyNoMoreInteractions(handler);
     verifyNoMoreInteractions(handler2);
@@ -145,7 +145,7 @@ public class ServerInterceptorsTest {
     ServerServiceDefinition intercepted = ServerInterceptors.intercept(
         serviceDefinition, Arrays.asList(interceptor1, interceptor2));
     assertSame(listener,
-        intercepted.getMethods().get(0).getServerCallHandler().startCall(methodDescriptor, call));
+        getSoleMethod(intercepted).getServerCallHandler().startCall(methodDescriptor, call));
     assertEquals(Arrays.asList("i1", "i2", "handler"), order);
   }
 
@@ -169,8 +169,23 @@ public class ServerInterceptorsTest {
     ServerServiceDefinition intercepted = ServerInterceptors.intercept(
         serviceDefinition, Arrays.asList(interceptor));
     assertSame(listener2,
-        intercepted.getMethods().get(0).getServerCallHandler().startCall(methodDescriptor, call));
+        getSoleMethod(intercepted).getServerCallHandler().startCall(methodDescriptor, call));
     verify(handler).startCall(method2, call2);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static ServerMethodDefinition<String, Integer> getSoleMethod(
+      ServerServiceDefinition serviceDef) {
+    if (serviceDef.getMethods().size() != 1) {
+      throw new AssertionError("Not exactly one method present");
+    }
+    return (ServerMethodDefinition<String, Integer>) serviceDef.getMethods().get(0);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static ServerMethodDefinition<String, Integer> getMethod(
+      ServerServiceDefinition serviceDef, String name) {
+    return (ServerMethodDefinition<String, Integer>) serviceDef.getMethod(name);
   }
 
   private ServerCallHandler<String, Integer> anyCallHandler() {
