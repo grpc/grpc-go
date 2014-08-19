@@ -107,8 +107,7 @@ class NettyClientStream extends AbstractStream implements ClientStream {
 
   @Override
   protected void sendFrame(ByteBuffer frame, boolean endOfStream) {
-    SendGrpcFrameCommand cmd =
-        new SendGrpcFrameCommand(this, toByteBuf(frame), endOfStream, endOfStream);
+    SendGrpcFrameCommand cmd = new SendGrpcFrameCommand(this, toByteBuf(frame), endOfStream);
     channel.writeAndFlush(cmd);
   }
 

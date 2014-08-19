@@ -133,7 +133,6 @@ public class NettyClientHandlerTest {
         eq(Http2CodecUtil.DEFAULT_PRIORITY_WEIGHT),
         eq(false),
         eq(0),
-        eq(false),
         eq(false));
     Http2Headers headers = captor.getValue();
     assertEquals("https", headers.scheme());
@@ -166,7 +165,7 @@ public class NettyClientHandlerTest {
     createStream();
 
     // Send a frame and verify that it was written.
-    handler.write(ctx, new SendGrpcFrameCommand(stream, content, true, true), promise);
+    handler.write(ctx, new SendGrpcFrameCommand(stream, content, true), promise);
     verify(promise, never()).setFailure(any(Throwable.class));
     verify(ctx).writeAndFlush(any(ByteBuf.class), eq(promise));
   }
@@ -174,7 +173,7 @@ public class NettyClientHandlerTest {
   @Test
   public void sendForUnknownStreamShouldFail() throws Exception {
     when(stream.id()).thenReturn(3);
-    handler.write(ctx, new SendGrpcFrameCommand(stream, content, true, true), promise);
+    handler.write(ctx, new SendGrpcFrameCommand(stream, content, true), promise);
     verify(promise).setFailure(any(Throwable.class));
   }
 
@@ -215,7 +214,6 @@ public class NettyClientHandlerTest {
         eq(Http2CodecUtil.DEFAULT_PRIORITY_WEIGHT),
         eq(false),
         eq(0),
-        eq(false),
         eq(false));
   }
 
@@ -251,7 +249,7 @@ public class NettyClientHandlerTest {
 
   private ByteBuf headersFrame(int streamId, Http2Headers headers) {
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeHeaders(ctx, promise, streamId, headers, 0, false, false);
+    frameWriter.writeHeaders(ctx, promise, streamId, headers, 0, false);
     return captureWrite(ctx);
   }
 
@@ -259,7 +257,7 @@ public class NettyClientHandlerTest {
     // Need to retain the content since the frameWriter releases it.
     content.retain();
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeData(ctx, newPromise(), streamId, content, 0, endStream, false);
+    frameWriter.writeData(ctx, newPromise(), streamId, content, 0, endStream);
     return captureWrite(ctx);
   }
 

@@ -56,7 +56,7 @@ abstract class Http2Operation extends AbstractOperation implements Framer.Sink {
 
     try {
       ChannelFuture channelFuture = writer.writeData(getId(),
-          Unpooled.wrappedBuffer(frame), closed, closed, false);
+          Unpooled.wrappedBuffer(frame), closed);
       if (!closed) {
         // Sync for all except the last frame to prevent buffer corruption.
         channelFuture.get();

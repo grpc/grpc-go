@@ -28,7 +28,6 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLEngine;
@@ -74,16 +73,22 @@ public class Http2Negotiator {
     if (!installJettyTLSProtocolSelection(sslEngine, tlsNegotiatedHttp2)) {
       throw new IllegalStateException("NPN/ALPN extensions not installed");
     }
-    final CountDownLatch sslCompletion = new CountDownLatch(1);
     final ChannelInitializer<SocketChannel> initializer = new ChannelInitializer<SocketChannel>() {
       @Override
-      public void initChannel(SocketChannel ch) throws Exception {
+      public void initChannel(final SocketChannel ch) throws Exception {
         SslHandler sslHandler = new SslHandler(sslEngine, false);
         sslHandler.handshakeFuture().addListener(
             new GenericFutureListener<Future<? super Channel>>() {
               @Override
               public void operationComplete(Future<? super Channel> future) throws Exception {
-                sslCompletion.countDown();
+                if (!future.isSuccess()) {
+                  // Throw the exception.
+                  if (tlsNegotiatedHttp2.isDone()) {
+                    tlsNegotiatedHttp2.get();
+                  } else {
+                    future.get();
+                  }
+                }
               }
             });
         ch.pipeline().addLast(sslHandler);
@@ -100,10 +105,6 @@ public class Http2Negotiator {
       @Override
       public void await(Channel channel) {
         try {
-          // Wait for SSL negotiation to complete
-          if (!sslCompletion.await(20, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("Failed to negotiate TLS");
-          }
           // Wait for NPN/ALPN negotation to complete. Will throw if failed.
           tlsNegotiatedHttp2.get(5, TimeUnit.SECONDS);
         } catch (Exception e) {
@@ -268,15 +269,15 @@ public class Http2Negotiator {
                   case "unsupported":
                     // both
                     removeMethod.invoke(null, engine);
-                    protocolNegotiated.setException(
-                        new IllegalStateException("ALPN/NPN not supported by server"));
+                    protocolNegotiated.setException(new IllegalStateException(
+                        "ALPN/NPN protocol " + HTTP_VERSION_NAME + " not supported by server"));
                     return null;
                   case "protocols":
                     // ALPN only
                     return ImmutableList.of(HTTP_VERSION_NAME);
                   case "selected":
                     // ALPN only
-                    // Only 'supports' one protocol so we know what was 'selected.
+                    // Only 'supports' one protocol so we know what was selected.
                     removeMethod.invoke(null, engine);
                     protocolNegotiated.set(null);
                     return null;

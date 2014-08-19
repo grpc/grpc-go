@@ -42,7 +42,7 @@ class Http2Request extends Http2Operation implements Request {
         .authority(HOST_NAME)
         .scheme("https")
         .add("content-type", Http2Session.PROTORPC);
-    writer.writeHeaders(response.getId(), headersBuilder.build(), false, true);
+    writer.writeHeaders(response.getId(), headersBuilder.build(), false);
     this.response = response;
   }
 

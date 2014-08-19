@@ -31,6 +31,6 @@ class Http2Response extends Http2Operation implements Response {
     super(id, writer, framer);
     Http2Headers headers = DefaultHttp2Headers.newBuilder().status("200")
         .add("content-type", Http2Session.PROTORPC).build();
-    writer.writeHeaders(id, headers, false, true);
+    writer.writeHeaders(id, headers, false);
   }
 }

@@ -72,7 +72,7 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
 
   @Override
   public void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
-                  boolean endOfStream, boolean endOfSegment)
+                  boolean endOfStream)
       throws Http2Exception {
     Request request = requestRegistry.lookup(streamId);
     if (request == null) {
@@ -99,7 +99,7 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
   @Override
   public void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers,
                      int streamDependency, short weight, boolean exclusive, int padding,
-                     boolean endStream, boolean endSegment) throws Http2Exception {
+                     boolean endStream) throws Http2Exception {
     Request operation = requestRegistry.lookup(streamId);
     if (operation == null) {
       if (isClient()) {
@@ -206,7 +206,7 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     }
     // Use Path to specify the operation
     String operationName =
-        normalizeOperationName(headers.get(Http2Headers.HttpName.PATH.value()));
+        normalizeOperationName(headers.get(Http2Headers.PseudoHeaderName.PATH.value()));
     if (operationName == null) {
       return null;
     }
@@ -264,25 +264,24 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
       this.ctx = ctx;
     }
 
-    public ChannelFuture writeData(int streamId, ByteBuf data, boolean endStream,
-                                   boolean endSegment, boolean compressed) {
+    public ChannelFuture writeData(int streamId, ByteBuf data, boolean endStream) {
       return Http2Codec.this.writeData(ctx, ctx.newPromise(),
-          streamId, data, PADDING, endStream, endSegment, compressed);
+          streamId, data, PADDING, endStream);
     }
 
     public ChannelFuture writeHeaders(int streamId,
                                       Http2Headers headers,
-                                      boolean endStream, boolean endSegment) {
+                                      boolean endStream) {
 
       return Http2Codec.this.writeHeaders(ctx, ctx.newPromise(), streamId,
-          headers, PADDING, endStream, endSegment);
+          headers, PADDING, endStream);
     }
 
     public ChannelFuture writeHeaders(int streamId, Http2Headers headers, int streamDependency,
                                       short weight, boolean exclusive,
-                                      boolean endStream, boolean endSegment) {
+                                      boolean endStream) {
       return Http2Codec.this.writeHeaders(ctx, ctx.newPromise(), streamId,
-          headers, streamDependency, weight, exclusive, PADDING, endStream, endSegment);
+          headers, streamDependency, weight, exclusive, PADDING, endStream);
     }
 
     public ChannelFuture writeRstStream(int streamId, long errorCode) {

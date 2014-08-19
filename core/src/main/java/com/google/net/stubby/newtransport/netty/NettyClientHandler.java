@@ -121,8 +121,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
       short weight,
       boolean exclusive,
       int padding,
-      boolean endStream,
-      boolean endSegment) throws Http2Exception {
+      boolean endStream) throws Http2Exception {
     // TODO(user): Assuming that all headers fit in a single HEADERS frame.
     NettyClientStream stream = clientStream(connection().requireStream(streamId));
     stream.inboundHeadersRecieved(headers, endStream);
@@ -136,8 +135,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
       int streamId,
       ByteBuf data,
       int padding,
-      boolean endOfStream,
-      boolean endOfSegment) throws Http2Exception {
+      boolean endOfStream) throws Http2Exception {
     NettyClientStream stream = clientStream(connection().requireStream(streamId));
 
     // TODO(user): update flow controller to use a promise.
@@ -260,9 +258,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
         stream.id(),
         cmd.content(),
         0,
-        cmd.endStream(),
-        cmd.endSegment(),
-        false);
+        cmd.endStream());
   }
 
   /**
@@ -337,7 +333,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
           .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC)
           .path("/" + pendingStream.method.getName())
           .build();
-      writeHeaders(ctx(), ctx().newPromise(), streamId, headersBuilder.build(), 0, false, false)
+      writeHeaders(ctx(), ctx().newPromise(), streamId, headersBuilder.build(), 0, false)
           .addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {

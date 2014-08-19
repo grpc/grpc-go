@@ -12,14 +12,11 @@ import io.netty.buffer.DefaultByteBufHolder;
 class SendGrpcFrameCommand extends DefaultByteBufHolder {
   private final NettyClientStream stream;
   private final boolean endStream;
-  private final boolean endSegment;
 
-  SendGrpcFrameCommand(NettyClientStream stream, ByteBuf content, boolean endStream,
-      boolean endSegment) {
+  SendGrpcFrameCommand(NettyClientStream stream, ByteBuf content, boolean endStream) {
     super(content);
     this.stream = Preconditions.checkNotNull(stream, "stream");
     this.endStream = endStream;
-    this.endSegment = endSegment;
   }
 
   NettyClientStream stream() {
@@ -30,18 +27,14 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder {
     return endStream;
   }
 
-  boolean endSegment() {
-    return endSegment;
-  }
-
   @Override
   public ByteBufHolder copy() {
-    return new SendGrpcFrameCommand(stream, content().copy(), endStream, endSegment);
+    return new SendGrpcFrameCommand(stream, content().copy(), endStream);
   }
 
   @Override
   public ByteBufHolder duplicate() {
-    return new SendGrpcFrameCommand(stream, content().duplicate(), endStream, endSegment);
+    return new SendGrpcFrameCommand(stream, content().duplicate(), endStream);
   }
 
   @Override
