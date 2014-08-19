@@ -19,7 +19,7 @@ import javax.annotation.Nullable;
  *
  * <p>Methods are guaranteed to be non-blocking. Implementations are not required to be thread-safe.
  */
-public abstract class ServerCall<RequestT, ResponseT> {
+public abstract class ServerCall<ResponseT> {
   /**
    * Callbacks for consuming incoming RPC messages.
    *
@@ -32,7 +32,7 @@ public abstract class ServerCall<RequestT, ResponseT> {
   // TODO(user): We need to decide what to do in the case of server closing with non-cancellation
   // before client half closes. It may be that we treat such a case as an error. If we permit such
   // a case then we either get to generate a half close or purposefully omit it.
-  public abstract static class Listener<T> {
+  public abstract static class Listener<RequestT> {
     /**
      * A request context has been received. Any context messages will precede payload messages.
      *
@@ -48,7 +48,7 @@ public abstract class ServerCall<RequestT, ResponseT> {
      * messages.
      */
     @Nullable
-    public abstract ListenableFuture<Void> onPayload(T payload);
+    public abstract ListenableFuture<Void> onPayload(RequestT payload);
 
     /**
      * The client completed all message sending. However, the call may still be cancelled.

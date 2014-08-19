@@ -33,15 +33,14 @@ public class ServerInterceptorsTest {
   private ServerCallHandler<String, Integer> handler = mock(ServerCallHandler.class);
   private ServerCall.Listener<String> listener = mock(ServerCall.Listener.class);
   private MethodDescriptor<String, Integer> methodDescriptor = mock(MethodDescriptor.class);
-  private ServerCall<String, Integer> call = mock(ServerCall.class);
+  private ServerCall<Integer> call = mock(ServerCall.class);
   private ServerServiceDefinition serviceDefinition = ServerServiceDefinition.builder("basic")
       .addMethod("flow", requestMarshaller, responseMarshaller, handler).build();
 
   @Before
   public void setUp() {
     Mockito.when(handler.startCall(
-          Mockito.<MethodDescriptor<String, Integer>>any(),
-          Mockito.<ServerCall<String, Integer>>any()))
+          Mockito.<MethodDescriptor<String, Integer>>any(), Mockito.<ServerCall<Integer>>any()))
         .thenReturn(listener);
   }
 
@@ -118,7 +117,7 @@ public class ServerInterceptorsTest {
     handler = new ServerCallHandler<String, Integer>() {
           @Override
           public ServerCall.Listener<String> startCall(MethodDescriptor<String, Integer> method,
-              ServerCall<String, Integer> call) {
+              ServerCall<Integer> call) {
             order.add("handler");
             return listener;
           }
@@ -126,7 +125,7 @@ public class ServerInterceptorsTest {
     ServerInterceptor interceptor1 = new ServerInterceptor() {
           @Override
           public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-              MethodDescriptor<ReqT, RespT> method, ServerCall<ReqT, RespT> call,
+              MethodDescriptor<ReqT, RespT> method, ServerCall<RespT> call,
               ServerCallHandler<ReqT, RespT> next) {
             order.add("i1");
             return next.startCall(method, call);
@@ -135,7 +134,7 @@ public class ServerInterceptorsTest {
     ServerInterceptor interceptor2 = new ServerInterceptor() {
           @Override
           public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-              MethodDescriptor<ReqT, RespT> method, ServerCall<ReqT, RespT> call,
+              MethodDescriptor<ReqT, RespT> method, ServerCall<RespT> call,
               ServerCallHandler<ReqT, RespT> next) {
             order.add("i2");
             return next.startCall(method, call);
@@ -153,12 +152,13 @@ public class ServerInterceptorsTest {
   @Test
   public void argumentsPassed() {
     final MethodDescriptor<String, Integer> method2 = mock(MethodDescriptor.class);
-    final ServerCall<String, Integer> call2 = mock(ServerCall.class);
+    @SuppressWarnings("unchecked")
+    final ServerCall<Integer> call2 = mock(ServerCall.class);
     final ServerCall.Listener<String> listener2 = mock(ServerCall.Listener.class);
     ServerInterceptor interceptor = new ServerInterceptor() {
           @Override
           public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-              MethodDescriptor<ReqT, RespT> method, ServerCall<ReqT, RespT> call,
+              MethodDescriptor<ReqT, RespT> method, ServerCall<RespT> call,
               ServerCallHandler<ReqT, RespT> next) {
             assertSame(method, methodDescriptor);
             assertSame(call, ServerInterceptorsTest.this.call);
@@ -180,7 +180,7 @@ public class ServerInterceptorsTest {
   private static class NoopInterceptor implements ServerInterceptor {
     @Override
     public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-        MethodDescriptor<ReqT, RespT> method, ServerCall<ReqT, RespT> call,
+        MethodDescriptor<ReqT, RespT> method, ServerCall<RespT> call,
         ServerCallHandler<ReqT, RespT> next) {
       return next.startCall(method, call);
     }

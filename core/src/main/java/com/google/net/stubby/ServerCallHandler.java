@@ -21,5 +21,5 @@ public interface ServerCallHandler<ReqT, RespT> {
    * @return listener for processing incoming messages for {@code call}
    */
   ServerCall.Listener<ReqT> startCall(MethodDescriptor<ReqT, RespT> method,
-      ServerCall<ReqT, RespT> call);
+      ServerCall<RespT> call);
 }

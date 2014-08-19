@@ -60,7 +60,7 @@ public class ServerInterceptors {
 
     @Override
     public ServerCall.Listener<ReqT> startCall(MethodDescriptor<ReqT, RespT> method,
-        ServerCall<ReqT, RespT> call) {
+        ServerCall<RespT> call) {
       return ProcessInterceptorsCallHandler.create(interceptors.iterator(), callHandler)
           .startCall(method, call);
     }
@@ -84,7 +84,7 @@ public class ServerInterceptors {
 
     @Override
     public ServerCall.Listener<ReqT> startCall(MethodDescriptor<ReqT, RespT> method,
-        ServerCall<ReqT, RespT> call) {
+        ServerCall<RespT> call) {
       if (interceptors != null && interceptors.hasNext()) {
         return interceptors.next().interceptCall(method, call, this);
       } else {
