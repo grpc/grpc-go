@@ -19,7 +19,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -28,17 +30,22 @@ import java.util.List;
 /** Unit tests for {@link ServerInterceptors}. */
 @RunWith(JUnit4.class)
 public class ServerInterceptorsTest {
-  private Marshaller<String> requestMarshaller = mock(Marshaller.class);
-  private Marshaller<Integer> responseMarshaller = mock(Marshaller.class);
-  private ServerCallHandler<String, Integer> handler = mock(ServerCallHandler.class);
-  private ServerCall.Listener<String> listener = mock(ServerCall.Listener.class);
-  private MethodDescriptor<String, Integer> methodDescriptor = mock(MethodDescriptor.class);
-  private ServerCall<Integer> call = mock(ServerCall.class);
+  @SuppressWarnings("unchecked")
+  private Marshaller<String> requestMarshaller = (Marshaller<String>) mock(Marshaller.class);
+  @SuppressWarnings("unchecked")
+  private Marshaller<Integer> responseMarshaller = (Marshaller<Integer>) mock(Marshaller.class);
+  @SuppressWarnings("unchecked")
+  private ServerCallHandler<String, Integer> handler
+      = (ServerCallHandler<String, Integer>) mock(ServerCallHandler.class);
+  @Mock private ServerCall.Listener<String> listener;
+  @Mock private MethodDescriptor<String, Integer> methodDescriptor;
+  @Mock private ServerCall<Integer> call;
   private ServerServiceDefinition serviceDefinition = ServerServiceDefinition.builder("basic")
       .addMethod("flow", requestMarshaller, responseMarshaller, handler).build();
 
   @Before
   public void setUp() {
+    MockitoAnnotations.initMocks(this);
     Mockito.when(handler.startCall(
           Mockito.<MethodDescriptor<String, Integer>>any(), Mockito.<ServerCall<Integer>>any()))
         .thenReturn(listener);
@@ -94,7 +101,8 @@ public class ServerInterceptorsTest {
 
   @Test
   public void correctHandlerCalled() {
-    ServerCallHandler<String, Integer> handler2 = Mockito.mock(ServerCallHandler.class);
+    @SuppressWarnings("unchecked")
+    ServerCallHandler<String, Integer> handler2 = mock(ServerCallHandler.class);
     serviceDefinition = ServerServiceDefinition.builder("basic")
         .addMethod("flow", requestMarshaller, responseMarshaller, handler)
         .addMethod("flow2", requestMarshaller, responseMarshaller, handler2).build();
@@ -151,9 +159,11 @@ public class ServerInterceptorsTest {
 
   @Test
   public void argumentsPassed() {
+    @SuppressWarnings("unchecked")
     final MethodDescriptor<String, Integer> method2 = mock(MethodDescriptor.class);
     @SuppressWarnings("unchecked")
     final ServerCall<Integer> call2 = mock(ServerCall.class);
+    @SuppressWarnings("unchecked")
     final ServerCall.Listener<String> listener2 = mock(ServerCall.Listener.class);
     ServerInterceptor interceptor = new ServerInterceptor() {
           @Override
@@ -162,8 +172,14 @@ public class ServerInterceptorsTest {
               ServerCallHandler<ReqT, RespT> next) {
             assertSame(method, methodDescriptor);
             assertSame(call, ServerInterceptorsTest.this.call);
-            assertSame(listener, next.startCall((MethodDescriptor) method2, (ServerCall) call2));
-            return (ServerCall.Listener) listener2;
+            @SuppressWarnings("unchecked")
+            MethodDescriptor<ReqT, RespT> method2Typed = (MethodDescriptor<ReqT, RespT>) method2;
+            @SuppressWarnings("unchecked")
+            ServerCall<RespT> call2Typed = (ServerCall<RespT>) call2;
+            assertSame(listener, next.startCall(method2Typed, call2Typed));
+            @SuppressWarnings("unchecked")
+            ServerCall.Listener<ReqT> listener2Typed = (ServerCall.Listener<ReqT>) listener2;
+            return listener2Typed;
           }
         };
     ServerServiceDefinition intercepted = ServerInterceptors.intercept(
