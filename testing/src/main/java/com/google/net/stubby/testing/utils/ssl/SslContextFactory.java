@@ -1,7 +1,5 @@
 package com.google.net.stubby.testing.utils.ssl;
 
-import io.netty.util.internal.SystemPropertyUtil;
-
 import java.security.KeyStore;
 
 import javax.net.ssl.KeyManagerFactory;
@@ -33,7 +31,7 @@ public final class SslContextFactory {
       keyStore.load(SslKeyStore.asInputStream(), SslKeyStore.getKeyStorePassword());
 
       // Set up key manager factory to use our key store
-      String algorithm = SystemPropertyUtil.get("ssl.KeyManagerFactory.algorithm");
+      String algorithm = System.getProperty("ssl.KeyManagerFactory.algorithm");
       if (algorithm == null) {
         algorithm = "SunX509";
       }

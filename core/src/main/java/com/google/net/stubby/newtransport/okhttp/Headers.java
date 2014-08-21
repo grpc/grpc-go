@@ -1,4 +1,4 @@
-package com.google.net.stubby.http2.okhttp;
+package com.google.net.stubby.newtransport.okhttp;
 
 import com.google.common.collect.Lists;
 

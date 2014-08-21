@@ -4,6 +4,7 @@ import com.google.net.stubby.Request;
 import com.google.net.stubby.RequestRegistry;
 import com.google.net.stubby.Response;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.newtransport.okhttp.Headers;
 import com.google.net.stubby.transport.Framer;
 import com.google.net.stubby.transport.Transport;
 

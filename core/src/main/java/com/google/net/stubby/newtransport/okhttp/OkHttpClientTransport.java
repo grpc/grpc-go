@@ -7,7 +7,6 @@ import com.google.common.io.ByteBuffers;
 import com.google.common.io.ByteStreams;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.http2.okhttp.Headers;
 import com.google.net.stubby.newtransport.AbstractClientTransport;
 import com.google.net.stubby.newtransport.AbstractStream;
 import com.google.net.stubby.newtransport.ClientStream;
