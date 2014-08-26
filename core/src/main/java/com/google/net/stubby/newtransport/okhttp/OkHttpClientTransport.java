@@ -152,7 +152,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       abort(new Status(Code.INTERNAL, "Transport stopped"));
       // Send GOAWAY with lastGoodStreamId of 0, since we don't expect any server-initiated streams.
       // The GOAWAY is part of graceful shutdown.
-      frameWriter.goAway(0, ErrorCode.NO_ERROR, null);
+      frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
     }
     stopIfNecessary();
   }
