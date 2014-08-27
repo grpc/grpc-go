@@ -131,10 +131,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
    * Handler for an inbound HTTP/2 DATA frame.
    */
   @Override
-  public void onDataRead(ChannelHandlerContext ctx,
-      int streamId,
-      ByteBuf data,
-      int padding,
+  public void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
       boolean endOfStream) throws Http2Exception {
     NettyClientStream stream = clientStream(connection().requireStream(streamId));
 
@@ -228,7 +225,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
     // Send a RST_STREAM frame to terminate this stream.
     Http2Stream http2Stream = connection().requireStream(stream.id());
     if (http2Stream.state() != Http2Stream.State.CLOSED) {
-      writeRstStream(ctx, promise, stream.id(), Http2Error.CANCEL.code());
+      writeRstStream(ctx, stream.id(), Http2Error.CANCEL.code(), promise);
     }
   }
 
@@ -253,12 +250,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
     }
 
     // Call the base class to write the HTTP/2 DATA frame.
-    writeData(ctx,
-        promise,
-        stream.id(),
-        cmd.content(),
-        0,
-        cmd.endStream());
+    writeData(ctx, stream.id(), cmd.content(), 0, cmd.endStream(), promise);
   }
 
   /**
@@ -333,7 +325,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
           .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC)
           .path("/" + pendingStream.method.getName())
           .build();
-      writeHeaders(ctx(), ctx().newPromise(), streamId, headersBuilder.build(), 0, false)
+      writeHeaders(ctx(), streamId, headersBuilder.build(), 0, false, ctx().newPromise())
           .addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {
@@ -413,7 +405,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
         // Disallowed state, terminate the stream.
         clientStream(stream).setStatus(
             new Status(Transport.Code.INTERNAL, "Stream in invalid state: " + stream.state()));
-        writeRstStream(ctx(), ctx().newPromise(), stream.id(), Http2Error.INTERNAL_ERROR.code());
+        writeRstStream(ctx(), stream.id(), Http2Error.INTERNAL_ERROR.code(), ctx().newPromise());
         break;
       default:
         break;

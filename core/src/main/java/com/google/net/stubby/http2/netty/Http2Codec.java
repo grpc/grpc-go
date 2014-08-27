@@ -53,9 +53,7 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
   /**
    * Constructor used by servers, takes a session which will receive operation events.
    */
-  private Http2Codec(Http2Connection connection,
-                     Session session,
-                     RequestRegistry requestRegistry) {
+  private Http2Codec(Http2Connection connection, Session session, RequestRegistry requestRegistry) {
     super(connection);
     this.session = session;
     this.requestRegistry = requestRegistry;
@@ -72,12 +70,11 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
 
   @Override
   public void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
-                  boolean endOfStream)
-      throws Http2Exception {
+      boolean endOfStream) throws Http2Exception {
     Request request = requestRegistry.lookup(streamId);
     if (request == null) {
       // Stream may have been terminated already or this is just plain spurious
-        throw Http2Exception.format(Http2Error.STREAM_CLOSED, "Stream does not exist");
+      throw Http2Exception.format(Http2Error.STREAM_CLOSED, "Stream does not exist");
     }
     Operation operation = isClient() ? request.getResponse() : request;
     try {
@@ -97,9 +94,14 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
   }
 
   @Override
-  public void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers,
-                     int streamDependency, short weight, boolean exclusive, int padding,
-                     boolean endStream) throws Http2Exception {
+  public void onHeadersRead(ChannelHandlerContext ctx,
+      int streamId,
+      Http2Headers headers,
+      int streamDependency,
+      short weight,
+      boolean exclusive,
+      int padding,
+      boolean endStream) throws Http2Exception {
     Request operation = requestRegistry.lookup(streamId);
     if (operation == null) {
       if (isClient()) {
@@ -120,7 +122,7 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
 
   @Override
   public void onPriorityRead(ChannelHandlerContext ctx, int streamId, int streamDependency,
-                      short weight, boolean exclusive) throws Http2Exception {
+      short weight, boolean exclusive) throws Http2Exception {
     // TODO
   }
 
@@ -157,13 +159,13 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
 
   @Override
   public void onPushPromiseRead(ChannelHandlerContext ctx, int streamId, int promisedStreamId,
-                         Http2Headers headers, int padding) throws Http2Exception {
+      Http2Headers headers, int padding) throws Http2Exception {
     // TODO
   }
 
   @Override
   public void onGoAwayRead(ChannelHandlerContext ctx, int lastStreamId, long errorCode,
-                           ByteBuf debugData) throws Http2Exception {
+      ByteBuf debugData) throws Http2Exception {
     // TODO
   }
 
@@ -216,8 +218,7 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     }
     // Create the operation and bind a HTTP2 response operation
     Request op = session.startRequest(operationName, headerMap.build(),
-        createResponse(new Http2Writer(ctx),
-        streamId));
+        createResponse(new Http2Writer(ctx), streamId));
     if (op == null) {
       return null;
     }
@@ -265,29 +266,38 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     }
 
     public ChannelFuture writeData(int streamId, ByteBuf data, boolean endStream) {
-      return Http2Codec.this.writeData(ctx, ctx.newPromise(),
-          streamId, data, PADDING, endStream);
+      return Http2Codec.this.writeData(ctx, streamId, data, PADDING, endStream, ctx.newPromise());
+    }
+
+    public ChannelFuture writeHeaders(int streamId, Http2Headers headers, boolean endStream) {
+
+      return Http2Codec.this.writeHeaders(ctx,
+          streamId,
+          headers,
+          PADDING,
+          endStream,
+          ctx.newPromise());
     }
 
     public ChannelFuture writeHeaders(int streamId,
-                                      Http2Headers headers,
-                                      boolean endStream) {
-
-      return Http2Codec.this.writeHeaders(ctx, ctx.newPromise(), streamId,
-          headers, PADDING, endStream);
-    }
-
-    public ChannelFuture writeHeaders(int streamId, Http2Headers headers, int streamDependency,
-                                      short weight, boolean exclusive,
-                                      boolean endStream) {
-      return Http2Codec.this.writeHeaders(ctx, ctx.newPromise(), streamId,
-          headers, streamDependency, weight, exclusive, PADDING, endStream);
+        Http2Headers headers,
+        int streamDependency,
+        short weight,
+        boolean exclusive,
+        boolean endStream) {
+      return Http2Codec.this.writeHeaders(ctx,
+          streamId,
+          headers,
+          streamDependency,
+          weight,
+          exclusive,
+          PADDING,
+          endStream,
+          ctx.newPromise());
     }
 
     public ChannelFuture writeRstStream(int streamId, long errorCode) {
-      return Http2Codec.this.writeRstStream(ctx, ctx.newPromise(),
-          streamId,
-          errorCode);
+      return Http2Codec.this.writeRstStream(ctx, streamId, errorCode, ctx.newPromise());
     }
   }
 }

@@ -47,7 +47,7 @@ import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Error;
-import io.netty.handler.codec.http2.Http2FrameObserver;
+import io.netty.handler.codec.http2.Http2FrameListener;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
@@ -80,7 +80,7 @@ public class NettyClientHandlerTest {
   private MethodDescriptor<?, ?> method;
 
   @Mock
-  private Http2FrameObserver frameObserver;
+  private Http2FrameListener frameListener;
 
   private Http2FrameWriter frameWriter;
   private Http2FrameReader frameReader;
@@ -124,9 +124,9 @@ public class NettyClientHandlerTest {
     // Capture and verify the written headers frame.
     ByteBuf serializedHeaders = captureWrite(ctx);
     ChannelHandlerContext ctx = newContext();
-    frameReader.readFrame(ctx, serializedHeaders, frameObserver);
+    frameReader.readFrame(ctx, serializedHeaders, frameListener);
     ArgumentCaptor<Http2Headers> captor = ArgumentCaptor.forClass(Http2Headers.class);
-    verify(frameObserver).onHeadersRead(eq(ctx),
+    verify(frameListener).onHeadersRead(eq(ctx),
         eq(3),
         captor.capture(),
         eq(0),
@@ -150,7 +150,8 @@ public class NettyClientHandlerTest {
     handler.write(ctx, new CancelStreamCommand(stream), promise);
 
     ByteBuf expected = rstStreamFrame(3, Http2Error.CANCEL.code());
-    verify(ctx).writeAndFlush(eq(expected), eq(promise));
+    verify(ctx).write(eq(expected), eq(promise));
+    verify(ctx).flush();
   }
 
   @Test
@@ -167,7 +168,8 @@ public class NettyClientHandlerTest {
     // Send a frame and verify that it was written.
     handler.write(ctx, new SendGrpcFrameCommand(stream, content, true), promise);
     verify(promise, never()).setFailure(any(Throwable.class));
-    verify(ctx).writeAndFlush(any(ByteBuf.class), eq(promise));
+    verify(ctx).write(any(ByteBuf.class), eq(promise));
+    verify(ctx).flush();
   }
 
   @Test
@@ -207,7 +209,7 @@ public class NettyClientHandlerTest {
     handler.write(ctx, new CreateStreamCommand(method, stream), promise);
 
     // Make sure the write never occurred.
-    verify(frameObserver, never()).onHeadersRead(eq(ctx),
+    verify(frameListener, never()).onHeadersRead(eq(ctx),
         eq(3),
         any(Http2Headers.class),
         eq(0),
@@ -249,7 +251,7 @@ public class NettyClientHandlerTest {
 
   private ByteBuf headersFrame(int streamId, Http2Headers headers) {
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeHeaders(ctx, promise, streamId, headers, 0, false);
+    frameWriter.writeHeaders(ctx, streamId, headers, 0, false, promise);
     return captureWrite(ctx);
   }
 
@@ -257,25 +259,25 @@ public class NettyClientHandlerTest {
     // Need to retain the content since the frameWriter releases it.
     content.retain();
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeData(ctx, newPromise(), streamId, content, 0, endStream);
+    frameWriter.writeData(ctx, streamId, content, 0, endStream, newPromise());
     return captureWrite(ctx);
   }
 
   private ByteBuf goAwayFrame(int lastStreamId) {
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeGoAway(ctx, newPromise(), lastStreamId, 0, Unpooled.EMPTY_BUFFER);
+    frameWriter.writeGoAway(ctx, lastStreamId, 0, Unpooled.EMPTY_BUFFER, newPromise());
     return captureWrite(ctx);
   }
 
   private ByteBuf rstStreamFrame(int streamId, int errorCode) {
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeRstStream(ctx, newPromise(), streamId, errorCode);
+    frameWriter.writeRstStream(ctx, streamId, errorCode, newPromise());
     return captureWrite(ctx);
   }
 
   private ByteBuf serializeSettings(Http2Settings settings) {
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeSettings(ctx, newPromise(), settings);
+    frameWriter.writeSettings(ctx, settings, newPromise());
     return captureWrite(ctx);
   }
 
@@ -291,7 +293,7 @@ public class NettyClientHandlerTest {
 
   private ByteBuf captureWrite(ChannelHandlerContext ctx) {
     ArgumentCaptor<ByteBuf> captor = ArgumentCaptor.forClass(ByteBuf.class);
-    verify(ctx).writeAndFlush(captor.capture(), any(ChannelPromise.class));
+    verify(ctx).write(captor.capture(), any(ChannelPromise.class));
     return captor.getValue();
   }
 
