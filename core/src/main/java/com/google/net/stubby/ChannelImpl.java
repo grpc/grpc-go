@@ -71,11 +71,14 @@ public final class ChannelImpl extends AbstractService implements Channel {
       if (state() != State.RUNNING) {
         throw new IllegalStateException("Not running");
       }
-      activeTransport = transportFactory.newClientTransport();
-      activeTransport.addListener(
-          new TransportListener(activeTransport), MoreExecutors.directExecutor());
-      transports.add(activeTransport);
-      activeTransport.startAsync();
+      ClientTransport newTransport = transportFactory.newClientTransport();
+      newTransport.addListener(
+          new TransportListener(newTransport), MoreExecutors.directExecutor());
+      transports.add(newTransport);
+      // activeTransport reference can be changed during this call, even if we hold the lock, due to
+      // reentrancy.
+      newTransport.startAsync();
+      activeTransport = newTransport;
     }
     return activeTransport;
   }
