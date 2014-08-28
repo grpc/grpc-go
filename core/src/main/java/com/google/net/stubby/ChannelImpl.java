@@ -52,12 +52,14 @@ public final class ChannelImpl extends AbstractService implements Channel {
 
   @Override
   protected synchronized void doStop() {
-    if (activeTransport != null) {
-      activeTransport.stopAsync();
-      activeTransport = null;
-      // The last TransportListener will call notifyStopped().
-    } else {
+    if (transports.isEmpty()) {
       notifyStopped();
+    } else {
+      // The last TransportListener will call notifyStopped().
+      if (activeTransport != null) {
+        activeTransport.stopAsync();
+        activeTransport = null;
+      }
     }
   }
 
@@ -72,13 +74,14 @@ public final class ChannelImpl extends AbstractService implements Channel {
         throw new IllegalStateException("Not running");
       }
       ClientTransport newTransport = transportFactory.newClientTransport();
+      activeTransport = newTransport;
+      transports.add(newTransport);
+      // activeTransport reference can be changed during calls to the transport, even if we hold the
+      // lock, due to reentrancy.
       newTransport.addListener(
           new TransportListener(newTransport), MoreExecutors.directExecutor());
-      transports.add(newTransport);
-      // activeTransport reference can be changed during this call, even if we hold the lock, due to
-      // reentrancy.
       newTransport.startAsync();
-      activeTransport = newTransport;
+      return newTransport;
     }
     return activeTransport;
   }
