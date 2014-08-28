@@ -7,8 +7,8 @@ import com.google.common.io.ByteBuffers;
 import com.google.common.io.ByteStreams;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.newtransport.AbstractClientStream;
 import com.google.net.stubby.newtransport.AbstractClientTransport;
-import com.google.net.stubby.newtransport.AbstractStream;
 import com.google.net.stubby.newtransport.ClientStream;
 import com.google.net.stubby.newtransport.ClientTransport;
 import com.google.net.stubby.newtransport.InputStreamDeframer;
@@ -25,11 +25,11 @@ import com.squareup.okhttp.internal.spdy.Http20Draft12;
 import com.squareup.okhttp.internal.spdy.Settings;
 import com.squareup.okhttp.internal.spdy.Variant;
 
-import okio.ByteString;
+import okio.Buffer;
 import okio.BufferedSink;
 import okio.BufferedSource;
+import okio.ByteString;
 import okio.Okio;
-import okio.Buffer;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -383,7 +383,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
    * Client stream for the okhttp transport.
    */
   @VisibleForTesting
-  class OkHttpClientStream extends AbstractStream implements ClientStream {
+  class OkHttpClientStream extends AbstractClientStream {
     int streamId;
     final InputStreamDeframer deframer;
     int unacknowledgedBytesRead;

@@ -11,4 +11,12 @@ public interface ClientStream extends Stream {
    * period until {@link StreamListener#closed} is called.
    */
   void cancel();
+
+  /**
+   * Closes the local side of this stream and flushes any remaining messages. After this is called,
+   * no further messages may be sent on this stream, but additional messages may be received until
+   * the remote end-point is closed.
+   */
+  void halfClose();
+
 }

@@ -127,4 +127,15 @@ public class MethodDescriptor<RequestT, ResponseT> {
         ImmutableMap.<String, Provider<String>>builder().
             putAll(headers).put(headerName, headerValueProvider).build());
   }
+
+  /**
+   * Creates a new descriptor with additional bound headers.
+   */
+  public MethodDescriptor<RequestT, ResponseT> withHeaders(
+      ImmutableMap<String, Provider<String>> additionalHeaders) {
+    return new MethodDescriptor<RequestT, ResponseT>(type, name, timeoutMicros,
+        requestMarshaller, responseMarshaller,
+        ImmutableMap.<String, Provider<String>>builder().
+            putAll(headers).putAll(additionalHeaders).build());
+  }
 }

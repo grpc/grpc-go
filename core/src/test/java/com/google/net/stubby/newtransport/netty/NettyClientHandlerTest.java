@@ -9,7 +9,6 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.calls;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -22,6 +21,17 @@ import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
+import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
+import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.Http2CodecUtil;
+import io.netty.handler.codec.http2.Http2Error;
+import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2Settings;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,61 +39,23 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-
-import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import io.netty.buffer.UnpooledByteBufAllocator;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelPromise;
-import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
-import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
-import io.netty.handler.codec.http2.Http2CodecUtil;
-import io.netty.handler.codec.http2.Http2Error;
-import io.netty.handler.codec.http2.Http2FrameListener;
-import io.netty.handler.codec.http2.Http2FrameReader;
-import io.netty.handler.codec.http2.Http2FrameWriter;
-import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2Settings;
 
 /**
  * Tests for {@link NettyClientHandler}.
  */
 @RunWith(JUnit4.class)
-public class NettyClientHandlerTest {
+public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
   private NettyClientHandler handler;
 
-  @Mock
-  private Channel channel;
-
-  @Mock
-  private ChannelHandlerContext ctx;
-
-  @Mock
-  private ChannelFuture future;
-
-  @Mock
-  private ChannelPromise promise;
-
+  // TODO(user): mocking concrete classes is not safe. Consider making NettyClientStream an
+  // interface.
   @Mock
   private NettyClientStream stream;
 
   @Mock
   private MethodDescriptor<?, ?> method;
-
-  @Mock
-  private Http2FrameListener frameListener;
-
-  private Http2FrameWriter frameWriter;
-  private Http2FrameReader frameReader;
   private ByteBuf content;
 
   @Before
@@ -166,7 +138,7 @@ public class NettyClientHandlerTest {
     createStream();
 
     // Send a frame and verify that it was written.
-    handler.write(ctx, new SendGrpcFrameCommand(stream, content, true), promise);
+    handler.write(ctx, new SendGrpcFrameCommand(stream.id(), content, true), promise);
     verify(promise, never()).setFailure(any(Throwable.class));
     verify(ctx).write(any(ByteBuf.class), eq(promise));
     verify(ctx).flush();
@@ -175,7 +147,7 @@ public class NettyClientHandlerTest {
   @Test
   public void sendForUnknownStreamShouldFail() throws Exception {
     when(stream.id()).thenReturn(3);
-    handler.write(ctx, new SendGrpcFrameCommand(stream, content, true), promise);
+    handler.write(ctx, new SendGrpcFrameCommand(stream.id(), content, true), promise);
     verify(promise).setFailure(any(Throwable.class));
   }
 
@@ -249,12 +221,6 @@ public class NettyClientHandlerTest {
     mockContext();
   }
 
-  private ByteBuf headersFrame(int streamId, Http2Headers headers) {
-    ChannelHandlerContext ctx = newContext();
-    frameWriter.writeHeaders(ctx, streamId, headers, 0, false, promise);
-    return captureWrite(ctx);
-  }
-
   private ByteBuf dataFrame(int streamId, boolean endStream) {
     // Need to retain the content since the frameWriter releases it.
     content.retain();
@@ -263,75 +229,11 @@ public class NettyClientHandlerTest {
     return captureWrite(ctx);
   }
 
-  private ByteBuf goAwayFrame(int lastStreamId) {
-    ChannelHandlerContext ctx = newContext();
-    frameWriter.writeGoAway(ctx, lastStreamId, 0, Unpooled.EMPTY_BUFFER, newPromise());
-    return captureWrite(ctx);
-  }
-
-  private ByteBuf rstStreamFrame(int streamId, int errorCode) {
-    ChannelHandlerContext ctx = newContext();
-    frameWriter.writeRstStream(ctx, streamId, errorCode, newPromise());
-    return captureWrite(ctx);
-  }
-
-  private ByteBuf serializeSettings(Http2Settings settings) {
-    ChannelHandlerContext ctx = newContext();
-    frameWriter.writeSettings(ctx, settings, newPromise());
-    return captureWrite(ctx);
-  }
-
-  private ChannelHandlerContext newContext() {
-    ChannelHandlerContext ctx = Mockito.mock(ChannelHandlerContext.class);
-    when(ctx.alloc()).thenReturn(UnpooledByteBufAllocator.DEFAULT);
-    return ctx;
-  }
-
-  private ChannelPromise newPromise() {
-    return Mockito.mock(ChannelPromise.class);
-  }
-
-  private ByteBuf captureWrite(ChannelHandlerContext ctx) {
-    ArgumentCaptor<ByteBuf> captor = ArgumentCaptor.forClass(ByteBuf.class);
-    verify(ctx).write(captor.capture(), any(ChannelPromise.class));
-    return captor.getValue();
-  }
-
   private void createStream() throws Exception {
     // Create the stream.
     handler.write(ctx, new CreateStreamCommand(method, stream), promise);
     when(stream.id()).thenReturn(3);
     // Reset the context mock to clear recording of sent headers frame.
     mockContext();
-  }
-
-  private void mockContext() {
-    Mockito.reset(ctx);
-    Mockito.reset(promise);
-    when(ctx.alloc()).thenReturn(UnpooledByteBufAllocator.DEFAULT);
-    when(ctx.channel()).thenReturn(channel);
-    when(ctx.write(any())).thenReturn(future);
-    when(ctx.write(any(), eq(promise))).thenReturn(future);
-    when(ctx.writeAndFlush(any())).thenReturn(future);
-    when(ctx.writeAndFlush(any(), eq(promise))).thenReturn(future);
-    when(ctx.newPromise()).thenReturn(promise);
-  }
-
-  private void mockFuture(boolean succeeded) {
-    when(future.isDone()).thenReturn(true);
-    when(future.isCancelled()).thenReturn(false);
-    when(future.isSuccess()).thenReturn(succeeded);
-    if (!succeeded) {
-      when(future.cause()).thenReturn(new Exception("fake"));
-    }
-
-    doAnswer(new Answer<ChannelFuture>() {
-      @Override
-      public ChannelFuture answer(InvocationOnMock invocation) throws Throwable {
-        ChannelFutureListener listener = (ChannelFutureListener) invocation.getArguments()[0];
-        listener.operationComplete(future);
-        return future;
-      }
-    }).when(future).addListener(any(ChannelFutureListener.class));
   }
 }

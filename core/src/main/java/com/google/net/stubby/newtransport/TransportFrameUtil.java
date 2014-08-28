@@ -1,5 +1,6 @@
 package com.google.net.stubby.newtransport;
 
+import javax.annotation.Nullable;
 
 /**
  * Utility functions for transport layer framing.
@@ -70,6 +71,20 @@ public final class TransportFrameUtil {
 
   public static boolean isStatusFrame(byte flags) {
     return (flags & FRAME_TYPE_MASK) == STATUS_FRAME;
+  }
+
+  // TODO(user): This needs proper namespacing support, this is currently just a hack
+  /**
+   * Converts the path from the HTTP request to the full qualified method name.
+   *
+   * @return null if the path is malformatted.
+   */
+  @Nullable
+  public static String getFullMethodNameFromPath(String path) {
+    if (!path.startsWith("/")) {
+      return null;
+    }
+    return path.substring(1);
   }
 
   private TransportFrameUtil() {}

@@ -234,8 +234,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
    */
   private void sendGrpcFrame(ChannelHandlerContext ctx, SendGrpcFrameCommand cmd,
       ChannelPromise promise) throws Http2Exception {
-    NettyClientStream stream = cmd.stream();
-    Http2Stream http2Stream = connection().requireStream(stream.id());
+    Http2Stream http2Stream = connection().requireStream(cmd.streamId());
     switch (http2Stream.state()) {
       case CLOSED:
       case HALF_CLOSED_LOCAL:
@@ -250,7 +249,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
     }
 
     // Call the base class to write the HTTP/2 DATA frame.
-    writeData(ctx, stream.id(), cmd.content(), 0, cmd.endStream(), promise);
+    writeData(ctx, cmd.streamId(), cmd.content(), 0, cmd.endStream(), promise);
   }
 
   /**

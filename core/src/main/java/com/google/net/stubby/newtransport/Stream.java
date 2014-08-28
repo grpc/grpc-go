@@ -17,13 +17,6 @@ public interface Stream {
   StreamState state();
 
   /**
-   * Closes the local side of this stream and flushes any remaining messages. After this is called,
-   * no further messages may be sent on this stream, but additional messages may be received until
-   * the remote end-point is closed.
-   */
-  void halfClose();
-
-  /**
    * Writes the context name/value pair to the remote end-point. The bytes from the stream are
    * immediate read by the Transport. This method will always return immediately and will not wait
    * for the write to complete.

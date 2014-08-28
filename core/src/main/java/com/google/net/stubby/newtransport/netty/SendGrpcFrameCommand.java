@@ -1,7 +1,5 @@
 package com.google.net.stubby.newtransport.netty;
 
-import com.google.common.base.Preconditions;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.DefaultByteBufHolder;
@@ -10,17 +8,17 @@ import io.netty.buffer.DefaultByteBufHolder;
  * Command sent from the transport to the Netty channel to send a GRPC frame to the remote endpoint.
  */
 class SendGrpcFrameCommand extends DefaultByteBufHolder {
-  private final NettyClientStream stream;
+  private final int streamId;
   private final boolean endStream;
 
-  SendGrpcFrameCommand(NettyClientStream stream, ByteBuf content, boolean endStream) {
+  SendGrpcFrameCommand(int streamId, ByteBuf content, boolean endStream) {
     super(content);
-    this.stream = Preconditions.checkNotNull(stream, "stream");
+    this.streamId = streamId;
     this.endStream = endStream;
   }
 
-  NettyClientStream stream() {
-    return stream;
+  int streamId() {
+    return streamId;
   }
 
   boolean endStream() {
@@ -29,12 +27,12 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder {
 
   @Override
   public ByteBufHolder copy() {
-    return new SendGrpcFrameCommand(stream, content().copy(), endStream);
+    return new SendGrpcFrameCommand(streamId, content().copy(), endStream);
   }
 
   @Override
   public ByteBufHolder duplicate() {
-    return new SendGrpcFrameCommand(stream, content().duplicate(), endStream);
+    return new SendGrpcFrameCommand(streamId, content().duplicate(), endStream);
   }
 
   @Override
@@ -59,5 +57,32 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder {
   public SendGrpcFrameCommand touch(Object hint) {
     super.touch(hint);
     return this;
+  }
+
+  @Override
+  public boolean equals(Object that) {
+    if (that == null || !that.getClass().equals(SendGrpcFrameCommand.class)) {
+      return false;
+    }
+    SendGrpcFrameCommand thatCmd = (SendGrpcFrameCommand) that;
+    return thatCmd.streamId == streamId && thatCmd.endStream == endStream
+        && thatCmd.content().equals(content());
+  }
+
+  @Override
+  public String toString() {
+    return getClass().getSimpleName() + "(streamId=" + streamId
+        + ", endStream=" + endStream + ", content=" + content()
+        + ")";
+  }
+
+  @Override
+  public int hashCode() {
+    int hash = content().hashCode();
+    hash = hash * 31 + streamId;
+    if (endStream) {
+      hash = -hash;
+    }
+    return hash;
   }
 }

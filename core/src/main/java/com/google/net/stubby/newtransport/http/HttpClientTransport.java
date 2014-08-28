@@ -9,8 +9,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.io.ByteBuffers;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.newtransport.AbstractClientStream;
 import com.google.net.stubby.newtransport.AbstractClientTransport;
-import com.google.net.stubby.newtransport.AbstractStream;
 import com.google.net.stubby.newtransport.ClientStream;
 import com.google.net.stubby.newtransport.InputStreamDeframer;
 import com.google.net.stubby.newtransport.StreamListener;
@@ -75,7 +75,7 @@ public class HttpClientTransport extends AbstractClientTransport {
   /**
    * Client stream implementation for an HTTP transport.
    */
-  private class HttpClientStream extends AbstractStream implements ClientStream {
+  private class HttpClientStream extends AbstractClientStream {
     final HttpURLConnection connection;
     final DataOutputStream outputStream;
     boolean connected;

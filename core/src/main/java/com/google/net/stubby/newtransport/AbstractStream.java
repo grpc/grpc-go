@@ -1,9 +1,5 @@
 package com.google.net.stubby.newtransport;
 
-import static com.google.net.stubby.newtransport.StreamState.CLOSED;
-import static com.google.net.stubby.newtransport.StreamState.OPEN;
-import static com.google.net.stubby.newtransport.StreamState.READ_ONLY;
-
 import com.google.common.base.Preconditions;
 import com.google.common.io.Closeables;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -27,12 +23,8 @@ public abstract class AbstractStream implements Stream {
     CONTEXT, MESSAGE, STATUS
   }
 
-  private volatile StreamState state = StreamState.OPEN;
-  private Status status;
-  private final Object stateLock = new Object();
   private final Object writeLock = new Object();
   private final MessageFramer framer;
-  private final StreamListener listener;
   protected Phase inboundPhase = Phase.CONTEXT;
   protected Phase outboundPhase = Phase.CONTEXT;
 
@@ -55,7 +47,7 @@ public abstract class AbstractStream implements Stream {
       ListenableFuture<Void> future = null;
       try {
         inboundPhase(Phase.CONTEXT);
-        future = listener.contextRead(name, value, length);
+        future = listener().contextRead(name, value, length);
       } finally {
         closeWhenDone(future, value);
       }
@@ -66,7 +58,7 @@ public abstract class AbstractStream implements Stream {
       ListenableFuture<Void> future = null;
       try {
         inboundPhase(Phase.MESSAGE);
-        future = listener.messageRead(input, length);
+        future = listener().messageRead(input, length);
       } finally {
         closeWhenDone(future, input);
       }
@@ -75,32 +67,13 @@ public abstract class AbstractStream implements Stream {
     @Override
     public void onStatus(Status status) {
       inboundPhase(Phase.STATUS);
-      setStatus(status);
     }
   };
 
-  protected AbstractStream(StreamListener listener) {
-    this.listener = Preconditions.checkNotNull(listener, "listener");
-
+  protected AbstractStream() {
     framer = new MessageFramer(outboundFrameHandler, 4096);
     // No compression at the moment.
     framer.setAllowCompression(false);
-  }
-
-  @Override
-  public StreamState state() {
-    return state;
-  }
-
-  @Override
-  public final void halfClose() {
-    outboundPhase(Phase.STATUS);
-    synchronized (stateLock) {
-      state = state == OPEN ? READ_ONLY : CLOSED;
-    }
-    synchronized (writeLock) {
-      framer.close();
-    }
   }
 
   /**
@@ -159,35 +132,7 @@ public abstract class AbstractStream implements Stream {
   }
 
   /**
-   * Sets the status if not already set and notifies the stream listener that the stream was closed.
-   * This method must be called from the transport thread.
-   *
-   * @param newStatus the new status to set
-   * @return {@code} true if the status was not already set.
-   */
-  public boolean setStatus(final Status newStatus) {
-    Preconditions.checkNotNull(newStatus, "newStatus");
-    synchronized (stateLock) {
-      if (status != null) {
-        // Disallow override of current status.
-        return false;
-      }
-
-      status = newStatus;
-      state = CLOSED;
-    }
-
-    // Invoke the observer callback.
-    listener.closed(newStatus);
-
-    // Free any resources.
-    dispose();
-
-    return true;
-  }
-
-  /**
-   * Sends an outbound frame to the server.
+   * Sends an outbound frame to the remote end point.
    *
    * @param frame a buffer containing the chunk of data to be sent.
    * @param endOfStream if {@code true} indicates that no more data will be sent on the stream by
@@ -196,10 +141,15 @@ public abstract class AbstractStream implements Stream {
   protected abstract void sendFrame(ByteBuffer frame, boolean endOfStream);
 
   /**
+   * Returns the listener associated to this stream.
+   */
+  protected abstract StreamListener listener();
+
+  /**
    * Gets the handler for inbound messages. Subclasses must use this as the target for a
    * {@link com.google.net.stubby.newtransport.Deframer}.
    */
-  protected final GrpcMessageListener inboundMessageHandler() {
+  protected GrpcMessageListener inboundMessageHandler() {
     return inboundMessageHandler;
   }
 
@@ -217,6 +167,24 @@ public abstract class AbstractStream implements Stream {
    */
   protected final void outboundPhase(Phase nextPhase) {
     outboundPhase = verifyNextPhase(outboundPhase, nextPhase);
+  }
+
+  /**
+   * Closes the underlying framer.
+   *
+   * <p>No-op if the framer has already been closed.
+   *
+   * @param status if not null, will write the status to the framer before closing it
+   */
+  protected final void closeFramer(@Nullable Status status) {
+    synchronized (writeLock) {
+      if (!framer.isClosed()) {
+        if (status != null) {
+          framer.writeStatus(status);
+        }
+        framer.close();
+      }
+    }
   }
 
   private Phase verifyNextPhase(Phase currentPhase, Phase nextPhase) {

@@ -5,6 +5,8 @@ import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.AbstractService;
+import com.google.net.stubby.newtransport.ServerListener;
+import com.google.net.stubby.newtransport.ServerTransportListener;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -15,6 +17,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http2.DefaultHttp2Connection;
+import io.netty.handler.codec.http2.DefaultHttp2StreamRemovalPolicy;
 
 /**
  * Implementation of the {@link com.google.common.util.concurrent.Service} interface for a
@@ -27,18 +31,25 @@ public class NettyServer extends AbstractService {
   private final EventLoopGroup workerGroup;
   private Channel channel;
 
-  public NettyServer(int port, ChannelInitializer<SocketChannel> channelInitializer) {
-    this(port, channelInitializer, new NioEventLoopGroup(), new NioEventLoopGroup());
+  public NettyServer(ServerListener serverListener, int port) {
+    this(serverListener, port, new NioEventLoopGroup(), new NioEventLoopGroup());
   }
 
-  public NettyServer(int port, ChannelInitializer<SocketChannel> channelInitializer,
-      EventLoopGroup bossGroup, EventLoopGroup workerGroup) {
-    Preconditions.checkNotNull(channelInitializer, "channelInitializer");
+  public NettyServer(final ServerListener serverListener, int port, EventLoopGroup bossGroup,
+      EventLoopGroup workerGroup) {
     Preconditions.checkNotNull(bossGroup, "bossGroup");
     Preconditions.checkNotNull(workerGroup, "workerGroup");
     Preconditions.checkArgument(port >= 0, "port must be positive");
     this.port = port;
-    this.channelInitializer = channelInitializer;
+    this.channelInitializer = new ChannelInitializer<SocketChannel>() {
+      @Override
+      public void initChannel(SocketChannel ch) throws Exception {
+        // TODO(user): pass a real transport object
+        ServerTransportListener transportListener = serverListener.transportCreated(null);
+        ch.pipeline().addLast(new NettyServerHandler(transportListener,
+              new DefaultHttp2Connection(true, new DefaultHttp2StreamRemovalPolicy())));
+      }
+    };
     this.bossGroup = bossGroup;
     this.workerGroup = workerGroup;
   }

@@ -5,8 +5,7 @@ import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.newtransport.AbstractStream;
-import com.google.net.stubby.newtransport.ClientStream;
+import com.google.net.stubby.newtransport.AbstractClientStream;
 import com.google.net.stubby.newtransport.GrpcDeframer;
 import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamListener;
@@ -23,7 +22,7 @@ import java.nio.ByteBuffer;
 /**
  * Client stream for a Netty transport.
  */
-class NettyClientStream extends AbstractStream implements ClientStream {
+class NettyClientStream extends AbstractClientStream implements NettyStream {
   public static final int PENDING_STREAM_ID = -1;
 
   private volatile int id = PENDING_STREAM_ID;
@@ -43,6 +42,7 @@ class NettyClientStream extends AbstractStream implements ClientStream {
   /**
    * Returns the HTTP/2 ID for this stream.
    */
+  @Override
   public int id() {
     return id;
   }
@@ -70,13 +70,7 @@ class NettyClientStream extends AbstractStream implements ClientStream {
     }
   }
 
-  /**
-   * Called in the channel thread to process the content of an inbound DATA frame.
-   *
-   * @param frame the inbound HTTP/2 DATA frame. If this buffer is not used immediately, it must be
-   *        retained.
-   * @param promise the promise to be set after the application has finished processing the frame.
-   */
+  @Override
   public void inboundDataReceived(ByteBuf frame, boolean endOfStream, ChannelPromise promise) {
     Preconditions.checkNotNull(frame, "frame");
     Preconditions.checkNotNull(promise, "promise");
@@ -107,17 +101,9 @@ class NettyClientStream extends AbstractStream implements ClientStream {
 
   @Override
   protected void sendFrame(ByteBuffer frame, boolean endOfStream) {
-    SendGrpcFrameCommand cmd = new SendGrpcFrameCommand(this, toByteBuf(frame), endOfStream);
+    SendGrpcFrameCommand cmd = new SendGrpcFrameCommand(id(),
+        Utils.toByteBuf(channel.alloc(), frame), endOfStream);
     channel.writeAndFlush(cmd);
-  }
-
-  /**
-   * Copies the content of the given {@link ByteBuffer} to a new {@link ByteBuf} instance.
-   */
-  private ByteBuf toByteBuf(ByteBuffer source) {
-    ByteBuf buf = channel.alloc().buffer(source.remaining());
-    buf.writeBytes(source);
-    return buf;
   }
 
   /**
