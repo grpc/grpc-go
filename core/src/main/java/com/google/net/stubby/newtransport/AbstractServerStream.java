@@ -8,8 +8,6 @@ import com.google.common.base.Preconditions;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 
-import java.io.InputStream;
-
 /**
  * Abstract base class for {@link ServerStream} implementations.
  */
@@ -27,29 +25,6 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
 
   public final void setListener(StreamListener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");
-  }
-
-  @Override
-  protected final GrpcMessageListener inboundMessageHandler() {
-    // Wraps the base handler to get status update.
-    final GrpcMessageListener delegate = super.inboundMessageHandler();
-    return new GrpcMessageListener() {
-      @Override
-      public void onContext(String name, InputStream value, int length) {
-        delegate.onContext(name, value, length);
-      }
-
-      @Override
-      public void onPayload(InputStream input, int length) {
-        delegate.onPayload(input, length);
-      }
-
-      @Override
-      public void onStatus(Status status) {
-        delegate.onStatus(status);
-        listener.closed(status);
-      }
-    };
   }
 
   @Override

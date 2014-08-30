@@ -11,54 +11,39 @@ import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
-import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.Http2Headers;
-
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.Http2Headers;
 
 /**
  * Tests for {@link NettyClientStream}.
  */
 @RunWith(JUnit4.class)
 public class NettyClientStreamTest extends NettyStreamTestBase {
-  private NettyClientStream stream;
-
-  @Before
-  public void setup() {
-    init();
-
-    stream = new NettyClientStream(listener, channel);
-    assertEquals(StreamState.OPEN, stream.state());
-  }
-
-  @Override
-  protected NettyStream stream() {
-    return stream;
-  }
 
   @Test
   public void closeShouldSucceed() {
     // Force stream creation.
-    stream.id(1);
-    stream.halfClose();
+    stream().id(STREAM_ID);
+    stream().halfClose();
     assertEquals(StreamState.READ_ONLY, stream.state());
   }
 
   @Test
   public void cancelShouldSendCommand() {
-    stream.cancel();
+    stream().cancel();
     verify(channel).writeAndFlush(any(CancelStreamCommand.class));
   }
 
   @Test
   public void writeContextShouldSendRequest() throws Exception {
     // Force stream creation.
-    stream.id(1);
+    stream().id(STREAM_ID);
     stream.writeContext(CONTEXT_KEY, input, input.available(), accepted);
     stream.flush();
     verify(channel).writeAndFlush(new SendGrpcFrameCommand(1, contextFrame(), false));
@@ -68,7 +53,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void writeMessageShouldSendRequest() throws Exception {
     // Force stream creation.
-    stream.id(1);
+    stream().id(STREAM_ID);
     stream.writeMessage(input, input.available(), accepted);
     stream.flush();
     verify(channel).writeAndFlush(new SendGrpcFrameCommand(1, messageFrame(), false));
@@ -77,8 +62,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void setStatusWithOkShouldCloseStream() {
-    stream.id(1);
-    stream.setStatus(Status.OK);
+    stream().id(1);
+    stream().setStatus(Status.OK);
     verify(listener).closed(Status.OK);
     assertEquals(StreamState.CLOSED, stream.state());
   }
@@ -86,7 +71,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setStatusWithErrorShouldCloseStream() {
     Status errorStatus = new Status(Transport.Code.INTERNAL);
-    stream.setStatus(errorStatus);
+    stream().setStatus(errorStatus);
     verify(listener).closed(eq(errorStatus));
     assertEquals(StreamState.CLOSED, stream.state());
   }
@@ -94,8 +79,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setStatusWithOkShouldNotOverrideError() {
     Status errorStatus = new Status(Transport.Code.INTERNAL);
-    stream.setStatus(errorStatus);
-    stream.setStatus(Status.OK);
+    stream().setStatus(errorStatus);
+    stream().setStatus(Status.OK);
     verify(listener).closed(any(Status.class));
     assertEquals(StreamState.CLOSED, stream.state());
   }
@@ -103,8 +88,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setStatusWithErrorShouldNotOverridePreviousError() {
     Status errorStatus = new Status(Transport.Code.INTERNAL);
-    stream.setStatus(errorStatus);
-    stream.setStatus(Status.fromThrowable(new RuntimeException("fake")));
+    stream().setStatus(errorStatus);
+    stream().setStatus(Status.fromThrowable(new RuntimeException("fake")));
     verify(listener).closed(any(Status.class));
     assertEquals(StreamState.CLOSED, stream.state());
   }
@@ -113,7 +98,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void inboundContextShouldCallListener() throws Exception {
     // Receive headers first so that it's a valid GRPC response.
-    stream.inboundHeadersRecieved(grpcResponseHeaders(), false);
+    stream().id(1);
+    stream().inboundHeadersRecieved(grpcResponseHeaders(), false);
+
     super.inboundContextShouldCallListener();
   }
 
@@ -121,31 +108,43 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void inboundMessageShouldCallListener() throws Exception {
     // Receive headers first so that it's a valid GRPC response.
-    stream.inboundHeadersRecieved(grpcResponseHeaders(), false);
+    stream().id(1);
+    stream().inboundHeadersRecieved(grpcResponseHeaders(), false);
+
     super.inboundMessageShouldCallListener();
   }
 
   @Test
   public void inboundStatusShouldSetStatus() throws Exception {
-    stream.id(1);
+    stream().id(1);
 
     // Receive headers first so that it's a valid GRPC response.
-    stream.inboundHeadersRecieved(grpcResponseHeaders(), false);
+    stream().inboundHeadersRecieved(grpcResponseHeaders(), false);
 
-    stream.inboundDataReceived(statusFrame(new Status(Transport.Code.INTERNAL)), false, promise);
+    stream.inboundDataReceived(statusFrame(new Status(Transport.Code.INTERNAL)), false);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture());
     assertEquals(Transport.Code.INTERNAL, captor.getValue().getCode());
-    verify(promise).setSuccess();
     assertEquals(StreamState.CLOSED, stream.state());
   }
 
   @Test
   public void nonGrpcResponseShouldSetStatus() throws Exception {
-    stream.inboundDataReceived(Unpooled.copiedBuffer(MESSAGE, UTF_8), true, promise);
+    stream.inboundDataReceived(Unpooled.copiedBuffer(MESSAGE, UTF_8), true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture());
     assertEquals(MESSAGE, captor.getValue().getDescription());
+  }
+
+  @Override
+  protected NettyStream createStream() {
+    NettyStream stream = new NettyClientStream(listener, channel, inboundFlow);
+    assertEquals(StreamState.OPEN, stream.state());
+    return stream;
+  }
+
+  private NettyClientStream stream() {
+    return (NettyClientStream) stream;
   }
 
   private Http2Headers grpcResponseHeaders() {

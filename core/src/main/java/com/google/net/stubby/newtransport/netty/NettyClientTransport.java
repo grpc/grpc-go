@@ -11,6 +11,11 @@ import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.newtransport.netty.NettyClientTransportFactory.NegotiationType;
 import com.google.net.stubby.testing.utils.ssl.SslContextFactory;
 
+import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
+
+import io.netty.handler.codec.http2.Http2InboundFrameLogger;
+import io.netty.util.internal.logging.InternalLogLevel;
+import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -18,7 +23,16 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http2.DefaultHttp2Connection;
+import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
+import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
+import io.netty.handler.codec.http2.DefaultHttp2OutboundFlowController;
 import io.netty.handler.codec.http2.DefaultHttp2StreamRemovalPolicy;
+import io.netty.handler.codec.http2.Http2Connection;
+import io.netty.handler.codec.http2.Http2FrameReader;
+import io.netty.handler.codec.http2.Http2FrameWriter;
+import io.netty.handler.codec.http2.Http2OutboundFlowController;
 
 import java.util.concurrent.ExecutionException;
 
@@ -33,6 +47,7 @@ class NettyClientTransport extends AbstractClientTransport {
   private final int port;
   private final EventLoopGroup eventGroup;
   private final Http2Negotiator.Negotiation negotiation;
+  private final NettyClientHandler handler;
   private Channel channel;
 
   NettyClientTransport(String host, int port, NegotiationType negotiationType) {
@@ -48,10 +63,8 @@ class NettyClientTransport extends AbstractClientTransport {
     this.host = host;
     this.port = port;
     this.eventGroup = eventGroup;
-    final DefaultHttp2StreamRemovalPolicy streamRemovalPolicy =
-        new DefaultHttp2StreamRemovalPolicy();
-    final NettyClientHandler handler =
-        new NettyClientHandler(host, negotiationType == NegotiationType.TLS, streamRemovalPolicy);
+
+    handler = newHandler(host, negotiationType == NegotiationType.TLS);
     switch (negotiationType) {
       case PLAINTEXT:
         negotiation = Http2Negotiator.plaintext(handler);
@@ -72,7 +85,7 @@ class NettyClientTransport extends AbstractClientTransport {
   @Override
   protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method, StreamListener listener) {
     // Create the stream.
-    NettyClientStream stream = new NettyClientStream(listener, channel);
+    NettyClientStream stream = new NettyClientStream(listener, channel, handler.inboundFlow());
 
     try {
       // Write the request and await creation of the stream.
@@ -135,5 +148,28 @@ class NettyClientTransport extends AbstractClientTransport {
     if (eventGroup != null) {
       eventGroup.shutdownGracefully();
     }
+  }
+
+  private static NettyClientHandler newHandler(String host, boolean ssl) {
+    Http2Connection connection =
+        new DefaultHttp2Connection(false, new DefaultHttp2StreamRemovalPolicy());
+    Http2FrameReader frameReader = new DefaultHttp2FrameReader();
+    Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
+
+    Http2FrameLogger frameLogger = new Http2FrameLogger(InternalLogLevel.DEBUG);
+    frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
+    frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
+
+    DefaultHttp2InboundFlowController inboundFlow =
+        new DefaultHttp2InboundFlowController(connection, frameWriter);
+    Http2OutboundFlowController outboundFlow =
+        new DefaultHttp2OutboundFlowController(connection, frameWriter);
+    return new NettyClientHandler(host,
+        ssl,
+        connection,
+        frameReader,
+        frameWriter,
+        inboundFlow,
+        outboundFlow);
   }
 }

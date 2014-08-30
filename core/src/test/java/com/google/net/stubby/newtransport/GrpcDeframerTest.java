@@ -7,11 +7,15 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
+import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 import com.google.protobuf.ByteString;
@@ -50,13 +54,24 @@ public class GrpcDeframerTest {
   private StubDecompressor decompressor;
 
   @Mock
-  private GrpcMessageListener listener;
+  private StreamListener listener;
+
+  private SettableFuture<Void> contextFuture;
+
+  private SettableFuture<Void> messageFuture;
 
   @Before
   public void setup() {
     MockitoAnnotations.initMocks(this);
+
+    contextFuture = SettableFuture.create();
+    messageFuture = SettableFuture.create();
+    when(listener.contextRead(anyString(), any(InputStream.class), anyInt())).thenReturn(
+        contextFuture);
+    when(listener.messageRead(any(InputStream.class), anyInt())).thenReturn(messageFuture);
+
     decompressor = new StubDecompressor();
-    reader = new GrpcDeframer(decompressor, listener);
+    reader = new GrpcDeframer(decompressor, listener, MoreExecutors.directExecutor());
 
     contextProto = Transport.ContextValue.newBuilder().setKey(KEY).setValue(MESSAGE_BSTR).build();
   }
@@ -76,6 +91,9 @@ public class GrpcDeframerTest {
     reader.deframe(Buffers.empty(), true);
     verifyContext();
     verifyNoPayload();
+    verifyNoStatus();
+
+    contextFuture.set(null);
     verifyStatus(Transport.Code.OK);
   }
 
@@ -94,6 +112,9 @@ public class GrpcDeframerTest {
     reader.deframe(Buffers.empty(), true);
     verifyNoContext();
     verifyPayload();
+    verifyNoStatus();
+
+    messageFuture.set(null);
     verifyStatus(Transport.Code.OK);
   }
 
@@ -139,7 +160,14 @@ public class GrpcDeframerTest {
 
     // Verify that all callbacks were called.
     verifyContext();
+    verifyNoPayload();
+    verifyNoStatus();
+
+    contextFuture.set(null);
     verifyPayload();
+    verifyNoStatus();
+
+    messageFuture.set(null);
     verifyStatus();
   }
 
@@ -174,13 +202,13 @@ public class GrpcDeframerTest {
 
   private void verifyContext() {
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(listener).onContext(eq(KEY), captor.capture(), eq(MESSAGE.length()));
+    verify(listener).contextRead(eq(KEY), captor.capture(), eq(MESSAGE.length()));
     assertEquals(MESSAGE, readString(captor.getValue(), MESSAGE.length()));
   }
 
   private void verifyPayload() {
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(listener).onPayload(captor.capture(), eq(MESSAGE.length()));
+    verify(listener).messageRead(captor.capture(), eq(MESSAGE.length()));
     assertEquals(MESSAGE, readString(captor.getValue(), MESSAGE.length()));
   }
 
@@ -200,20 +228,20 @@ public class GrpcDeframerTest {
 
   private void verifyStatus(Transport.Code code) {
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).onStatus(captor.capture());
+    verify(listener).closed(captor.capture());
     assertEquals(code, captor.getValue().getCode());
   }
 
   private void verifyNoContext() {
-    verify(listener, never()).onContext(any(String.class), any(InputStream.class), anyInt());
+    verify(listener, never()).contextRead(any(String.class), any(InputStream.class), anyInt());
   }
 
   private void verifyNoPayload() {
-    verify(listener, never()).onPayload(any(InputStream.class), anyInt());
+    verify(listener, never()).messageRead(any(InputStream.class), anyInt());
   }
 
   private void verifyNoStatus() {
-    verify(listener, never()).onStatus(any(Status.class));
+    verify(listener, never()).closed(any(Status.class));
   }
 
   private byte[] contextFrame() throws IOException {

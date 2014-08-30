@@ -4,6 +4,7 @@ import static com.google.net.stubby.newtransport.StreamState.CLOSED;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
 import com.google.net.stubby.newtransport.GrpcDeframer;
@@ -13,11 +14,13 @@ import com.google.net.stubby.transport.Transport;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 import io.netty.handler.codec.http2.Http2Headers;
 
 import java.nio.ByteBuffer;
+
+import javax.annotation.Nullable;
 
 /**
  * Client stream for a Netty transport.
@@ -28,15 +31,18 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
   private volatile int id = PENDING_STREAM_ID;
   private final Channel channel;
   private final GrpcDeframer deframer;
+  private final WindowUpdateManager windowUpdateManager;
   private Transport.Code responseCode = Transport.Code.UNKNOWN;
   private boolean isGrpcResponse;
   private StringBuilder nonGrpcErrorMessage = new StringBuilder();
 
-  NettyClientStream(StreamListener listener, Channel channel) {
+  NettyClientStream(StreamListener listener, Channel channel,
+      DefaultHttp2InboundFlowController inboundFlow) {
     super(listener);
     this.channel = Preconditions.checkNotNull(channel, "channel");
-    this.deframer =
-        new GrpcDeframer(new NettyDecompressor(channel.alloc()), inboundMessageHandler());
+    this.deframer = new GrpcDeframer(new NettyDecompressor(channel.alloc()),
+        inboundMessageHandler(), channel.eventLoop());
+    windowUpdateManager = new WindowUpdateManager(channel, inboundFlow);
   }
 
   /**
@@ -49,6 +55,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
 
   void id(int id) {
     this.id = id;
+    windowUpdateManager.streamId(id);
   }
 
   @Override
@@ -70,21 +77,22 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
     }
   }
 
+  /**
+   * Called in the channel thread to process the content of an inbound DATA frame.
+   *
+   * @param frame the inbound HTTP/2 DATA frame. If this buffer is not used immediately, it must be
+   *        retained.
+   */
   @Override
-  public void inboundDataReceived(ByteBuf frame, boolean endOfStream, ChannelPromise promise) {
+  public void inboundDataReceived(ByteBuf frame, boolean endOfStream) {
     Preconditions.checkNotNull(frame, "frame");
-    Preconditions.checkNotNull(promise, "promise");
     if (state() == CLOSED) {
-      promise.setSuccess();
       return;
     }
 
     if (isGrpcResponse) {
       // Retain the ByteBuf until it is released by the deframer.
       deframer.deframe(new NettyBuffer(frame.retain()), endOfStream);
-
-      // TODO(user): add flow control.
-      promise.setSuccess();
     } else {
       // It's not a GRPC response, assume that the frame contains a text-based error message.
 
@@ -104,6 +112,11 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
     SendGrpcFrameCommand cmd = new SendGrpcFrameCommand(id(),
         Utils.toByteBuf(channel.alloc(), frame), endOfStream);
     channel.writeAndFlush(cmd);
+  }
+
+  @Override
+  protected void disableWindowUpdate(@Nullable ListenableFuture<Void> processingFuture) {
+    windowUpdateManager.disableWindowUpdate(processingFuture);
   }
 
   /**

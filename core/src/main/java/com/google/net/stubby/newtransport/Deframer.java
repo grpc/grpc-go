@@ -23,13 +23,13 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
    */
   private static final int LENGTH_NOT_SET = -1;
 
-  private final GrpcMessageListener target;
+  private final StreamListener target;
   private boolean inFrame;
   private byte currentFlags;
   private int currentLength = LENGTH_NOT_SET;
   private boolean statusDelivered;
 
-  public Deframer(GrpcMessageListener target) {
+  public Deframer(StreamListener target) {
     this.target = target;
   }
 
@@ -85,7 +85,7 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
           framedChunk = new ByteArrayInputStream(ByteStreams.toByteArray(framedChunk));
           try {
             // Report payload to the receiving operation
-            target.onPayload(framedChunk, currentLength);
+            target.messageRead(framedChunk, currentLength);
           } finally {
             currentLength = LENGTH_NOT_SET;
             inFrame = false;
@@ -98,7 +98,7 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
           Transport.ContextValue contextValue = Transport.ContextValue.parseFrom(framedChunk);
           try {
             ByteString value = contextValue.getValue();
-            target.onContext(contextValue.getKey(), value.newInput(), value.size());
+            target.contextRead(contextValue.getKey(), value.newInput(), value.size());
           } finally {
             currentLength = LENGTH_NOT_SET;
             inFrame = false;
@@ -154,7 +154,7 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
   }
 
   private void writeStatus(Status status) {
-    target.onStatus(status);
+    target.closed(status);
     statusDelivered = true;
   }
 

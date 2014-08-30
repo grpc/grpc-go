@@ -42,6 +42,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
+import io.netty.handler.codec.http2.DefaultHttp2OutboundFlowController;
+import io.netty.handler.codec.http2.Http2Connection;
+import io.netty.handler.codec.http2.Http2FrameReader;
+import io.netty.handler.codec.http2.Http2FrameWriter;
+import io.netty.handler.codec.http2.Http2OutboundFlowController;
+
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -53,9 +60,11 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   private static final int STREAM_ID = 3;
   private static final byte[] CONTENT = "hello world".getBytes(UTF_8);
 
-  @Mock private ServerTransportListener transportListener;
+  @Mock
+  private ServerTransportListener transportListener;
 
-  @Mock private StreamListener streamListener;
+  @Mock
+  private StreamListener streamListener;
 
   private NettyServerStream stream;
 
@@ -67,7 +76,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     when(transportListener.streamCreated(any(ServerStream.class), any(MethodDescriptor.class)))
         .thenReturn(streamListener);
-    handler = new NettyServerHandler(transportListener, new DefaultHttp2Connection(true));
+    handler = newHandler(transportListener);
     frameWriter = new DefaultHttp2FrameWriter();
     frameReader = new DefaultHttp2FrameReader();
 
@@ -187,5 +196,21 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     ChannelHandlerContext ctx = newContext();
     frameWriter.writeData(ctx, streamId, Unpooled.EMPTY_BUFFER, 0, endStream, newPromise());
     return captureWrite(ctx);
+  }
+
+  private static NettyServerHandler newHandler(ServerTransportListener transportListener) {
+    Http2Connection connection = new DefaultHttp2Connection(true);
+    Http2FrameReader frameReader = new DefaultHttp2FrameReader();
+    Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
+    DefaultHttp2InboundFlowController inboundFlow =
+        new DefaultHttp2InboundFlowController(connection, frameWriter);
+    Http2OutboundFlowController outboundFlow =
+        new DefaultHttp2OutboundFlowController(connection, frameWriter);
+    return new NettyServerHandler(transportListener,
+        connection,
+        frameReader,
+        frameWriter,
+        inboundFlow,
+        outboundFlow);
   }
 }

@@ -11,7 +11,6 @@ import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -19,23 +18,6 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link NettyServerStream}. */
 @RunWith(JUnit4.class)
 public class NettyServerStreamTest extends NettyStreamTestBase {
-
-  private static final int STREAM_ID = 1;
-  private NettyServerStream stream;
-
-  @Before public void setUp() {
-    init();
-
-    stream = new NettyServerStream(channel, STREAM_ID);
-    stream.setListener(listener);
-    assertEquals(StreamState.OPEN, stream.state());
-    verifyZeroInteractions(listener);
-  }
-
-  @Override
-  protected NettyStream stream() {
-    return stream;
-  }
 
   @Test
   public void writeContextShouldSendResponse() throws Exception {
@@ -58,16 +40,17 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   @Test
   public void closeBeforeClientHalfCloseShouldFail() {
     try {
-      stream.close(Status.OK);
+      stream().close(Status.OK);
       fail("Should throw exception");
-    } catch (IllegalStateException expected) { }
+    } catch (IllegalStateException expected) {
+    }
     assertEquals(StreamState.OPEN, stream.state());
     verifyZeroInteractions(listener);
   }
 
   @Test
   public void closeWithErrorBeforeClientHalfCloseShouldSucceed() throws Exception {
-    stream.close(Status.CANCELLED);
+    stream().close(Status.CANCELLED);
     assertEquals(StreamState.CLOSED, stream.state());
     verify(channel).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.CANCELLED), true));
@@ -77,11 +60,11 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   @Test
   public void closeAfterClientHalfCloseShouldSucceed() throws Exception {
     // Client half-closes. Listener gets closed()
-    stream.remoteEndClosed();
+    stream().remoteEndClosed();
     assertEquals(StreamState.WRITE_ONLY, stream.state());
     verify(listener).closed(Status.OK);
     // Server closes. Status sent.
-    stream.close(Status.OK);
+    stream().close(Status.OK);
     assertEquals(StreamState.CLOSED, stream.state());
     verify(channel).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.OK), true));
@@ -91,36 +74,32 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   @Test
   public void clientHalfCloseForTheSecondTimeShouldFail() throws Exception {
     // Client half-closes. Listener gets closed()
-    stream.remoteEndClosed();
+    stream().remoteEndClosed();
     assertEquals(StreamState.WRITE_ONLY, stream.state());
     verify(listener).closed(Status.OK);
     // Client half-closes again. Stream will be aborted with an error.
-    stream.remoteEndClosed();
+    stream().remoteEndClosed();
     assertEquals(StreamState.CLOSED, stream.state());
-    verify(channel).writeAndFlush(
-        new SendGrpcFrameCommand(
-            STREAM_ID,
-            statusFrame(new Status(Transport.Code.FAILED_PRECONDITION,
-                "Client-end of the stream already closed")),
-            true));
+    verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, statusFrame(
+        new Status(Transport.Code.FAILED_PRECONDITION, "Client-end of the stream already closed")),
+        true));
     verifyNoMoreInteractions(listener);
   }
 
   @Test
   public void abortStreamAndSendStatus() throws Exception {
     Status status = new Status(Transport.Code.INTERNAL, new Throwable());
-    stream.abortStream(status, true);
+    stream().abortStream(status, true);
     assertEquals(StreamState.CLOSED, stream.state());
     verify(listener).closed(status);
-    verify(channel).writeAndFlush(
-        new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
+    verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
     verifyNoMoreInteractions(listener);
   }
 
   @Test
   public void abortStreamAndNotSendStatus() throws Exception {
     Status status = new Status(Transport.Code.INTERNAL, new Throwable());
-    stream.abortStream(status, false);
+    stream().abortStream(status, false);
     assertEquals(StreamState.CLOSED, stream.state());
     verify(listener).closed(status);
     verify(channel, never()).writeAndFlush(
@@ -132,12 +111,25 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   public void abortStreamAfterClientHalfCloseShouldNotCallListenerTwice() {
     Status status = new Status(Transport.Code.INTERNAL, new Throwable());
     // Client half-closes. Listener gets closed()
-    stream.remoteEndClosed();
+    stream().remoteEndClosed();
     assertEquals(StreamState.WRITE_ONLY, stream.state());
     verify(listener).closed(Status.OK);
     // Abort
-    stream.abortStream(status, true);
+    stream().abortStream(status, true);
     assertEquals(StreamState.CLOSED, stream.state());
     verifyNoMoreInteractions(listener);
+  }
+
+  @Override
+  protected NettyStream createStream() {
+    NettyServerStream stream = new NettyServerStream(channel, STREAM_ID, inboundFlow);
+    stream.setListener(listener);
+    assertEquals(StreamState.OPEN, stream.state());
+    verifyZeroInteractions(listener);
+    return stream;
+  }
+
+  private NettyServerStream stream() {
+    return (NettyServerStream) stream;
   }
 }

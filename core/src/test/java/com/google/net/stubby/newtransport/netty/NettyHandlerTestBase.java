@@ -6,6 +6,14 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
@@ -14,19 +22,12 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2FrameListener;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
-
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
 /**
  * Base class for Netty handler unit tests.
@@ -48,6 +49,9 @@ public abstract class NettyHandlerTestBase {
 
   @Mock
   protected Http2FrameListener frameListener;
+
+  @Mock
+  protected EventLoop eventLoop;
 
   protected Http2FrameWriter frameWriter;
   protected Http2FrameReader frameReader;
@@ -102,6 +106,16 @@ public abstract class NettyHandlerTestBase {
     when(ctx.writeAndFlush(any())).thenReturn(future);
     when(ctx.writeAndFlush(any(), eq(promise))).thenReturn(future);
     when(ctx.newPromise()).thenReturn(promise);
+    when(channel.eventLoop()).thenReturn(eventLoop);
+
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) throws Throwable {
+        Runnable runnable = (Runnable) invocation.getArguments()[0];
+        runnable.run();
+        return null;
+      }
+    }).when(eventLoop).execute(any(Runnable.class));
   }
 
   protected final void mockFuture(boolean succeeded) {

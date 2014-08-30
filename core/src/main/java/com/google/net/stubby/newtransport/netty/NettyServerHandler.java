@@ -4,6 +4,7 @@ import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_PROTORPC;
 import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
@@ -12,6 +13,10 @@ import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.newtransport.TransportFrameUtil;
 import com.google.net.stubby.transport.Transport;
 
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
+import io.netty.handler.codec.http2.Http2FrameReader;
+import io.netty.handler.codec.http2.Http2FrameWriter;
+import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -45,10 +50,16 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
   private static final Status GOAWAY_STATUS = new Status(Transport.Code.UNAVAILABLE);
 
   private final ServerTransportListener transportListener;
+  private final DefaultHttp2InboundFlowController inboundFlow;
 
-  NettyServerHandler(ServerTransportListener transportListener, Http2Connection connection) {
-    super(connection);
-    this.transportListener = transportListener;
+  NettyServerHandler(ServerTransportListener transportListener, Http2Connection connection,
+      Http2FrameReader frameReader,
+      Http2FrameWriter frameWriter,
+      DefaultHttp2InboundFlowController inboundFlow,
+      Http2OutboundFlowController outboundFlow) {
+    super(connection, frameReader, frameWriter, inboundFlow, outboundFlow);
+    this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
+    this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
 
     // Observe the HTTP/2 connection for events.
     connection.addListener(new Http2ConnectionAdapter() {
@@ -71,7 +82,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
       int padding,
       boolean endStream) throws Http2Exception {
     try {
-      NettyServerStream stream = new NettyServerStream(ctx.channel(), streamId);
+      NettyServerStream stream = new NettyServerStream(ctx.channel(), streamId, inboundFlow);
       // The Http2Stream object was put by AbstractHttp2ConnectionHandler before calling this method.
       Http2Stream http2Stream = connection().requireStream(streamId);
       http2Stream.data(stream);
@@ -94,8 +105,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
       boolean endOfStream) throws Http2Exception {
     try {
       NettyServerStream stream = serverStream(connection().requireStream(streamId));
-      // TODO(user): update flow controller to use a promise
-      stream.inboundDataReceived(data, endOfStream, ctx.newPromise());
+      stream.inboundDataReceived(data, endOfStream);
     } catch (Http2Exception e) {
       throw e;
     } catch (Throwable e) {

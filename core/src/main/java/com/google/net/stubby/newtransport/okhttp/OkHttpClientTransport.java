@@ -5,6 +5,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteBuffers;
 import com.google.common.io.ByteStreams;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
@@ -421,6 +422,11 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       // Write the data to the remote endpoint.
       frameWriter.data(endOfStream, streamId, buffer);
       frameWriter.flush();
+    }
+
+    @Override
+    protected void disableWindowUpdate(ListenableFuture<Void> processingFuture) {
+      // TODO(user): implement inbound flow control.
     }
 
     @Override

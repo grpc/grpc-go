@@ -16,16 +16,18 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.AbstractHttp2ConnectionHandler;
-import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
+import io.netty.handler.codec.http2.Http2FrameReader;
+import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamException;
-import io.netty.handler.codec.http2.Http2StreamRemovalPolicy;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -56,18 +58,21 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
 
   private final String host;
   private final String scheme;
+  private final DefaultHttp2InboundFlowController inboundFlow;
   private final Deque<PendingStream> pendingStreams = new ArrayDeque<PendingStream>();
   private Status goAwayStatus = GOAWAY_STATUS;
 
-  public NettyClientHandler(String host, boolean ssl,
-      Http2StreamRemovalPolicy streamRemovalPolicy) {
-    this(host, ssl, new DefaultHttp2Connection(false, streamRemovalPolicy));
-  }
-
-  private NettyClientHandler(String host, boolean ssl, Http2Connection connection) {
-    super(connection);
+  public NettyClientHandler(String host,
+      boolean ssl,
+      Http2Connection connection,
+      Http2FrameReader frameReader,
+      Http2FrameWriter frameWriter,
+      DefaultHttp2InboundFlowController inboundFlow,
+      Http2OutboundFlowController outboundFlow) {
+    super(connection, frameReader, frameWriter, inboundFlow, outboundFlow);
     this.host = Preconditions.checkNotNull(host, "host");
     this.scheme = ssl ? "https" : "http";
+    this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
 
     // Disallow stream creation by the server.
     connection.remote().maxStreams(0);
@@ -91,6 +96,10 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
         NettyClientHandler.this.goingAway();
       }
     });
+  }
+
+  public DefaultHttp2InboundFlowController inboundFlow() {
+    return inboundFlow;
   }
 
   /**
@@ -134,9 +143,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
   public void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
       boolean endOfStream) throws Http2Exception {
     NettyClientStream stream = clientStream(connection().requireStream(streamId));
-
-    // TODO(user): update flow controller to use a promise.
-    stream.inboundDataReceived(data, endOfStream, ctx.newPromise());
+    stream.inboundDataReceived(data, endOfStream);
   }
 
   /**

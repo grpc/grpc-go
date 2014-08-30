@@ -3,7 +3,6 @@ package com.google.net.stubby.newtransport.netty;
 import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_PROTORPC;
 import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
-import static io.netty.handler.codec.http2.Http2CodecUtil.immediateRemovalPolicy;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
@@ -21,17 +20,6 @@ import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
-import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
-import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.Http2CodecUtil;
-import io.netty.handler.codec.http2.Http2Error;
-import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2Settings;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -40,6 +28,24 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http2.DefaultHttp2Connection;
+import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
+import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
+import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
+import io.netty.handler.codec.http2.DefaultHttp2OutboundFlowController;
+import io.netty.handler.codec.http2.Http2CodecUtil;
+import io.netty.handler.codec.http2.Http2Connection;
+import io.netty.handler.codec.http2.Http2Error;
+import io.netty.handler.codec.http2.Http2FrameReader;
+import io.netty.handler.codec.http2.Http2FrameWriter;
+import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2OutboundFlowController;
+import io.netty.handler.codec.http2.Http2Settings;
 
 /**
  * Tests for {@link NettyClientHandler}.
@@ -64,7 +70,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
     frameWriter = new DefaultHttp2FrameWriter();
     frameReader = new DefaultHttp2FrameReader();
-    handler = new NettyClientHandler("www.fake.com", true, immediateRemovalPolicy());
+    handler = newHandler("www.fake.com", true);
     content = Unpooled.copiedBuffer("hello world", UTF_8);
 
     when(channel.isActive()).thenReturn(true);
@@ -171,7 +177,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     // Need to retain to simulate what is done by the stream.
     ByteBuf frame = dataFrame(3, false).retain();
     handler.channelRead(this.ctx, frame);
-    verify(stream).inboundDataReceived(eq(content), eq(false), eq(promise));
+    verify(stream).inboundDataReceived(eq(content), eq(false));
   }
 
   @Test
@@ -235,5 +241,22 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     when(stream.id()).thenReturn(3);
     // Reset the context mock to clear recording of sent headers frame.
     mockContext();
+  }
+
+  private static NettyClientHandler newHandler(String host, boolean ssl) {
+    Http2Connection connection = new DefaultHttp2Connection(false);
+    Http2FrameReader frameReader = new DefaultHttp2FrameReader();
+    Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
+    DefaultHttp2InboundFlowController inboundFlow =
+        new DefaultHttp2InboundFlowController(connection, frameWriter);
+    Http2OutboundFlowController outboundFlow =
+        new DefaultHttp2OutboundFlowController(connection, frameWriter);
+    return new NettyClientHandler(host,
+        ssl,
+        connection,
+        frameReader,
+        frameWriter,
+        inboundFlow,
+        outboundFlow);
   }
 }

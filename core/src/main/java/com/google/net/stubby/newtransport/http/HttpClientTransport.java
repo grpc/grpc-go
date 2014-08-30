@@ -7,6 +7,7 @@ import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
 
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteBuffers;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
@@ -144,6 +145,13 @@ public class HttpClientTransport extends AbstractClientTransport {
     public void dispose() {
       super.dispose();
       disconnect();
+    }
+
+    /**
+     * This implementation does nothing since HTTP/1.1 does not support flow control.
+     */
+    @Override
+    protected void disableWindowUpdate(ListenableFuture<Void> processingFuture) {
     }
 
     /**

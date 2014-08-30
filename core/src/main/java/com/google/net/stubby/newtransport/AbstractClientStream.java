@@ -7,8 +7,6 @@ import static com.google.net.stubby.newtransport.StreamState.READ_ONLY;
 import com.google.common.base.Preconditions;
 import com.google.net.stubby.Status;
 
-import java.io.InputStream;
-
 /**
  * The abstract base class for {@link ClientStream} implementations.
  */
@@ -30,24 +28,17 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
     return listener;
   }
 
+  /**
+   * Overrides the behavior of the {@link StreamListener#closed(Status)} method to call
+   * {@link #setStatus(Status)}, rather than notifying the {@link #listener()} directly.
+   */
   @Override
-  protected final GrpcMessageListener inboundMessageHandler() {
+  protected final StreamListener inboundMessageHandler() {
     // Wraps the base handler to get status update.
-    final GrpcMessageListener delegate = super.inboundMessageHandler();
-    return new GrpcMessageListener() {
+    return new ForwardingStreamListener(super.inboundMessageHandler()) {
       @Override
-      public void onContext(String name, InputStream value, int length) {
-        delegate.onContext(name, value, length);
-      }
-
-      @Override
-      public void onPayload(InputStream input, int length) {
-        delegate.onPayload(input, length);
-      }
-
-      @Override
-      public void onStatus(Status status) {
-        delegate.onStatus(status);
+      public void closed(Status status) {
+        inboundPhase(Phase.STATUS);
         setStatus(status);
       }
     };

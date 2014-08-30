@@ -39,34 +39,39 @@ public abstract class AbstractStream implements Stream {
   };
 
   /**
-   * Handler for Deframer output.
+   * Internal handler for Deframer output. Informs the {@link #listener()} of inbound messages.
    */
-  private final GrpcMessageListener inboundMessageHandler = new GrpcMessageListener() {
+  private final StreamListener inboundMessageHandler = new StreamListener() {
     @Override
-    public void onContext(String name, InputStream value, int length) {
+    public ListenableFuture<Void> contextRead(String name, InputStream value, int length) {
       ListenableFuture<Void> future = null;
       try {
         inboundPhase(Phase.CONTEXT);
         future = listener().contextRead(name, value, length);
+        disableWindowUpdate(future);
+        return future;
       } finally {
         closeWhenDone(future, value);
       }
     }
 
     @Override
-    public void onPayload(InputStream input, int length) {
+    public ListenableFuture<Void> messageRead(InputStream input, int length) {
       ListenableFuture<Void> future = null;
       try {
         inboundPhase(Phase.MESSAGE);
         future = listener().messageRead(input, length);
+        disableWindowUpdate(future);
+        return future;
       } finally {
         closeWhenDone(future, input);
       }
     }
 
     @Override
-    public void onStatus(Status status) {
+    public void closed(Status status) {
       inboundPhase(Phase.STATUS);
+      listener().closed(status);
     }
   };
 
@@ -146,10 +151,17 @@ public abstract class AbstractStream implements Stream {
   protected abstract StreamListener listener();
 
   /**
-   * Gets the handler for inbound messages. Subclasses must use this as the target for a
+   * If the given future is non-{@code null}, temporarily disables window updates for inbound flow
+   * control for this stream until the future completes. If the given future is {@code null}, does
+   * nothing.
+   */
+  protected abstract void disableWindowUpdate(@Nullable ListenableFuture<Void> processingFuture);
+
+  /**
+   * Gets the internal handler for inbound messages. Subclasses must use this as the target for a
    * {@link com.google.net.stubby.newtransport.Deframer}.
    */
-  protected GrpcMessageListener inboundMessageHandler() {
+  protected StreamListener inboundMessageHandler() {
     return inboundMessageHandler;
   }
 

@@ -3,16 +3,22 @@ package com.google.net.stubby.newtransport.netty;
 import static com.google.net.stubby.GrpcFramingUtil.CONTEXT_VALUE_FRAME;
 import static com.google.net.stubby.GrpcFramingUtil.PAYLOAD_FRAME;
 import static com.google.net.stubby.GrpcFramingUtil.STATUS_FRAME;
+import static io.netty.handler.codec.http2.DefaultHttp2InboundFlowController.DEFAULT_WINDOW_UPDATE_RATIO;
+import static io.netty.handler.codec.http2.DefaultHttp2InboundFlowController.WINDOW_UPDATE_OFF;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.transport.Transport.ContextValue;
@@ -27,12 +33,17 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPipeline;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -46,56 +57,111 @@ import java.util.concurrent.TimeUnit;
 public abstract class NettyStreamTestBase {
   protected static final String CONTEXT_KEY = "key";
   protected static final String MESSAGE = "hello world";
+  protected static final int STREAM_ID = 1;
 
-  @Mock protected Channel channel;
+  @Mock
+  protected Channel channel;
 
-  @Mock protected ChannelFuture future;
+  @Mock
+  private ChannelHandlerContext ctx;
 
-  @Mock protected StreamListener listener;
+  @Mock
+  private ChannelPipeline pipeline;
 
-  @Mock protected Runnable accepted;
+  @Mock
+  protected ChannelFuture future;
 
-  @Mock protected EventLoop eventLoop;
+  @Mock
+  protected StreamListener listener;
 
-  @Mock protected ChannelPromise promise;
+  @Mock
+  protected Runnable accepted;
+
+  @Mock
+  protected EventLoop eventLoop;
+
+  @Mock
+  protected ChannelPromise promise;
+
+  @Mock
+  protected DefaultHttp2InboundFlowController inboundFlow;
+
+  protected SettableFuture<Void> processingFuture;
 
   protected InputStream input;
 
-  /**
-   * Returns the NettyStream object to be tested.
-   */
-  protected abstract NettyStream stream();
+  protected NettyStream stream;
 
-  protected final void init() {
+  @Before
+  public void setup() {
     MockitoAnnotations.initMocks(this);
 
     mockChannelFuture(true);
     when(channel.write(any())).thenReturn(future);
     when(channel.writeAndFlush(any())).thenReturn(future);
     when(channel.alloc()).thenReturn(UnpooledByteBufAllocator.DEFAULT);
+    when(channel.pipeline()).thenReturn(pipeline);
     when(channel.eventLoop()).thenReturn(eventLoop);
+    when(pipeline.firstContext()).thenReturn(ctx);
     when(eventLoop.inEventLoop()).thenReturn(true);
 
+    processingFuture = SettableFuture.create();
+    when(listener.contextRead(anyString(), any(InputStream.class), anyInt())).thenReturn(
+        processingFuture);
+    when(listener.messageRead(any(InputStream.class), anyInt())).thenReturn(processingFuture);
+
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) throws Throwable {
+        Runnable runnable = (Runnable) invocation.getArguments()[0];
+        runnable.run();
+        return null;
+      }
+    }).when(eventLoop).execute(any(Runnable.class));
+
     input = new ByteArrayInputStream(MESSAGE.getBytes(UTF_8));
+    stream = createStream();
   }
 
   @Test
   public void inboundContextShouldCallListener() throws Exception {
-    stream().inboundDataReceived(contextFrame(), false, promise);
+    stream.inboundDataReceived(contextFrame(), false);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
     verify(listener).contextRead(eq(CONTEXT_KEY), captor.capture(), eq(MESSAGE.length()));
-    verify(promise).setSuccess();
+
+    // Verify that inbound flow control window update has been disabled for the stream.
+    verify(inboundFlow).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID), eq(WINDOW_UPDATE_OFF));
+    verify(inboundFlow, never()).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID),
+        eq(DEFAULT_WINDOW_UPDATE_RATIO));
     assertEquals(MESSAGE, toString(captor.getValue()));
+
+    // Verify that inbound flow control window update has been re-enabled for the stream after
+    // the future completes.
+    processingFuture.set(null);
+    verify(inboundFlow).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID),
+        eq(DEFAULT_WINDOW_UPDATE_RATIO));
   }
 
   @Test
   public void inboundMessageShouldCallListener() throws Exception {
-    stream().inboundDataReceived(messageFrame(), false, promise);
+    stream.inboundDataReceived(messageFrame(), false);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
     verify(listener).messageRead(captor.capture(), eq(MESSAGE.length()));
-    verify(promise).setSuccess();
+
+    // Verify that inbound flow control window update has been disabled for the stream.
+    verify(inboundFlow).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID), eq(WINDOW_UPDATE_OFF));
+    verify(inboundFlow, never()).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID),
+        eq(DEFAULT_WINDOW_UPDATE_RATIO));
     assertEquals(MESSAGE, toString(captor.getValue()));
+
+    // Verify that inbound flow control window update has been re-enabled for the stream after
+    // the future completes.
+    processingFuture.set(null);
+    verify(inboundFlow).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID),
+        eq(DEFAULT_WINDOW_UPDATE_RATIO));
   }
+
+  protected abstract NettyStream createStream();
 
   private String toString(InputStream in) throws Exception {
     byte[] bytes = new byte[in.available()];
