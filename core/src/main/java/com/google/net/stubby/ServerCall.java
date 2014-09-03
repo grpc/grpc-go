@@ -70,7 +70,7 @@ public abstract class ServerCall<ResponseT> {
      *
      * <p>There will be no further callbacks for the call.
      */
-    public abstract void onCompleted();
+    public abstract void onComplete();
   }
 
   /**
@@ -78,7 +78,7 @@ public abstract class ServerCall<ResponseT> {
    * status} is not equal to {@link Status#OK}, then the call is said to have failed.
    *
    * <p>If {@code status} is not {@link Status#CANCELLED} and no errors or cancellations are known
-   * to have occured, then a {@link Listener#onCompleted} notification should be expected.
+   * to have occured, then a {@link Listener#onComplete} notification should be expected.
    * Otherwise {@link Listener#onCancel} has been or will be called.
    *
    * @throws IllegalStateException if call is already {@code close}d
