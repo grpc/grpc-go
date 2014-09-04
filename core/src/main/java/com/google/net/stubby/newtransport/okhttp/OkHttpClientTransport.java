@@ -3,7 +3,6 @@ package com.google.net.stubby.newtransport.okhttp;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.io.ByteBuffers;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.MethodDescriptor;
@@ -410,15 +409,10 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     @Override
     protected void sendFrame(ByteBuffer frame, boolean endOfStream) {
       Preconditions.checkState(streamId != 0, "streamId should be set");
-      Buffer buffer;
-      try {
-        // Read the data into a buffer.
-        // TODO(user): swap to NIO buffers or zero-copy if/when okhttp/okio supports it
-        buffer = new Buffer().readFrom(ByteBuffers.newConsumingInputStream(frame));
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-
+      Buffer buffer = new Buffer();
+      // Read the data into a buffer.
+      // TODO(user): swap to NIO buffers or zero-copy if/when okhttp/okio supports it
+      buffer.write(frame.array(), frame.arrayOffset(), frame.remaining());
       // Write the data to the remote endpoint.
       frameWriter.data(endOfStream, streamId, buffer);
       frameWriter.flush();

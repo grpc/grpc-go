@@ -1,8 +1,7 @@
 package com.google.net.stubby.newtransport.okhttp;
 
-import com.google.common.util.concurrent.SerializingExecutor;
+import com.google.net.stubby.SerializingExecutor;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.Transport.Code;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameWriter;

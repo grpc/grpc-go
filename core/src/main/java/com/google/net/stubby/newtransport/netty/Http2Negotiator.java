@@ -2,7 +2,6 @@ package com.google.net.stubby.newtransport.netty;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.logging.FormattingLogger;
 import com.google.common.util.concurrent.SettableFuture;
 
 import io.netty.channel.Channel;
@@ -29,6 +28,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.net.ssl.SSLEngine;
 
@@ -44,7 +45,7 @@ public class Http2Negotiator {
   private static final String[] JETTY_TLS_NEGOTIATION_IMPL =
       {"org.eclipse.jetty.alpn.ALPN", "org.eclipse.jetty.npn.NextProtoNego"};
 
-  private static final FormattingLogger log = FormattingLogger.getLoggerForCallerClass();
+  private static final Logger log = Logger.getLogger(Http2Negotiator.class.getName());
 
   /**
    * A Netty-based negotiation that provides an pre-configured {@link ChannelInitializer} for to
@@ -249,7 +250,7 @@ public class Http2Negotiator {
           negoClass = Class.forName(protocolNegoClassName);
         } catch (ClassNotFoundException ignored) {
           // Not on the classpath.
-          log.warningfmt("Jetty extension %s not found", protocolNegoClassName);
+          log.warning("Jetty extension " + protocolNegoClassName + " not found");
           continue;
         }
         Class<?> providerClass = Class.forName(protocolNegoClassName + "$Provider");
@@ -301,7 +302,8 @@ public class Http2Negotiator {
             }));
         return true;
       } catch (Exception e) {
-        log.severefmt(e, "Unable to initialize protocol negotation for %s", protocolNegoClassName);
+        log.log(Level.SEVERE,
+            "Unable to initialize protocol negotation for " + protocolNegoClassName, e);
       }
     }
     return false;

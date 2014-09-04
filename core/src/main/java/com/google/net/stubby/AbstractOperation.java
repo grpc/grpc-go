@@ -2,19 +2,19 @@ package com.google.net.stubby;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.MapMaker;
-import com.google.common.logging.FormattingLogger;
 import com.google.net.stubby.transport.Transport;
 
 import java.io.InputStream;
 import java.util.concurrent.ConcurrentMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Common implementation for {@link Request} and {@link Response} operations
  */
 public abstract class AbstractOperation implements Operation {
 
-  private static final FormattingLogger logger =
-      FormattingLogger.getLogger(AbstractOperation.class);
+  private static final Logger logger = Logger.getLogger(AbstractOperation.class.getName());
 
   /**
    * Allow implementations to associate state with an operation
@@ -90,9 +90,8 @@ public abstract class AbstractOperation implements Operation {
     Preconditions.checkNotNull(status, "status");
     this.phase = Phase.CLOSED;
     if (this.status != null && this.status.getCode() != status.getCode()) {
-      logger.severefmt(status.getCause(),
-          "Attempting to override status of already closed operation from %s to %s",
-        this.status.getCode(), status.getCode());
+      logger.log(Level.SEVERE, "Attempting to override status of already closed operation from "
+          + this.status.getCode() + " to " + status.getCode(), status.getCause());
     } else {
       this.status = status;
     }

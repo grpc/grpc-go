@@ -6,7 +6,6 @@ import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_PROTORPC;
 import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
 
 import com.google.common.base.Preconditions;
-import com.google.common.io.ByteBuffers;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
@@ -116,7 +115,7 @@ public class HttpClientTransport extends AbstractClientTransport {
         // Synchronizing here to protect against cancellation due to the transport shutting down.
         synchronized (connection) {
           // Write the data to the connection output stream.
-          ByteBuffers.asByteSource(frame).copyTo(outputStream);
+          outputStream.write(frame.array(), frame.arrayOffset(), frame.remaining());
 
           if (endOfStream) {
             // Close the output stream on this connection.
