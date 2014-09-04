@@ -1,5 +1,7 @@
 package com.google.net.stubby;
 
+import java.io.InputStream;
+
 /** Definition of a method supported by a service. */
 public final class ServerMethodDefinition<RequestT, ResponseT> {
   private final String name;
@@ -22,18 +24,25 @@ public final class ServerMethodDefinition<RequestT, ResponseT> {
     return name;
   }
 
-  /** Marshaller for deserializing incoming requests. */
-  public Marshaller<RequestT> getRequestMarshaller() {
-    return requestMarshaller;
+  /** Deserialize an incoming request message. */
+  public RequestT parseRequest(InputStream input) {
+    return requestMarshaller.parse(input);
   }
 
-  /** Marshaller for serializing outgoing responses. */
-  public Marshaller<ResponseT> getResponseMarshaller() {
-    return responseMarshaller;
+  /** Serialize an outgoing response message. */
+  public InputStream streamResponse(ResponseT response) {
+    return responseMarshaller.stream(response);
   }
 
   /** Handler for incoming calls. */
   public ServerCallHandler<RequestT, ResponseT> getServerCallHandler() {
     return handler;
+  }
+
+  /** Create a new method definition with a different call handler. */
+  public ServerMethodDefinition<RequestT, ResponseT> withServerCallHandler(
+      ServerCallHandler<RequestT, ResponseT> handler) {
+    return new ServerMethodDefinition<RequestT, ResponseT>(
+        name, requestMarshaller, responseMarshaller, handler);
   }
 }

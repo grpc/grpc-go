@@ -39,8 +39,7 @@ public class ServerInterceptors {
       List<ServerInterceptor> interceptors) {
     ServerCallHandler<ReqT, RespT> callHandler
         = InterceptCallHandler.create(interceptors, method.getServerCallHandler());
-    serviceDefBuilder.addMethod(method.getName(), method.getRequestMarshaller(),
-        method.getResponseMarshaller(), callHandler);
+    serviceDefBuilder.addMethod(method.withServerCallHandler(callHandler));
   }
 
   private static class InterceptCallHandler<ReqT, RespT> implements ServerCallHandler<ReqT, RespT> {

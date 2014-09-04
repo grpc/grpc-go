@@ -59,15 +59,19 @@ public final class ServerServiceDefinition {
      */
     public <ReqT, RespT> Builder addMethod(String name, Marshaller<ReqT> requestMarshaller,
         Marshaller<RespT> responseMarshaller, ServerCallHandler<ReqT, RespT> handler) {
-      Preconditions.checkNotNull(name, "name must not be null");
-      if (methodLookup.containsKey(name)) {
-        throw new IllegalStateException("Method by same name already registered");
-      }
-      ServerMethodDefinition<ReqT, RespT> def = new ServerMethodDefinition<ReqT, RespT>(name,
+      return addMethod(new ServerMethodDefinition<ReqT, RespT>(
+          Preconditions.checkNotNull(name, "name must not be null"),
           Preconditions.checkNotNull(requestMarshaller, "requestMarshaller must not be null"),
           Preconditions.checkNotNull(responseMarshaller, "responseMarshaller must not be null"),
-          Preconditions.checkNotNull(handler, "handler must not be null"));
-      methodLookup.put(name, def);
+          Preconditions.checkNotNull(handler, "handler must not be null")));
+    }
+
+    /** Add a method to be supported by the service. */
+    public <ReqT, RespT> Builder addMethod(ServerMethodDefinition<ReqT, RespT> def) {
+      if (methodLookup.containsKey(def.getName())) {
+        throw new IllegalStateException("Method by same name already registered");
+      }
+      methodLookup.put(def.getName(), def);
       methods.add(def);
       return this;
     }
