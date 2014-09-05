@@ -1,15 +1,14 @@
 package com.google.net.stubby;
 
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
 
 import java.io.InputStream;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 import javax.inject.Provider;
 
@@ -27,20 +26,12 @@ public class MethodDescriptor<RequestT, ResponseT> {
     UNKNOWN
   }
 
-  private  static final Function<Provider<String>,String> HEADER_SNAPSHOT =
-      new Function<Provider<String>, String>() {
-    @Override
-    public String apply(@Nullable Provider<String> headerProvider) {
-      return headerProvider == null ? null : headerProvider.get();
-    }
-  };
-
   private final Type type;
   private final String name;
   private final Marshaller<RequestT> requestMarshaller;
   private final Marshaller<ResponseT> responseMarshaller;
   private final long timeoutMicros;
-  private final ImmutableMap<String, Provider<String>> headers;
+  private final Map<String, Provider<String>> headers;
 
   public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> create(
       Type type, String name, long timeout, TimeUnit timeoutUnit,
@@ -48,20 +39,20 @@ public class MethodDescriptor<RequestT, ResponseT> {
       Marshaller<ResponseT> responseMarshaller) {
     return new MethodDescriptor<RequestT, ResponseT>(
         type, name, timeoutUnit.toMicros(timeout), requestMarshaller, responseMarshaller,
-        ImmutableMap.<String, Provider<String>>of());
+        Collections.<String, Provider<String>>emptyMap());
   }
 
   private MethodDescriptor(Type type, String name, long timeoutMicros,
                            Marshaller<RequestT> requestMarshaller,
                            Marshaller<ResponseT> responseMarshaller,
-                           ImmutableMap<String, Provider<String>> headers) {
+                           Map<String, Provider<String>> headers) {
     this.type = Preconditions.checkNotNull(type);
     this.name = name;
     Preconditions.checkArgument(timeoutMicros > 0);
     this.timeoutMicros = timeoutMicros;
     this.requestMarshaller = requestMarshaller;
     this.responseMarshaller = responseMarshaller;
-    this.headers = headers;
+    this.headers = Collections.unmodifiableMap(headers);
   }
 
   /**
@@ -90,9 +81,13 @@ public class MethodDescriptor<RequestT, ResponseT> {
    */
   public Map<String, String> getHeaders() {
     if (headers.isEmpty()) {
-      return ImmutableMap.of();
+      return Collections.emptyMap();
     }
-    return ImmutableMap.copyOf(Maps.transformValues(headers, HEADER_SNAPSHOT));
+    Map<String, String> snapshot = new HashMap<String, String>();
+    for (Entry<String, Provider<String>> entry : headers.entrySet()) {
+      snapshot.put(entry.getKey(), entry.getValue().get());
+    }
+    return Collections.unmodifiableMap(snapshot);
   }
 
   /**
@@ -122,20 +117,20 @@ public class MethodDescriptor<RequestT, ResponseT> {
    */
   public MethodDescriptor<RequestT, ResponseT> withHeader(String headerName,
       Provider<String> headerValueProvider) {
+    Map<String, Provider<String>> newHeaders = new HashMap<String, Provider<String>>(headers);
+    newHeaders.put(headerName, headerValueProvider);
     return new MethodDescriptor<RequestT, ResponseT>(type, name, timeoutMicros,
-        requestMarshaller, responseMarshaller,
-        ImmutableMap.<String, Provider<String>>builder().
-            putAll(headers).put(headerName, headerValueProvider).build());
+        requestMarshaller, responseMarshaller, newHeaders);
   }
 
   /**
    * Creates a new descriptor with additional bound headers.
    */
   public MethodDescriptor<RequestT, ResponseT> withHeaders(
-      ImmutableMap<String, Provider<String>> additionalHeaders) {
+      Map<String, Provider<String>> additionalHeaders) {
+    Map<String, Provider<String>> newHeaders = new HashMap<String, Provider<String>>(headers);
+    newHeaders.putAll(additionalHeaders);
     return new MethodDescriptor<RequestT, ResponseT>(type, name, timeoutMicros,
-        requestMarshaller, responseMarshaller,
-        ImmutableMap.<String, Provider<String>>builder().
-            putAll(headers).putAll(additionalHeaders).build());
+        requestMarshaller, responseMarshaller, newHeaders);
   }
 }

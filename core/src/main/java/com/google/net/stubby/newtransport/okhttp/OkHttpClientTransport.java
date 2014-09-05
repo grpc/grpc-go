@@ -2,7 +2,6 @@ package com.google.net.stubby.newtransport.okhttp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.MethodDescriptor;
@@ -52,26 +51,37 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   @VisibleForTesting
   static final int DEFAULT_INITIAL_WINDOW_SIZE = 64 * 1024;
 
-  private static final ImmutableMap<ErrorCode, Status> ERROR_CODE_TO_STATUS = ImmutableMap
-      .<ErrorCode, Status>builder()
-      .put(ErrorCode.NO_ERROR, Status.OK)
-      .put(ErrorCode.PROTOCOL_ERROR, new Status(Transport.Code.INTERNAL, "Protocol error"))
-      .put(ErrorCode.INVALID_STREAM, new Status(Transport.Code.INTERNAL, "Invalid stream"))
-      .put(ErrorCode.UNSUPPORTED_VERSION,
-          new Status(Transport.Code.INTERNAL, "Unsupported version"))
-      .put(ErrorCode.STREAM_IN_USE, new Status(Transport.Code.INTERNAL, "Stream in use"))
-      .put(ErrorCode.STREAM_ALREADY_CLOSED,
-          new Status(Transport.Code.INTERNAL, "Stream already closed"))
-      .put(ErrorCode.INTERNAL_ERROR, new Status(Transport.Code.INTERNAL, "Internal error"))
-      .put(ErrorCode.FLOW_CONTROL_ERROR, new Status(Transport.Code.INTERNAL, "Flow control error"))
-      .put(ErrorCode.STREAM_CLOSED, new Status(Transport.Code.INTERNAL, "Stream closed"))
-      .put(ErrorCode.FRAME_TOO_LARGE, new Status(Transport.Code.INTERNAL, "Frame too large"))
-      .put(ErrorCode.REFUSED_STREAM, new Status(Transport.Code.INTERNAL, "Refused stream"))
-      .put(ErrorCode.CANCEL, new Status(Transport.Code.CANCELLED, "Cancelled"))
-      .put(ErrorCode.COMPRESSION_ERROR, new Status(Transport.Code.INTERNAL, "Compression error"))
-      .put(ErrorCode.INVALID_CREDENTIALS,
-          new Status(Transport.Code.PERMISSION_DENIED, "Invalid credentials"))
-      .build();
+  private static final Map<ErrorCode, Status> ERROR_CODE_TO_STATUS;
+  static {
+    Map<ErrorCode, Status> errorToStatus = new HashMap<ErrorCode, Status>();
+    errorToStatus.put(ErrorCode.NO_ERROR, Status.OK);
+    errorToStatus.put(ErrorCode.PROTOCOL_ERROR,
+        new Status(Transport.Code.INTERNAL, "Protocol error"));
+    errorToStatus.put(ErrorCode.INVALID_STREAM,
+        new Status(Transport.Code.INTERNAL, "Invalid stream"));
+    errorToStatus.put(ErrorCode.UNSUPPORTED_VERSION,
+        new Status(Transport.Code.INTERNAL, "Unsupported version"));
+    errorToStatus.put(ErrorCode.STREAM_IN_USE,
+        new Status(Transport.Code.INTERNAL, "Stream in use"));
+    errorToStatus.put(ErrorCode.STREAM_ALREADY_CLOSED,
+        new Status(Transport.Code.INTERNAL, "Stream already closed"));
+    errorToStatus.put(ErrorCode.INTERNAL_ERROR,
+        new Status(Transport.Code.INTERNAL, "Internal error"));
+    errorToStatus.put(ErrorCode.FLOW_CONTROL_ERROR,
+        new Status(Transport.Code.INTERNAL, "Flow control error"));
+    errorToStatus.put(ErrorCode.STREAM_CLOSED,
+        new Status(Transport.Code.INTERNAL, "Stream closed"));
+    errorToStatus.put(ErrorCode.FRAME_TOO_LARGE,
+        new Status(Transport.Code.INTERNAL, "Frame too large"));
+    errorToStatus.put(ErrorCode.REFUSED_STREAM,
+        new Status(Transport.Code.INTERNAL, "Refused stream"));
+    errorToStatus.put(ErrorCode.CANCEL, new Status(Transport.Code.CANCELLED, "Cancelled"));
+    errorToStatus.put(ErrorCode.COMPRESSION_ERROR,
+        new Status(Transport.Code.INTERNAL, "Compression error"));
+    errorToStatus.put(ErrorCode.INVALID_CREDENTIALS,
+        new Status(Transport.Code.PERMISSION_DENIED, "Invalid credentials"));
+    ERROR_CODE_TO_STATUS = Collections.unmodifiableMap(errorToStatus);
+  }
 
   private final String host;
   private final int port;
