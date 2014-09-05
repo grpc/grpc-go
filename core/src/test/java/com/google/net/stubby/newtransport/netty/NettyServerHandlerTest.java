@@ -12,7 +12,6 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
-import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.Framer;
 import com.google.net.stubby.newtransport.HttpUtil;
@@ -74,7 +73,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   public void setup() throws Exception {
     MockitoAnnotations.initMocks(this);
 
-    when(transportListener.streamCreated(any(ServerStream.class), any(MethodDescriptor.class)))
+    when(transportListener.streamCreated(any(ServerStream.class), any(String.class)))
         .thenReturn(streamListener);
     handler = newHandler(transportListener);
     frameWriter = new DefaultHttp2FrameWriter();
@@ -169,7 +168,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     ArgumentCaptor<NettyServerStream> streamCaptor =
         ArgumentCaptor.forClass(NettyServerStream.class);
     @SuppressWarnings("rawtypes")
-    ArgumentCaptor<MethodDescriptor> methodCaptor = ArgumentCaptor.forClass(MethodDescriptor.class);
+    ArgumentCaptor<String> methodCaptor = ArgumentCaptor.forClass(String.class);
     verify(transportListener).streamCreated(streamCaptor.capture(), methodCaptor.capture());
     stream = streamCaptor.getValue();
   }

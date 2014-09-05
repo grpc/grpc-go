@@ -15,11 +15,11 @@ public interface ServerInterceptor {
    * Implementations must not throw an exception if they started processing that may use {@code
    * call} on another thread.
    *
-   * @param method metadata concerning the call
+   * @param method full method name of the call
    * @param call object for responding
    * @param next next processor in the interceptor chain
    * @return listener for processing incoming messages for {@code call}
    */
-  <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-      ServerCall<RespT> call, ServerCallHandler<ReqT, RespT> next);
+  <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(String method, ServerCall<RespT> call,
+      ServerCallHandler<ReqT, RespT> next);
 }

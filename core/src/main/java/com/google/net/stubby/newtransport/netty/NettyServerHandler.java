@@ -5,7 +5,6 @@ import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_PROTORPC;
 import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.ServerTransportListener;
@@ -32,12 +31,9 @@ import io.netty.handler.codec.http2.Http2StreamException;
 import io.netty.util.ReferenceCountUtil;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import javax.inject.Provider;
 
 /**
  * Server-side Netty handler for GRPC processing. All event handlers are executed entirely within
@@ -86,7 +82,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
       // The Http2Stream object was put by AbstractHttp2ConnectionHandler before calling this method.
       Http2Stream http2Stream = connection().requireStream(streamId);
       http2Stream.data(stream);
-      MethodDescriptor<?, ?> method = createMethod(streamId, headers);
+      String method = determineMethod(streamId, headers);
       StreamListener listener = transportListener.streamCreated(stream, method);
       stream.setListener(listener);
     } catch (Http2Exception e) {
@@ -188,7 +184,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
     }
   }
 
-  private MethodDescriptor<?, ?> createMethod(int streamId, Http2Headers headers)
+  private String determineMethod(int streamId, Http2Headers headers)
       throws Http2StreamException {
     if (!HTTP_METHOD.equals(headers.method())) {
       throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM,
@@ -204,24 +200,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
       throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM,
           String.format("Malformatted path: %s", headers.path()));
     }
-    // TODO(user): pass the real timeout
-    MethodDescriptor<?, ?> method = MethodDescriptor.create(
-        MethodDescriptor.Type.UNKNOWN, methodName, 1, TimeUnit.SECONDS, null, null);
-    ImmutableMap.Builder<String, Provider<String>> grpcHeaders =
-        new ImmutableMap.Builder<String, Provider<String>>();
-    for (Map.Entry<String, String> header : headers) {
-      if (!header.getKey().startsWith(":")) {
-        final String value = header.getValue();
-        // headers starting with ":" are reserved for HTTP/2 built-in headers
-        grpcHeaders.put(header.getKey(), new Provider<String>() {
-          @Override
-          public String get() {
-            return value;
-          }
-        });
-      }
-    }
-    return method.withHeaders(grpcHeaders.build());
+    return methodName;
   }
 
   /**
