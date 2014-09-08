@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.CountingInputStream;
 import com.google.common.io.CountingOutputStream;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Operation.Phase;
 import com.google.net.stubby.Request;
@@ -25,17 +26,16 @@ import com.squareup.okhttp.internal.spdy.Http20Draft12;
 import com.squareup.okhttp.internal.spdy.Settings;
 import com.squareup.okhttp.internal.spdy.Variant;
 
-import java.io.IOException;
-import java.net.Socket;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import okio.BufferedSink;
 import okio.BufferedSource;
 import okio.ByteString;
 import okio.Okio;
+
+import java.io.IOException;
+import java.net.Socket;
+import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Basic implementation of {@link Session} using OkHttp
@@ -147,7 +147,8 @@ public class OkHttpSession implements Session {
   }
 
   @Override
-  public Request startRequest(String operationName, Map<String, String> headers,
+  public Request startRequest(String operationName,
+                              Metadata.Headers headers,
                               Response.ResponseBuilder responseBuilder) {
     int nextStreamId = getNextStreamId();
     Response response = responseBuilder.build(nextStreamId);
@@ -256,18 +257,21 @@ public class OkHttpSession implements Session {
         HeadersMode headersMode) {
       Operation op = getOperation(streamId);
 
-      ImmutableMap.Builder<String, String> mapBuilder = ImmutableMap.builder();
-      for (Header header : headers) {
-        mapBuilder.put(header.name.utf8(), header.value.utf8());
-      }
-      Map<String, String> headersMap = mapBuilder.build();
-
       // Start an Operation for SYN_STREAM
       if (op == null && headersMode == HeadersMode.HTTP_20_HEADERS) {
-        String path = headersMap.get(Header.TARGET_PATH.utf8());
+        String path = findReservedHeader(Header.TARGET_PATH.utf8(), headers);
+        byte[][] binaryHeaders = new byte[headers.size() * 2][];
+        for (int i = 0; i < headers.size(); i++) {
+          Header header = headers.get(i);
+          binaryHeaders[i * 2] = header.name.toByteArray();
+          binaryHeaders[(i * 2) + 1] = header.value.toByteArray();
+        }
+        Metadata.Headers grpcHeaders = new Metadata.Headers(binaryHeaders);
+        grpcHeaders.setPath(path);
+        grpcHeaders.setAuthority(findReservedHeader(Header.TARGET_AUTHORITY.utf8(), headers));
         if (path != null) {
           Request request = serverSession.startRequest(path,
-              headersMap,
+              grpcHeaders,
               Http2Response.builder(streamId, frameWriter, new MessageFramer(4096)));
           requestRegistry.register(request);
           op = request;
@@ -281,6 +285,20 @@ public class OkHttpSession implements Session {
       if (inFinished) {
         finish(streamId);
       }
+    }
+
+    private String findReservedHeader(String name, List<Header> headers) {
+      for (Header header : headers) {
+        // Reserved headers must come before non-reserved headers, so we can exit the loop
+        // early if we see a non-reserved header.
+        if (!header.name.utf8().startsWith(":")) {
+          return null;
+        }
+        if (header.name.utf8().equals(name)) {
+          return header.value.utf8();
+        }
+      }
+      return null;
     }
 
     @Override

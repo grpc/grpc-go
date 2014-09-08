@@ -1,12 +1,12 @@
 package com.google.net.stubby.http2.netty;
 
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Request;
 import com.google.net.stubby.RequestRegistry;
 import com.google.net.stubby.Response;
 import com.google.net.stubby.Session;
 import com.google.net.stubby.transport.MessageFramer;
 
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -33,7 +33,7 @@ public class Http2Session implements Session {
   }
 
   @Override
-  public Request startRequest(String operationName, Map<String, String> headers,
+  public Request startRequest(String operationName, Metadata.Headers headers,
                               Response.ResponseBuilder response) {
     int nextSessionId = getNextStreamId();
     Request operation = new Http2Request(response.build(nextSessionId), operationName,

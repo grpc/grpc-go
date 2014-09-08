@@ -4,21 +4,23 @@ import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.verify;
 
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.Http2Headers;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-
-import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.Http2Headers;
 
 /**
  * Tests for {@link NettyClientStream}.
@@ -63,34 +65,35 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setStatusWithOkShouldCloseStream() {
     stream().id(1);
-    stream().setStatus(Status.OK);
-    verify(listener).closed(Status.OK);
+    stream().setStatus(Status.OK, new Metadata.Trailers());
+    verify(listener).closed(same(Status.OK), any(Metadata.Trailers.class));
     assertEquals(StreamState.CLOSED, stream.state());
   }
 
   @Test
   public void setStatusWithErrorShouldCloseStream() {
     Status errorStatus = new Status(Transport.Code.INTERNAL);
-    stream().setStatus(errorStatus);
-    verify(listener).closed(eq(errorStatus));
+    stream().setStatus(errorStatus, new Metadata.Trailers());
+    verify(listener).closed(eq(errorStatus), any(Metadata.Trailers.class));
     assertEquals(StreamState.CLOSED, stream.state());
   }
 
   @Test
   public void setStatusWithOkShouldNotOverrideError() {
     Status errorStatus = new Status(Transport.Code.INTERNAL);
-    stream().setStatus(errorStatus);
-    stream().setStatus(Status.OK);
-    verify(listener).closed(any(Status.class));
+    stream().setStatus(errorStatus, new Metadata.Trailers());
+    stream().setStatus(Status.OK, new Metadata.Trailers());
+    verify(listener).closed(any(Status.class), any(Metadata.Trailers.class));
     assertEquals(StreamState.CLOSED, stream.state());
   }
 
   @Test
   public void setStatusWithErrorShouldNotOverridePreviousError() {
     Status errorStatus = new Status(Transport.Code.INTERNAL);
-    stream().setStatus(errorStatus);
-    stream().setStatus(Status.fromThrowable(new RuntimeException("fake")));
-    verify(listener).closed(any(Status.class));
+    stream().setStatus(errorStatus, new Metadata.Trailers());
+    stream().setStatus(Status.fromThrowable(new RuntimeException("fake")),
+        new Metadata.Trailers());
+    verify(listener).closed(any(Status.class), any(Metadata.Trailers.class));
     assertEquals(StreamState.CLOSED, stream.state());
   }
 
@@ -123,7 +126,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
     stream.inboundDataReceived(statusFrame(new Status(Transport.Code.INTERNAL)), false);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture());
+    verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
     assertEquals(Transport.Code.INTERNAL, captor.getValue().getCode());
     assertEquals(StreamState.CLOSED, stream.state());
   }
@@ -132,7 +135,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   public void nonGrpcResponseShouldSetStatus() throws Exception {
     stream.inboundDataReceived(Unpooled.copiedBuffer(MESSAGE, UTF_8), true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture());
+    verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
     assertEquals(MESSAGE, captor.getValue().getDescription());
   }
 

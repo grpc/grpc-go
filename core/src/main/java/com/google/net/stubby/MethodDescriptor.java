@@ -10,7 +10,6 @@ import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.Immutable;
-import javax.inject.Provider;
 
 /**
  * Descriptor for a single operation, used by Channel to execute a call.
@@ -31,28 +30,24 @@ public class MethodDescriptor<RequestT, ResponseT> {
   private final Marshaller<RequestT> requestMarshaller;
   private final Marshaller<ResponseT> responseMarshaller;
   private final long timeoutMicros;
-  private final Map<String, Provider<String>> headers;
 
   public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> create(
       Type type, String name, long timeout, TimeUnit timeoutUnit,
       Marshaller<RequestT> requestMarshaller,
       Marshaller<ResponseT> responseMarshaller) {
     return new MethodDescriptor<RequestT, ResponseT>(
-        type, name, timeoutUnit.toMicros(timeout), requestMarshaller, responseMarshaller,
-        Collections.<String, Provider<String>>emptyMap());
+        type, name, timeoutUnit.toMicros(timeout), requestMarshaller, responseMarshaller);
   }
 
   private MethodDescriptor(Type type, String name, long timeoutMicros,
                            Marshaller<RequestT> requestMarshaller,
-                           Marshaller<ResponseT> responseMarshaller,
-                           Map<String, Provider<String>> headers) {
+                           Marshaller<ResponseT> responseMarshaller) {
     this.type = Preconditions.checkNotNull(type);
     this.name = name;
     Preconditions.checkArgument(timeoutMicros > 0);
     this.timeoutMicros = timeoutMicros;
     this.requestMarshaller = requestMarshaller;
     this.responseMarshaller = responseMarshaller;
-    this.headers = Collections.unmodifiableMap(headers);
   }
 
   /**
@@ -77,20 +72,6 @@ public class MethodDescriptor<RequestT, ResponseT> {
   }
 
   /**
-   * Return a snapshot of the headers.
-   */
-  public Map<String, String> getHeaders() {
-    if (headers.isEmpty()) {
-      return Collections.emptyMap();
-    }
-    Map<String, String> snapshot = new HashMap<String, String>();
-    for (Entry<String, Provider<String>> entry : headers.entrySet()) {
-      snapshot.put(entry.getKey(), entry.getValue().get());
-    }
-    return Collections.unmodifiableMap(snapshot);
-  }
-
-  /**
    * Parse a response payload from the given {@link InputStream}
    */
   public ResponseT parseResponse(InputStream input) {
@@ -109,28 +90,6 @@ public class MethodDescriptor<RequestT, ResponseT> {
    */
   public MethodDescriptor<RequestT, ResponseT> withTimeout(long timeout, TimeUnit unit) {
     return new MethodDescriptor<RequestT, ResponseT>(type, name, unit.toMicros(timeout),
-        requestMarshaller, responseMarshaller, headers);
-  }
-
-  /**
-   * Create a new descriptor with an additional bound header.
-   */
-  public MethodDescriptor<RequestT, ResponseT> withHeader(String headerName,
-      Provider<String> headerValueProvider) {
-    Map<String, Provider<String>> newHeaders = new HashMap<String, Provider<String>>(headers);
-    newHeaders.put(headerName, headerValueProvider);
-    return new MethodDescriptor<RequestT, ResponseT>(type, name, timeoutMicros,
-        requestMarshaller, responseMarshaller, newHeaders);
-  }
-
-  /**
-   * Creates a new descriptor with additional bound headers.
-   */
-  public MethodDescriptor<RequestT, ResponseT> withHeaders(
-      Map<String, Provider<String>> additionalHeaders) {
-    Map<String, Provider<String>> newHeaders = new HashMap<String, Provider<String>>(headers);
-    newHeaders.putAll(additionalHeaders);
-    return new MethodDescriptor<RequestT, ResponseT>(type, name, timeoutMicros,
-        requestMarshaller, responseMarshaller, newHeaders);
+        requestMarshaller, responseMarshaller);
   }
 }

@@ -9,6 +9,7 @@ import static com.google.net.stubby.GrpcFramingUtil.STATUS_FRAME;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 
@@ -255,6 +256,6 @@ public class GrpcDeframer implements Closeable {
    */
   private void notifyStatus(Status status) {
     statusNotified = true;
-    listener.closed(status);
+    listener.closed(status, new Metadata.Trailers());
   }
 }

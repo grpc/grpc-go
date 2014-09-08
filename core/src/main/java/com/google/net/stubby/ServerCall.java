@@ -3,6 +3,7 @@ package com.google.net.stubby;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.io.InputStream;
+
 import javax.annotation.Nullable;
 
 /**
@@ -11,9 +12,9 @@ import javax.annotation.Nullable;
  * response is most common. This API is generally intended for use generated handlers, but advanced
  * applications may have need for it.
  *
- * <p>Any contexts must be sent before any payloads, which must be sent before closing.
+ * <p>Headers must be sent before any payloads, which must be sent before closing.
  *
- * <p>No generic method for determining message receipt or providing acknowlegement is provided.
+ * <p>No generic method for determining message receipt or providing acknowledgement is provided.
  * Applications are expected to utilize normal payload messages for such signals, as a response
  * natually acknowledges its request.
  *
@@ -34,6 +35,19 @@ public abstract class ServerCall<ResponseT> {
   // a case then we either get to generate a half close or purposefully omit it.
   public abstract static class Listener<RequestT> {
     /**
+     * Called upon receiving all header information from the remote end-point.
+     * <p>This method should return quickly, as the same thread may be used to process other
+     * streams.
+     *
+     * @param headers the fully buffered received headers.
+     * @return a processing completion future, or {@code null} to indicate that processing of the
+     *         headers is immediately complete.
+     */
+    @Nullable
+    public abstract ListenableFuture<Void> headersRead(Metadata.Headers headers);
+
+
+    /**
      * A request context has been received. Any context messages will precede payload messages.
      *
      * <p>The {@code value} {@link InputStream} will be closed when the returned future completes.
@@ -41,6 +55,7 @@ public abstract class ServerCall<ResponseT> {
      * method.
      */
     @Nullable
+    @Deprecated
     public abstract ListenableFuture<Void> onContext(String name, InputStream value);
 
     /**
@@ -83,7 +98,7 @@ public abstract class ServerCall<ResponseT> {
    *
    * @throws IllegalStateException if call is already {@code close}d
    */
-  public abstract void close(Status status);
+  public abstract void close(Status status, Metadata.Trailers trailers);
 
   /**
    * Send a context message. Context messages are intended for side-channel information like
@@ -93,6 +108,7 @@ public abstract class ServerCall<ResponseT> {
    * @param value context value bytes
    * @throws IllegalStateException if call is {@link #close}d, or after {@link #sendPayload}
    */
+  @Deprecated
   public abstract void sendContext(String name, InputStream value);
 
   /**

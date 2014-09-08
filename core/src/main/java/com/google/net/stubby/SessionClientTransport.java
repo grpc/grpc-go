@@ -27,9 +27,10 @@ public class SessionClientTransport extends AbstractService implements ClientTra
 
   @Override
   public ClientStream newStream(MethodDescriptor<?, ?> method,
+                                Metadata.Headers headers,
                                 StreamListener listener) {
     final SessionClientStream stream = new SessionClientStream(listener);
-    Request request = session.startRequest(method.getName(), method.getHeaders(),
+    Request request = session.startRequest(method.getName(), headers,
         stream.responseBuilder());
     stream.start(request);
     return stream;

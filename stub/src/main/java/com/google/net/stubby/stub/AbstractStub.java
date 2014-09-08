@@ -7,8 +7,6 @@ import com.google.net.stubby.MethodDescriptor;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import javax.inject.Provider;
-
 /**
  * Common base type for stub implementations. Allows for reconfiguration.
  */
@@ -58,16 +56,6 @@ public abstract class AbstractStub<S extends AbstractStub, C extends AbstractSer
       for (MethodDescriptor method : AbstractStub.this.config.methods()) {
         methodMap.put(method.getName(), method);
       }
-    }
-
-    /**
-     * Set a header provider for all methods in the stub.
-     */
-    public StubConfigBuilder setHeader(String headerName, Provider<String> headerValueProvider) {
-      for (Map.Entry<String, MethodDescriptor> entry : methodMap.entrySet()) {
-        entry.setValue(entry.getValue().withHeader(headerName, headerValueProvider));
-      }
-      return this;
     }
 
     /**

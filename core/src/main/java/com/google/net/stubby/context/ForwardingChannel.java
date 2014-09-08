@@ -4,6 +4,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Call;
 import com.google.net.stubby.Channel;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
 import java.io.InputStream;
@@ -35,8 +36,8 @@ public abstract class ForwardingChannel implements Channel {
     }
 
     @Override
-    public void start(Listener<ResponseT> responseListener) {
-      this.delegate.start(responseListener);
+    public void start(Listener<ResponseT> responseListener, Metadata.Headers headers) {
+      this.delegate.start(responseListener, headers);
     }
 
     @Override
@@ -72,6 +73,11 @@ public abstract class ForwardingChannel implements Channel {
     }
 
     @Override
+    public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
+      return delegate.onHeaders(headers);
+    }
+
+    @Override
     public ListenableFuture<Void> onContext(String name, InputStream value) {
       return delegate.onContext(name, value);
     }
@@ -82,8 +88,8 @@ public abstract class ForwardingChannel implements Channel {
     }
 
     @Override
-    public void onClose(Status status) {
-      delegate.onClose(status);
+    public void onClose(Status status, Metadata.Trailers trailers) {
+      delegate.onClose(status, trailers);
     }
   }
 }

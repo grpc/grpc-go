@@ -2,6 +2,7 @@ package com.google.net.stubby.newtransport;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.AbstractService;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 
 /**
@@ -12,7 +13,9 @@ import com.google.net.stubby.MethodDescriptor;
 public abstract class AbstractClientTransport extends AbstractService implements ClientTransport {
 
   @Override
-  public final ClientStream newStream(MethodDescriptor<?, ?> method, StreamListener listener) {
+  public final ClientStream newStream(MethodDescriptor<?, ?> method,
+                                      Metadata.Headers headers,
+                                      StreamListener listener) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(listener, "listener");
     if (state() == State.STARTING) {
@@ -25,7 +28,7 @@ public abstract class AbstractClientTransport extends AbstractService implements
     }
 
     // Create the stream.
-    return newStreamInternal(method, listener);
+    return newStreamInternal(method, headers, listener);
   }
 
   /**
@@ -38,5 +41,6 @@ public abstract class AbstractClientTransport extends AbstractService implements
    * @return the new stream.
    */
   protected abstract ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
+      Metadata.Headers headers,
       StreamListener listener);
 }

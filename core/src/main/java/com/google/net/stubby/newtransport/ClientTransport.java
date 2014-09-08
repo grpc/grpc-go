@@ -1,6 +1,7 @@
 package com.google.net.stubby.newtransport;
 
 import com.google.common.util.concurrent.Service;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 
 /**
@@ -23,8 +24,11 @@ public interface ClientTransport extends Service {
    * completed (either successfully or unsuccessfully).
    *
    * @param method the descriptor of the remote method to be called for this stream.
+   * @param headers to send at the beginning of the call
    * @param listener the listener for the newly created stream.
    * @return the newly created stream.
    */
-  ClientStream newStream(MethodDescriptor<?, ?> method, StreamListener listener);
+  ClientStream newStream(MethodDescriptor<?, ?> method,
+                         Metadata.Headers headers,
+                         StreamListener listener);
 }

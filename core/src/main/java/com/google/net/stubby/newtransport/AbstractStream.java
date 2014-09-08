@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.io.Closeables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
 import java.io.InputStream;
@@ -42,6 +43,15 @@ public abstract class AbstractStream implements Stream {
    * Internal handler for Deframer output. Informs the {@link #listener()} of inbound messages.
    */
   private final StreamListener inboundMessageHandler = new StreamListener() {
+
+    @Override
+    public ListenableFuture<Void> headersRead(Metadata.Headers headers) {
+      inboundPhase(Phase.CONTEXT);
+      ListenableFuture<Void> future = listener().headersRead(headers);
+      disableWindowUpdate(future);
+      return future;
+    }
+
     @Override
     public ListenableFuture<Void> contextRead(String name, InputStream value, int length) {
       ListenableFuture<Void> future = null;
@@ -69,9 +79,9 @@ public abstract class AbstractStream implements Stream {
     }
 
     @Override
-    public void closed(Status status) {
+    public void closed(Status status, Metadata.Trailers trailers) {
       inboundPhase(Phase.STATUS);
-      listener().closed(status);
+      listener().closed(status, trailers);
     }
   };
 

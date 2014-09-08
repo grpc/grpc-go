@@ -33,6 +33,7 @@ public interface Stream {
    * @param length the length of the {@link InputStream}.
    * @param accepted an optional callback for when the transport has accepted the write.
    */
+  @Deprecated
   void writeContext(String name, InputStream value, int length, @Nullable Runnable accepted);
 
   /**

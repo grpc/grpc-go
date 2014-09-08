@@ -5,27 +5,27 @@ import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_PROTORPC;
 import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
 
 import com.google.common.base.Preconditions;
-import com.google.net.stubby.MethodDescriptor;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.ServerTransportListener;
 import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.newtransport.TransportFrameUtil;
 import com.google.net.stubby.transport.Transport;
 
-import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
-import io.netty.handler.codec.http2.Http2FrameReader;
-import io.netty.handler.codec.http2.Http2FrameWriter;
-import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.AbstractHttp2ConnectionHandler;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
+import io.netty.handler.codec.http2.Http2FrameReader;
+import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamException;
 import io.netty.util.ReferenceCountUtil;
@@ -83,7 +83,8 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
       Http2Stream http2Stream = connection().requireStream(streamId);
       http2Stream.data(stream);
       String method = determineMethod(streamId, headers);
-      StreamListener listener = transportListener.streamCreated(stream, method);
+      StreamListener listener = transportListener.streamCreated(stream, method,
+          new Metadata.Headers(headers));
       stream.setListener(listener);
     } catch (Http2Exception e) {
       throw e;

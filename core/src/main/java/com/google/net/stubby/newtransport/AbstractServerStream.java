@@ -5,6 +5,7 @@ import static com.google.net.stubby.newtransport.StreamState.OPEN;
 import static com.google.net.stubby.newtransport.StreamState.WRITE_ONLY;
 
 import com.google.common.base.Preconditions;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 
@@ -28,7 +29,7 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
   }
 
   @Override
-  public final void close(Status status) {
+  public final void close(Status status, Metadata.Trailers trailers) {
     synchronized (stateLock) {
       Preconditions.checkState(!status.isOk() || state == WRITE_ONLY,
           "Cannot close with OK before client half-closes");
@@ -57,7 +58,7 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
     }
     if (previousState == OPEN) {
       inboundPhase(Phase.STATUS);
-      listener.closed(Status.OK);
+      listener.closed(Status.OK, new Metadata.Trailers());
     } else {
       abortStream(
           new Status(Transport.Code.FAILED_PRECONDITION, "Client-end of the stream already closed"),
@@ -69,8 +70,8 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
    * Aborts the stream with an error status, cleans up resources and notifies the listener if
    * necessary.
    *
-   * <p>Unlike {@link #close(Status)}, this method is only called from the gRPC framework, so that
-   * we need to call closed() on the listener if it has not been called.
+   * <p>Unlike {@link #close(Status, Metadata.Trailers)}, this method is only called from the
+   * gRPC framework, so that we need to call closed() on the listener if it has not been called.
    *
    * @param status the error status. Must not be Status.OK.
    * @param notifyClient true if the stream is still writable and you want to notify the client
@@ -88,7 +89,7 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
     }
 
     if (previousState == OPEN) {
-      listener.closed(status);
+      listener.closed(status, new Metadata.Trailers());
     }  // Otherwise, previousState is WRITE_ONLY thus closed() has already been called.
 
     outboundPhase(Phase.STATUS);

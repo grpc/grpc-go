@@ -6,12 +6,15 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.notNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
+import com.google.net.stubby.Metadata;
+import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.Framer;
 import com.google.net.stubby.newtransport.HttpUtil;
@@ -28,9 +31,15 @@ import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
+import io.netty.handler.codec.http2.DefaultHttp2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2CodecUtil;
+import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
+import io.netty.handler.codec.http2.Http2FrameReader;
+import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
 
 import org.junit.Before;
@@ -40,13 +49,6 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
-import io.netty.handler.codec.http2.DefaultHttp2OutboundFlowController;
-import io.netty.handler.codec.http2.Http2Connection;
-import io.netty.handler.codec.http2.Http2FrameReader;
-import io.netty.handler.codec.http2.Http2FrameWriter;
-import io.netty.handler.codec.http2.Http2OutboundFlowController;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -73,7 +75,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   public void setup() throws Exception {
     MockitoAnnotations.initMocks(this);
 
-    when(transportListener.streamCreated(any(ServerStream.class), any(String.class)))
+    when(transportListener.streamCreated(any(ServerStream.class),
+        any(String.class),
+        any(Metadata.Headers.class)))
         .thenReturn(streamListener);
     handler = newHandler(transportListener);
     frameWriter = new DefaultHttp2FrameWriter();
@@ -132,7 +136,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     assertArrayEquals(CONTENT, ByteStreams.toByteArray(captor.getValue()));
 
     if (endStream) {
-      verify(streamListener).closed(eq(Status.OK));
+      verify(streamListener).closed(eq(Status.OK), notNull(Metadata.Trailers.class));
     }
     verifyNoMoreInteractions(streamListener);
   }
@@ -143,7 +147,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     handler.channelRead(ctx, emptyDataFrame(STREAM_ID, true));
     verify(streamListener, never()).messageRead(any(InputStream.class), anyInt());
-    verify(streamListener).closed(eq(Status.OK));
+    verify(streamListener).closed(eq(Status.OK), notNull(Metadata.Trailers.class));
     verifyNoMoreInteractions(streamListener);
   }
 
@@ -153,7 +157,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     handler.channelRead(ctx, rstStreamFrame(STREAM_ID, Http2Error.CANCEL.code()));
     verify(streamListener, never()).messageRead(any(InputStream.class), anyInt());
-    verify(streamListener).closed(eq(Status.CANCELLED));
+    verify(streamListener).closed(eq(Status.CANCELLED), notNull(Metadata.Trailers.class));
     verifyNoMoreInteractions(streamListener);
   }
 
@@ -169,7 +173,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
         ArgumentCaptor.forClass(NettyServerStream.class);
     @SuppressWarnings("rawtypes")
     ArgumentCaptor<String> methodCaptor = ArgumentCaptor.forClass(String.class);
-    verify(transportListener).streamCreated(streamCaptor.capture(), methodCaptor.capture());
+    verify(transportListener).streamCreated(streamCaptor.capture(), methodCaptor.capture(),
+        any(Metadata.Headers.class));
     stream = streamCaptor.getValue();
   }
 

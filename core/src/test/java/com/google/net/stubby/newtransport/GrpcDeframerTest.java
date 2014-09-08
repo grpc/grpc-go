@@ -9,6 +9,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.notNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,6 +17,7 @@ import static org.mockito.Mockito.when;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 import com.google.protobuf.ByteString;
@@ -228,7 +230,7 @@ public class GrpcDeframerTest {
 
   private void verifyStatus(Transport.Code code) {
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture());
+    verify(listener).closed(captor.capture(), notNull(Metadata.Trailers.class));
     assertEquals(code, captor.getValue().getCode());
   }
 
@@ -241,7 +243,7 @@ public class GrpcDeframerTest {
   }
 
   private void verifyNoStatus() {
-    verify(listener, never()).closed(any(Status.class));
+    verify(listener, never()).closed(any(Status.class), notNull(Metadata.Trailers.class));
   }
 
   private byte[] contextFrame() throws IOException {

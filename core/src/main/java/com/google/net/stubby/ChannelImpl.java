@@ -11,8 +11,8 @@ import com.google.net.stubby.newtransport.ClientTransport;
 import com.google.net.stubby.newtransport.ClientTransportFactory;
 import com.google.net.stubby.newtransport.StreamListener;
 
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -136,9 +136,12 @@ public final class ChannelImpl extends AbstractService implements Channel {
     }
 
     @Override
-    public void start(Listener<RespT> observer) {
+    public void start(Listener<RespT> observer, Metadata.Headers headers) {
       Preconditions.checkState(stream == null, "Already started");
-      stream = obtainActiveTransport().newStream(method, new StreamListenerImpl(observer));
+      headers.setPath(method.getName());
+      headers.setAuthority("fixme");
+      stream = obtainActiveTransport().newStream(method, headers,
+          new StreamListenerImpl(observer));
     }
 
     @Override
@@ -239,6 +242,16 @@ public final class ChannelImpl extends AbstractService implements Channel {
       }
 
       @Override
+      public ListenableFuture<Void> headersRead(final Metadata.Headers headers) {
+        return dispatchCallable(new Callable<ListenableFuture<Void>>() {
+          @Override
+          public ListenableFuture<Void> call() throws Exception {
+            return observer.onHeaders(headers);
+          }
+        });
+      }
+
+      @Override
       public ListenableFuture<Void> contextRead(final String name, final InputStream value,
           final int length) {
         return dispatchCallable(new Callable<ListenableFuture<Void>>() {
@@ -260,7 +273,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
       }
 
       @Override
-      public void closed(final Status status) {
+      public void closed(final Status status, final Metadata.Trailers trailers) {
         for (SettableFuture<Void> future : inProcessFutures) {
           future.cancel(false);
         }
@@ -268,7 +281,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
         callExecutor.execute(new Runnable() {
           @Override
           public void run() {
-            observer.onClose(status);
+            observer.onClose(status, trailers);
           }
         });
       }

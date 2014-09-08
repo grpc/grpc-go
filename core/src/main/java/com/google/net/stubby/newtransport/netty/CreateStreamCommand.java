@@ -8,12 +8,15 @@ import com.google.net.stubby.MethodDescriptor;
  * {@link NettyClientHandler} for processing in the Channel thread.
  */
 class CreateStreamCommand {
-  final MethodDescriptor<?, ?> method;
-  final NettyClientStream stream;
+  private final MethodDescriptor<?, ?> method;
+  private final String[] headers;
+  private final NettyClientStream stream;
 
-  CreateStreamCommand(MethodDescriptor<?, ?> method, NettyClientStream stream) {
+  CreateStreamCommand(MethodDescriptor<?, ?> method, String[] headers,
+                      NettyClientStream stream) {
     this.method = Preconditions.checkNotNull(method, "method");
     this.stream = Preconditions.checkNotNull(stream, "stream");
+    this.headers = Preconditions.checkNotNull(headers, "headers");
   }
 
   MethodDescriptor<?, ?> method() {
@@ -22,5 +25,9 @@ class CreateStreamCommand {
 
   NettyClientStream stream() {
     return stream;
+  }
+
+  String[] headers() {
+    return headers;
   }
 }

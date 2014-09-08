@@ -2,11 +2,15 @@ package com.google.net.stubby.newtransport.netty;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.notNull;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
 
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
@@ -40,7 +44,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   @Test
   public void closeBeforeClientHalfCloseShouldFail() {
     try {
-      stream().close(Status.OK);
+      stream().close(Status.OK, new Metadata.Trailers());
       fail("Should throw exception");
     } catch (IllegalStateException expected) {
     }
@@ -50,7 +54,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Test
   public void closeWithErrorBeforeClientHalfCloseShouldSucceed() throws Exception {
-    stream().close(Status.CANCELLED);
+    stream().close(Status.CANCELLED, new Metadata.Trailers());
     assertEquals(StreamState.CLOSED, stream.state());
     verify(channel).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.CANCELLED), true));
@@ -62,9 +66,9 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     // Client half-closes. Listener gets closed()
     stream().remoteEndClosed();
     assertEquals(StreamState.WRITE_ONLY, stream.state());
-    verify(listener).closed(Status.OK);
+    verify(listener).closed(eq(Status.OK), notNull(Metadata.Trailers.class));
     // Server closes. Status sent.
-    stream().close(Status.OK);
+    stream().close(Status.OK, new Metadata.Trailers());
     assertEquals(StreamState.CLOSED, stream.state());
     verify(channel).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.OK), true));
@@ -76,7 +80,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     // Client half-closes. Listener gets closed()
     stream().remoteEndClosed();
     assertEquals(StreamState.WRITE_ONLY, stream.state());
-    verify(listener).closed(Status.OK);
+    verify(listener).closed(eq(Status.OK), notNull(Metadata.Trailers.class));
     // Client half-closes again. Stream will be aborted with an error.
     stream().remoteEndClosed();
     assertEquals(StreamState.CLOSED, stream.state());
@@ -91,7 +95,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     Status status = new Status(Transport.Code.INTERNAL, new Throwable());
     stream().abortStream(status, true);
     assertEquals(StreamState.CLOSED, stream.state());
-    verify(listener).closed(status);
+    verify(listener).closed(same(status), notNull(Metadata.Trailers.class));
     verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
     verifyNoMoreInteractions(listener);
   }
@@ -101,7 +105,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     Status status = new Status(Transport.Code.INTERNAL, new Throwable());
     stream().abortStream(status, false);
     assertEquals(StreamState.CLOSED, stream.state());
-    verify(listener).closed(status);
+    verify(listener).closed(same(status), notNull(Metadata.Trailers.class));
     verify(channel, never()).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
     verifyNoMoreInteractions(listener);
@@ -113,7 +117,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     // Client half-closes. Listener gets closed()
     stream().remoteEndClosed();
     assertEquals(StreamState.WRITE_ONLY, stream.state());
-    verify(listener).closed(Status.OK);
+    verify(listener).closed(same(Status.OK), notNull(Metadata.Trailers.class));
     // Abort
     stream().abortStream(status, true);
     assertEquals(StreamState.CLOSED, stream.state());

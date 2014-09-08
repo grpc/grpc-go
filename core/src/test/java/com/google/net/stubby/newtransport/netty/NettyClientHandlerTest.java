@@ -7,27 +7,19 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.notNull;
 import static org.mockito.Mockito.calls;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -47,6 +39,15 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
 
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
 /**
  * Tests for {@link NettyClientHandler}.
  */
@@ -63,6 +64,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   @Mock
   private MethodDescriptor<?, ?> method;
   private ByteBuf content;
+  private Metadata.Headers grpcHeaders;
 
   @Before
   public void setup() throws Exception {
@@ -77,8 +79,11 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     mockContext();
     mockFuture(true);
 
+    Metadata.Key key = new Metadata.Key("auth", Metadata.STRING_MARSHALLER);
+    grpcHeaders = new Metadata.Headers();
+    grpcHeaders.put(key, "sometoken");
+
     when(method.getName()).thenReturn("fakemethod");
-    when(method.getHeaders()).thenReturn(ImmutableMap.of("auth", "sometoken"));
     when(stream.state()).thenReturn(StreamState.OPEN);
 
     // Simulate activation of the handler to force writing of the initial settings
@@ -95,7 +100,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
   @Test
   public void createStreamShouldSucceed() throws Exception {
-    handler.write(ctx, new CreateStreamCommand(method, stream), promise);
+    handler.write(ctx, new CreateStreamCommand(method, grpcHeaders.serializeAscii(), stream),
+        promise);
     verify(promise).setSuccess();
     verify(stream).id(eq(3));
 
@@ -184,7 +190,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   public void createShouldQueueStream() throws Exception {
     // Disallow stream creation to force the stream to get added to the pending queue.
     setMaxConcurrentStreams(0);
-    handler.write(ctx, new CreateStreamCommand(method, stream), promise);
+    handler.write(ctx, new CreateStreamCommand(method, grpcHeaders.serializeAscii(), stream),
+        promise);
 
     // Make sure the write never occurred.
     verify(frameListener, never()).onHeadersRead(eq(ctx),
@@ -201,7 +208,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   public void receivedGoAwayShouldFailQueuedStreams() throws Exception {
     // Force a stream to get added to the pending queue.
     setMaxConcurrentStreams(0);
-    handler.write(ctx, new CreateStreamCommand(method, stream), promise);
+    handler.write(ctx, new CreateStreamCommand(method, grpcHeaders.serializeAscii(), stream),
+        promise);
 
     handler.channelRead(ctx, goAwayFrame(0));
     verify(promise).setFailure(any(Throwable.class));
@@ -210,13 +218,14 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   @Test
   public void receivedGoAwayShouldFailUnknownStreams() throws Exception {
     // Force a stream to get added to the pending queue.
-    handler.write(ctx, new CreateStreamCommand(method, stream), promise);
+    handler.write(ctx, new CreateStreamCommand(method, grpcHeaders.serializeAscii(), stream),
+        promise);
 
     // Read a GOAWAY that indicates our stream was never processed by the server.
     handler.channelRead(ctx, goAwayFrame(0));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     InOrder inOrder = inOrder(stream);
-    inOrder.verify(stream, calls(1)).setStatus(captor.capture());
+    inOrder.verify(stream, calls(1)).setStatus(captor.capture(), notNull(Metadata.Trailers.class));
     assertEquals(Transport.Code.UNAVAILABLE, captor.getValue().getCode());
   }
 
@@ -237,7 +246,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
   private void createStream() throws Exception {
     // Create the stream.
-    handler.write(ctx, new CreateStreamCommand(method, stream), promise);
+    handler.write(ctx, new CreateStreamCommand(method, grpcHeaders.serializeAscii(), stream),
+        promise);
     when(stream.id()).thenReturn(3);
     // Reset the context mock to clear recording of sent headers frame.
     mockContext();

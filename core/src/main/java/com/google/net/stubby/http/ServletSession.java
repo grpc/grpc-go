@@ -1,10 +1,10 @@
 package com.google.net.stubby.http;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteBuffers;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.AbstractResponse;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Request;
 import com.google.net.stubby.Response;
@@ -20,7 +20,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.concurrent.Executor;
 
 import javax.servlet.ServletException;
@@ -97,15 +99,17 @@ public class ServletSession extends HttpServlet {
       return null;
     }
 
-    ImmutableMap.Builder<String, String> headerMapBuilder = ImmutableMap.builder();
+    List<String> headerList = new ArrayList<>();
     Enumeration headerNames = req.getHeaderNames();
     while (headerNames.hasMoreElements()) {
       String name = headerNames.nextElement().toString();
-      headerMapBuilder.put(name, req.getHeader(name));
+      headerList.add(name);
+      headerList.add(req.getHeader(name));
     }
+    Metadata.Headers headers = new Metadata.Headers(headerList.toArray(new String[]{}));
 
     // Create the operation and bind an HTTP response operation
-    Request op = session.startRequest(operationName, headerMapBuilder.build(),
+    Request op = session.startRequest(operationName, headers,
         HttpResponseOperation.builder(responseStream));
     if (op == null) {
       // TODO(user): Unify error handling once spec finalized

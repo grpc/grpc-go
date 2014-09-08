@@ -1,18 +1,12 @@
 package com.google.net.stubby;
 
-import com.google.net.stubby.AbstractResponse;
-import com.google.net.stubby.Operation;
-import com.google.net.stubby.Request;
-import com.google.net.stubby.Response;
-import com.google.net.stubby.Session;
-import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.ClientStream;
 import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 /**
  * A temporary shim layer between the new (Channel) and the old (Session). Will go away when the
@@ -151,7 +145,7 @@ public class SessionClientStream implements ClientStream {
     }
 
     private void propagateClosed() {
-      listener.closed(getStatus());
+      listener.closed(getStatus(), new Metadata.Trailers());
     }
   }
 }

@@ -7,6 +7,7 @@ import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
@@ -41,9 +42,11 @@ public class HttpClientTransport extends AbstractClientTransport {
   }
 
   @Override
-  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method, StreamListener listener) {
+  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
+                                           Metadata.Headers headers,
+                                           StreamListener listener) {
     URI uri = baseUri.resolve(method.getName());
-    HttpClientStream stream = new HttpClientStream(uri, listener);
+    HttpClientStream stream = new HttpClientStream(uri, headers.serializeAscii(), listener);
     synchronized (streams) {
       // Check for RUNNING to deal with race condition of this being executed right after doStop
       // cancels all the streams.
@@ -80,7 +83,7 @@ public class HttpClientTransport extends AbstractClientTransport {
     final DataOutputStream outputStream;
     boolean connected;
 
-    HttpClientStream(URI uri, StreamListener listener) {
+    HttpClientStream(URI uri, String[] headers, StreamListener listener) {
       super(listener);
 
       try {
@@ -89,6 +92,9 @@ public class HttpClientTransport extends AbstractClientTransport {
         connection.setDoInput(true);
         connection.setRequestMethod(HTTP_METHOD);
         connection.setRequestProperty(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC);
+        for (int i = 0; i < headers.length; i++) {
+          connection.setRequestProperty(headers[i], headers[++i]);
+        }
         outputStream = new DataOutputStream(connection.getOutputStream());
         connected = true;
       } catch (IOException e) {
@@ -99,7 +105,7 @@ public class HttpClientTransport extends AbstractClientTransport {
     @Override
     public void cancel() {
       outboundPhase = Phase.STATUS;
-      if (setStatus(CANCELLED)) {
+      if (setStatus(CANCELLED, new Metadata.Trailers())) {
         disconnect();
       }
     }
@@ -136,7 +142,7 @@ public class HttpClientTransport extends AbstractClientTransport {
           }
         }
       } catch (IOException ioe) {
-        setStatus(new Status(Transport.Code.INTERNAL, ioe));
+        setStatus(new Status(Transport.Code.INTERNAL, ioe), new Metadata.Trailers());
       }
     }
 

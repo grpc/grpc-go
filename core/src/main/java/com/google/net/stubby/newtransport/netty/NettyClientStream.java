@@ -5,6 +5,7 @@ import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
 import com.google.net.stubby.newtransport.GrpcDeframer;
@@ -73,7 +74,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
     responseCode = responseCode(headers);
     isGrpcResponse = isGrpcResponse(headers, responseCode);
     if (!isGrpcResponse && endOfStream) {
-      setStatus(new Status(responseCode));
+      setStatus(new Status(responseCode), new Metadata.Trailers());
     }
   }
 
@@ -102,7 +103,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
 
       if (endOfStream) {
         String msg = nonGrpcErrorMessage.toString();
-        setStatus(new Status(responseCode, msg));
+        setStatus(new Status(responseCode, msg), new Metadata.Trailers());
       }
     }
   }

@@ -5,6 +5,7 @@ import static com.google.net.stubby.newtransport.StreamState.OPEN;
 import static com.google.net.stubby.newtransport.StreamState.READ_ONLY;
 
 import com.google.common.base.Preconditions;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
 /**
@@ -37,9 +38,10 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
     // Wraps the base handler to get status update.
     return new ForwardingStreamListener(super.inboundMessageHandler()) {
       @Override
-      public void closed(Status status) {
+      public void closed(Status status, Metadata.Trailers trailers) {
         inboundPhase(Phase.STATUS);
-        setStatus(status);
+        // TODO(user): Fix once we switch the wire format to express status in trailers
+        setStatus(status, new Metadata.Trailers());
       }
     };
   }
@@ -51,7 +53,7 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
    * @param newStatus the new status to set
    * @return {@code} true if the status was not already set.
    */
-  public boolean setStatus(final Status newStatus) {
+  public boolean setStatus(final Status newStatus, Metadata.Trailers trailers) {
     Preconditions.checkNotNull(newStatus, "newStatus");
     synchronized (stateLock) {
       if (status != null) {
@@ -64,7 +66,7 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
     }
 
     // Invoke the observer callback.
-    listener.closed(newStatus);
+    listener.closed(newStatus, trailers);
 
     // Free any resources.
     dispose();

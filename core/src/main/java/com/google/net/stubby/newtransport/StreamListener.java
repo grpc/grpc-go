@@ -1,6 +1,7 @@
 package com.google.net.stubby.newtransport;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
 import java.io.InputStream;
@@ -12,6 +13,17 @@ import javax.annotation.Nullable;
  * time.
  */
 public interface StreamListener {
+
+  /**
+   * Called upon receiving all header information from the remote end-point.
+   * <p>This method should return quickly, as the same thread may be used to process other streams.
+   *
+   * @param headers the fully buffered received headers.
+   * @return a processing completion future, or {@code null} to indicate that processing of the
+   *         headers is immediately complete.
+   */
+  @Nullable
+  ListenableFuture<Void> headersRead(Metadata.Headers headers);
 
   /**
    * Called upon receiving context information from the remote end-point. The {@link InputStream} is
@@ -33,6 +45,7 @@ public interface StreamListener {
    *         context is immediately complete.
    */
   @Nullable
+  @Deprecated
   ListenableFuture<Void> contextRead(String name, InputStream value, int length);
 
   /**
@@ -58,15 +71,9 @@ public interface StreamListener {
   ListenableFuture<Void> messageRead(InputStream message, int length);
 
   /**
-   * Called when the remote side of the transport closed. A status code of
-   * {@link com.google.net.stubby.transport.Transport.Code#OK} implies normal termination of the
-   * remote side of the stream (i.e. half-closed). Any other value implies abnormal termination. If
-   * the remote end-point was abnormally terminated, no further messages will be received on the
-   * stream.
-   *
-   * <p>This method should return quickly, as the same thread may be used to process other streams.
-   *
-   * @param status details of the remote stream closure.
+   * Called when the remote side of the transport closed.
+   * @param status details about the remote closure
+   * @param trailers that may optionally include status information about call closure.
    */
-  void closed(Status status);
+  void closed(Status status, Metadata.Trailers trailers);
 }

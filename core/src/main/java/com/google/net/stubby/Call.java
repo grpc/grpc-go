@@ -15,9 +15,9 @@ import javax.annotation.Nullable;
  *
  * <p>{@link #start} is required to be the first of any methods called.
  *
- * <p>Any contexts must be sent before any payloads, which must be sent before half closing.
+ * <p>Any headers must be sent before any payloads, which must be sent before half closing.
  *
- * <p>No generic method for determining message receipt or providing acknowlegement is provided.
+ * <p>No generic method for determining message receipt or providing acknowledgement is provided.
  * Applications are expected to utilize normal payload messages for such signals, as a response
  * natually acknowledges its request.
  *
@@ -27,13 +27,22 @@ public abstract class Call<RequestT, ResponseT> {
   /**
    * Callbacks for consuming incoming RPC messages.
    *
-   * <p>Any contexts are guaranteed to arrive before any payloads, which are guaranteed before
+   * <p>Response headers are guaranteed to arrive before any payloads, which are guaranteed
+   * to arrive before close. An additional block of headers called 'trailers' can be delivered with
    * close.
    *
    * <p>Implementations are free to block for extended periods of time. Implementations are not
    * required to be thread-safe.
    */
   public abstract static class Listener<T> {
+
+    /**
+     * The response headers have been received. Headers always precede payloads.
+     * This method is always called, if no headers were received then an empty {@link Metadata}
+     * is passed.
+     */
+    public abstract ListenableFuture<Void> onHeaders(Metadata.Headers headers);
+
     /**
      * A response context has been received. Any context messages will precede payload messages.
      *
@@ -42,6 +51,7 @@ public abstract class Call<RequestT, ResponseT> {
      * method.
      */
     @Nullable
+    @Deprecated
     public abstract ListenableFuture<Void> onContext(String name, InputStream value);
 
     /**
@@ -52,33 +62,24 @@ public abstract class Call<RequestT, ResponseT> {
     public abstract ListenableFuture<Void> onPayload(T payload);
 
     /**
-     * The Call has been closed. No further sending or receiving will occur. If {@code status} is
-     * not equal to {@link Status#OK}, then the call failed.
+     * The Call has been closed. No further sending or receiving can occur. If {@code status} is
+     * not equal to {@link Status#OK}, then the call failed. An additional block of headers may be
+     * received at the end of the call from the server. An empty {@link Metadata} object is passed
+     * if no trailers are received.
      */
-    public abstract void onClose(Status status);
+    public abstract void onClose(Status status, Metadata.Trailers trailers);
   }
 
   /**
    * Start a call, using {@code responseListener} for processing response messages.
    *
    * @param responseListener receives response messages
+   * @param headers which can contain extra information like authentication.
    * @throws IllegalStateException if call is already started
    */
-  public abstract void start(Listener<ResponseT> responseListener);
+  // TODO(user): Might be better to put into Channel#newCall, might reduce decoration burden
+  public abstract void start(Listener<ResponseT> responseListener, Metadata.Headers headers);
 
-  /**
-   * Prevent any further processing for this Call. No further messages may be sent or will be
-   * received. The server is informed of cancellations, but may not stop processing the call.
-   * Cancellation is permitted even if previously {@code cancel()}ed or {@link #halfClose}d.
-   */
-  public abstract void cancel();
-
-  /**
-   * Close call for message sending. Incoming messages are unaffected.
-   *
-   * @throws IllegalStateException if call is already {@code halfClose()}d or {@link #cancel}ed
-   */
-  public abstract void halfClose();
 
   /**
    * Send a context message. Context messages are intended for side-channel information like
@@ -89,6 +90,7 @@ public abstract class Call<RequestT, ResponseT> {
    * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed,
    *     or after {@link #sendPayload}
    */
+  @Deprecated
   public void sendContext(String name, InputStream value) {
     sendContext(name, value, null);
   }
@@ -108,8 +110,23 @@ public abstract class Call<RequestT, ResponseT> {
    * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed,
    *     or after {@link #sendPayload}
    */
+  @Deprecated
   public abstract void sendContext(String name, InputStream value,
-      @Nullable SettableFuture<Void> accepted);
+                                   @Nullable SettableFuture<Void> accepted);
+
+  /**
+   * Prevent any further processing for this Call. No further messages may be sent or will be
+   * received. The server is informed of cancellations, but may not stop processing the call.
+   * Cancellation is permitted even if previously {@code cancel()}ed or {@link #halfClose}d.
+   */
+  public abstract void cancel();
+
+  /**
+   * Close call for message sending. Incoming messages are unaffected.
+   *
+   * @throws IllegalStateException if call is already {@code halfClose()}d or {@link #cancel}ed
+   */
+  public abstract void halfClose();
 
   /**
    * Send a payload message. Payload messages are the primary form of communication associated with

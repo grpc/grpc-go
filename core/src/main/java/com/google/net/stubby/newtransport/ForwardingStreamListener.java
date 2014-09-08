@@ -1,6 +1,7 @@
 package com.google.net.stubby.newtransport;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
 import java.io.InputStream;
@@ -17,6 +18,11 @@ public class ForwardingStreamListener implements StreamListener {
   }
 
   @Override
+  public ListenableFuture<Void> headersRead(Metadata.Headers headers) {
+    return delegate.headersRead(headers);
+  }
+
+  @Override
   public ListenableFuture<Void> contextRead(String name, InputStream value, int length) {
     return delegate.contextRead(name, value, length);
   }
@@ -27,7 +33,7 @@ public class ForwardingStreamListener implements StreamListener {
   }
 
   @Override
-  public void closed(Status status) {
-    delegate.closed(status);
+  public void closed(Status status, Metadata.Trailers trailers) {
+    delegate.closed(status, trailers);
   }
 }

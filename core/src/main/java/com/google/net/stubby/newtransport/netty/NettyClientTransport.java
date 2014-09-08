@@ -3,6 +3,7 @@ package com.google.net.stubby.newtransport.netty;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.Preconditions;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.newtransport.AbstractClientTransport;
 import com.google.net.stubby.newtransport.ClientStream;
@@ -11,11 +12,6 @@ import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.newtransport.netty.NettyClientTransportFactory.NegotiationType;
 import com.google.net.stubby.testing.utils.ssl.SslContextFactory;
 
-import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
-
-import io.netty.handler.codec.http2.Http2InboundFrameLogger;
-import io.netty.util.internal.logging.InternalLogLevel;
-import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -30,9 +26,13 @@ import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 import io.netty.handler.codec.http2.DefaultHttp2OutboundFlowController;
 import io.netty.handler.codec.http2.DefaultHttp2StreamRemovalPolicy;
 import io.netty.handler.codec.http2.Http2Connection;
+import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
+import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFlowController;
+import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
+import io.netty.util.internal.logging.InternalLogLevel;
 
 import java.util.concurrent.ExecutionException;
 
@@ -83,13 +83,17 @@ class NettyClientTransport extends AbstractClientTransport {
   }
 
   @Override
-  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method, StreamListener listener) {
+  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
+                                           Metadata.Headers headers,
+                                           StreamListener listener) {
     // Create the stream.
     NettyClientStream stream = new NettyClientStream(listener, channel, handler.inboundFlow());
 
     try {
       // Write the request and await creation of the stream.
-      channel.writeAndFlush(new CreateStreamCommand(method, stream)).get();
+      channel.writeAndFlush(new CreateStreamCommand(method,
+          headers.serializeAscii(),
+          stream)).get();
     } catch (InterruptedException e) {
       // Restore the interrupt.
       Thread.currentThread().interrupt();

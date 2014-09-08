@@ -1,6 +1,6 @@
 package com.google.net.stubby.http2.netty;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.NoOpRequest;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Operation.Phase;
@@ -22,8 +22,6 @@ import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
-
-import java.util.Map;
 
 /**
  * Codec used by clients and servers to interpret HTTP2 frames in the context of an ongoing
@@ -212,12 +210,9 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     if (operationName == null) {
       return null;
     }
-    ImmutableMap.Builder<String, String> headerMap = ImmutableMap.builder();
-    for (Map.Entry<String, String> header : headers) {
-      headerMap.put(header);
-    }
+    Metadata.Headers grpcHeaders = new Metadata.Headers(headers);
     // Create the operation and bind a HTTP2 response operation
-    Request op = session.startRequest(operationName, headerMap.build(),
+    Request op = session.startRequest(operationName, grpcHeaders,
         createResponse(new Http2Writer(ctx), streamId));
     if (op == null) {
       return null;

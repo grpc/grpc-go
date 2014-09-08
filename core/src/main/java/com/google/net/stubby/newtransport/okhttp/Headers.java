@@ -4,6 +4,8 @@ import com.google.common.collect.Lists;
 
 import com.squareup.okhttp.internal.spdy.Header;
 
+import okio.ByteString;
+
 import java.util.List;
 
 /**
@@ -15,12 +17,15 @@ public class Headers {
       new Header("content-type", "application/protorpc");
   public static final Header RESPONSE_STATUS_OK = new Header(Header.RESPONSE_STATUS, "200");
 
-  public static List<Header> createRequestHeaders(String operationName) {
-    List<Header> headers = Lists.newArrayListWithCapacity(6);
-    headers.add(new Header(Header.TARGET_PATH, operationName));
-    headers.add(SCHEME_HEADER);
-    headers.add(CONTENT_TYPE_HEADER);
-    return headers;
+  public static List<Header> createRequestHeaders(String operationName, byte[][] headers) {
+    List<Header> okhttpHeaders = Lists.newArrayListWithCapacity(6);
+    okhttpHeaders.add(new Header(Header.TARGET_PATH, operationName));
+    okhttpHeaders.add(SCHEME_HEADER);
+    okhttpHeaders.add(CONTENT_TYPE_HEADER);
+    for (int i = 0; i < headers.length; i++) {
+      okhttpHeaders.add(new Header(ByteString.of(headers[i]), ByteString.of(headers[++i])));
+    }
+    return okhttpHeaders;
   }
 
   public static List<Header> createResponseHeaders() {

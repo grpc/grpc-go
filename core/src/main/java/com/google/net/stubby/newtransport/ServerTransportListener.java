@@ -1,5 +1,6 @@
 package com.google.net.stubby.newtransport;
 
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 
 /**
@@ -12,7 +13,9 @@ public interface ServerTransportListener {
    *
    * @param stream the newly created stream.
    * @param method the full method name being called on the server.
+   * @param headers containing metadata for the call.
    * @return a listener for events on the new stream.
    */
-  StreamListener streamCreated(ServerStream stream, String method);
+  StreamListener streamCreated(ServerStream stream, String method,
+                               Metadata.Headers headers);
 }

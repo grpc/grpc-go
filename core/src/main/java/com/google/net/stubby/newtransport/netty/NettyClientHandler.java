@@ -6,6 +6,7 @@ import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
 import static com.google.net.stubby.newtransport.netty.NettyClientStream.PENDING_STREAM_ID;
 
 import com.google.common.base.Preconditions;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
@@ -32,7 +33,6 @@ import io.netty.handler.codec.http2.Http2StreamException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
-import java.util.Map;
 
 /**
  * Client-side Netty handler for GRPC processing. All event handlers are executed entirely within
@@ -46,11 +46,13 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
    */
   private final class PendingStream {
     private final MethodDescriptor<?, ?> method;
+    private final String[] headers;
     private final NettyClientStream stream;
     private final ChannelPromise promise;
 
     public PendingStream(CreateStreamCommand command, ChannelPromise promise) {
       method = command.method();
+      headers = command.headers();
       stream = command.stream();
       this.promise = promise;
     }
@@ -155,7 +157,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
     // TODO(user): do something with errorCode?
     Http2Stream http2Stream = connection().requireStream(streamId);
     NettyClientStream stream = clientStream(http2Stream);
-    stream.setStatus(new Status(Transport.Code.UNKNOWN));
+    stream.setStatus(new Status(Transport.Code.UNKNOWN), new Metadata.Trailers());
   }
 
   /**
@@ -170,7 +172,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
 
     // Any streams that are still active must be closed.
     for (Http2Stream stream : http2Streams()) {
-      clientStream(stream).setStatus(goAwayStatus);
+      clientStream(stream).setStatus(goAwayStatus, new Metadata.Trailers());
     }
   }
 
@@ -194,7 +196,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
     // Close the stream with a status that contains the cause.
     Http2Stream stream = connection().stream(cause.streamId());
     if (stream != null) {
-      clientStream(stream).setStatus(Status.fromThrowable(cause));
+      clientStream(stream).setStatus(Status.fromThrowable(cause), new Metadata.Trailers());
     }
     super.onStreamError(ctx, cause);
   }
@@ -217,7 +219,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
   private void cancelStream(ChannelHandlerContext ctx, CancelStreamCommand cmd,
       ChannelPromise promise) throws Http2Exception {
     NettyClientStream stream = cmd.stream();
-    stream.setStatus(Status.CANCELLED);
+    stream.setStatus(Status.CANCELLED, new Metadata.Trailers());
 
     // No need to set the stream status for a cancellation. It should already have been
     // set prior to sending the command.
@@ -272,7 +274,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
       int lastKnownStream = connection().local().lastKnownStream();
       for (Http2Stream stream : http2Streams()) {
         if (lastKnownStream < stream.id()) {
-          clientStream(stream).setStatus(goAwayStatus);
+          clientStream(stream).setStatus(goAwayStatus, new Metadata.Trailers());
           stream.close();
         }
       }
@@ -319,10 +321,12 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
       // Finish creation of the stream by writing a headers frame.
       final PendingStream pendingStream = pendingStreams.remove();
       // TODO(user): Change Netty to not send priority, just use default.
+      // TODO(user): Switch to binary headers when Netty supports it.
       DefaultHttp2Headers.Builder headersBuilder = DefaultHttp2Headers.newBuilder();
-      // Add custom headers from the method descriptor
-      for (Map.Entry<String, String> entry : pendingStream.method.getHeaders().entrySet()) {
-        headersBuilder.add(entry.getKey(), entry.getValue());
+      for (int i = 0; i < pendingStream.headers.length; i++) {
+        headersBuilder.add(
+            pendingStream.headers[i],
+            pendingStream.headers[++i]);
       }
       headersBuilder
           .method(HTTP_METHOD)
@@ -410,7 +414,8 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
       case RESERVED_REMOTE:
         // Disallowed state, terminate the stream.
         clientStream(stream).setStatus(
-            new Status(Transport.Code.INTERNAL, "Stream in invalid state: " + stream.state()));
+            new Status(Transport.Code.INTERNAL, "Stream in invalid state: " + stream.state()),
+            new Metadata.Trailers());
         writeRstStream(ctx(), stream.id(), Http2Error.INTERNAL_ERROR.code(), ctx().newPromise());
         break;
       default:

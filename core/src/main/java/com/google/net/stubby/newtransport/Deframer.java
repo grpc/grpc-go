@@ -2,6 +2,7 @@ package com.google.net.stubby.newtransport;
 
 import com.google.common.io.ByteStreams;
 import com.google.net.stubby.GrpcFramingUtil;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
@@ -154,7 +155,7 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
   }
 
   private void writeStatus(Status status) {
-    target.closed(status);
+    target.closed(status, new Metadata.Trailers());
     statusDelivered = true;
   }
 

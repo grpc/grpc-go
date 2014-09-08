@@ -7,6 +7,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.net.stubby.Call;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 
@@ -121,7 +122,7 @@ public class Calls {
       Call<ReqT, RespT> call,
       ReqT param,
       Call.Listener<RespT> responseListener) {
-    call.start(responseListener);
+    call.start(responseListener, new Metadata.Headers());
     try {
       call.sendPayload(param);
       call.halfClose();
@@ -139,7 +140,7 @@ public class Calls {
       Call<ReqT, RespT> call,
       Iterator<ReqT> clientStream) {
     SettableFuture<RespT> responseFuture = SettableFuture.create();
-    call.start(new UnaryStreamToFuture<RespT>(responseFuture));
+    call.start(new UnaryStreamToFuture<RespT>(responseFuture), new Metadata.Headers());
     try {
       while (clientStream.hasNext()) {
         call.sendPayload(clientStream.next());
@@ -173,7 +174,8 @@ public class Calls {
    */
   public static <ReqT, RespT> StreamObserver<ReqT> duplexStreamingCall(
       Call<ReqT, RespT> call, StreamObserver<RespT> responseObserver) {
-    call.start(new StreamObserverToCallListenerAdapter<RespT>(responseObserver));
+    call.start(new StreamObserverToCallListenerAdapter<RespT>(responseObserver),
+        new Metadata.Headers());
     return new CallToStreamObserverAdapter<ReqT>(call);
   }
 
@@ -209,6 +211,11 @@ public class Calls {
     }
 
     @Override
+    public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
+      return null;
+    }
+
+    @Override
     public ListenableFuture<Void> onContext(String name, InputStream value) {
       // StreamObservers don't receive contexts.
       return null;
@@ -221,7 +228,7 @@ public class Calls {
     }
 
     @Override
-    public void onClose(Status status) {
+    public void onClose(Status status, Metadata.Trailers trailers) {
       if (status.isOk()) {
         observer.onCompleted();
       } else {
@@ -242,6 +249,11 @@ public class Calls {
     }
 
     @Override
+    public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
+      return null;
+    }
+
+    @Override
     public ListenableFuture<Void> onContext(String name, InputStream value) {
       // Don't care about contexts.
       return null;
@@ -258,7 +270,7 @@ public class Calls {
     }
 
     @Override
-    public void onClose(Status status) {
+    public void onClose(Status status, Metadata.Trailers trailers) {
       if (status.isOk()) {
         if (value == null) {
           // No value received so mark the future as an error
@@ -333,6 +345,11 @@ public class Calls {
       }
 
       @Override
+      public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
+        return null;
+      }
+
+      @Override
       public ListenableFuture<Void> onPayload(T value) {
         Preconditions.checkState(!done, "Call already closed");
         SettableFuture<Void> future = SettableFuture.create();
@@ -341,7 +358,7 @@ public class Calls {
       }
 
       @Override
-      public void onClose(Status status) {
+      public void onClose(Status status, Metadata.Trailers trailers) {
         Preconditions.checkState(!done, "Call already closed");
         if (status.isOk()) {
           buffer.add(this);

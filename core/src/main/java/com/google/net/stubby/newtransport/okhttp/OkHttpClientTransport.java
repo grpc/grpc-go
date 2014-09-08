@@ -4,6 +4,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
@@ -87,7 +88,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   private final int port;
   private FrameReader frameReader;
   private AsyncFrameWriter frameWriter;
-  private Object lock = new Object();
+  private final Object lock = new Object();
   @GuardedBy("lock")
   private int nextStreamId;
   private final Map<Integer, OkHttpClientStream> streams =
@@ -125,8 +126,10 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   }
 
   @Override
-  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method, StreamListener listener) {
-    return new OkHttpClientStream(method, listener);
+  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
+                                           Metadata.Headers headers,
+                                           StreamListener listener) {
+    return new OkHttpClientStream(method, headers.serialize(), listener);
   }
 
   @Override
@@ -204,7 +207,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     stopAsync();
 
     for (OkHttpClientStream stream : goAwayStreams) {
-      stream.setStatus(status);
+      stream.setStatus(status, new Metadata.Trailers());
     }
   }
 
@@ -218,7 +221,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     stream = streams.remove(streamId);
     if (stream != null) {
       // This is mainly for failed streams, for successfully finished streams, it's a no-op.
-      stream.setStatus(status);
+      stream.setStatus(status, new Metadata.Trailers());
       return true;
     }
     return false;
@@ -398,18 +401,18 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     final InputStreamDeframer deframer;
     int unacknowledgedBytesRead;
 
-    OkHttpClientStream(MethodDescriptor<?, ?> method, StreamListener listener) {
+    OkHttpClientStream(MethodDescriptor<?, ?> method, byte[][] headers, StreamListener listener) {
       super(listener);
       deframer = new InputStreamDeframer(inboundMessageHandler());
       synchronized (lock) {
         if (goAway) {
-          setStatus(goAwayStatus);
+          setStatus(goAwayStatus, new Metadata.Trailers());
           return;
         }
         assignStreamId(this);
       }
       frameWriter.synStream(false, false, streamId, 0,
-          Headers.createRequestHeaders(method.getName()));
+          Headers.createRequestHeaders(method.getName(), headers));
     }
 
     InputStreamDeframer getDeframer() {
