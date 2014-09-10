@@ -67,13 +67,6 @@ public class UrlConnectionClientSession implements Session {
     }
 
     @Override
-    public Operation addContext(String type, InputStream message, Phase nextPhase) {
-      super.addContext(type, message, nextPhase);
-      framer.writeContext(type, message, getPhase() == Phase.CLOSED, this);
-      return this;
-    }
-
-    @Override
     public Operation addPayload(InputStream payload, Phase nextPhase) {
       super.addPayload(payload, nextPhase);
       framer.writePayload(payload, getPhase() == Phase.CLOSED, this);

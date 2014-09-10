@@ -6,7 +6,6 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
-import com.google.protobuf.ByteString;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -87,19 +86,6 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
           try {
             // Report payload to the receiving operation
             target.messageRead(framedChunk, currentLength);
-          } finally {
-            currentLength = LENGTH_NOT_SET;
-            inFrame = false;
-          }
-        } else if (GrpcFramingUtil.isContextValueFrame(currentFlags)) {
-          // Not clear if using proto encoding here is of any benefit.
-          // Using ContextValue.parseFrom requires copying out of the framed chunk
-          // Writing a custom parser would have to do varint handling and potentially
-          // deal with out-of-order tags etc.
-          Transport.ContextValue contextValue = Transport.ContextValue.parseFrom(framedChunk);
-          try {
-            ByteString value = contextValue.getValue();
-            target.contextRead(contextValue.getKey(), value.newInput(), value.size());
           } finally {
             currentLength = LENGTH_NOT_SET;
             inFrame = false;

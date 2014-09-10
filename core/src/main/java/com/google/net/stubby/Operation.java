@@ -14,7 +14,7 @@ public interface Operation {
 
   public static enum Phase {
     /**
-     * Used to communicate key-value pairs that define common context for the operation but
+     * Used to communicate key-value pairs that define metadata for the call but
      * that are not strictly part of the interface. Provided prior to delivering any formal
      * parameters
      */
@@ -24,11 +24,11 @@ public interface Operation {
      */
     PAYLOAD,
     /**
-     * Used to communicate key-value pairs that define common context for the call but
+     * Used to communicate key-value pairs that define metadata for the call but
      * that are not strictly part of the interface. Provided after all formal parameters have
      * been delivered.
      */
-    FOOTERS,
+    TRAILERS,
     /**
      * Indicates that the operation is closed and will not accept further input.
      */
@@ -45,25 +45,6 @@ public interface Operation {
    * The current phase of the operation
    */
   public Phase getPhase();
-
-  /**
-   * Add a key-value context value.
-   * Allowed when phase = HEADERS | FOOTERS.
-   * Valid next phases
-   * HEADERS -> PAYLOAD_FRAME | FOOTERS | CLOSED
-   * FOOTERS -> CLOSED
-   * <p>
-   * The {@link InputStream} message must be entirely consumed before this call returns.
-   * Implementations should not pass references to this stream across thread boundaries without
-   * taking a copy.
-   * <p>
-   * {@code payload.available()} must return the number of remaining bytes to be read.
-   *
-   * @return this object
-   */
-  // TODO(user): Context is an incredibly general term. Consider having two signatures
-  // addHeader and addTrailer to follow HTTP nomenclature more closely.
-  public Operation addContext(String type, InputStream message, Phase nextPhase);
 
   /**
    * Send a payload to the receiver, indicates that more may follow.

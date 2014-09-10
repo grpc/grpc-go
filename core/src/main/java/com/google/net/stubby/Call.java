@@ -3,8 +3,6 @@ package com.google.net.stubby;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
-import java.io.InputStream;
-
 import javax.annotation.Nullable;
 
 /**
@@ -44,17 +42,6 @@ public abstract class Call<RequestT, ResponseT> {
     public abstract ListenableFuture<Void> onHeaders(Metadata.Headers headers);
 
     /**
-     * A response context has been received. Any context messages will precede payload messages.
-     *
-     * <p>The {@code value} {@link InputStream} will be closed when the returned future completes.
-     * If no future is returned, the value will be closed immediately after returning from this
-     * method.
-     */
-    @Nullable
-    @Deprecated
-    public abstract ListenableFuture<Void> onContext(String name, InputStream value);
-
-    /**
      * A response payload has been received. For streaming calls, there may be zero payload
      * messages.
      */
@@ -79,40 +66,6 @@ public abstract class Call<RequestT, ResponseT> {
    */
   // TODO(user): Might be better to put into Channel#newCall, might reduce decoration burden
   public abstract void start(Listener<ResponseT> responseListener, Metadata.Headers headers);
-
-
-  /**
-   * Send a context message. Context messages are intended for side-channel information like
-   * statistics and authentication.
-   *
-   * @param name key identifier of context
-   * @param value context value bytes
-   * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed,
-   *     or after {@link #sendPayload}
-   */
-  @Deprecated
-  public void sendContext(String name, InputStream value) {
-    sendContext(name, value, null);
-  }
-
-  /**
-   * Send a context message. Context messages are intended for side-channel information like
-   * statistics and authentication.
-   *
-   * <p>If {@code accepted} is non-{@code null}, then the future will be completed when the flow
-   * control window is able to fully permit the context message. If the Call fails before being
-   * accepted, then the future will be cancelled. Callers concerned with unbounded buffering should
-   * wait until the future completes before sending more messages.
-   *
-   * @param name key identifier of context
-   * @param value context value bytes
-   * @param accepted notification for adhering to flow control, or {@code null}
-   * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed,
-   *     or after {@link #sendPayload}
-   */
-  @Deprecated
-  public abstract void sendContext(String name, InputStream value,
-                                   @Nullable SettableFuture<Void> accepted);
 
   /**
    * Prevent any further processing for this Call. No further messages may be sent or will be

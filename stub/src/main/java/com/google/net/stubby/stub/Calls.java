@@ -11,7 +11,6 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 
-import java.io.InputStream;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CancellationException;
@@ -216,12 +215,6 @@ public class Calls {
     }
 
     @Override
-    public ListenableFuture<Void> onContext(String name, InputStream value) {
-      // StreamObservers don't receive contexts.
-      return null;
-    }
-
-    @Override
     public ListenableFuture<Void> onPayload(T payload) {
       observer.onValue(payload);
       return null;
@@ -250,12 +243,6 @@ public class Calls {
 
     @Override
     public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
-      return null;
-    }
-
-    @Override
-    public ListenableFuture<Void> onContext(String name, InputStream value) {
-      // Don't care about contexts.
       return null;
     }
 
@@ -337,12 +324,6 @@ public class Calls {
 
     private class QueuingListener extends Call.Listener<T> {
       private boolean done = false;
-
-      @Override
-      public ListenableFuture<Void> onContext(String name, InputStream value) {
-        // Don't care about contexts.
-        return null;
-      }
 
       @Override
       public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {

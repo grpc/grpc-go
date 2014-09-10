@@ -73,20 +73,6 @@ public abstract class Deframer<F> {
             currentLength = LENGTH_NOT_SET;
             inFrame = false;
           }
-        } else if (GrpcFramingUtil.isContextValueFrame(currentFlags)) {
-          // Not clear if using proto encoding here is of any benefit.
-          // Using ContextValue.parseFrom requires copying out of the framed chunk
-          // Writing a custom parser would have to do varint handling and potentially
-          // deal with out-of-order tags etc.
-          Transport.ContextValue contextValue = Transport.ContextValue.parseFrom(framedChunk);
-          try {
-            target.addContext(contextValue.getKey(),
-                contextValue.getValue().newInput(),
-                target.getPhase());
-          } finally {
-            currentLength = LENGTH_NOT_SET;
-            inFrame = false;
-          }
         } else if (GrpcFramingUtil.isStatusFrame(currentFlags)) {
           int status = framedChunk.read() << 8 | framedChunk.read();
           Transport.Code code = Transport.Code.valueOf(status);

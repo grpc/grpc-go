@@ -17,7 +17,6 @@ public class ProtocolConstants {
 
   // Flags
   public static final int PAYLOAD_FRAME = 0x0;
-  public static final int CONTEXT_VALUE_FRAME =  0x1;
   public static final int RESPONSE_STATUS_FRAME = 0x2;
   public static final int RESERVED_FRAME = 0x3;
   public static final int FRAME_TYPE_MASK = 0x3;
@@ -27,10 +26,6 @@ public class ProtocolConstants {
    * No. of bytes for the length of each data stream frame
    */
   public static final int FRAME_LENGTH = 4;
-
-  public static boolean isContextValueFrame(int flags) {
-    return (flags & FRAME_TYPE_MASK)  == CONTEXT_VALUE_FRAME;
-  }
 
   public static boolean isPayloadFrame(byte flags) {
     return (flags & FRAME_TYPE_MASK) == PAYLOAD_FRAME;

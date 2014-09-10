@@ -1,6 +1,5 @@
 package com.google.net.stubby.newtransport.netty;
 
-import static com.google.net.stubby.GrpcFramingUtil.CONTEXT_VALUE_FRAME;
 import static com.google.net.stubby.GrpcFramingUtil.PAYLOAD_FRAME;
 import static com.google.net.stubby.GrpcFramingUtil.STATUS_FRAME;
 import static io.netty.handler.codec.http2.DefaultHttp2InboundFlowController.DEFAULT_WINDOW_UPDATE_RATIO;
@@ -10,7 +9,6 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
@@ -21,8 +19,6 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.StreamListener;
-import com.google.net.stubby.transport.Transport.ContextValue;
-import com.google.protobuf.ByteString;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -55,7 +51,6 @@ import java.util.concurrent.TimeUnit;
  * Base class for Netty stream unit tests.
  */
 public abstract class NettyStreamTestBase {
-  protected static final String CONTEXT_KEY = "key";
   protected static final String MESSAGE = "hello world";
   protected static final int STREAM_ID = 1;
 
@@ -106,8 +101,6 @@ public abstract class NettyStreamTestBase {
     when(eventLoop.inEventLoop()).thenReturn(true);
 
     processingFuture = SettableFuture.create();
-    when(listener.contextRead(anyString(), any(InputStream.class), anyInt())).thenReturn(
-        processingFuture);
     when(listener.messageRead(any(InputStream.class), anyInt())).thenReturn(processingFuture);
 
     doAnswer(new Answer<Void>() {
@@ -121,25 +114,6 @@ public abstract class NettyStreamTestBase {
 
     input = new ByteArrayInputStream(MESSAGE.getBytes(UTF_8));
     stream = createStream();
-  }
-
-  @Test
-  public void inboundContextShouldCallListener() throws Exception {
-    stream.inboundDataReceived(contextFrame(), false);
-    ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(listener).contextRead(eq(CONTEXT_KEY), captor.capture(), eq(MESSAGE.length()));
-
-    // Verify that inbound flow control window update has been disabled for the stream.
-    verify(inboundFlow).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID), eq(WINDOW_UPDATE_OFF));
-    verify(inboundFlow, never()).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID),
-        eq(DEFAULT_WINDOW_UPDATE_RATIO));
-    assertEquals(MESSAGE, toString(captor.getValue()));
-
-    // Verify that inbound flow control window update has been re-enabled for the stream after
-    // the future completes.
-    processingFuture.set(null);
-    verify(inboundFlow).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID),
-        eq(DEFAULT_WINDOW_UPDATE_RATIO));
   }
 
   @Test
@@ -167,24 +141,6 @@ public abstract class NettyStreamTestBase {
     byte[] bytes = new byte[in.available()];
     ByteStreams.readFully(in, bytes);
     return new String(bytes, UTF_8);
-  }
-
-  protected final ByteBuf contextFrame() throws Exception {
-    byte[] body = ContextValue
-        .newBuilder()
-        .setKey(CONTEXT_KEY)
-        .setValue(ByteString.copyFromUtf8(MESSAGE))
-        .build()
-        .toByteArray();
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(CONTEXT_VALUE_FRAME);
-    dos.writeInt(body.length);
-    dos.write(body);
-    dos.close();
-
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
   }
 
   protected final ByteBuf messageFrame() throws Exception {

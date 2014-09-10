@@ -2,8 +2,6 @@ package com.google.net.stubby;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
-import java.io.InputStream;
-
 import javax.annotation.Nullable;
 
 /**
@@ -46,18 +44,6 @@ public abstract class ServerCall<ResponseT> {
     @Nullable
     public abstract ListenableFuture<Void> headersRead(Metadata.Headers headers);
 
-
-    /**
-     * A request context has been received. Any context messages will precede payload messages.
-     *
-     * <p>The {@code value} {@link InputStream} will be closed when the returned future completes.
-     * If no future is returned, the value will be closed immediately after returning from this
-     * method.
-     */
-    @Nullable
-    @Deprecated
-    public abstract ListenableFuture<Void> onContext(String name, InputStream value);
-
     /**
      * A request payload has been receiveed. For streaming calls, there may be zero payload
      * messages.
@@ -99,17 +85,6 @@ public abstract class ServerCall<ResponseT> {
    * @throws IllegalStateException if call is already {@code close}d
    */
   public abstract void close(Status status, Metadata.Trailers trailers);
-
-  /**
-   * Send a context message. Context messages are intended for side-channel information like
-   * statistics and authentication.
-   *
-   * @param name key identifier of context
-   * @param value context value bytes
-   * @throws IllegalStateException if call is {@link #close}d, or after {@link #sendPayload}
-   */
-  @Deprecated
-  public abstract void sendContext(String name, InputStream value);
 
   /**
    * Send a payload message. Payload messages are the primary form of communication associated with

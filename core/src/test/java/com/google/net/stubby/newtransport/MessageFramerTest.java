@@ -9,7 +9,6 @@ import com.google.common.primitives.Bytes;
 import com.google.net.stubby.GrpcFramingUtil;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
-import com.google.protobuf.ByteString;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -46,37 +45,6 @@ public class MessageFramerTest {
     }
     framer.flush();
     assertEquals(sink.deframedStream.length, unframedStream.length * 1000);
-    for (int i = 0; i < 1000; i++) {
-      assertArrayEquals(unframedStream,
-          Arrays.copyOfRange(sink.deframedStream, i * unframedStream.length,
-              (i + 1) * unframedStream.length));
-    }
-  }
-
-  @Test
-  public void testContext() throws Exception {
-    CapturingSink sink = new CapturingSink();
-    MessageFramer framer = new MessageFramer(sink, TRANSPORT_FRAME_SIZE);
-    byte[] payload = new byte[]{11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23};
-    byte[] contextValue = Transport.ContextValue.newBuilder()
-        .setKey("somekey")
-        .setValue(ByteString.copyFrom(payload))
-        .build().toByteArray();
-    byte[] unframedStream =
-        Bytes.concat(
-            new byte[]{GrpcFramingUtil.CONTEXT_VALUE_FRAME},
-            new byte[]{0, 0,
-                (byte) (contextValue.length >> 8 & 0xff),
-                (byte) (contextValue.length & 0xff)},
-            contextValue);
-    for (int i = 0; i < 1000; i++) {
-      framer.writeContext("somekey", new ByteArrayInputStream(payload), payload.length);
-      if ((i + 1) % 13 == 0) {
-        framer.flush();
-      }
-    }
-    framer.flush();
-    assertEquals(unframedStream.length * 1000, sink.deframedStream.length);
     for (int i = 0; i < 1000; i++) {
       assertArrayEquals(unframedStream,
           Arrays.copyOfRange(sink.deframedStream, i * unframedStream.length,

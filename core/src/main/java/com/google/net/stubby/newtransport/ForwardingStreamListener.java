@@ -23,11 +23,6 @@ public class ForwardingStreamListener implements StreamListener {
   }
 
   @Override
-  public ListenableFuture<Void> contextRead(String name, InputStream value, int length) {
-    return delegate.contextRead(name, value, length);
-  }
-
-  @Override
   public ListenableFuture<Void> messageRead(InputStream message, int length) {
     return delegate.messageRead(message, length);
   }

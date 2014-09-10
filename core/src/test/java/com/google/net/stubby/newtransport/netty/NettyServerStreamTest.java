@@ -24,15 +24,6 @@ import org.junit.runners.JUnit4;
 public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Test
-  public void writeContextShouldSendResponse() throws Exception {
-    stream.writeContext(CONTEXT_KEY, input, input.available(), accepted);
-    stream.flush();
-    verify(channel).write(new SendResponseHeadersCommand(STREAM_ID));
-    verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, contextFrame(), false));
-    verify(accepted).run();
-  }
-
-  @Test
   public void writeMessageShouldSendResponse() throws Exception {
     stream.writeMessage(input, input.available(), accepted);
     stream.flush();

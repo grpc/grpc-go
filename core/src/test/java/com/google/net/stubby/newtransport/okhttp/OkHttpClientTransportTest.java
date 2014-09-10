@@ -7,7 +7,9 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.ListenableFuture;
@@ -20,8 +22,6 @@ import com.google.net.stubby.newtransport.okhttp.OkHttpClientTransport.ClientFra
 import com.google.net.stubby.newtransport.okhttp.OkHttpClientTransport.OkHttpClientStream;
 import com.google.net.stubby.transport.Transport;
 import com.google.net.stubby.transport.Transport.Code;
-import com.google.net.stubby.transport.Transport.ContextValue;
-import com.google.protobuf.ByteString;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
@@ -64,7 +64,6 @@ public class OkHttpClientTransportTest {
 
   // Flags
   private static final byte PAYLOAD_FRAME = 0x0;
-  public static final byte CONTEXT_VALUE_FRAME = 0x1;
   public static final byte STATUS_FRAME = 0x3;
 
   @Mock
@@ -144,30 +143,6 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
-  public void readContexts() throws Exception {
-    final int numContexts = 10;
-    final String key = "KEY";
-    final String value = "value";
-    MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener);
-    assertTrue(streams.containsKey(3));
-    for (int i = 0; i < numContexts; i++) {
-      BufferedSource source = mock(BufferedSource.class);
-      InputStream inputStream = createContextFrame(key + i, value + i);
-      when(source.inputStream()).thenReturn(inputStream);
-      frameHandler.data(i == numContexts - 1 ? true : false, 3, source, inputStream.available());
-    }
-    listener.waitUntilStreamClosed();
-    assertEquals(Status.OK, listener.status);
-    assertEquals(numContexts, listener.contexts.size());
-    for (int i = 0; i < numContexts; i++) {
-      String val = listener.contexts.get(key + i);
-      assertNotNull(val);
-      assertEquals(value + i, val);
-    }
-  }
-
-  @Test
   public void readStatus() throws Exception {
     MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method,new Metadata.Headers(), listener);
@@ -219,25 +194,6 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
-  public void writeContext() throws Exception {
-    final String key = "KEY";
-    final String value = "VALUE";
-    MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener);
-    OkHttpClientStream stream = streams.get(3);
-    InputStream input = new ByteArrayInputStream(value.getBytes(StandardCharsets.UTF_8));
-    stream.writeContext(key, input, input.available(), null);
-    stream.flush();
-    ArgumentCaptor<Buffer> captor =
-        ArgumentCaptor.forClass(Buffer.class);
-    verify(frameWriter).data(eq(false), eq(3), captor.capture());
-    stream.cancel();
-    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
-    listener.waitUntilStreamClosed();
-    assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL), listener.status);
-  }
-
-  @Test
   public void windowUpdate() throws Exception {
     MockStreamListener listener1 = new MockStreamListener();
     MockStreamListener listener2 = new MockStreamListener();
@@ -249,26 +205,7 @@ public class OkHttpClientTransportTest {
 
     int messageLength = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 4;
     byte[] fakeMessage = new byte[messageLength];
-    byte[] contextBody = ContextValue
-        .newBuilder()
-        .setKey("KEY")
-        .setValue(ByteString.copyFrom(fakeMessage))
-        .build()
-        .toByteArray();
-
-    // Stream 1 receives context
-    InputStream contextFrame = createContextFrame(contextBody);
-    int contextFrameLength = contextFrame.available();
     BufferedSource source = mock(BufferedSource.class);
-    when(source.inputStream()).thenReturn(contextFrame);
-    frameHandler.data(false, 3, source, contextFrame.available());
-
-    // Stream 2 receives context
-    contextFrame = createContextFrame(contextBody);
-    when(source.inputStream()).thenReturn(contextFrame);
-    frameHandler.data(false, 5, source, contextFrame.available());
-
-    verify(frameWriter).windowUpdate(eq(0), eq((long) 2 * contextFrameLength));
 
     // Stream 1 receives a message
     InputStream messageFrame = createMessageFrame(fakeMessage);
@@ -276,14 +213,27 @@ public class OkHttpClientTransportTest {
     when(source.inputStream()).thenReturn(messageFrame);
     frameHandler.data(false, 3, source, messageFrame.available());
 
-    verify(frameWriter).windowUpdate(eq(3), eq((long) contextFrameLength + messageFrameLength));
-
     // Stream 2 receives a message
     messageFrame = createMessageFrame(fakeMessage);
     when(source.inputStream()).thenReturn(messageFrame);
     frameHandler.data(false, 5, source, messageFrame.available());
 
-    verify(frameWriter).windowUpdate(eq(5), eq((long) contextFrameLength + messageFrameLength));
+    verify(frameWriter).windowUpdate(eq(0), eq((long) 2 * messageFrameLength));
+    reset(frameWriter);
+
+    // Stream 1 receives another message
+    messageFrame = createMessageFrame(fakeMessage);
+    when(source.inputStream()).thenReturn(messageFrame);
+    frameHandler.data(false, 3, source, messageFrame.available());
+
+    verify(frameWriter).windowUpdate(eq(3), eq((long) 2 * messageFrameLength));
+
+    // Stream 2 receives another message
+    messageFrame = createMessageFrame(fakeMessage);
+    when(source.inputStream()).thenReturn(messageFrame);
+    frameHandler.data(false, 5, source, messageFrame.available());
+
+    verify(frameWriter).windowUpdate(eq(5), eq((long) 2 * messageFrameLength));
     verify(frameWriter).windowUpdate(eq(0), eq((long) 2 * messageFrameLength));
 
     stream1.cancel();
@@ -426,29 +376,6 @@ public class OkHttpClientTransportTest {
     return addCompressionHeader(messageFrame);
   }
 
-  private static InputStream createContextFrame(String key, String value) throws IOException {
-    byte[] body = ContextValue
-        .newBuilder()
-        .setKey(key)
-        .setValue(ByteString.copyFromUtf8(value))
-        .build()
-        .toByteArray();
-    return createContextFrame(body);
-  }
-
-  private static InputStream createContextFrame(byte[] body) throws IOException {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(CONTEXT_VALUE_FRAME);
-    dos.writeInt(body.length);
-    dos.write(body);
-    dos.close();
-    byte[] contextFrame = os.toByteArray();
-
-    // Write the compression header followed by the context frame.
-    return addCompressionHeader(contextFrame);
-  }
-
   private static InputStream createStatusFrame(short code) throws IOException {
     ByteArrayOutputStream os = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(os);
@@ -515,16 +442,6 @@ public class OkHttpClientTransportTest {
     CountDownLatch closed = new CountDownLatch(1);
     ArrayList<String> messages = new ArrayList<String>();
     Map<String, String> contexts = new HashMap<String, String>();
-
-    @Override
-    public ListenableFuture<Void> contextRead(String name, InputStream value, int length) {
-      String valueStr = getContent(value);
-      if (valueStr != null) {
-        // We assume only one context for each name.
-        contexts.put(name, valueStr);
-      }
-      return null;
-    }
 
     @Override
     public ListenableFuture<Void> headersRead(Metadata.Headers headers) {

@@ -26,8 +26,6 @@ public class GrpcFramingUtil {
 
   // Flags
   public static final byte PAYLOAD_FRAME = 0x0;
-  public static final byte CONTEXT_VALUE_FRAME =  0x1;
-  public static final byte CALL_HEADER_FRAME = 0x2;
   public static final byte STATUS_FRAME = 0x3;
   public static final byte FRAME_TYPE_MASK = 0x3;
 
@@ -35,10 +33,6 @@ public class GrpcFramingUtil {
    * No. of bytes for length field within a frame
    */
   public static final int FRAME_LENGTH = 4;
-
-  public static boolean isContextValueFrame(int flags) {
-    return (flags & FRAME_TYPE_MASK) == CONTEXT_VALUE_FRAME;
-  }
 
   public static boolean isPayloadFrame(byte flags) {
     return (flags & FRAME_TYPE_MASK) == PAYLOAD_FRAME;

@@ -161,13 +161,6 @@ public class ServletSession extends HttpServlet {
     }
 
     @Override
-    public Operation addContext(String type, InputStream message, Phase nextPhase) {
-      super.addContext(type, message, nextPhase);
-      framer.writeContext(type, message, getPhase() == Phase.CLOSED, this);
-      return this;
-    }
-
-    @Override
     public Operation addPayload(InputStream payload, Phase nextPhase) {
       super.addPayload(payload, Phase.PAYLOAD);
       framer.writePayload(payload, false, this);

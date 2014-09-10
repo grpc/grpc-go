@@ -7,8 +7,6 @@ import com.google.net.stubby.Channel;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
-import java.io.InputStream;
-
 import javax.annotation.Nullable;
 
 /**
@@ -51,11 +49,6 @@ public abstract class ForwardingChannel implements Channel {
     }
 
     @Override
-    public void sendContext(String name, InputStream value, @Nullable SettableFuture<Void> accepted) {
-      this.delegate.sendContext(name, value, accepted);
-    }
-
-    @Override
     public void sendPayload(RequestT payload, @Nullable SettableFuture<Void> accepted) {
       this.delegate.sendPayload(payload, accepted);
     }
@@ -75,11 +68,6 @@ public abstract class ForwardingChannel implements Channel {
     @Override
     public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
       return delegate.onHeaders(headers);
-    }
-
-    @Override
-    public ListenableFuture<Void> onContext(String name, InputStream value) {
-      return delegate.onContext(name, value);
     }
 
     @Override

@@ -1,6 +1,5 @@
 package com.google.net.stubby.newtransport;
 
-import static com.google.net.stubby.GrpcFramingUtil.CONTEXT_VALUE_FRAME;
 import static com.google.net.stubby.GrpcFramingUtil.FRAME_LENGTH;
 import static com.google.net.stubby.GrpcFramingUtil.FRAME_TYPE_LENGTH;
 import static com.google.net.stubby.GrpcFramingUtil.FRAME_TYPE_MASK;
@@ -14,7 +13,6 @@ import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.concurrent.Executor;
 
 /**
@@ -181,9 +179,6 @@ public class GrpcDeframer implements Closeable {
   private ListenableFuture<Void> processBody() {
     ListenableFuture<Void> future = null;
     switch (frameType) {
-      case CONTEXT_VALUE_FRAME:
-        future = processContext();
-        break;
       case PAYLOAD_FRAME:
         future = processMessage();
         break;
@@ -198,30 +193,6 @@ public class GrpcDeframer implements Closeable {
     state = State.HEADER;
     requiredLength = HEADER_LENGTH;
     return future;
-  }
-
-  /**
-   * Processes the payload of a context frame.
-   */
-  private ListenableFuture<Void> processContext() {
-    Transport.ContextValue ctx;
-    try {
-      // Not clear if using proto encoding here is of any benefit.
-      // Using ContextValue.parseFrom requires copying out of the framed chunk
-      // Writing a custom parser would have to do varint handling and potentially
-      // deal with out-of-order tags etc.
-      ctx = Transport.ContextValue.parseFrom(Buffers.openStream(nextFrame, false));
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    } finally {
-      nextFrame.close();
-      nextFrame = null;
-    }
-
-    // Call the handler.
-    Buffer ctxBuffer = Buffers.wrap(ctx.getValue());
-    return listener.contextRead(ctx.getKey(), Buffers.openStream(ctxBuffer, true),
-        ctxBuffer.readableBytes());
   }
 
   /**

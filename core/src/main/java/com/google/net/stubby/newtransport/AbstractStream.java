@@ -21,13 +21,13 @@ public abstract class AbstractStream implements Stream {
    * Indicates the phase of the GRPC stream in one direction.
    */
   protected enum Phase {
-    CONTEXT, MESSAGE, STATUS
+    HEADERS, MESSAGE, STATUS
   }
 
   private final Object writeLock = new Object();
   private final MessageFramer framer;
-  protected Phase inboundPhase = Phase.CONTEXT;
-  protected Phase outboundPhase = Phase.CONTEXT;
+  protected Phase inboundPhase = Phase.HEADERS;
+  protected Phase outboundPhase = Phase.HEADERS;
 
   /**
    * Handler for Framer output.
@@ -46,23 +46,10 @@ public abstract class AbstractStream implements Stream {
 
     @Override
     public ListenableFuture<Void> headersRead(Metadata.Headers headers) {
-      inboundPhase(Phase.CONTEXT);
+      inboundPhase(Phase.HEADERS);
       ListenableFuture<Void> future = listener().headersRead(headers);
       disableWindowUpdate(future);
       return future;
-    }
-
-    @Override
-    public ListenableFuture<Void> contextRead(String name, InputStream value, int length) {
-      ListenableFuture<Void> future = null;
-      try {
-        inboundPhase(Phase.CONTEXT);
-        future = listener().contextRead(name, value, length);
-        disableWindowUpdate(future);
-        return future;
-      } finally {
-        closeWhenDone(future, value);
-      }
     }
 
     @Override
@@ -98,25 +85,6 @@ public abstract class AbstractStream implements Stream {
   public void dispose() {
     synchronized (writeLock) {
       framer.dispose();
-    }
-  }
-
-  @Override
-  public final void writeContext(String name, InputStream value, int length,
-      @Nullable Runnable accepted) {
-    Preconditions.checkNotNull(name, "name");
-    Preconditions.checkNotNull(value, "value");
-    Preconditions.checkArgument(length >= 0, "length must be >= 0");
-    outboundPhase(Phase.CONTEXT);
-    synchronized (writeLock) {
-      if (!framer.isClosed()) {
-        framer.writeContext(name, value, length);
-      }
-    }
-
-    // TODO(user): add flow control.
-    if (accepted != null) {
-      accepted.run();
     }
   }
 

@@ -1,13 +1,11 @@
 package com.google.net.stubby.newtransport;
 
-import static com.google.net.stubby.newtransport.TransportFrameUtil.CONTEXT_VALUE_FRAME;
 import static com.google.net.stubby.newtransport.TransportFrameUtil.PAYLOAD_FRAME;
 import static com.google.net.stubby.newtransport.TransportFrameUtil.STATUS_FRAME;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
 import static org.mockito.Mockito.never;
@@ -44,66 +42,33 @@ import javax.annotation.Nullable;
  */
 @RunWith(JUnit4.class)
 public class GrpcDeframerTest {
-  private static final String KEY = "key";
   private static final String MESSAGE = "hello world";
   private static final ByteString MESSAGE_BSTR = ByteString.copyFromUtf8(MESSAGE);
   private static final Transport.Code STATUS_CODE = Transport.Code.CANCELLED;
 
   private GrpcDeframer reader;
 
-  private Transport.ContextValue contextProto;
-
   private StubDecompressor decompressor;
 
   @Mock
   private StreamListener listener;
-
-  private SettableFuture<Void> contextFuture;
 
   private SettableFuture<Void> messageFuture;
 
   @Before
   public void setup() {
     MockitoAnnotations.initMocks(this);
-
-    contextFuture = SettableFuture.create();
     messageFuture = SettableFuture.create();
-    when(listener.contextRead(anyString(), any(InputStream.class), anyInt())).thenReturn(
-        contextFuture);
     when(listener.messageRead(any(InputStream.class), anyInt())).thenReturn(messageFuture);
 
     decompressor = new StubDecompressor();
     reader = new GrpcDeframer(decompressor, listener, MoreExecutors.directExecutor());
-
-    contextProto = Transport.ContextValue.newBuilder().setKey(KEY).setValue(MESSAGE_BSTR).build();
-  }
-
-  @Test
-  public void contextShouldCallTarget() throws Exception {
-    decompressor.init(contextFrame());
-    reader.deframe(Buffers.empty(), false);
-    verifyContext();
-    verifyNoPayload();
-    verifyNoStatus();
-  }
-
-  @Test
-  public void contextWithEndOfStreamShouldNotifyStatus() throws Exception {
-    decompressor.init(contextFrame());
-    reader.deframe(Buffers.empty(), true);
-    verifyContext();
-    verifyNoPayload();
-    verifyNoStatus();
-
-    contextFuture.set(null);
-    verifyStatus(Transport.Code.OK);
   }
 
   @Test
   public void payloadShouldCallTarget() throws Exception {
     decompressor.init(payloadFrame());
     reader.deframe(Buffers.empty(), false);
-    verifyNoContext();
     verifyPayload();
     verifyNoStatus();
   }
@@ -112,7 +77,6 @@ public class GrpcDeframerTest {
   public void payloadWithEndOfStreamShouldNotifyStatus() throws Exception {
     decompressor.init(payloadFrame());
     reader.deframe(Buffers.empty(), true);
-    verifyNoContext();
     verifyPayload();
     verifyNoStatus();
 
@@ -124,7 +88,6 @@ public class GrpcDeframerTest {
   public void statusShouldCallTarget() throws Exception {
     decompressor.init(statusFrame());
     reader.deframe(Buffers.empty(), false);
-    verifyNoContext();
     verifyNoPayload();
     verifyStatus();
   }
@@ -133,7 +96,6 @@ public class GrpcDeframerTest {
   public void statusWithEndOfStreamShouldNotifyStatusOnce() throws Exception {
     decompressor.init(statusFrame());
     reader.deframe(Buffers.empty(), true);
-    verifyNoContext();
     verifyNoPayload();
     verifyStatus();
   }
@@ -142,9 +104,6 @@ public class GrpcDeframerTest {
   public void multipleFramesShouldCallTarget() throws Exception {
     ByteArrayOutputStream os = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(os);
-
-    // Write a context frame.
-    writeFrame(CONTEXT_VALUE_FRAME, contextProto.toByteArray(), dos);
 
     // Write a payload frame.
     writeFrame(PAYLOAD_FRAME, MESSAGE_BSTR.toByteArray(), dos);
@@ -161,11 +120,6 @@ public class GrpcDeframerTest {
     reader.deframe(Buffers.empty(), false);
 
     // Verify that all callbacks were called.
-    verifyContext();
-    verifyNoPayload();
-    verifyNoStatus();
-
-    contextFuture.set(null);
     verifyPayload();
     verifyNoStatus();
 
@@ -187,7 +141,6 @@ public class GrpcDeframerTest {
     byte[] chunk = Arrays.copyOfRange(fullBuffer, startIx, endIx);
     decompressor.init(chunk);
     reader.deframe(Buffers.empty(), false);
-    verifyNoContext();
     verifyNoPayload();
     verifyNoStatus();
 
@@ -197,15 +150,8 @@ public class GrpcDeframerTest {
     chunk = Arrays.copyOfRange(fullBuffer, startIx, endIx);
     decompressor.init(chunk);
     reader.deframe(Buffers.empty(), false);
-    verifyNoContext();
     verifyPayload();
     verifyNoStatus();
-  }
-
-  private void verifyContext() {
-    ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(listener).contextRead(eq(KEY), captor.capture(), eq(MESSAGE.length()));
-    assertEquals(MESSAGE, readString(captor.getValue(), MESSAGE.length()));
   }
 
   private void verifyPayload() {
@@ -234,20 +180,12 @@ public class GrpcDeframerTest {
     assertEquals(code, captor.getValue().getCode());
   }
 
-  private void verifyNoContext() {
-    verify(listener, never()).contextRead(any(String.class), any(InputStream.class), anyInt());
-  }
-
   private void verifyNoPayload() {
     verify(listener, never()).messageRead(any(InputStream.class), anyInt());
   }
 
   private void verifyNoStatus() {
     verify(listener, never()).closed(any(Status.class), notNull(Metadata.Trailers.class));
-  }
-
-  private byte[] contextFrame() throws IOException {
-    return frame(CONTEXT_VALUE_FRAME, contextProto.toByteArray());
   }
 
   private static byte[] payloadFrame() throws IOException {

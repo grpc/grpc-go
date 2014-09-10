@@ -168,17 +168,6 @@ public final class ChannelImpl extends AbstractService implements Channel {
     }
 
     @Override
-    public void sendContext(String name, InputStream value, SettableFuture<Void> accepted) {
-      Preconditions.checkState(stream != null, "Not started");
-      if (accepted == null) {
-        stream.writeContext(name, value, available(value), null);
-      } else {
-        inProcessFutures.add(accepted);
-        stream.writeContext(name, value, available(value), new AcceptedRunnable(accepted));
-      }
-    }
-
-    @Override
     public void sendPayload(ReqT payload, SettableFuture<Void> accepted) {
       Preconditions.checkState(stream != null, "Not started");
       InputStream payloadIs = method.streamRequest(payload);
@@ -247,17 +236,6 @@ public final class ChannelImpl extends AbstractService implements Channel {
           @Override
           public ListenableFuture<Void> call() throws Exception {
             return observer.onHeaders(headers);
-          }
-        });
-      }
-
-      @Override
-      public ListenableFuture<Void> contextRead(final String name, final InputStream value,
-          final int length) {
-        return dispatchCallable(new Callable<ListenableFuture<Void>>() {
-          @Override
-          public ListenableFuture<Void> call() {
-            return observer.onContext(name, value);
           }
         });
       }

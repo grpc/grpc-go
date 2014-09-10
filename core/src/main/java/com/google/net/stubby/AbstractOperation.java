@@ -57,20 +57,6 @@ public abstract class AbstractOperation implements Operation {
   }
 
   @Override
-  public Operation addContext(String type, InputStream message, Phase nextPhase) {
-    if (getPhase() == Phase.CLOSED) {
-      throw new RuntimeException("addContext called after operation closed");
-    }
-    if (phase == Phase.PAYLOAD) {
-      progressTo(Phase.FOOTERS);
-    }
-    if (phase == Phase.HEADERS || phase == Phase.FOOTERS) {
-      return progressTo(nextPhase);
-    }
-    throw new IllegalStateException("Cannot add context in phase " + phase.name());
-  }
-
-  @Override
   public Operation addPayload(InputStream payload, Phase nextPhase) {
     if (getPhase() == Phase.CLOSED) {
       throw new RuntimeException("addPayload called after operation closed");

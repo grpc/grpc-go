@@ -43,16 +43,6 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   }
 
   @Test
-  public void writeContextShouldSendRequest() throws Exception {
-    // Force stream creation.
-    stream().id(STREAM_ID);
-    stream.writeContext(CONTEXT_KEY, input, input.available(), accepted);
-    stream.flush();
-    verify(channel).writeAndFlush(new SendGrpcFrameCommand(1, contextFrame(), false));
-    verify(accepted).run();
-  }
-
-  @Test
   public void writeMessageShouldSendRequest() throws Exception {
     // Force stream creation.
     stream().id(STREAM_ID);
@@ -95,16 +85,6 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
         new Metadata.Trailers());
     verify(listener).closed(any(Status.class), any(Metadata.Trailers.class));
     assertEquals(StreamState.CLOSED, stream.state());
-  }
-
-  @Override
-  @Test
-  public void inboundContextShouldCallListener() throws Exception {
-    // Receive headers first so that it's a valid GRPC response.
-    stream().id(1);
-    stream().inboundHeadersRecieved(grpcResponseHeaders(), false);
-
-    super.inboundContextShouldCallListener();
   }
 
   @Override

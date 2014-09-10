@@ -25,12 +25,6 @@ public interface Framer {
   }
 
   /**
-   * Write out a Context-Value message. {@code message} will be completely consumed.
-   * {@code message.available()} must return the number of remaining bytes to be read.
-   */
-  public void writeContext(String type, InputStream message, boolean flush, Sink sink);
-
-  /**
    * Write out a Payload message. {@code payload} will be completely consumed.
    * {@code payload.available()} must return the number of remaining bytes to be read.
    */

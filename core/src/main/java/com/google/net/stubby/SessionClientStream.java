@@ -66,14 +66,6 @@ public class SessionClientStream implements ClientStream {
   }
 
   @Override
-  public void writeContext(String name, InputStream value, int length, Runnable accepted) {
-    request.addContext(name, value, Operation.Phase.HEADERS);
-    if (accepted != null) {
-      accepted.run();
-    }
-  }
-
-  @Override
   public void writeMessage(InputStream message, int length, Runnable accepted) {
     request.addPayload(message, Operation.Phase.PAYLOAD);
     if (accepted != null) {
@@ -108,18 +100,6 @@ public class SessionClientStream implements ClientStream {
         return is.available();
       } catch (IOException ex) {
         throw new RuntimeException(ex);
-      }
-    }
-
-    @Override
-    public Operation addContext(String type, InputStream message, Phase nextPhase) {
-      try {
-        listener.contextRead(type, message, available(message));
-        return super.addContext(type, message, nextPhase);
-      } finally {
-        if (getPhase() == Phase.CLOSED) {
-          propagateClosed();
-        }
       }
     }
 

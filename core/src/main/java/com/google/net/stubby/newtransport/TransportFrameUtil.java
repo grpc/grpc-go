@@ -39,39 +39,9 @@ public final class TransportFrameUtil {
   public static final int COMPRESSION_HEADER_LENGTH =
       COMPRESSION_TYPE_LENGTH + COMPRESSION_FRAME_LENGTH;
 
-  /**
-   * Length of flags block in bytes
-   */
-  public static final int FRAME_TYPE_LENGTH = 1;
-
   // Flags
   public static final byte PAYLOAD_FRAME = 0x0;
-  public static final byte CONTEXT_VALUE_FRAME = 0x1;
-  public static final byte CALL_HEADER_FRAME = 0x2;
   public static final byte STATUS_FRAME = 0x3;
-  public static final byte FRAME_TYPE_MASK = 0x3;
-
-  /**
-   * Number of bytes for the length field within a frame
-   */
-  public static final int FRAME_LENGTH = 4;
-
-  /**
-   * Full length of the GRPC frame header.
-   */
-  public static final int FRAME_HEADER_LENGTH = FRAME_TYPE_LENGTH + FRAME_LENGTH;
-
-  public static boolean isContextValueFrame(int flags) {
-    return (flags & FRAME_TYPE_MASK) == CONTEXT_VALUE_FRAME;
-  }
-
-  public static boolean isPayloadFrame(byte flags) {
-    return (flags & FRAME_TYPE_MASK) == PAYLOAD_FRAME;
-  }
-
-  public static boolean isStatusFrame(byte flags) {
-    return (flags & FRAME_TYPE_MASK) == STATUS_FRAME;
-  }
 
   // TODO(user): This needs proper namespacing support, this is currently just a hack
   /**
