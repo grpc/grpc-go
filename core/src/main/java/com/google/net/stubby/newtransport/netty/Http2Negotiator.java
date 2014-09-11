@@ -263,39 +263,42 @@ public class Http2Negotiator {
               @Override
               public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                 String methodName = method.getName();
-                switch (methodName) {
-                  case "supports":
-                    // both
-                    return true;
-                  case "unsupported":
-                    // both
-                    removeMethod.invoke(null, engine);
-                    protocolNegotiated.setException(new IllegalStateException(
-                        "ALPN/NPN protocol " + HTTP_VERSION_NAME + " not supported by server"));
-                    return null;
-                  case "protocols":
-                    // ALPN only
-                    return ImmutableList.of(HTTP_VERSION_NAME);
-                  case "selected":
-                    // ALPN only
-                    // Only 'supports' one protocol so we know what was selected.
-                    removeMethod.invoke(null, engine);
-                    protocolNegotiated.set(null);
-                    return null;
-                  case "selectProtocol":
-                    // NPN only
-                @SuppressWarnings("unchecked")
-                    List<String> names = (List<String>) args[0];
-                    for (String name : names) {
-                      if (name.startsWith(HTTP_VERSION_NAME)) {
-                        protocolNegotiated.set(null);
-                        return name;
-                      }
+                if ("supports".equals(methodName)) {
+                  // both
+                  return true;
+                }
+                if ("unsupported".equals(methodName)) {
+                  // both
+                  removeMethod.invoke(null, engine);
+                  protocolNegotiated.setException(new IllegalStateException(
+                      "ALPN/NPN protocol " + HTTP_VERSION_NAME + " not supported by server"));
+                  return null;
+                }
+                if ("protocols".equals(methodName)) {
+                  // ALPN only
+                  return ImmutableList.of(HTTP_VERSION_NAME);
+                }
+                if ("selected".equals(methodName)) {
+                  // ALPN only
+                  // Only 'supports' one protocol so we know what was selected.
+                  removeMethod.invoke(null, engine);
+                  protocolNegotiated.set(null);
+                  return null;
+                }
+                if ("selectProtocol".equals(methodName)) {
+                  // NPN only
+                  @SuppressWarnings("unchecked")
+                  List<String> names = (List<String>) args[0];
+                  for (String name : names) {
+                    if (name.startsWith(HTTP_VERSION_NAME)) {
+                      protocolNegotiated.set(null);
+                      return name;
                     }
-                    protocolNegotiated.setException(
-                        new IllegalStateException("Protocol not available via ALPN/NPN: " + names));
-                    removeMethod.invoke(null, engine);
-                    return null;
+                  }
+                  protocolNegotiated.setException(
+                      new IllegalStateException("Protocol not available via ALPN/NPN: " + names));
+                  removeMethod.invoke(null, engine);
+                  return null;
                 }
                 throw new IllegalStateException("Unknown method " + methodName);
               }
