@@ -5,7 +5,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -20,8 +19,7 @@ import java.util.Iterator;
 @RunWith(JUnit4.class)
 public class MetadataTest {
 
-  private static final Metadata.Marshaller<Fish> FISH_MARSHALLER =
-      new Metadata.Marshaller<Fish>() {
+  private static final Metadata.Marshaller<Fish> FISH_MARSHALLER = new Metadata.Marshaller<Fish>() {
     @Override
     public byte[] toBytes(Fish fish) {
       return fish.name.getBytes(StandardCharsets.UTF_8);
@@ -32,7 +30,7 @@ public class MetadataTest {
       return value.name;
     }
 
-        @Override
+    @Override
     public Fish parseBytes(byte[] serialized) {
       return new Fish(new String(serialized, StandardCharsets.UTF_8));
     }
@@ -70,38 +68,44 @@ public class MetadataTest {
 
   @Test
   public void testWriteRaw() {
-    Metadata.Headers raw = new Metadata.Headers(
-        KEY.asciiName(), LANCE_BYTES);
+    Metadata.Headers raw = new Metadata.Headers(KEY.asciiName(), LANCE_BYTES);
     Fish lance = raw.get(KEY);
     assertEquals(lance, new Fish(LANCE));
     // Reading again should return the same parsed instance
     assertSame(lance, raw.get(KEY));
   }
 
-  @Test
+  @Test(expected = IllegalStateException.class)
   public void testFailSerializeRaw() {
-    Metadata.Headers raw = new Metadata.Headers(
-        KEY.asciiName(), LANCE_BYTES);
+    Metadata.Headers raw = new Metadata.Headers(KEY.asciiName(), LANCE_BYTES);
+    raw.serialize();
+  }
 
-    try {
-      raw.serialize();
-      fail("Can't serialize raw metadata");
-    } catch (IllegalStateException ise) {
-      // Success
-    }
+  @Test(expected = IllegalArgumentException.class)
+  public void testFailMergeRawIntoSerializable() {
+    Metadata.Headers raw = new Metadata.Headers(KEY.asciiName(), LANCE_BYTES);
+    Metadata.Headers serializable = new Metadata.Headers();
+    serializable.merge(raw);
   }
 
   @Test
-  public void testFailMergeRawIntoSerializable() {
-    Metadata.Headers raw = new Metadata.Headers(
-        KEY.asciiName(), LANCE_BYTES);
-    Metadata.Headers serializable = new Metadata.Headers();
-    try {
-      serializable.merge(raw);
-      fail("Can't serialize raw metadata");
-    } catch (IllegalArgumentException iae) {
-      // Success
-    }
+  public void headerMergeShouldCopyValues() {
+    Fish lance = new Fish(LANCE);
+    Metadata.Headers h1 = new Metadata.Headers();
+
+    Metadata.Headers h2 = new Metadata.Headers();
+    h2.setPath("/some/path");
+    h2.setAuthority("authority");
+    h2.put(KEY, lance);
+
+    h1.merge(h2);
+
+    Iterator<Fish> fishes = h1.<Fish>getAll(KEY).iterator();
+    assertTrue(fishes.hasNext());
+    assertSame(fishes.next(), lance);
+    assertFalse(fishes.hasNext());
+    assertEquals("/some/path", h1.getPath());
+    assertEquals("authority", h1.getAuthority());
   }
 
   private static class Fish {
@@ -113,10 +117,16 @@ public class MetadataTest {
 
     @Override
     public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
       Fish fish = (Fish) o;
-      if (name != null ? !name.equals(fish.name) : fish.name != null) return false;
+      if (name != null ? !name.equals(fish.name) : fish.name != null) {
+        return false;
+      }
       return true;
     }
   }

@@ -32,6 +32,7 @@ import okio.ByteString;
 import okio.Okio;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -84,8 +85,8 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     ERROR_CODE_TO_STATUS = Collections.unmodifiableMap(errorToStatus);
   }
 
-  private final String host;
-  private final int port;
+  private final InetSocketAddress address;
+  private final String defaultAuthority;
   private FrameReader frameReader;
   private AsyncFrameWriter frameWriter;
   private final Object lock = new Object();
@@ -102,9 +103,9 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   @GuardedBy("lock")
   private Status goAwayStatus;
 
-  OkHttpClientTransport(String host, int port, Executor executor) {
-    this.host = Preconditions.checkNotNull(host);
-    this.port = port;
+  OkHttpClientTransport(InetSocketAddress address, Executor executor) {
+    this.address = Preconditions.checkNotNull(address);
+    defaultAuthority = address.getHostString() + ":" + address.getPort();
     this.executor = Preconditions.checkNotNull(executor);
     // Client initiated streams are odd, server initiated ones are even. Server should not need to
     // use it. We start clients at 3 to avoid conflicting with HTTP negotiation.
@@ -117,8 +118,8 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   @VisibleForTesting
   OkHttpClientTransport(Executor executor, FrameReader frameReader, AsyncFrameWriter frameWriter,
       int nextStreamId) {
-    host = null;
-    port = -1;
+    address = null;
+    defaultAuthority = "notarealauthority:80";
     this.executor = Preconditions.checkNotNull(executor);
     this.frameReader = Preconditions.checkNotNull(frameReader);
     this.frameWriter = Preconditions.checkNotNull(frameWriter);
@@ -129,17 +130,17 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
                                            Metadata.Headers headers,
                                            StreamListener listener) {
-    return new OkHttpClientStream(method, headers.serialize(), listener);
+    return new OkHttpClientStream(method, headers, listener);
   }
 
   @Override
   protected void doStart() {
     // We set host to null for test.
-    if (host != null) {
+    if (address != null) {
       BufferedSource source;
       BufferedSink sink;
       try {
-        Socket socket = new Socket(host, port);
+        Socket socket = new Socket(address.getAddress(), address.getPort());
         source = Okio.buffer(Okio.source(socket));
         sink = Okio.buffer(Okio.sink(socket));
       } catch (IOException e) {
@@ -401,7 +402,8 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     final InputStreamDeframer deframer;
     int unacknowledgedBytesRead;
 
-    OkHttpClientStream(MethodDescriptor<?, ?> method, byte[][] headers, StreamListener listener) {
+    OkHttpClientStream(MethodDescriptor<?, ?> method, Metadata.Headers headers,
+        StreamListener listener) {
       super(listener);
       deframer = new InputStreamDeframer(inboundMessageHandler());
       synchronized (lock) {
@@ -411,8 +413,9 @@ public class OkHttpClientTransport extends AbstractClientTransport {
         }
         assignStreamId(this);
       }
+      String defaultPath = "/" + method.getName();
       frameWriter.synStream(false, false, streamId, 0,
-          Headers.createRequestHeaders(method.getName(), headers));
+          Headers.createRequestHeaders(headers, defaultPath, defaultAuthority));
     }
 
     InputStreamDeframer getDeframer() {

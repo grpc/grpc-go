@@ -29,11 +29,13 @@ import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
+import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.util.internal.logging.InternalLogLevel;
 
+import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutionException;
 
 import javax.net.ssl.SSLEngine;
@@ -43,39 +45,41 @@ import javax.net.ssl.SSLEngine;
  */
 class NettyClientTransport extends AbstractClientTransport {
 
-  private final String host;
-  private final int port;
+  private final InetSocketAddress address;
   private final EventLoopGroup eventGroup;
   private final Http2Negotiator.Negotiation negotiation;
   private final NettyClientHandler handler;
+  private final boolean ssl;
+  private final String authority;
   private Channel channel;
 
-  NettyClientTransport(String host, int port, NegotiationType negotiationType) {
-    this(host, port, negotiationType, new NioEventLoopGroup());
+  NettyClientTransport(InetSocketAddress address, NegotiationType negotiationType) {
+    this(address, negotiationType, new NioEventLoopGroup());
   }
 
-  NettyClientTransport(String host, int port, NegotiationType negotiationType,
+  NettyClientTransport(InetSocketAddress address, NegotiationType negotiationType,
       EventLoopGroup eventGroup) {
-    Preconditions.checkNotNull(host, "host");
-    Preconditions.checkArgument(port >= 0, "port must be positive");
-    Preconditions.checkNotNull(eventGroup, "eventGroup");
     Preconditions.checkNotNull(negotiationType, "negotiationType");
-    this.host = host;
-    this.port = port;
-    this.eventGroup = eventGroup;
+    this.address = Preconditions.checkNotNull(address, "address");
+    this.eventGroup = Preconditions.checkNotNull(eventGroup, "eventGroup");
 
-    handler = newHandler(host, negotiationType == NegotiationType.TLS);
+    authority = address.getHostString() + ":" + address.getPort();
+
+    handler = newHandler();
     switch (negotiationType) {
       case PLAINTEXT:
         negotiation = Http2Negotiator.plaintext(handler);
+        ssl = false;
         break;
       case PLAINTEXT_UPGRADE:
         negotiation = Http2Negotiator.plaintextUpgrade(handler);
+        ssl = false;
         break;
       case TLS:
         SSLEngine sslEngine = SslContextFactory.getClientContext().createSSLEngine();
         sslEngine.setUseClientMode(true);
         negotiation = Http2Negotiator.tls(handler, sslEngine);
+        ssl = true;
         break;
       default:
         throw new IllegalArgumentException("Unsupported negotiationType: " + negotiationType);
@@ -83,17 +87,18 @@ class NettyClientTransport extends AbstractClientTransport {
   }
 
   @Override
-  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
-                                           Metadata.Headers headers,
-                                           StreamListener listener) {
+  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method, Metadata.Headers headers,
+      StreamListener listener) {
     // Create the stream.
     NettyClientStream stream = new NettyClientStream(listener, channel, handler.inboundFlow());
 
     try {
+      // Convert the headers into Netty HTTP/2 headers.
+      String defaultPath = "/" + method.getName();
+      Http2Headers http2Headers = Utils.convertHeaders(headers, ssl, defaultPath, authority);
+
       // Write the request and await creation of the stream.
-      channel.writeAndFlush(new CreateStreamCommand(method,
-          headers.serializeAscii(),
-          stream)).get();
+      channel.writeAndFlush(new CreateStreamCommand(http2Headers, stream)).get();
     } catch (InterruptedException e) {
       // Restore the interrupt.
       Thread.currentThread().interrupt();
@@ -116,7 +121,7 @@ class NettyClientTransport extends AbstractClientTransport {
     b.handler(negotiation.initializer());
 
     // Start the connection operation to the server.
-    b.connect(host, port).addListener(new ChannelFutureListener() {
+    b.connect(address).addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
         if (future.isSuccess()) {
@@ -154,7 +159,7 @@ class NettyClientTransport extends AbstractClientTransport {
     }
   }
 
-  private static NettyClientHandler newHandler(String host, boolean ssl) {
+  private static NettyClientHandler newHandler() {
     Http2Connection connection =
         new DefaultHttp2Connection(false, new DefaultHttp2StreamRemovalPolicy());
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
@@ -168,12 +173,6 @@ class NettyClientTransport extends AbstractClientTransport {
         new DefaultHttp2InboundFlowController(connection, frameWriter);
     Http2OutboundFlowController outboundFlow =
         new DefaultHttp2OutboundFlowController(connection, frameWriter);
-    return new NettyClientHandler(host,
-        ssl,
-        connection,
-        frameReader,
-        frameWriter,
-        inboundFlow,
-        outboundFlow);
+    return new NettyClientHandler(connection, frameReader, frameWriter, inboundFlow, outboundFlow);
   }
 }

@@ -3,6 +3,8 @@ package com.google.net.stubby.newtransport.netty;
 import com.google.common.base.Preconditions;
 import com.google.net.stubby.newtransport.ClientTransportFactory;
 
+import java.net.InetSocketAddress;
+
 import io.netty.channel.EventLoopGroup;
 
 /**
@@ -31,22 +33,19 @@ public class NettyClientTransportFactory implements ClientTransportFactory {
     PLAINTEXT
   }
 
-  private final String host;
-  private final int port;
+  private final InetSocketAddress address;
   private final NegotiationType negotiationType;
   private final EventLoopGroup group;
 
-  public NettyClientTransportFactory(String host, int port, NegotiationType negotiationType,
+  public NettyClientTransportFactory(InetSocketAddress address, NegotiationType negotiationType,
       EventLoopGroup group) {
+    this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
-    Preconditions.checkArgument(port > 0, "Port must be positive");
-    this.host = Preconditions.checkNotNull(host, "host");
     this.negotiationType = Preconditions.checkNotNull(negotiationType, "negotiationType");
-    this.port = port;
   }
 
   @Override
   public NettyClientTransport newClientTransport() {
-    return new NettyClientTransport(host, port, negotiationType, group);
+    return new NettyClientTransport(address, negotiationType, group);
   }
 }

@@ -138,8 +138,6 @@ public final class ChannelImpl extends AbstractService implements Channel {
     @Override
     public void start(Listener<RespT> observer, Metadata.Headers headers) {
       Preconditions.checkState(stream == null, "Already started");
-      headers.setPath(method.getName());
-      headers.setAuthority("fixme");
       stream = obtainActiveTransport().newStream(method, headers,
           new StreamListenerImpl(observer));
     }

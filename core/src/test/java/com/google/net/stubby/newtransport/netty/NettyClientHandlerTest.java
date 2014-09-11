@@ -15,7 +15,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.net.stubby.Metadata;
-import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamState;
@@ -61,10 +60,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   @Mock
   private NettyClientStream stream;
 
-  @Mock
-  private MethodDescriptor<?, ?> method;
   private ByteBuf content;
-  private Metadata.Headers grpcHeaders;
+  private Http2Headers grpcHeaders;
 
   @Before
   public void setup() throws Exception {
@@ -72,18 +69,23 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
     frameWriter = new DefaultHttp2FrameWriter();
     frameReader = new DefaultHttp2FrameReader();
-    handler = newHandler("www.fake.com", true);
+    handler = newHandler();
     content = Unpooled.copiedBuffer("hello world", UTF_8);
 
     when(channel.isActive()).thenReturn(true);
     mockContext();
     mockFuture(true);
 
-    Metadata.Key key = new Metadata.Key("auth", Metadata.STRING_MARSHALLER);
-    grpcHeaders = new Metadata.Headers();
-    grpcHeaders.put(key, "sometoken");
+    grpcHeaders = DefaultHttp2Headers
+        .newBuilder()
+        .scheme("https")
+        .authority("www.fake.com")
+        .path("/fakemethod")
+        .method(HTTP_METHOD)
+        .add("auth", "sometoken")
+        .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC)
+        .build();
 
-    when(method.getName()).thenReturn("fakemethod");
     when(stream.state()).thenReturn(StreamState.OPEN);
 
     // Simulate activation of the handler to force writing of the initial settings
@@ -100,7 +102,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
   @Test
   public void createStreamShouldSucceed() throws Exception {
-    handler.write(ctx, new CreateStreamCommand(method, grpcHeaders.serializeAscii(), stream),
+    handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream),
         promise);
     verify(promise).setSuccess();
     verify(stream).id(eq(3));
@@ -190,7 +192,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   public void createShouldQueueStream() throws Exception {
     // Disallow stream creation to force the stream to get added to the pending queue.
     setMaxConcurrentStreams(0);
-    handler.write(ctx, new CreateStreamCommand(method, grpcHeaders.serializeAscii(), stream),
+    handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream),
         promise);
 
     // Make sure the write never occurred.
@@ -208,7 +210,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   public void receivedGoAwayShouldFailQueuedStreams() throws Exception {
     // Force a stream to get added to the pending queue.
     setMaxConcurrentStreams(0);
-    handler.write(ctx, new CreateStreamCommand(method, grpcHeaders.serializeAscii(), stream),
+    handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream),
         promise);
 
     handler.channelRead(ctx, goAwayFrame(0));
@@ -218,7 +220,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   @Test
   public void receivedGoAwayShouldFailUnknownStreams() throws Exception {
     // Force a stream to get added to the pending queue.
-    handler.write(ctx, new CreateStreamCommand(method, grpcHeaders.serializeAscii(), stream),
+    handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream),
         promise);
 
     // Read a GOAWAY that indicates our stream was never processed by the server.
@@ -246,14 +248,14 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
   private void createStream() throws Exception {
     // Create the stream.
-    handler.write(ctx, new CreateStreamCommand(method, grpcHeaders.serializeAscii(), stream),
+    handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream),
         promise);
     when(stream.id()).thenReturn(3);
     // Reset the context mock to clear recording of sent headers frame.
     mockContext();
   }
 
-  private static NettyClientHandler newHandler(String host, boolean ssl) {
+  private static NettyClientHandler newHandler() {
     Http2Connection connection = new DefaultHttp2Connection(false);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
@@ -261,9 +263,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
         new DefaultHttp2InboundFlowController(connection, frameWriter);
     Http2OutboundFlowController outboundFlow =
         new DefaultHttp2OutboundFlowController(connection, frameWriter);
-    return new NettyClientHandler(host,
-        ssl,
-        connection,
+    return new NettyClientHandler(connection,
         frameReader,
         frameWriter,
         inboundFlow,

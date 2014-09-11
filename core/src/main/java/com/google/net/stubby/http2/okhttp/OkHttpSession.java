@@ -32,6 +32,7 @@ import okio.ByteString;
 import okio.Okio;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -81,6 +82,7 @@ public class OkHttpSession implements Session {
     }
   }
 
+  private final String defaultAuthority;
   private final FrameReader frameReader;
   private final FrameWriter frameWriter;
   private final AtomicInteger sessionId;
@@ -108,6 +110,10 @@ public class OkHttpSession implements Session {
     this.serverSession = null;
     this.requestRegistry = requestRegistry;
     executor.execute(new FrameHandler());
+
+    // Determine the default :authority header to use.
+    InetSocketAddress remoteAddress = (InetSocketAddress) socket.getRemoteSocketAddress();
+    defaultAuthority = remoteAddress.getHostString() + ":" + remoteAddress.getPort();
   }
 
   /**
@@ -129,6 +135,9 @@ public class OkHttpSession implements Session {
     this.serverSession = server;
     this.requestRegistry = requestRegistry;
     executor.execute(new FrameHandler());
+
+    // Authority is not used for server-side sessions.
+    defaultAuthority = null;
   }
 
   @Override
@@ -147,13 +156,18 @@ public class OkHttpSession implements Session {
   }
 
   @Override
-  public Request startRequest(String operationName,
-                              Metadata.Headers headers,
-                              Response.ResponseBuilder responseBuilder) {
+  public Request startRequest(String operationName, Metadata.Headers headers,
+      Response.ResponseBuilder responseBuilder) {
     int nextStreamId = getNextStreamId();
     Response response = responseBuilder.build(nextStreamId);
-    Http2Request request = new Http2Request(frameWriter, operationName, headers, response,
-        requestRegistry, new MessageFramer(4096));
+    String defaultPath = "/" + operationName;
+    Http2Request request = new Http2Request(frameWriter,
+        headers,
+        defaultPath,
+        defaultAuthority,
+        response,
+        requestRegistry,
+        new MessageFramer(4096));
     return request;
   }
 
@@ -259,7 +273,22 @@ public class OkHttpSession implements Session {
 
       // Start an Operation for SYN_STREAM
       if (op == null && headersMode == HeadersMode.HTTP_20_HEADERS) {
+        // TODO(user): Throwing inside this method seems to cause a request to
+        // hang indefinitely ... possibly an OkHttp bug? We should investigate
+        // this and come up with a solution that works for any handler method that encounters
+        // an exception.
         String path = findReservedHeader(Header.TARGET_PATH.utf8(), headers);
+        if (path == null) {
+          try {
+            // The :path MUST be provided. This is a protocol error.
+            frameWriter.rstStream(streamId, ErrorCode.PROTOCOL_ERROR);
+            frameWriter.flush();
+            return;
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        }
+
         byte[][] binaryHeaders = new byte[headers.size() * 2][];
         for (int i = 0; i < headers.size(); i++) {
           Header header = headers.get(i);
@@ -269,13 +298,10 @@ public class OkHttpSession implements Session {
         Metadata.Headers grpcHeaders = new Metadata.Headers(binaryHeaders);
         grpcHeaders.setPath(path);
         grpcHeaders.setAuthority(findReservedHeader(Header.TARGET_AUTHORITY.utf8(), headers));
-        if (path != null) {
-          Request request = serverSession.startRequest(path,
-              grpcHeaders,
-              Http2Response.builder(streamId, frameWriter, new MessageFramer(4096)));
-          requestRegistry.register(request);
-          op = request;
-        }
+        Request request = serverSession.startRequest(path, grpcHeaders,
+            Http2Response.builder(streamId, frameWriter, new MessageFramer(4096)));
+        requestRegistry.register(request);
+        op = request;
       }
       if (op == null) {
         return;
@@ -291,10 +317,11 @@ public class OkHttpSession implements Session {
       for (Header header : headers) {
         // Reserved headers must come before non-reserved headers, so we can exit the loop
         // early if we see a non-reserved header.
-        if (!header.name.utf8().startsWith(":")) {
-          return null;
+        String headerString = header.name.utf8();
+        if (!headerString.startsWith(":")) {
+          break;
         }
-        if (header.name.utf8().equals(name)) {
+        if (headerString.equals(name)) {
           return header.value.utf8();
         }
       }

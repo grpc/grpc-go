@@ -21,8 +21,10 @@ import java.util.List;
 public class Http2Request extends Http2Operation implements Request {
   private final Response response;
 
-  public Http2Request(FrameWriter frameWriter, String operationName,
+  public Http2Request(FrameWriter frameWriter,
                      Metadata.Headers headers,
+                     String defaultPath,
+                     String defaultAuthority,
                      Response response, RequestRegistry requestRegistry,
                      Framer framer) {
     super(response.getId(), frameWriter, framer);
@@ -31,8 +33,8 @@ public class Http2Request extends Http2Operation implements Request {
       // Register this request.
       requestRegistry.register(this);
 
-      List<Header> requestHeaders = Headers.createRequestHeaders(operationName,
-          headers.serialize());
+      List<Header> requestHeaders =
+          Headers.createRequestHeaders(headers, defaultPath, defaultAuthority);
       frameWriter.synStream(false, false, getId(), 0, requestHeaders);
     } catch (IOException ioe) {
       close(new Status(Transport.Code.UNKNOWN, ioe));

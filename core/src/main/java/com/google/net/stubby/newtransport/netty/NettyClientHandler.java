@@ -1,13 +1,9 @@
 package com.google.net.stubby.newtransport.netty;
 
-import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_HEADER;
-import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_PROTORPC;
-import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
 import static com.google.net.stubby.newtransport.netty.NettyClientStream.PENDING_STREAM_ID;
 
 import com.google.common.base.Preconditions;
 import com.google.net.stubby.Metadata;
-import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 
@@ -17,7 +13,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.AbstractHttp2ConnectionHandler;
-import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
@@ -45,35 +40,27 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
    * A pending stream creation.
    */
   private final class PendingStream {
-    private final MethodDescriptor<?, ?> method;
-    private final String[] headers;
+    private final Http2Headers headers;
     private final NettyClientStream stream;
     private final ChannelPromise promise;
 
     public PendingStream(CreateStreamCommand command, ChannelPromise promise) {
-      method = command.method();
       headers = command.headers();
       stream = command.stream();
       this.promise = promise;
     }
   }
 
-  private final String host;
-  private final String scheme;
   private final DefaultHttp2InboundFlowController inboundFlow;
   private final Deque<PendingStream> pendingStreams = new ArrayDeque<PendingStream>();
   private Status goAwayStatus = GOAWAY_STATUS;
 
-  public NettyClientHandler(String host,
-      boolean ssl,
-      Http2Connection connection,
+  public NettyClientHandler(Http2Connection connection,
       Http2FrameReader frameReader,
       Http2FrameWriter frameWriter,
       DefaultHttp2InboundFlowController inboundFlow,
       Http2OutboundFlowController outboundFlow) {
     super(connection, frameReader, frameWriter, inboundFlow, outboundFlow);
-    this.host = Preconditions.checkNotNull(host, "host");
-    this.scheme = ssl ? "https" : "http";
     this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
 
     // Disallow stream creation by the server.
@@ -320,22 +307,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
 
       // Finish creation of the stream by writing a headers frame.
       final PendingStream pendingStream = pendingStreams.remove();
-      // TODO(user): Change Netty to not send priority, just use default.
-      // TODO(user): Switch to binary headers when Netty supports it.
-      DefaultHttp2Headers.Builder headersBuilder = DefaultHttp2Headers.newBuilder();
-      for (int i = 0; i < pendingStream.headers.length; i++) {
-        headersBuilder.add(
-            pendingStream.headers[i],
-            pendingStream.headers[++i]);
-      }
-      headersBuilder
-          .method(HTTP_METHOD)
-          .authority(host)
-          .scheme(scheme)
-          .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC)
-          .path("/" + pendingStream.method.getName())
-          .build();
-      writeHeaders(ctx(), streamId, headersBuilder.build(), 0, false, ctx().newPromise())
+      writeHeaders(ctx(), streamId, pendingStream.headers, 0, false, ctx().newPromise())
           .addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {

@@ -301,6 +301,26 @@ public abstract class Metadata<S extends Metadata> {
     public void setAuthority(String authority) {
       this.authority = authority;
     }
+
+    @Override
+    public void merge(Metadata other) {
+      super.merge(other);
+      mergePathAndAuthority(other);
+    }
+
+    @Override
+    public void merge(Metadata other, Set<Key> keys) {
+      super.merge(other, keys);
+      mergePathAndAuthority(other);
+    }
+
+    private void mergePathAndAuthority(Metadata other) {
+      if (other instanceof Headers) {
+        Headers otherHeaders = (Headers) other;
+        path = otherHeaders.path != null ? otherHeaders.path : path;
+        authority = otherHeaders.authority != null ? otherHeaders.authority : authority;
+      }
+    }
   }
 
   /**
