@@ -4,7 +4,6 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import com.google.common.io.ByteBuffers;
 import com.google.common.primitives.Bytes;
 import com.google.net.stubby.GrpcFramingUtil;
 import com.google.net.stubby.Status;
@@ -89,7 +88,9 @@ public class MessageFramerTest {
       assertTrue(TransportFrameUtil.isNotCompressed(flag));
       assertEquals(frame.remaining(), length);
       // Frame must exceed dictated transport frame size
-      deframedStream = Bytes.concat(deframedStream,  ByteBuffers.extractBytes(frame));
+      byte[] frameBytes = new byte[frame.remaining()];
+      frame.get(frameBytes);
+      deframedStream = Bytes.concat(deframedStream, frameBytes);
     }
   }
 }
