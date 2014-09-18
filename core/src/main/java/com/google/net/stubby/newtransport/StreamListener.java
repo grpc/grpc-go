@@ -48,9 +48,15 @@ public interface StreamListener {
   ListenableFuture<Void> messageRead(InputStream message, int length);
 
   /**
-   * Called when the remote side of the transport closed.
+   * Called when the stream is fully closed. A status code of {@link
+   * com.google.net.stubby.transport.Transport.Code#OK} implies normal termination of the stream.
+   * Any other value implies abnormal termination. This is guaranteed to always be the final call on
+   * a listener. No further callbacks will be issued.
+   *
+   * <p>This method should return quickly, as the same thread may be used to process other streams.
+   *
    * @param status details about the remote closure
-   * @param trailers that may optionally include status information about call closure.
+   * @param trailers trailing metadata
    */
   void closed(Status status, Metadata.Trailers trailers);
 }

@@ -101,7 +101,7 @@ public abstract class NettyStreamTestBase {
     when(eventLoop.inEventLoop()).thenReturn(true);
 
     processingFuture = SettableFuture.create();
-    when(listener.messageRead(any(InputStream.class), anyInt())).thenReturn(processingFuture);
+    when(listener().messageRead(any(InputStream.class), anyInt())).thenReturn(processingFuture);
 
     doAnswer(new Answer<Void>() {
       @Override
@@ -120,7 +120,7 @@ public abstract class NettyStreamTestBase {
   public void inboundMessageShouldCallListener() throws Exception {
     stream.inboundDataReceived(messageFrame(), false);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(listener).messageRead(captor.capture(), eq(MESSAGE.length()));
+    verify(listener()).messageRead(captor.capture(), eq(MESSAGE.length()));
 
     // Verify that inbound flow control window update has been disabled for the stream.
     verify(inboundFlow).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID), eq(WINDOW_UPDATE_OFF));
@@ -136,6 +136,10 @@ public abstract class NettyStreamTestBase {
   }
 
   protected abstract NettyStream createStream();
+
+  protected StreamListener listener() {
+    return listener;
+  }
 
   private String toString(InputStream in) throws Exception {
     byte[] bytes = new byte[in.available()];

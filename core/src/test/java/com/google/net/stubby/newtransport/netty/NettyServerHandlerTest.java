@@ -20,8 +20,8 @@ import com.google.net.stubby.newtransport.Framer;
 import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.MessageFramer;
 import com.google.net.stubby.newtransport.ServerStream;
+import com.google.net.stubby.newtransport.ServerStreamListener;
 import com.google.net.stubby.newtransport.ServerTransportListener;
-import com.google.net.stubby.newtransport.StreamListener;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -65,7 +65,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   private ServerTransportListener transportListener;
 
   @Mock
-  private StreamListener streamListener;
+  private ServerStreamListener streamListener;
 
   private NettyServerStream stream;
 

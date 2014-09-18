@@ -16,6 +16,6 @@ public interface ServerTransportListener {
    * @param headers containing metadata for the call.
    * @return a listener for events on the new stream.
    */
-  StreamListener streamCreated(ServerStream stream, String method,
-                               Metadata.Headers headers);
+  ServerStreamListener streamCreated(ServerStream stream, String method,
+      Metadata.Headers headers);
 }

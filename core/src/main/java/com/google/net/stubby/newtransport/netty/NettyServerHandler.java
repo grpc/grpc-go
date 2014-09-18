@@ -7,12 +7,14 @@ import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
 import com.google.common.base.Preconditions;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.newtransport.ServerStreamListener;
 import com.google.net.stubby.newtransport.ServerTransportListener;
-import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.newtransport.TransportFrameUtil;
 import com.google.net.stubby.transport.Transport;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.AbstractHttp2ConnectionHandler;
@@ -83,7 +85,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
       Http2Stream http2Stream = connection().requireStream(streamId);
       http2Stream.data(stream);
       String method = determineMethod(streamId, headers);
-      StreamListener listener = transportListener.streamCreated(stream, method,
+      ServerStreamListener listener = transportListener.streamCreated(stream, method,
           new Metadata.Headers(headers));
       stream.setListener(listener);
     } catch (Http2Exception e) {
@@ -162,9 +164,19 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
    * Handler for commands sent from the stream.
    */
   @Override
-  public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
+  public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise)
+      throws Http2Exception {
     if (msg instanceof SendGrpcFrameCommand) {
       SendGrpcFrameCommand cmd = (SendGrpcFrameCommand) msg;
+      if (cmd.endStream()) {
+        final NettyServerStream stream = serverStream(connection().requireStream(cmd.streamId()));
+        promise.addListener(new ChannelFutureListener() {
+          @Override
+          public void operationComplete(ChannelFuture future) {
+            stream.complete();
+          }
+        });
+      }
       // Call the base class to write the HTTP/2 DATA frame.
       writeData(ctx, cmd.streamId(), cmd.content(), 0, cmd.endStream(), promise);
     } else if (msg instanceof SendResponseHeadersCommand) {

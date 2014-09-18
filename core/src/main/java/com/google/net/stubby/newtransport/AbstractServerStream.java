@@ -9,35 +9,78 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 
+import javax.annotation.concurrent.GuardedBy;
+
 /**
  * Abstract base class for {@link ServerStream} implementations.
  */
 public abstract class AbstractServerStream extends AbstractStream implements ServerStream {
 
-  private StreamListener listener;
+  private ServerStreamListener listener;
 
   private final Object stateLock = new Object();
   private volatile StreamState state = StreamState.OPEN;
+  /** Whether listener.closed() has been called. */
+  @GuardedBy("stateLock")
+  private boolean listenerClosed;
+  /** Saved application status for notifying when graceful stream termination completes. */
+  @GuardedBy("stateLock")
+  private Status gracefulStatus;
+  @GuardedBy("stateLock")
+  private Metadata.Trailers gracefulTrailers;
 
   @Override
   protected final StreamListener listener() {
     return listener;
   }
 
-  public final void setListener(StreamListener listener) {
+  public final void setListener(ServerStreamListener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");
   }
 
   @Override
   public final void close(Status status, Metadata.Trailers trailers) {
+    Preconditions.checkNotNull(status, "status");
+    Preconditions.checkNotNull(trailers, "trailers");
+    outboundPhase(Phase.STATUS);
     synchronized (stateLock) {
       Preconditions.checkState(!status.isOk() || state == WRITE_ONLY,
           "Cannot close with OK before client half-closes");
       state = CLOSED;
+      if (!listenerClosed) {
+        // Delay calling listener.closed() until the status has been flushed to the network (which
+        // is notified via complete()). Since there may be large buffers involved, the actual
+        // completion of the RPC could be much later than this call.
+        gracefulStatus = status;
+        gracefulTrailers = trailers;
+      }
     }
-    outboundPhase(Phase.STATUS);
     closeFramer(status);
     dispose();
+  }
+
+  /**
+   * The Stream is considered completely closed and there is no further opportunity for error. It
+   * calls the listener's {@code closed()} if it was not already done by {@link #abortStream}. Note
+   * that it is expected that either {@code closed()} or {@code abortStream()} was previously
+   * called, as otherwise there is no status to provide to the listener.
+   */
+  public void complete() {
+    Status status;
+    synchronized (stateLock) {
+      if (listenerClosed) {
+        return;
+      }
+      listenerClosed = true;
+      status = gracefulStatus;
+      gracefulStatus = null;
+    }
+    if (status == null) {
+      listener.closed(new Status(Transport.Code.INTERNAL, "successful complete() without close()"),
+          new Metadata.Trailers());
+      throw new IllegalStateException("successful complete() without close()");
+    }
+    listener.closed(status, gracefulTrailers);
   }
 
   @Override
@@ -49,21 +92,12 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
    * Called when the remote end half-closes the stream.
    */
   public final void remoteEndClosed() {
-    StreamState previousState;
     synchronized (stateLock) {
-      previousState = state;
-      if (previousState == OPEN) {
-        state = WRITE_ONLY;
-      }
+      Preconditions.checkState(state == OPEN, "Stream not OPEN");
+      state = WRITE_ONLY;
     }
-    if (previousState == OPEN) {
-      inboundPhase(Phase.STATUS);
-      listener.closed(Status.OK, new Metadata.Trailers());
-    } else {
-      abortStream(
-          new Status(Transport.Code.FAILED_PRECONDITION, "Client-end of the stream already closed"),
-          true);
-    }
+    inboundPhase(Phase.STATUS);
+    listener.halfClosed();
   }
 
   /**
@@ -71,7 +105,8 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
    * necessary.
    *
    * <p>Unlike {@link #close(Status, Metadata.Trailers)}, this method is only called from the
-   * gRPC framework, so that we need to call closed() on the listener if it has not been called.
+   * transport. The transport should use this method instead of {@code close(Status)} for internal
+   * errors to prevent exposing unexpected states and exceptions to the application.
    *
    * @param status the error status. Must not be Status.OK.
    * @param notifyClient true if the stream is still writable and you want to notify the client
@@ -79,24 +114,26 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
    */
   public final void abortStream(Status status, boolean notifyClient) {
     Preconditions.checkArgument(!status.isOk(), "status must not be OK");
-    StreamState previousState;
+    boolean closeListener;
     synchronized (stateLock) {
-      previousState = state;
       if (state == CLOSED) {
-        return;
+        // Can't actually notify client.
+        notifyClient = false;
       }
       state = CLOSED;
+      closeListener = !listenerClosed;
+      listenerClosed = true;
     }
 
-    if (previousState == OPEN) {
-      listener.closed(status, new Metadata.Trailers());
-    }  // Otherwise, previousState is WRITE_ONLY thus closed() has already been called.
-
-    outboundPhase(Phase.STATUS);
-    if (notifyClient) {
-      closeFramer(status);
+    try {
+      if (notifyClient) {
+        closeFramer(status);
+      }
+      dispose();
+    } finally {
+      if (closeListener) {
+        listener.closed(status, new Metadata.Trailers());
+      }
     }
-
-    dispose();
   }
 }
