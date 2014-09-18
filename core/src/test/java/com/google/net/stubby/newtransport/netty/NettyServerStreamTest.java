@@ -2,7 +2,6 @@ package com.google.net.stubby.newtransport.netty;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
@@ -26,7 +25,7 @@ import org.mockito.Mock;
 public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Mock
-  protected ServerStreamListener listener;
+  protected ServerStreamListener serverListener;
   private Metadata.Trailers trailers = new Metadata.Trailers();
 
   @Test
@@ -46,7 +45,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     } catch (IllegalStateException expected) {
     }
     assertEquals(StreamState.OPEN, stream.state());
-    verifyZeroInteractions(listener);
+    verifyZeroInteractions(serverListener);
   }
 
   @Test
@@ -55,12 +54,12 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     stream().close(Status.CANCELLED, trailers);
     verify(channel).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.CANCELLED), true));
-    verifyZeroInteractions(listener);
+    verifyZeroInteractions(serverListener);
     // Sending complete. Listener gets closed()
     stream().complete();
-    verify(listener).closed(Status.CANCELLED, trailers);
+    verify(serverListener).closed(Status.CANCELLED, trailers);
     assertEquals(StreamState.CLOSED, stream.state());
-    verifyZeroInteractions(listener);
+    verifyZeroInteractions(serverListener);
   }
 
   @Test
@@ -68,17 +67,17 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     // Client half-closes. Listener gets halfClosed()
     stream().remoteEndClosed();
     assertEquals(StreamState.WRITE_ONLY, stream.state());
-    verify(listener).halfClosed();
+    verify(serverListener).halfClosed();
     // Server closes. Status sent
     stream().close(Status.OK, trailers);
-    verifyNoMoreInteractions(listener);
+    verifyNoMoreInteractions(serverListener);
     assertEquals(StreamState.CLOSED, stream.state());
     verify(channel).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.OK), true));
     // Sending and receiving complete. Listener gets closed()
     stream().complete();
-    verify(listener).closed(Status.OK, trailers);
-    verifyNoMoreInteractions(listener);
+    verify(serverListener).closed(Status.OK, trailers);
+    verifyNoMoreInteractions(serverListener);
   }
 
   @Test
@@ -86,7 +85,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     // Client half-closes. Listener gets halfClosed()
     stream().remoteEndClosed();
     assertEquals(StreamState.WRITE_ONLY, stream.state());
-    verify(listener).halfClosed();
+    verify(serverListener).halfClosed();
     // Client half-closes again.
     try {
       stream().remoteEndClosed();
@@ -94,7 +93,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     } catch (IllegalStateException expected) {
     }
     assertEquals(StreamState.WRITE_ONLY, stream.state());
-    verifyNoMoreInteractions(listener);
+    verifyNoMoreInteractions(serverListener);
   }
 
   @Test
@@ -102,9 +101,9 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     Status status = new Status(Transport.Code.INTERNAL, new Throwable());
     stream().abortStream(status, true);
     assertEquals(StreamState.CLOSED, stream.state());
-    verify(listener).closed(same(status), notNull(Metadata.Trailers.class));
+    verify(serverListener).closed(same(status), notNull(Metadata.Trailers.class));
     verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
-    verifyNoMoreInteractions(listener);
+    verifyNoMoreInteractions(serverListener);
   }
 
   @Test
@@ -112,10 +111,10 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     Status status = new Status(Transport.Code.INTERNAL, new Throwable());
     stream().abortStream(status, false);
     assertEquals(StreamState.CLOSED, stream.state());
-    verify(listener).closed(same(status), notNull(Metadata.Trailers.class));
+    verify(serverListener).closed(same(status), notNull(Metadata.Trailers.class));
     verify(channel, never()).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
-    verifyNoMoreInteractions(listener);
+    verifyNoMoreInteractions(serverListener);
   }
 
   @Test
@@ -124,26 +123,26 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     // Client half-closes. Listener gets halfClosed()
     stream().remoteEndClosed();
     assertEquals(StreamState.WRITE_ONLY, stream.state());
-    verify(listener).halfClosed();
+    verify(serverListener).halfClosed();
     // Abort
     stream().abortStream(status, true);
-    verify(listener).closed(same(status), notNull(Metadata.Trailers.class));
+    verify(serverListener).closed(same(status), notNull(Metadata.Trailers.class));
     assertEquals(StreamState.CLOSED, stream.state());
-    verifyNoMoreInteractions(listener);
+    verifyNoMoreInteractions(serverListener);
   }
 
   @Override
   protected NettyStream createStream() {
     NettyServerStream stream = new NettyServerStream(channel, STREAM_ID, inboundFlow);
-    stream.setListener(listener);
+    stream.setListener(serverListener);
     assertEquals(StreamState.OPEN, stream.state());
-    verifyZeroInteractions(listener);
+    verifyZeroInteractions(serverListener);
     return stream;
   }
 
   @Override
   protected ServerStreamListener listener() {
-    return listener;
+    return serverListener;
   }
 
   private NettyServerStream stream() {

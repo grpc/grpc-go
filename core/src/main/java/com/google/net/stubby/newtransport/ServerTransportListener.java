@@ -1,7 +1,6 @@
 package com.google.net.stubby.newtransport;
 
 import com.google.net.stubby.Metadata;
-import com.google.net.stubby.MethodDescriptor;
 
 /**
  * A observer of a server-side transport for stream creation events.

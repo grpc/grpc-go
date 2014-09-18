@@ -9,13 +9,14 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
 import com.google.net.stubby.newtransport.GrpcDeframer;
-import com.google.net.stubby.newtransport.MessageDeframer2;
 import com.google.net.stubby.newtransport.HttpUtil;
+import com.google.net.stubby.newtransport.MessageDeframer2;
 import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.transport.Transport;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
+import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 import io.netty.handler.codec.http2.Http2Headers;
@@ -148,8 +149,8 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
       return true;
     }
 
-    String contentType = headers.get(HttpUtil.CONTENT_TYPE_HEADER);
-    return HttpUtil.CONTENT_TYPE_PROTORPC.equalsIgnoreCase(contentType);
+    AsciiString contentType = headers.get(Utils.CONTENT_TYPE_HEADER);
+    return Utils.CONTENT_TYPE_PROTORPC.equalsIgnoreCase(contentType);
   }
 
   /**
@@ -160,7 +161,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
       return Transport.Code.UNKNOWN;
     }
 
-    String statusLine = headers.status();
+    AsciiString statusLine = headers.status();
     if (statusLine == null) {
       return Transport.Code.UNKNOWN;
     }

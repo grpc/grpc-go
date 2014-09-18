@@ -15,6 +15,7 @@ import com.google.net.stubby.transport.Transport.Code;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.AbstractHttp2ConnectionHandler;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.Http2Connection;
@@ -23,12 +24,13 @@ import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
 
+import java.util.Map;
+
 /**
  * Codec used by clients and servers to interpret HTTP2 frames in the context of an ongoing
  * request-response dialog
  */
 public class Http2Codec extends AbstractHttp2ConnectionHandler {
-
   public static final int PADDING = 0;
   private final RequestRegistry requestRegistry;
   private final Session session;
@@ -201,16 +203,26 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
    * Start the Request operation on the server
    */
   private Request serverStart(ChannelHandlerContext ctx, int streamId, Http2Headers headers) {
-    if (!Http2Session.PROTORPC.equals(headers.get("content-type"))) {
+    if (!Http2Session.PROTORPC.equals(headers.get(Http2Session.CONTENT_TYPE))) {
       return null;
     }
     // Use Path to specify the operation
     String operationName =
-        normalizeOperationName(headers.get(Http2Headers.PseudoHeaderName.PATH.value()));
+        normalizeOperationName(headers.get(Http2Headers.PseudoHeaderName.PATH.value()).toString());
     if (operationName == null) {
       return null;
     }
-    Metadata.Headers grpcHeaders = new Metadata.Headers(headers);
+
+    // The Netty AsciiString class is really just a wrapper around a byte[] and supports
+    // arbitrary binary data, not just ASCII.
+    byte[][] headerValues = new byte[headers.size() * 2][];
+    int i = 0;
+    for (Map.Entry<AsciiString, AsciiString> entry : headers) {
+      headerValues[i++] = entry.getKey().array();
+      headerValues[i++] = entry.getValue().array();
+    }
+    Metadata.Headers grpcHeaders = new Metadata.Headers(headerValues);
+
     // Create the operation and bind a HTTP2 response operation
     Request op = session.startRequest(operationName, grpcHeaders,
         createResponse(new Http2Writer(ctx), streamId));

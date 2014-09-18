@@ -1,8 +1,10 @@
 package com.google.net.stubby.newtransport.netty;
 
-import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_HEADER;
-import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_PROTORPC;
-import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_PROTORPC;
+import static com.google.net.stubby.newtransport.netty.Utils.HTTPS;
+import static com.google.net.stubby.newtransport.netty.Utils.HTTP_METHOD;
+import static com.google.net.stubby.newtransport.netty.Utils.STATUS_OK;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
@@ -16,13 +18,13 @@ import static org.mockito.Mockito.when;
 
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
@@ -76,15 +78,13 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     mockContext();
     mockFuture(true);
 
-    grpcHeaders = DefaultHttp2Headers
-        .newBuilder()
-        .scheme("https")
-        .authority("www.fake.com")
-        .path("/fakemethod")
+    grpcHeaders = new DefaultHttp2Headers()
+        .scheme(HTTPS)
+        .authority(as("www.fake.com"))
+        .path(as("/fakemethod"))
         .method(HTTP_METHOD)
-        .add("auth", "sometoken")
-        .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC)
-        .build();
+        .add(as("auth"), as("sometoken"))
+        .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC);
 
     when(stream.state()).thenReturn(StreamState.OPEN);
 
@@ -121,12 +121,12 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
         eq(0),
         eq(false));
     Http2Headers headers = captor.getValue();
-    assertEquals("https", headers.scheme());
+    assertEquals("https", headers.scheme().toString());
     assertEquals(HTTP_METHOD, headers.method());
-    assertEquals("www.fake.com", headers.authority());
+    assertEquals("www.fake.com", headers.authority().toString());
     assertEquals(CONTENT_TYPE_PROTORPC, headers.get(CONTENT_TYPE_HEADER));
-    assertEquals("/fakemethod", headers.path());
-    assertEquals("sometoken", headers.get("auth"));
+    assertEquals("/fakemethod", headers.path().toString());
+    assertEquals("sometoken", headers.get(as("auth")).toString());
   }
 
   @Test
@@ -170,8 +170,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     createStream();
 
     // Read a headers frame first.
-    Http2Headers headers = DefaultHttp2Headers.newBuilder().status("200")
-        .set(HttpUtil.CONTENT_TYPE_HEADER, HttpUtil.CONTENT_TYPE_PROTORPC).build();
+    Http2Headers headers = new DefaultHttp2Headers().status(STATUS_OK)
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC);
     ByteBuf headersFrame = headersFrame(3, headers);
     handler.channelRead(this.ctx, headersFrame);
     verify(stream).inboundHeadersRecieved(headers, false);
@@ -268,5 +268,9 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
         frameWriter,
         inboundFlow,
         outboundFlow);
+  }
+
+  private AsciiString as(String string) {
+    return new AsciiString(string);
   }
 }

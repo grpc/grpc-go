@@ -1,5 +1,8 @@
 package com.google.net.stubby.newtransport.netty;
 
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_PROTORPC;
+import static com.google.net.stubby.newtransport.netty.Utils.HTTP_METHOD;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -14,10 +17,8 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
 import com.google.net.stubby.Metadata;
-import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.Framer;
-import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.MessageFramer;
 import com.google.net.stubby.newtransport.ServerStream;
 import com.google.net.stubby.newtransport.ServerStreamListener;
@@ -27,6 +28,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
@@ -162,11 +164,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   }
 
   private void createStream() throws Exception {
-    Http2Headers headers = DefaultHttp2Headers.newBuilder()
-        .method(HttpUtil.HTTP_METHOD)
-        .set(HttpUtil.CONTENT_TYPE_HEADER, HttpUtil.CONTENT_TYPE_PROTORPC)
-        .path("/foo.bar")
-        .build();
+    Http2Headers headers = new DefaultHttp2Headers()
+        .method(HTTP_METHOD)
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC)
+        .path(new AsciiString("/foo.bar"));
     ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
     handler.channelRead(ctx, headersFrame);
     ArgumentCaptor<NettyServerStream> streamCaptor =

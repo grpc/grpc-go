@@ -1,5 +1,8 @@
 package com.google.net.stubby.newtransport.netty;
 
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_PROTORPC;
+import static com.google.net.stubby.newtransport.netty.Utils.STATUS_OK;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
@@ -9,7 +12,6 @@ import static org.mockito.Mockito.verify;
 
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
@@ -131,7 +133,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   }
 
   private Http2Headers grpcResponseHeaders() {
-    return DefaultHttp2Headers.newBuilder().status("200")
-        .set(HttpUtil.CONTENT_TYPE_HEADER, HttpUtil.CONTENT_TYPE_PROTORPC).build();
+    return new DefaultHttp2Headers()
+        .status(STATUS_OK)
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC);
   }
 }

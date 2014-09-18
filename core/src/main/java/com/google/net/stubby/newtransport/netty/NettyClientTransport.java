@@ -19,6 +19,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
@@ -50,7 +51,7 @@ class NettyClientTransport extends AbstractClientTransport {
   private final Http2Negotiator.Negotiation negotiation;
   private final NettyClientHandler handler;
   private final boolean ssl;
-  private final String authority;
+  private final AsciiString authority;
   private Channel channel;
 
   NettyClientTransport(InetSocketAddress address, NegotiationType negotiationType) {
@@ -63,7 +64,7 @@ class NettyClientTransport extends AbstractClientTransport {
     this.address = Preconditions.checkNotNull(address, "address");
     this.eventGroup = Preconditions.checkNotNull(eventGroup, "eventGroup");
 
-    authority = address.getHostString() + ":" + address.getPort();
+    authority = new AsciiString(address.getHostString() + ":" + address.getPort());
 
     handler = newHandler();
     switch (negotiationType) {
@@ -94,7 +95,7 @@ class NettyClientTransport extends AbstractClientTransport {
 
     try {
       // Convert the headers into Netty HTTP/2 headers.
-      String defaultPath = "/" + method.getName();
+      AsciiString defaultPath = new AsciiString("/" + method.getName());
       Http2Headers http2Headers = Utils.convertHeaders(headers, ssl, defaultPath, authority);
 
       // Write the request and await creation of the stream.

@@ -7,6 +7,8 @@ import com.google.net.stubby.Response;
 import com.google.net.stubby.Session;
 import com.google.net.stubby.transport.MessageFramer;
 
+import io.netty.handler.codec.AsciiString;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -15,7 +17,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class Http2Session implements Session {
 
-  public static final String PROTORPC = "application/protorpc";
+  public static final AsciiString CONTENT_TYPE = new AsciiString("content-type");
+  public static final AsciiString PROTORPC = new AsciiString("application/protorpc");
 
   private final Http2Codec.Http2Writer writer;
   private final RequestRegistry requestRegistry;

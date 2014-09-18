@@ -1,11 +1,11 @@
 package com.google.net.stubby.newtransport.netty;
 
-import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_HEADER;
-import static com.google.net.stubby.newtransport.HttpUtil.CONTENT_TYPE_PROTORPC;
-import static com.google.net.stubby.newtransport.HttpUtil.HTTP_METHOD;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_PROTORPC;
+import static com.google.net.stubby.newtransport.netty.Utils.HTTP_METHOD;
+import static com.google.net.stubby.newtransport.netty.Utils.STATUS_OK;
 
 import com.google.common.base.Preconditions;
-import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.ServerStreamListener;
 import com.google.net.stubby.newtransport.ServerTransportListener;
@@ -33,7 +33,6 @@ import io.netty.handler.codec.http2.Http2StreamException;
 import io.netty.util.ReferenceCountUtil;
 
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -86,7 +85,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
       http2Stream.data(stream);
       String method = determineMethod(streamId, headers);
       ServerStreamListener listener = transportListener.streamCreated(stream, method,
-          new Metadata.Headers(headers));
+          Utils.convertHeaders(headers));
       stream.setListener(listener);
     } catch (Http2Exception e) {
       throw e;
@@ -181,13 +180,14 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
       writeData(ctx, cmd.streamId(), cmd.content(), 0, cmd.endStream(), promise);
     } else if (msg instanceof SendResponseHeadersCommand) {
       SendResponseHeadersCommand cmd = (SendResponseHeadersCommand) msg;
-      writeHeaders(
-          ctx, cmd.streamId(),
-          DefaultHttp2Headers.newBuilder()
-              .status("200")
-              .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC)
-              .build(),
-          0, false, promise);
+      writeHeaders(ctx,
+          cmd.streamId(),
+          new DefaultHttp2Headers()
+            .status(STATUS_OK)
+            .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC),
+          0,
+          false,
+          promise);
     } else {
       AssertionError e = new AssertionError("Write called for unexpected type: "
           + msg.getClass().getName());
@@ -208,7 +208,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
           String.format("Header '%s'='%s', while '%s' is expected", CONTENT_TYPE_HEADER,
           headers.get(CONTENT_TYPE_HEADER), CONTENT_TYPE_PROTORPC));
     }
-    String methodName = TransportFrameUtil.getFullMethodNameFromPath(headers.path());
+    String methodName = TransportFrameUtil.getFullMethodNameFromPath(headers.path().toString());
     if (methodName == null) {
       throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM,
           String.format("Malformatted path: %s", headers.path()));
