@@ -9,6 +9,7 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
 import com.google.net.stubby.newtransport.GrpcDeframer;
+import com.google.net.stubby.newtransport.MessageDeframer2;
 import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.transport.Transport;
@@ -32,6 +33,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
   private volatile int id = PENDING_STREAM_ID;
   private final Channel channel;
   private final GrpcDeframer deframer;
+  private final MessageDeframer2 deframer2;
   private final WindowUpdateManager windowUpdateManager;
   private Transport.Code responseCode = Transport.Code.UNKNOWN;
   private boolean isGrpcResponse;
@@ -41,8 +43,15 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
       DefaultHttp2InboundFlowController inboundFlow) {
     super(listener);
     this.channel = Preconditions.checkNotNull(channel, "channel");
-    this.deframer = new GrpcDeframer(new NettyDecompressor(channel.alloc()),
-        inboundMessageHandler(), channel.eventLoop());
+    if (!GRPC_V2_PROTOCOL) {
+      this.deframer = new GrpcDeframer(new NettyDecompressor(channel.alloc()),
+          inboundMessageHandler(), channel.eventLoop());
+      this.deframer2 = null;
+    } else {
+      this.deframer = null;
+      this.deframer2 = MessageDeframer2.createOnClient(
+          inboundMessageHandler(), channel.eventLoop());
+    }
     windowUpdateManager = new WindowUpdateManager(channel, inboundFlow);
   }
 
@@ -93,7 +102,11 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
 
     if (isGrpcResponse) {
       // Retain the ByteBuf until it is released by the deframer.
-      deframer.deframe(new NettyBuffer(frame.retain()), endOfStream);
+      if (!GRPC_V2_PROTOCOL) {
+        deframer.deframe(new NettyBuffer(frame.retain()), endOfStream);
+      } else {
+        deframer2.deframe(new NettyBuffer(frame.retain()), endOfStream);
+      }
     } else {
       // It's not a GRPC response, assume that the frame contains a text-based error message.
 

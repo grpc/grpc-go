@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.newtransport.AbstractServerStream;
 import com.google.net.stubby.newtransport.GrpcDeframer;
+import com.google.net.stubby.newtransport.MessageDeframer2;
 import com.google.net.stubby.newtransport.StreamState;
 
 import io.netty.buffer.ByteBuf;
@@ -18,6 +19,7 @@ import java.nio.ByteBuffer;
 class NettyServerStream extends AbstractServerStream implements NettyStream {
 
   private final GrpcDeframer deframer;
+  private final MessageDeframer2 deframer2;
   private final Channel channel;
   private final int id;
   private final WindowUpdateManager windowUpdateManager;
@@ -27,8 +29,14 @@ class NettyServerStream extends AbstractServerStream implements NettyStream {
   NettyServerStream(Channel channel, int id, DefaultHttp2InboundFlowController inboundFlow) {
     this.channel = Preconditions.checkNotNull(channel, "channel is null");
     this.id = id;
-    deframer = new GrpcDeframer(new NettyDecompressor(channel.alloc()), inboundMessageHandler(),
-        channel.eventLoop());
+    if (!GRPC_V2_PROTOCOL) {
+      deframer = new GrpcDeframer(new NettyDecompressor(channel.alloc()), inboundMessageHandler(),
+          channel.eventLoop());
+      deframer2 = null;
+    } else {
+      deframer = null;
+      deframer2 = MessageDeframer2.createOnServer(inboundMessageHandler(), channel.eventLoop());
+    }
     windowUpdateManager =
         new WindowUpdateManager(channel, Preconditions.checkNotNull(inboundFlow, "inboundFlow"));
     windowUpdateManager.streamId(id);
@@ -42,7 +50,11 @@ class NettyServerStream extends AbstractServerStream implements NettyStream {
     // Retain the ByteBuf until it is released by the deframer.
     // TODO(user): It sounds sub-optimal to deframe in the network thread. That means
     // decompression is serialized.
-    deframer.deframe(new NettyBuffer(frame.retain()), endOfStream);
+    if (!GRPC_V2_PROTOCOL) {
+      deframer.deframe(new NettyBuffer(frame.retain()), endOfStream);
+    } else {
+      deframer2.deframe(new NettyBuffer(frame.retain()), endOfStream);
+    }
   }
 
   @Override

@@ -16,6 +16,12 @@ import javax.annotation.Nullable;
  * Abstract base class for {@link Stream} implementations.
  */
 public abstract class AbstractStream implements Stream {
+  /**
+   * Global to enable gRPC v2 protocol support, which may be incomplete. This is a complete hack
+   * and should please, please, please be temporary to ease migration.
+   */
+  // TODO(user): remove this once v1 support is dropped.
+  public static boolean GRPC_V2_PROTOCOL = false;
 
   /**
    * Indicates the phase of the GRPC stream in one direction.
@@ -25,7 +31,7 @@ public abstract class AbstractStream implements Stream {
   }
 
   private final Object writeLock = new Object();
-  private final MessageFramer framer;
+  private final Framer framer;
   protected Phase inboundPhase = Phase.HEADERS;
   protected Phase outboundPhase = Phase.HEADERS;
 
@@ -73,9 +79,11 @@ public abstract class AbstractStream implements Stream {
   };
 
   protected AbstractStream() {
-    framer = new MessageFramer(outboundFrameHandler, 4096);
-    // No compression at the moment.
-    framer.setAllowCompression(false);
+    if (!GRPC_V2_PROTOCOL) {
+      framer = new MessageFramer(outboundFrameHandler, 4096);
+    } else {
+      framer = new MessageFramer2(outboundFrameHandler, 4096);
+    }
   }
 
   /**

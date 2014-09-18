@@ -26,8 +26,20 @@ public class CompositeBuffer extends AbstractBuffer {
    * this {@link CompositeBuffer}.
    */
   public void addBuffer(Buffer buffer) {
-    buffers.add(buffer);
-    readableBytes += buffer.readableBytes();
+    if (!(buffer instanceof CompositeBuffer)) {
+      buffers.add(buffer);
+      readableBytes += buffer.readableBytes();
+      return;
+    }
+
+    CompositeBuffer compositeBuffer = (CompositeBuffer) buffer;
+    while (!compositeBuffer.buffers.isEmpty()) {
+      Buffer subBuffer = compositeBuffer.buffers.remove();
+      buffers.add(subBuffer);
+    }
+    readableBytes += compositeBuffer.readableBytes;
+    compositeBuffer.readableBytes = 0;
+    compositeBuffer.close();
   }
 
   @Override
@@ -103,6 +115,25 @@ public class CompositeBuffer extends AbstractBuffer {
     if (op.isError()) {
       throw op.ex;
     }
+  }
+
+  @Override
+  public CompositeBuffer readBytes(int length) {
+    checkReadable(length);
+    readableBytes -= length;
+
+    CompositeBuffer newBuffer = new CompositeBuffer();
+    while (length > 0) {
+      Buffer buffer = buffers.peek();
+      if (buffer.readableBytes() > length) {
+        newBuffer.addBuffer(buffer.readBytes(length));
+        length = 0;
+      } else {
+        newBuffer.addBuffer(buffers.poll());
+        length -= buffer.readableBytes();
+      }
+    }
+    return newBuffer;
   }
 
   @Override

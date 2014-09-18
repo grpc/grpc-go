@@ -201,6 +201,14 @@ public final class Buffers {
     }
 
     @Override
+    public ByteArrayWrapper readBytes(int length) {
+      checkReadable(length);
+      int originalOffset = offset;
+      offset += length;
+      return new ByteArrayWrapper(bytes, originalOffset, length);
+    }
+
+    @Override
     public boolean hasArray() {
       return true;
     }
@@ -264,6 +272,14 @@ public final class Buffers {
       checkReadable(length);
       internalSlice(length).writeTo(dest);
       offset += length;
+    }
+
+    @Override
+    public ByteStringWrapper readBytes(int length) {
+      checkReadable(length);
+      ByteStringWrapper buffer = new ByteStringWrapper(internalSlice(length));
+      offset += length;
+      return buffer;
     }
 
     private ByteString internalSlice(int length) {
@@ -331,6 +347,15 @@ public final class Buffers {
         bytes.get(array);
         dest.write(array);
       }
+    }
+
+    @Override
+    public ByteBufferWrapper readBytes(int length) {
+      checkReadable(length);
+      ByteBuffer buffer = bytes.duplicate();
+      bytes.position(bytes.position() + length);
+      buffer.limit(bytes.position() + length);
+      return new ByteBufferWrapper(buffer);
     }
 
     @Override

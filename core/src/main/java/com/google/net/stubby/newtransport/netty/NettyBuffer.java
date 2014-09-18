@@ -63,6 +63,11 @@ class NettyBuffer extends AbstractBuffer {
   }
 
   @Override
+  public NettyBuffer readBytes(int length) {
+    return new NettyBuffer(buffer.readSlice(length));
+  }
+
+  @Override
   public boolean hasArray() {
     return buffer.hasArray();
   }

@@ -63,6 +63,11 @@ public abstract class ForwardingBuffer implements Buffer {
   }
 
   @Override
+  public Buffer readBytes(int length) {
+    return buf.readBytes(length);
+  }
+
+  @Override
   public boolean hasArray() {
     return buf.hasArray();
   }
