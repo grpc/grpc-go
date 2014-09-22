@@ -2,6 +2,7 @@ package com.google.net.stubby.newtransport.netty;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.newtransport.AbstractServerStream;
 import com.google.net.stubby.newtransport.GrpcDeframer;
 import com.google.net.stubby.newtransport.MessageDeframer2;
@@ -35,7 +36,7 @@ class NettyServerStream extends AbstractServerStream implements NettyStream {
       deframer2 = null;
     } else {
       deframer = null;
-      deframer2 = MessageDeframer2.createOnServer(inboundMessageHandler(), channel.eventLoop());
+      deframer2 = new MessageDeframer2(inboundMessageHandler(), channel.eventLoop());
     }
     windowUpdateManager =
         new WindowUpdateManager(channel, Preconditions.checkNotNull(inboundFlow, "inboundFlow"));
@@ -66,6 +67,11 @@ class NettyServerStream extends AbstractServerStream implements NettyStream {
     SendGrpcFrameCommand cmd =
         new SendGrpcFrameCommand(id, Utils.toByteBuf(channel.alloc(), frame), endOfStream);
     channel.writeAndFlush(cmd);
+  }
+
+  @Override
+  protected void sendTrailers(Metadata.Trailers trailers) {
+    // TODO(user): send trailers
   }
 
   @Override

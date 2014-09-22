@@ -14,7 +14,7 @@ import javax.inject.Provider;
 /** Channel wrapper that authenticates all calls with OAuth2. */
 public class OAuth2ChannelInterceptor extends ForwardingChannel {
   private static final Metadata.Key<String> AUTHORIZATION =
-      new Metadata.Key<String>("Authorization", Metadata.STRING_MARSHALLER);
+      Metadata.Key.of("Authorization", Metadata.STRING_MARSHALLER);
 
   private final OAuth2AccessTokenProvider accessTokenProvider;
   private final Provider<String> authorizationHeaderProvider

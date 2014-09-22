@@ -4,6 +4,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.net.stubby.transport.Transport;
 
+import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
@@ -12,9 +14,14 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 public class Status {
-
   public static final Status OK = new Status(Transport.Code.OK);
   public static final Status CANCELLED = new Status(Transport.Code.CANCELLED);
+  public static final Metadata.Key<Transport.Code> CODE_KEY
+      = Metadata.Key.of("grpc-status", new CodeMarshaller());
+  public static final Metadata.Key<String> MESSAGE_KEY
+      = Metadata.Key.of("grpc-message", Metadata.STRING_MARSHALLER);
+
+  private static final Logger log = Logger.getLogger(Status.class.getName());
 
   public static Status fromThrowable(Throwable t) {
     for (Throwable cause : Throwables.getCausalChain(t)) {
@@ -133,5 +140,36 @@ public class Status {
     }
     builder.append("]");
     return builder.toString();
+  }
+
+  private static class CodeMarshaller implements Metadata.Marshaller<Transport.Code> {
+    @Override
+    public byte[] toBytes(Transport.Code value) {
+      return Metadata.INTEGER_MARSHALLER.toBytes(value.getNumber());
+    }
+
+    @Override
+    public String toAscii(Transport.Code value) {
+      return Metadata.INTEGER_MARSHALLER.toAscii(value.getNumber());
+    }
+
+    @Override
+    public Transport.Code parseBytes(byte[] serialized) {
+      return intToCode(Metadata.INTEGER_MARSHALLER.parseBytes(serialized));
+    }
+
+    @Override
+    public Transport.Code parseAscii(String ascii) {
+      return intToCode(Metadata.INTEGER_MARSHALLER.parseAscii(ascii));
+    }
+
+    private Transport.Code intToCode(Integer i) {
+      Transport.Code code = Transport.Code.valueOf(i);
+      if (code == null) {
+        log.warning("Unknown Code: " + i);
+        code = Transport.Code.UNKNOWN;
+      }
+      return code;
+    }
   }
 }

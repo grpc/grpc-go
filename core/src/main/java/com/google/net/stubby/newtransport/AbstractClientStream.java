@@ -5,8 +5,14 @@ import static com.google.net.stubby.newtransport.StreamState.OPEN;
 import static com.google.net.stubby.newtransport.StreamState.READ_ONLY;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
+
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * The abstract base class for {@link ClientStream} implementations.
@@ -15,36 +21,63 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
 
   private final StreamListener listener;
 
+  @GuardedBy("stateLock")
   private Status status;
 
   private final Object stateLock = new Object();
   private volatile StreamState state = StreamState.OPEN;
+
+  private Status stashedStatus;
+  private Metadata.Trailers stashedTrailers;
 
   protected AbstractClientStream(StreamListener listener) {
     this.listener = Preconditions.checkNotNull(listener);
   }
 
   @Override
-  protected final StreamListener listener() {
-    return listener;
+  protected ListenableFuture<Void> receiveMessage(InputStream is, int length) {
+    return listener.messageRead(is, length);
+  }
+
+  /** gRPC protocol v1 support */
+  @Override
+  protected void receiveStatus(Status status) {
+    Preconditions.checkNotNull(status, "status");
+    stashedStatus = status;
+    stashedTrailers = new Metadata.Trailers();
   }
 
   /**
-   * Overrides the behavior of the {@link StreamListener#closed(Status)} method to call
-   * {@link #setStatus(Status)}, rather than notifying the {@link #listener()} directly.
+   * If using gRPC v2 protocol, this method must be called with received trailers before notifying
+   * deframer of end of stream.
    */
-  @Override
-  protected final StreamListener inboundMessageHandler() {
-    // Wraps the base handler to get status update.
-    return new ForwardingStreamListener(super.inboundMessageHandler()) {
-      @Override
-      public void closed(Status status, Metadata.Trailers trailers) {
-        inboundPhase(Phase.STATUS);
-        // TODO(user): Fix once we switch the wire format to express status in trailers
-        setStatus(status, new Metadata.Trailers());
-      }
-    };
+  public void stashTrailers(Metadata.Trailers trailers) {
+    Preconditions.checkNotNull(status, "trailers");
+    stashedStatus = new Status(trailers.get(Status.CODE_KEY), trailers.get(Status.MESSAGE_KEY));
+    trailers.removeAll(Status.CODE_KEY);
+    trailers.removeAll(Status.MESSAGE_KEY);
+    stashedTrailers = trailers;
   }
+
+  @Override
+  protected void remoteEndClosed() {
+    Preconditions.checkState(stashedStatus != null, "Status and trailers should have been set");
+    setStatus(stashedStatus, stashedTrailers);
+  }
+
+  @Override
+  protected final void internalSendFrame(ByteBuffer frame, boolean endOfStream) {
+    sendFrame(frame, endOfStream);
+  }
+
+  /**
+   * Sends an outbound frame to the remote end point.
+   *
+   * @param frame a buffer containing the chunk of data to be sent.
+   * @param endOfStream if {@code true} indicates that no more data will be sent on the stream by
+   *        this endpoint.
+   */
+  protected abstract void sendFrame(ByteBuffer frame, boolean endOfStream);
 
   /**
    * Sets the status if not already set and notifies the stream listener that the stream was closed.

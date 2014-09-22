@@ -5,9 +5,13 @@ import static com.google.net.stubby.newtransport.StreamState.OPEN;
 import static com.google.net.stubby.newtransport.StreamState.WRITE_ONLY;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
+
+import java.io.InputStream;
+import java.nio.ByteBuffer;
 
 import javax.annotation.concurrent.GuardedBy;
 
@@ -26,16 +30,23 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
   /** Saved application status for notifying when graceful stream termination completes. */
   @GuardedBy("stateLock")
   private Status gracefulStatus;
-  @GuardedBy("stateLock")
-  private Metadata.Trailers gracefulTrailers;
-
-  @Override
-  protected final StreamListener listener() {
-    return listener;
-  }
+  /** Saved trailers from close() that need to be sent once the framer has sent all messages. */
+  private Metadata.Trailers stashedTrailers;
 
   public final void setListener(ServerStreamListener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");
+  }
+
+  @Override
+  protected ListenableFuture<Void> receiveMessage(InputStream is, int length) {
+    inboundPhase(Phase.MESSAGE);
+    return listener.messageRead(is, length);
+  }
+
+  /** gRPC protocol v1 support */
+  @Override
+  protected void receiveStatus(Status status) {
+    Preconditions.checkState(status == Status.OK, "Received status can only be OK on server");
   }
 
   @Override
@@ -52,12 +63,47 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
         // is notified via complete()). Since there may be large buffers involved, the actual
         // completion of the RPC could be much later than this call.
         gracefulStatus = status;
-        gracefulTrailers = trailers;
       }
     }
+    trailers.removeAll(Status.CODE_KEY);
+    trailers.removeAll(Status.MESSAGE_KEY);
+    trailers.put(Status.CODE_KEY, status.getCode());
+    if (status.getDescription() != null) {
+      trailers.put(Status.MESSAGE_KEY, status.getDescription());
+    }
+    this.stashedTrailers = trailers;
     closeFramer(status);
     dispose();
   }
+
+  @Override
+  protected final void internalSendFrame(ByteBuffer frame, boolean endOfStream) {
+    if (!GRPC_V2_PROTOCOL) {
+      sendFrame(frame, endOfStream);
+    } else {
+      sendFrame(frame, false);
+      if (endOfStream) {
+        sendTrailers(stashedTrailers);
+        stashedTrailers = null;
+      }
+    }
+  }
+
+  /**
+   * Sends an outbound frame to the remote end point.
+   *
+   * @param frame a buffer containing the chunk of data to be sent.
+   * @param endOfStream if {@code true} indicates that no more data will be sent on the stream by
+   *        this endpoint.
+   */
+  protected abstract void sendFrame(ByteBuffer frame, boolean endOfStream);
+
+  /**
+   * Sends trailers to the remote end point. This call implies end of stream.
+   *
+   * @param trailers metadata to be sent to end point
+   */
+  protected abstract void sendTrailers(Metadata.Trailers trailers);
 
   /**
    * The Stream is considered completely closed and there is no further opportunity for error. It
@@ -80,7 +126,7 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
           new Metadata.Trailers());
       throw new IllegalStateException("successful complete() without close()");
     }
-    listener.closed(status, gracefulTrailers);
+    listener.closed(status, new Metadata.Trailers());
   }
 
   @Override
@@ -91,7 +137,8 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
   /**
    * Called when the remote end half-closes the stream.
    */
-  public final void remoteEndClosed() {
+  @Override
+  protected final void remoteEndClosed() {
     synchronized (stateLock) {
       Preconditions.checkState(state == OPEN, "Stream not OPEN");
       state = WRITE_ONLY;

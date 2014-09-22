@@ -87,6 +87,42 @@ public abstract class Metadata<S extends Metadata> {
     }
   };
 
+  /**
+   * Simple metadata marshaller that encodes an integer as a signed decimal string or as big endian
+   * binary with four bytes.
+   */
+  public static final Marshaller<Integer> INTEGER_MARSHALLER = new Marshaller<Integer>() {
+    @Override
+    public byte[] toBytes(Integer value) {
+      return new byte[] {
+        (byte) (value >>> 24),
+        (byte) (value >>> 16),
+        (byte) (value >>> 8),
+        (byte) (value >>> 0)};
+    }
+
+    @Override
+    public String toAscii(Integer value) {
+      return value.toString();
+    }
+
+    @Override
+    public Integer parseBytes(byte[] serialized) {
+      if (serialized.length != 4) {
+        throw new IllegalArgumentException("Can only deserialize 4 bytes into an integer");
+      }
+      return (serialized[0] << 24)
+          |  (serialized[1] << 16)
+          |  (serialized[2] << 8)
+          |   serialized[3];
+    }
+
+    @Override
+    public Integer parseAscii(String ascii) {
+      return Integer.valueOf(ascii);
+    }
+  };
+
   private final ListMultimap<String, MetadataEntry> store;
   private final boolean serializable;
 
@@ -395,6 +431,9 @@ public abstract class Metadata<S extends Metadata> {
    * Key for metadata entries. Allows for parsing and serialization of metadata.
    */
   public static class Key<T> {
+    public static <T> Key<T> of(String name, Marshaller<T> marshaller) {
+      return new Key<T>(name, marshaller);
+    }
 
     private final String name;
     private final byte[] asciiName;
@@ -403,7 +442,7 @@ public abstract class Metadata<S extends Metadata> {
     /**
      * Keys have a name and a marshaller used for serialization.
      */
-    public Key(String name, Marshaller<T> marshaller) {
+    private Key(String name, Marshaller<T> marshaller) {
       this.name = Preconditions.checkNotNull(name, "name").intern();
       this.asciiName = name.getBytes(StandardCharsets.US_ASCII);
       this.marshaller = Preconditions.checkNotNull(marshaller);

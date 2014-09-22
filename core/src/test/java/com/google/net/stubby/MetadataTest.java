@@ -6,6 +6,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.primitives.Bytes;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -43,7 +45,7 @@ public class MetadataTest {
 
   private static final String LANCE = "lance";
   private static final byte[] LANCE_BYTES = LANCE.getBytes(StandardCharsets.US_ASCII);
-  private static final Metadata.Key<Fish> KEY = new Metadata.Key<Fish>("test", FISH_MARSHALLER);
+  private static final Metadata.Key<Fish> KEY = Metadata.Key.of("test", FISH_MARSHALLER);
 
   @Test
   public void testWriteParsed() {
@@ -106,6 +108,31 @@ public class MetadataTest {
     assertFalse(fishes.hasNext());
     assertEquals("/some/path", h1.getPath());
     assertEquals("authority", h1.getAuthority());
+  }
+
+  @Test
+  public void integerMarshallerBytesIsBigEndian() {
+    assertEquals(Bytes.asList(new byte[] {0x12, 0x34, 0x56, 0x78}),
+          Bytes.asList(Metadata.INTEGER_MARSHALLER.toBytes(0x12345678)));
+  }
+
+  @Test
+  public void integerMarshallerAsciiIsDecimal() {
+    assertEquals("12345678", Metadata.INTEGER_MARSHALLER.toAscii(12345678));
+  }
+
+  @Test
+  public void roundTripIntegerMarshaller() {
+    roundTripInteger(0);
+    roundTripInteger(1);
+    roundTripInteger(-1);
+    roundTripInteger(0x12345678);
+    roundTripInteger(0x87654321);
+  }
+
+  private void roundTripInteger(Integer i) {
+    assertEquals(i, Metadata.INTEGER_MARSHALLER.parseBytes(Metadata.INTEGER_MARSHALLER.toBytes(i)));
+    assertEquals(i, Metadata.INTEGER_MARSHALLER.parseAscii(Metadata.INTEGER_MARSHALLER.toAscii(i)));
   }
 
   private static class Fish {

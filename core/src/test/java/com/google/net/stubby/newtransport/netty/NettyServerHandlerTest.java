@@ -138,7 +138,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     assertArrayEquals(CONTENT, ByteStreams.toByteArray(captor.getValue()));
 
     if (endStream) {
-      verify(streamListener).closed(eq(Status.OK), notNull(Metadata.Trailers.class));
+      verify(streamListener).halfClosed();
     }
     verifyNoMoreInteractions(streamListener);
   }
@@ -149,7 +149,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     handler.channelRead(ctx, emptyDataFrame(STREAM_ID, true));
     verify(streamListener, never()).messageRead(any(InputStream.class), anyInt());
-    verify(streamListener).closed(eq(Status.OK), notNull(Metadata.Trailers.class));
+    verify(streamListener).halfClosed();
     verifyNoMoreInteractions(streamListener);
   }
 

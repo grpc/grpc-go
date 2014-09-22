@@ -15,7 +15,7 @@ public class InputStreamDeframer extends Deframer<InputStream> {
 
   private final PrefixingInputStream prefixingInputStream;
 
-  public InputStreamDeframer(StreamListener target) {
+  public InputStreamDeframer(GrpcDeframer.Sink target) {
     super(target);
     prefixingInputStream = new PrefixingInputStream(4096);
   }

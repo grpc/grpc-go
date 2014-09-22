@@ -2,7 +2,6 @@ package com.google.net.stubby.newtransport;
 
 import com.google.common.io.ByteStreams;
 import com.google.net.stubby.GrpcFramingUtil;
-import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
@@ -23,13 +22,13 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
    */
   private static final int LENGTH_NOT_SET = -1;
 
-  private final StreamListener target;
+  private final GrpcDeframer.Sink target;
   private boolean inFrame;
   private byte currentFlags;
   private int currentLength = LENGTH_NOT_SET;
   private boolean statusDelivered;
 
-  public Deframer(StreamListener target) {
+  public Deframer(GrpcDeframer.Sink target) {
     this.target = target;
   }
 
@@ -141,7 +140,8 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
   }
 
   private void writeStatus(Status status) {
-    target.closed(status, new Metadata.Trailers());
+    target.statusRead(status);
+    target.endOfStream();
     statusDelivered = true;
   }
 

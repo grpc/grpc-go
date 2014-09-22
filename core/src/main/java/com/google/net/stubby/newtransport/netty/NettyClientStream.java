@@ -50,8 +50,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
       this.deframer2 = null;
     } else {
       this.deframer = null;
-      this.deframer2 = MessageDeframer2.createOnClient(
-          inboundMessageHandler(), channel.eventLoop());
+      this.deframer2 = new MessageDeframer2(inboundMessageHandler(), channel.eventLoop());
     }
     windowUpdateManager = new WindowUpdateManager(channel, inboundFlow);
   }
@@ -83,8 +82,14 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
   public void inboundHeadersRecieved(Http2Headers headers, boolean endOfStream) {
     responseCode = responseCode(headers);
     isGrpcResponse = isGrpcResponse(headers, responseCode);
-    if (!isGrpcResponse && endOfStream) {
-      setStatus(new Status(responseCode), new Metadata.Trailers());
+    if (endOfStream) {
+      if (isGrpcResponse) {
+        // TODO(user): call stashTrailers() as appropriate, then provide endOfStream to
+        // deframer.
+        setStatus(new Status(responseCode), new Metadata.Trailers());
+      } else {
+        setStatus(new Status(responseCode), new Metadata.Trailers());
+      }
     }
   }
 

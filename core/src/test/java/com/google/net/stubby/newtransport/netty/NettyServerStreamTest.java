@@ -2,6 +2,7 @@ package com.google.net.stubby.newtransport.netty;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
@@ -14,6 +15,9 @@ import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.ServerStreamListener;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
+
+import io.netty.buffer.EmptyByteBuf;
+import io.netty.buffer.UnpooledByteBufAllocator;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -57,7 +61,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     verifyZeroInteractions(serverListener);
     // Sending complete. Listener gets closed()
     stream().complete();
-    verify(serverListener).closed(Status.CANCELLED, trailers);
+    verify(serverListener).closed(eq(Status.CANCELLED), notNull(Metadata.Trailers.class));
     assertEquals(StreamState.CLOSED, stream.state());
     verifyZeroInteractions(serverListener);
   }
@@ -65,7 +69,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   @Test
   public void closeAfterClientHalfCloseShouldSucceed() throws Exception {
     // Client half-closes. Listener gets halfClosed()
-    stream().remoteEndClosed();
+    stream().inboundDataReceived(new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
     assertEquals(StreamState.WRITE_ONLY, stream.state());
     verify(serverListener).halfClosed();
     // Server closes. Status sent
@@ -76,23 +80,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.OK), true));
     // Sending and receiving complete. Listener gets closed()
     stream().complete();
-    verify(serverListener).closed(Status.OK, trailers);
-    verifyNoMoreInteractions(serverListener);
-  }
-
-  @Test
-  public void clientHalfCloseForTheSecondTimeShouldFail() throws Exception {
-    // Client half-closes. Listener gets halfClosed()
-    stream().remoteEndClosed();
-    assertEquals(StreamState.WRITE_ONLY, stream.state());
-    verify(serverListener).halfClosed();
-    // Client half-closes again.
-    try {
-      stream().remoteEndClosed();
-      fail();
-    } catch (IllegalStateException expected) {
-    }
-    assertEquals(StreamState.WRITE_ONLY, stream.state());
+    verify(serverListener).closed(eq(Status.OK), notNull(Metadata.Trailers.class));
     verifyNoMoreInteractions(serverListener);
   }
 
@@ -121,7 +109,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   public void abortStreamAfterClientHalfCloseShouldCallClose() {
     Status status = new Status(Transport.Code.INTERNAL, new Throwable());
     // Client half-closes. Listener gets halfClosed()
-    stream().remoteEndClosed();
+    stream().inboundDataReceived(new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
     assertEquals(StreamState.WRITE_ONLY, stream.state());
     verify(serverListener).halfClosed();
     // Abort

@@ -3,11 +3,10 @@ package com.google.net.stubby.newtransport;
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.net.stubby.Metadata;
-import com.google.net.stubby.Status;
 
 import java.io.ByteArrayInputStream;
 import java.io.Closeable;
+import java.io.InputStream;
 import java.io.IOException;
 import java.util.concurrent.Executor;
 import java.util.zip.GZIPInputStream;
@@ -30,63 +29,17 @@ public class MessageDeframer2 implements Closeable {
     NONE, GZIP;
   }
 
+  public interface Sink {
+    public ListenableFuture<Void> messageRead(InputStream is, int length);
+    public void endOfStream();
+  }
+
   private enum State {
     HEADER, BODY
   }
 
-  /**
-   * Create a deframer for use on the server-side. All calls to this class must be made in the
-   * context of the provided executor, which also must not allow concurrent processing of Runnables.
-   *
-   * @param listener callback for fully read GRPC messages
-   * @param executor used for internal event processing
-   */
-  public static MessageDeframer2 createOnServer(StreamListener listener, Executor executor) {
-    return createOnServer(listener, executor, Compression.NONE);
-  }
-
-  /**
-   * Create a deframer for use on the server-side. All calls to this class must be made in the
-   * context of the provided executor, which also must not allow concurrent processing of Runnables.
-   *
-   * @param listener callback for fully read GRPC messages
-   * @param executor used for internal event processing
-   * @param compression the compression used if a compressed frame is encountered, with NONE meaning
-   *     unsupported
-   */
-  public static MessageDeframer2 createOnServer(StreamListener listener, Executor executor,
-      Compression compression) {
-    return new MessageDeframer2(listener, executor, false, compression);
-  }
-
-  /**
-   * Create a deframer for use on the client-side. All calls to this class must be made in the
-   * context of the provided executor, which also must not allow concurrent processing of Runnables.
-   *
-   * @param listener callback for fully read GRPC messages
-   * @param executor used for internal event processing
-   */
-  public static MessageDeframer2 createOnClient(StreamListener listener, Executor executor) {
-    return createOnClient(listener, executor, Compression.NONE);
-  }
-
-  /**
-   * Create a deframer for use on the client-side. All calls to this class must be made in the
-   * context of the provided executor, which also must not allow concurrent processing of Runnables.
-   *
-   * @param listener callback for fully read GRPC messages
-   * @param executor used for internal event processing
-   * @param compression the compression used if a compressed frame is encountered, with NONE meaning
-   *     unsupported
-   */
-  public static MessageDeframer2 createOnClient(StreamListener listener, Executor executor,
-      Compression compression) {
-    return new MessageDeframer2(listener, executor, true, compression);
-  }
-
-  private final StreamListener listener;
+  private final Sink sink;
   private final Executor executor;
-  private final boolean client;
   private final Compression compression;
   private final Runnable deliveryTask = new Runnable() {
         @Override
@@ -103,16 +56,35 @@ public class MessageDeframer2 implements Closeable {
   private CompositeBuffer nextFrame;
   private CompositeBuffer unprocessed = new CompositeBuffer();
 
-  private MessageDeframer2(StreamListener listener, Executor executor, boolean client,
-      Compression compression) {
-    this.listener = Preconditions.checkNotNull(listener, "listener");
+  /**
+   * Create a deframer. All calls to this class must be made in the context of the provided
+   * executor, which also must not allow concurrent processing of Runnables. Compression will not
+   * be supported.
+   *
+   * @param sink callback for fully read GRPC messages
+   * @param executor used for internal event processing
+   */
+  public MessageDeframer2(Sink sink, Executor executor) {
+    this(sink, executor, Compression.NONE);
+  }
+
+  /**
+   * Create a deframer. All calls to this class must be made in the context of the provided
+   * executor, which also must not allow concurrent processing of Runnables.
+   *
+   * @param sink callback for fully read GRPC messages
+   * @param executor used for internal event processing
+   * @param compression the compression used if a compressed frame is encountered, with NONE meaning
+   *     unsupported
+   */
+  public MessageDeframer2(Sink sink, Executor executor, Compression compression) {
+    this.sink = Preconditions.checkNotNull(sink, "sink");
     this.executor = Preconditions.checkNotNull(executor, "executor");
-    this.client = client;
     this.compression = Preconditions.checkNotNull(compression, "compression");
   }
 
   /**
-   * Adds the given data to this deframer and attempts delivery to the listener.
+   * Adds the given data to this deframer and attempts delivery to the sink.
    */
   public void deframe(Buffer data, boolean endOfStream) {
     Preconditions.checkNotNull(data, "data");
@@ -134,9 +106,18 @@ public class MessageDeframer2 implements Closeable {
     }
   }
 
+  public void delayProcessing(ListenableFuture<Void> future) {
+    Preconditions.checkState(!deliveryOutstanding, "Only one delay allowed concurrently");
+    if (future != null) {
+      deliveryOutstanding = true;
+      // Once future completes, try to deliver the next message.
+      future.addListener(deliveryTask, executor);
+    }
+  }
+
   /**
    * If there is no outstanding delivery, attempts to read and deliver as many messages to the
-   * listener as possible. Only one outstanding delivery is allowed at a time.
+   * sink as possible. Only one outstanding delivery is allowed at a time.
    */
   private void deliver() {
     if (deliveryOutstanding) {
@@ -151,11 +132,11 @@ public class MessageDeframer2 implements Closeable {
           processHeader();
           break;
         case BODY:
-          // Read the body and deliver the message to the listener.
+          // Read the body and deliver the message to the sink.
           deliveryOutstanding = true;
           ListenableFuture<Void> processingFuture = processBody();
           if (processingFuture != null) {
-            // A listener was returned for the completion of processing the delivered
+            // A future was returned for the completion of processing the delivered
             // message. Once it's done, try to deliver the next message.
             processingFuture.addListener(deliveryTask, executor);
             return;
@@ -175,10 +156,7 @@ public class MessageDeframer2 implements Closeable {
         // application is properly notified of abortion.
         throw new RuntimeException("Encountered end-of-stream mid-frame");
       }
-      if (!client) {
-        // If on the server-side, we need to notify application of half-close.
-        listener.closed(Status.OK, new Metadata.Trailers());
-      }
+      sink.endOfStream();
     }
   }
 
@@ -241,13 +219,13 @@ public class MessageDeframer2 implements Closeable {
         } catch (IOException ex) {
           throw new RuntimeException(ex);
         }
-        future = listener.messageRead(new ByteArrayInputStream(bytes), bytes.length);
+        future = sink.messageRead(new ByteArrayInputStream(bytes), bytes.length);
       } else {
         throw new AssertionError("Unknown compression type");
       }
     } else {
-      // Don't close the frame, since the listener is now responsible for the life-cycle.
-      future = listener.messageRead(Buffers.openStream(nextFrame, true), nextFrame.readableBytes());
+      // Don't close the frame, since the sink is now responsible for the life-cycle.
+      future = sink.messageRead(Buffers.openStream(nextFrame, true), nextFrame.readableBytes());
       nextFrame = null;
     }
 

@@ -4,7 +4,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.io.Closeables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
 import java.io.InputStream;
@@ -41,29 +40,19 @@ public abstract class AbstractStream implements Stream {
   private final Framer.Sink<ByteBuffer> outboundFrameHandler = new Framer.Sink<ByteBuffer>() {
     @Override
     public void deliverFrame(ByteBuffer frame, boolean endOfStream) {
-      sendFrame(frame, endOfStream);
+      internalSendFrame(frame, endOfStream);
     }
   };
 
   /**
-   * Internal handler for Deframer output. Informs the {@link #listener()} of inbound messages.
+   * Internal handler for deframer output. Informs stream of inbound messages.
    */
-  private final StreamListener inboundMessageHandler = new StreamListener() {
-
-    @Override
-    public ListenableFuture<Void> headersRead(Metadata.Headers headers) {
-      inboundPhase(Phase.HEADERS);
-      ListenableFuture<Void> future = listener().headersRead(headers);
-      disableWindowUpdate(future);
-      return future;
-    }
-
+  private final GrpcDeframer.Sink inboundMessageHandler = new GrpcDeframer.Sink() {
     @Override
     public ListenableFuture<Void> messageRead(InputStream input, int length) {
       ListenableFuture<Void> future = null;
       try {
-        inboundPhase(Phase.MESSAGE);
-        future = listener().messageRead(input, length);
+        future = receiveMessage(input, length);
         disableWindowUpdate(future);
         return future;
       } finally {
@@ -72,9 +61,13 @@ public abstract class AbstractStream implements Stream {
     }
 
     @Override
-    public void closed(Status status, Metadata.Trailers trailers) {
-      inboundPhase(Phase.STATUS);
-      listener().closed(status, trailers);
+    public void statusRead(Status status) {
+      receiveStatus(status);
+    }
+
+    @Override
+    public void endOfStream() {
+      remoteEndClosed();
     }
   };
 
@@ -129,12 +122,16 @@ public abstract class AbstractStream implements Stream {
    * @param endOfStream if {@code true} indicates that no more data will be sent on the stream by
    *        this endpoint.
    */
-  protected abstract void sendFrame(ByteBuffer frame, boolean endOfStream);
+  protected abstract void internalSendFrame(ByteBuffer frame, boolean endOfStream);
 
-  /**
-   * Returns the listener associated to this stream.
-   */
-  protected abstract StreamListener listener();
+  /** A message was deframed. */
+  protected abstract ListenableFuture<Void> receiveMessage(InputStream is, int length);
+
+  /** A status was deframed. */
+  protected abstract void receiveStatus(Status status);
+
+  /** Deframer reached end of stream. */
+  protected abstract void remoteEndClosed();
 
   /**
    * If the given future is non-{@code null}, temporarily disables window updates for inbound flow
@@ -147,7 +144,7 @@ public abstract class AbstractStream implements Stream {
    * Gets the internal handler for inbound messages. Subclasses must use this as the target for a
    * {@link com.google.net.stubby.newtransport.Deframer}.
    */
-  protected StreamListener inboundMessageHandler() {
+  protected GrpcDeframer.Sink inboundMessageHandler() {
     return inboundMessageHandler;
   }
 

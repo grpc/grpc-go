@@ -20,6 +20,9 @@ import java.util.concurrent.Executor;
  * {@link Decompressor}.
  */
 public class GrpcDeframer implements Closeable {
+  public interface Sink extends MessageDeframer2.Sink {
+    void statusRead(Status status);
+  }
 
   private enum State {
     HEADER, BODY
@@ -35,22 +38,22 @@ public class GrpcDeframer implements Closeable {
   private boolean statusNotified;
   private boolean endOfStream;
   private boolean deliveryOutstanding;
-  private StreamListener listener;
+  private Sink sink;
   private CompositeBuffer nextFrame;
 
   /**
    * Constructs the deframer.
    *
    * @param decompressor the object used for de-framing GRPC compression frames.
-   * @param listener the listener for fully read GRPC messages.
+   * @param sink the sink for fully read GRPC messages.
    * @param executor the executor to be used for delivery. All calls to
    *        {@link #deframe(Buffer, boolean)} must be made in the context of this executor. This
    *        executor must not allow concurrent access to this class, so it must be either a single
    *        thread or have sequential processing of events.
    */
-  public GrpcDeframer(Decompressor decompressor, StreamListener listener, Executor executor) {
+  public GrpcDeframer(Decompressor decompressor, Sink sink, Executor executor) {
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
-    this.listener = Preconditions.checkNotNull(listener, "listener");
+    this.sink = Preconditions.checkNotNull(sink, "sink");
     this.executor = Preconditions.checkNotNull(executor, "executor");
     deliveryTask = new Runnable() {
       @Override
@@ -62,7 +65,7 @@ public class GrpcDeframer implements Closeable {
   }
 
   /**
-   * Adds the given data to this deframer and attempts delivery to the listener.
+   * Adds the given data to this deframer and attempts delivery to the sink.
    */
   public void deframe(Buffer data, boolean endOfStream) {
     Preconditions.checkNotNull(data, "data");
@@ -87,7 +90,7 @@ public class GrpcDeframer implements Closeable {
 
   /**
    * If there is no outstanding delivery, attempts to read and deliver as many messages to the
-   * listener as possible. Only one outstanding delivery is allowed at a time.
+   * sink as possible. Only one outstanding delivery is allowed at a time.
    */
   private void deliver() {
     if (deliveryOutstanding) {
@@ -106,11 +109,11 @@ public class GrpcDeframer implements Closeable {
           processHeader();
           break;
         case BODY:
-          // Read the body and deliver the message to the listener.
+          // Read the body and deliver the message to the sink.
           deliveryOutstanding = true;
           ListenableFuture<Void> processingFuture = processBody();
           if (processingFuture != null) {
-            // A listener was returned for the completion of processing the delivered
+            // A sink was returned for the completion of processing the delivered
             // message. Once it's done, try to deliver the next message.
             processingFuture.addListener(deliveryTask, executor);
             return;
@@ -200,9 +203,9 @@ public class GrpcDeframer implements Closeable {
    */
   private ListenableFuture<Void> processMessage() {
     try {
-      return listener.messageRead(Buffers.openStream(nextFrame, true), nextFrame.readableBytes());
+      return sink.messageRead(Buffers.openStream(nextFrame, true), nextFrame.readableBytes());
     } finally {
-      // Don't close the frame, since the listener is now responsible for the life-cycle.
+      // Don't close the frame, since the sink is now responsible for the life-cycle.
       nextFrame = null;
     }
   }
@@ -223,10 +226,11 @@ public class GrpcDeframer implements Closeable {
   }
 
   /**
-   * Delivers the status notification to the listener.
+   * Delivers the status notification to the sink.
    */
   private void notifyStatus(Status status) {
     statusNotified = true;
-    listener.closed(status, new Metadata.Trailers());
+    sink.statusRead(status);
+    sink.endOfStream();
   }
 }

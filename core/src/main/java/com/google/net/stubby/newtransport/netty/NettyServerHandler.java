@@ -57,16 +57,6 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
     super(connection, frameReader, frameWriter, inboundFlow, outboundFlow);
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
     this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
-
-    // Observe the HTTP/2 connection for events.
-    connection.addListener(new Http2ConnectionAdapter() {
-        @Override
-        public void streamHalfClosed(Http2Stream stream) {
-          if (stream.state() == Http2Stream.State.HALF_CLOSED_REMOTE) {
-            serverStream(stream).remoteEndClosed();
-          }
-        }
-    });
   }
 
   @Override

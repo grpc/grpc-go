@@ -51,7 +51,7 @@ public class GrpcDeframerTest {
   private StubDecompressor decompressor;
 
   @Mock
-  private StreamListener listener;
+  private GrpcDeframer.Sink sink;
 
   private SettableFuture<Void> messageFuture;
 
@@ -59,10 +59,10 @@ public class GrpcDeframerTest {
   public void setup() {
     MockitoAnnotations.initMocks(this);
     messageFuture = SettableFuture.create();
-    when(listener.messageRead(any(InputStream.class), anyInt())).thenReturn(messageFuture);
+    when(sink.messageRead(any(InputStream.class), anyInt())).thenReturn(messageFuture);
 
     decompressor = new StubDecompressor();
-    reader = new GrpcDeframer(decompressor, listener, MoreExecutors.directExecutor());
+    reader = new GrpcDeframer(decompressor, sink, MoreExecutors.directExecutor());
   }
 
   @Test
@@ -135,7 +135,7 @@ public class GrpcDeframerTest {
     byte[] fullBuffer = Arrays.copyOf(frame, frame.length * 2);
     System.arraycopy(frame, 0, fullBuffer, frame.length, frame.length);
 
-    // Use only a portion of the frame. Should not call the listener.
+    // Use only a portion of the frame. Should not call the sink.
     int startIx = 0;
     int endIx = 10;
     byte[] chunk = Arrays.copyOfRange(fullBuffer, startIx, endIx);
@@ -144,7 +144,7 @@ public class GrpcDeframerTest {
     verifyNoPayload();
     verifyNoStatus();
 
-    // Supply the rest of the frame and a portion of a second frame. Should call the listener.
+    // Supply the rest of the frame and a portion of a second frame. Should call the sink.
     startIx = endIx;
     endIx = startIx + frame.length;
     chunk = Arrays.copyOfRange(fullBuffer, startIx, endIx);
@@ -156,7 +156,7 @@ public class GrpcDeframerTest {
 
   private void verifyPayload() {
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(listener).messageRead(captor.capture(), eq(MESSAGE.length()));
+    verify(sink).messageRead(captor.capture(), eq(MESSAGE.length()));
     assertEquals(MESSAGE, readString(captor.getValue(), MESSAGE.length()));
   }
 
@@ -176,16 +176,18 @@ public class GrpcDeframerTest {
 
   private void verifyStatus(Transport.Code code) {
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture(), notNull(Metadata.Trailers.class));
+    verify(sink).statusRead(captor.capture());
+    verify(sink).endOfStream();
     assertEquals(code, captor.getValue().getCode());
   }
 
   private void verifyNoPayload() {
-    verify(listener, never()).messageRead(any(InputStream.class), anyInt());
+    verify(sink, never()).messageRead(any(InputStream.class), anyInt());
   }
 
   private void verifyNoStatus() {
-    verify(listener, never()).closed(any(Status.class), notNull(Metadata.Trailers.class));
+    verify(sink, never()).statusRead(any(Status.class));
+    verify(sink, never()).endOfStream();
   }
 
   private static byte[] payloadFrame() throws IOException {
