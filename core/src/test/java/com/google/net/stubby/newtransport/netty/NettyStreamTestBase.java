@@ -67,9 +67,6 @@ public abstract class NettyStreamTestBase {
   protected ChannelFuture future;
 
   @Mock
-  protected StreamListener listener;
-
-  @Mock
   protected Runnable accepted;
 
   @Mock
@@ -137,9 +134,7 @@ public abstract class NettyStreamTestBase {
 
   protected abstract NettyStream createStream();
 
-  protected StreamListener listener() {
-    return listener;
-  }
+  protected abstract StreamListener listener();
 
   private String toString(InputStream in) throws Exception {
     byte[] bytes = new byte[in.available()];

@@ -7,9 +7,9 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.newtransport.ClientStream;
+import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.ClientTransport;
 import com.google.net.stubby.newtransport.ClientTransportFactory;
-import com.google.net.stubby.newtransport.StreamListener;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -139,7 +139,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
     public void start(Listener<RespT> observer, Metadata.Headers headers) {
       Preconditions.checkState(stream == null, "Already started");
       stream = obtainActiveTransport().newStream(method, headers,
-          new StreamListenerImpl(observer));
+          new ClientStreamListenerImpl(observer));
     }
 
     @Override
@@ -191,10 +191,10 @@ public final class ChannelImpl extends AbstractService implements Channel {
       }
     }
 
-    private class StreamListenerImpl implements StreamListener {
+    private class ClientStreamListenerImpl implements ClientStreamListener {
       private final Listener<RespT> observer;
 
-      public StreamListenerImpl(Listener<RespT> observer) {
+      public ClientStreamListenerImpl(Listener<RespT> observer) {
         Preconditions.checkNotNull(observer);
         this.observer = observer;
       }

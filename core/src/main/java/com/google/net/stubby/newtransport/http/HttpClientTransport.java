@@ -13,8 +13,8 @@ import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
 import com.google.net.stubby.newtransport.AbstractClientTransport;
 import com.google.net.stubby.newtransport.ClientStream;
+import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.InputStreamDeframer;
-import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
@@ -44,7 +44,7 @@ public class HttpClientTransport extends AbstractClientTransport {
   @Override
   protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
                                            Metadata.Headers headers,
-                                           StreamListener listener) {
+                                           ClientStreamListener listener) {
     URI uri = baseUri.resolve(method.getName());
     HttpClientStream stream = new HttpClientStream(uri, headers.serializeAscii(), listener);
     synchronized (streams) {
@@ -83,7 +83,7 @@ public class HttpClientTransport extends AbstractClientTransport {
     final DataOutputStream outputStream;
     boolean connected;
 
-    HttpClientStream(URI uri, String[] headers, StreamListener listener) {
+    HttpClientStream(URI uri, String[] headers, ClientStreamListener listener) {
       super(listener);
 
       try {

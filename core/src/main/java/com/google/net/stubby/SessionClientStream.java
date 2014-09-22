@@ -1,7 +1,7 @@
 package com.google.net.stubby;
 
 import com.google.net.stubby.newtransport.ClientStream;
-import com.google.net.stubby.newtransport.StreamListener;
+import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
@@ -14,14 +14,14 @@ import java.io.InputStream;
  */
 // TODO(user): Delete this class when new transport interfaces are introduced
 public class SessionClientStream implements ClientStream {
-  private final StreamListener listener;
+  private final ClientStreamListener listener;
   /**
    * The {@link Request} used by the stub to dispatch the call
    */
   private Request request;
   private Response response;
 
-  public SessionClientStream(StreamListener listener) {
+  public SessionClientStream(ClientStreamListener listener) {
     this.listener = listener;
   }
 

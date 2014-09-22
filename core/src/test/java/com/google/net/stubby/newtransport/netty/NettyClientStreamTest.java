@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 
@@ -23,12 +24,20 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 
 /**
  * Tests for {@link NettyClientStream}.
  */
 @RunWith(JUnit4.class)
 public class NettyClientStreamTest extends NettyStreamTestBase {
+  @Mock
+  protected ClientStreamListener listener;
+
+  @Override
+  protected ClientStreamListener listener() {
+    return listener;
+  }
 
   @Test
   public void closeShouldSucceed() {

@@ -17,7 +17,7 @@ import com.google.common.util.concurrent.Service;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.newtransport.StreamListener;
+import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.okhttp.OkHttpClientTransport.ClientFrameHandler;
 import com.google.net.stubby.newtransport.okhttp.OkHttpClientTransport.OkHttpClientStream;
 import com.google.net.stubby.transport.Transport;
@@ -437,7 +437,7 @@ public class OkHttpClientTransportTest {
     }
   }
 
-  private static class MockStreamListener implements StreamListener {
+  private static class MockStreamListener implements ClientStreamListener {
     Status status;
     CountDownLatch closed = new CountDownLatch(1);
     ArrayList<String> messages = new ArrayList<String>();

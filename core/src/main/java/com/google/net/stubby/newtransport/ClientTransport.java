@@ -19,8 +19,8 @@ public interface ClientTransport extends Service {
    * TODO(user): Consider also throwing for stopping.
    * <p>
    * This method returns immediately and does not wait for any validation of the request. If
-   * creation fails for any reason, {@link StreamListener#closed} will be called to provide the
-   * error information. Any sent messages for this stream will be buffered until creation has
+   * creation fails for any reason, {@link ClientStreamListener#closed} will be called to provide
+   * the error information. Any sent messages for this stream will be buffered until creation has
    * completed (either successfully or unsuccessfully).
    *
    * @param method the descriptor of the remote method to be called for this stream.
@@ -30,5 +30,5 @@ public interface ClientTransport extends Service {
    */
   ClientStream newStream(MethodDescriptor<?, ?> method,
                          Metadata.Headers headers,
-                         StreamListener listener);
+                         ClientStreamListener listener);
 }

@@ -15,7 +15,7 @@ public abstract class AbstractClientTransport extends AbstractService implements
   @Override
   public final ClientStream newStream(MethodDescriptor<?, ?> method,
                                       Metadata.Headers headers,
-                                      StreamListener listener) {
+                                      ClientStreamListener listener) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(listener, "listener");
     if (state() == State.STARTING) {
@@ -42,5 +42,5 @@ public abstract class AbstractClientTransport extends AbstractService implements
    */
   protected abstract ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
       Metadata.Headers headers,
-      StreamListener listener);
+      ClientStreamListener listener);
 }

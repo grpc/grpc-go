@@ -8,10 +8,10 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
+import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.GrpcDeframer;
 import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.MessageDeframer2;
-import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.transport.Transport;
 
 import io.netty.buffer.ByteBuf;
@@ -40,7 +40,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
   private boolean isGrpcResponse;
   private StringBuilder nonGrpcErrorMessage = new StringBuilder();
 
-  NettyClientStream(StreamListener listener, Channel channel,
+  NettyClientStream(ClientStreamListener listener, Channel channel,
       DefaultHttp2InboundFlowController inboundFlow) {
     super(listener);
     this.channel = Preconditions.checkNotNull(channel, "channel");

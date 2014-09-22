@@ -7,8 +7,8 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.newtransport.AbstractClientTransport;
 import com.google.net.stubby.newtransport.ClientStream;
+import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.ClientTransport;
-import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.newtransport.netty.NettyClientTransportFactory.NegotiationType;
 import com.google.net.stubby.testing.utils.ssl.SslContextFactory;
 
@@ -89,7 +89,7 @@ class NettyClientTransport extends AbstractClientTransport {
 
   @Override
   protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method, Metadata.Headers headers,
-      StreamListener listener) {
+      ClientStreamListener listener) {
     // Create the stream.
     NettyClientStream stream = new NettyClientStream(listener, channel, handler.inboundFlow());
 

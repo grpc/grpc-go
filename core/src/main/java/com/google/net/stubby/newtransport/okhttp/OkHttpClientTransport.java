@@ -10,9 +10,9 @@ import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
 import com.google.net.stubby.newtransport.AbstractClientTransport;
 import com.google.net.stubby.newtransport.ClientStream;
+import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.ClientTransport;
 import com.google.net.stubby.newtransport.InputStreamDeframer;
-import com.google.net.stubby.newtransport.StreamListener;
 import com.google.net.stubby.newtransport.StreamState;
 import com.google.net.stubby.transport.Transport;
 import com.google.net.stubby.transport.Transport.Code;
@@ -129,7 +129,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   @Override
   protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
                                            Metadata.Headers headers,
-                                           StreamListener listener) {
+                                           ClientStreamListener listener) {
     return new OkHttpClientStream(method, headers, listener);
   }
 
@@ -403,7 +403,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     int unacknowledgedBytesRead;
 
     OkHttpClientStream(MethodDescriptor<?, ?> method, Metadata.Headers headers,
-        StreamListener listener) {
+        ClientStreamListener listener) {
       super(listener);
       deframer = new InputStreamDeframer(inboundMessageHandler());
       synchronized (lock) {

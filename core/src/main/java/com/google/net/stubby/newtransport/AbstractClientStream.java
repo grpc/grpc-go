@@ -19,7 +19,7 @@ import javax.annotation.concurrent.GuardedBy;
  */
 public abstract class AbstractClientStream extends AbstractStream implements ClientStream {
 
-  private final StreamListener listener;
+  private final ClientStreamListener listener;
 
   @GuardedBy("stateLock")
   private Status status;
@@ -30,7 +30,7 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
   private Status stashedStatus;
   private Metadata.Trailers stashedTrailers;
 
-  protected AbstractClientStream(StreamListener listener) {
+  protected AbstractClientStream(ClientStreamListener listener) {
     this.listener = Preconditions.checkNotNull(listener);
   }
 

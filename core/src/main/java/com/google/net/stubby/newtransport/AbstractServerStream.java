@@ -27,9 +27,8 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
   /** Whether listener.closed() has been called. */
   @GuardedBy("stateLock")
   private boolean listenerClosed;
-  /** Saved application status for notifying when graceful stream termination completes. */
-  @GuardedBy("stateLock")
-  private Status gracefulStatus;
+  /** Whether the stream was closed gracefull by the application (vs. a transport-level failure). */
+  private boolean gracefulClose;
   /** Saved trailers from close() that need to be sent once the framer has sent all messages. */
   private Metadata.Trailers stashedTrailers;
 
@@ -58,13 +57,8 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
       Preconditions.checkState(!status.isOk() || state == WRITE_ONLY,
           "Cannot close with OK before client half-closes");
       state = CLOSED;
-      if (!listenerClosed) {
-        // Delay calling listener.closed() until the status has been flushed to the network (which
-        // is notified via complete()). Since there may be large buffers involved, the actual
-        // completion of the RPC could be much later than this call.
-        gracefulStatus = status;
-      }
     }
+    gracefulClose = true;
     trailers.removeAll(Status.CODE_KEY);
     trailers.removeAll(Status.MESSAGE_KEY);
     trailers.put(Status.CODE_KEY, status.getCode());
@@ -109,24 +103,21 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
    * The Stream is considered completely closed and there is no further opportunity for error. It
    * calls the listener's {@code closed()} if it was not already done by {@link #abortStream}. Note
    * that it is expected that either {@code closed()} or {@code abortStream()} was previously
-   * called, as otherwise there is no status to provide to the listener.
+   * called, since {@code closed()} is required for a normal stream closure and {@code
+   * abortStream()} for abnormal.
    */
   public void complete() {
-    Status status;
     synchronized (stateLock) {
       if (listenerClosed) {
         return;
       }
       listenerClosed = true;
-      status = gracefulStatus;
-      gracefulStatus = null;
     }
-    if (status == null) {
-      listener.closed(new Status(Transport.Code.INTERNAL, "successful complete() without close()"),
-          new Metadata.Trailers());
+    if (!gracefulClose) {
+      listener.closed(new Status(Transport.Code.INTERNAL, "successful complete() without close()"));
       throw new IllegalStateException("successful complete() without close()");
     }
-    listener.closed(status, new Metadata.Trailers());
+    listener.closed(Status.OK);
   }
 
   @Override
@@ -179,7 +170,7 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
       dispose();
     } finally {
       if (closeListener) {
-        listener.closed(status, new Metadata.Trailers());
+        listener.closed(status);
       }
     }
   }

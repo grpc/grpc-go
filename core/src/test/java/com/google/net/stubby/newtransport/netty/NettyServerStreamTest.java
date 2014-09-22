@@ -2,8 +2,6 @@ package com.google.net.stubby.newtransport.netty;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.notNull;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -27,7 +25,6 @@ import org.mockito.Mock;
 /** Unit tests for {@link NettyServerStream}. */
 @RunWith(JUnit4.class)
 public class NettyServerStreamTest extends NettyStreamTestBase {
-
   @Mock
   protected ServerStreamListener serverListener;
   private Metadata.Trailers trailers = new Metadata.Trailers();
@@ -61,7 +58,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     verifyZeroInteractions(serverListener);
     // Sending complete. Listener gets closed()
     stream().complete();
-    verify(serverListener).closed(eq(Status.CANCELLED), notNull(Metadata.Trailers.class));
+    verify(serverListener).closed(Status.OK);
     assertEquals(StreamState.CLOSED, stream.state());
     verifyZeroInteractions(serverListener);
   }
@@ -80,7 +77,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.OK), true));
     // Sending and receiving complete. Listener gets closed()
     stream().complete();
-    verify(serverListener).closed(eq(Status.OK), notNull(Metadata.Trailers.class));
+    verify(serverListener).closed(Status.OK);
     verifyNoMoreInteractions(serverListener);
   }
 
@@ -89,7 +86,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     Status status = new Status(Transport.Code.INTERNAL, new Throwable());
     stream().abortStream(status, true);
     assertEquals(StreamState.CLOSED, stream.state());
-    verify(serverListener).closed(same(status), notNull(Metadata.Trailers.class));
+    verify(serverListener).closed(same(status));
     verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
     verifyNoMoreInteractions(serverListener);
   }
@@ -99,7 +96,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     Status status = new Status(Transport.Code.INTERNAL, new Throwable());
     stream().abortStream(status, false);
     assertEquals(StreamState.CLOSED, stream.state());
-    verify(serverListener).closed(same(status), notNull(Metadata.Trailers.class));
+    verify(serverListener).closed(same(status));
     verify(channel, never()).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
     verifyNoMoreInteractions(serverListener);
@@ -114,7 +111,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     verify(serverListener).halfClosed();
     // Abort
     stream().abortStream(status, true);
-    verify(serverListener).closed(same(status), notNull(Metadata.Trailers.class));
+    verify(serverListener).closed(same(status));
     assertEquals(StreamState.CLOSED, stream.state());
     verifyNoMoreInteractions(serverListener);
   }

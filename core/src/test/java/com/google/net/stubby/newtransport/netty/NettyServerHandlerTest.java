@@ -9,7 +9,6 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.notNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -159,7 +158,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     handler.channelRead(ctx, rstStreamFrame(STREAM_ID, Http2Error.CANCEL.code()));
     verify(streamListener, never()).messageRead(any(InputStream.class), anyInt());
-    verify(streamListener).closed(eq(Status.CANCELLED), notNull(Metadata.Trailers.class));
+    verify(streamListener).closed(Status.CANCELLED);
     verifyNoMoreInteractions(streamListener);
   }
 
