@@ -2,7 +2,6 @@ package com.google.net.stubby;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
@@ -27,7 +26,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * </p>
  */
 @NotThreadSafe
-public abstract class Metadata<S extends Metadata> {
+public abstract class Metadata {
 
   /**
    * Interleave keys and values into a single iterator.
@@ -167,26 +166,32 @@ public abstract class Metadata<S extends Metadata> {
 
   /**
    * Returns the last metadata entry added with the name 'name' parsed as T.
-   * @return the parsed metadata entry or null if not defined
+   * @return the parsed metadata entry or null if there are none.
    */
   public <T> T get(Key<T> key) {
-    MetadataEntry metadataEntry = Iterables.getLast(store.get(key.name()));
-    return metadataEntry == null ? null : metadataEntry.getParsed(key);
+    if (containsKey(key)) {
+      MetadataEntry metadataEntry = Iterables.getLast(store.get(key.name()));
+      return metadataEntry.getParsed(key);
+    }
+    return null;
   }
 
   /**
    * Returns all the metadata entries named 'name', in the order they were received,
-   * parsed as T.
+   * parsed as T or null if there are none.
    */
   public <T> Iterable<T> getAll(final Key<T> key) {
-    return Iterables.transform(
-        store.get(key.name()),
-        new Function<MetadataEntry, T>() {
-          @Override
-          public T apply(MetadataEntry entry) {
-            return entry.getParsed(key);
-          }
-        });
+    if (containsKey(key)) {
+      return Iterables.transform(
+          store.get(key.name()),
+          new Function<MetadataEntry, T>() {
+            @Override
+            public T apply(MetadataEntry entry) {
+              return entry.getParsed(key);
+            }
+          });
+    }
+    return null;
   }
 
   public <T> void put(Key<T> key, T value) {
@@ -284,7 +289,7 @@ public abstract class Metadata<S extends Metadata> {
   /**
    * Concrete instance for metadata attached to the start of a call.
    */
-  public static class Headers extends Metadata<Headers> {
+  public static class Headers extends Metadata {
     private String path;
     private String authority;
 
@@ -363,7 +368,7 @@ public abstract class Metadata<S extends Metadata> {
    * Concrete instance for metadata attached to the end of the call. Only provided by
    * servers.
    */
-  public static class Trailers extends Metadata<Headers> {
+  public static class Trailers extends Metadata {
     /**
      * Called by the transport layer to create trailers from their binary serialized values.
      */
@@ -443,7 +448,7 @@ public abstract class Metadata<S extends Metadata> {
      * Keys have a name and a marshaller used for serialization.
      */
     private Key(String name, Marshaller<T> marshaller) {
-      this.name = Preconditions.checkNotNull(name, "name").intern();
+      this.name = Preconditions.checkNotNull(name, "name").toLowerCase().intern();
       this.asciiName = name.getBytes(StandardCharsets.US_ASCII);
       this.marshaller = Preconditions.checkNotNull(marshaller);
     }
@@ -452,13 +457,31 @@ public abstract class Metadata<S extends Metadata> {
       return name;
     }
 
-    @VisibleForTesting
-    byte[] asciiName() {
+    // TODO (lryan): Migrate to ByteString
+    public byte[] asciiName() {
       return asciiName;
     }
 
     public Marshaller<T> getMarshaller() {
       return marshaller;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      Key key = (Key) o;
+      return !(name != null ? !name.equals(key.name) : key.name != null);
+    }
+
+    @Override
+    public int hashCode() {
+      return name != null ? name.hashCode() : 0;
+    }
+
+    @Override
+    public String toString() {
+      return "Key{name='" + name + "'}";
     }
   }
 
