@@ -64,7 +64,8 @@ class NettyBuffer extends AbstractBuffer {
 
   @Override
   public NettyBuffer readBytes(int length) {
-    return new NettyBuffer(buffer.readSlice(length));
+    // The ByteBuf returned by readSlice() stores a reference to buffer but does not call retain().
+    return new NettyBuffer(buffer.readSlice(length).retain());
   }
 
   @Override
