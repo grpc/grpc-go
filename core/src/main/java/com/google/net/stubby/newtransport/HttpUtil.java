@@ -31,6 +31,11 @@ public final class HttpUtil {
   public static final String HTTP_METHOD = "POST";
 
   /**
+   * The Header name for the gRPC status found in the trailers.
+   */
+  public static final String GRPC_STATUS_HEADER = "grpc-status";
+
+  /**
    * Maps HTTP error response status codes to transport codes.
    */
   public static Transport.Code httpStatusToTransportCode(int httpStatusCode) {

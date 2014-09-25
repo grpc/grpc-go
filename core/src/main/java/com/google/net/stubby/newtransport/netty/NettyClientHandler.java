@@ -65,6 +65,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
 
     // Disallow stream creation by the server.
     connection.remote().maxStreams(0);
+    connection.local().allowPushTo(false);
 
     // Observe the HTTP/2 connection for events.
     connection.addListener(new Http2ConnectionAdapter() {
@@ -120,7 +121,6 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
       boolean exclusive,
       int padding,
       boolean endStream) throws Http2Exception {
-    // TODO(user): Assuming that all headers fit in a single HEADERS frame.
     NettyClientStream stream = clientStream(connection().requireStream(streamId));
     stream.inboundHeadersRecieved(headers, endStream);
   }
@@ -221,6 +221,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
     // Send a RST_STREAM frame to terminate this stream.
     Http2Stream http2Stream = connection().requireStream(stream.id());
     if (http2Stream.state() != Http2Stream.State.CLOSED) {
+      // Note: RST_STREAM frames are automatically flushed.
       writeRstStream(ctx, stream.id(), Http2Error.CANCEL.code(), promise);
     }
   }
@@ -245,6 +246,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
     }
 
     // Call the base class to write the HTTP/2 DATA frame.
+    // Note: no need to flush since this is handled by the outbound flow controller.
     writeData(ctx, cmd.streamId(), cmd.content(), 0, cmd.endStream(), promise);
   }
 
@@ -319,6 +321,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
               }
             }
           });
+      ctx().flush();
     }
   }
 
@@ -389,6 +392,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
             new Status(Transport.Code.INTERNAL, "Stream in invalid state: " + stream.state()),
             new Metadata.Trailers());
         writeRstStream(ctx(), stream.id(), Http2Error.INTERNAL_ERROR.code(), ctx().newPromise());
+        ctx().flush();
         break;
       default:
         break;

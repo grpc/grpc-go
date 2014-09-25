@@ -1,6 +1,9 @@
 package com.google.net.stubby.newtransport.netty;
 
 import static com.google.net.stubby.newtransport.StreamState.CLOSED;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_PROTORPC;
+import static com.google.net.stubby.newtransport.netty.Utils.GRPC_STATUS_HEADER;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
@@ -80,7 +83,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
    * Called in the channel thread to process headers received from the server.
    */
   public void inboundHeadersRecieved(Http2Headers headers, boolean endOfStream) {
-    responseCode = responseCode(headers);
+    responseCode = responseCode(headers, responseCode);
     isGrpcResponse = isGrpcResponse(headers, responseCode);
     if (endOfStream) {
       if (isGrpcResponse) {
@@ -142,7 +145,12 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
   /**
    * Determines whether or not the response from the server is a GRPC response.
    */
-  private static boolean isGrpcResponse(Http2Headers headers, Transport.Code code) {
+  private boolean isGrpcResponse(Http2Headers headers, Transport.Code code) {
+    if (isGrpcResponse) {
+      // Already verified that it's a gRPC response.
+      return true;
+    }
+
     if (headers == null) {
       // No headers, not a GRPC response.
       return false;
@@ -154,23 +162,31 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
       return true;
     }
 
-    AsciiString contentType = headers.get(Utils.CONTENT_TYPE_HEADER);
-    return Utils.CONTENT_TYPE_PROTORPC.equalsIgnoreCase(contentType);
+    AsciiString contentType = headers.get(CONTENT_TYPE_HEADER);
+    return CONTENT_TYPE_PROTORPC.equalsIgnoreCase(contentType);
   }
 
   /**
    * Parses the response status and converts it to a transport code.
    */
-  private static Transport.Code responseCode(Http2Headers headers) {
+  private Transport.Code responseCode(Http2Headers headers, Transport.Code defaultValue) {
     if (headers == null) {
-      return Transport.Code.UNKNOWN;
+      return defaultValue;
     }
 
+    // First, check to see if we found a v2 protocol grpc-status header.
+    AsciiString grpcStatus = headers.get(GRPC_STATUS_HEADER);
+    if (grpcStatus != null) {
+      int code = grpcStatus.parseInt();
+      Transport.Code value = Transport.Code.valueOf(code);
+      return value != null ? value : Transport.Code.UNKNOWN;
+    }
+
+    // Next, check the HTTP/2 status.
     AsciiString statusLine = headers.status();
     if (statusLine == null) {
-      return Transport.Code.UNKNOWN;
+      return defaultValue;
     }
-
     HttpResponseStatus status = HttpResponseStatus.parseLine(statusLine);
     return HttpUtil.httpStatusToTransportCode(status.code());
   }

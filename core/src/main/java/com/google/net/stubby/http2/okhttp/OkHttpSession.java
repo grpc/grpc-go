@@ -198,7 +198,7 @@ public class OkHttpSession implements Session {
         // Read until the underlying socket closes.
         while (frameReader.nextFrame(this)) {
         }
-      } catch (IOException ioe) {
+      } catch (Throwable ioe) {
         ioe.printStackTrace();
         closeAllRequests(new Status(Code.INTERNAL, ioe.getMessage()));
       } finally {
@@ -242,7 +242,11 @@ public class OkHttpSession implements Session {
       // Wait until the frame is complete.
       in.require(length);
 
-      deframer.deframe(ByteStreams.limit(in.inputStream(), length), op);
+      // Protect against empty data frames used to just denote the end of stream.
+      if (length > 0) {
+        deframer.deframe(ByteStreams.limit(in.inputStream(), length), op);
+      }
+
       if (inFinished) {
         finish(streamId);
         op.close(Status.OK);

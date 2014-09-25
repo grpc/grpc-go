@@ -26,6 +26,7 @@ class Utils {
       new AsciiString(HttpUtil.CONTENT_TYPE_HEADER);
   public static final AsciiString CONTENT_TYPE_PROTORPC =
       new AsciiString(HttpUtil.CONTENT_TYPE_PROTORPC);
+  public static final AsciiString GRPC_STATUS_HEADER = new AsciiString(HttpUtil.GRPC_STATUS_HEADER);
 
   /**
    * Copies the content of the given {@link ByteBuffer} to a new {@link ByteBuf} instance.

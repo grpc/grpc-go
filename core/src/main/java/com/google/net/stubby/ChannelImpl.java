@@ -175,6 +175,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
         inProcessFutures.add(accepted);
         stream.writeMessage(payloadIs, available(payloadIs), new AcceptedRunnable(accepted));
       }
+      stream.flush();
     }
 
     private class AcceptedRunnable implements Runnable {

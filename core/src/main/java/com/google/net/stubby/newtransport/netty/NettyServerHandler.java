@@ -21,7 +21,6 @@ import io.netty.handler.codec.http2.AbstractHttp2ConnectionHandler;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 import io.netty.handler.codec.http2.Http2Connection;
-import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameReader;
@@ -57,6 +56,8 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
     super(connection, frameReader, frameWriter, inboundFlow, outboundFlow);
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
     this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
+
+    connection.local().allowPushTo(false);
   }
 
   @Override
@@ -168,6 +169,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
       }
       // Call the base class to write the HTTP/2 DATA frame.
       writeData(ctx, cmd.streamId(), cmd.content(), 0, cmd.endStream(), promise);
+      ctx.flush();
     } else if (msg instanceof SendResponseHeadersCommand) {
       SendResponseHeadersCommand cmd = (SendResponseHeadersCommand) msg;
       writeHeaders(ctx,
@@ -178,6 +180,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
           0,
           false,
           promise);
+      ctx.flush();
     } else {
       AssertionError e = new AssertionError("Write called for unexpected type: "
           + msg.getClass().getName());
