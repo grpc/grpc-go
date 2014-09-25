@@ -7,7 +7,6 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.notNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,7 +14,6 @@ import static org.mockito.Mockito.when;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Transport;
 import com.google.protobuf.ByteString;
@@ -242,7 +240,7 @@ public class GrpcDeframerTest {
         return null;
       }
 
-      Buffer buffer = Buffers.wrap(ByteString.copyFrom(bytes, offset, length));
+      Buffer buffer = Buffers.wrap(bytes, offset, length);
       offset += length;
       return buffer;
     }

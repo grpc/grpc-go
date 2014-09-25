@@ -3,10 +3,6 @@ package com.google.net.stubby.newtransport;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
-import com.google.common.io.ByteStreams;
-import com.google.net.stubby.DeferredProtoInputStream;
-import com.google.protobuf.ByteString;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,13 +21,6 @@ public final class Buffers {
    */
   public static Buffer empty() {
     return EMPTY_BUFFER;
-  }
-
-  /**
-   * Creates a new {@link Buffer} that is backed by the given {@link ByteString}.
-   */
-  public static Buffer wrap(ByteString bytes) {
-    return new ByteStringWrapper(bytes);
   }
 
   /**
@@ -70,30 +59,6 @@ public final class Buffers {
     byte[] bytes = new byte[length];
     buffer.readBytes(bytes, 0, length);
     return bytes;
-  }
-
-  /**
-   * Creates a new {@link Buffer} that contains the content from the given {@link InputStream}.
-   *
-   * @param in the source of the bytes.
-   * @param length the number of bytes to be read from the stream.
-   */
-  public static Buffer copyFrom(InputStream in, int length) {
-    Preconditions.checkNotNull(in, "in");
-    Preconditions.checkArgument(length >= 0, "length must be positive");
-
-    if (in instanceof DeferredProtoInputStream) {
-      ByteString bstr = ((DeferredProtoInputStream) in).getMessage().toByteString();
-      return new ByteStringWrapper(bstr.substring(0, length));
-    }
-
-    byte[] bytes = new byte[length];
-    try {
-      ByteStreams.readFully(in, bytes);
-    } catch (IOException e) {
-      Throwables.propagate(e);
-    }
-    return new ByteArrayWrapper(bytes, 0, length);
   }
 
   /**
@@ -221,69 +186,6 @@ public final class Buffers {
     @Override
     public int arrayOffset() {
       return offset;
-    }
-  }
-
-  /**
-   * A {@link Buffer} that is backed by a {@link ByteString}.
-   */
-  private static class ByteStringWrapper extends AbstractBuffer {
-    int offset;
-    final ByteString bytes;
-
-    ByteStringWrapper(ByteString bytes) {
-      this.bytes = Preconditions.checkNotNull(bytes, "bytes");
-    }
-
-    @Override
-    public int readableBytes() {
-      return bytes.size() - offset;
-    }
-
-    @Override
-    public int readUnsignedByte() {
-      checkReadable(1);
-      return bytes.byteAt(offset++) & 0xFF;
-    }
-
-    @Override
-    public void skipBytes(int length) {
-      checkReadable(length);
-      offset += length;
-    }
-
-    @Override
-    public void readBytes(byte[] dest, int destOffset, int length) {
-      bytes.copyTo(dest, offset, destOffset, length);
-      offset += length;
-    }
-
-    @Override
-    public void readBytes(ByteBuffer dest) {
-      Preconditions.checkNotNull(dest, "dest");
-      int length = dest.remaining();
-      checkReadable(length);
-      internalSlice(length).copyTo(dest);
-      offset += length;
-    }
-
-    @Override
-    public void readBytes(OutputStream dest, int length) throws IOException {
-      checkReadable(length);
-      internalSlice(length).writeTo(dest);
-      offset += length;
-    }
-
-    @Override
-    public ByteStringWrapper readBytes(int length) {
-      checkReadable(length);
-      ByteStringWrapper buffer = new ByteStringWrapper(internalSlice(length));
-      offset += length;
-      return buffer;
-    }
-
-    private ByteString internalSlice(int length) {
-      return bytes.substring(offset, offset + length);
     }
   }
 
