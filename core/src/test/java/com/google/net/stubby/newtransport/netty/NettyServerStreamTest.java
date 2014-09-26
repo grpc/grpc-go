@@ -12,7 +12,6 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.ServerStreamListener;
 import com.google.net.stubby.newtransport.StreamState;
-import com.google.net.stubby.transport.Transport;
 
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
@@ -83,7 +82,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Test
   public void abortStreamAndSendStatus() throws Exception {
-    Status status = new Status(Transport.Code.INTERNAL, new Throwable());
+    Status status = Status.INTERNAL.withCause(new Throwable());
     stream().abortStream(status, true);
     assertEquals(StreamState.CLOSED, stream.state());
     verify(serverListener).closed(same(status));
@@ -93,7 +92,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Test
   public void abortStreamAndNotSendStatus() throws Exception {
-    Status status = new Status(Transport.Code.INTERNAL, new Throwable());
+    Status status = Status.INTERNAL.withCause(new Throwable());
     stream().abortStream(status, false);
     assertEquals(StreamState.CLOSED, stream.state());
     verify(serverListener).closed(same(status));
@@ -104,7 +103,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Test
   public void abortStreamAfterClientHalfCloseShouldCallClose() {
-    Status status = new Status(Transport.Code.INTERNAL, new Throwable());
+    Status status = Status.INTERNAL.withCause(new Throwable());
     // Client half-closes. Listener gets halfClosed()
     stream().inboundDataReceived(new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
     assertEquals(StreamState.WRITE_ONLY, stream.state());

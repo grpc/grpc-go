@@ -15,7 +15,6 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.Transport;
 import com.google.protobuf.ByteString;
 
 import org.junit.Before;
@@ -42,7 +41,7 @@ import javax.annotation.Nullable;
 public class GrpcDeframerTest {
   private static final String MESSAGE = "hello world";
   private static final ByteString MESSAGE_BSTR = ByteString.copyFromUtf8(MESSAGE);
-  private static final Transport.Code STATUS_CODE = Transport.Code.CANCELLED;
+  private static final Status STATUS_CODE = Status.CANCELLED;
 
   private GrpcDeframer reader;
 
@@ -79,7 +78,7 @@ public class GrpcDeframerTest {
     verifyNoStatus();
 
     messageFuture.set(null);
-    verifyStatus(Transport.Code.OK);
+    verifyStatus(Status.Code.OK);
   }
 
   @Test
@@ -107,7 +106,7 @@ public class GrpcDeframerTest {
     writeFrame(PAYLOAD_FRAME, MESSAGE_BSTR.toByteArray(), dos);
 
     // Write a status frame.
-    byte[] statusBytes = new byte[] {0, (byte) STATUS_CODE.getNumber()};
+    byte[] statusBytes = new byte[] {0, (byte) STATUS_CODE.getCode().value()};
     writeFrame(STATUS_FRAME, statusBytes, dos);
 
     // Now write the complete frame: compression header followed by the 3 message frames.
@@ -169,10 +168,10 @@ public class GrpcDeframerTest {
   }
 
   private void verifyStatus() {
-    verifyStatus(Transport.Code.CANCELLED);
+    verifyStatus(Status.Code.CANCELLED);
   }
 
-  private void verifyStatus(Transport.Code code) {
+  private void verifyStatus(Status.Code code) {
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(sink).statusRead(captor.capture());
     verify(sink).endOfStream();
@@ -193,7 +192,7 @@ public class GrpcDeframerTest {
   }
 
   private static byte[] statusFrame() throws IOException {
-    byte[] bytes = new byte[] {0, (byte) STATUS_CODE.getNumber()};
+    byte[] bytes = new byte[] {0, (byte) STATUS_CODE.getCode().value()};
     return frame(STATUS_FRAME, bytes);
   }
 

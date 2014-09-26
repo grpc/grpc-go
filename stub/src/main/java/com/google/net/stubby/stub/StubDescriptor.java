@@ -1,6 +1,6 @@
 package com.google.net.stubby.stub;
 
-import com.google.net.stubby.DeferredProtoInputStream;
+import com.google.net.stubby.proto.DeferredProtoInputStream;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.MessageLite;
 

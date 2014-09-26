@@ -4,13 +4,12 @@ import com.google.net.stubby.AbstractOperation;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Framer;
-import com.google.net.stubby.transport.Transport;
-
-import java.io.InputStream;
-import java.nio.ByteBuffer;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
+
+import java.io.InputStream;
+import java.nio.ByteBuffer;
 
 /**
  * Base implementation of {@link Operation} that writes HTTP2 frames
@@ -55,7 +54,7 @@ abstract class Http2Operation extends AbstractOperation implements Framer.Sink {
         channelFuture.get();
       }
     } catch (Exception e) {
-      close(new Status(Transport.Code.INTERNAL, e));
+      close(Status.INTERNAL.withCause(e));
     } finally {
       if (closed) {
         framer.close();

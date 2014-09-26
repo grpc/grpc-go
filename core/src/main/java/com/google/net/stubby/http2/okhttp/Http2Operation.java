@@ -5,7 +5,6 @@ import com.google.net.stubby.AbstractOperation;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Framer;
-import com.google.net.stubby.transport.Transport;
 
 import com.squareup.okhttp.internal.spdy.FrameWriter;
 
@@ -58,7 +57,7 @@ abstract class Http2Operation extends AbstractOperation implements Framer.Sink {
       frameWriter.data(closed && endOfMessage, getId(), buffer);
       frameWriter.flush();
     } catch (IOException ioe) {
-      close(new Status(Transport.Code.INTERNAL, ioe));
+      close(Status.INTERNAL.withCause(ioe));
     } finally {
       if (closed && endOfMessage) {
         framer.close();

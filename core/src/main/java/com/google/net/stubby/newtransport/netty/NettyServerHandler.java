@@ -10,7 +10,6 @@ import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.ServerStreamListener;
 import com.google.net.stubby.newtransport.ServerTransportListener;
 import com.google.net.stubby.newtransport.TransportFrameUtil;
-import com.google.net.stubby.transport.Transport;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
@@ -43,7 +42,7 @@ class NettyServerHandler extends AbstractHttp2ConnectionHandler {
 
   private static Logger logger = Logger.getLogger(NettyServerHandler.class.getName());
 
-  private static final Status GOAWAY_STATUS = new Status(Transport.Code.UNAVAILABLE);
+  private static final Status GOAWAY_STATUS = Status.UNAVAILABLE;
 
   private final ServerTransportListener transportListener;
   private final DefaultHttp2InboundFlowController inboundFlow;

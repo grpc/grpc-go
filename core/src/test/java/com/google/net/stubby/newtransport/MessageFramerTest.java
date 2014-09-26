@@ -7,7 +7,6 @@ import static org.junit.Assert.assertTrue;
 import com.google.common.primitives.Bytes;
 import com.google.net.stubby.GrpcFramingUtil;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.Transport;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -60,7 +59,7 @@ public class MessageFramerTest {
             new byte[]{0, 0, 0, 2},  // Len is 2 bytes
             new byte[]{0, 13});  // Internal==13
     for (int i = 0; i < 1000; i++) {
-      framer.writeStatus(new Status(Transport.Code.INTERNAL));
+      framer.writeStatus(Status.INTERNAL);
       if ((i + 1) % 13 == 0) {
         framer.flush();
       }

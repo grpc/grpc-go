@@ -15,7 +15,6 @@ import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.GrpcDeframer;
 import com.google.net.stubby.newtransport.HttpUtil;
 import com.google.net.stubby.newtransport.MessageDeframer2;
-import com.google.net.stubby.transport.Transport;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -39,7 +38,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
   private final GrpcDeframer deframer;
   private final MessageDeframer2 deframer2;
   private final WindowUpdateManager windowUpdateManager;
-  private Transport.Code responseCode = Transport.Code.UNKNOWN;
+  private Status responseStatus = Status.UNKNOWN;
   private boolean isGrpcResponse;
   private StringBuilder nonGrpcErrorMessage = new StringBuilder();
 
@@ -83,15 +82,15 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
    * Called in the channel thread to process headers received from the server.
    */
   public void inboundHeadersRecieved(Http2Headers headers, boolean endOfStream) {
-    responseCode = responseCode(headers, responseCode);
-    isGrpcResponse = isGrpcResponse(headers, responseCode);
+    responseStatus = responseStatus(headers, responseStatus);
+    isGrpcResponse = isGrpcResponse(headers, responseStatus);
     if (endOfStream) {
       if (isGrpcResponse) {
         // TODO(user): call stashTrailers() as appropriate, then provide endOfStream to
         // deframer.
-        setStatus(new Status(responseCode), new Metadata.Trailers());
+        setStatus(responseStatus, new Metadata.Trailers());
       } else {
-        setStatus(new Status(responseCode), new Metadata.Trailers());
+        setStatus(responseStatus, new Metadata.Trailers());
       }
     }
   }
@@ -125,7 +124,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
 
       if (endOfStream) {
         String msg = nonGrpcErrorMessage.toString();
-        setStatus(new Status(responseCode, msg), new Metadata.Trailers());
+        setStatus(responseStatus.withDescription(msg), new Metadata.Trailers());
       }
     }
   }
@@ -145,7 +144,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
   /**
    * Determines whether or not the response from the server is a GRPC response.
    */
-  private boolean isGrpcResponse(Http2Headers headers, Transport.Code code) {
+  private boolean isGrpcResponse(Http2Headers headers, Status status) {
     if (isGrpcResponse) {
       // Already verified that it's a gRPC response.
       return true;
@@ -157,7 +156,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
     }
 
     // GRPC responses should always return OK. Updated this code once b/16290036 is fixed.
-    if (code == Transport.Code.OK) {
+    if (status.isOk()) {
       // ESF currently returns the wrong content-type for grpc.
       return true;
     }
@@ -169,7 +168,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
   /**
    * Parses the response status and converts it to a transport code.
    */
-  private Transport.Code responseCode(Http2Headers headers, Transport.Code defaultValue) {
+  private static Status responseStatus(Http2Headers headers, Status defaultValue) {
     if (headers == null) {
       return defaultValue;
     }
@@ -177,9 +176,7 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
     // First, check to see if we found a v2 protocol grpc-status header.
     AsciiString grpcStatus = headers.get(GRPC_STATUS_HEADER);
     if (grpcStatus != null) {
-      int code = grpcStatus.parseInt();
-      Transport.Code value = Transport.Code.valueOf(code);
-      return value != null ? value : Transport.Code.UNKNOWN;
+      return Status.fromCodeValue(grpcStatus.parseInt());
     }
 
     // Next, check the HTTP/2 status.
@@ -188,6 +185,6 @@ class NettyClientStream extends AbstractClientStream implements NettyStream {
       return defaultValue;
     }
     HttpResponseStatus status = HttpResponseStatus.parseLine(statusLine);
-    return HttpUtil.httpStatusToTransportCode(status.code());
+    return HttpUtil.httpStatusToGrpcStatus(status.code());
   }
 }

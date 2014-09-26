@@ -9,7 +9,6 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.ListenableFuture;
@@ -20,8 +19,6 @@ import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.okhttp.OkHttpClientTransport.ClientFrameHandler;
 import com.google.net.stubby.newtransport.okhttp.OkHttpClientTransport.OkHttpClientStream;
-import com.google.net.stubby.transport.Transport;
-import com.google.net.stubby.transport.Transport.Code;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
@@ -113,9 +110,9 @@ public class OkHttpClientTransportTest {
     listener1.waitUntilStreamClosed();
     listener2.waitUntilStreamClosed();
     assertEquals(0, streams.size());
-    assertEquals(Code.INTERNAL, listener1.status.getCode());
+    assertEquals(Status.INTERNAL.getCode(), listener1.status.getCode());
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
-    assertEquals(Code.INTERNAL, listener1.status.getCode());
+    assertEquals(Status.INTERNAL.getCode(), listener1.status.getCode());
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
     assertTrue("Service state: " + clientTransport.state(),
         Service.State.TERMINATED == clientTransport.state());
@@ -148,11 +145,11 @@ public class OkHttpClientTransportTest {
     clientTransport.newStream(method,new Metadata.Headers(), listener);
     assertTrue(streams.containsKey(3));
     BufferedSource source = mock(BufferedSource.class);
-    InputStream inputStream = createStatusFrame((short) Transport.Code.UNAVAILABLE.getNumber());
+    InputStream inputStream = createStatusFrame((short) Status.UNAVAILABLE.getCode().value());
     when(source.inputStream()).thenReturn(inputStream);
     frameHandler.data(true, 3, source, inputStream.available());
     listener.waitUntilStreamClosed();
-    assertEquals(Transport.Code.UNAVAILABLE, listener.status.getCode());
+    assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
   }
 
   @Test
@@ -259,8 +256,8 @@ public class OkHttpClientTransportTest {
     listener2.waitUntilStreamClosed();
     verify(frameWriter).goAway(eq(0), eq(ErrorCode.NO_ERROR), (byte[]) any());
     assertEquals(0, streams.size());
-    assertEquals(Code.INTERNAL, listener1.status.getCode());
-    assertEquals(Code.INTERNAL, listener2.status.getCode());
+    assertEquals(Status.INTERNAL.getCode(), listener1.status.getCode());
+    assertEquals(Status.INTERNAL.getCode(), listener2.status.getCode());
     assertEquals(Service.State.TERMINATED, clientTransport.state());
   }
 
@@ -282,7 +279,7 @@ public class OkHttpClientTransportTest {
     // Stream 2 should be closed.
     listener2.waitUntilStreamClosed();
     assertEquals(1, streams.size());
-    assertEquals(Code.UNAVAILABLE, listener2.status.getCode());
+    assertEquals(Status.UNAVAILABLE.getCode(), listener2.status.getCode());
 
     // New stream should be failed.
     MockStreamListener listener3 = new MockStreamListener();

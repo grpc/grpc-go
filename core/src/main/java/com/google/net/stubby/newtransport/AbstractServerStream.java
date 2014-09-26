@@ -8,7 +8,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.Transport;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -61,7 +60,7 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
     gracefulClose = true;
     trailers.removeAll(Status.CODE_KEY);
     trailers.removeAll(Status.MESSAGE_KEY);
-    trailers.put(Status.CODE_KEY, status.getCode());
+    trailers.put(Status.CODE_KEY, status);
     if (status.getDescription() != null) {
       trailers.put(Status.MESSAGE_KEY, status.getDescription());
     }
@@ -114,7 +113,7 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
       listenerClosed = true;
     }
     if (!gracefulClose) {
-      listener.closed(new Status(Transport.Code.INTERNAL, "successful complete() without close()"));
+      listener.closed(Status.INTERNAL.withDescription("successful complete() without close()"));
       throw new IllegalStateException("successful complete() without close()");
     }
     listener.closed(Status.OK);

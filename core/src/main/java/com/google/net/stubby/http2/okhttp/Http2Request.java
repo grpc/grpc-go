@@ -7,7 +7,6 @@ import com.google.net.stubby.Response;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.okhttp.Headers;
 import com.google.net.stubby.transport.Framer;
-import com.google.net.stubby.transport.Transport;
 
 import com.squareup.okhttp.internal.spdy.FrameWriter;
 import com.squareup.okhttp.internal.spdy.Header;
@@ -37,7 +36,7 @@ public class Http2Request extends Http2Operation implements Request {
           Headers.createRequestHeaders(headers, defaultPath, defaultAuthority);
       frameWriter.synStream(false, false, getId(), 0, requestHeaders);
     } catch (IOException ioe) {
-      close(new Status(Transport.Code.UNKNOWN, ioe));
+      close(Status.UNKNOWN.withCause(ioe));
     }
   }
 

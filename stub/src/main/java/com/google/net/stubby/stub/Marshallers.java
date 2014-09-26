@@ -1,9 +1,8 @@
 package com.google.net.stubby.stub;
 
-import com.google.net.stubby.DeferredProtoInputStream;
 import com.google.net.stubby.Marshaller;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.Transport;
+import com.google.net.stubby.proto.DeferredProtoInputStream;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.Parser;
@@ -29,8 +28,8 @@ public class Marshallers {
         try {
           return parser.parseFrom(stream);
         } catch (InvalidProtocolBufferException ipbe) {
-          throw new Status(Transport.Code.INTERNAL, "Invalid protobuf byte sequence", ipbe)
-              .asRuntimeException();
+          throw Status.INTERNAL.withDescription("Invalid protobuf byte sequence")
+            .withCause(ipbe).asRuntimeException();
         }
       }
     };

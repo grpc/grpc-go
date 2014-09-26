@@ -14,8 +14,6 @@ import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.ClientTransport;
 import com.google.net.stubby.newtransport.InputStreamDeframer;
 import com.google.net.stubby.newtransport.StreamState;
-import com.google.net.stubby.transport.Transport;
-import com.google.net.stubby.transport.Transport.Code;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
@@ -58,30 +56,30 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     Map<ErrorCode, Status> errorToStatus = new HashMap<ErrorCode, Status>();
     errorToStatus.put(ErrorCode.NO_ERROR, Status.OK);
     errorToStatus.put(ErrorCode.PROTOCOL_ERROR,
-        new Status(Transport.Code.INTERNAL, "Protocol error"));
+        Status.INTERNAL.withDescription("Protocol error"));
     errorToStatus.put(ErrorCode.INVALID_STREAM,
-        new Status(Transport.Code.INTERNAL, "Invalid stream"));
+        Status.INTERNAL.withDescription("Invalid stream"));
     errorToStatus.put(ErrorCode.UNSUPPORTED_VERSION,
-        new Status(Transport.Code.INTERNAL, "Unsupported version"));
+        Status.INTERNAL.withDescription("Unsupported version"));
     errorToStatus.put(ErrorCode.STREAM_IN_USE,
-        new Status(Transport.Code.INTERNAL, "Stream in use"));
+        Status.INTERNAL.withDescription("Stream in use"));
     errorToStatus.put(ErrorCode.STREAM_ALREADY_CLOSED,
-        new Status(Transport.Code.INTERNAL, "Stream already closed"));
+        Status.INTERNAL.withDescription("Stream already closed"));
     errorToStatus.put(ErrorCode.INTERNAL_ERROR,
-        new Status(Transport.Code.INTERNAL, "Internal error"));
+        Status.INTERNAL.withDescription("Internal error"));
     errorToStatus.put(ErrorCode.FLOW_CONTROL_ERROR,
-        new Status(Transport.Code.INTERNAL, "Flow control error"));
+        Status.INTERNAL.withDescription("Flow control error"));
     errorToStatus.put(ErrorCode.STREAM_CLOSED,
-        new Status(Transport.Code.INTERNAL, "Stream closed"));
+        Status.INTERNAL.withDescription("Stream closed"));
     errorToStatus.put(ErrorCode.FRAME_TOO_LARGE,
-        new Status(Transport.Code.INTERNAL, "Frame too large"));
+        Status.INTERNAL.withDescription("Frame too large"));
     errorToStatus.put(ErrorCode.REFUSED_STREAM,
-        new Status(Transport.Code.INTERNAL, "Refused stream"));
-    errorToStatus.put(ErrorCode.CANCEL, new Status(Transport.Code.CANCELLED, "Cancelled"));
+        Status.INTERNAL.withDescription("Refused stream"));
+    errorToStatus.put(ErrorCode.CANCEL, Status.CANCELLED.withDescription("Cancelled"));
     errorToStatus.put(ErrorCode.COMPRESSION_ERROR,
-        new Status(Transport.Code.INTERNAL, "Compression error"));
+        Status.INTERNAL.withDescription("Compression error"));
     errorToStatus.put(ErrorCode.INVALID_CREDENTIALS,
-        new Status(Transport.Code.PERMISSION_DENIED, "Invalid credentials"));
+        Status.PERMISSION_DENIED.withDescription("Invalid credentials"));
     ERROR_CODE_TO_STATUS = Collections.unmodifiableMap(errorToStatus);
   }
 
@@ -163,7 +161,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       normalClose = !goAway;
     }
     if (normalClose) {
-      abort(new Status(Code.INTERNAL, "Transport stopped"));
+      abort(Status.INTERNAL.withDescription("Transport stopped"));
       // Send GOAWAY with lastGoodStreamId of 0, since we don't expect any server-initiated streams.
       // The GOAWAY is part of graceful shutdown.
       frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
@@ -353,7 +351,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
 
     @Override
     public void goAway(int lastGoodStreamId, ErrorCode errorCode, ByteString debugData) {
-      onGoAway(lastGoodStreamId, new Status(Code.UNAVAILABLE, "Go away"));
+      onGoAway(lastGoodStreamId, Status.UNAVAILABLE.withDescription("Go away"));
     }
 
     @Override
@@ -387,7 +385,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     stream.streamId = nextStreamId;
     streams.put(stream.streamId, stream);
     if (nextStreamId >= Integer.MAX_VALUE - 2) {
-      onGoAway(Integer.MAX_VALUE, new Status(Code.INTERNAL, "Stream id exhaust"));
+      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream id exhaust"));
     } else {
       nextStreamId += 2;
     }

@@ -53,7 +53,8 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
    */
   public void stashTrailers(Metadata.Trailers trailers) {
     Preconditions.checkNotNull(status, "trailers");
-    stashedStatus = new Status(trailers.get(Status.CODE_KEY), trailers.get(Status.MESSAGE_KEY));
+    stashedStatus = trailers.get(Status.CODE_KEY)
+        .withDescription(trailers.get(Status.MESSAGE_KEY));
     trailers.removeAll(Status.CODE_KEY);
     trailers.removeAll(Status.MESSAGE_KEY);
     stashedTrailers = trailers;

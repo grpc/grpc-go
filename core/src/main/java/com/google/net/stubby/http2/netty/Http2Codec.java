@@ -10,7 +10,6 @@ import com.google.net.stubby.Response;
 import com.google.net.stubby.Session;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.MessageFramer;
-import com.google.net.stubby.transport.Transport.Code;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
@@ -111,7 +110,7 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
         operation = serverStart(ctx, streamId, headers);
         if (operation == null) {
           closeWithError(new NoOpRequest(createResponse(new Http2Writer(ctx), streamId).build()),
-              new Status(Code.NOT_FOUND));
+              Status.NOT_FOUND);
         }
       }
     }
@@ -131,7 +130,7 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
       throws Http2Exception {
     Request request = requestRegistry.lookup(streamId);
     if (request != null) {
-      closeWithError(request, new Status(Code.CANCELLED, "Stream reset"));
+      closeWithError(request, Status.CANCELLED.withDescription("Stream reset"));
       requestRegistry.remove(streamId);
     }
   }

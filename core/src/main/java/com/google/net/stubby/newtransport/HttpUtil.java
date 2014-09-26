@@ -1,6 +1,6 @@
 package com.google.net.stubby.newtransport;
 
-import com.google.net.stubby.transport.Transport;
+import com.google.net.stubby.Status;
 
 import java.net.HttpURLConnection;
 
@@ -38,29 +38,29 @@ public final class HttpUtil {
   /**
    * Maps HTTP error response status codes to transport codes.
    */
-  public static Transport.Code httpStatusToTransportCode(int httpStatusCode) {
+  public static Status httpStatusToGrpcStatus(int httpStatusCode) {
     // Specific HTTP code handling.
     switch (httpStatusCode) {
       case HttpURLConnection.HTTP_UNAUTHORIZED: // 401
-        return Transport.Code.UNAUTHENTICATED;
+        return Status.UNAUTHENTICATED;
       case HttpURLConnection.HTTP_FORBIDDEN: // 403
-        return Transport.Code.PERMISSION_DENIED;
+        return Status.PERMISSION_DENIED;
       default:
     }
     // Generic HTTP code handling.
     if (httpStatusCode < 300) {
-      return Transport.Code.OK;
+      return Status.OK;
     }
     if (httpStatusCode < 400) {
-      return Transport.Code.UNAVAILABLE;
+      return Status.UNAVAILABLE;
     }
     if (httpStatusCode < 500) {
-      return Transport.Code.INVALID_ARGUMENT;
+      return Status.INVALID_ARGUMENT;
     }
     if (httpStatusCode < 600) {
-      return Transport.Code.FAILED_PRECONDITION;
+      return Status.FAILED_PRECONDITION;
     }
-    return Transport.Code.INTERNAL;
+    return Status.INTERNAL;
   }
 
   private HttpUtil() {}

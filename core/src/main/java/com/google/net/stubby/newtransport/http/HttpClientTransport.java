@@ -16,7 +16,6 @@ import com.google.net.stubby.newtransport.ClientStream;
 import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.InputStreamDeframer;
 import com.google.net.stubby.newtransport.StreamState;
-import com.google.net.stubby.transport.Transport;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -142,7 +141,7 @@ public class HttpClientTransport extends AbstractClientTransport {
           }
         }
       } catch (IOException ioe) {
-        setStatus(new Status(Transport.Code.INTERNAL, ioe), new Metadata.Trailers());
+        setStatus(Status.INTERNAL.withCause(ioe), new Metadata.Trailers());
       }
     }
 

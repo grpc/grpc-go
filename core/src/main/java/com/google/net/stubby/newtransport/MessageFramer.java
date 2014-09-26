@@ -49,7 +49,7 @@ public class MessageFramer implements Framer {
   @Override
   public void writeStatus(Status status) {
     verifyNotClosed();
-    short code = (short) status.getCode().getNumber();
+    short code = (short) status.getCode().value();
     scratch.clear();
     scratch.put(GrpcFramingUtil.STATUS_FRAME);
     int length = 2;

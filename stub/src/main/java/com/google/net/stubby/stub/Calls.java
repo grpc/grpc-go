@@ -9,7 +9,6 @@ import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.net.stubby.Call;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.Transport;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -249,7 +248,7 @@ public class Calls {
     @Override
     public ListenableFuture<Void> onPayload(RespT value) {
       if (this.value != null) {
-        throw new Status(Transport.Code.INTERNAL, "More than one value received for unary call")
+        throw Status.INTERNAL.withDescription("More than one value received for unary call")
             .asRuntimeException();
       }
       this.value = value;
@@ -262,7 +261,7 @@ public class Calls {
         if (value == null) {
           // No value received so mark the future as an error
           responseFuture.setException(
-              new Status(Transport.Code.INTERNAL, "No value received for unary call")
+              Status.INTERNAL.withDescription("No value received for unary call")
                   .asRuntimeException().fillInStackTrace());
         }
         responseFuture.set(value);

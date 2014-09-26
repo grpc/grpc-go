@@ -14,8 +14,6 @@ import com.google.net.stubby.Session;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.InputStreamDeframer;
 import com.google.net.stubby.transport.MessageFramer;
-import com.google.net.stubby.transport.Transport;
-import com.google.net.stubby.transport.Transport.Code;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
@@ -46,22 +44,22 @@ public class OkHttpSession implements Session {
   private static final ImmutableMap<ErrorCode, Status> ERROR_CODE_TO_STATUS = ImmutableMap
       .<ErrorCode, Status>builder()
       .put(ErrorCode.NO_ERROR, Status.OK)
-      .put(ErrorCode.PROTOCOL_ERROR, new Status(Transport.Code.INTERNAL, "Protocol error"))
-      .put(ErrorCode.INVALID_STREAM, new Status(Transport.Code.INTERNAL, "Invalid stream"))
+      .put(ErrorCode.PROTOCOL_ERROR, Status.INTERNAL.withDescription("Protocol error"))
+      .put(ErrorCode.INVALID_STREAM, Status.INTERNAL.withDescription("Invalid stream"))
       .put(ErrorCode.UNSUPPORTED_VERSION,
-          new Status(Transport.Code.INTERNAL, "Unsupported version"))
-      .put(ErrorCode.STREAM_IN_USE, new Status(Transport.Code.INTERNAL, "Stream in use"))
+          Status.INTERNAL.withDescription("Unsupported version"))
+      .put(ErrorCode.STREAM_IN_USE, Status.INTERNAL.withDescription("Stream in use"))
       .put(ErrorCode.STREAM_ALREADY_CLOSED,
-          new Status(Transport.Code.INTERNAL, "Stream already closed"))
-      .put(ErrorCode.INTERNAL_ERROR, new Status(Transport.Code.INTERNAL, "Internal error"))
-      .put(ErrorCode.FLOW_CONTROL_ERROR, new Status(Transport.Code.INTERNAL, "Flow control error"))
-      .put(ErrorCode.STREAM_CLOSED, new Status(Transport.Code.INTERNAL, "Stream closed"))
-      .put(ErrorCode.FRAME_TOO_LARGE, new Status(Transport.Code.INTERNAL, "Frame too large"))
-      .put(ErrorCode.REFUSED_STREAM, new Status(Transport.Code.INTERNAL, "Refused stream"))
-      .put(ErrorCode.CANCEL, new Status(Transport.Code.CANCELLED, "Cancelled"))
-      .put(ErrorCode.COMPRESSION_ERROR, new Status(Transport.Code.INTERNAL, "Compression error"))
+          Status.INTERNAL.withDescription("Stream already closed"))
+      .put(ErrorCode.INTERNAL_ERROR, Status.INTERNAL.withDescription("Internal error"))
+      .put(ErrorCode.FLOW_CONTROL_ERROR, Status.INTERNAL.withDescription("Flow control error"))
+      .put(ErrorCode.STREAM_CLOSED, Status.INTERNAL.withDescription("Stream closed"))
+      .put(ErrorCode.FRAME_TOO_LARGE, Status.INTERNAL.withDescription("Frame too large"))
+      .put(ErrorCode.REFUSED_STREAM, Status.INTERNAL.withDescription("Refused stream"))
+      .put(ErrorCode.CANCEL, Status.CANCELLED.withDescription("Cancelled"))
+      .put(ErrorCode.COMPRESSION_ERROR, Status.INTERNAL.withDescription("Compression error"))
       .put(ErrorCode.INVALID_CREDENTIALS,
-          new Status(Transport.Code.PERMISSION_DENIED, "Invalid credentials"))
+          Status.PERMISSION_DENIED.withDescription("Invalid credentials"))
       .build();
 
   public static Session startClient(Socket socket, RequestRegistry requestRegistry,
@@ -200,7 +198,7 @@ public class OkHttpSession implements Session {
         }
       } catch (Throwable ioe) {
         ioe.printStackTrace();
-        closeAllRequests(new Status(Code.INTERNAL, ioe.getMessage()));
+        closeAllRequests(Status.INTERNAL.withCause(ioe));
       } finally {
         // Restore the original thread name.
         Thread.currentThread().setName(threadName);

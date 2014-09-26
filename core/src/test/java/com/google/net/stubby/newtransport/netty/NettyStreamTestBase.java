@@ -26,8 +26,11 @@ import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -36,10 +39,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
-
-import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelPipeline;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -157,7 +156,7 @@ public abstract class NettyStreamTestBase {
   protected final ByteBuf statusFrame(Status status) throws Exception {
     ByteArrayOutputStream os = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(os);
-    short code = (short) status.getCode().getNumber();
+    short code = (short) status.getCode().value();
     dos.write(STATUS_FRAME);
     int length = 2;
     dos.writeInt(length);

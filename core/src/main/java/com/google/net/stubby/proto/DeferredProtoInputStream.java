@@ -1,6 +1,7 @@
-package com.google.net.stubby;
+package com.google.net.stubby.proto;
 
 import com.google.common.io.ByteStreams;
+import com.google.net.stubby.DeferredInputStream;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.MessageLite;
 
@@ -11,9 +12,9 @@ import java.io.OutputStream;
 import javax.annotation.Nullable;
 
 /**
- * Implementation of {@link DeferredInputStream} backed by a protobuf.
+ * Implementation of {@link com.google.net.stubby.DeferredInputStream} backed by a protobuf.
  */
-public class DeferredProtoInputStream extends DeferredInputStream {
+public class DeferredProtoInputStream extends DeferredInputStream<MessageLite> {
 
   // DeferredProtoInputStream is first initialized with a *message*. *partial* is initially null.
   // Once there has been a read operation on this stream, *message* is serialized to *partial* and
@@ -29,7 +30,7 @@ public class DeferredProtoInputStream extends DeferredInputStream {
    * Returns the original protobuf message. Returns null after this stream has been read.
    */
   @Nullable
-  public MessageLite getMessage() {
+  public MessageLite getDeferred() {
     return message;
   }
 

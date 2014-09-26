@@ -5,7 +5,6 @@ import static com.google.net.stubby.newtransport.netty.NettyClientStream.PENDING
 import com.google.common.base.Preconditions;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.Transport;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
@@ -34,7 +33,7 @@ import java.util.Iterator;
  * the context of the Netty Channel thread.
  */
 class NettyClientHandler extends AbstractHttp2ConnectionHandler {
-  private static final Status GOAWAY_STATUS = new Status(Transport.Code.UNAVAILABLE);
+  private static final Status GOAWAY_STATUS = Status.UNAVAILABLE;
 
   /**
    * A pending stream creation.
@@ -144,7 +143,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
     // TODO(user): do something with errorCode?
     Http2Stream http2Stream = connection().requireStream(streamId);
     NettyClientStream stream = clientStream(http2Stream);
-    stream.setStatus(new Status(Transport.Code.UNKNOWN), new Metadata.Trailers());
+    stream.setStatus(Status.UNKNOWN, new Metadata.Trailers());
   }
 
   /**
@@ -389,7 +388,7 @@ class NettyClientHandler extends AbstractHttp2ConnectionHandler {
       case RESERVED_REMOTE:
         // Disallowed state, terminate the stream.
         clientStream(stream).setStatus(
-            new Status(Transport.Code.INTERNAL, "Stream in invalid state: " + stream.state()),
+            Status.INTERNAL.withDescription("Stream in invalid state: " + stream.state()),
             new Metadata.Trailers());
         writeRstStream(ctx(), stream.id(), Http2Error.INTERNAL_ERROR.code(), ctx().newPromise());
         ctx().flush();

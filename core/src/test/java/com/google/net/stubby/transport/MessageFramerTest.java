@@ -60,7 +60,7 @@ public class MessageFramerTest {
             new byte[]{0, 13});  // Internal==13
     CapturingSink sink = new CapturingSink();
     for (int i = 0; i < 1000; i++) {
-      framer.writeStatus(new Status(Transport.Code.INTERNAL), (i % 17 == 11), sink);
+      framer.writeStatus(Status.INTERNAL, (i % 17 == 11), sink);
       if ((i + 1) % 13 == 0) {
         framer.flush(sink);
       }

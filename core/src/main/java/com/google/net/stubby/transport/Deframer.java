@@ -74,16 +74,10 @@ public abstract class Deframer<F> {
             inFrame = false;
           }
         } else if (GrpcFramingUtil.isStatusFrame(currentFlags)) {
-          int status = framedChunk.read() << 8 | framedChunk.read();
-          Transport.Code code = Transport.Code.valueOf(status);
+          int code = framedChunk.read() << 8 | framedChunk.read();
           // TODO(user): Resolve what to do with remainder of framedChunk
           try {
-            if (code == null) {
-              // Log for unknown code
-              target.close(new Status(Transport.Code.UNKNOWN, "Unknown status code " + status));
-            } else {
-              target.close(new Status(code));
-            }
+            target.close(Status.fromCodeValue(code));
           } finally {
             currentLength = LENGTH_NOT_SET;
             inFrame = false;
@@ -95,7 +89,7 @@ public abstract class Deframer<F> {
         }
       }
     } catch (IOException ioe) {
-      Status status = new Status(Transport.Code.UNKNOWN, ioe);
+      Status status = Status.UNKNOWN.withCause(ioe);
       target.close(status);
       throw status.asRuntimeException();
     }

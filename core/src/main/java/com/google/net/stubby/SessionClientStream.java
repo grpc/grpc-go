@@ -3,7 +3,6 @@ package com.google.net.stubby;
 import com.google.net.stubby.newtransport.ClientStream;
 import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.StreamState;
-import com.google.net.stubby.transport.Transport;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -82,7 +81,7 @@ public class SessionClientStream implements ClientStream {
    */
   @Override
   public void cancel() {
-    request.close(new Status(Transport.Code.CANCELLED));
+    request.close(Status.CANCELLED);
   }
 
   /**

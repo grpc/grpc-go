@@ -8,9 +8,7 @@ import static com.google.net.stubby.GrpcFramingUtil.STATUS_FRAME;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.Transport;
 
 import java.io.Closeable;
 import java.util.concurrent.Executor;
@@ -215,10 +213,7 @@ public class GrpcDeframer implements Closeable {
    */
   private void processStatus() {
     try {
-      int statusCode = nextFrame.readUnsignedShort();
-      Transport.Code code = Transport.Code.valueOf(statusCode);
-      notifyStatus(code != null ? new Status(code)
-          : new Status(Transport.Code.UNKNOWN, "Unknown status code " + statusCode));
+      notifyStatus(Status.fromCodeValue(nextFrame.readUnsignedShort()));
     } finally {
       nextFrame.close();
       nextFrame = null;

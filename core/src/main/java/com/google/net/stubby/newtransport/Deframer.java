@@ -4,7 +4,6 @@ import com.google.common.io.ByteStreams;
 import com.google.net.stubby.GrpcFramingUtil;
 import com.google.net.stubby.Operation;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.Transport;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -37,7 +36,7 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
     int remaining = internalDeliverFrame(frame);
     if (endOfStream) {
       if (remaining > 0) {
-        writeStatus(new Status(Transport.Code.UNKNOWN, "EOF on incomplete frame"));
+        writeStatus(Status.UNKNOWN.withDescription("EOF on incomplete frame"));
       } else if (!statusDelivered) {
         writeStatus(Status.OK);
       }
@@ -90,16 +89,9 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
             inFrame = false;
           }
         } else if (GrpcFramingUtil.isStatusFrame(currentFlags)) {
-          int status = framedChunk.read() << 8 | framedChunk.read();
-          Transport.Code code = Transport.Code.valueOf(status);
-          // TODO(user): Resolve what to do with remainder of framedChunk
+          int code = framedChunk.read() << 8 | framedChunk.read();
           try {
-            if (code == null) {
-              // Log for unknown code
-              writeStatus(new Status(Transport.Code.UNKNOWN, "Unknown status code " + status));
-            } else {
-              writeStatus(new Status(code));
-            }
+            writeStatus(Status.fromCodeValue(code));
           } finally {
             currentLength = LENGTH_NOT_SET;
             inFrame = false;
@@ -111,7 +103,7 @@ public abstract class Deframer<F> implements Framer.Sink<F> {
         }
       }
     } catch (IOException ioe) {
-      Status status = new Status(Transport.Code.UNKNOWN, ioe);
+      Status status = Status.UNKNOWN.withCause(ioe);
       writeStatus(status);
       throw status.asRuntimeException();
     }

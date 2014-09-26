@@ -14,7 +14,6 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.StreamState;
-import com.google.net.stubby.transport.Transport;
 
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
@@ -73,7 +72,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void setStatusWithErrorShouldCloseStream() {
-    Status errorStatus = new Status(Transport.Code.INTERNAL);
+    Status errorStatus = Status.INTERNAL;
     stream().setStatus(errorStatus, new Metadata.Trailers());
     verify(listener).closed(eq(errorStatus), any(Metadata.Trailers.class));
     assertEquals(StreamState.CLOSED, stream.state());
@@ -81,7 +80,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void setStatusWithOkShouldNotOverrideError() {
-    Status errorStatus = new Status(Transport.Code.INTERNAL);
+    Status errorStatus = Status.INTERNAL;
     stream().setStatus(errorStatus, new Metadata.Trailers());
     stream().setStatus(Status.OK, new Metadata.Trailers());
     verify(listener).closed(any(Status.class), any(Metadata.Trailers.class));
@@ -90,7 +89,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void setStatusWithErrorShouldNotOverridePreviousError() {
-    Status errorStatus = new Status(Transport.Code.INTERNAL);
+    Status errorStatus = Status.INTERNAL;
     stream().setStatus(errorStatus, new Metadata.Trailers());
     stream().setStatus(Status.fromThrowable(new RuntimeException("fake")),
         new Metadata.Trailers());
@@ -115,10 +114,10 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     // Receive headers first so that it's a valid GRPC response.
     stream().inboundHeadersRecieved(grpcResponseHeaders(), false);
 
-    stream.inboundDataReceived(statusFrame(new Status(Transport.Code.INTERNAL)), false);
+    stream.inboundDataReceived(statusFrame(Status.INTERNAL), false);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
-    assertEquals(Transport.Code.INTERNAL, captor.getValue().getCode());
+    assertEquals(Status.INTERNAL.getCode(), captor.getValue().getCode());
     assertEquals(StreamState.CLOSED, stream.state());
   }
 

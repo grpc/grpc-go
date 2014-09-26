@@ -2,7 +2,6 @@ package com.google.net.stubby;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.MapMaker;
-import com.google.net.stubby.transport.Transport;
 
 import java.io.InputStream;
 import java.util.concurrent.ConcurrentMap;
@@ -45,7 +44,7 @@ public abstract class AbstractOperation implements Operation {
    */
   protected Operation progressTo(Phase desiredPhase) {
     if (desiredPhase.ordinal() < phase.ordinal()) {
-      close(new Status(Transport.Code.INTERNAL,
+      close(Status.INTERNAL.withDescription(
           "Canot move to " + desiredPhase.name() + " from " + phase.name()));
     } else {
       phase = desiredPhase;

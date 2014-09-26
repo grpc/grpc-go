@@ -12,7 +12,6 @@ import com.google.net.stubby.Session;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.Framer;
 import com.google.net.stubby.transport.MessageFramer;
-import com.google.net.stubby.transport.Transport;
 import com.google.net.stubby.transport.TransportFrameUtil;
 
 import java.io.ByteArrayOutputStream;
@@ -156,7 +155,7 @@ public class ServletSession extends HttpServlet {
       try {
         responseStream.write(TransportFrameUtil.NO_COMPRESS_FLAG);
       } catch (IOException ioe) {
-        close(new Status(Transport.Code.INTERNAL, ioe));
+        close(Status.INTERNAL.withCause(ioe));
       }
     }
 
@@ -188,7 +187,7 @@ public class ServletSession extends HttpServlet {
         frame.position(1);
         ByteBuffers.asByteSource(frame).copyTo(responseStream);
       } catch (Throwable t) {
-        close(new Status(Transport.Code.INTERNAL, t));
+        close(Status.INTERNAL.withCause(t));
       } finally {
         if (closed && endOfMessage) {
           framer.close();
