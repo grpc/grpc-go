@@ -139,7 +139,7 @@ public final class Status {
     public int value() {
       return value;
     }
-    
+
     private Status status() {
       return STATUS_LIST.get(value);
     }
@@ -169,9 +169,9 @@ public final class Status {
   public static final Status NOT_FOUND = Code.NOT_FOUND.status();
   public static final Status ALREADY_EXISTS = Code.ALREADY_EXISTS.status();
   public static final Status PERMISSION_DENIED = Code.PERMISSION_DENIED.status();
-  public static final Status UNAUTHENTICATED = Code.PERMISSION_DENIED.status();
+  public static final Status UNAUTHENTICATED = Code.UNAUTHENTICATED.status();
   public static final Status RESOURCE_EXHAUSTED = Code.RESOURCE_EXHAUSTED.status();
-  public static final Status FAILED_PRECONDITION = 
+  public static final Status FAILED_PRECONDITION =
       Code.FAILED_PRECONDITION.status();
   public static final Status ABORTED = Code.ABORTED.status();
   public static final Status OUT_OF_RANGE = Code.OUT_OF_RANGE.status();
