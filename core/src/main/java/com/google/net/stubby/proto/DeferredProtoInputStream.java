@@ -64,6 +64,11 @@ public class DeferredProtoInputStream extends DeferredInputStream<MessageLite> {
   public int read(byte[] b, int off, int len) throws IOException {
     if (message != null) {
       int size = message.getSerializedSize();
+      if (size == 0) {
+        message = null;
+        partial = null;
+        return -1;
+      }
       if (len >= size) {
         // This is the only case that is zero-copy.
         CodedOutputStream stream = CodedOutputStream.newInstance(b, off, size);
