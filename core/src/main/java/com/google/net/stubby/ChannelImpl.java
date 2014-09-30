@@ -1,8 +1,9 @@
 package com.google.net.stubby;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.AbstractService;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
@@ -161,19 +162,27 @@ public final class ChannelImpl extends AbstractService implements Channel {
       try {
         return is.available();
       } catch (IOException ex) {
-        throw Throwables.propagate(ex);
+        throw new RuntimeException(ex);
       }
     }
 
     @Override
     public void sendPayload(ReqT payload, SettableFuture<Void> accepted) {
       Preconditions.checkState(stream != null, "Not started");
-      InputStream payloadIs = method.streamRequest(payload);
-      if (accepted == null) {
-        stream.writeMessage(payloadIs, available(payloadIs), null);
-      } else {
-        inProcessFutures.add(accepted);
-        stream.writeMessage(payloadIs, available(payloadIs), new AcceptedRunnable(accepted));
+      boolean failed = true;
+      try {
+        InputStream payloadIs = method.streamRequest(payload);
+        if (accepted == null) {
+          stream.writeMessage(payloadIs, available(payloadIs), null);
+        } else {
+          inProcessFutures.add(accepted);
+          stream.writeMessage(payloadIs, available(payloadIs), new AcceptedRunnable(accepted));
+        }
+        failed = false;
+      } finally {
+        if (failed) {
+          cancel();
+        }
       }
       stream.flush();
     }
@@ -211,18 +220,19 @@ public final class ChannelImpl extends AbstractService implements Channel {
               if (theirs == null) {
                 ours.set(null);
               } else {
-                theirs.addListener(new Runnable() {
+                Futures.addCallback(theirs, new FutureCallback<Void>() {
                   @Override
-                  public void run() {
-                    // TODO(user): If their Future fails, should we Call.cancel()?
+                  public void onSuccess(Void result) {
                     ours.set(null);
+                  }
+                  @Override
+                  public void onFailure(Throwable t) {
+                    ours.setException(t);
                   }
                 }, MoreExecutors.directExecutor());
               }
             } catch (Throwable t) {
-              ours.set(null);
-              CallImpl.this.cancel();
-              Throwables.propagate(t);
+              ours.setException(t);
             }
           }
         });

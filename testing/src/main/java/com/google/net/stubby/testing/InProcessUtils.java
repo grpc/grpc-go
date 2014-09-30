@@ -129,15 +129,7 @@ public class InProcessUtils {
       // Get the listener from the service implementation
       final ServerCall.Listener serverListener =
           serverMethod.getServerCallHandler().startCall(method.getName(),
-              serverCall);
-
-      // Send headers
-      serverWorkQueue.execute(new Runnable() {
-        @Override
-        public void run() {
-          serverListener.headersRead(headers);
-        }
-      });
+              serverCall, headers);
 
       // Return implementation of ClientStream which delegates to the server listener.
       return new ClientStream() {

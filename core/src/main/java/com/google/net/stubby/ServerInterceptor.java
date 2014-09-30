@@ -21,5 +21,5 @@ public interface ServerInterceptor {
    * @return listener for processing incoming messages for {@code call}
    */
   <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(String method, ServerCall<RespT> call,
-      ServerCallHandler<ReqT, RespT> next);
+      Metadata.Headers headers, ServerCallHandler<ReqT, RespT> next);
 }

@@ -58,9 +58,10 @@ public class ServerInterceptors {
     }
 
     @Override
-    public ServerCall.Listener<ReqT> startCall(String method, ServerCall<RespT> call) {
+    public ServerCall.Listener<ReqT> startCall(String method, ServerCall<RespT> call,
+        Metadata.Headers headers) {
       return ProcessInterceptorsCallHandler.create(interceptors.iterator(), callHandler)
-          .startCall(method, call);
+          .startCall(method, call, headers);
     }
   }
 
@@ -81,12 +82,13 @@ public class ServerInterceptors {
     }
 
     @Override
-    public ServerCall.Listener<ReqT> startCall(String method, ServerCall<RespT> call) {
+    public ServerCall.Listener<ReqT> startCall(String method, ServerCall<RespT> call,
+        Metadata.Headers headers) {
       if (interceptors != null && interceptors.hasNext()) {
-        return interceptors.next().interceptCall(method, call, this);
+        return interceptors.next().interceptCall(method, call, headers, this);
       } else {
         interceptors = null;
-        return callHandler.startCall(method, call);
+        return callHandler.startCall(method, call, headers);
       }
     }
   }

@@ -20,5 +20,6 @@ public interface ServerCallHandler<ReqT, RespT> {
    * @param call object for responding
    * @return listener for processing incoming messages for {@code call}
    */
-  ServerCall.Listener<ReqT> startCall(String fullMethodName, ServerCall<RespT> call);
+  ServerCall.Listener<ReqT> startCall(String fullMethodName, ServerCall<RespT> call,
+      Metadata.Headers headers);
 }

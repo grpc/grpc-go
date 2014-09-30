@@ -33,18 +33,6 @@ public abstract class ServerCall<ResponseT> {
   // a case then we either get to generate a half close or purposefully omit it.
   public abstract static class Listener<RequestT> {
     /**
-     * Called upon receiving all header information from the remote end-point.
-     * <p>This method should return quickly, as the same thread may be used to process other
-     * streams.
-     *
-     * @param headers the fully buffered received headers.
-     * @return a processing completion future, or {@code null} to indicate that processing of the
-     *         headers is immediately complete.
-     */
-    @Nullable
-    public abstract ListenableFuture<Void> headersRead(Metadata.Headers headers);
-
-    /**
      * A request payload has been receiveed. For streaming calls, there may be zero payload
      * messages.
      */
