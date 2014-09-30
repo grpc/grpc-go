@@ -19,6 +19,13 @@ public final class ServerMethodDefinition<RequestT, ResponseT> {
     this.handler = handler;
   }
 
+  public static <RequestT, ResponseT> ServerMethodDefinition<RequestT, ResponseT> create(
+      String name, Marshaller<RequestT> requestMarshaller,
+      Marshaller<ResponseT> responseMarshaller, ServerCallHandler<RequestT, ResponseT> handler) {
+    return new ServerMethodDefinition<RequestT, ResponseT>(name, requestMarshaller,
+        responseMarshaller, handler);
+  }
+
   /** The simple name of the method. It is not an absolute path. */
   public String getName() {
     return name;

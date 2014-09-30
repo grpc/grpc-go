@@ -8,6 +8,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.net.stubby.Call;
 import com.google.net.stubby.Metadata;
+import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 
 import java.util.Iterator;
@@ -16,6 +17,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Utility functions for processing different call idioms. We have one-to-one correspondence
@@ -23,6 +25,20 @@ import java.util.concurrent.LinkedBlockingQueue;
  * that the runtime can vary behavior without requiring regeneration of the stub.
  */
 public class Calls {
+
+  /**
+   * Creates a MethodDescriptor for a given method.
+   *
+   * @param fullServiceName fully qualified service name
+   * @param method carries all invariants of the method
+   */
+  public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> createMethodDescriptor(
+      String fullServiceName, Method method) {
+    // TODO(user): if timeout is not defined in proto file, use a default timeout here.
+    // If timeout is defined in proto file, Method should carry the timeout.
+    return MethodDescriptor.create(method.getType(), fullServiceName + "." + method.getName(),
+        1, TimeUnit.SECONDS, method.getRequestMarshaller(), method.getResponseMarshaller());
+  }
 
   /**
    * Execute a unary call and return a {@link ListenableFuture} to the response.

@@ -17,29 +17,21 @@ import javax.annotation.concurrent.Immutable;
 @Immutable
 public class MethodDescriptor<RequestT, ResponseT> {
 
-  public enum Type {
-    UNARY,
-    CLIENT_STREAMING,
-    SERVER_STREAMING,
-    DUPLEX_STREAMING,
-    UNKNOWN
-  }
-
-  private final Type type;
+  private final MethodType type;
   private final String name;
   private final Marshaller<RequestT> requestMarshaller;
   private final Marshaller<ResponseT> responseMarshaller;
   private final long timeoutMicros;
 
   public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> create(
-      Type type, String name, long timeout, TimeUnit timeoutUnit,
+      MethodType type, String name, long timeout, TimeUnit timeoutUnit,
       Marshaller<RequestT> requestMarshaller,
       Marshaller<ResponseT> responseMarshaller) {
     return new MethodDescriptor<RequestT, ResponseT>(
         type, name, timeoutUnit.toMicros(timeout), requestMarshaller, responseMarshaller);
   }
 
-  private MethodDescriptor(Type type, String name, long timeoutMicros,
+  private MethodDescriptor(MethodType type, String name, long timeoutMicros,
                            Marshaller<RequestT> requestMarshaller,
                            Marshaller<ResponseT> responseMarshaller) {
     this.type = Preconditions.checkNotNull(type);
@@ -53,7 +45,7 @@ public class MethodDescriptor<RequestT, ResponseT> {
   /**
    * The call type of the method.
    */
-  public Type getType() {
+  public MethodType getType() {
     return type;
   }
 
