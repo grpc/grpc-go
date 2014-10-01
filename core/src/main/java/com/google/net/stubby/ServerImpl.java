@@ -7,7 +7,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.SerializingExecutor;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.newtransport.ServerListener;
@@ -19,7 +18,6 @@ import java.io.InputStream;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Callable;
 
@@ -309,7 +307,9 @@ public class ServerImpl extends AbstractService implements Server {
       this.listener = listener;
     }
 
-    /** Like {@link #close(Status, Metadata.Trailers)}, but thread-safe for internal use. */
+    /**
+     * Like {@link ServerCall#close(Status, Metadata.Trailers)}, but thread-safe for internal use.
+     */
     private void internalClose(Status status, Metadata.Trailers trailers) {
       // TODO(user): this is not thread-safe :)
       stream.close(status, trailers);
@@ -326,6 +326,7 @@ public class ServerImpl extends AbstractService implements Server {
       });
     }
 
+    @Override
     public void halfClosed() {
       callExecutor.execute(new Runnable() {
         @Override
