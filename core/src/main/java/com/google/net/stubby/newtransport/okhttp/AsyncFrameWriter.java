@@ -1,5 +1,6 @@
 package com.google.net.stubby.newtransport.okhttp;
 
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.SerializingExecutor;
 import com.google.net.stubby.Status;
 
@@ -12,6 +13,7 @@ import okio.Buffer;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 
 class AsyncFrameWriter implements FrameWriter {
@@ -177,12 +179,28 @@ class AsyncFrameWriter implements FrameWriter {
 
   @Override
   public void close() {
-    executor.execute(new WriteRunnable() {
+    // Wait for the frameWriter to close.
+    final SettableFuture<?> closeFuture = SettableFuture.create();
+    executor.execute(new Runnable() {
       @Override
-      public void doRun() throws IOException {
-        frameWriter.close();
+      public void run() {
+        try {
+          frameWriter.close();
+        } catch (IOException e) {
+          closeFuture.setException(e);
+        } finally {
+          closeFuture.set(null);
+        }
       }
     });
+    try {
+      closeFuture.get();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException(e);
+    } catch (ExecutionException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private abstract class WriteRunnable implements Runnable {

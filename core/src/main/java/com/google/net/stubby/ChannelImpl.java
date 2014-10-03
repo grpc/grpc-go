@@ -1,5 +1,8 @@
 package com.google.net.stubby;
 
+import static com.google.common.util.concurrent.Service.State.RUNNING;
+import static com.google.common.util.concurrent.Service.State.STARTING;
+
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.AbstractService;
 import com.google.common.util.concurrent.Futures;
@@ -47,7 +50,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
 
   @Override
   protected void doStart() {
-    notifyStarted();
+    obtainActiveTransport(true);
   }
 
   @Override
@@ -68,9 +71,10 @@ public final class ChannelImpl extends AbstractService implements Channel {
     return new CallImpl<ReqT, RespT>(method, new SerializingExecutor(executor));
   }
 
-  private synchronized ClientTransport obtainActiveTransport() {
+  private synchronized ClientTransport obtainActiveTransport(boolean notifyWhenRunning) {
     if (activeTransport == null) {
-      if (state() != State.RUNNING) {
+      State state = state();
+      if (state != RUNNING && state != STARTING) {
         throw new IllegalStateException("Not running");
       }
       ClientTransport newTransport = transportFactory.newClientTransport();
@@ -80,19 +84,31 @@ public final class ChannelImpl extends AbstractService implements Channel {
       // lock, due to reentrancy.
       newTransport.addListener(
           new TransportListener(newTransport), MoreExecutors.directExecutor());
+      if (notifyWhenRunning) {
+        newTransport.addListener(new Listener() {
+          @Override
+          public void running() {
+            notifyStarted();
+          }
+        }, executor);
+      }
       newTransport.startAsync();
       return newTransport;
     }
     return activeTransport;
   }
 
-  private synchronized void transportFailedOrStopped(ClientTransport transport) {
+  private synchronized void transportFailedOrStopped(ClientTransport transport, Throwable t) {
     if (activeTransport == transport) {
       activeTransport = null;
     }
     transports.remove(transport);
-    if (state() != State.RUNNING && transports.isEmpty()) {
-      notifyStopped();
+    if (state() != RUNNING && transports.isEmpty()) {
+      if (t != null) {
+        notifyFailed(t);
+      } else {
+        notifyStopped();
+      }
     }
   }
 
@@ -114,12 +130,12 @@ public final class ChannelImpl extends AbstractService implements Channel {
 
     @Override
     public void failed(State from, Throwable failure) {
-      transportFailedOrStopped(transport);
+      transportFailedOrStopped(transport, failure);
     }
 
     @Override
     public void terminated(State from) {
-      transportFailedOrStopped(transport);
+      transportFailedOrStopped(transport, null);
     }
   }
 
@@ -139,7 +155,7 @@ public final class ChannelImpl extends AbstractService implements Channel {
     @Override
     public void start(Listener<RespT> observer, Metadata.Headers headers) {
       Preconditions.checkState(stream == null, "Already started");
-      stream = obtainActiveTransport().newStream(method, headers,
+      stream = obtainActiveTransport(false).newStream(method, headers,
           new ClientStreamListenerImpl(observer));
     }
 

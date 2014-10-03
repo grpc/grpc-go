@@ -2,6 +2,7 @@ package com.google.net.stubby.newtransport.netty;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
 import io.netty.channel.Channel;
@@ -15,19 +16,17 @@ import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpClientUpgradeHandler;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.codec.http2.AbstractHttp2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
+import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2OrHttpChooser;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
-import io.netty.util.concurrent.Promise;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -57,10 +56,12 @@ public class Http2Negotiator {
      */
     ChannelInitializer<SocketChannel> initializer();
 
+    void onConnected(Channel channel);
+
     /**
-     * Awaits completion of the protocol negotiation handshake.
+     * Completion future for this negotiation.
      */
-    void await(Channel channel);
+    ListenableFuture<Void> completeFuture();
   }
 
   /**
@@ -70,8 +71,8 @@ public class Http2Negotiator {
     Preconditions.checkNotNull(handler, "handler");
     Preconditions.checkNotNull(sslEngine, "sslEngine");
 
-    final SettableFuture<Void> tlsNegotiatedHttp2 = SettableFuture.create();
-    if (!installJettyTLSProtocolSelection(sslEngine, tlsNegotiatedHttp2)) {
+    final SettableFuture<Void> completeFuture = SettableFuture.create();
+    if (!installJettyTLSProtocolSelection(sslEngine, completeFuture)) {
       throw new IllegalStateException("NPN/ALPN extensions not installed");
     }
     final ChannelInitializer<SocketChannel> initializer = new ChannelInitializer<SocketChannel>() {
@@ -82,14 +83,11 @@ public class Http2Negotiator {
             new GenericFutureListener<Future<? super Channel>>() {
               @Override
               public void operationComplete(Future<? super Channel> future) throws Exception {
-                if (!future.isSuccess()) {
-                  // Throw the exception.
-                  if (tlsNegotiatedHttp2.isDone()) {
-                    tlsNegotiatedHttp2.get();
-                  } else {
-                    future.get();
-                  }
-                }
+                // If an error occurred during the handshake, throw it
+                // to the pipeline.
+                java.util.concurrent.Future<?> doneFuture =
+                    future.isSuccess() ? completeFuture : future;
+                doneFuture.get();
               }
             });
         ch.pipeline().addLast(sslHandler);
@@ -104,15 +102,13 @@ public class Http2Negotiator {
       }
 
       @Override
-      public void await(Channel channel) {
-        try {
-          // Wait for NPN/ALPN negotation to complete. Will throw if failed.
-          tlsNegotiatedHttp2.get(5, TimeUnit.SECONDS);
-        } catch (Exception e) {
-          // Attempt to close the channel before propagating the error
-          channel.close();
-          throw new IllegalStateException("Error waiting for TLS negotiation", e);
-        }
+      public void onConnected(Channel channel) {
+        // Nothing to do.
+      }
+
+      @Override
+      public ListenableFuture<Void> completeFuture() {
+        return completeFuture;
       }
     };
   }
@@ -120,14 +116,13 @@ public class Http2Negotiator {
   /**
    * Create a plaintext upgrade negotiation for HTTP/1.1 to HTTP/2.
    */
-  public static Negotiation plaintextUpgrade(final AbstractHttp2ConnectionHandler handler) {
+  public static Negotiation plaintextUpgrade(final Http2ConnectionHandler handler) {
     // Register the plaintext upgrader
     Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(handler);
     HttpClientCodec httpClientCodec = new HttpClientCodec();
     final HttpClientUpgradeHandler upgrader =
         new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
     final UpgradeCompletionHandler completionHandler = new UpgradeCompletionHandler();
-
     final ChannelInitializer<SocketChannel> initializer = new ChannelInitializer<SocketChannel>() {
       @Override
       public void initChannel(SocketChannel ch) throws Exception {
@@ -143,21 +138,17 @@ public class Http2Negotiator {
       }
 
       @Override
-      public void await(Channel channel) {
-        try {
-          // Trigger the HTTP/1.1 plaintext upgrade protocol by issuing an HTTP request
-          // which causes the upgrade headers to be added
-          Promise<Void> upgradePromise = completionHandler.getUpgradePromise();
-          DefaultHttpRequest upgradeTrigger =
-              new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
-          channel.writeAndFlush(upgradeTrigger);
-          // Wait for the upgrade to complete
-          upgradePromise.get(5, TimeUnit.SECONDS);
-        } catch (Exception e) {
-          // Attempt to close the channel before propagating the error
-          channel.close();
-          throw new IllegalStateException("Error waiting for plaintext protocol upgrade", e);
-        }
+      public ListenableFuture<Void> completeFuture() {
+        return completionHandler.getUpgradeFuture();
+      }
+
+      @Override
+      public void onConnected(Channel channel) {
+        // Trigger the HTTP/1.1 plaintext upgrade protocol by issuing an HTTP request
+        // which causes the upgrade headers to be added
+        DefaultHttpRequest upgradeTrigger =
+            new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+        channel.writeAndFlush(upgradeTrigger);
       }
     };
   }
@@ -173,13 +164,21 @@ public class Http2Negotiator {
       }
     };
     return new Negotiation() {
+      private final SettableFuture<Void> completeFuture = SettableFuture.create();
       @Override
       public ChannelInitializer<SocketChannel> initializer() {
         return initializer;
       }
 
       @Override
-      public void await(Channel channel) {}
+      public void onConnected(Channel channel) {
+        completeFuture.set(null);
+      }
+
+      @Override
+      public ListenableFuture<Void> completeFuture() {
+        return completeFuture;
+      }
     };
   }
 
@@ -187,25 +186,19 @@ public class Http2Negotiator {
    * Report protocol upgrade completion using a promise.
    */
   private static class UpgradeCompletionHandler extends ChannelHandlerAdapter {
+    private final SettableFuture<Void> upgradeFuture = SettableFuture.create();
 
-    private Promise<Void> upgradePromise;
-
-    @Override
-    public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-      upgradePromise = ctx.newPromise();
-    }
-
-    public Promise<Void> getUpgradePromise() {
-      return upgradePromise;
+    public ListenableFuture<Void> getUpgradeFuture() {
+      return upgradeFuture;
     }
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-      if (!upgradePromise.isDone()) {
+      if (!upgradeFuture.isDone()) {
         if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_REJECTED) {
-          upgradePromise.setFailure(new Throwable());
+          upgradeFuture.setException(new RuntimeException("HTTP/2 upgrade rejected"));
         } else if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_SUCCESSFUL) {
-          upgradePromise.setSuccess(null);
+          upgradeFuture.set(null);
           ctx.pipeline().remove(this);
         }
       }
@@ -214,24 +207,25 @@ public class Http2Negotiator {
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
       super.channelInactive(ctx);
-      if (!upgradePromise.isDone()) {
-        upgradePromise.setFailure(new Throwable());
+      if (!upgradeFuture.isDone()) {
+        upgradeFuture.setException(new RuntimeException("Channel closed before upgrade complete"));
       }
     }
 
     @Override
     public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
       super.channelUnregistered(ctx);
-      if (!upgradePromise.isDone()) {
-        upgradePromise.setFailure(new Throwable());
+      if (!upgradeFuture.isDone()) {
+        upgradeFuture.setException(
+            new RuntimeException("Handler unregistered before upgrade complete"));
       }
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
       super.exceptionCaught(ctx, cause);
-      if (!upgradePromise.isDone()) {
-        upgradePromise.setFailure(cause);
+      if (!upgradeFuture.isDone()) {
+        upgradeFuture.setException(cause);
       }
     }
   }

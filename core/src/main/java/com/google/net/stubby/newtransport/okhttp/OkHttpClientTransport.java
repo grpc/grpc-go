@@ -100,6 +100,8 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   private boolean goAway;
   @GuardedBy("lock")
   private Status goAwayStatus;
+  @GuardedBy("lock")
+  private boolean stopped;
 
   OkHttpClientTransport(InetSocketAddress address, Executor executor) {
     this.address = Preconditions.checkNotNull(address);
@@ -149,9 +151,9 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       frameWriter = new AsyncFrameWriter(variant.newWriter(sink, true), this, executor);
     }
 
-    notifyStarted();
     clientFrameHandler = new ClientFrameHandler();
     executor.execute(clientFrameHandler);
+    notifyStarted();
   }
 
   @Override
@@ -161,10 +163,11 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       normalClose = !goAway;
     }
     if (normalClose) {
-      abort(Status.INTERNAL.withDescription("Transport stopped"));
       // Send GOAWAY with lastGoodStreamId of 0, since we don't expect any server-initiated streams.
       // The GOAWAY is part of graceful shutdown.
       frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
+
+      abort(Status.INTERNAL.withDescription("Transport stopped"));
     }
     stopIfNecessary();
   }
@@ -203,7 +206,10 @@ public class OkHttpClientTransport extends AbstractClientTransport {
 
     // Starting stop, go into STOPPING state so that Channel know this Transport should not be used
     // further, will become STOPPED once all streams are complete.
-    stopAsync();
+    State state = state();
+    if (state == State.RUNNING || state == State.NEW) {
+      stopAsync();
+    }
 
     for (OkHttpClientStream stream : goAwayStreams) {
       stream.setStatus(status, new Metadata.Trailers());
@@ -233,8 +239,16 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     boolean shouldStop;
     synchronized (lock) {
       shouldStop = (goAway && streams.size() == 0);
+      if (shouldStop) {
+        if (stopped) {
+          // We've already stopped, don't stop again.
+          shouldStop = false;
+        }
+        stopped = true;
+      }
     }
     if (shouldStop) {
+      // Wait for the frame writer to close.
       frameWriter.close();
       try {
         frameReader.close();

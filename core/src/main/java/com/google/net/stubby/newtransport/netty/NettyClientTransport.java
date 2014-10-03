@@ -3,6 +3,9 @@ package com.google.net.stubby.newtransport.netty;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.newtransport.AbstractClientTransport;
@@ -125,24 +128,50 @@ class NettyClientTransport extends AbstractClientTransport {
     b.connect(address).addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
-        if (future.isSuccess()) {
-          channel = future.channel();
-          notifyStarted();
-
-          // Listen for the channel close event.
-          channel.closeFuture().addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture future) throws Exception {
-              if (future.isSuccess()) {
-                notifyStopped();
-              } else {
-                notifyFailed(future.cause());
-              }
-            }
-          });
-        } else {
+        if (!future.isSuccess()) {
+          // The connection attempt failed.
           notifyFailed(future.cause());
+          return;
         }
+
+        // Connected successfully, start the protocol negotiation.
+        channel = future.channel();
+        negotiation.onConnected(channel);
+
+        final ListenableFuture<Void> negotiationFuture = negotiation.completeFuture();
+        Futures.addCallback(negotiationFuture, new FutureCallback<Void>() {
+          @Override
+          public void onSuccess(Void result) {
+            // The negotiation was successful.
+            notifyStarted();
+
+            // Handle transport shutdown when the channel is closed.
+            channel.closeFuture().addListener(new ChannelFutureListener() {
+              @Override
+              public void operationComplete(ChannelFuture future) throws Exception {
+                if (!future.isSuccess()) {
+                  // The close failed. Just notify that transport shutdown failed.
+                  notifyFailed(future.cause());
+                  return;
+                }
+
+                if (handler.connectionError() != null) {
+                  // The handler encountered a connection error.
+                  notifyFailed(handler.connectionError());
+                } else {
+                  // Normal termination of the connection.
+                  notifyStopped();
+                }
+              }
+            });
+          }
+
+          @Override
+          public void onFailure(Throwable t) {
+            // The negotiation failed.
+            notifyFailed(t);
+          }
+        });
       }
     });
   }
@@ -153,10 +182,6 @@ class NettyClientTransport extends AbstractClientTransport {
     // channel closes.
     if (channel != null && channel.isOpen()) {
       channel.close();
-    }
-
-    if (eventGroup != null) {
-      eventGroup.shutdownGracefully();
     }
   }
 

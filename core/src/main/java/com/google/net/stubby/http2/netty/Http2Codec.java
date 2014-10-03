@@ -15,13 +15,14 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.AsciiString;
-import io.netty.handler.codec.http2.AbstractHttp2ConnectionHandler;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
+import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2Connection;
+import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
+import io.netty.handler.codec.http2.Http2FrameAdapter;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2Settings;
 
 import java.util.Map;
 
@@ -29,7 +30,7 @@ import java.util.Map;
  * Codec used by clients and servers to interpret HTTP2 frames in the context of an ongoing
  * request-response dialog
  */
-public class Http2Codec extends AbstractHttp2ConnectionHandler {
+public class Http2Codec extends Http2ConnectionHandler {
   public static final int PADDING = 0;
   private final RequestRegistry requestRegistry;
   private final Session session;
@@ -53,9 +54,10 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
    * Constructor used by servers, takes a session which will receive operation events.
    */
   private Http2Codec(Http2Connection connection, Session session, RequestRegistry requestRegistry) {
-    super(connection);
+    super(connection, new LazyFrameListener());
     this.session = session;
     this.requestRegistry = requestRegistry;
+    initListener();
   }
 
   @Override
@@ -67,8 +69,11 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     return http2Writer;
   }
 
-  @Override
-  public void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
+  private void initListener() {
+    ((LazyFrameListener)((DefaultHttp2ConnectionDecoder) this.decoder()).listener()).setCodec(this);
+  }
+
+  private void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data,
       boolean endOfStream) throws Http2Exception {
     Request request = requestRegistry.lookup(streamId);
     if (request == null) {
@@ -92,14 +97,9 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     }
   }
 
-  @Override
-  public void onHeadersRead(ChannelHandlerContext ctx,
+  private void onHeadersRead(ChannelHandlerContext ctx,
       int streamId,
       Http2Headers headers,
-      int streamDependency,
-      short weight,
-      boolean exclusive,
-      int padding,
       boolean endStream) throws Http2Exception {
     Request operation = requestRegistry.lookup(streamId);
     if (operation == null) {
@@ -119,59 +119,12 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     }
   }
 
-  @Override
-  public void onPriorityRead(ChannelHandlerContext ctx, int streamId, int streamDependency,
-      short weight, boolean exclusive) throws Http2Exception {
-    // TODO
-  }
-
-  @Override
-  public void onRstStreamRead(ChannelHandlerContext ctx, int streamId, long errorCode)
-      throws Http2Exception {
+  private void onRstStreamRead(int streamId) {
     Request request = requestRegistry.lookup(streamId);
     if (request != null) {
       closeWithError(request, Status.CANCELLED.withDescription("Stream reset"));
       requestRegistry.remove(streamId);
     }
-  }
-
-  @Override
-  public void onSettingsAckRead(ChannelHandlerContext ctx) throws Http2Exception {
-    // TOOD
-  }
-
-  @Override
-  public void onSettingsRead(ChannelHandlerContext ctx, Http2Settings settings)
-      throws Http2Exception {
-    // TOOD
-  }
-
-  @Override
-  public void onPingRead(ChannelHandlerContext ctx, ByteBuf data) throws Http2Exception {
-    // TODO
-  }
-
-  @Override
-  public void onPingAckRead(ChannelHandlerContext ctx, ByteBuf data) throws Http2Exception {
-    // TODO
-  }
-
-  @Override
-  public void onPushPromiseRead(ChannelHandlerContext ctx, int streamId, int promisedStreamId,
-      Http2Headers headers, int padding) throws Http2Exception {
-    // TODO
-  }
-
-  @Override
-  public void onGoAwayRead(ChannelHandlerContext ctx, int lastStreamId, long errorCode,
-      ByteBuf debugData) throws Http2Exception {
-    // TODO
-  }
-
-  @Override
-  public void onWindowUpdateRead(ChannelHandlerContext ctx, int streamId, int windowSizeIncrement)
-      throws Http2Exception {
-    // TODO
   }
 
   private boolean isClient() {
@@ -272,12 +225,11 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     }
 
     public ChannelFuture writeData(int streamId, ByteBuf data, boolean endStream) {
-      return Http2Codec.this.writeData(ctx, streamId, data, PADDING, endStream, ctx.newPromise());
+      return encoder().writeData(ctx, streamId, data, PADDING, endStream, ctx.newPromise());
     }
 
     public ChannelFuture writeHeaders(int streamId, Http2Headers headers, boolean endStream) {
-
-      return Http2Codec.this.writeHeaders(ctx,
+      return encoder().writeHeaders(ctx,
           streamId,
           headers,
           PADDING,
@@ -291,7 +243,7 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
         short weight,
         boolean exclusive,
         boolean endStream) {
-      return Http2Codec.this.writeHeaders(ctx,
+      return encoder().writeHeaders(ctx,
           streamId,
           headers,
           streamDependency,
@@ -303,7 +255,39 @@ public class Http2Codec extends AbstractHttp2ConnectionHandler {
     }
 
     public ChannelFuture writeRstStream(int streamId, long errorCode) {
-      return Http2Codec.this.writeRstStream(ctx, streamId, errorCode, ctx.newPromise());
+      return encoder().writeRstStream(ctx, streamId, errorCode, ctx.newPromise());
+    }
+  }
+
+  private static class LazyFrameListener extends Http2FrameAdapter {
+    private Http2Codec codec;
+
+    void setCodec(Http2Codec codec) {
+      this.codec = codec;
+    }
+
+    @Override
+    public void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
+        boolean endOfStream) throws Http2Exception {
+      codec.onDataRead(ctx, streamId, data, endOfStream);
+    }
+
+    @Override
+    public void onHeadersRead(ChannelHandlerContext ctx,
+        int streamId,
+        Http2Headers headers,
+        int streamDependency,
+        short weight,
+        boolean exclusive,
+        int padding,
+        boolean endStream) throws Http2Exception {
+      codec.onHeadersRead(ctx, streamId, headers, endStream);
+    }
+
+    @Override
+    public void onRstStreamRead(ChannelHandlerContext ctx, int streamId, long errorCode)
+        throws Http2Exception {
+      codec.onRstStreamRead(streamId);
     }
   }
 }
