@@ -234,7 +234,9 @@ public class ServerImpl extends AbstractService implements Server {
               try {
                 HandlerRegistry.Method method = registry.lookupMethod(methodName);
                 if (method == null) {
-                  stream.close(Status.UNIMPLEMENTED, new Metadata.Trailers());
+                  stream.close(
+                      Status.UNIMPLEMENTED.withDescription("Method not found: " + methodName),
+                      new Metadata.Trailers());
                   return;
                 }
                 listener = startCall(stream, methodName, method.getMethodDefinition(), headers);

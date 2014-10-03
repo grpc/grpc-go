@@ -32,7 +32,7 @@ public class ServerCalls {
           ReqT request;
           @Override
           public ListenableFuture<Void> onPayload(ReqT request) {
-            if (request == null) {
+            if (this.request == null) {
               // We delay calling method.invoke() until onHalfClose(), because application may call
               // close(OK) inside invoke(), while close(OK) is not allowed before onHalfClose().
               this.request = request;

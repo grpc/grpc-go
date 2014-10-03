@@ -54,7 +54,7 @@ public final class TransportFrameUtil {
     if (!path.startsWith("/")) {
       return null;
     }
-    return path.substring(1);
+    return path;
   }
 
   private TransportFrameUtil() {}

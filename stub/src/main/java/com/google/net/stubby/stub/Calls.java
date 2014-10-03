@@ -357,7 +357,7 @@ public class Calls {
       public void onClose(Status status, Metadata.Trailers trailers) {
         Preconditions.checkState(!done, "Call already closed");
         if (status.isOk()) {
-          buffer.add(this);
+          buffer.add(BlockingResponseStream.this);
         } else {
           buffer.add(status.asRuntimeException());
         }
