@@ -19,7 +19,7 @@ import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
 import com.squareup.okhttp.internal.spdy.Header;
 import com.squareup.okhttp.internal.spdy.HeadersMode;
-import com.squareup.okhttp.internal.spdy.Http20Draft12;
+import com.squareup.okhttp.internal.spdy.Http20Draft14;
 import com.squareup.okhttp.internal.spdy.Settings;
 import com.squareup.okhttp.internal.spdy.Variant;
 
@@ -146,7 +146,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-      Variant variant = new Http20Draft12();
+      Variant variant = new Http20Draft14();
       frameReader = variant.newReader(source, true);
       frameWriter = new AsyncFrameWriter(variant.newWriter(sink, true), this, executor);
     }
@@ -348,7 +348,11 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     @Override
     public void settings(boolean clearPrevious, Settings settings) {
       // not impl
-      frameWriter.ackSettings();
+      try {
+        frameWriter.ackSettings(settings);
+      } catch (IOException e) {
+        abort(Status.fromThrowable(e));
+      }
     }
 
     @Override
@@ -442,7 +446,10 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       // TODO(user): swap to NIO buffers or zero-copy if/when okhttp/okio supports it
       buffer.write(frame.array(), frame.arrayOffset(), frame.remaining());
       // Write the data to the remote endpoint.
-      frameWriter.data(endOfStream, streamId, buffer);
+      // Per http2 SPEC, the max data length should be larger than 64K, while our frame size is
+      // only 4K.
+      Preconditions.checkState(buffer.size() < frameWriter.maxDataLength());
+      frameWriter.data(endOfStream, streamId, buffer, (int) buffer.size());
       frameWriter.flush();
     }
 

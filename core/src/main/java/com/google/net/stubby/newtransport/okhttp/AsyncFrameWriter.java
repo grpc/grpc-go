@@ -41,11 +41,11 @@ class AsyncFrameWriter implements FrameWriter {
   }
 
   @Override
-  public void ackSettings() {
+  public void ackSettings(final Settings peerSettings) throws IOException {
     executor.execute(new WriteRunnable() {
       @Override
       public void doRun() throws IOException {
-        frameWriter.ackSettings();
+        frameWriter.ackSettings(peerSettings);
       }
     });
   }
@@ -120,16 +120,6 @@ class AsyncFrameWriter implements FrameWriter {
       @Override
       public void doRun() throws IOException {
         frameWriter.data(outFinished, streamId, source, byteCount);
-      }
-    });
-  }
-
-  @Override
-  public void data(final boolean outFinished, final int streamId, final Buffer source) {
-    executor.execute(new WriteRunnable() {
-      @Override
-      public void doRun() throws IOException {
-        frameWriter.data(outFinished, streamId, source);
       }
     });
   }
@@ -215,5 +205,10 @@ class AsyncFrameWriter implements FrameWriter {
     }
 
     public abstract void doRun() throws IOException;
+  }
+
+  @Override
+  public int maxDataLength() {
+    return frameWriter.maxDataLength();
   }
 }

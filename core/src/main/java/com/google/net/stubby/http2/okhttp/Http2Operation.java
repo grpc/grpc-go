@@ -54,7 +54,7 @@ abstract class Http2Operation extends AbstractOperation implements Framer.Sink {
       Buffer buffer = new Buffer().readFrom(ByteBuffers.newConsumingInputStream(frame));
 
       // Write the data to the remote endpoint.
-      frameWriter.data(closed && endOfMessage, getId(), buffer);
+      frameWriter.data(closed && endOfMessage, getId(), buffer, (int) buffer.size());
       frameWriter.flush();
     } catch (IOException ioe) {
       close(Status.INTERNAL.withCause(ioe));

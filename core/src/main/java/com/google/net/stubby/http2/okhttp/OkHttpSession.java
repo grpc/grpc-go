@@ -20,7 +20,7 @@ import com.squareup.okhttp.internal.spdy.FrameReader;
 import com.squareup.okhttp.internal.spdy.FrameWriter;
 import com.squareup.okhttp.internal.spdy.Header;
 import com.squareup.okhttp.internal.spdy.HeadersMode;
-import com.squareup.okhttp.internal.spdy.Http20Draft12;
+import com.squareup.okhttp.internal.spdy.Http20Draft14;
 import com.squareup.okhttp.internal.spdy.Settings;
 import com.squareup.okhttp.internal.spdy.Variant;
 
@@ -94,7 +94,7 @@ public class OkHttpSession implements Session {
    */
   private OkHttpSession(Socket socket, RequestRegistry requestRegistry,
       Executor executor) throws IOException {
-    Variant variant = new Http20Draft12();
+    Variant variant = new Http20Draft14();
     // TODO(user): use Okio.buffer(Socket)
     countingInputStream = new CountingInputStream(socket.getInputStream());
     countingOutputStream = new CountingOutputStream(socket.getOutputStream());
@@ -119,7 +119,7 @@ public class OkHttpSession implements Session {
    */
   private OkHttpSession(Socket socket, Session server,
       RequestRegistry requestRegistry, Executor executor) throws IOException {
-    Variant variant = new Http20Draft12();
+    Variant variant = new Http20Draft14();
     // TODO(user): use Okio.buffer(Socket)
     countingInputStream = new CountingInputStream(socket.getInputStream());
     countingOutputStream = new CountingOutputStream(socket.getOutputStream());

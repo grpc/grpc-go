@@ -58,6 +58,10 @@ import java.util.concurrent.TimeUnit;
 public class OkHttpClientTransportTest {
   private static final int TIME_OUT_MS = 5000000;
   private static final String NETWORK_ISSUE_MESSAGE = "network issue";
+  // The extra bytes that would be added to a message before passing to okhttp transport, they are:
+  // 4 bytes (1 byte flag, 3 byte length) compression frame header + 5 bytes (1 byte flag,
+  // 4 bytes length) message frame header.
+  private static final int EXTRA_BYTES = 9;
 
   // Flags
   private static final byte PAYLOAD_FRAME = 0x0;
@@ -84,6 +88,7 @@ public class OkHttpClientTransportTest {
     frameHandler = clientTransport.getHandler();
     streams = clientTransport.getStreams();
     when(method.getName()).thenReturn("fakemethod");
+    when(frameWriter.maxDataLength()).thenReturn(Integer.MAX_VALUE);
   }
 
   @After
@@ -181,11 +186,12 @@ public class OkHttpClientTransportTest {
     clientTransport.newStream(method,new Metadata.Headers(), listener);
     OkHttpClientStream stream = streams.get(3);
     InputStream input = new ByteArrayInputStream(message.getBytes(StandardCharsets.UTF_8));
+    assertEquals(12, input.available());
     stream.writeMessage(input, input.available(), null);
     stream.flush();
     ArgumentCaptor<Buffer> captor =
         ArgumentCaptor.forClass(Buffer.class);
-    verify(frameWriter).data(eq(false), eq(3), captor.capture());
+    verify(frameWriter).data(eq(false), eq(3), captor.capture(), eq(12 + EXTRA_BYTES));
     Buffer sentFrame = captor.getValue();
     checkSameInputStream(createMessageFrame(message), sentFrame.inputStream());
   }
@@ -295,11 +301,12 @@ public class OkHttpClientTransportTest {
     OkHttpClientStream stream = streams.get(3);
     InputStream input =
         new ByteArrayInputStream(sentMessage.getBytes(StandardCharsets.UTF_8));
+    assertEquals(22, input.available());
     stream.writeMessage(input, input.available(), null);
     stream.flush();
     ArgumentCaptor<Buffer> captor =
         ArgumentCaptor.forClass(Buffer.class);
-    verify(frameWriter).data(eq(false), eq(3), captor.capture());
+    verify(frameWriter).data(eq(false), eq(3), captor.capture(), eq(22 + EXTRA_BYTES));
     Buffer sentFrame = captor.getValue();
     checkSameInputStream(createMessageFrame(sentMessage), sentFrame.inputStream());
 
@@ -438,7 +445,6 @@ public class OkHttpClientTransportTest {
     Status status;
     CountDownLatch closed = new CountDownLatch(1);
     ArrayList<String> messages = new ArrayList<String>();
-    Map<String, String> contexts = new HashMap<String, String>();
 
     @Override
     public ListenableFuture<Void> headersRead(Metadata.Headers headers) {
