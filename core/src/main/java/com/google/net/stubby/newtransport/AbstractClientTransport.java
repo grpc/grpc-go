@@ -24,7 +24,8 @@ public abstract class AbstractClientTransport extends AbstractService implements
     }
 
     if (state() != State.RUNNING) {
-      throw new IllegalStateException("Invalid state for creating new stream: " + state());
+      throw new IllegalStateException("Invalid state for creating new stream: " + state(),
+          failureCause());
     }
 
     // Create the stream.

@@ -2,7 +2,6 @@ package com.google.net.stubby.newtransport;
 
 import com.google.common.io.ByteStreams;
 import com.google.net.stubby.GrpcFramingUtil;
-import com.google.net.stubby.Operation;
 import com.google.net.stubby.Status;
 
 import java.io.ByteArrayInputStream;
@@ -12,7 +11,7 @@ import java.io.InputStream;
 
 /**
  * Base implementation that joins a sequence of framed GRPC data produced by a {@link Framer},
- * reconstructs their messages and hands them off to a receiving {@link Operation}
+ * reconstructs their messages and hands them off to a receiving {@link GrpcDeframer.Sink}
  */
 public abstract class Deframer<F> implements Framer.Sink<F> {
 

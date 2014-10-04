@@ -27,7 +27,8 @@ import javax.annotation.Nullable;
 public class InProcessUtils {
 
   /**
-   * Create a {@link ClientTransportFactory} connected to the given {@link com.google.net.stubby.HandlerRegistry}
+   * Create a {@link ClientTransportFactory} connected to the given
+   * {@link com.google.net.stubby.HandlerRegistry}
    */
   public static ClientTransportFactory adaptHandlerRegistry(HandlerRegistry handlers,
                                                             ExecutorService executor) {
@@ -44,7 +45,8 @@ public class InProcessUtils {
   }
 
   /**
-   * Implementation of ClientTransport that delegates to a {@link com.google.net.stubby.ServerCall.Listener}
+   * Implementation of ClientTransport that delegates to a
+   * {@link com.google.net.stubby.ServerCall.Listener}
    */
   private static class InProcessClientTransport extends AbstractService
       implements ClientTransport {

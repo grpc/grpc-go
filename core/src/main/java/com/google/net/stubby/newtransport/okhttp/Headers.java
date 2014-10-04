@@ -59,13 +59,6 @@ public class Headers {
     return okhttpHeaders;
   }
 
-  public static List<Header> createResponseHeaders() {
-    // TODO(user): Need to review status code handling
-    List<Header> headers = Lists.newArrayListWithCapacity(6);
-    headers.add(RESPONSE_STATUS_OK);
-    return headers;
-  }
-
   /**
    * Returns {@code true} if the given header is an application-provided header. Otherwise, returns
    * {@code false} if the header is reserved by GRPC.

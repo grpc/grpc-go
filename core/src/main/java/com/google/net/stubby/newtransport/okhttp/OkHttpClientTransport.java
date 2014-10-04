@@ -208,7 +208,11 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     // further, will become STOPPED once all streams are complete.
     State state = state();
     if (state == State.RUNNING || state == State.NEW) {
-      stopAsync();
+      if (status.getCode() == Status.Code.INTERNAL && status.getCause() != null) {
+        notifyFailed(status.asRuntimeException());
+      } else {
+        stopAsync();
+      }
     }
 
     for (OkHttpClientStream stream : goAwayStreams) {

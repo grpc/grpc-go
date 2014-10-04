@@ -23,6 +23,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
@@ -30,6 +32,9 @@ import javax.annotation.concurrent.ThreadSafe;
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
 public final class ChannelImpl extends AbstractService implements Channel {
+
+  private static final Logger log = Logger.getLogger(ChannelImpl.class.getName());
+
   private final ClientTransportFactory transportFactory;
   private final ExecutorService executor;
   /**
@@ -99,6 +104,10 @@ public final class ChannelImpl extends AbstractService implements Channel {
   }
 
   private synchronized void transportFailedOrStopped(ClientTransport transport, Throwable t) {
+    if (transport.state() == State.FAILED) {
+      log.log(Level.SEVERE, "client transport failed " + transport.getClass().getName(),
+          transport.failureCause());
+    }
     if (activeTransport == transport) {
       activeTransport = null;
     }
