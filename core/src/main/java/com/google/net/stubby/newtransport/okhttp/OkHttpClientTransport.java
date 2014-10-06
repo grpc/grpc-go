@@ -149,6 +149,9 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       Variant variant = new Http20Draft14();
       frameReader = variant.newReader(source, true);
       frameWriter = new AsyncFrameWriter(variant.newWriter(sink, true), this, executor);
+      frameWriter.connectionPreface();
+      Settings settings = new Settings();
+      frameWriter.settings(settings);
     }
 
     clientFrameHandler = new ClientFrameHandler();
