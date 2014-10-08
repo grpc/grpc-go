@@ -1,5 +1,7 @@
 package com.google.net.stubby;
 
+import static com.google.common.base.Charsets.US_ASCII;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
@@ -341,7 +343,7 @@ public final class Status {
   private static class StatusCodeMarshaller implements Metadata.Marshaller<Status> {
     @Override
     public byte[] toBytes(Status status) {
-      return Metadata.INTEGER_MARSHALLER.toBytes(status.getCode().value());
+      return Metadata.INTEGER_MARSHALLER.toAscii(status.getCode().value()).getBytes(US_ASCII);
     }
 
     @Override
@@ -351,7 +353,8 @@ public final class Status {
 
     @Override
     public Status parseBytes(byte[] serialized) {
-      return fromCodeValue(Metadata.INTEGER_MARSHALLER.parseBytes(serialized));
+      return fromCodeValue(Metadata.INTEGER_MARSHALLER.parseAscii(
+          new String(serialized, US_ASCII)));
     }
 
     @Override
