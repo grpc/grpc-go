@@ -4,6 +4,9 @@ import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER
 import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_PROTORPC;
 import static com.google.net.stubby.newtransport.netty.Utils.HTTP_METHOD;
 import static com.google.net.stubby.newtransport.netty.Utils.STATUS_OK;
+import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
+import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
+import static io.netty.handler.codec.http2.Http2Error.NO_ERROR;
 
 import com.google.common.base.Preconditions;
 import com.google.net.stubby.Status;
@@ -36,6 +39,8 @@ import io.netty.util.ReferenceCountUtil;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
+
 /**
  * Server-side Netty handler for GRPC processing. All event handlers are executed entirely within
  * the context of the Netty Channel thread.
@@ -48,6 +53,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
   private final ServerTransportListener transportListener;
   private final DefaultHttp2InboundFlowController inboundFlow;
+  private Throwable connectionError;
 
   NettyServerHandler(ServerTransportListener transportListener, Http2Connection connection,
       Http2FrameReader frameReader,
@@ -61,9 +67,26 @@ class NettyServerHandler extends Http2ConnectionHandler {
     connection.local().allowPushTo(false);
   }
 
+  @Nullable
+  Throwable connectionError() {
+    return connectionError;
+  }
+
   private void initListener() {
     ((LazyFrameListener) ((DefaultHttp2ConnectionDecoder) this.decoder()).listener()).setHandler(
         this);
+  }
+
+  @Override
+  public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
+    // Avoid NotYetConnectedException
+    if (!ctx.channel().isActive()) {
+        ctx.close(promise);
+        return;
+    }
+
+    // Write the GO_AWAY frame to the remote endpoint and then shutdown the channel.
+    goAwayAndClose(ctx, NO_ERROR.code(), EMPTY_BUFFER, promise);
   }
 
   private void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers)
@@ -116,17 +139,20 @@ class NettyServerHandler extends Http2ConnectionHandler {
     Http2Exception e = Http2CodecUtil.toHttp2Exception(cause);
     if (e instanceof Http2StreamException) {
       // Aborts the stream with a status that contains the cause.
-      Http2Stream stream = connection().stream(((Http2StreamException)cause).streamId());
+      Http2Stream stream = connection().stream(((Http2StreamException) cause).streamId());
       if (stream != null) {
         // Send the error message to the client to help debugging.
         serverStream(stream).abortStream(Status.fromThrowable(cause), true);
-        // We've already handled it, don't call the base class.
-        return;
+      } else {
+        // Delegate to the base class for proper handling of the Http2Exception.
+        super.exceptionCaught(ctx, e);
       }
+    } else {
+      // Connection error...
+      connectionError = e;
+      // Write the GO_AWAY frame to the remote endpoint and then shutdown the channel.
+      goAwayAndClose(ctx, e.error().code(), toByteBuf(ctx, e), ctx.newPromise());
     }
-
-    // Delegate to the super class for proper handling of the Http2Exception.
-    super.exceptionCaught(ctx, e);
   }
 
   /**
@@ -179,6 +205,31 @@ class NettyServerHandler extends Http2ConnectionHandler {
       promise.setFailure(e);
       throw e;
     }
+  }
+
+  /**
+   * Writes a {@code GO_AWAY} frame to the remote endpoint. When it completes, shuts down
+   * the channel.
+   */
+  private void goAwayAndClose(final ChannelHandlerContext ctx, int errorCode, ByteBuf data,
+      ChannelPromise promise) {
+    if (connection().remote().isGoAwayReceived()) {
+      // Already sent the GO_AWAY. Do nothing.
+      return;
+    }
+
+    // Write the GO_AWAY frame to the remote endpoint.
+    int lastKnownStream = connection().remote().lastStreamCreated();
+    ChannelFuture future =
+        lifecycleManager().writeGoAway(ctx, lastKnownStream, errorCode, data, promise);
+
+    // When the write completes, close this channel.
+    future.addListener(new ChannelFutureListener() {
+      @Override
+      public void operationComplete(ChannelFuture future) throws Exception {
+        ctx.close();
+      }
+    });
   }
 
   private String determineMethod(int streamId, Http2Headers headers)

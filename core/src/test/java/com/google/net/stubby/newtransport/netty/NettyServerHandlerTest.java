@@ -3,6 +3,7 @@ package com.google.net.stubby.newtransport.netty;
 import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_PROTORPC;
 import static com.google.net.stubby.newtransport.netty.Utils.HTTP_METHOD;
+import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -17,11 +18,20 @@ import static org.mockito.Mockito.when;
 import com.google.common.io.ByteStreams;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.Status.Code;
 import com.google.net.stubby.newtransport.Framer;
 import com.google.net.stubby.newtransport.MessageFramer;
 import com.google.net.stubby.newtransport.ServerStream;
 import com.google.net.stubby.newtransport.ServerStreamListener;
 import com.google.net.stubby.newtransport.ServerTransportListener;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -42,14 +52,7 @@ import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import io.netty.handler.codec.http2.Http2StreamException;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -160,6 +163,51 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     verify(streamListener, never()).messageRead(any(InputStream.class), anyInt());
     verify(streamListener).closed(Status.CANCELLED);
     verifyNoMoreInteractions(streamListener);
+  }
+
+  @Test
+  public void streamErrorShouldNotCloseChannel() throws Exception {
+    createStream();
+
+    Http2StreamException e = new Http2StreamException(STREAM_ID, Http2Error.REFUSED_STREAM);
+    handler.exceptionCaught(ctx, e);
+
+    // Verify that the context was NOT closed.
+    verify(ctx, never()).close();
+
+    // Verify the stream was closed.
+    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
+    verify(streamListener).closed(captor.capture());
+    assertEquals(e, Http2CodecUtil.toHttp2Exception(captor.getValue().asException()));
+    assertEquals(Code.INTERNAL, captor.getValue().getCode());
+  }
+
+  @Test
+  public void connectionErrorShouldCloseChannel() throws Exception {
+    // Non-HTTP/2 exceptions are automatically interpreted as connection errors.
+    Exception e = new Exception("Fake Exception");
+    handler.exceptionCaught(ctx, e);
+
+    // Verify the expected GO_AWAY frame was written.
+    ByteBuf expected = goAwayFrame(0, Http2Error.INTERNAL_ERROR.code(), toByteBuf(ctx, e));
+    ByteBuf actual = captureWrite(ctx);
+    assertEquals(expected, actual);
+
+    // Verify that the context was closed.
+    verify(ctx).close();
+  }
+
+  @Test
+  public void closeShouldCloseChannel() throws Exception {
+    handler.close(ctx, promise);
+
+    // Verify the expected GO_AWAY frame was written.
+    ByteBuf expected = goAwayFrame(0, Http2Error.NO_ERROR.code(), Unpooled.EMPTY_BUFFER);
+    ByteBuf actual = captureWrite(ctx);
+    assertEquals(expected, actual);
+
+    // Verify that the context was closed.
+    verify(ctx).close();
   }
 
   private void createStream() throws Exception {

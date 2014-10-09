@@ -5,6 +5,8 @@ import com.google.common.util.concurrent.AbstractService;
 import com.google.net.stubby.newtransport.ServerListener;
 import com.google.net.stubby.newtransport.ServerTransportListener;
 
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
@@ -25,45 +27,77 @@ import io.netty.util.internal.logging.InternalLogLevel;
  * The Netty-based server transport.
  */
 class NettyServerTransport extends AbstractService {
+  private static final Http2FrameLogger frameLogger = new Http2FrameLogger(InternalLogLevel.DEBUG); 
+  private final SocketChannel channel;
+  private final ServerListener serverListener;
+  private NettyServerHandler handler;
 
-  NettyServerHandler handler;
+  NettyServerTransport(SocketChannel channel, ServerListener serverListener) {
+    this.channel = Preconditions.checkNotNull(channel, "channel");
+    this.serverListener = Preconditions.checkNotNull(serverListener, "serverListener");
+  }
 
   @Override
   protected void doStart() {
+    Preconditions.checkState(handler == null, "Handler already registered");
+
+    // Notify the listener that this transport is being constructed.
+    ServerTransportListener transportListener = serverListener.transportCreated(this);
+
+    // Create the Netty handler for the pipeline.
+    handler = createHandler(transportListener);
+
+    // Notify when the channel closes.
+    channel.closeFuture().addListener(new ChannelFutureListener() {
+      @Override
+      public void operationComplete(ChannelFuture future) throws Exception {
+        if (!future.isSuccess()) {
+          // Close failed.
+          notifyFailed(future.cause());
+        } else if (handler.connectionError() != null) {
+          // The handler encountered a connection error.
+          notifyFailed(handler.connectionError());
+        } else {
+          // Normal termination of the connection.
+          notifyStopped();
+        }
+      }
+    });
+
+    channel.pipeline().addLast(handler);
+
     notifyStarted();
   }
 
   @Override
   protected void doStop() {
-    // TODO(user): signal GO_AWAY and optionally terminate the socket after a timeout
-    notifyStopped();
+    // No explicit call to notifyStopped() here, since this is automatically done when the
+    // channel closes.
+    if (channel.isOpen()) {
+      channel.close();
+    }
   }
 
   /**
-   * This must be called when the transport is starting or running.
+   * Creates the Netty handler to be used in the channel pipeline.
    */
-  void bind(SocketChannel ch, ServerListener serverListener) {
-    Preconditions.checkState(handler == null, "Handler already registered");
-    ServerTransportListener transportListener = serverListener.transportCreated(this);
+  private NettyServerHandler createHandler(ServerTransportListener transportListener) {
     Http2Connection connection =
         new DefaultHttp2Connection(true, new DefaultHttp2StreamRemovalPolicy());
-    Http2FrameReader frameReader = new DefaultHttp2FrameReader();
-    Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
-
-    Http2FrameLogger frameLogger = new Http2FrameLogger(InternalLogLevel.DEBUG);
-    frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
-    frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
+    Http2FrameReader frameReader =
+        new Http2InboundFrameLogger(new DefaultHttp2FrameReader(), frameLogger);
+    Http2FrameWriter frameWriter =
+        new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
 
     DefaultHttp2InboundFlowController inboundFlow =
         new DefaultHttp2InboundFlowController(connection, frameWriter);
     Http2OutboundFlowController outboundFlow =
         new DefaultHttp2OutboundFlowController(connection, frameWriter);
-    handler = new NettyServerHandler(transportListener,
+    return new NettyServerHandler(transportListener,
         connection,
         frameReader,
         frameWriter,
         inboundFlow,
         outboundFlow);
-    ch.pipeline().addLast(handler);
   }
 }

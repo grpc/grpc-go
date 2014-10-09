@@ -6,8 +6,6 @@ import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.AbstractService;
 import com.google.net.stubby.newtransport.ServerListener;
-import com.google.net.stubby.newtransport.ServerTransportListener;
-
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -43,9 +41,9 @@ public class NettyServer extends AbstractService {
     this.channelInitializer = new ChannelInitializer<SocketChannel>() {
       @Override
       public void initChannel(SocketChannel ch) throws Exception {
-        NettyServerTransport transport = new NettyServerTransport();
+        NettyServerTransport transport = new NettyServerTransport(ch, serverListener);
         transport.startAsync();
-        transport.bind(ch, serverListener);
+        // TODO(user): Should we wait for transport shutdown before shutting down server?
       }
     };
     this.bossGroup = bossGroup;

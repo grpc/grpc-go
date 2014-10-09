@@ -63,8 +63,12 @@ public abstract class NettyHandlerTestBase {
   }
 
   protected final ByteBuf goAwayFrame(int lastStreamId) {
+    return goAwayFrame(lastStreamId, 0, Unpooled.EMPTY_BUFFER);
+  }
+
+  protected final ByteBuf goAwayFrame(int lastStreamId, int errorCode, ByteBuf data) {
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeGoAway(ctx, lastStreamId, 0, Unpooled.EMPTY_BUFFER, newPromise());
+    frameWriter.writeGoAway(ctx, lastStreamId, errorCode, data, newPromise());
     return captureWrite(ctx);
   }
 
