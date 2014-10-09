@@ -99,7 +99,7 @@ class NettyClientTransport extends AbstractClientTransport {
     try {
       // Convert the headers into Netty HTTP/2 headers.
       AsciiString defaultPath = new AsciiString("/" + method.getName());
-      Http2Headers http2Headers = Utils.convertHeaders(headers, ssl, defaultPath, authority);
+      Http2Headers http2Headers = Utils.convertClientHeaders(headers, ssl, defaultPath, authority);
 
       // Write the request and await creation of the stream.
       channel.writeAndFlush(new CreateStreamCommand(http2Headers, stream)).get();

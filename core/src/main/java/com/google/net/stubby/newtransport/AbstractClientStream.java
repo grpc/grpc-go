@@ -34,6 +34,10 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
     this.listener = Preconditions.checkNotNull(listener);
   }
 
+  protected ListenableFuture<Void> receiveHeaders(Metadata.Headers headers) {
+    return listener.headersRead(headers);
+  }
+
   @Override
   protected ListenableFuture<Void> receiveMessage(InputStream is, int length) {
     return listener.messageRead(is, length);
@@ -51,8 +55,8 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
    * If using gRPC v2 protocol, this method must be called with received trailers before notifying
    * deframer of end of stream.
    */
-  public void stashTrailers(Metadata.Trailers trailers) {
-    Preconditions.checkNotNull(status, "trailers");
+  protected void stashTrailers(Metadata.Trailers trailers) {
+    Preconditions.checkNotNull(trailers, "trailers");
     stashedStatus = trailers.get(Status.CODE_KEY)
         .withDescription(trailers.get(Status.MESSAGE_KEY));
     trailers.removeAll(Status.CODE_KEY);
@@ -62,6 +66,14 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
 
   @Override
   protected void remoteEndClosed() {
+    // TODO(user): Delete this hack when trailers are supported by GFE with v2. Currently GFE
+    // doesn't support trailers, so when using gRPC v2 protocol GFE will not send any status. We
+    // paper over this for now by just assuming OK. For all properly functioning servers (both v1
+    // and v2), stashedStatus should not be null here.
+    if (stashedStatus == null) {
+      stashedStatus = Status.OK;
+      stashedTrailers = new Metadata.Trailers();
+    }
     Preconditions.checkState(stashedStatus != null, "Status and trailers should have been set");
     setStatus(stashedStatus, stashedTrailers);
   }

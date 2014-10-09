@@ -38,6 +38,21 @@ class Utils {
   }
 
   public static Metadata.Headers convertHeaders(Http2Headers http2Headers) {
+    Metadata.Headers headers = new Metadata.Headers(convertHeadersToArray(http2Headers));
+    if (http2Headers.authority() != null) {
+      headers.setAuthority(http2Headers.authority().toString());
+    }
+    if (http2Headers.path() != null) {
+      headers.setPath(http2Headers.path().toString());
+    }
+    return headers;
+  }
+
+  public static Metadata.Trailers convertTrailers(Http2Headers http2Headers) {
+    return new Metadata.Trailers(convertHeadersToArray(http2Headers));
+  }
+
+  private static byte[][] convertHeadersToArray(Http2Headers http2Headers) {
     // The Netty AsciiString class is really just a wrapper around a byte[] and supports
     // arbitrary binary data, not just ASCII.
     byte[][] headerValues = new byte[http2Headers.size()*2][];
@@ -46,33 +61,24 @@ class Utils {
       headerValues[i++] = entry.getKey().array();
       headerValues[i++] = entry.getValue().array();
     }
-    return new Metadata.Headers(headerValues);
+    return headerValues;
   }
 
-  public static Http2Headers convertHeaders(Metadata.Headers headers,
+  public static Http2Headers convertClientHeaders(Metadata.Headers headers,
       boolean ssl,
       AsciiString defaultPath,
       AsciiString defaultAuthority) {
-    Preconditions.checkNotNull(headers, "headers");
     Preconditions.checkNotNull(defaultPath, "defaultPath");
     Preconditions.checkNotNull(defaultAuthority, "defaultAuthority");
-
-    Http2Headers http2Headers = new DefaultHttp2Headers();
-
     // Add any application-provided headers first.
-    byte[][] serializedHeaders = headers.serialize();
-    for (int i = 0; i < serializedHeaders.length; i++) {
-      http2Headers.add(new AsciiString(serializedHeaders[i], false),
-          new AsciiString(serializedHeaders[++i], false));
-    }
+    Http2Headers http2Headers = convertMetadata(headers);
 
     // Now set GRPC-specific default headers.
-    http2Headers
-        .authority(defaultAuthority)
+    http2Headers.authority(defaultAuthority)
         .path(defaultPath)
         .method(HTTP_METHOD)
-        .scheme(ssl? HTTPS : HTTP)
-        .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC);
+        .scheme(ssl ? HTTPS : HTTP)
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC);
 
     // Override the default authority and path if provided by the headers.
     if (headers.getAuthority() != null) {
@@ -82,6 +88,25 @@ class Utils {
       http2Headers.path(new AsciiString(headers.getPath()));
     }
 
+    return http2Headers;
+  }
+
+  public static Http2Headers convertServerHeaders(Metadata.Headers headers) {
+    return convertMetadata(headers);
+  }
+
+  public static Http2Headers convertTrailers(Metadata.Trailers trailers) {
+    return convertMetadata(trailers);
+  }
+
+  private static Http2Headers convertMetadata(Metadata headers) {
+    Preconditions.checkNotNull(headers, "headers");
+    Http2Headers http2Headers = new DefaultHttp2Headers();
+    byte[][] serializedHeaders = headers.serialize();
+    for (int i = 0; i < serializedHeaders.length; i++) {
+      http2Headers.add(new AsciiString(serializedHeaders[i], false),
+          new AsciiString(serializedHeaders[++i], false));
+    }
     return http2Headers;
   }
 

@@ -15,6 +15,9 @@ import com.google.net.stubby.newtransport.StreamState;
 
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.handler.codec.AsciiString;
+import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.Http2Headers;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -32,7 +35,10 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   public void writeMessageShouldSendResponse() throws Exception {
     stream.writeMessage(input, input.available(), accepted);
     stream.flush();
-    verify(channel).write(new SendResponseHeadersCommand(STREAM_ID));
+    Http2Headers headers = new DefaultHttp2Headers()
+        .status(Utils.STATUS_OK)
+        .set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_PROTORPC);
+    verify(channel).write(new SendResponseHeadersCommand(STREAM_ID, headers, false));
     verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, messageFrame(), false));
     verify(accepted).run();
   }

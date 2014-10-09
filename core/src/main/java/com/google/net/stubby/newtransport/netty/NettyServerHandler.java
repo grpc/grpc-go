@@ -3,7 +3,6 @@ package com.google.net.stubby.newtransport.netty;
 import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_PROTORPC;
 import static com.google.net.stubby.newtransport.netty.Utils.HTTP_METHOD;
-import static com.google.net.stubby.newtransport.netty.Utils.STATUS_OK;
 import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
 import static io.netty.handler.codec.http2.Http2Error.NO_ERROR;
@@ -189,14 +188,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
       ctx.flush();
     } else if (msg instanceof SendResponseHeadersCommand) {
       SendResponseHeadersCommand cmd = (SendResponseHeadersCommand) msg;
-      encoder().writeHeaders(ctx,
-          cmd.streamId(),
-          new DefaultHttp2Headers()
-            .status(STATUS_OK)
-            .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC),
-          0,
-          false,
-          promise);
+      encoder().writeHeaders(ctx, cmd.streamId(), cmd.headers(), 0, cmd.endOfStream(), promise);
       ctx.flush();
     } else {
       AssertionError e = new AssertionError("Write called for unexpected type: "
