@@ -1,6 +1,7 @@
 package com.google.net.stubby;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
+import static com.google.common.base.Charsets.US_ASCII;
+import static com.google.common.base.Charsets.UTF_8;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
@@ -10,7 +11,6 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -132,7 +132,7 @@ public abstract class Metadata {
   private Metadata(byte[]... binaryValues) {
     store = LinkedListMultimap.create();
     for (int i = 0; i < binaryValues.length; i++) {
-      String name = new String(binaryValues[i], StandardCharsets.US_ASCII);
+      String name = new String(binaryValues[i], US_ASCII);
       store.put(name, new MetadataEntry(binaryValues[++i]));
     }
     this.serializable = false;
@@ -449,7 +449,7 @@ public abstract class Metadata {
      */
     private Key(String name, Marshaller<T> marshaller) {
       this.name = Preconditions.checkNotNull(name, "name").toLowerCase().intern();
-      this.asciiName = name.getBytes(StandardCharsets.US_ASCII);
+      this.asciiName = name.getBytes(US_ASCII);
       this.marshaller = Preconditions.checkNotNull(marshaller);
     }
 

@@ -2,12 +2,12 @@ package com.google.net.stubby;
 
 import static com.google.common.base.Charsets.US_ASCII;
 
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.TreeMap;
 
 import javax.annotation.Nullable;
@@ -150,7 +150,7 @@ public final class Status {
   // Create the canonical list of Status instances indexed by their code values.
   private static List<Status> STATUS_LIST;
   static {
-    TreeMap<Integer, Status> canonicalizer = new TreeMap<>();
+    TreeMap<Integer, Status> canonicalizer = new TreeMap<Integer, Status>();
     for (Code code : Code.values()) {
       Status replaced = canonicalizer.put(code.value(), new Status(code));
       if (replaced != null) {
@@ -239,7 +239,7 @@ public final class Status {
    * Create a derived instance of {@link Status} with the given cause.
    */
   public Status withCause(Throwable cause) {
-    if (Objects.equals(this.cause, cause)) {
+    if (Objects.equal(this.cause, cause)) {
       return this;
     }
     return new Status(this.code, this.description, cause);
@@ -249,7 +249,7 @@ public final class Status {
    * Create a derived instance of {@link Status} with the given description.
    */
   public Status withDescription(String description) {
-    if (Objects.equals(this.description, description)) {
+    if (Objects.equal(this.description, description)) {
       return this;
     }
     return new Status(this.code, description, this.cause);
