@@ -74,7 +74,9 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
     if (!GRPC_V2_PROTOCOL) {
       sendFrame(frame, endOfStream);
     } else {
-      sendFrame(frame, false);
+      if (frame.hasRemaining()) {
+        sendFrame(frame, false);
+      }
       if (endOfStream) {
         sendTrailers(stashedTrailers);
         stashedTrailers = null;
