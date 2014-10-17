@@ -8,14 +8,19 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
+import com.google.common.util.concurrent.Service.State;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.newtransport.AbstractStream;
 import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.okhttp.OkHttpClientTransport.ClientFrameHandler;
 import com.google.net.stubby.newtransport.okhttp.OkHttpClientTransport.OkHttpClientStream;
@@ -24,11 +29,10 @@ import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
 
 import okio.Buffer;
-import okio.BufferedSource;
 
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -38,8 +42,6 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -59,14 +61,8 @@ import java.util.concurrent.TimeUnit;
 public class OkHttpClientTransportTest {
   private static final int TIME_OUT_MS = 5000000;
   private static final String NETWORK_ISSUE_MESSAGE = "network issue";
-  // The extra bytes that would be added to a message before passing to okhttp transport, they are:
-  // 4 bytes (1 byte flag, 3 byte length) compression frame header + 5 bytes (1 byte flag,
-  // 4 bytes length) message frame header.
-  private static final int EXTRA_BYTES = 9;
-
-  // Flags
-  private static final byte PAYLOAD_FRAME = 0x0;
-  public static final byte STATUS_FRAME = 0x3;
+  // The gRPC header length, which includes 1 byte compression flag and 4 bytes message length.
+  private static final int HEADER_LENGTH = 5;
 
   @Mock
   private AsyncFrameWriter frameWriter;
@@ -80,6 +76,7 @@ public class OkHttpClientTransportTest {
 
   @Before
   public void setup() {
+    AbstractStream.GRPC_V2_PROTOCOL = true;
     MockitoAnnotations.initMocks(this);
     streams = new HashMap<Integer, OkHttpClientStream>();
     frameReader = new MockFrameReader();
@@ -94,9 +91,12 @@ public class OkHttpClientTransportTest {
 
   @After
   public void tearDown() {
-    clientTransport.stopAsync();
-    assertTrue(frameReader.closed);
-    verify(frameWriter).close();
+    State state = clientTransport.state();
+    if (state == State.NEW || state == State.RUNNING) {
+      clientTransport.stopAsync();
+      assertTrue(frameReader.closed);
+      verify(frameWriter).close();
+    }
     executor.shutdown();
   }
 
@@ -105,7 +105,6 @@ public class OkHttpClientTransportTest {
    */
   @Test
   public void nextFrameThrowIOException() throws Exception {
-    Assume.assumeTrue(false);
     MockStreamListener listener1 = new MockStreamListener();
     MockStreamListener listener2 = new MockStreamListener();
     clientTransport.newStream(method, new Metadata.Headers(), listener1);
@@ -121,23 +120,19 @@ public class OkHttpClientTransportTest {
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
     assertEquals(Status.INTERNAL.getCode(), listener1.status.getCode());
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
-    assertTrue("Service state: " + clientTransport.state(),
-        Service.State.TERMINATED == clientTransport.state());
+    assertEquals(Service.State.FAILED, clientTransport.state());
   }
 
   @Test
   public void readMessages() throws Exception {
-    Assume.assumeTrue(false);
     final int numMessages = 10;
     final String message = "Hello Client";
     MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method, new Metadata.Headers(), listener);
     assertTrue(streams.containsKey(3));
     for (int i = 0; i < numMessages; i++) {
-      BufferedSource source = mock(BufferedSource.class);
-      InputStream inputStream = createMessageFrame(message + i);
-      when(source.inputStream()).thenReturn(inputStream);
-      frameHandler.data(i == numMessages - 1 ? true : false, 3, source, inputStream.available());
+      Buffer buffer = createMessageFrame(message + i);
+      frameHandler.data(i == numMessages - 1 ? true : false, 3, buffer, (int) buffer.size());
     }
     listener.waitUntilStreamClosed();
     assertEquals(Status.OK, listener.status);
@@ -147,23 +142,16 @@ public class OkHttpClientTransportTest {
     }
   }
 
-  @Test
+  @Ignore
+  /**
+   * TODO (simonma): Re-implement this test, since status is carried by header instead of data frame
+   * in V2 protocol.
+   */
   public void readStatus() throws Exception {
-    Assume.assumeTrue(false);
-    MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener);
-    assertTrue(streams.containsKey(3));
-    BufferedSource source = mock(BufferedSource.class);
-    InputStream inputStream = createStatusFrame((short) Status.UNAVAILABLE.getCode().value());
-    when(source.inputStream()).thenReturn(inputStream);
-    frameHandler.data(true, 3, source, inputStream.available());
-    listener.waitUntilStreamClosed();
-    assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
   }
 
   @Test
   public void receiveReset() throws Exception {
-    Assume.assumeTrue(false);
     MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method,new Metadata.Headers(), listener);
     assertTrue(streams.containsKey(3));
@@ -174,7 +162,6 @@ public class OkHttpClientTransportTest {
 
   @Test
   public void cancelStream() throws Exception {
-    Assume.assumeTrue(false);
     MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method,new Metadata.Headers(), listener);
     OkHttpClientStream stream = streams.get(3);
@@ -187,7 +174,6 @@ public class OkHttpClientTransportTest {
 
   @Test
   public void writeMessage() throws Exception {
-    Assume.assumeTrue(false);
     final String message = "Hello Server";
     MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method,new Metadata.Headers(), listener);
@@ -196,16 +182,14 @@ public class OkHttpClientTransportTest {
     assertEquals(12, input.available());
     stream.writeMessage(input, input.available(), null);
     stream.flush();
-    ArgumentCaptor<Buffer> captor =
-        ArgumentCaptor.forClass(Buffer.class);
-    verify(frameWriter).data(eq(false), eq(3), captor.capture(), eq(12 + EXTRA_BYTES));
+    ArgumentCaptor<Buffer> captor = ArgumentCaptor.forClass(Buffer.class);
+    verify(frameWriter).data(eq(false), eq(3), captor.capture(), eq(12 + HEADER_LENGTH));
     Buffer sentFrame = captor.getValue();
-    checkSameInputStream(createMessageFrame(message), sentFrame.inputStream());
+    assertEquals(createMessageFrame(message), sentFrame);
   }
 
   @Test
   public void windowUpdate() throws Exception {
-    Assume.assumeTrue(false);
     MockStreamListener listener1 = new MockStreamListener();
     MockStreamListener listener2 = new MockStreamListener();
     clientTransport.newStream(method,new Metadata.Headers(), listener1);
@@ -216,33 +200,28 @@ public class OkHttpClientTransportTest {
 
     int messageLength = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 4;
     byte[] fakeMessage = new byte[messageLength];
-    BufferedSource source = mock(BufferedSource.class);
 
     // Stream 1 receives a message
-    InputStream messageFrame = createMessageFrame(fakeMessage);
-    int messageFrameLength = messageFrame.available();
-    when(source.inputStream()).thenReturn(messageFrame);
-    frameHandler.data(false, 3, source, messageFrame.available());
+    Buffer buffer = createMessageFrame(fakeMessage);
+    int messageFrameLength = (int) buffer.size();
+    frameHandler.data(false, 3, buffer, messageFrameLength);
 
     // Stream 2 receives a message
-    messageFrame = createMessageFrame(fakeMessage);
-    when(source.inputStream()).thenReturn(messageFrame);
-    frameHandler.data(false, 5, source, messageFrame.available());
+    buffer = createMessageFrame(fakeMessage);
+    frameHandler.data(false, 5, buffer, messageFrameLength);
 
     verify(frameWriter).windowUpdate(eq(0), eq((long) 2 * messageFrameLength));
     reset(frameWriter);
 
     // Stream 1 receives another message
-    messageFrame = createMessageFrame(fakeMessage);
-    when(source.inputStream()).thenReturn(messageFrame);
-    frameHandler.data(false, 3, source, messageFrame.available());
+    buffer = createMessageFrame(fakeMessage);
+    frameHandler.data(false, 3, buffer, messageFrameLength);
 
     verify(frameWriter).windowUpdate(eq(3), eq((long) 2 * messageFrameLength));
 
     // Stream 2 receives another message
-    messageFrame = createMessageFrame(fakeMessage);
-    when(source.inputStream()).thenReturn(messageFrame);
-    frameHandler.data(false, 5, source, messageFrame.available());
+    buffer = createMessageFrame(fakeMessage);
+    frameHandler.data(false, 5, buffer, messageFrameLength);
 
     verify(frameWriter).windowUpdate(eq(5), eq((long) 2 * messageFrameLength));
     verify(frameWriter).windowUpdate(eq(0), eq((long) 2 * messageFrameLength));
@@ -253,14 +232,38 @@ public class OkHttpClientTransportTest {
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL), listener1.status);
 
     stream2.cancel();
-    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
+    verify(frameWriter).rstStream(eq(5), eq(ErrorCode.CANCEL));
     listener2.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL), listener2.status);
   }
 
   @Test
+  public void windowUpdateWithInboundFlowControl() throws Exception {
+    SettableFuture<Void> future = SettableFuture.create();
+    MockStreamListener listener = new MockStreamListener(future);
+    clientTransport.newStream(method, new Metadata.Headers(), listener);
+    OkHttpClientStream stream = streams.get(3);
+
+    int messageLength = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1;
+    byte[] fakeMessage = new byte[messageLength];
+
+    Buffer buffer = createMessageFrame(fakeMessage);
+    long messageFrameLength = buffer.size();
+    frameHandler.data(false, 3, buffer, (int) messageFrameLength);
+    verify(frameWriter).windowUpdate(eq(0), eq(messageFrameLength));
+    verify(frameWriter, times(0)).windowUpdate(eq(3), eq(messageFrameLength));
+
+    future.set(null);
+    verify(frameWriter).windowUpdate(eq(3), eq(messageFrameLength));
+
+    stream.cancel();
+    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
+    listener.waitUntilStreamClosed();
+    assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL), listener.status);
+  }
+
+  @Test
   public void stopNormally() throws Exception {
-    Assume.assumeTrue(false);
     MockStreamListener listener1 = new MockStreamListener();
     MockStreamListener listener2 = new MockStreamListener();
     clientTransport.newStream(method,new Metadata.Headers(), listener1);
@@ -278,7 +281,6 @@ public class OkHttpClientTransportTest {
 
   @Test
   public void receiveGoAway() throws Exception {
-    Assume.assumeTrue(false);
     // start 2 streams.
     MockStreamListener listener1 = new MockStreamListener();
     MockStreamListener listener2 = new MockStreamListener();
@@ -316,16 +318,14 @@ public class OkHttpClientTransportTest {
     stream.flush();
     ArgumentCaptor<Buffer> captor =
         ArgumentCaptor.forClass(Buffer.class);
-    verify(frameWriter).data(eq(false), eq(3), captor.capture(), eq(22 + EXTRA_BYTES));
+    verify(frameWriter).data(eq(false), eq(3), captor.capture(), eq(22 + HEADER_LENGTH));
     Buffer sentFrame = captor.getValue();
-    checkSameInputStream(createMessageFrame(sentMessage), sentFrame.inputStream());
+    assertEquals(createMessageFrame(sentMessage), sentFrame);
 
     // And read.
     final String receivedMessage = "No, you are fine.";
-    BufferedSource source = mock(BufferedSource.class);
-    InputStream inputStream = createMessageFrame(receivedMessage);
-    when(source.inputStream()).thenReturn(inputStream);
-    frameHandler.data(true, 3, source, inputStream.available());
+    Buffer buffer = createMessageFrame(receivedMessage);
+    frameHandler.data(true, 3, buffer, (int) buffer.size());
     listener1.waitUntilStreamClosed();
     assertEquals(1, listener1.messages.size());
     assertEquals(receivedMessage, listener1.messages.get(0));
@@ -337,7 +337,6 @@ public class OkHttpClientTransportTest {
 
   @Test
   public void streamIdExhaust() throws Exception {
-    Assume.assumeTrue(false);
     int startId = Integer.MAX_VALUE - 2;
     AsyncFrameWriter writer =  mock(AsyncFrameWriter.class);
     OkHttpClientTransport transport =
@@ -361,57 +360,16 @@ public class OkHttpClientTransportTest {
     assertEquals(Service.State.TERMINATED, transport.state());
   }
 
-  private static void checkSameInputStream(InputStream in1, InputStream in2) throws IOException {
-    assertEquals(in1.available(), in2.available());
-    byte[] b1 = new byte[in1.available()];
-    in1.read(b1);
-    byte[] b2 = new byte[in2.available()];
-    in2.read(b2);
-    for (int i = 0; i < b1.length; i++) {
-      if (b1[i] != b2[i]) {
-        fail("Different InputStream.");
-      }
-    }
-  }
-
-  private static InputStream createMessageFrame(String message) throws IOException {
+  private static Buffer createMessageFrame(String message) {
     return createMessageFrame(message.getBytes(StandardCharsets.UTF_8));
   }
 
-  private static InputStream createMessageFrame(byte[] message) throws IOException {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(PAYLOAD_FRAME);
-    dos.writeInt(message.length);
-    dos.write(message);
-    dos.close();
-    byte[] messageFrame = os.toByteArray();
-
-    // Write the compression header followed by the message frame.
-    return addCompressionHeader(messageFrame);
-  }
-
-  private static InputStream createStatusFrame(short code) throws IOException {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(STATUS_FRAME);
-    int length = 2;
-    dos.writeInt(length);
-    dos.writeShort(code);
-    dos.close();
-    byte[] statusFrame = os.toByteArray();
-
-    // Write the compression header followed by the status frame.
-    return addCompressionHeader(statusFrame);
-  }
-
-  private static InputStream addCompressionHeader(byte[] raw) throws IOException {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.writeInt(raw.length);
-    dos.write(raw);
-    dos.close();
-    return new ByteArrayInputStream(os.toByteArray());
+  private static Buffer createMessageFrame(byte[] message) {
+    Buffer buffer = new Buffer();
+    buffer.writeByte(0 /* UNCOMPRESSED */);
+    buffer.writeInt(message.length);
+    buffer.write(message);
+    return buffer;
   }
 
   private static class MockFrameReader implements FrameReader {
@@ -456,6 +414,15 @@ public class OkHttpClientTransportTest {
     Status status;
     CountDownLatch closed = new CountDownLatch(1);
     ArrayList<String> messages = new ArrayList<String>();
+    final ListenableFuture<Void> messageFuture;
+
+    MockStreamListener() {
+      messageFuture = null;
+    }
+
+    MockStreamListener(ListenableFuture<Void> future) {
+      messageFuture = future;
+    }
 
     @Override
     public ListenableFuture<Void> headersRead(Metadata.Headers headers) {
@@ -468,7 +435,7 @@ public class OkHttpClientTransportTest {
       if (msg != null) {
         messages.add(msg);
       }
-      return null;
+      return messageFuture;
     }
 
     @Override

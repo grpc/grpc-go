@@ -199,7 +199,7 @@ class AsyncFrameWriter implements FrameWriter {
       try {
         doRun();
       } catch (IOException ex) {
-        transport.abort(Status.fromThrowable(ex));
+        transport.abort(ex);
         throw new RuntimeException(ex);
       }
     }

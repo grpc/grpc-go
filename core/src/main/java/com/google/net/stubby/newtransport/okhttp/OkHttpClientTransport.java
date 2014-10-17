@@ -2,17 +2,18 @@ package com.google.net.stubby.newtransport.okhttp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractClientStream;
 import com.google.net.stubby.newtransport.AbstractClientTransport;
+import com.google.net.stubby.newtransport.Buffers;
 import com.google.net.stubby.newtransport.ClientStream;
 import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.ClientTransport;
-import com.google.net.stubby.newtransport.InputStreamDeframer;
+import com.google.net.stubby.newtransport.MessageDeframer2;
 import com.google.net.stubby.newtransport.StreamState;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
@@ -41,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -93,7 +95,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   private final Map<Integer, OkHttpClientStream> streams =
       Collections.synchronizedMap(new HashMap<Integer, OkHttpClientStream>());
   private final Executor executor;
-  private int unacknowledgedBytesRead;
+  private int connectionUnacknowledgedBytesRead;
   private ClientFrameHandler clientFrameHandler;
   // The status used to finish all active streams when the transport is closed.
   @GuardedBy("lock")
@@ -170,7 +172,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       // The GOAWAY is part of graceful shutdown.
       frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
 
-      abort(Status.INTERNAL.withDescription("Transport stopped"));
+      onGoAway(0, Status.INTERNAL.withDescription("Transport stopped"), null);
     }
     stopIfNecessary();
   }
@@ -186,33 +188,36 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   }
 
   /**
-   * Finish all active streams with given status, then close the transport.
+   * Finish all active streams due to a failure, then close the transport.
    */
-  void abort(Status status) {
-    onGoAway(-1, status);
+  void abort(Throwable failureCause) {
+    onGoAway(0, Status.fromThrowable(failureCause), failureCause);
   }
 
-  private void onGoAway(int lastKnownStreamId, Status status) {
+  private void onGoAway(int lastKnownStreamId, Status status, @Nullable Throwable failureCause) {
     ArrayList<OkHttpClientStream> goAwayStreams = new ArrayList<OkHttpClientStream>();
     synchronized (lock) {
       goAway = true;
       goAwayStatus = status;
-      Iterator<Map.Entry<Integer, OkHttpClientStream>> it = streams.entrySet().iterator();
-      while (it.hasNext()) {
-        Map.Entry<Integer, OkHttpClientStream> entry = it.next();
-        if (entry.getKey() > lastKnownStreamId) {
-          goAwayStreams.add(entry.getValue());
-          it.remove();
+      synchronized (streams) {
+        Iterator<Map.Entry<Integer, OkHttpClientStream>> it = streams.entrySet().iterator();
+        while (it.hasNext()) {
+          Map.Entry<Integer, OkHttpClientStream> entry = it.next();
+          if (entry.getKey() > lastKnownStreamId) {
+            goAwayStreams.add(entry.getValue());
+            it.remove();
+          }
         }
       }
     }
 
     // Starting stop, go into STOPPING state so that Channel know this Transport should not be used
-    // further, will become STOPPED once all streams are complete.
+    // further, will become STOPPED once all streams are complete, or become FAILED immediately if
+    // the transport is aborted by some error.
     State state = state();
     if (state == State.RUNNING || state == State.NEW) {
-      if (status.getCode() == Status.Code.INTERNAL && status.getCause() != null) {
-        notifyFailed(status.asRuntimeException());
+      if (failureCause != null) {
+        notifyFailed(failureCause);
       } else {
         stopAsync();
       }
@@ -290,7 +295,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
         while (frameReader.nextFrame(this)) {
         }
       } catch (IOException ioe) {
-        abort(Status.fromThrowable(ioe));
+        abort(ioe);
       } finally {
         // Restore the original thread name.
         Thread.currentThread().setName(threadName);
@@ -309,26 +314,19 @@ public class OkHttpClientTransport extends AbstractClientTransport {
         frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
         return;
       }
-      InputStreamDeframer deframer = stream.getDeframer();
 
       // Wait until the frame is complete.
       in.require(length);
 
-      deframer.deliverFrame(ByteStreams.limit(in.inputStream(), length), inFinished);
-      unacknowledgedBytesRead += length;
-      stream.unacknowledgedBytesRead += length;
-      if (unacknowledgedBytesRead >= DEFAULT_INITIAL_WINDOW_SIZE / 2) {
-        frameWriter.windowUpdate(0, unacknowledgedBytesRead);
-        unacknowledgedBytesRead = 0;
-      }
-      if (stream.unacknowledgedBytesRead >= DEFAULT_INITIAL_WINDOW_SIZE / 2) {
-        frameWriter.windowUpdate(streamId, stream.unacknowledgedBytesRead);
-        stream.unacknowledgedBytesRead = 0;
-      }
-      if (inFinished) {
-        if (finishStream(streamId, Status.OK)) {
-          stopIfNecessary();
-        }
+      Buffer buf = new Buffer();
+      buf.write(in.buffer(), length);
+      stream.deliverData(buf, inFinished, length);
+
+      // connection window update
+      connectionUnacknowledgedBytesRead += length;
+      if (connectionUnacknowledgedBytesRead >= DEFAULT_INITIAL_WINDOW_SIZE / 2) {
+        frameWriter.windowUpdate(0, connectionUnacknowledgedBytesRead);
+        connectionUnacknowledgedBytesRead = 0;
       }
     }
 
@@ -343,6 +341,15 @@ public class OkHttpClientTransport extends AbstractClientTransport {
         List<Header> headerBlock,
         HeadersMode headersMode) {
       // TODO(user): handle received headers.
+      if (inFinished) {
+        final OkHttpClientStream stream;
+        stream = streams.get(streamId);
+        if (stream == null) {
+          frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
+          return;
+        }
+        stream.deliverHeaders(inFinished);
+      }
     }
 
     @Override
@@ -358,7 +365,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       try {
         frameWriter.ackSettings(settings);
       } catch (IOException e) {
-        abort(Status.fromThrowable(e));
+        abort(e);
       }
     }
 
@@ -376,7 +383,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
 
     @Override
     public void goAway(int lastGoodStreamId, ErrorCode errorCode, ByteString debugData) {
-      onGoAway(lastGoodStreamId, Status.UNAVAILABLE.withDescription("Go away"));
+      onGoAway(lastGoodStreamId, Status.UNAVAILABLE.withDescription("Go away"), null);
     }
 
     @Override
@@ -388,7 +395,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
 
     @Override
     public void windowUpdate(int arg0, long arg1) {
-      // TODO(user): flow control.
+      // TODO(user): outbound flow control.
     }
 
     @Override
@@ -410,7 +417,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     stream.streamId = nextStreamId;
     streams.put(stream.streamId, stream);
     if (nextStreamId >= Integer.MAX_VALUE - 2) {
-      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream id exhaust"));
+      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream id exhaust"), null);
     } else {
       nextStreamId += 2;
     }
@@ -422,13 +429,33 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   @VisibleForTesting
   class OkHttpClientStream extends AbstractClientStream {
     int streamId;
-    final InputStreamDeframer deframer;
+    final MessageDeframer2 deframer;
+    @GuardedBy("this")
     int unacknowledgedBytesRead;
+    @GuardedBy("this")
+    boolean windowUpdateDisabled;
 
     OkHttpClientStream(MethodDescriptor<?, ?> method, Metadata.Headers headers,
         ClientStreamListener listener) {
       super(listener);
-      deframer = new InputStreamDeframer(inboundMessageHandler());
+      if (!GRPC_V2_PROTOCOL) {
+        throw new RuntimeException("okhttp transport can only work with V2 protocol!");
+      }
+      deframer = new MessageDeframer2(inboundMessageHandler(), new Executor() {
+        // An executor that synchronized on this stream before executing a task, so that flow
+        // control processing is properly synchronized.
+        @Override
+        public void execute(final Runnable command) {
+          executor.execute(new Runnable() {
+            @Override
+            public void run() {
+              synchronized (OkHttpClientStream.this) {
+                command.run();
+              }
+            }
+          });
+        }
+      });
       synchronized (lock) {
         if (goAway) {
           setStatus(goAwayStatus, new Metadata.Trailers());
@@ -441,8 +468,24 @@ public class OkHttpClientTransport extends AbstractClientTransport {
           Headers.createRequestHeaders(headers, defaultPath, defaultAuthority));
     }
 
-    InputStreamDeframer getDeframer() {
-      return deframer;
+    /**
+     * We synchronized on "this" for delivering frames and updating window size, so that the future
+     * listeners (executed by synchronizedExecutor) will not be executed in the same time.
+     */
+    synchronized void deliverData(Buffer data, boolean endOfStream, int length) {
+      deframer.deframe(new OkHttpBuffer(data), endOfStream);
+      unacknowledgedBytesRead += length;
+      if (windowUpdateDisabled) {
+        return;
+      }
+      if (unacknowledgedBytesRead >= DEFAULT_INITIAL_WINDOW_SIZE / 2) {
+        frameWriter.windowUpdate(streamId, unacknowledgedBytesRead);
+        unacknowledgedBytesRead = 0;
+      }
+    }
+
+    synchronized void deliverHeaders(boolean endOfStream) {
+      deframer.deframe(Buffers.empty(), endOfStream);
     }
 
     @Override
@@ -461,8 +504,23 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     }
 
     @Override
-    protected void disableWindowUpdate(ListenableFuture<Void> processingFuture) {
-      // TODO(user): implement inbound flow control.
+    synchronized protected void disableWindowUpdate(ListenableFuture<Void> processingFuture) {
+      if (processingFuture == null || processingFuture.isDone()) {
+        return;
+      }
+      windowUpdateDisabled = true;
+      processingFuture.addListener(new Runnable() {
+        @Override
+        public void run() {
+          synchronized (OkHttpClientStream.this) {
+            windowUpdateDisabled = false;
+            if (unacknowledgedBytesRead >= DEFAULT_INITIAL_WINDOW_SIZE / 2) {
+              frameWriter.windowUpdate(streamId, unacknowledgedBytesRead);
+              unacknowledgedBytesRead = 0;
+            }
+          }
+        }
+      }, MoreExecutors.directExecutor());
     }
 
     @Override
@@ -474,6 +532,14 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       outboundPhase = Phase.STATUS;
       if (finishStream(streamId, toGrpcStatus(ErrorCode.CANCEL))) {
         frameWriter.rstStream(streamId, ErrorCode.CANCEL);
+        stopIfNecessary();
+      }
+    }
+
+    @Override
+    public void remoteEndClosed() {
+      super.remoteEndClosed();
+      if (finishStream(streamId, Status.OK)) {
         stopIfNecessary();
       }
     }
