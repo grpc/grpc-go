@@ -27,6 +27,13 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     return new NettyChannelBuilder(serverAddress);
   }
 
+  /**
+   * Creates a new builder with the given host and port.
+   */
+  public static NettyChannelBuilder forAddress(String host, int port) {
+    return forAddress(new InetSocketAddress(host, port));
+  }
+
   private NettyChannelBuilder(InetSocketAddress serverAddress) {
     this.serverAddress = serverAddress;
   }
