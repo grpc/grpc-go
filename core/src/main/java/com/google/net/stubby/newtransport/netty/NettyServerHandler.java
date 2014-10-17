@@ -1,7 +1,7 @@
 package com.google.net.stubby.newtransport.netty;
 
 import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
-import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_PROTORPC;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_GRPC;
 import static com.google.net.stubby.newtransport.netty.Utils.HTTP_METHOD;
 import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
@@ -19,7 +19,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
-import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
@@ -175,19 +174,16 @@ class NettyServerHandler extends Http2ConnectionHandler {
     if (msg instanceof SendGrpcFrameCommand) {
       SendGrpcFrameCommand cmd = (SendGrpcFrameCommand) msg;
       if (cmd.endStream()) {
-        final NettyServerStream stream = serverStream(connection().requireStream(cmd.streamId()));
-        promise.addListener(new ChannelFutureListener() {
-          @Override
-          public void operationComplete(ChannelFuture future) {
-            stream.complete();
-          }
-        });
+        closeStreamWhenDone(promise, cmd.streamId());
       }
       // Call the base class to write the HTTP/2 DATA frame.
       encoder().writeData(ctx, cmd.streamId(), cmd.content(), 0, cmd.endStream(), promise);
       ctx.flush();
     } else if (msg instanceof SendResponseHeadersCommand) {
       SendResponseHeadersCommand cmd = (SendResponseHeadersCommand) msg;
+      if (cmd.endOfStream()) {
+        closeStreamWhenDone(promise, cmd.streamId());
+      }
       encoder().writeHeaders(ctx, cmd.streamId(), cmd.headers(), 0, cmd.endOfStream(), promise);
       ctx.flush();
     } else {
@@ -197,6 +193,16 @@ class NettyServerHandler extends Http2ConnectionHandler {
       promise.setFailure(e);
       throw e;
     }
+  }
+
+  private void closeStreamWhenDone(ChannelPromise promise, int streamId) throws Http2Exception {
+    final NettyServerStream stream = serverStream(connection().requireStream(streamId));
+    promise.addListener(new ChannelFutureListener() {
+      @Override
+      public void operationComplete(ChannelFuture future) {
+        stream.complete();
+      }
+    });
   }
 
   /**
@@ -230,10 +236,10 @@ class NettyServerHandler extends Http2ConnectionHandler {
       throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM,
           String.format("Method '%s' is not supported", headers.method()));
     }
-    if (!CONTENT_TYPE_PROTORPC.equals(headers.get(CONTENT_TYPE_HEADER))) {
+    if (!CONTENT_TYPE_GRPC.equals(headers.get(CONTENT_TYPE_HEADER))) {
       throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM,
           String.format("Header '%s'='%s', while '%s' is expected", CONTENT_TYPE_HEADER,
-          headers.get(CONTENT_TYPE_HEADER), CONTENT_TYPE_PROTORPC));
+          headers.get(CONTENT_TYPE_HEADER), CONTENT_TYPE_GRPC));
     }
     String methodName = TransportFrameUtil.getFullMethodNameFromPath(headers.path().toString());
     if (methodName == null) {

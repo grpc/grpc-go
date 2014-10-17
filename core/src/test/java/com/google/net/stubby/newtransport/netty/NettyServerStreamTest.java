@@ -15,7 +15,6 @@ import com.google.net.stubby.newtransport.StreamState;
 
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
-import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
 
@@ -37,10 +36,32 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     stream.flush();
     Http2Headers headers = new DefaultHttp2Headers()
         .status(Utils.STATUS_OK)
-        .set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_PROTORPC);
-    verify(channel).write(new SendResponseHeadersCommand(STREAM_ID, headers, false));
+        .set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_GRPC);
+    verify(channel).writeAndFlush(new SendResponseHeadersCommand(STREAM_ID, headers, false));
     verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, messageFrame(), false));
     verify(accepted).run();
+  }
+
+  @Test
+  public void writeHeadersShouldSendHeaders() throws Exception {
+    Metadata.Headers headers = new Metadata.Headers();
+    stream().writeHeaders(headers);
+    verify(channel).writeAndFlush(new SendResponseHeadersCommand(STREAM_ID,
+        Utils.convertServerHeaders(headers), false));
+  }
+
+  @Test
+  public void duplicateWriteHeadersShouldFail() throws Exception {
+    Metadata.Headers headers = new Metadata.Headers();
+    stream().writeHeaders(headers);
+    verify(channel).writeAndFlush(new SendResponseHeadersCommand(STREAM_ID,
+        Utils.convertServerHeaders(headers), false));
+    try {
+      stream().writeHeaders(headers);
+      fail("Can only write response headers once");
+    } catch (IllegalStateException ise) {
+      // Success
+    }
   }
 
   @Test

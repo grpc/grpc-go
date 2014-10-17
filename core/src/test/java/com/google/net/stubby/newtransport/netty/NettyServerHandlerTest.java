@@ -1,7 +1,7 @@
 package com.google.net.stubby.newtransport.netty;
 
 import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
-import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_PROTORPC;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_GRPC;
 import static com.google.net.stubby.newtransport.netty.Utils.HTTP_METHOD;
 import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -213,7 +213,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   private void createStream() throws Exception {
     Http2Headers headers = new DefaultHttp2Headers()
         .method(HTTP_METHOD)
-        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC)
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC)
         .path(new AsciiString("/foo.bar"));
     ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
     handler.channelRead(ctx, headersFrame);

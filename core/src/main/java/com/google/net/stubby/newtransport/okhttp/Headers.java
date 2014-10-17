@@ -19,7 +19,7 @@ public class Headers {
   public static final Header SCHEME_HEADER = new Header(Header.TARGET_SCHEME, "https");
   public static final Header METHOD_HEADER = new Header(Header.TARGET_METHOD, HttpUtil.HTTP_METHOD);
   public static final Header CONTENT_TYPE_HEADER =
-      new Header(HttpUtil.CONTENT_TYPE_HEADER, HttpUtil.CONTENT_TYPE_PROTORPC);
+      new Header(HttpUtil.CONTENT_TYPE_HEADER, HttpUtil.CONTENT_TYPE_GRPC);
   public static final Header RESPONSE_STATUS_OK = new Header(Header.RESPONSE_STATUS, "200");
 
   /**

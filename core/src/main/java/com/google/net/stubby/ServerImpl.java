@@ -395,8 +395,8 @@ public class ServerImpl extends AbstractService implements Server {
     }
 
     @Override
-    public void close(Status status, Metadata.Trailers trailers) {
-      stream.close(status, trailers);
+    public void sendHeaders(Metadata.Headers headers) {
+      stream.writeHeaders(headers);
     }
 
     @Override
@@ -409,6 +409,11 @@ public class ServerImpl extends AbstractService implements Server {
         close(Status.fromThrowable(t), new Metadata.Trailers());
         throw Throwables.propagate(t);
       }
+    }
+
+    @Override
+    public void close(Status status, Metadata.Trailers trailers) {
+      stream.close(status, trailers);
     }
 
     @Override

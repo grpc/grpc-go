@@ -12,6 +12,7 @@ import com.google.net.stubby.Status;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -41,6 +42,11 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
   @Override
   protected ListenableFuture<Void> receiveMessage(InputStream is, int length) {
     return listener.messageRead(is, length);
+  }
+
+  @Override
+  public final void writeMessage(InputStream message, int length, @Nullable Runnable accepted) {
+    super.writeMessage(message, length, accepted);
   }
 
   /** gRPC protocol v1 support */

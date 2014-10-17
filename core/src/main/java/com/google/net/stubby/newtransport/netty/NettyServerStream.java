@@ -11,7 +11,6 @@ import com.google.net.stubby.newtransport.StreamState;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
-import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
 
 import java.nio.ByteBuffer;
@@ -26,8 +25,6 @@ class NettyServerStream extends AbstractServerStream implements NettyStream {
   private final Channel channel;
   private final int id;
   private final WindowUpdateManager windowUpdateManager;
-
-  private boolean headersSent;
 
   NettyServerStream(Channel channel, int id, DefaultHttp2InboundFlowController inboundFlow) {
     this.channel = Preconditions.checkNotNull(channel, "channel is null");
@@ -61,27 +58,21 @@ class NettyServerStream extends AbstractServerStream implements NettyStream {
   }
 
   @Override
+  protected void internalSendHeaders(Metadata.Headers headers) {
+    channel.writeAndFlush(new SendResponseHeadersCommand(id,
+        Utils.convertServerHeaders(headers), false));
+  }
+
+  @Override
   protected void sendFrame(ByteBuffer frame, boolean endOfStream) {
-    if (!headersSent) {
-      Http2Headers headers = new DefaultHttp2Headers()
-          .status(Utils.STATUS_OK)
-          .set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_PROTORPC);
-      channel.write(new SendResponseHeadersCommand(id, headers, false));
-      headersSent = true;
-    }
     SendGrpcFrameCommand cmd =
         new SendGrpcFrameCommand(id, Utils.toByteBuf(channel.alloc(), frame), endOfStream);
     channel.writeAndFlush(cmd);
   }
 
   @Override
-  protected void sendTrailers(Metadata.Trailers trailers) {
-    Http2Headers http2Trailers = Utils.convertTrailers(trailers);
-    if (!headersSent) {
-      http2Trailers.status(Utils.STATUS_OK)
-          .set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_PROTORPC);
-      headersSent = true;
-    }
+  protected void sendTrailers(Metadata.Trailers trailers, boolean headersSent) {
+    Http2Headers http2Trailers = Utils.convertTrailers(trailers, headersSent);
     channel.writeAndFlush(new SendResponseHeadersCommand(id, http2Trailers, true));
   }
 

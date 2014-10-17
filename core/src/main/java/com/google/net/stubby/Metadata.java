@@ -449,7 +449,7 @@ public abstract class Metadata {
      */
     private Key(String name, Marshaller<T> marshaller) {
       this.name = Preconditions.checkNotNull(name, "name").toLowerCase().intern();
-      this.asciiName = name.getBytes(US_ASCII);
+      this.asciiName = this.name.getBytes(US_ASCII);
       this.marshaller = Preconditions.checkNotNull(marshaller);
     }
 

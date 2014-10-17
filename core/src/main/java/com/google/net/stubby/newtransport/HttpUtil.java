@@ -23,7 +23,7 @@ public final class HttpUtil {
   /**
    * Content-Type used for GRPC-over-HTTP/2.
    */
-  public static final String CONTENT_TYPE_PROTORPC = "application/grpc";
+  public static final String CONTENT_TYPE_GRPC = "application/grpc";
 
   /**
    * The HTTP method used for GRPC requests.

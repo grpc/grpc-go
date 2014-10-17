@@ -63,7 +63,7 @@ public class ServerInterceptorsTest {
 
   @Test(expected = NullPointerException.class)
   public void npeForNullInterceptorList() {
-    ServerInterceptors.intercept(serviceDefinition, null);
+    ServerInterceptors.intercept(serviceDefinition, (List) null);
   }
 
   @Test(expected = NullPointerException.class)

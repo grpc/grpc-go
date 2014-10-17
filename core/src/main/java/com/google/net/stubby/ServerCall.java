@@ -14,7 +14,7 @@ import javax.annotation.Nullable;
  *
  * <p>No generic method for determining message receipt or providing acknowledgement is provided.
  * Applications are expected to utilize normal payload messages for such signals, as a response
- * natually acknowledges its request.
+ * naturally acknowledges its request.
  *
  * <p>Methods are guaranteed to be non-blocking. Implementations are not required to be thread-safe.
  */
@@ -33,7 +33,7 @@ public abstract class ServerCall<ResponseT> {
   // a case then we either get to generate a half close or purposefully omit it.
   public abstract static class Listener<RequestT> {
     /**
-     * A request payload has been receiveed. For streaming calls, there may be zero payload
+     * A request payload has been received. For streaming calls, there may be zero payload
      * messages.
      */
     @Nullable
@@ -63,6 +63,25 @@ public abstract class ServerCall<ResponseT> {
   }
 
   /**
+   * Send response header metadata prior to sending a response payload. This method may
+   * only be called once and cannot be called after calls to {@code Stream#sendPayload}
+   * or {@code #close}.
+   *
+   * @param headers metadata to send prior to any response body.
+   * @throws IllegalStateException if {@code close} has been called or a payload has been sent.
+   */
+  public abstract void sendHeaders(Metadata.Headers headers);
+
+  /**
+   * Send a payload message. Payload messages are the primary form of communication associated with
+   * RPCs. Multiple payload messages may exist for streaming calls.
+   *
+   * @param payload message
+   * @throws IllegalStateException if call is {@link #close}d
+   */
+  public abstract void sendPayload(ResponseT payload);
+
+  /**
    * Close the call with the provided status. No further sending or receiving will occur. If {@code
    * status} is not equal to {@link Status#OK}, then the call is said to have failed.
    *
@@ -73,15 +92,6 @@ public abstract class ServerCall<ResponseT> {
    * @throws IllegalStateException if call is already {@code close}d
    */
   public abstract void close(Status status, Metadata.Trailers trailers);
-
-  /**
-   * Send a payload message. Payload messages are the primary form of communication associated with
-   * RPCs. Multiple payload messages may exist for streaming calls.
-   *
-   * @param payload message
-   * @throws IllegalStateException if call is {@link #close}d
-   */
-  public abstract void sendPayload(ResponseT payload);
 
   /**
    * Returns {@code true} when the call is cancelled and the server is encouraged to abort

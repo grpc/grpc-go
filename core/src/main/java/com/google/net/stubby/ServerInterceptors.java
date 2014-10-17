@@ -2,18 +2,24 @@ package com.google.net.stubby;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.net.stubby.ServerMethodDefinition;
-import com.google.net.stubby.ServerCallHandler;
-import com.google.net.stubby.ServerInterceptor;
-import com.google.net.stubby.ServerServiceDefinition;
 
-import java.util.List;
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 
 /** Utility class for {@link ServerInterceptor}s. */
 public class ServerInterceptors {
   // Prevent instantiation
   private ServerInterceptors() {}
+
+  /**
+   * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call {@code
+   * interceptors} before calling the pre-existing {@code ServerCallHandler}.
+   */
+  public static ServerServiceDefinition intercept(ServerServiceDefinition serviceDef,
+                                                  ServerInterceptor... interceptors) {
+    return intercept(serviceDef, Arrays.asList(interceptors));
+  }
 
   /**
    * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call {@code
@@ -90,6 +96,38 @@ public class ServerInterceptors {
         interceptors = null;
         return callHandler.startCall(method, call, headers);
       }
+    }
+  }
+
+  /**
+   * Utility base class for decorating {@link ServerCall} instances.
+   */
+  public static class ForwardingServerCall<RespT> extends ServerCall<RespT> {
+
+    private final ServerCall<RespT> delegate;
+
+    public ForwardingServerCall(ServerCall<RespT> delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public void sendHeaders(Metadata.Headers headers) {
+      delegate.sendHeaders(headers);
+    }
+
+    @Override
+    public void sendPayload(RespT payload) {
+      delegate.sendPayload(payload);
+    }
+
+    @Override
+    public void close(Status status, Metadata.Trailers trailers) {
+      delegate.close(status, trailers);
+    }
+
+    @Override
+    public boolean isCancelled() {
+      return delegate.isCancelled();
     }
   }
 }

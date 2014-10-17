@@ -24,8 +24,8 @@ class Utils {
   public static final AsciiString HTTP = new AsciiString("http");
   public static final AsciiString CONTENT_TYPE_HEADER =
       new AsciiString(HttpUtil.CONTENT_TYPE_HEADER);
-  public static final AsciiString CONTENT_TYPE_PROTORPC =
-      new AsciiString(HttpUtil.CONTENT_TYPE_PROTORPC);
+  public static final AsciiString CONTENT_TYPE_GRPC =
+      new AsciiString(HttpUtil.CONTENT_TYPE_GRPC);
   public static final AsciiString GRPC_STATUS_HEADER = new AsciiString(HttpUtil.GRPC_STATUS_HEADER);
 
   /**
@@ -78,7 +78,7 @@ class Utils {
         .path(defaultPath)
         .method(HTTP_METHOD)
         .scheme(ssl ? HTTPS : HTTP)
-        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_PROTORPC);
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
 
     // Override the default authority and path if provided by the headers.
     if (headers.getAuthority() != null) {
@@ -92,11 +92,19 @@ class Utils {
   }
 
   public static Http2Headers convertServerHeaders(Metadata.Headers headers) {
-    return convertMetadata(headers);
+    Http2Headers http2Headers = convertMetadata(headers);
+    http2Headers.set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
+    http2Headers.status(STATUS_OK);
+    return http2Headers;
   }
 
-  public static Http2Headers convertTrailers(Metadata.Trailers trailers) {
-    return convertMetadata(trailers);
+  public static Http2Headers convertTrailers(Metadata.Trailers trailers, boolean headersSent) {
+    Http2Headers http2Trailers = convertMetadata(trailers);
+    if (!headersSent) {
+      http2Trailers.set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_GRPC);
+      http2Trailers.status(STATUS_OK);
+    }
+    return http2Trailers;
   }
 
   private static Http2Headers convertMetadata(Metadata headers) {

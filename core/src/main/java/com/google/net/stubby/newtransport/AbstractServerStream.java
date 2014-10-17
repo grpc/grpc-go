@@ -12,6 +12,7 @@ import com.google.net.stubby.Status;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -23,10 +24,13 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
 
   private final Object stateLock = new Object();
   private volatile StreamState state = StreamState.OPEN;
+  private boolean headersSent = false;
   /** Whether listener.closed() has been called. */
   @GuardedBy("stateLock")
   private boolean listenerClosed;
-  /** Whether the stream was closed gracefull by the application (vs. a transport-level failure). */
+  /**
+   * Whether the stream was closed gracefully by the application (vs. a transport-level failure).
+   */
   private boolean gracefulClose;
   /** Saved trailers from close() that need to be sent once the framer has sent all messages. */
   private Metadata.Trailers stashedTrailers;
@@ -45,6 +49,24 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
   @Override
   protected void receiveStatus(Status status) {
     Preconditions.checkState(status == Status.OK, "Received status can only be OK on server");
+  }
+
+  @Override
+  public void writeHeaders(Metadata.Headers headers) {
+    Preconditions.checkNotNull(headers, "headers");
+    outboundPhase(Phase.HEADERS);
+    headersSent = true;
+    internalSendHeaders(headers);
+    outboundPhase(Phase.MESSAGE);
+  }
+
+  @Override
+  public final void writeMessage(InputStream message, int length, @Nullable Runnable accepted) {
+    if (!headersSent) {
+      writeHeaders(new Metadata.Headers());
+      headersSent = true;
+    }
+    super.writeMessage(message, length, accepted);
   }
 
   @Override
@@ -78,11 +100,18 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
         sendFrame(frame, false);
       }
       if (endOfStream) {
-        sendTrailers(stashedTrailers);
+        sendTrailers(stashedTrailers, headersSent);
+        headersSent = true;
         stashedTrailers = null;
       }
     }
   }
+
+  /**
+   * Sends response headers to the remote end points.
+   * @param headers to be sent to client.
+   */
+  protected abstract void internalSendHeaders(Metadata.Headers headers);
 
   /**
    * Sends an outbound frame to the remote end point.
@@ -97,8 +126,9 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
    * Sends trailers to the remote end point. This call implies end of stream.
    *
    * @param trailers metadata to be sent to end point
+   * @param headersSent true if response headers have already been sent.
    */
-  protected abstract void sendTrailers(Metadata.Trailers trailers);
+  protected abstract void sendTrailers(Metadata.Trailers trailers, boolean headersSent);
 
   /**
    * The Stream is considered completely closed and there is no further opportunity for error. It

@@ -137,7 +137,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private void onHeadersRead(int streamId, Http2Headers headers, boolean endStream)
       throws Http2Exception {
     NettyClientStream stream = clientStream(connection().requireStream(streamId));
-    stream.inboundHeadersRecieved(headers, endStream);
+    stream.inboundHeadersReceived(headers, endStream);
   }
 
   /**

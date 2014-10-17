@@ -94,15 +94,15 @@ public class InProcessUtils {
 
       // Implementation of ServerCall which delegates to the client listener.
       final ServerCall serverCall = new ServerCall() {
+
         @Override
-        public void close(final Status status, final Metadata.Trailers trailers) {
+        public void sendHeaders(final Metadata.Headers headers) {
           clientWorkQueue.execute(new Runnable() {
             @Override
             public void run() {
-              clientListener.closed(status, trailers);
+              clientListener.headersRead(headers);
             }
           });
-
         }
 
         @Override
@@ -120,6 +120,17 @@ public class InProcessUtils {
               }
             }
           });
+        }
+
+        @Override
+        public void close(final Status status, final Metadata.Trailers trailers) {
+          clientWorkQueue.execute(new Runnable() {
+            @Override
+            public void run() {
+              clientListener.closed(status, trailers);
+            }
+          });
+
         }
 
         @Override

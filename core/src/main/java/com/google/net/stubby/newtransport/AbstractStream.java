@@ -90,7 +90,7 @@ public abstract class AbstractStream implements Stream {
   }
 
   @Override
-  public final void writeMessage(InputStream message, int length, @Nullable Runnable accepted) {
+  public void writeMessage(InputStream message, int length, @Nullable Runnable accepted) {
     Preconditions.checkNotNull(message, "message");
     Preconditions.checkArgument(length >= 0, "length must be >= 0");
     outboundPhase(Phase.MESSAGE);

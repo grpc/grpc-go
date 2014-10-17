@@ -18,6 +18,7 @@ import static org.mockito.Mockito.when;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.newtransport.AbstractStream;
 import com.google.net.stubby.newtransport.StreamListener;
 
 import io.netty.buffer.ByteBuf;
@@ -144,8 +145,10 @@ public abstract class NettyStreamTestBase {
   protected final ByteBuf messageFrame() throws Exception {
     ByteArrayOutputStream os = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(os);
-    dos.write(PAYLOAD_FRAME);
-    dos.writeInt(MESSAGE.length());
+    if (!AbstractStream.GRPC_V2_PROTOCOL) {
+      dos.write(PAYLOAD_FRAME);
+      dos.writeInt(MESSAGE.length());
+    }
     dos.write(MESSAGE.getBytes(UTF_8));
     dos.close();
 
@@ -168,6 +171,9 @@ public abstract class NettyStreamTestBase {
 
   protected final ByteBuf compressionFrame(byte[] data) {
     ByteBuf buf = Unpooled.buffer();
+    if (AbstractStream.GRPC_V2_PROTOCOL) {
+      buf.writeByte(0);
+    }
     buf.writeInt(data.length);
     buf.writeBytes(data);
     return buf;
