@@ -1,7 +1,9 @@
 package com.google.net.stubby.newtransport.netty;
 
-import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
+import static com.google.net.stubby.newtransport.netty.NettyTestUtil.messageFrame;
+import static com.google.net.stubby.newtransport.netty.NettyTestUtil.statusFrame;
 import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_GRPC;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.newtransport.netty.Utils.STATUS_OK;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
@@ -9,20 +11,13 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
 
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.AbstractStream;
 import com.google.net.stubby.newtransport.ClientStreamListener;
 import com.google.net.stubby.newtransport.StreamState;
-
-import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.AsciiString;
-import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.Http2Headers;
 
 import org.junit.After;
 import org.junit.Assume;
@@ -33,6 +28,11 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.AsciiString;
+import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.Http2Headers;
 
 /**
  * Tests for {@link NettyClientStream}.
@@ -47,6 +47,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     return listener;
   }
 
+  @Override
   @Before
   public void setup() {
     AbstractStream.GRPC_V2_PROTOCOL = false;
@@ -78,7 +79,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     stream().id(STREAM_ID);
     stream.writeMessage(input, input.available(), accepted);
     stream.flush();
-    verify(channel).writeAndFlush(new SendGrpcFrameCommand(1, messageFrame(), false));
+    verify(channel).writeAndFlush(new SendGrpcFrameCommand(1, messageFrame(MESSAGE), false));
     verify(accepted).run();
   }
 

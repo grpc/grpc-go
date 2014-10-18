@@ -1,7 +1,6 @@
 package com.google.net.stubby.newtransport.netty;
 
-import static com.google.net.stubby.GrpcFramingUtil.PAYLOAD_FRAME;
-import static com.google.net.stubby.GrpcFramingUtil.STATUS_FRAME;
+import static com.google.net.stubby.newtransport.netty.NettyTestUtil.messageFrame;
 import static io.netty.handler.codec.http2.DefaultHttp2InboundFlowController.DEFAULT_WINDOW_UPDATE_RATIO;
 import static io.netty.handler.codec.http2.DefaultHttp2InboundFlowController.WINDOW_UPDATE_OFF;
 import static io.netty.util.CharsetUtil.UTF_8;
@@ -15,14 +14,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.net.stubby.Status;
-import com.google.net.stubby.newtransport.AbstractStream;
 import com.google.net.stubby.newtransport.StreamListener;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -33,17 +35,7 @@ import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.util.concurrent.TimeUnit;
 
@@ -115,7 +107,7 @@ public abstract class NettyStreamTestBase {
 
   @Test
   public void inboundMessageShouldCallListener() throws Exception {
-    stream.inboundDataReceived(messageFrame(), false);
+    stream.inboundDataReceived(messageFrame(MESSAGE), false);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
     verify(listener()).messageRead(captor.capture(), eq(MESSAGE.length()));
 
@@ -123,7 +115,7 @@ public abstract class NettyStreamTestBase {
     verify(inboundFlow).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID), eq(WINDOW_UPDATE_OFF));
     verify(inboundFlow, never()).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID),
         eq(DEFAULT_WINDOW_UPDATE_RATIO));
-    assertEquals(MESSAGE, toString(captor.getValue()));
+    assertEquals(MESSAGE, NettyTestUtil.toString(captor.getValue()));
 
     // Verify that inbound flow control window update has been re-enabled for the stream after
     // the future completes.
@@ -135,49 +127,6 @@ public abstract class NettyStreamTestBase {
   protected abstract NettyStream createStream();
 
   protected abstract StreamListener listener();
-
-  private String toString(InputStream in) throws Exception {
-    byte[] bytes = new byte[in.available()];
-    ByteStreams.readFully(in, bytes);
-    return new String(bytes, UTF_8);
-  }
-
-  protected final ByteBuf messageFrame() throws Exception {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    if (!AbstractStream.GRPC_V2_PROTOCOL) {
-      dos.write(PAYLOAD_FRAME);
-      dos.writeInt(MESSAGE.length());
-    }
-    dos.write(MESSAGE.getBytes(UTF_8));
-    dos.close();
-
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
-  }
-
-  protected final ByteBuf statusFrame(Status status) throws Exception {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    short code = (short) status.getCode().value();
-    dos.write(STATUS_FRAME);
-    int length = 2;
-    dos.writeInt(length);
-    dos.writeShort(code);
-
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
-  }
-
-  protected final ByteBuf compressionFrame(byte[] data) {
-    ByteBuf buf = Unpooled.buffer();
-    if (AbstractStream.GRPC_V2_PROTOCOL) {
-      buf.writeByte(0);
-    }
-    buf.writeInt(data.length);
-    buf.writeBytes(data);
-    return buf;
-  }
 
   private void mockChannelFuture(boolean succeeded) {
     when(future.isDone()).thenReturn(true);

@@ -4,6 +4,7 @@ import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER
 import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_GRPC;
 import static com.google.net.stubby.newtransport.netty.Utils.HTTP_METHOD;
 import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
+import static io.netty.handler.codec.http2.Http2Exception.protocolError;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -52,7 +53,6 @@ import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
-import io.netty.handler.codec.http2.Http2StreamException;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -149,8 +149,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   public void clientHalfCloseShouldForwardToStreamListener() throws Exception {
     createStream();
 
-    handler.channelRead(ctx, emptyDataFrame(STREAM_ID, true));
-    verify(streamListener, never()).messageRead(any(InputStream.class), anyInt());
+    handler.channelRead(ctx, emptyGrpcFrame(STREAM_ID, true));
+    ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
+    verify(streamListener).messageRead(captor.capture(), anyInt());
+    assertArrayEquals(new byte[0], ByteStreams.toByteArray(captor.getValue()));
     verify(streamListener).halfClosed();
     verifyNoMoreInteractions(streamListener);
   }
@@ -169,8 +171,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   public void streamErrorShouldNotCloseChannel() throws Exception {
     createStream();
 
-    Http2StreamException e = new Http2StreamException(STREAM_ID, Http2Error.REFUSED_STREAM);
-    handler.exceptionCaught(ctx, e);
+    // When a DATA frame is read, throw an exception. It will be converted into an
+    // Http2StreamException.
+    RuntimeException e = new RuntimeException("Fake Exception");
+    when(streamListener.messageRead(any(InputStream.class), anyInt())).thenThrow(e);
+
+    // Read a DATA frame to trigger the exception.
+    handler.channelRead(ctx, emptyGrpcFrame(STREAM_ID, true));
 
     // Verify that the context was NOT closed.
     verify(ctx, never()).close();
@@ -178,18 +185,20 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     // Verify the stream was closed.
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(streamListener).closed(captor.capture());
-    assertEquals(e, Http2CodecUtil.toHttp2Exception(captor.getValue().asException()));
+    assertEquals(e, captor.getValue().asException().getCause().getCause());
     assertEquals(Code.INTERNAL, captor.getValue().getCode());
   }
 
   @Test
   public void connectionErrorShouldCloseChannel() throws Exception {
-    // Non-HTTP/2 exceptions are automatically interpreted as connection errors.
-    Exception e = new Exception("Fake Exception");
-    handler.exceptionCaught(ctx, e);
+    createStream();
+
+    // Read a DATA frame to trigger the exception.
+    handler.channelRead(ctx, badFrame());
 
     // Verify the expected GO_AWAY frame was written.
-    ByteBuf expected = goAwayFrame(0, Http2Error.INTERNAL_ERROR.code(), toByteBuf(ctx, e));
+    Exception e = protocolError("Frame length 0 incorrect size for ping.");
+    ByteBuf expected = goAwayFrame(STREAM_ID, Http2Error.PROTOCOL_ERROR.code(), toByteBuf(ctx, e));
     ByteBuf actual = captureWrite(ctx);
     assertEquals(expected, actual);
 
@@ -244,9 +253,17 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     return captureWrite(ctx);
   }
 
-  private ByteBuf emptyDataFrame(int streamId, boolean endStream) {
+  private ByteBuf emptyGrpcFrame(int streamId, boolean endStream) throws Exception {
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeData(ctx, streamId, Unpooled.EMPTY_BUFFER, 0, endStream, newPromise());
+    ByteBuf buf = NettyTestUtil.messageFrame("");
+    frameWriter.writeData(ctx, streamId, buf, 0, endStream, newPromise());
+    return captureWrite(ctx);
+  }
+
+  private ByteBuf badFrame() throws Exception {
+    ChannelHandlerContext ctx = newContext();
+    // Write an empty PING frame - this is invalid.
+    frameWriter.writePing(ctx, false, Unpooled.EMPTY_BUFFER, newPromise());
     return captureWrite(ctx);
   }
 

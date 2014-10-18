@@ -1,5 +1,7 @@
 package com.google.net.stubby.newtransport.netty;
 
+import static com.google.net.stubby.newtransport.netty.NettyTestUtil.messageFrame;
+import static com.google.net.stubby.newtransport.netty.NettyTestUtil.statusFrame;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.same;
@@ -38,7 +40,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
         .status(Utils.STATUS_OK)
         .set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_GRPC);
     verify(channel).writeAndFlush(new SendResponseHeadersCommand(STREAM_ID, headers, false));
-    verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, messageFrame(), false));
+    verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, messageFrame(MESSAGE), false));
     verify(accepted).run();
   }
 

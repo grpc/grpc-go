@@ -5,16 +5,13 @@ import static com.google.net.stubby.newtransport.netty.NettyClientStream.PENDING
 import com.google.common.base.Preconditions;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.newtransport.StreamState;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
-import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
@@ -130,8 +127,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   }
 
   private void initListener() {
-    ((LazyFrameListener) ((DefaultHttp2ConnectionDecoder) this.decoder()).listener()).setHandler(
-        this);
+    ((LazyFrameListener) decoder().listener()).setHandler(this);
   }
 
   private void onHeadersRead(int streamId, Http2Headers headers, boolean endStream)
@@ -143,17 +139,10 @@ class NettyClientHandler extends Http2ConnectionHandler {
   /**
    * Handler for an inbound HTTP/2 DATA frame.
    */
-  private void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data,
-      boolean endOfStream) throws Http2Exception {
+  private void onDataRead(int streamId, ByteBuf data, boolean endOfStream) throws Http2Exception {
     Http2Stream http2Stream = connection().requireStream(streamId);
     NettyClientStream stream = clientStream(http2Stream);
     stream.inboundDataReceived(data, endOfStream);
-    if (stream.state() == StreamState.CLOSED && !endOfStream) {
-      // TODO(user): This is a hack due to the test server not consistently
-      // setting endOfStream on the last frame for the v1 protocol.
-      // Remove this once b/17692766 is fixed.
-      lifecycleManager().closeRemoteSide(http2Stream, ctx.newSucceededFuture());
-    }
   }
 
   /**
@@ -185,21 +174,25 @@ class NettyClientHandler extends Http2ConnectionHandler {
   }
 
   @Override
-  public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-    // Force the conversion of any exceptions into HTTP/2 exceptions.
-    Http2Exception e = Http2CodecUtil.toHttp2Exception(cause);
-    if (e instanceof Http2StreamException) {
-      // Close the stream with a status that contains the cause.
-      Http2Stream stream = connection().stream(((Http2StreamException) e).streamId());
-      if (stream != null) {
-        clientStream(stream).setStatus(Status.fromThrowable(cause), new Metadata.Trailers());
-      }
-    } else {
-      connectionError = e;
+  protected void onConnectionError(ChannelHandlerContext ctx, Throwable cause,
+      Http2Exception http2Ex) {
+    // Save the error.
+    connectionError = cause;
+
+    super.onConnectionError(ctx, cause, http2Ex);
+  }
+
+  @Override
+  protected void onStreamError(ChannelHandlerContext ctx, Throwable cause,
+      Http2StreamException http2Ex) {
+    // Close the stream with a status that contains the cause.
+    Http2Stream stream = connection().stream(http2Ex.streamId());
+    if (stream != null) {
+      clientStream(stream).setStatus(Status.fromThrowable(cause), new Metadata.Trailers());
     }
 
-    // Delegate to the super class for proper handling of the Http2Exception.
-    super.exceptionCaught(ctx, e);
+    // Delegate to the base class to send a RST_STREAM.
+    super.onStreamError(ctx, cause, http2Ex);
   }
 
   /**
@@ -244,21 +237,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
    * Sends the given GRPC frame for the stream.
    */
   private void sendGrpcFrame(ChannelHandlerContext ctx, SendGrpcFrameCommand cmd,
-      ChannelPromise promise) throws Http2Exception {
-    Http2Stream http2Stream = connection().requireStream(cmd.streamId());
-    switch (http2Stream.state()) {
-      case CLOSED:
-      case HALF_CLOSED_LOCAL:
-      case IDLE:
-      case RESERVED_LOCAL:
-      case RESERVED_REMOTE:
-        cmd.release();
-        promise.setFailure(new Exception("Closed before write could occur"));
-        return;
-      default:
-        break;
-    }
-
+      ChannelPromise promise) {
     // Call the base class to write the HTTP/2 DATA frame.
     // Note: no need to flush since this is handled by the outbound flow controller.
     encoder().writeData(ctx, cmd.streamId(), cmd.content(), 0, cmd.endStream(), promise);
@@ -272,7 +251,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     Status goAwayStatus = goAwayStatus();
     failPendingStreams(goAwayStatus);
 
-    if (connection().local().isGoAwayReceived()) {
+    if (connection().goAwayReceived()) {
       // Received a GOAWAY from the remote endpoint. Fail any streams that were created after the
       // last known stream.
       int lastKnownStream = connection().local().lastKnownStream();
@@ -435,7 +414,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     @Override
     public void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
         boolean endOfStream) throws Http2Exception {
-      handler.onDataRead(ctx, streamId, data, endOfStream);
+      handler.onDataRead(streamId, data, endOfStream);
     }
 
     @Override

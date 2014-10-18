@@ -4,7 +4,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.notNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -14,8 +13,6 @@ import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Bytes;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.net.stubby.Metadata;
-import com.google.net.stubby.Status;
 import com.google.net.stubby.newtransport.MessageDeframer2.Sink;
 
 import org.junit.Test;
@@ -23,12 +20,11 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.zip.GZIPOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * Tests for {@link MessageDeframer2}.
