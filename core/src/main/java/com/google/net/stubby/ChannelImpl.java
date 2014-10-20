@@ -87,16 +87,8 @@ public final class ChannelImpl extends AbstractService implements Channel {
       transports.add(newTransport);
       // activeTransport reference can be changed during calls to the transport, even if we hold the
       // lock, due to reentrancy.
-      newTransport.addListener(
-          new TransportListener(newTransport), MoreExecutors.directExecutor());
-      if (notifyWhenRunning) {
-        newTransport.addListener(new Listener() {
-          @Override
-          public void running() {
-            notifyStarted();
-          }
-        }, executor);
-      }
+      newTransport.addListener(new TransportListener(newTransport, notifyWhenRunning),
+          MoreExecutors.directExecutor());
       newTransport.startAsync();
       return newTransport;
     }
@@ -123,9 +115,11 @@ public final class ChannelImpl extends AbstractService implements Channel {
 
   private class TransportListener extends Listener {
     private final ClientTransport transport;
+    private final boolean notifyWhenRunning;
 
-    public TransportListener(ClientTransport transport) {
+    public TransportListener(ClientTransport transport, boolean notifyWhenRunning) {
       this.transport = transport;
+      this.notifyWhenRunning = notifyWhenRunning;
     }
 
     @Override
@@ -145,6 +139,13 @@ public final class ChannelImpl extends AbstractService implements Channel {
     @Override
     public void terminated(State from) {
       transportFailedOrStopped(transport, null);
+    }
+
+    @Override
+    public void running() {
+      if (notifyWhenRunning) {
+        notifyStarted();
+      }
     }
   }
 
