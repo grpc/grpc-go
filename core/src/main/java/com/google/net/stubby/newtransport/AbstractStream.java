@@ -142,7 +142,7 @@ public abstract class AbstractStream implements Stream {
 
   /**
    * Gets the internal handler for inbound messages. Subclasses must use this as the target for a
-   * {@link com.google.net.stubby.newtransport.Deframer}.
+   * {@link GrpcDeframer} or {@link MessageDeframer2} (V2 protocol).
    */
   protected GrpcDeframer.Sink inboundMessageHandler() {
     return inboundMessageHandler;
