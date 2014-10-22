@@ -36,7 +36,7 @@ public class Calls {
       String fullServiceName, Method method) {
     // TODO(user): if timeout is not defined in proto file, use a default timeout here.
     // If timeout is defined in proto file, Method should carry the timeout.
-    return MethodDescriptor.create(method.getType(), fullServiceName + "." + method.getName(),
+    return MethodDescriptor.create(method.getType(), fullServiceName + "/" + method.getName(),
         1, TimeUnit.SECONDS, method.getRequestMarshaller(), method.getResponseMarshaller());
   }
 
