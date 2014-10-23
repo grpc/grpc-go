@@ -13,9 +13,11 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.ssl.SslContext;
+
+import javax.annotation.Nullable;
 
 /**
  * Implementation of the {@link com.google.common.util.concurrent.Service} interface for a
@@ -28,12 +30,13 @@ public class NettyServer extends AbstractService {
   private final EventLoopGroup workerGroup;
   private Channel channel;
 
-  public NettyServer(ServerListener serverListener, int port) {
-    this(serverListener, port, new NioEventLoopGroup(), new NioEventLoopGroup());
+  public NettyServer(ServerListener serverListener, int port, EventLoopGroup bossGroup,
+      EventLoopGroup workerGroup) {
+    this(serverListener, port, bossGroup, workerGroup, null);
   }
 
   public NettyServer(final ServerListener serverListener, int port, EventLoopGroup bossGroup,
-      EventLoopGroup workerGroup) {
+      EventLoopGroup workerGroup, @Nullable final SslContext sslContext) {
     Preconditions.checkNotNull(bossGroup, "bossGroup");
     Preconditions.checkNotNull(workerGroup, "workerGroup");
     Preconditions.checkArgument(port >= 0, "port must be positive");
@@ -41,7 +44,7 @@ public class NettyServer extends AbstractService {
     this.channelInitializer = new ChannelInitializer<SocketChannel>() {
       @Override
       public void initChannel(SocketChannel ch) throws Exception {
-        NettyServerTransport transport = new NettyServerTransport(ch, serverListener);
+        NettyServerTransport transport = new NettyServerTransport(ch, serverListener, sslContext);
         transport.startAsync();
         // TODO(user): Should we wait for transport shutdown before shutting down server?
       }

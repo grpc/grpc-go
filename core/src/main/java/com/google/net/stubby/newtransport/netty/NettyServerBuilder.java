@@ -8,6 +8,7 @@ import com.google.net.stubby.newtransport.ServerListener;
 
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.handler.ssl.SslContext;
 
 /**
  * The convenient builder for a netty-based GRPC server.
@@ -18,6 +19,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
 
   private EventLoopGroup userBossEventLoopGroup;
   private EventLoopGroup userWorkerEventLoopGroup;
+  private SslContext sslContext;
 
   public static NettyServerBuilder forPort(int port) {
     return new NettyServerBuilder(port);
@@ -64,13 +66,22 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
     return this;
   }
 
+  /**
+   * Sets the TLS context to use for encryption. Providing a context enables encryption.
+   */
+  public NettyServerBuilder sslContext(SslContext sslContext) {
+    this.sslContext = sslContext;
+    return this;
+  }
+
   @Override
   protected Service buildTransportServer(ServerListener serverListener) {
     final EventLoopGroup bossEventLoopGroup  = (userBossEventLoopGroup == null)
         ? new NioEventLoopGroup() : userBossEventLoopGroup;
     final EventLoopGroup workerEventLoopGroup = (userWorkerEventLoopGroup == null)
         ? new NioEventLoopGroup() : userWorkerEventLoopGroup;
-    NettyServer server = new NettyServer(serverListener, port);
+    NettyServer server =
+        new NettyServer(serverListener, port, bossEventLoopGroup, workerEventLoopGroup, sslContext);
     if (userBossEventLoopGroup == null) {
       server.addListener(new ClosureHook() {
         @Override

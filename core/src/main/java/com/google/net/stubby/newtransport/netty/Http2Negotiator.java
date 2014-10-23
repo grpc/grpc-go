@@ -65,6 +65,17 @@ public class Http2Negotiator {
   }
 
   /**
+   * Create a TLS handler for HTTP/2 capable of using ALPN/NPN.
+   */
+  public static ChannelHandler serverTls(SSLEngine sslEngine) {
+    Preconditions.checkNotNull(sslEngine, "sslEngine");
+    if (!installJettyTLSProtocolSelection(sslEngine, SettableFuture.<Void>create(), true)) {
+      throw new IllegalStateException("NPN/ALPN extensions not installed");
+    }
+    return new SslHandler(sslEngine, false);
+  }
+
+  /**
    * Creates an TLS negotiation for HTTP/2 using ALPN/NPN.
    */
   public static Negotiation tls(final ChannelHandler handler, final SSLEngine sslEngine) {
@@ -72,7 +83,7 @@ public class Http2Negotiator {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
 
     final SettableFuture<Void> completeFuture = SettableFuture.create();
-    if (!installJettyTLSProtocolSelection(sslEngine, completeFuture)) {
+    if (!installJettyTLSProtocolSelection(sslEngine, completeFuture, false)) {
       throw new IllegalStateException("NPN/ALPN extensions not installed");
     }
     final ChannelInitializer<SocketChannel> initializer = new ChannelInitializer<SocketChannel>() {
@@ -236,7 +247,7 @@ public class Http2Negotiator {
    * @return true if NPN/ALPN support is available.
    */
   private static boolean installJettyTLSProtocolSelection(final SSLEngine engine,
-      final SettableFuture<Void> protocolNegotiated) {
+      final SettableFuture<Void> protocolNegotiated, boolean server) {
     for (String protocolNegoClassName : JETTY_TLS_NEGOTIATION_IMPL) {
       try {
         Class<?> negoClass;
@@ -249,38 +260,53 @@ public class Http2Negotiator {
         }
         Class<?> providerClass = Class.forName(protocolNegoClassName + "$Provider");
         Class<?> clientProviderClass = Class.forName(protocolNegoClassName + "$ClientProvider");
+        Class<?> serverProviderClass = Class.forName(protocolNegoClassName + "$ServerProvider");
         Method putMethod = negoClass.getMethod("put", SSLEngine.class, providerClass);
         final Method removeMethod = negoClass.getMethod("remove", SSLEngine.class);
         putMethod.invoke(null, engine, Proxy.newProxyInstance(
-            Http2Negotiator.class.getClassLoader(), new Class[] {clientProviderClass},
+            Http2Negotiator.class.getClassLoader(),
+            new Class[] {server ? serverProviderClass : clientProviderClass},
             new InvocationHandler() {
               @Override
               public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                 String methodName = method.getName();
                 if ("supports".equals(methodName)) {
-                  // both
+                  // NPN client
                   return true;
                 }
                 if ("unsupported".equals(methodName)) {
-                  // both
+                  // all
                   removeMethod.invoke(null, engine);
-                  protocolNegotiated.setException(new IllegalStateException(
-                      "ALPN/NPN protocol " + HTTP_VERSION_NAME + " not supported by server"));
+                  protocolNegotiated.setException(new RuntimeException(
+                      "ALPN/NPN protocol " + HTTP_VERSION_NAME + " not supported by endpoint"));
                   return null;
                 }
                 if ("protocols".equals(methodName)) {
-                  // ALPN only
+                  // ALPN client, NPN server
                   return ImmutableList.of(HTTP_VERSION_NAME);
                 }
-                if ("selected".equals(methodName)) {
-                  // ALPN only
-                  // Only 'supports' one protocol so we know what was selected.
+                if ("selected".equals(methodName) || "protocolSelected".equals(methodName)) {
+                  // ALPN client, NPN server
                   removeMethod.invoke(null, engine);
+                  String protocol = (String) args[0];
+                  if (!HTTP_VERSION_NAME.equals(protocol)) {
+                    RuntimeException e = new RuntimeException(
+                        "Unsupported protocol selected via ALPN/NPN: " + protocol);
+                    protocolNegotiated.setException(e);
+                    if ("selected".equals(methodName)) {
+                      // ALPN client
+                      // Throwing exception causes TLS alert.
+                      throw e;
+                    } else {
+                      return null;
+                    }
+                  }
                   protocolNegotiated.set(null);
                   return null;
                 }
-                if ("selectProtocol".equals(methodName)) {
-                  // NPN only
+                if ("select".equals(methodName) || "selectProtocol".equals(methodName)) {
+                  // ALPN server, NPN client
+                  removeMethod.invoke(null, engine);
                   @SuppressWarnings("unchecked")
                   List<String> names = (List<String>) args[0];
                   for (String name : names) {
@@ -289,9 +315,13 @@ public class Http2Negotiator {
                       return name;
                     }
                   }
-                  protocolNegotiated.setException(
-                      new IllegalStateException("Protocol not available via ALPN/NPN: " + names));
-                  removeMethod.invoke(null, engine);
+                  RuntimeException e =
+                      new RuntimeException("Protocol not available via ALPN/NPN: " + names);
+                  protocolNegotiated.setException(e);
+                  if ("select".equals(methodName)) {
+                    // ALPN server
+                    throw e; // Throwing exception causes TLS alert.
+                  }
                   return null;
                 }
                 throw new IllegalStateException("Unknown method " + methodName);

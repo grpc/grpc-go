@@ -44,7 +44,7 @@ abstract class AbstractServiceBuilder<ProductT extends Service,
    * <p>The returned service has not been started at this point. You will need to start it by
    * yourself or use {@link #buildAndStart()}.
    */
-   private ProductT build() {
+  public ProductT build() {
     final ExecutorService executor = (userExecutor == null)
         ?  Executors.newCachedThreadPool() : userExecutor;
     ProductT service = buildImpl(executor);

@@ -21,7 +21,10 @@ import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
+import io.netty.handler.ssl.SslContext;
 import io.netty.util.internal.logging.InternalLogLevel;
+
+import javax.annotation.Nullable;
 
 /**
  * The Netty-based server transport.
@@ -30,11 +33,14 @@ class NettyServerTransport extends AbstractService {
   private static final Http2FrameLogger frameLogger = new Http2FrameLogger(InternalLogLevel.DEBUG); 
   private final SocketChannel channel;
   private final ServerListener serverListener;
+  private final SslContext sslContext;
   private NettyServerHandler handler;
 
-  NettyServerTransport(SocketChannel channel, ServerListener serverListener) {
+  NettyServerTransport(SocketChannel channel, ServerListener serverListener,
+      @Nullable SslContext sslContext) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
     this.serverListener = Preconditions.checkNotNull(serverListener, "serverListener");
+    this.sslContext = sslContext;
   }
 
   @Override
@@ -64,6 +70,9 @@ class NettyServerTransport extends AbstractService {
       }
     });
 
+    if (sslContext != null) {
+      channel.pipeline().addLast(Http2Negotiator.serverTls(sslContext.newEngine(channel.alloc())));
+    }
     channel.pipeline().addLast(handler);
 
     notifyStarted();
