@@ -233,12 +233,13 @@ public class OkHttpClientTransport extends AbstractClientTransport {
    *
    * <p> Return false if the stream has already finished.
    */
-  private boolean finishStream(int streamId, Status status) {
+  private boolean finishStream(int streamId, @Nullable Status status) {
     OkHttpClientStream stream;
     stream = streams.remove(streamId);
     if (stream != null) {
-      // This is mainly for failed streams, for successfully finished streams, it's a no-op.
-      stream.setStatus(status, new Metadata.Trailers());
+      if (status != null) {
+        stream.setStatus(status, new Metadata.Trailers());
+      }
       return true;
     }
     return false;
@@ -340,16 +341,13 @@ public class OkHttpClientTransport extends AbstractClientTransport {
         int associatedStreamId,
         List<Header> headerBlock,
         HeadersMode headersMode) {
-      // TODO(user): handle received headers.
-      if (inFinished) {
-        final OkHttpClientStream stream;
-        stream = streams.get(streamId);
-        if (stream == null) {
-          frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
-          return;
-        }
-        stream.deliverHeaders(inFinished);
+      OkHttpClientStream stream;
+      stream = streams.get(streamId);
+      if (stream == null) {
+        frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
+        return;
       }
+      stream.deliverHeaders(headerBlock, inFinished);
     }
 
     @Override
@@ -484,8 +482,19 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       }
     }
 
-    synchronized void deliverHeaders(boolean endOfStream) {
-      deframer.deframe(Buffers.empty(), endOfStream);
+    synchronized void deliverHeaders(List<Header> headers, boolean endOfStream) {
+      if (inboundPhase == Phase.HEADERS) {
+        inboundPhase(Phase.MESSAGE);
+        // If endOfStream, we have trailers and no "headers" were sent.
+        if (!endOfStream) {
+          deframer.delayProcessing(receiveHeaders(Utils.convertHeaders(headers)));
+        }
+      }
+      if (endOfStream) {
+        stashTrailers(Utils.convertTrailers(headers));
+        inboundPhase(Phase.STATUS);
+        deframer.deframe(Buffers.empty(), endOfStream);
+      }
     }
 
     @Override
@@ -539,7 +548,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     @Override
     public void remoteEndClosed() {
       super.remoteEndClosed();
-      if (finishStream(streamId, Status.OK)) {
+      if (finishStream(streamId, null)) {
         stopIfNecessary();
       }
     }
