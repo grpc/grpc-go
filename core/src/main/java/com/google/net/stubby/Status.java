@@ -133,9 +133,11 @@ public final class Status {
     UNAUTHENTICATED(16);
 
     private final int value;
+    private final String valueAscii;
 
     private Code(int value) {
       this.value = value;
+      this.valueAscii = Integer.toString(value);
     }
 
     public int value() {
@@ -144,6 +146,10 @@ public final class Status {
 
     private Status status() {
       return STATUS_LIST.get(value);
+    }
+
+    private String valueAscii() {
+      return valueAscii;
     }
   }
 
@@ -343,23 +349,22 @@ public final class Status {
   private static class StatusCodeMarshaller implements Metadata.Marshaller<Status> {
     @Override
     public byte[] toBytes(Status status) {
-      return Metadata.INTEGER_MARSHALLER.toAscii(status.getCode().value()).getBytes(US_ASCII);
+      return toAscii(status).getBytes(US_ASCII);
     }
 
     @Override
     public String toAscii(Status status) {
-      return Metadata.INTEGER_MARSHALLER.toAscii(status.getCode().value());
+      return status.getCode().valueAscii();
     }
 
     @Override
     public Status parseBytes(byte[] serialized) {
-      return fromCodeValue(Metadata.INTEGER_MARSHALLER.parseAscii(
-          new String(serialized, US_ASCII)));
+      return parseAscii(new String(serialized, US_ASCII));
     }
 
     @Override
     public Status parseAscii(String ascii) {
-      return fromCodeValue(Metadata.INTEGER_MARSHALLER.parseAscii(ascii));
+      return fromCodeValue(Integer.valueOf(ascii));
     }
   }
 }
