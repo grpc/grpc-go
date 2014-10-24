@@ -14,7 +14,7 @@ public interface ServerStreamListener extends StreamListener {
 
   /**
    * Called when the stream is fully closed. A status code of {@link
-   * com.google.net.stubby.transport.Transport.Code#OK} implies normal termination of the stream.
+   * com.google.net.stubby.Status.Code#OK} implies normal termination of the stream.
    * Any other value implies abnormal termination. Since clients cannot send status, the passed
    * status is always library-generated and only is concerned with transport-level stream shutdown
    * (the call itself may have had a failing status, but if the stream terminated cleanly with the

@@ -17,9 +17,12 @@ import javax.annotation.Nullable;
  * <p>The ownership rule: a builder generally does not take ownership of any objects passed to it.
  * The caller is responsible for closing them if needed. The builder is only responsible for the
  * life-cycle of objects created inside.
+ *
+ * @param <ProductT> The product that is built by this builder.
+ * @param <BuilderT> The concrete type of this builder.
  */
 abstract class AbstractServiceBuilder<ProductT extends Service,
-         BuilderT extends AbstractServiceBuilder> {
+    BuilderT extends AbstractServiceBuilder<?, ?>> {
 
   @Nullable
   private ExecutorService userExecutor;
@@ -33,6 +36,7 @@ abstract class AbstractServiceBuilder<ProductT extends Service,
    * <p>The service won't take ownership of the given executor. It's caller's responsibility to
    * shut down the executor when it's desired.
    */
+  @SuppressWarnings("unchecked")
   public final BuilderT executor(ExecutorService executor) {
     userExecutor = executor;
     return (BuilderT) this;

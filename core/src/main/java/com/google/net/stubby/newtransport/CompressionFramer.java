@@ -197,7 +197,7 @@ class CompressionFramer {
       }
     }
     if (message instanceof DeferredInputStream) {
-      return ((DeferredInputStream) message).flushTo(outputStreamAdapter);
+      return ((DeferredInputStream<?>) message).flushTo(outputStreamAdapter);
     } else {
       // This could be optimized when compression is off, but we expect performance-critical code
       // to provide a DeferredInputStream.

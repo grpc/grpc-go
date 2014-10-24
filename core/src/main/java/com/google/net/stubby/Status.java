@@ -192,11 +192,10 @@ public final class Status {
    * Return a {@link Status} given a canonical error {@link Code} value.
    */
   public static Status fromCodeValue(int codeValue) {
-    Status status;
     if (codeValue < 0 || codeValue > STATUS_LIST.size()) {
       return UNKNOWN.withDescription("Unknown code " + codeValue);
     } else {
-      return status = STATUS_LIST.get(codeValue);
+      return STATUS_LIST.get(codeValue);
     }
   }
 

@@ -1,6 +1,5 @@
 package com.google.net.stubby.testing.integration;
 
-import com.google.common.base.Randoms;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Queues;
 import com.google.net.stubby.stub.StreamObserver;
@@ -33,7 +32,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
       "/com/google/net/stubby/testing/integration/testdata/compressable.txt";
   private static final String UNCOMPRESSABLE_FILE =
       "/com/google/net/stubby/testing/integration/testdata/uncompressable.bin";
-  private final Random random = Randoms.insecureRandom();
+  private final Random random = new Random();
 
   private final ScheduledExecutorService executor;
   private final ByteString uncompressableBuffer;

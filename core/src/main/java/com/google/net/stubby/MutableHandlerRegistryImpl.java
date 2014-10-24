@@ -1,9 +1,5 @@
 package com.google.net.stubby;
 
-import com.google.net.stubby.ServerMethodDefinition;
-import com.google.net.stubby.ServerServiceDefinition;
-
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -43,7 +39,7 @@ public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
     if (service == null) {
       return null;
     }
-    ServerMethodDefinition method = service.getMethod(methodName.substring(index + 1));
+    ServerMethodDefinition<?, ?> method = service.getMethod(methodName.substring(index + 1));
     if (method == null) {
       return null;
     }

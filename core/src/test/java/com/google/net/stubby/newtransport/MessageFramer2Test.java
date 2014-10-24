@@ -3,16 +3,19 @@ package com.google.net.stubby.newtransport;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.common.primitives.Bytes;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
@@ -25,10 +28,21 @@ import java.util.List;
 public class MessageFramer2Test {
   private static final int TRANSPORT_FRAME_SIZE = 12;
 
-  private Framer.Sink<List<Byte>> sink = mock(Framer.Sink.class);
-  private Framer.Sink<ByteBuffer> copyingSink = new ByteArrayConverterSink(sink);
-  private MessageFramer2 framer = new MessageFramer2(copyingSink, TRANSPORT_FRAME_SIZE);
-  private ArgumentCaptor<List<Byte>> frameCaptor = ArgumentCaptor.forClass((Class) List.class);
+  @Mock
+  private Framer.Sink<List<Byte>> sink;
+  private Framer.Sink<ByteBuffer> copyingSink;
+  private MessageFramer2 framer;
+
+  @Captor
+  private ArgumentCaptor<List<Byte>> frameCaptor;
+
+  @Before
+  public void setup() {
+    MockitoAnnotations.initMocks(this);
+
+    copyingSink = new ByteArrayConverterSink(sink);
+    framer = new MessageFramer2(copyingSink, TRANSPORT_FRAME_SIZE);
+  }
 
   @Test
   public void simplePayload() {

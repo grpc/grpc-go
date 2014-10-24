@@ -9,11 +9,15 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Common base type for stub implementations. Allows for reconfiguration.
+ *
+ * @param <S> the concrete type of this stub.
+ * @param <C> the service descriptor type
  */
 // TODO(user): Move into 3rd party when tidy
-// TOOD(lryan/kevinb): Excessive parameterization can be a pain, try to eliminate once the generated
+// TODO(lryan/kevinb): Excessive parameterization can be a pain, try to eliminate once the generated
 // code is more tangible.
-public abstract class AbstractStub<S extends AbstractStub, C extends AbstractServiceDescriptor<C>> {
+public abstract class AbstractStub<S extends AbstractStub<?, ?>,
+    C extends AbstractServiceDescriptor<C>> {
   protected final Channel channel;
   protected final C config;
 
@@ -47,13 +51,13 @@ public abstract class AbstractStub<S extends AbstractStub, C extends AbstractSer
    */
   public class StubConfigBuilder {
 
-    private final Map<String, MethodDescriptor> methodMap;
-    private Channel channel;
+    private final Map<String, MethodDescriptor<?, ?>> methodMap;
+    private Channel stubChannel;
 
     private StubConfigBuilder() {
-      this.channel = AbstractStub.this.channel;
+      this.stubChannel = AbstractStub.this.channel;
       methodMap = Maps.newHashMapWithExpectedSize(config.methods().size());
-      for (MethodDescriptor method : AbstractStub.this.config.methods()) {
+      for (MethodDescriptor<?, ?> method : AbstractStub.this.config.methods()) {
         methodMap.put(method.getName(), method);
       }
     }
@@ -62,7 +66,7 @@ public abstract class AbstractStub<S extends AbstractStub, C extends AbstractSer
      * Set a timeout for all methods in the stub.
      */
     public StubConfigBuilder setTimeout(long timeout, TimeUnit unit) {
-      for (Map.Entry<String, MethodDescriptor> entry : methodMap.entrySet()) {
+      for (Map.Entry<String, MethodDescriptor<?, ?>> entry : methodMap.entrySet()) {
         entry.setValue(entry.getValue().withTimeout(timeout, unit));
       }
       return this;
@@ -72,7 +76,7 @@ public abstract class AbstractStub<S extends AbstractStub, C extends AbstractSer
      * Set the channel to be used by the stub.
      */
     public StubConfigBuilder setChannel(Channel channel) {
-      this.channel = channel;
+      this.stubChannel = channel;
       return this;
     }
 
@@ -80,7 +84,7 @@ public abstract class AbstractStub<S extends AbstractStub, C extends AbstractSer
      * Create a new stub configuration
      */
     public S build() {
-      return AbstractStub.this.build(channel, config.build(methodMap));
+      return AbstractStub.this.build(stubChannel, config.build(methodMap));
     }
   }
 }

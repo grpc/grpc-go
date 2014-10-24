@@ -55,7 +55,8 @@ public abstract class ForwardingChannel implements Channel {
   }
 
   /**
-   * A {@link Call.Listener} which forwards all of its methods to another {@link Call.Listener}.
+   * A {@link com.google.net.stubby.Call.Listener} which forwards all of its methods to another
+   * {@link com.google.net.stubby.Call.Listener}.
    */
   public static class ForwardingListener<T> extends Call.Listener<T> {
 

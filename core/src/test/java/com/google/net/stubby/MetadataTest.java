@@ -1,5 +1,6 @@
 package com.google.net.stubby;
 
+import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -24,7 +25,7 @@ public class MetadataTest {
   private static final Metadata.Marshaller<Fish> FISH_MARSHALLER = new Metadata.Marshaller<Fish>() {
     @Override
     public byte[] toBytes(Fish fish) {
-      return fish.name.getBytes(StandardCharsets.UTF_8);
+      return fish.name.getBytes(UTF_8);
     }
 
     @Override
@@ -34,7 +35,7 @@ public class MetadataTest {
 
     @Override
     public Fish parseBytes(byte[] serialized) {
-      return new Fish(new String(serialized, StandardCharsets.UTF_8));
+      return new Fish(new String(serialized, UTF_8));
     }
 
     @Override

@@ -1,4 +1,4 @@
-package com.google.net.stubby.testing.utils.ssl;
+package com.google.net.stubby.util.ssl;
 
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -19,6 +19,7 @@ public class InsecureTrustManager implements X509TrustManager {
    * @throws CertificateException never, even if the certificate chain
    * is invalid.
    */
+  @Override
   public void checkClientTrusted(X509Certificate[] chain, String authType)
       throws CertificateException {
     // Doing absolutely no checking of client certificate chain.
@@ -31,6 +32,7 @@ public class InsecureTrustManager implements X509TrustManager {
    * @throws CertificateException never, even if the certificate chain
    * is invalid.
    */
+  @Override
   public void checkServerTrusted(X509Certificate[] chain, String authType)
       throws CertificateException {
     // Doing absolutely no checking of server certificate chain.
@@ -39,6 +41,7 @@ public class InsecureTrustManager implements X509TrustManager {
   /**
    * @return null, always.
    */
+  @Override
   public X509Certificate[] getAcceptedIssuers() {
     return null;
   }

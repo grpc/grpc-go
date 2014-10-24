@@ -1,6 +1,6 @@
 package com.google.net.stubby.newtransport;
 
-import static io.netty.util.CharsetUtil.UTF_8;
+import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;

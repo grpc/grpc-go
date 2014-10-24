@@ -1,11 +1,11 @@
 package com.google.net.stubby.newtransport.netty;
 
-import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
+import static com.google.common.base.Charsets.UTF_8;
 import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_GRPC;
+import static com.google.net.stubby.newtransport.netty.Utils.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.newtransport.netty.Utils.HTTP_METHOD;
 import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
 import static io.netty.handler.codec.http2.Http2Exception.protocolError;
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;

@@ -3,11 +3,9 @@ package com.google.net.stubby.testing.integration;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.net.stubby.MutableHandlerRegistry;
-import com.google.net.stubby.MutableHandlerRegistryImpl;
 import com.google.net.stubby.ServerImpl;
 import com.google.net.stubby.ServerInterceptors;
-import com.google.net.stubby.newtransport.netty.NettyServer;
+import com.google.net.stubby.newtransport.netty.NettyServerBuilder;
 import com.google.net.stubby.testing.TestUtils;
 
 import io.netty.handler.ssl.SslContext;
@@ -181,12 +179,12 @@ public class TestServiceServer {
         SelfSignedCertificate ssc = new SelfSignedCertificate();
         sslContext = SslContext.newServerContext(ssc.certificate(), ssc.privateKey());
       }
-      MutableHandlerRegistry handlerRegistry = new MutableHandlerRegistryImpl();
-      handlerRegistry.addService(
-          ServerInterceptors.intercept(TestServiceGrpc.bindService(testService),
-              TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)));
-      server = new ServerImpl(executor, handlerRegistry);
-      server.setTransportServer(new NettyServer(server.serverListener(), port));
+      server = NettyServerBuilder.forPort(port)
+          .executor(executor)
+          .sslContext(sslContext)
+          .addService(ServerInterceptors.intercept(TestServiceGrpc.bindService(testService),
+                TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
+          .build();
     }
 
     @Override

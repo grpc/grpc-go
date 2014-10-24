@@ -16,7 +16,7 @@ public class ServerCalls {
   }
 
   public static <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> createMethodDefinition(
-      Method method, ServerCallHandler<ReqT, RespT> handler) {
+      Method<ReqT, RespT> method, ServerCallHandler<ReqT, RespT> handler) {
     return ServerMethodDefinition.create(method.getName(), method.getRequestMarshaller(),
         method.getResponseMarshaller(), handler);
   }
@@ -27,7 +27,7 @@ public class ServerCalls {
       @Override
       public ServerCall.Listener<ReqT> startCall(
           String fullMethodName, final ServerCall<RespT> call, Metadata.Headers headers) {
-        final ResponseObserver responseObserver = new ResponseObserver<RespT>(call);
+        final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
         return new EmptyServerCallListener<ReqT>() {
           ReqT request;
           @Override
@@ -70,7 +70,7 @@ public class ServerCalls {
       @Override
       public ServerCall.Listener<ReqT> startCall(String fullMethodName, ServerCall<RespT> call,
           Metadata.Headers headers) {
-        final ResponseObserver responseObserver = new ResponseObserver<RespT>(call);
+        final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
         final StreamObserver<ReqT> requestObserver = method.invoke(responseObserver);
         return new EmptyServerCallListener<ReqT>() {
           boolean halfClosed = false;

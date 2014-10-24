@@ -1,4 +1,4 @@
-package com.google.net.stubby.testing.utils.ssl;
+package com.google.net.stubby.util.ssl;
 
 import java.security.KeyStore;
 

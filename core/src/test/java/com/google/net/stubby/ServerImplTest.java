@@ -1,18 +1,18 @@
 package com.google.net.stubby;
 
+import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isNull;
 import static org.mockito.Matchers.notNull;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
-import com.google.common.base.Charsets;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.AbstractService;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -21,7 +21,6 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.newtransport.ServerStream;
 import com.google.net.stubby.newtransport.ServerStreamListener;
 import com.google.net.stubby.newtransport.ServerTransportListener;
-import com.google.net.stubby.newtransport.StreamListener;
 
 import org.junit.After;
 import org.junit.Before;
@@ -29,18 +28,20 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Unit tests for {@link ServerImpl}. */
@@ -55,10 +56,14 @@ public class ServerImplTest {
   private ServerImpl server = new ServerImpl(executor, registry)
       .setTransportServer(transportServer);
   private ServerStream stream = Mockito.mock(ServerStream.class);
-  private ServerCall.Listener<String> callListener = Mockito.mock(ServerCall.Listener.class);
+
+  @Mock
+  private ServerCall.Listener<String> callListener;
 
   @Before
   public void startup() {
+    MockitoAnnotations.initMocks(this);
+
     server.startAsync();
     server.awaitRunning();
   }
@@ -345,13 +350,13 @@ public class ServerImplTest {
   private static class StringMarshaller implements Marshaller<String> {
     @Override
     public InputStream stream(String value) {
-      return new ByteArrayInputStream(value.getBytes(Charsets.UTF_8));
+      return new ByteArrayInputStream(value.getBytes(UTF_8));
     }
 
     @Override
     public String parse(InputStream stream) {
       try {
-        return new String(ByteStreams.toByteArray(stream), Charsets.UTF_8);
+        return new String(ByteStreams.toByteArray(stream), UTF_8);
       } catch (IOException ex) {
         throw new RuntimeException(ex);
       }

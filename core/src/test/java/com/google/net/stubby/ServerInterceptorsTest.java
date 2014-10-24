@@ -28,12 +28,11 @@ import java.util.List;
 @RunWith(JUnit4.class)
 public class ServerInterceptorsTest {
   @SuppressWarnings("unchecked")
-  private Marshaller<String> requestMarshaller = (Marshaller<String>) mock(Marshaller.class);
+  private Marshaller<String> requestMarshaller = mock(Marshaller.class);
   @SuppressWarnings("unchecked")
-  private Marshaller<Integer> responseMarshaller = (Marshaller<Integer>) mock(Marshaller.class);
+  private Marshaller<Integer> responseMarshaller = mock(Marshaller.class);
   @SuppressWarnings("unchecked")
-  private ServerCallHandler<String, Integer> handler
-      = (ServerCallHandler<String, Integer>) mock(ServerCallHandler.class);
+  private ServerCallHandler<String, Integer> handler = mock(ServerCallHandler.class);
   @Mock private ServerCall.Listener<String> listener;
   private String methodName = "/someRandom.Name";
   @Mock private ServerCall<Integer> call;
@@ -63,7 +62,7 @@ public class ServerInterceptorsTest {
 
   @Test(expected = NullPointerException.class)
   public void npeForNullInterceptorList() {
-    ServerInterceptors.intercept(serviceDefinition, (List) null);
+    ServerInterceptors.intercept(serviceDefinition, (List<ServerInterceptor>) null);
   }
 
   @Test(expected = NullPointerException.class)

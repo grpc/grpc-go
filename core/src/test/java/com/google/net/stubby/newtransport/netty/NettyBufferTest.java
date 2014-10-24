@@ -1,10 +1,10 @@
 package com.google.net.stubby.newtransport.netty;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
+import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 
-import com.google.net.stubby.newtransport.BufferTestBase;
 import com.google.net.stubby.newtransport.Buffer;
+import com.google.net.stubby.newtransport.BufferTestBase;
 
 import org.junit.Before;
 import org.junit.Test;

@@ -1,7 +1,7 @@
 package com.google.net.stubby.newtransport;
 
+import static com.google.common.base.Charsets.UTF_8;
 import static com.google.net.stubby.newtransport.Buffers.wrap;
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;

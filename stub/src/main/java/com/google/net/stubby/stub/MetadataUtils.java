@@ -1,24 +1,16 @@
 package com.google.net.stubby.stub;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.io.BaseEncoding;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Call;
 import com.google.net.stubby.Channel;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
-import com.google.net.stubby.ServerCall;
-import com.google.net.stubby.ServerCallHandler;
-import com.google.net.stubby.ServerInterceptor;
-import com.google.net.stubby.ServerInterceptors;
-import com.google.net.stubby.ServerServiceDefinition;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.context.ForwardingChannel;
 import com.google.protobuf.GeneratedMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
 
-import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -32,7 +24,7 @@ public class MetadataUtils {
    * @param extraHeaders the headers to be passed by each call on the returned stub.
    * @return an implementation of the stub with extraHeaders bound to each call.
    */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "rawtypes"})
   public static <T extends AbstractStub> T attachHeaders(
       T stub,
       final Metadata.Headers extraHeaders) {
@@ -70,7 +62,7 @@ public class MetadataUtils {
    * @param trailersCapture to record the last received trailers
    * @return an implementation of the stub with extraHeaders bound to each call.
    */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "rawtypes"})
   public static <T extends AbstractStub> T captureMetadata(
       T stub,
       AtomicReference<Metadata.Headers> headersCapture,

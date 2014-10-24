@@ -28,7 +28,7 @@ public class Method<RequestT, ResponseT> {
   public static <RequestT, ResponseT> Method<RequestT, ResponseT> create(
       MethodType type, String name,
       Marshaller<RequestT> requestMarshaller, Marshaller<ResponseT> responseMarshaller) {
-    return new Method(type, name, requestMarshaller, responseMarshaller);
+    return new Method<RequestT, ResponseT>(type, name, requestMarshaller, responseMarshaller);
   }
 
   private Method(MethodType type, String name, Marshaller<RequestT> requestMarshaller,

@@ -20,8 +20,8 @@ public class TestUtils {
    * Echo the request headers from a client into response headers and trailers. Useful for
    * testing end-to-end metadata propagation.
    */
-  public static ServerInterceptor echoRequestHeadersInterceptor(Metadata.Key... keys) {
-    final Set<Metadata.Key> keySet = new HashSet<Metadata.Key>(Arrays.asList(keys));
+  public static ServerInterceptor echoRequestHeadersInterceptor(final Metadata.Key<?>... keys) {
+    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
     return new ServerInterceptor() {
       @Override
       public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(String method,

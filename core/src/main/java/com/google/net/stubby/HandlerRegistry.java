@@ -16,9 +16,9 @@ public abstract class HandlerRegistry {
   /** A method definition and its parent's service definition. */
   public static final class Method {
     private final ServerServiceDefinition serviceDef;
-    private final ServerMethodDefinition methodDef;
+    private final ServerMethodDefinition<?, ?> methodDef;
 
-    public Method(ServerServiceDefinition serviceDef, ServerMethodDefinition methodDef) {
+    public Method(ServerServiceDefinition serviceDef, ServerMethodDefinition<?, ?> methodDef) {
       this.serviceDef = serviceDef;
       this.methodDef = methodDef;
     }
@@ -27,7 +27,7 @@ public abstract class HandlerRegistry {
       return serviceDef;
     }
 
-    public ServerMethodDefinition getMethodDefinition() {
+    public ServerMethodDefinition<?, ?> getMethodDefinition() {
       return methodDef;
     }
   }

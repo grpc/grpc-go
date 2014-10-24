@@ -160,7 +160,7 @@ public abstract class Metadata {
   /**
    * Returns true if a value is defined for the given key.
    */
-  public <T> boolean containsKey(Key key) {
+  public boolean containsKey(Key<?> key) {
     return store.containsKey(key.name);
   }
 
@@ -274,13 +274,14 @@ public abstract class Metadata {
   /**
    * Merge values for the given set of keys into this set of metadata.
    */
-  public void merge(Metadata other, Set<Key> keys) {
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public void merge(Metadata other, Set<Key<?>> keys) {
     Preconditions.checkNotNull(other);
-    for (Key key : keys) {
+    for (Key<?> key : keys) {
       if (other.containsKey(key)) {
-        Iterable values = other.getAll(key);
+        Iterable<?> values = other.getAll(key);
         for (Object value : values) {
-          put(key, value);
+          put((Key) key, value);
         }
       }
     }
@@ -350,7 +351,7 @@ public abstract class Metadata {
     }
 
     @Override
-    public void merge(Metadata other, Set<Key> keys) {
+    public void merge(Metadata other, Set<Key<?>> keys) {
       super.merge(other, keys);
       mergePathAndAuthority(other);
     }
@@ -470,7 +471,7 @@ public abstract class Metadata {
     public boolean equals(Object o) {
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
-      Key key = (Key) o;
+      Key<?> key = (Key<?>) o;
       return !(name != null ? !name.equals(key.name) : key.name != null);
     }
 
@@ -487,6 +488,8 @@ public abstract class Metadata {
 
   private static class MetadataEntry {
     Object parsed;
+
+    @SuppressWarnings("rawtypes")
     Key key;
     byte[] serializedBinary;
     String serializedAscii;
@@ -494,7 +497,7 @@ public abstract class Metadata {
     /**
      * Constructor used when application layer adds a parsed value.
      */
-    private MetadataEntry(Key key, Object parsed) {
+    private MetadataEntry(Key<?> key, Object parsed) {
       this.parsed = Preconditions.checkNotNull(parsed);
       this.key = Preconditions.checkNotNull(key);
     }
@@ -514,8 +517,8 @@ public abstract class Metadata {
       this.serializedAscii = Preconditions.checkNotNull(serializedAscii);
     }
 
+    @SuppressWarnings("unchecked")
     public <T> T getParsed(Key<T> key) {
-      @SuppressWarnings("unchecked")
       T value = (T) parsed;
       if (value != null) {
         if (this.key != key) {

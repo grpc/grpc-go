@@ -76,8 +76,10 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
 
   @Override
   protected Service buildTransportServer(ServerListener serverListener) {
+    @SuppressWarnings("resource")
     final EventLoopGroup bossEventLoopGroup  = (userBossEventLoopGroup == null)
         ? new NioEventLoopGroup() : userBossEventLoopGroup;
+    @SuppressWarnings("resource")
     final EventLoopGroup workerEventLoopGroup = (userWorkerEventLoopGroup == null)
         ? new NioEventLoopGroup() : userWorkerEventLoopGroup;
     NettyServer server =

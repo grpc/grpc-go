@@ -89,10 +89,12 @@ public class InProcessUtils {
         return new NoOpClientStream();
       }
 
+      @SuppressWarnings("rawtypes")
       final ServerMethodDefinition serverMethod = resolvedMethod.getMethodDefinition();
       final AtomicBoolean cancelled = new AtomicBoolean();
 
       // Implementation of ServerCall which delegates to the client listener.
+      @SuppressWarnings("rawtypes")
       final ServerCall serverCall = new ServerCall() {
 
         @Override
@@ -113,6 +115,7 @@ public class InProcessUtils {
               try {
                 // TODO(user): Consider adapting at the Channel layer on the client
                 // so we avoid serialization costs.
+                @SuppressWarnings("unchecked")
                 InputStream message = serverMethod.streamResponse(payload);
                 clientListener.messageRead(message, message.available());
               } catch (IOException ioe) {
@@ -140,6 +143,7 @@ public class InProcessUtils {
       };
 
       // Get the listener from the service implementation
+      @SuppressWarnings({"rawtypes", "unchecked"})
       final ServerCall.Listener serverListener =
           serverMethod.getServerCallHandler().startCall(method.getName(),
               serverCall, headers);
@@ -181,6 +185,7 @@ public class InProcessUtils {
         public void writeMessage(final InputStream message, int length,
                                  @Nullable final Runnable accepted) {
           serverWorkQueue.execute(new Runnable() {
+            @SuppressWarnings("unchecked")
             @Override
             public void run() {
               try {

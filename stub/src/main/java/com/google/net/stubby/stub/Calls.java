@@ -33,7 +33,7 @@ public class Calls {
    * @param method carries all invariants of the method
    */
   public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> createMethodDescriptor(
-      String fullServiceName, Method method) {
+      String fullServiceName, Method<RequestT, ResponseT> method) {
     // TODO(user): if timeout is not defined in proto file, use a default timeout here.
     // If timeout is defined in proto file, Method should carry the timeout.
     return MethodDescriptor.create(method.getType(), fullServiceName + "/" + method.getName(),
@@ -288,7 +288,8 @@ public class Calls {
   }
 
   /**
-   * Convert events on a {@link Call.Listener} into a blocking {@link Iterator}.
+   * Convert events on a {@link com.google.net.stubby.Call.Listener} into a blocking
+   * {@link Iterator}.
    *
    * <p>The class is not thread-safe, but it does permit Call.Listener calls in a separate thread
    * from Iterator calls.

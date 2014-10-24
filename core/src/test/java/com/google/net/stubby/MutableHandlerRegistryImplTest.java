@@ -22,17 +22,23 @@ import org.mockito.Mockito;
 @RunWith(JUnit4.class)
 public class MutableHandlerRegistryImplTest {
   private MutableHandlerRegistry registry = new MutableHandlerRegistryImpl();
+  @SuppressWarnings("unchecked")
   private Marshaller<String> requestMarshaller = mock(Marshaller.class);
+  @SuppressWarnings("unchecked")
   private Marshaller<Integer> responseMarshaller = mock(Marshaller.class);
+  @SuppressWarnings("unchecked")
   private ServerCallHandler<String, Integer> handler = mock(ServerCallHandler.class);
   private ServerServiceDefinition basicServiceDefinition = ServerServiceDefinition.builder("basic")
-        .addMethod("flow", requestMarshaller, responseMarshaller, handler).build();
+      .addMethod("flow", requestMarshaller, responseMarshaller, handler).build();
+  @SuppressWarnings("rawtypes")
   private ServerMethodDefinition flowMethodDefinition = basicServiceDefinition.getMethods().get(0);
   private ServerServiceDefinition multiServiceDefinition = ServerServiceDefinition.builder("multi")
-        .addMethod("couple", requestMarshaller, responseMarshaller, handler)
-        .addMethod("few", requestMarshaller, responseMarshaller, handler).build();
-  private ServerMethodDefinition coupleMethodDefinition
-      = multiServiceDefinition.getMethod("couple");
+      .addMethod("couple", requestMarshaller, responseMarshaller, handler)
+      .addMethod("few", requestMarshaller, responseMarshaller, handler).build();
+  @SuppressWarnings("rawtypes")
+  private ServerMethodDefinition coupleMethodDefinition =
+      multiServiceDefinition.getMethod("couple");
+  @SuppressWarnings("rawtypes")
   private ServerMethodDefinition fewMethodDefinition = multiServiceDefinition.getMethod("few");
 
   @After
@@ -93,7 +99,8 @@ public class MutableHandlerRegistryImplTest {
     assertNotNull(registry.lookupMethod("/basic.flow"));
     ServerServiceDefinition replaceServiceDefinition = ServerServiceDefinition.builder("basic")
         .addMethod("another", requestMarshaller, responseMarshaller, handler).build();
-    ServerMethodDefinition anotherMethodDefinition = replaceServiceDefinition.getMethods().get(0);
+    ServerMethodDefinition<?, ?> anotherMethodDefinition =
+        replaceServiceDefinition.getMethods().get(0);
     assertSame(basicServiceDefinition, registry.addService(replaceServiceDefinition));
 
     assertNull(registry.lookupMethod("/basic.flow"));

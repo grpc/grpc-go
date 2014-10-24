@@ -1,5 +1,6 @@
 package com.google.net.stubby.newtransport.netty;
 
+import static com.google.common.base.Charsets.UTF_8;
 import static com.google.net.stubby.newtransport.Buffers.readAsStringUtf8;
 import static com.google.net.stubby.newtransport.TransportFrameUtil.COMPRESSION_HEADER_LENGTH;
 import static com.google.net.stubby.newtransport.TransportFrameUtil.FLATE_FLAG;
@@ -21,7 +22,6 @@ import io.netty.buffer.UnpooledByteBufAllocator;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.zip.DeflaterOutputStream;
 
@@ -157,7 +157,7 @@ public class NettyDecompressorTest {
   }
 
   private byte[] bytes(String str) {
-    return str.getBytes(StandardCharsets.UTF_8);
+    return str.getBytes(UTF_8);
   }
 
   private byte[] compress(byte[] data) throws Exception {

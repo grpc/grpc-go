@@ -1,15 +1,15 @@
 package com.google.net.stubby.newtransport.okhttp;
 
+import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.eq;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -45,7 +45,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -178,7 +177,7 @@ public class OkHttpClientTransportTest {
     MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method,new Metadata.Headers(), listener);
     OkHttpClientStream stream = streams.get(3);
-    InputStream input = new ByteArrayInputStream(message.getBytes(StandardCharsets.UTF_8));
+    InputStream input = new ByteArrayInputStream(message.getBytes(UTF_8));
     assertEquals(12, input.available());
     stream.writeMessage(input, input.available(), null);
     stream.flush();
@@ -312,7 +311,7 @@ public class OkHttpClientTransportTest {
     final String sentMessage = "Should I also go away?";
     OkHttpClientStream stream = streams.get(3);
     InputStream input =
-        new ByteArrayInputStream(sentMessage.getBytes(StandardCharsets.UTF_8));
+        new ByteArrayInputStream(sentMessage.getBytes(UTF_8));
     assertEquals(22, input.available());
     stream.writeMessage(input, input.available(), null);
     stream.flush();
@@ -361,7 +360,7 @@ public class OkHttpClientTransportTest {
   }
 
   private static Buffer createMessageFrame(String message) {
-    return createMessageFrame(message.getBytes(StandardCharsets.UTF_8));
+    return createMessageFrame(message.getBytes(UTF_8));
   }
 
   private static Buffer createMessageFrame(byte[] message) {
@@ -452,7 +451,7 @@ public class OkHttpClientTransportTest {
 
     static String getContent(InputStream message) {
       BufferedReader br =
-          new BufferedReader(new InputStreamReader(message, StandardCharsets.UTF_8));
+          new BufferedReader(new InputStreamReader(message, UTF_8));
       try {
         // Only one line message is used in this test.
         return br.readLine();

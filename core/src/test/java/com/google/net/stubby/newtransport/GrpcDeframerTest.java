@@ -2,7 +2,6 @@ package com.google.net.stubby.newtransport;
 
 import static com.google.net.stubby.newtransport.TransportFrameUtil.PAYLOAD_FRAME;
 import static com.google.net.stubby.newtransport.TransportFrameUtil.STATUS_FRAME;
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
@@ -15,6 +14,7 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Status;
+import com.google.common.base.Charsets;
 import com.google.protobuf.ByteString;
 
 import org.junit.Before;
@@ -161,7 +161,7 @@ public class GrpcDeframerTest {
     try {
       byte[] bytes = new byte[length];
       ByteStreams.readFully(in, bytes);
-      return new String(bytes, UTF_8);
+      return new String(bytes, Charsets.UTF_8);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

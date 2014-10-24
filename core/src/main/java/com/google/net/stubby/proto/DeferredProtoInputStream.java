@@ -29,6 +29,7 @@ public class DeferredProtoInputStream extends DeferredInputStream<MessageLite> {
   /**
    * Returns the original protobuf message. Returns null after this stream has been read.
    */
+  @Override
   @Nullable
   public MessageLite getDeferred() {
     return message;

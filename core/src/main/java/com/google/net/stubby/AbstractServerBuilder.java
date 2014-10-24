@@ -8,8 +8,10 @@ import java.util.concurrent.ExecutorService;
 
 /**
  * The base class for server builders.
+ *
+ * @param <BuilderT> The concrete type for this builder.
  */
-public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuilder>
+public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuilder<?>>
     extends AbstractServiceBuilder<ServerImpl, BuilderT> {
 
   private final HandlerRegistry registry;
@@ -34,6 +36,7 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
    * <p>This is supported only if the user didn't provide a handler registry, or the provided one is
    * a {@link MutableHandlerRegistry}. Otherwise it throws an UnsupportedOperationException.
    */
+  @SuppressWarnings("unchecked")
   public final BuilderT addService(ServerServiceDefinition service) {
     if (registry instanceof MutableHandlerRegistry) {
       ((MutableHandlerRegistry) registry).addService(service);

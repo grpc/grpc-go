@@ -21,7 +21,7 @@ public interface ClientStreamListener extends StreamListener {
 
   /**
    * Called when the stream is fully closed. {@link
-   * com.google.net.stubby.transport.Transport.Code#OK} is the only status code that is guaranteed
+   * com.google.net.stubby.Status.Code#OK} is the only status code that is guaranteed
    * to have been sent from the remote server. Any other status code may have been caused by
    * abnormal stream termination. This is guaranteed to always be the final call on a listener. No
    * further callbacks will be issued.

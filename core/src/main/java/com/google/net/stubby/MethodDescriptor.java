@@ -3,10 +3,6 @@ package com.google.net.stubby;
 import com.google.common.base.Preconditions;
 
 import java.io.InputStream;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.Immutable;

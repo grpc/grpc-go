@@ -25,8 +25,7 @@ public interface Stream {
    * called. The definition of what it means to be "accepted" is up to the transport implementation,
    * but this is a general indication that the transport is capable of handling more out-bound data
    * on the stream. If the stream/connection is closed for any reason before the write could be
-   * accepted, the callback will never be invoked. Any writes that are still pending upon receiving
-   * a {@link StreamListener#closed} callback are assumed to be cancelled.
+   * accepted, the callback will never be invoked.
    *
    * @param message stream containing the serialized message to be sent
    * @param length the length of the {@link InputStream}.

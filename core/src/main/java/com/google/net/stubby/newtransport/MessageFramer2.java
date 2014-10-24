@@ -46,15 +46,14 @@ public class MessageFramer2 implements Framer {
     try {
       if (compression == Compression.NONE) {
         writeFrame(message, messageLength, false);
+      } else if (compression != Compression.GZIP) {
+        throw new AssertionError("Unknown compression type");
       } else {
+        // compression == GZIP
         DirectAccessByteArrayOutputStream out = new DirectAccessByteArrayOutputStream();
-        if (compression == Compression.GZIP) {
-          gzipCompressTo(message, messageLength, out);
-        } else {
-          throw new AssertionError("Unknown compression type");
-        }
-        InputStream compressedMessage
-            = new DeferredByteArrayInputStream(out.getBuf(), 0, out.getCount());
+        gzipCompressTo(message, messageLength, out);
+        InputStream compressedMessage =
+            new DeferredByteArrayInputStream(out.getBuf(), 0, out.getCount());
         writeFrame(compressedMessage, out.getCount(), true);
       }
     } catch (IOException ex) {
@@ -88,6 +87,7 @@ public class MessageFramer2 implements Framer {
     }
   }
 
+  @SuppressWarnings("rawtypes")
   private static long writeToOutputStream(InputStream message, OutputStream outputStream)
       throws IOException {
     if (message instanceof DeferredInputStream) {
