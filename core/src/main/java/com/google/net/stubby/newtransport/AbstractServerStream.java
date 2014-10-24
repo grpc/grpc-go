@@ -75,8 +75,6 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
     Preconditions.checkNotNull(trailers, "trailers");
     outboundPhase(Phase.STATUS);
     synchronized (stateLock) {
-      Preconditions.checkState(!status.isOk() || state == WRITE_ONLY,
-          "Cannot close with OK before client half-closes");
       state = CLOSED;
     }
     gracefulClose = true;

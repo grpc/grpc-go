@@ -67,13 +67,15 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   }
 
   @Test
-  public void closeBeforeClientHalfCloseShouldFail() {
-    try {
-      stream().close(Status.OK, new Metadata.Trailers());
-      fail("Should throw exception");
-    } catch (IllegalStateException expected) {
-    }
-    assertEquals(StreamState.OPEN, stream.state());
+  public void closeBeforeClientHalfCloseShouldSucceed() throws Exception {
+    stream().close(Status.OK, new Metadata.Trailers());
+    verify(channel).writeAndFlush(
+        new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.OK), true));
+    verifyZeroInteractions(serverListener);
+    // Sending complete. Listener gets closed()
+    stream().complete();
+    verify(serverListener).closed(Status.OK);
+    assertEquals(StreamState.CLOSED, stream.state());
     verifyZeroInteractions(serverListener);
   }
 
