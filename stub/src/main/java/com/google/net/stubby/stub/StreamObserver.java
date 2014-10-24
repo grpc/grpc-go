@@ -2,6 +2,9 @@ package com.google.net.stubby.stub;
 
 /**
  * Receives notifications from an observable stream of messages.
+ *
+ * <p>Implementations are expected to be thread-compatible. Separate StreamObservers do not need to
+ * be sychronized together; incoming and outgoing directions are independent.
  */
 // TODO(user): Consider whether we need to interact with flow-control at this layer. E.g.
 // public ListenableFuture<Void> onValue(V value). Do we layer it in here or as an additional
