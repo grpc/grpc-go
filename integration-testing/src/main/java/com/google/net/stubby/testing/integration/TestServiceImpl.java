@@ -28,8 +28,6 @@ import java.util.concurrent.TimeUnit;
  * sent in response streams.
  */
 public class TestServiceImpl implements TestServiceGrpc.TestService {
-  private static final String COMPRESSABLE_FILE =
-      "/com/google/net/stubby/testing/integration/testdata/compressable.txt";
   private static final String UNCOMPRESSABLE_FILE =
       "/com/google/net/stubby/testing/integration/testdata/uncompressable.bin";
   private final Random random = new Random();
@@ -43,7 +41,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
    */
   public TestServiceImpl(ScheduledExecutorService executor) {
     this.executor = executor;
-    this.compressableBuffer = createBufferFromFile(COMPRESSABLE_FILE);
+    this.compressableBuffer = ByteString.copyFrom(new byte[1024]);
     this.uncompressableBuffer = createBufferFromFile(UNCOMPRESSABLE_FILE);
   }
 
