@@ -5,15 +5,15 @@ import static com.google.common.util.concurrent.Service.State.STARTING;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.AbstractService;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.net.stubby.newtransport.ClientStream;
-import com.google.net.stubby.newtransport.ClientStreamListener;
-import com.google.net.stubby.newtransport.ClientTransport;
-import com.google.net.stubby.newtransport.ClientTransportFactory;
+import com.google.net.stubby.transport.ClientStream;
+import com.google.net.stubby.transport.ClientStreamListener;
+import com.google.net.stubby.transport.ClientTransport;
+import com.google.net.stubby.transport.ClientTransportFactory;
 
 import java.io.IOException;
 import java.io.InputStream;

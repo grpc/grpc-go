@@ -2,7 +2,7 @@ package com.google.net.stubby;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Service;
-import com.google.net.stubby.newtransport.ServerListener;
+import com.google.net.stubby.transport.ServerListener;
 
 import java.util.concurrent.ExecutorService;
 

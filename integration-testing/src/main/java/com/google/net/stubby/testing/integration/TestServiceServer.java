@@ -5,8 +5,8 @@ import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.net.stubby.ServerImpl;
 import com.google.net.stubby.ServerInterceptors;
-import com.google.net.stubby.newtransport.netty.NettyServerBuilder;
 import com.google.net.stubby.testing.TestUtils;
+import com.google.net.stubby.transport.netty.NettyServerBuilder;
 
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
@@ -95,7 +95,7 @@ public class TestServiceServer {
     Transport transport = getTransport(argMap);
     int port = getPort(RPC_PORT_ARG, argMap);
 
-    com.google.net.stubby.newtransport.AbstractStream.GRPC_V2_PROTOCOL =
+    com.google.net.stubby.transport.AbstractStream.GRPC_V2_PROTOCOL =
         getGrpcVersion(argMap) == 2;
 
     final TestServiceServer server = new TestServiceServer(transport, port);

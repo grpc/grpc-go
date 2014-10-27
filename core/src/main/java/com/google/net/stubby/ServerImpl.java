@@ -3,23 +3,23 @@ package com.google.net.stubby;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.AbstractService;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.net.stubby.newtransport.ServerListener;
-import com.google.net.stubby.newtransport.ServerStream;
-import com.google.net.stubby.newtransport.ServerStreamListener;
-import com.google.net.stubby.newtransport.ServerTransportListener;
+import com.google.net.stubby.transport.ServerListener;
+import com.google.net.stubby.transport.ServerStream;
+import com.google.net.stubby.transport.ServerStreamListener;
+import com.google.net.stubby.transport.ServerTransportListener;
 
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Callable;
+import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
 

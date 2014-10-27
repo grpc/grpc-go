@@ -176,7 +176,7 @@ public class TestServiceClient {
     String serverHost = getServerHost(argMap);
     int serverPort = getPort(argMap);
 
-    com.google.net.stubby.newtransport.AbstractStream.GRPC_V2_PROTOCOL =
+    com.google.net.stubby.transport.AbstractStream.GRPC_V2_PROTOCOL =
         getGrpcVersion(argMap) == 2; 
     switch (stubType) {
       case BLOCKING:

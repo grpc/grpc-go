@@ -18,9 +18,9 @@ import com.google.common.util.concurrent.AbstractService;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.net.stubby.newtransport.ServerStream;
-import com.google.net.stubby.newtransport.ServerStreamListener;
-import com.google.net.stubby.newtransport.ServerTransportListener;
+import com.google.net.stubby.transport.ServerStream;
+import com.google.net.stubby.transport.ServerStreamListener;
+import com.google.net.stubby.transport.ServerTransportListener;
 
 import org.junit.After;
 import org.junit.Before;

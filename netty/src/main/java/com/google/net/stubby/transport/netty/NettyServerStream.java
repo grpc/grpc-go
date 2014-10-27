@@ -1,0 +1,88 @@
+package com.google.net.stubby.transport.netty;
+
+import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.net.stubby.Metadata;
+import com.google.net.stubby.transport.AbstractServerStream;
+import com.google.net.stubby.transport.GrpcDeframer;
+import com.google.net.stubby.transport.MessageDeframer2;
+import com.google.net.stubby.transport.StreamState;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
+import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
+import io.netty.handler.codec.http2.Http2Headers;
+
+import java.nio.ByteBuffer;
+
+/**
+ * Server stream for a Netty transport
+ */
+class NettyServerStream extends AbstractServerStream implements NettyStream {
+
+  private final GrpcDeframer deframer;
+  private final MessageDeframer2 deframer2;
+  private final Channel channel;
+  private final int id;
+  private final WindowUpdateManager windowUpdateManager;
+
+  NettyServerStream(Channel channel, int id, DefaultHttp2InboundFlowController inboundFlow) {
+    this.channel = Preconditions.checkNotNull(channel, "channel is null");
+    this.id = id;
+    if (!GRPC_V2_PROTOCOL) {
+      deframer = new GrpcDeframer(new NettyDecompressor(channel.alloc()), inboundMessageHandler(),
+          channel.eventLoop());
+      deframer2 = null;
+    } else {
+      deframer = null;
+      deframer2 = new MessageDeframer2(inboundMessageHandler(), channel.eventLoop());
+    }
+    windowUpdateManager =
+        new WindowUpdateManager(channel, Preconditions.checkNotNull(inboundFlow, "inboundFlow"));
+    windowUpdateManager.streamId(id);
+  }
+
+  @Override
+  public void inboundDataReceived(ByteBuf frame, boolean endOfStream) {
+    if (state() == StreamState.CLOSED) {
+      return;
+    }
+    // Retain the ByteBuf until it is released by the deframer.
+    // TODO(user): It sounds sub-optimal to deframe in the network thread. That means
+    // decompression is serialized.
+    if (!GRPC_V2_PROTOCOL) {
+      deframer.deframe(new NettyBuffer(frame.retain()), endOfStream);
+    } else {
+      deframer2.deframe(new NettyBuffer(frame.retain()), endOfStream);
+    }
+  }
+
+  @Override
+  protected void internalSendHeaders(Metadata.Headers headers) {
+    channel.writeAndFlush(new SendResponseHeadersCommand(id,
+        Utils.convertServerHeaders(headers), false));
+  }
+
+  @Override
+  protected void sendFrame(ByteBuffer frame, boolean endOfStream) {
+    SendGrpcFrameCommand cmd =
+        new SendGrpcFrameCommand(id, Utils.toByteBuf(channel.alloc(), frame), endOfStream);
+    channel.writeAndFlush(cmd);
+  }
+
+  @Override
+  protected void sendTrailers(Metadata.Trailers trailers, boolean headersSent) {
+    Http2Headers http2Trailers = Utils.convertTrailers(trailers, headersSent);
+    channel.writeAndFlush(new SendResponseHeadersCommand(id, http2Trailers, true));
+  }
+
+  @Override
+  public int id() {
+    return id;
+  }
+
+  @Override
+  protected void disableWindowUpdate(ListenableFuture<Void> processingFuture) {
+    windowUpdateManager.disableWindowUpdate(processingFuture);
+  }
+}

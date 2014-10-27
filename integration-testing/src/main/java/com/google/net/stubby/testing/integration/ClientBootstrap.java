@@ -4,9 +4,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.net.stubby.Channel;
 import com.google.net.stubby.ChannelImpl;
-import com.google.net.stubby.newtransport.ClientTransportFactory;
-import com.google.net.stubby.newtransport.netty.NettyClientTransportFactory;
-import com.google.net.stubby.newtransport.okhttp.OkHttpClientTransportFactory;
+import com.google.net.stubby.transport.ClientTransportFactory;
+import com.google.net.stubby.transport.netty.NettyClientTransportFactory;
+import com.google.net.stubby.transport.okhttp.OkHttpClientTransportFactory;
 
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;

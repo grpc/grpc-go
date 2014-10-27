@@ -8,11 +8,11 @@ import com.google.net.stubby.SerializingExecutor;
 import com.google.net.stubby.ServerCall;
 import com.google.net.stubby.ServerMethodDefinition;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.newtransport.ClientStream;
-import com.google.net.stubby.newtransport.ClientStreamListener;
-import com.google.net.stubby.newtransport.ClientTransport;
-import com.google.net.stubby.newtransport.ClientTransportFactory;
-import com.google.net.stubby.newtransport.StreamState;
+import com.google.net.stubby.transport.ClientStream;
+import com.google.net.stubby.transport.ClientStreamListener;
+import com.google.net.stubby.transport.ClientTransport;
+import com.google.net.stubby.transport.ClientTransportFactory;
+import com.google.net.stubby.transport.StreamState;
 
 import java.io.IOException;
 import java.io.InputStream;
