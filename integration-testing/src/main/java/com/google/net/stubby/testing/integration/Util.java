@@ -1,7 +1,7 @@
 package com.google.net.stubby.testing.integration;
 
 import com.google.net.stubby.Metadata;
-import com.google.net.stubby.stub.MetadataUtils;
+import com.google.net.stubby.proto.ProtoUtils;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -12,7 +12,7 @@ import java.net.ServerSocket;
 public class Util {
 
   public static final Metadata.Key<Messages.SimpleContext> METADATA_KEY =
-      MetadataUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
+      ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
 
   /**
    * Picks an unused port.
