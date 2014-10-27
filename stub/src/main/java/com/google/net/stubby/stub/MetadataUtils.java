@@ -1,6 +1,5 @@
 package com.google.net.stubby.stub;
 
-import com.google.common.io.BaseEncoding;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Call;
 import com.google.net.stubby.Channel;
@@ -8,8 +7,6 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.context.ForwardingChannel;
-import com.google.protobuf.GeneratedMessage;
-import com.google.protobuf.InvalidProtocolBufferException;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -109,38 +106,5 @@ public class MetadataUtils {
         };
       }
     };
-  }
-
-  /**
-   * Produce a metadata key for a generated protobuf type.
-   */
-  public static <T extends GeneratedMessage> Metadata.Key<T> keyForProto(final T instance) {
-    return Metadata.Key.of(instance.getDescriptorForType().getFullName(),
-        new  Metadata.Marshaller<T>() {
-          @Override
-          public byte[] toBytes(T value) {
-            return value.toByteArray();
-          }
-
-          @Override
-          public String toAscii(T value) {
-            return BaseEncoding.base64().encode(value.toByteArray());
-          }
-
-          @Override
-          @SuppressWarnings("unchecked")
-          public T parseBytes(byte[] serialized) {
-            try {
-              return (T) instance.getParserForType().parseFrom(serialized);
-            } catch (InvalidProtocolBufferException ipbe) {
-              throw new IllegalArgumentException(ipbe);
-            }
-          }
-
-          @Override
-          public T parseAscii(String ascii) {
-            return parseBytes(BaseEncoding.base64().decode(ascii));
-          }
-        });
   }
 }

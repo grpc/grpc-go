@@ -14,8 +14,6 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Status;
-import com.google.common.base.Charsets;
-import com.google.protobuf.ByteString;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -30,6 +28,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import javax.annotation.Nullable;
@@ -40,7 +39,7 @@ import javax.annotation.Nullable;
 @RunWith(JUnit4.class)
 public class GrpcDeframerTest {
   private static final String MESSAGE = "hello world";
-  private static final ByteString MESSAGE_BSTR = ByteString.copyFromUtf8(MESSAGE);
+  private static final byte[] MESSAGE_BYTES = MESSAGE.getBytes(StandardCharsets.UTF_8);
   private static final Status STATUS_CODE = Status.CANCELLED;
 
   private GrpcDeframer reader;
@@ -103,7 +102,7 @@ public class GrpcDeframerTest {
     DataOutputStream dos = new DataOutputStream(os);
 
     // Write a payload frame.
-    writeFrame(PAYLOAD_FRAME, MESSAGE_BSTR.toByteArray(), dos);
+    writeFrame(PAYLOAD_FRAME, MESSAGE_BYTES, dos);
 
     // Write a status frame.
     byte[] statusBytes = new byte[] {0, (byte) STATUS_CODE.getCode().value()};
@@ -161,7 +160,7 @@ public class GrpcDeframerTest {
     try {
       byte[] bytes = new byte[length];
       ByteStreams.readFully(in, bytes);
-      return new String(bytes, Charsets.UTF_8);
+      return new String(bytes, StandardCharsets.UTF_8);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -188,7 +187,7 @@ public class GrpcDeframerTest {
   }
 
   private static byte[] payloadFrame() throws IOException {
-    return frame(PAYLOAD_FRAME, MESSAGE_BSTR.toByteArray());
+    return frame(PAYLOAD_FRAME, MESSAGE_BYTES);
   }
 
   private static byte[] statusFrame() throws IOException {
