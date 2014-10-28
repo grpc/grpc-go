@@ -1,0 +1,365 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.google.net.stubby</groupId>
+  <artifactId>stubby-parent</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>Stubby</name>
+  <url>http://TBD.com</url>
+
+  <description>
+    Stubby is a high-performance RPC framework based on HTTP/2.
+  </description>
+
+  <organization>
+    <name>Google Inc.</name>
+    <url>https://developers.google.com/</url>
+  </organization>
+
+  <inceptionYear>2014</inceptionYear>
+
+  <licenses>
+    <license>
+      <name>New BSD License</name>
+      <url>http://opensource.org/licenses/BSD-3-Clause</url>
+    </license>
+  </licenses>
+
+  <scm>
+    <url>https://github.com/stubby/stubby-java</url>
+    <connection>scm:git:git://github.com/google/stubby-java.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/google/stubby-java.git
+    </developerConnection>
+    <tag>HEAD</tag>
+  </scm>
+
+  <profiles>
+    <profile>
+      <id>jdk8</id>
+      <activation>
+        <jdk>[1.8,)</jdk>
+      </activation>
+      <properties>
+        <jetty.alpn.version>8.0.0.v20140317</jetty.alpn.version>
+      </properties>
+    </profile>
+    <profile>
+      <id>alpn-7u40</id>
+      <activation>
+        <property>
+          <name>java.version</name>
+          <value>1.7.0_40</value>
+        </property>
+      </activation>
+      <properties>
+        <jetty.alpn.version>7.0.0.v20140317</jetty.alpn.version>
+      </properties>
+    </profile>
+    <profile>
+      <id>alpn-7u45</id>
+      <activation>
+        <property>
+          <name>java.version</name>
+          <value>1.7.0_45</value>
+        </property>
+      </activation>
+      <properties>
+        <jetty.alpn.version>7.0.0.v20140317</jetty.alpn.version>
+      </properties>
+    </profile>
+    <profile>
+      <id>alpn-7u51</id>
+      <activation>
+        <property>
+          <name>java.version</name>
+          <value>1.7.0_51</value>
+        </property>
+      </activation>
+      <properties>
+        <jetty.npn.version>1.1.6.v20130911</jetty.npn.version>
+        <jetty.alpn.version>7.0.0.v20140317</jetty.alpn.version>
+      </properties>
+    </profile>
+    <profile>
+      <id>alpn-7u55</id>
+      <activation>
+        <property>
+          <name>java.version</name>
+          <value>1.7.0_55</value>
+        </property>
+      </activation>
+      <properties>
+        <jetty.npn.version>1.1.7.v20140316</jetty.npn.version>
+        <jetty.alpn.version>7.0.0.v20140317</jetty.alpn.version>
+      </properties>
+    </profile>
+    <profile>
+      <id>alpn-7u60</id>
+      <activation>
+        <property>
+          <name>java.version</name>
+          <value>1.7.0_60</value>
+        </property>
+      </activation>
+      <properties>
+        <jetty.alpn.version>7.0.0.v20140317</jetty.alpn.version>
+      </properties>
+    </profile>
+    <profile>
+      <id>alpn-7u65</id>
+      <activation>
+        <property>
+          <name>java.version</name>
+          <value>1.7.0_65</value>
+        </property>
+      </activation>
+      <properties>
+        <jetty.alpn.version>7.0.0.v20140317</jetty.alpn.version>
+      </properties>
+    </profile>
+    <profile>
+      <id>alpn-7u67</id>
+      <activation>
+        <property>
+          <name>java.version</name>
+          <value>1.7.0_67</value>
+        </property>
+      </activation>
+      <properties>
+        <jetty.alpn.version>7.0.0.v20140317</jetty.alpn.version>
+      </properties>
+    </profile>
+  </profiles>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <okhttp.version>2.0.1-SNAPSHOT</okhttp.version>
+    <netty.version>5.0.0.Alpha2-SNAPSHOT</netty.version>
+    <jetty.alpn.version>8.0.0.v20140317</jetty.alpn.version>
+    <jetty.alpn.path>
+      ${settings.localRepository}/org/mortbay/jetty/alpn/alpn-boot/${jetty.alpn.version}/alpn-boot-${jetty.alpn.version}.jar
+    </jetty.alpn.path>
+    <argLine.bootcp>-Xbootclasspath/p:${jetty.alpn.path}</argLine.bootcp>
+  </properties>
+
+  <modules>
+    <module>core</module>
+    <module>stub</module>
+    <module>auth</module>
+    <module>okhttp</module>
+    <module>netty</module>
+    <module>testing</module>
+    <module>integration-testing</module>
+    <module>all</module>
+  </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java</artifactId>
+        <version>2.6.1</version>
+      </dependency>
+      <dependency>
+        <groupId>com.squareup.okhttp</groupId>
+        <artifactId>okhttp</artifactId>
+        <version>${okhttp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.squareup.okio</groupId>
+        <artifactId>okio</artifactId>
+        <version>1.0.1</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec-http2</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.twitter</groupId>
+        <artifactId>hpack</artifactId>
+        <version>0.9.1</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>18.0</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.code.findbugs</groupId>
+        <artifactId>jsr305</artifactId>
+        <version>3.0.0</version>
+      </dependency>
+      <dependency>
+        <groupId>javax</groupId>
+        <artifactId>javaee-api</artifactId>
+        <version>7.0</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.oauth-client</groupId>
+        <artifactId>google-oauth-client</artifactId>
+        <version>1.18.0-rc</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.eclipse.jetty.alpn</groupId>
+        <artifactId>alpn-api</artifactId>
+        <version>1.0.0</version>
+      </dependency>
+      <dependency>
+        <groupId>org.mortbay.jetty.alpn</groupId>
+        <artifactId>alpn-boot</artifactId>
+        <version>${jetty.alpn.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>4.11</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.mockito</groupId>
+        <artifactId>mockito-core</artifactId>
+        <version>1.10.8</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>build-helper-maven-plugin</artifactId>
+          <version>1.9.1</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>2.6</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>2.10.1</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>2.5</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.1</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>animal-sniffer-maven-plugin</artifactId>
+          <version>1.11</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>2.5.2</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>2.8</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-jxr-plugin</artifactId>
+          <version>2.2</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-antrun-plugin</artifactId>
+          <version>1.6</version>
+        </plugin>
+        <plugin>
+          <groupId>kr.motd.maven</groupId>
+          <artifactId>exec-maven-plugin</artifactId>
+          <version>1.0.0.Final</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-checkstyle-plugin</artifactId>
+          <version>2.13</version>
+        </plugin>
+        <plugin>
+          <groupId>net.dongliu.prettypb</groupId>
+          <artifactId>maven-protoc-plugin</artifactId>
+          <version>0.3.2</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>1.6</source>
+          <target>1.6</target>
+          <compilerArgs>
+            <arg>-Xlint:unchecked</arg>
+            <arg>-Xlint:deprecation</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+
+      <!-- ensure that only methods available in java 1.6 can be used even when compiling 
+        with java 1.7+ -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>animal-sniffer-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>check-java-version</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <configuration>
+              <signature>
+                <groupId>org.codehaus.mojo.signature</groupId>
+                <artifactId>java16</artifactId>
+                <version>1.1</version>
+              </signature>
+              <ignores>
+                <!-- Ignore lack of FLUSH. Some versions of Android support it, and 
+                  we will be removing the code using it. -->
+                <ignore>java.util.zip.Deflater</ignore>
+              </ignores>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Enforce code style rules. -->
+      <!-- TODO(nathanmittler): enable this before going open source. -->
+      <!-- <plugin> <artifactId>maven-checkstyle-plugin</artifactId> <configuration> 
+        <configLocation>checkstyle.xml</configLocation> <headerLocation>checkstyle.license</headerLocation> 
+        <consoleOutput>true</consoleOutput> </configuration> <executions> <execution> <goals> 
+        <goal>check</goal> </goals> </execution> </executions> </plugin> -->
+
+      <!-- Download the alpn-boot.jar in advance to add it to the boot classpath. -->
+      <plugin>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>get-alpn-boot</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>get</goal>
+            </goals>
+            <configuration>
+              <groupId>org.mortbay.jetty.alpn</groupId>
+              <artifactId>alpn-boot</artifactId>
+              <version>${jetty.alpn.version}</version>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,218 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.google.net.stubby</groupId>
+    <artifactId>stubby-parent</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>stubby-all</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Stubby/All-in-One</name>
+
+  <properties>
+    <generatedSourceDir>${project.build.directory}/src</generatedSourceDir>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>stubby-core</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>stubby-auth</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>stubby-stub</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>stubby-okhttp</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>stubby-netty</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
+      <optional>true</optional>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-clean-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>clean-first</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>clean</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <!-- Populate the properties whose key is groupId:artifactId:type and whose 
+            value is the path to the artifact -->
+          <execution>
+            <id>locate-dependencies</id>
+            <phase>initialize</phase>
+            <goals>
+              <goal>properties</goal>
+            </goals>
+          </execution>
+
+          <!-- Unpack all source files -->
+          <execution>
+            <id>unpack-sources</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>unpack-dependencies</goal>
+            </goals>
+            <configuration>
+              <classifier>sources</classifier>
+              <includeGroupIds>${project.groupId}</includeGroupIds>
+              <outputDirectory>${generatedSourceDir}</outputDirectory>
+            </configuration>
+          </execution>
+
+          <!-- Unpack all class files -->
+          <execution>
+            <id>unpack-jars</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>unpack-dependencies</goal>
+            </goals>
+            <configuration>
+              <includeGroupIds>${project.groupId}</includeGroupIds>
+              <outputDirectory>${project.build.outputDirectory}
+              </outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Include the directory where the source files were unpacked -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>add-source</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${generatedSourceDir}</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Override the default JAR configuration -->
+      <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>default-jar</id>
+            <phase>none</phase>
+          </execution>
+          <execution>
+            <id>all-in-one-jar</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <archive>
+                <manifest>
+                  <addDefaultImplementationEntries>true
+                  </addDefaultImplementationEntries>
+                </manifest>
+                <index>true</index>
+              </archive>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Generate Xref -->
+      <plugin>
+        <artifactId>maven-jxr-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>generate-xref</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jxr</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <linkJavadoc>true</linkJavadoc>
+          <destDir>${project.build.directory}/xref</destDir>
+          <javadocDir>${project.build.directory}/api</javadocDir>
+          <docTitle>Stubby Source Xref (${project.version})</docTitle>
+          <windowTitle>Stubby Source Xref (${project.version})</windowTitle>
+        </configuration>
+      </plugin>
+
+      <!-- Generate Javadoc -->
+      <plugin>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <docfilessubdirs>true</docfilessubdirs>
+          <outputDirectory>${project.build.directory}/api</outputDirectory>
+          <doctitle>Stubby API Reference (${project.version})</doctitle>
+          <windowtitle>Stubby API Reference (${project.version})</windowtitle>
+          <detectJavaApiLink>false</detectJavaApiLink>
+          <additionalparam>
+            -link http://docs.oracle.com/javaee/6/api/
+            -link
+            http://docs.oracle.com/javase/7/docs/api/
+            -link
+            http://docs.guava-libraries.googlecode.com/git-history/v18.0/javadoc/
+            -link
+            http://code.google.com/apis/protocolbuffers/docs/reference/java/
+            -link http://netty.io/5.0/api/
+            -link
+            http://square.github.io/okhttp/javadoc/
+          </additionalparam>
+          <locale>en_US</locale>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

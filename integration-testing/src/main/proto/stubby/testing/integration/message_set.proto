@@ -1,0 +1,19 @@
+//
+// Copyright 2014 Google Inc. All rights reserved.
+//
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file or at
+// https://developers.google.com/open-source/licenses/bsd
+syntax = "proto2";
+
+package proto2.bridge;
+
+option java_outer_classname = "MessageSetProtos";
+option java_multiple_files = true;
+option java_generate_equals_and_hash = true;
+
+message MessageSet {
+  option message_set_wire_format = true;
+  extensions 4 to max;
+}
+

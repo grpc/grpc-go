@@ -1,0 +1,22 @@
+//
+// Copyright 2014 Google Inc. All rights reserved.
+//
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file or at
+// https://developers.google.com/open-source/licenses/bsd
+syntax = "proto2";
+
+package proto2;
+
+option java_package = "com.google.protobuf";
+option java_outer_classname = "EmptyProtos";
+
+// An empty message that you can re-use to avoid defining duplicated empty
+// messages in your project. A typical example is to use it as argument or the
+// return value of a service API. For instance:
+//
+//   service Foo {
+//     rpc Bar (proto2.Empty) returns (proto2.Empty) { };
+//   };
+message Empty {}
+
