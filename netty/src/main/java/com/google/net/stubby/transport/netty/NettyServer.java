@@ -91,13 +91,5 @@ public class NettyServer extends AbstractService {
         }
       });
     }
-
-    // Wait for the event loop group to shutdown.
-    if (bossGroup != null) {
-      bossGroup.shutdownGracefully();
-    }
-    if (workerGroup != null) {
-      workerGroup.shutdownGracefully();
-    }
   }
 }

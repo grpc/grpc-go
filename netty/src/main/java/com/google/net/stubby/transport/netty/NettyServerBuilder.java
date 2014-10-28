@@ -4,10 +4,10 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.Service;
 import com.google.net.stubby.AbstractServerBuilder;
 import com.google.net.stubby.HandlerRegistry;
+import com.google.net.stubby.SharedResourceHolder;
 import com.google.net.stubby.transport.ServerListener;
 
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 
 /**
@@ -42,7 +42,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
    * Provides the boss EventGroupLoop to the server.
    *
    * <p>It's an optional parameter. If the user has not provided one when the server is built, the
-   * builder will create one.
+   * builder will use the default one which is static.
    *
    * <p>The server won't take ownership of the given EventLoopGroup. It's caller's responsibility
    * to shut it down when it's desired.
@@ -76,19 +76,18 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
 
   @Override
   protected Service buildTransportServer(ServerListener serverListener) {
-    @SuppressWarnings("resource")
     final EventLoopGroup bossEventLoopGroup  = (userBossEventLoopGroup == null)
-        ? new NioEventLoopGroup() : userBossEventLoopGroup;
-    @SuppressWarnings("resource")
+        ? SharedResourceHolder.get(Utils.DEFAULT_BOSS_EVENT_LOOP_GROUP) : userBossEventLoopGroup;
     final EventLoopGroup workerEventLoopGroup = (userWorkerEventLoopGroup == null)
-        ? new NioEventLoopGroup() : userWorkerEventLoopGroup;
-    NettyServer server =
-        new NettyServer(serverListener, port, bossEventLoopGroup, workerEventLoopGroup, sslContext);
+        ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP)
+        : userWorkerEventLoopGroup;
+    NettyServer server = new NettyServer(serverListener, port, bossEventLoopGroup,
+        workerEventLoopGroup, sslContext);
     if (userBossEventLoopGroup == null) {
       server.addListener(new ClosureHook() {
         @Override
         protected void onClosed() {
-          bossEventLoopGroup.shutdownGracefully();
+          SharedResourceHolder.release(Utils.DEFAULT_BOSS_EVENT_LOOP_GROUP, bossEventLoopGroup);
         }
       }, MoreExecutors.directExecutor());
     }
@@ -96,7 +95,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
       server.addListener(new ClosureHook() {
         @Override
         protected void onClosed() {
-          workerEventLoopGroup.shutdownGracefully();
+          SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, workerEventLoopGroup);
         }
       }, MoreExecutors.directExecutor());
     }

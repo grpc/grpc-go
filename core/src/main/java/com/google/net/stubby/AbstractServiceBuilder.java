@@ -3,6 +3,7 @@ package com.google.net.stubby;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.Service;
+import com.google.net.stubby.SharedResourceHolder.Resource;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,6 +25,19 @@ import javax.annotation.Nullable;
 abstract class AbstractServiceBuilder<ProductT extends Service,
     BuilderT extends AbstractServiceBuilder<?, ?>> {
 
+  private static final Resource<ExecutorService> DEFAULT_EXECUTOR =
+      new Resource<ExecutorService>() {
+        @Override
+        public ExecutorService create() {
+          return Executors.newCachedThreadPool();
+        }
+
+        @Override
+        public void close(ExecutorService instance) {
+          instance.shutdown();
+        }
+      };
+
   @Nullable
   private ExecutorService userExecutor;
 
@@ -31,7 +45,7 @@ abstract class AbstractServiceBuilder<ProductT extends Service,
    * Provides a custom executor.
    *
    * <p>It's an optional parameter. If the user has not provided an executor when the service is
-   * built, the builder will create a cached thread-pool executor.
+   * built, the builder will use a static cached thread pool.
    *
    * <p>The service won't take ownership of the given executor. It's caller's responsibility to
    * shut down the executor when it's desired.
@@ -50,14 +64,14 @@ abstract class AbstractServiceBuilder<ProductT extends Service,
    */
   public ProductT build() {
     final ExecutorService executor = (userExecutor == null)
-        ?  Executors.newCachedThreadPool() : userExecutor;
+        ?  SharedResourceHolder.get(DEFAULT_EXECUTOR) : userExecutor;
     ProductT service = buildImpl(executor);
     // We shut down the executor only if we created it.
     if (userExecutor == null) {
       service.addListener(new ClosureHook() {
         @Override
         protected void onClosed() {
-          executor.shutdown();
+          SharedResourceHolder.release(DEFAULT_EXECUTOR, executor);
         }
       }, MoreExecutors.directExecutor());
     }

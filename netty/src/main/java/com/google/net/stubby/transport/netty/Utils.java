@@ -2,10 +2,13 @@ package com.google.net.stubby.transport.netty;
 
 import com.google.common.base.Preconditions;
 import com.google.net.stubby.Metadata;
+import com.google.net.stubby.SharedResourceHolder.Resource;
 import com.google.net.stubby.transport.HttpUtil;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
@@ -27,6 +30,12 @@ class Utils {
   public static final AsciiString CONTENT_TYPE_GRPC =
       new AsciiString(HttpUtil.CONTENT_TYPE_GRPC);
   public static final AsciiString GRPC_STATUS_HEADER = new AsciiString(HttpUtil.GRPC_STATUS_HEADER);
+
+  public static final Resource<EventLoopGroup> DEFAULT_BOSS_EVENT_LOOP_GROUP =
+      new DefaultEventLoopGroupResource();
+
+  public static final Resource<EventLoopGroup> DEFAULT_WORKER_EVENT_LOOP_GROUP =
+      new DefaultEventLoopGroupResource();
 
   /**
    * Copies the content of the given {@link ByteBuffer} to a new {@link ByteBuf} instance.
@@ -116,6 +125,18 @@ class Utils {
           new AsciiString(serializedHeaders[++i], false));
     }
     return http2Headers;
+  }
+
+  private static class DefaultEventLoopGroupResource implements Resource<EventLoopGroup> {
+    @Override
+    public EventLoopGroup create() {
+      return new NioEventLoopGroup();
+    }
+
+    @Override
+    public void close(EventLoopGroup instance) {
+      instance.shutdownGracefully();
+    }
   }
 
   private Utils() {

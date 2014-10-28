@@ -2,11 +2,11 @@ package com.google.net.stubby.transport.netty;
 
 import com.google.common.util.concurrent.Service;
 import com.google.net.stubby.AbstractChannelBuilder;
+import com.google.net.stubby.SharedResourceHolder;
 import com.google.net.stubby.transport.ClientTransportFactory;
 import com.google.net.stubby.transport.netty.NettyClientTransportFactory.NegotiationType;
 
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 
 import java.net.InetSocketAddress;
 
@@ -52,7 +52,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
    * Provides an EventGroupLoop to be used by the netty transport.
    *
    * <p>It's an optional parameter. If the user has not provided an EventGroupLoop when the channel
-   * is built, the builder will create one.
+   * is built, the builder will use the default one which is static.
    *
    * <p>The channel won't take ownership of the given EventLoopGroup. It's caller's responsibility
    * to shut it down when it's desired.
@@ -65,16 +65,15 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   @Override
   protected ChannelEssentials buildEssentials() {
     final EventLoopGroup group = (userEventLoopGroup == null)
-        ? new NioEventLoopGroup() : userEventLoopGroup;
+        ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP) : userEventLoopGroup;
     ClientTransportFactory transportFactory = new NettyClientTransportFactory(
         serverAddress, negotiationType, group);
     Service.Listener listener = null;
-    // We shut down the EventLoopGroup only if we created it.
     if (userEventLoopGroup == null) {
       listener = new ClosureHook() {
         @Override
         protected void onClosed() {
-          group.shutdownGracefully();
+          SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, group);
         }
       };
     }
