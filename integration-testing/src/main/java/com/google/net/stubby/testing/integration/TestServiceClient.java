@@ -9,11 +9,15 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.net.stubby.Channel;
+import com.google.net.stubby.ChannelImpl;
 import com.google.net.stubby.stub.StreamRecorder;
 import com.google.net.stubby.testing.integration.Messages.SimpleRequest;
 import com.google.net.stubby.testing.integration.Messages.SimpleResponse;
 import com.google.net.stubby.testing.integration.Messages.StreamingOutputCallRequest;
 import com.google.net.stubby.testing.integration.Messages.StreamingOutputCallResponse;
+import com.google.net.stubby.transport.okhttp.OkHttpChannelBuilder;
+import com.google.net.stubby.transport.netty.NettyChannelBuilder;
+import com.google.net.stubby.transport.netty.NettyClientTransportFactory;
 
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -44,6 +48,32 @@ public class TestServiceClient {
     UNARY, STREAMING_OUTPUT, STREAMING_INPUT, FULL_DUPLEX, HALF_DUPLEX
   }
 
+  private enum Transport {
+    NETTY {
+      @Override
+      public ChannelImpl createChannel(String serverHost, int serverPort) {
+        return NettyChannelBuilder.forAddress(serverHost, serverPort)
+            .negotiationType(NettyClientTransportFactory.NegotiationType.PLAINTEXT).build();
+      }
+    },
+    NETTY_TLS {
+      @Override
+      public ChannelImpl createChannel(String serverHost, int serverPort) {
+        return NettyChannelBuilder.forAddress(serverHost, serverPort)
+            .negotiationType(NettyClientTransportFactory.NegotiationType.TLS).build();
+      }
+    },
+    OKHTTP {
+      @Override
+      public ChannelImpl createChannel(String serverHost, int serverPort) {
+        return OkHttpChannelBuilder.forAddress(serverHost, serverPort).build();
+      }
+    },
+    ;
+
+    public abstract ChannelImpl createChannel(String serverHost, int serverPort);
+  }
+
   private static final SimpleRequest UNARY_CALL_REQUEST;
   private static final StreamingOutputCallRequest STREAMING_OUTPUT_CALL_REQUEST;
   static {
@@ -62,30 +92,31 @@ public class TestServiceClient {
     STREAMING_OUTPUT_CALL_REQUEST = streamingOutputBuilder.build();
   }
 
-  public static Channel startClient(ClientBootstrap.Transport transport,
+  public static Channel startClient(Transport transport,
                                     String serverHost, int serverPort) throws Exception {
 
-    final ClientBootstrap client = new ClientBootstrap(transport, serverHost, serverPort);
+    final ChannelImpl channel = transport.createChannel(serverHost, serverPort);
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
         try {
           System.out.println("Shutting down");
-          client.stop();
+          channel.stopAsync();
         } catch (Exception e) {
           e.printStackTrace();
         }
       }
     });
 
-    // Start the client.
-    Channel channel = client.start();
+    // Start the channel.
+    channel.startAsync();
+    channel.awaitRunning();
     System.out.println("Client started");
     return channel;
   }
 
-  public static void runScenarioBlockingUnary(ClientBootstrap.Transport transport,
+  public static void runScenarioBlockingUnary(Transport transport,
                                               String serverHost, int serverPort) throws Exception {
 
     Channel channel = startClient(transport, serverHost, serverPort); 
@@ -106,7 +137,7 @@ public class TestServiceClient {
     }
   }
 
-  public static void runScenarioAsyncUnary(ClientBootstrap.Transport transport,
+  public static void runScenarioAsyncUnary(Transport transport,
                                            String serverHost, int serverPort) throws Exception {
 
     Channel channel = startClient(transport, serverHost, serverPort); 
@@ -127,7 +158,7 @@ public class TestServiceClient {
     }
   }
 
-  public static void runScenarioAsyncStreamingOutput(ClientBootstrap.Transport transport,
+  public static void runScenarioAsyncStreamingOutput(Transport transport,
                                                      String serverHost,
                                                      int serverPort) throws Exception {
 
@@ -160,17 +191,17 @@ public class TestServiceClient {
    * The main application allowing this client to be launched from the command line. Accepts the
    * following arguments:
    * <p>
-   * --transport=<HTTP|NETTY|OKHTTP|SHM_STUBBY> Identifies the concrete implementation of the
+   * --transport=NETTY|NETTY_TLS|OKHTTP Identifies the concrete implementation of the
    * transport. <br>
    * --serverHost=The host of the remote server.<br>
-   * --serverPort=<port number> The port of the remote server.<br>
-   * --stub_type=<BLOCKING|ASYNC> The type of stub to be created.<br>
-   * --call_type=<UNARY|STREAMING_OUTPUT> The type of call to be sent. <br>
-   * --grpc_version=<1|2> Use gRPC v2 protocol. Default is v1. 
+   * --serverPort=$port_number The port of the remote server.<br>
+   * --stub_type=BLOCKING|ASYNC The type of stub to be created.<br>
+   * --call_type=UNARY|STREAMING_OUTPUT The type of call to be sent. <br>
+   * --grpc_version=1|2 Use gRPC v2 protocol. Default is 1.
    */
   public static void main(String[] args) throws Exception {
     Map<String, String> argMap = parseArgs(args);
-    ClientBootstrap.Transport transport = getTransport(argMap);
+    Transport transport = getTransport(argMap);
     StubType stubType = getStubType(argMap);
     CallType callType = getCallType(argMap);
     String serverHost = getServerHost(argMap);
@@ -209,10 +240,10 @@ public class TestServiceClient {
     System.exit(0);
   }
 
-  private static ClientBootstrap.Transport getTransport(Map<String, String> argMap) {
+  private static Transport getTransport(Map<String, String> argMap) {
     String value = argMap.get(TRANSPORT_ARG.toLowerCase());
     Preconditions.checkNotNull(value, "%s argument must be provided.", TRANSPORT_ARG);
-    ClientBootstrap.Transport transport = ClientBootstrap.Transport.valueOf(value.toUpperCase().trim());
+    Transport transport = Transport.valueOf(value.toUpperCase().trim());
     System.out.println(TRANSPORT_ARG + " set to: " + transport);
     return transport;
   }
