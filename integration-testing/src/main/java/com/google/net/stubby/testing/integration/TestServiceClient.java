@@ -8,13 +8,13 @@ import static org.junit.Assert.assertTrue;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
-import com.google.net.stubby.Channel;
 import com.google.net.stubby.ChannelImpl;
 import com.google.net.stubby.stub.StreamRecorder;
 import com.google.net.stubby.testing.integration.Messages.SimpleRequest;
 import com.google.net.stubby.testing.integration.Messages.SimpleResponse;
 import com.google.net.stubby.testing.integration.Messages.StreamingOutputCallRequest;
 import com.google.net.stubby.testing.integration.Messages.StreamingOutputCallResponse;
+import com.google.net.stubby.testing.integration.TestServiceGrpc.TestService;
 import com.google.net.stubby.transport.okhttp.OkHttpChannelBuilder;
 import com.google.net.stubby.transport.netty.NettyChannelBuilder;
 import com.google.net.stubby.transport.netty.NettyClientTransportFactory;
@@ -30,23 +30,8 @@ public class TestServiceClient {
   private static final String SERVER_HOST_ARG = "--server_host";
   private static final String SERVER_PORT_ARG = "--server_port";
   private static final String TRANSPORT_ARG = "--transport";
-  private static final String STUB_TYPE_ARG = "--stub_type";
-  private static final String MESSAGE_TYPE_ARG = "--call_type";
+  private static final String TEST_CASE_ARG = "--test_case";
   private static final String GRPC_VERSION_ARG = "--grpc_version";
-
-  /**
-   * Stub types
-   */
-  private enum StubType {
-    BLOCKING, ASYNC
-  }
-
-  /**
-   * Call types
-   */
-  private enum CallType {
-    UNARY, STREAMING_OUTPUT, STREAMING_INPUT, FULL_DUPLEX, HALF_DUPLEX
-  }
 
   private enum Transport {
     NETTY {
@@ -74,119 +59,6 @@ public class TestServiceClient {
     public abstract ChannelImpl createChannel(String serverHost, int serverPort);
   }
 
-  private static final SimpleRequest UNARY_CALL_REQUEST;
-  private static final StreamingOutputCallRequest STREAMING_OUTPUT_CALL_REQUEST;
-  static {
-    SimpleRequest.Builder unaryBuilder = SimpleRequest.newBuilder();
-    unaryBuilder.setResponseType(COMPRESSABLE).setResponseSize(10);
-    UNARY_CALL_REQUEST = unaryBuilder.build();
-
-    ImmutableList<Integer> responseSizes = ImmutableList.of(50, 100, 150, 200);
-    StreamingOutputCallRequest.Builder streamingOutputBuilder =
-        StreamingOutputCallRequest.newBuilder();
-    streamingOutputBuilder.setResponseType(COMPRESSABLE);
-    for (Integer size : responseSizes) {
-      streamingOutputBuilder.addResponseParametersBuilder().setSize(size)
-          .setIntervalUs(0);
-    }
-    STREAMING_OUTPUT_CALL_REQUEST = streamingOutputBuilder.build();
-  }
-
-  public static Channel startClient(Transport transport,
-                                    String serverHost, int serverPort) throws Exception {
-
-    final ChannelImpl channel = transport.createChannel(serverHost, serverPort);
-
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      @Override
-      public void run() {
-        try {
-          System.out.println("Shutting down");
-          channel.stopAsync();
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
-      }
-    });
-
-    // Start the channel.
-    channel.startAsync();
-    channel.awaitRunning();
-    System.out.println("Client started");
-    return channel;
-  }
-
-  public static void runScenarioBlockingUnary(Transport transport,
-                                              String serverHost, int serverPort) throws Exception {
-
-    Channel channel = startClient(transport, serverHost, serverPort); 
-    final TestServiceGrpc.TestServiceBlockingClient grpcStub
-        = TestServiceGrpc.newBlockingStub(channel); 
-    try {
-      System.out.println("Blocking stub: sending unary call...");
-
-      final SimpleResponse response = grpcStub.unaryCall(UNARY_CALL_REQUEST);
-      assertNotNull(response);
-      assertEquals(COMPRESSABLE, response.getPayload().getType());
-      assertEquals(10, response.getPayload().getBody().size());
-
-      System.out.println("Blocking stub: received expected unary response.");
-    } catch (Exception e) {
-      e.printStackTrace();
-      System.exit(-1);
-    }
-  }
-
-  public static void runScenarioAsyncUnary(Transport transport,
-                                           String serverHost, int serverPort) throws Exception {
-
-    Channel channel = startClient(transport, serverHost, serverPort); 
-    final TestServiceGrpc.TestService asyncStub
-        = TestServiceGrpc.newStub(channel);
-    try {
-      System.out.println("Non-blocking stub: sending unary call...");
-
-      StreamRecorder<SimpleResponse> recorder = StreamRecorder.create();
-      asyncStub.unaryCall(UNARY_CALL_REQUEST, recorder);
-      assertTrue("Call timeout", recorder.awaitCompletion(10, TimeUnit.SECONDS));
-      assertEquals(1, recorder.getValues().size());
-      assertEquals(10, recorder.getValues().get(0).getPayload().getBody().size());
-      System.out.println("Non-blocking stub: received expected async response.");
-    } catch (Exception e) {
-      e.printStackTrace();
-      System.exit(-1);
-    }
-  }
-
-  public static void runScenarioAsyncStreamingOutput(Transport transport,
-                                                     String serverHost,
-                                                     int serverPort) throws Exception {
-
-    Channel channel = startClient(transport, serverHost, serverPort);
-    final TestServiceGrpc.TestService asyncStub
-        = TestServiceGrpc.newStub(channel);
-
-    try {
-      System.out.println("Non-blocking stub: sending streaming request...");
-
-      StreamRecorder<StreamingOutputCallResponse> recorder = StreamRecorder.create();
-      asyncStub.streamingOutputCall(STREAMING_OUTPUT_CALL_REQUEST, recorder);
-      assertTrue("Call timeout", recorder.awaitCompletion(10, TimeUnit.SECONDS));
-      ImmutableList<Integer> responseSizes = ImmutableList.of(50, 100, 150, 200);
-      assertEquals(responseSizes.size(), recorder.getValues().size());
-      for (int ix = 0; ix < recorder.getValues().size(); ++ix) {
-        StreamingOutputCallResponse response = recorder.getValues().get(ix);
-        assertEquals(COMPRESSABLE, response.getPayload().getType());
-        int length = response.getPayload().getBody().size();
-        assertEquals("comparison failed at index " + ix, responseSizes.get(ix).intValue(), length);
-        System.out.println("Non-blocking stub: received expected async response.");
-      }
-    } catch (Exception e) {
-      e.printStackTrace();
-      System.exit(-1);
-    }
-  }
-
   /**
    * The main application allowing this client to be launched from the command line. Accepts the
    * following arguments:
@@ -195,49 +67,43 @@ public class TestServiceClient {
    * transport. <br>
    * --serverHost=The host of the remote server.<br>
    * --serverPort=$port_number The port of the remote server.<br>
-   * --stub_type=BLOCKING|ASYNC The type of stub to be created.<br>
-   * --call_type=UNARY|STREAMING_OUTPUT The type of call to be sent. <br>
+   * --test_case=empty_unary|server_streaming The client test to run.<br>
    * --grpc_version=1|2 Use gRPC v2 protocol. Default is 1.
    */
   public static void main(String[] args) throws Exception {
     Map<String, String> argMap = parseArgs(args);
     Transport transport = getTransport(argMap);
-    StubType stubType = getStubType(argMap);
-    CallType callType = getCallType(argMap);
     String serverHost = getServerHost(argMap);
     int serverPort = getPort(argMap);
+    String testCase = getTestCase(argMap);
 
     com.google.net.stubby.transport.AbstractStream.GRPC_V2_PROTOCOL =
         getGrpcVersion(argMap) == 2; 
-    switch (stubType) {
-      case BLOCKING:
-        switch (callType) {
-          case UNARY:
-            runScenarioBlockingUnary(transport, serverHost, serverPort);
-            break;
-          default:
-            throw new IllegalArgumentException(
-                "Unsupported combo: stub type " + stubType + " call type " + callType);
+
+    final Tester tester = new Tester(transport, serverHost, serverPort);
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
+      public void run() {
+        System.out.println("Shutting down");
+        try {
+          tester.teardown();
+        } catch (Exception e) {
+          e.printStackTrace();
         }
-        break;
-      case ASYNC:
-        switch (callType) {
-          case UNARY:
-            runScenarioAsyncUnary(transport, serverHost, serverPort);
-            break;
-          case STREAMING_OUTPUT:
-            runScenarioAsyncStreamingOutput(transport, serverHost, serverPort);
-            break;
-          default:
-            throw new IllegalArgumentException(
-                "Unsupported combo: stub type " + stubType + " call type " + callType);
-        }
-        break;
-      default:
-        throw new IllegalArgumentException("Unsupported stub type: " + stubType);
+      }
+    });
+
+    tester.setup();
+    System.out.println("Running test " + testCase);
+    try {
+      runTest(tester, testCase);
+    } catch (Exception ex) {
+      ex.printStackTrace();
+      tester.teardown();
+      System.exit(1);
     }
     System.out.println("Test completed.");
-    System.exit(0);
+    tester.teardown();
   }
 
   private static Transport getTransport(Map<String, String> argMap) {
@@ -269,24 +135,14 @@ public class TestServiceClient {
     return port;
   }
 
-  private static StubType getStubType(Map<String, String> argMap) {
-    String value = argMap.get(STUB_TYPE_ARG.toLowerCase());
+  private static String getTestCase(Map<String, String> argMap) {
+    String value = argMap.get(TEST_CASE_ARG);
     if (value == null) {
-      return StubType.BLOCKING;
+      throw new IllegalArgumentException(
+          "Must provide " + TEST_CASE_ARG + " command-line argument");
     }
-    StubType stubType = StubType.valueOf(value.toUpperCase().trim());
-    System.out.println(STUB_TYPE_ARG + " set to: " + stubType);
-    return stubType;
-  }
-
-  private static CallType getCallType(Map<String, String> argMap) {
-    String value = argMap.get(MESSAGE_TYPE_ARG.toLowerCase());
-    if (value == null) {
-      return CallType.UNARY;
-    }
-    CallType callType = CallType.valueOf(value.toUpperCase().trim());
-    System.out.println(MESSAGE_TYPE_ARG + " set to: " + callType);
-    return callType;
+    System.out.println(TEST_CASE_ARG + " set to: " + value);
+    return value;
   }
 
   private static int getGrpcVersion(Map<String, String> argMap) {
@@ -308,5 +164,36 @@ public class TestServiceClient {
     }
 
     return argMap;
+  }
+
+  private static void runTest(Tester tester, String testCase) throws Exception {
+    if ("empty_unary".equals(testCase)) {
+      tester.emptyShouldSucceed();
+    } else if ("large_unary".equals(testCase)) {
+      tester.unaryCallShouldSucceed();
+    } else if ("client_streaming".equals(testCase)) {
+      tester.streamingInputCallShouldSucceed();
+    } else if ("server_streaming".equals(testCase)) {
+      tester.streamingOutputCallShouldSucceed();
+    } else {
+      throw new IllegalArgumentException("Unknown test case: " + testCase);
+    }
+  }
+
+  private static class Tester extends AbstractTransportTest {
+    private final Transport transport;
+    private final String host;
+    private final int port;
+
+    public Tester(Transport transport, String host, int port) {
+      this.transport = transport;
+      this.host = host;
+      this.port = port;
+    }
+
+    @Override
+    protected ChannelImpl createChannel() {
+      return transport.createChannel(host, port);
+    }
   }
 }
