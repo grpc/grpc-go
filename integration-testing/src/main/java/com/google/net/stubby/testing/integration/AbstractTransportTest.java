@@ -1,9 +1,12 @@
 package com.google.net.stubby.testing.integration;
 
 import static com.google.net.stubby.testing.integration.Messages.PayloadType.COMPRESSABLE;
+import static com.google.net.stubby.testing.integration.Util.assertEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
+import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.Uninterruptibles;
@@ -15,7 +18,9 @@ import com.google.net.stubby.proto.ProtoUtils;
 import com.google.net.stubby.stub.MetadataUtils;
 import com.google.net.stubby.stub.StreamObserver;
 import com.google.net.stubby.stub.StreamRecorder;
+import com.google.net.stubby.testing.integration.Messages.Payload;
 import com.google.net.stubby.testing.integration.Messages.PayloadType;
+import com.google.net.stubby.testing.integration.Messages.ResponseParameters;
 import com.google.net.stubby.testing.integration.Messages.SimpleRequest;
 import com.google.net.stubby.testing.integration.Messages.SimpleResponse;
 import com.google.net.stubby.testing.integration.Messages.StreamingInputCallRequest;
@@ -38,6 +43,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -75,67 +81,195 @@ public abstract class AbstractTransportTest {
   protected abstract ChannelImpl createChannel();
 
   @Test
-  public void emptyShouldSucceed() throws Exception {
-    Empty response = blockingStub.emptyCall(Empty.getDefaultInstance());
-    assertNotNull(response);
+  public void emptyUnary() throws Exception {
+    assertEquals(Empty.getDefaultInstance(), blockingStub.emptyCall(Empty.getDefaultInstance()));
   }
 
   @Test
-  public void unaryCallShouldSucceed() throws Exception {
-    // Create the request.
-    SimpleResponse response = blockingStub.unaryCall(unaryRequest());
-    assertNotNull(response);
-    assertEquals(COMPRESSABLE, response.getPayload().getType());
-    assertEquals(10, response.getPayload().getBody().size());
+  public void largeUnary() throws Exception {
+    final SimpleRequest request = SimpleRequest.newBuilder()
+        // TODO(user): Use proper size once Netty HEADERS+DATA ordering is fixed (b/18192619).
+        .setResponseSize(31415/*9*/)
+        .setResponseType(PayloadType.COMPRESSABLE)
+        .setPayload(Payload.newBuilder()
+            .setBody(ByteString.copyFrom(new byte[27182/*8*/])))
+        .build();
+    final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
+        .setPayload(Payload.newBuilder()
+            .setType(PayloadType.COMPRESSABLE)
+            .setBody(ByteString.copyFrom(new byte[31415/*9*/])))
+        .build();
+
+    assertEquals(goldenResponse, blockingStub.unaryCall(request));
   }
 
   @Test
-  public void streamingOutputCallShouldSucceed() throws Exception {
-    // Build the request.
-    List<Integer> responseSizes = Arrays.asList(50, 100, 150, 200);
-    StreamingOutputCallRequest.Builder streamingOutputBuilder =
-        StreamingOutputCallRequest.newBuilder();
-    streamingOutputBuilder.setResponseType(COMPRESSABLE);
-    for (Integer size : responseSizes) {
-      streamingOutputBuilder.addResponseParametersBuilder().setSize(size).setIntervalUs(0);
-    }
-    StreamingOutputCallRequest request = streamingOutputBuilder.build();
+  public void serverStreaming() throws Exception {
+    final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
+        .setResponseType(PayloadType.COMPRESSABLE)
+        // TODO(user): Use proper size once Netty HEADERS+DATA ordering is fixed (b/18192619).
+        .addResponseParameters(ResponseParameters.newBuilder()
+            .setSize(3141/*5*/))
+        .addResponseParameters(ResponseParameters.newBuilder()
+            .setSize(9))
+        .addResponseParameters(ResponseParameters.newBuilder()
+            .setSize(2653))
+        .addResponseParameters(ResponseParameters.newBuilder()
+            .setSize(5897/*9*/))
+        .build();
+    final List<StreamingOutputCallResponse> goldenResponses = Arrays.asList(
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[3141/*5*/])))
+            .build(),
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[9])))
+            .build(),
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[2653])))
+            .build(),
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[5897/*9*/])))
+            .build());
 
     StreamRecorder<StreamingOutputCallResponse> recorder = StreamRecorder.create();
     asyncStub.streamingOutputCall(request, recorder);
     recorder.awaitCompletion();
     assertSuccess(recorder);
-    assertEquals(responseSizes.size(), recorder.getValues().size());
-    for (int ix = 0; ix < recorder.getValues().size(); ++ix) {
-      StreamingOutputCallResponse response = recorder.getValues().get(ix);
-      assertEquals(COMPRESSABLE, response.getPayload().getType());
-      int length = response.getPayload().getBody().size();
-      assertEquals("comparison failed at index " + ix, responseSizes.get(ix).intValue(), length);
-    }
+    assertEquals(goldenResponses, recorder.getValues());
   }
 
   @Test
-  public void streamingInputCallShouldSucceed() throws Exception {
-    // Build the request.
-    String message = "hello world!";
-    StreamingInputCallRequest.Builder streamingInputBuilder =
-        StreamingInputCallRequest.newBuilder();
-    streamingInputBuilder.getPayloadBuilder().setType(PayloadType.COMPRESSABLE)
-        .setBody(ByteString.copyFromUtf8(message));
-    final StreamingInputCallRequest request = streamingInputBuilder.build();
+  public void clientStreaming() throws Exception {
+    final List<StreamingInputCallRequest> requests = Arrays.asList(
+        StreamingInputCallRequest.newBuilder()
+            // TODO(user): Use proper size once window update race is fixed. Should be fixed at
+            // same time as b/18192619.
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[2718/*2*/])))
+            .build(),
+        StreamingInputCallRequest.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[8])))
+            .build(),
+        StreamingInputCallRequest.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[1828])))
+            .build(),
+        StreamingInputCallRequest.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[4590/*4*/])))
+            .build());
+    final StreamingInputCallResponse goldenResponse = StreamingInputCallResponse.newBuilder()
+        .setAggregatedPayloadSize(9144/*74922*/)
+        .build();
 
-    StreamRecorder<StreamingInputCallResponse> recorder = StreamRecorder.create();
-    StreamObserver<StreamingInputCallRequest> requestStream =
-        asyncStub.streamingInputCall(recorder);
-    for (int ix = 10; ix > 0; --ix) {
-      // Send the request and close the request stream.
-      requestStream.onValue(request);
+    assertEquals(goldenResponse, blockingStub.streamingInputCall(requests.iterator()));
+  }
+
+  @Test(timeout=5000)
+  public void pingPong() throws Exception {
+    final List<StreamingOutputCallRequest> requests = Arrays.asList(
+        StreamingOutputCallRequest.newBuilder()
+            // TODO(user): Use proper size once Netty HEADERS+DATA ordering is fixed (b/18192619).
+            .addResponseParameters(ResponseParameters.newBuilder()
+                .setSize(3141/*5*/))
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[2718/*2*/])))
+            .build(),
+        StreamingOutputCallRequest.newBuilder()
+            .addResponseParameters(ResponseParameters.newBuilder()
+                .setSize(9))
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[8])))
+            .build(),
+        StreamingOutputCallRequest.newBuilder()
+            .addResponseParameters(ResponseParameters.newBuilder()
+                .setSize(2653))
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[1828])))
+            .build(),
+        StreamingOutputCallRequest.newBuilder()
+            .addResponseParameters(ResponseParameters.newBuilder()
+                .setSize(5897/*9*/))
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[4590/*4*/])))
+            .build());
+    final List<StreamingOutputCallResponse> goldenResponses = Arrays.asList(
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[3141/*5*/])))
+            .build(),
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[9])))
+            .build(),
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[2653])))
+            .build(),
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[5897/*9*/])))
+            .build());
+
+    final SynchronousQueue<Object> queue = new SynchronousQueue<Object>();
+    final Object sentinel = new Object();
+    StreamObserver<StreamingOutputCallRequest> requestObserver = asyncStub.fullDuplexCall(
+        new StreamObserver<StreamingOutputCallResponse>() {
+          @Override
+          public void onValue(StreamingOutputCallResponse response) {
+            put(response);
+          }
+
+          @Override
+          public void onError(Throwable t) {
+            put(t);
+          }
+
+          @Override
+          public void onCompleted() {
+            put(sentinel);
+          }
+
+          public void put(Object o) {
+            try {
+              queue.put(o);
+            } catch (InterruptedException ex) {
+              Thread.currentThread().interrupt();
+              throw new AssertionError(ex);
+            }
+          }
+        });
+    for (int i = 0; i < requests.size(); i++) {
+      requestObserver.onValue(requests.get(i));
+      Object o = queue.take();
+      if (o == sentinel) {
+        fail("Premature onCompleted");
+      } else if (o instanceof Throwable) {
+        throw Throwables.propagate((Throwable) o);
+      }
+      try {
+        assertEquals(goldenResponses.get(i), (StreamingOutputCallResponse) o);
+      } catch (Exception e) {
+        requestObserver.onError(e);
+        while (queue.take() instanceof StreamingOutputCallResponse) {}
+        throw e;
+      }
     }
-    requestStream.onCompleted();
-    recorder.awaitCompletion();
-    assertSuccess(recorder);
-    assertEquals(1, recorder.getValues().size());
-    assertEquals(10 * message.length(), recorder.getValues().get(0).getAggregatedPayloadSize());
+    requestObserver.onCompleted();
+    assertEquals(sentinel, queue.take());
   }
 
   @Test

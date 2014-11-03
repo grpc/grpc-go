@@ -168,13 +168,15 @@ public class TestServiceClient {
 
   private static void runTest(Tester tester, String testCase) throws Exception {
     if ("empty_unary".equals(testCase)) {
-      tester.emptyShouldSucceed();
+      tester.emptyUnary();
     } else if ("large_unary".equals(testCase)) {
-      tester.unaryCallShouldSucceed();
+      tester.largeUnary();
     } else if ("client_streaming".equals(testCase)) {
-      tester.streamingInputCallShouldSucceed();
+      tester.clientStreaming();
     } else if ("server_streaming".equals(testCase)) {
-      tester.streamingOutputCallShouldSucceed();
+      tester.serverStreaming();
+    } else if ("ping_pong".equals(testCase)) {
+      tester.pingPong();
     } else {
       throw new IllegalArgumentException("Unknown test case: " + testCase);
     }
