@@ -49,8 +49,8 @@ public abstract class ForwardingChannel implements Channel {
     }
 
     @Override
-    public void sendPayload(RequestT payload, @Nullable SettableFuture<Void> accepted) {
-      this.delegate.sendPayload(payload, accepted);
+    public void sendPayload(RequestT payload) {
+      this.delegate.sendPayload(payload);
     }
   }
 

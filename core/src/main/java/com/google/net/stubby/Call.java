@@ -1,7 +1,6 @@
 package com.google.net.stubby;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 
 import javax.annotation.Nullable;
 
@@ -88,22 +87,5 @@ public abstract class Call<RequestT, ResponseT> {
    * @param payload message
    * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed
    */
-  public void sendPayload(RequestT payload) {
-    sendPayload(payload, null);
-  }
-
-  /**
-   * Send a payload message. Payload messages are the primary form of communication associated with
-   * RPCs. Multiple payload messages may be sent for streaming calls.
-   *
-   * <p>If {@code accepted} is non-{@code null}, then the future will be completed when the flow
-   * control window is able to fully permit the payload message. If the Call fails before being
-   * accepted, then the future will be cancelled. Callers concerned with unbounded buffering should
-   * wait until the future completes before sending more messages.
-   *
-   * @param payload message
-   * @param accepted notification for adhering to flow control, or {@code null}
-   * @throws IllegalStateException if call is {@link #halfClose}d or {@link #cancel}ed
-   */
-  public abstract void sendPayload(RequestT payload, @Nullable SettableFuture<Void> accepted);
+  public abstract void sendPayload(RequestT payload);
 }

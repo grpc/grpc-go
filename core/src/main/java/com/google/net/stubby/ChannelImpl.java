@@ -152,9 +152,6 @@ public final class ChannelImpl extends AbstractService implements Channel {
   private class CallImpl<ReqT, RespT> extends Call<ReqT, RespT> {
     private final MethodDescriptor<ReqT, RespT> method;
     private final SerializingExecutor callExecutor;
-    // TODO(user): Consider moving flow control notification/management to Call itself.
-    private final Collection<SettableFuture<Void>> inProcessFutures
-        = Collections.synchronizedSet(new HashSet<SettableFuture<Void>>());
     private ClientStream stream;
 
     public CallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor) {
@@ -193,17 +190,12 @@ public final class ChannelImpl extends AbstractService implements Channel {
     }
 
     @Override
-    public void sendPayload(ReqT payload, SettableFuture<Void> accepted) {
+    public void sendPayload(ReqT payload) {
       Preconditions.checkState(stream != null, "Not started");
       boolean failed = true;
       try {
         InputStream payloadIs = method.streamRequest(payload);
-        if (accepted == null) {
-          stream.writeMessage(payloadIs, available(payloadIs), null);
-        } else {
-          inProcessFutures.add(accepted);
-          stream.writeMessage(payloadIs, available(payloadIs), new AcceptedRunnable(accepted));
-        }
+        stream.writeMessage(payloadIs, available(payloadIs), null);
         failed = false;
       } finally {
         if (failed) {
@@ -211,20 +203,6 @@ public final class ChannelImpl extends AbstractService implements Channel {
         }
       }
       stream.flush();
-    }
-
-    private class AcceptedRunnable implements Runnable {
-      private final SettableFuture<Void> future;
-
-      public AcceptedRunnable(SettableFuture<Void> future) {
-        this.future = future;
-      }
-
-      @Override
-      public void run() {
-        inProcessFutures.remove(future);
-        future.set(null);
-      }
     }
 
     private class ClientStreamListenerImpl implements ClientStreamListener {
@@ -287,10 +265,6 @@ public final class ChannelImpl extends AbstractService implements Channel {
 
       @Override
       public void closed(final Status status, final Metadata.Trailers trailers) {
-        for (SettableFuture<Void> future : inProcessFutures) {
-          future.cancel(false);
-        }
-        inProcessFutures.clear();
         callExecutor.execute(new Runnable() {
           @Override
           public void run() {
