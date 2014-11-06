@@ -2,8 +2,12 @@ package com.google.net.stubby.stub;
 
 import com.google.common.collect.Maps;
 import com.google.net.stubby.Channel;
+import com.google.net.stubby.ClientInterceptor;
+import com.google.net.stubby.ClientInterceptors;
 import com.google.net.stubby.MethodDescriptor;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -52,6 +56,7 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
   public class StubConfigBuilder {
 
     private final Map<String, MethodDescriptor<?, ?>> methodMap;
+    private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
     private Channel stubChannel;
 
     private StubConfigBuilder() {
@@ -81,10 +86,19 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
     }
 
     /**
+     * Adds a client interceptor to be attached to the channel.
+     */
+    public StubConfigBuilder addInterceptor(ClientInterceptor interceptor) {
+      interceptors.add(interceptor);
+      return this;
+    }
+
+    /**
      * Create a new stub configuration
      */
     public S build() {
-      return AbstractStub.this.build(stubChannel, config.build(methodMap));
+      return AbstractStub.this.build(ClientInterceptors.intercept(stubChannel, interceptors),
+          config.build(methodMap));
     }
   }
 }

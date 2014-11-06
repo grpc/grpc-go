@@ -3,10 +3,12 @@ package com.google.net.stubby.stub;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Call;
 import com.google.net.stubby.Channel;
+import com.google.net.stubby.ClientInterceptor;
+import com.google.net.stubby.ClientInterceptors.ForwardingCall;
+import com.google.net.stubby.ClientInterceptors.ForwardingListener;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.context.ForwardingChannel;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -25,27 +27,26 @@ public class MetadataUtils {
   public static <T extends AbstractStub> T attachHeaders(
       T stub,
       final Metadata.Headers extraHeaders) {
-    return (T) stub.configureNewStub().setChannel(attachHeaders(stub.getChannel(), extraHeaders))
-        .build();
+    return (T) stub.configureNewStub().addInterceptor(
+        newAttachHeadersInterceptor(extraHeaders)).build();
   }
 
   /**
-   * Attach a set of request headers to a channel.
+   * Return a client interceptor that attaches a set of headers to requests.
    *
-   * @param channel to channel to intercept.
-   * @param extraHeaders the headers to be passed by each call on the returned stub.
-   * @return an implementation of the channel with extraHeaders bound to each call.
+   * @param extraHeaders the headers to be passed by each call that is processed by the returned
+   *                     interceptor
    */
-  @SuppressWarnings("unchecked")
-  public static Channel attachHeaders(Channel channel, final Metadata.Headers extraHeaders) {
-    return new ForwardingChannel(channel) {
+  public static ClientInterceptor newAttachHeadersInterceptor(final Metadata.Headers extraHeaders) {
+    return new ClientInterceptor() {
       @Override
-      public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
-        return new ForwardingCall<ReqT, RespT>(delegate.newCall(method)) {
+      public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+          Channel next) {
+        return new ForwardingCall<ReqT, RespT>(next.newCall(method)) {
           @Override
           public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
             headers.merge(extraHeaders);
-            delegate.start(responseListener, headers);
+            super.start(responseListener, headers);
           }
         };
       }
@@ -64,9 +65,8 @@ public class MetadataUtils {
       T stub,
       AtomicReference<Metadata.Headers> headersCapture,
       AtomicReference<Metadata.Trailers> trailersCapture) {
-    return (T) stub.configureNewStub().setChannel(
-        captureMetadata(stub.getChannel(), headersCapture, trailersCapture))
-        .build();
+    return (T) stub.configureNewStub().addInterceptor(
+        newCaptureMetadataInterceptor(headersCapture, trailersCapture)).build();
   }
 
   /**
@@ -78,18 +78,19 @@ public class MetadataUtils {
    * @return an implementation of the channel with captures installed.
    */
   @SuppressWarnings("unchecked")
-  public static Channel captureMetadata(Channel channel,
+  public static ClientInterceptor newCaptureMetadataInterceptor(
       final AtomicReference<Metadata.Headers> headersCapture,
       final AtomicReference<Metadata.Trailers> trailersCapture) {
-    return new ForwardingChannel(channel) {
+    return new ClientInterceptor() {
       @Override
-      public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
-        return new ForwardingCall<ReqT, RespT>(delegate.newCall(method)) {
+      public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+          Channel next) {
+        return new ForwardingCall<ReqT, RespT>(next.newCall(method)) {
           @Override
           public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
             headersCapture.set(null);
             trailersCapture.set(null);
-            delegate.start(new ForwardingListener<RespT>(responseListener) {
+            super.start(new ForwardingListener<RespT>(responseListener) {
               @Override
               public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
                 headersCapture.set(headers);
