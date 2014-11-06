@@ -26,6 +26,8 @@ import io.netty.util.concurrent.GenericFutureListener;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -37,8 +39,10 @@ import javax.net.ssl.SSLEngine;
  * endpoint.
  */
 public class Http2Negotiator {
-  public static final String HTTP_VERSION_NAME =
-      Http2OrHttpChooser.SelectedProtocol.HTTP_2.protocolName();
+  private static final List<String> SUPPORTED_PROTOCOLS = Collections.unmodifiableList(
+      Arrays.asList(
+          Http2OrHttpChooser.SelectedProtocol.HTTP_2.protocolName(),
+          "h2-15"));
 
   // Prefer ALPN to NPN so try it first.
   private static final String[] JETTY_TLS_NEGOTIATION_IMPL =
@@ -278,18 +282,19 @@ public class Http2Negotiator {
                   // all
                   removeMethod.invoke(null, engine);
                   protocolNegotiated.setException(new RuntimeException(
-                      "ALPN/NPN protocol " + HTTP_VERSION_NAME + " not supported by endpoint"));
+                      "Endpoint does not support any of " + SUPPORTED_PROTOCOLS
+                      + " in ALPN/NPN negotiation"));
                   return null;
                 }
                 if ("protocols".equals(methodName)) {
                   // ALPN client, NPN server
-                  return ImmutableList.of(HTTP_VERSION_NAME);
+                  return SUPPORTED_PROTOCOLS;
                 }
                 if ("selected".equals(methodName) || "protocolSelected".equals(methodName)) {
                   // ALPN client, NPN server
                   removeMethod.invoke(null, engine);
                   String protocol = (String) args[0];
-                  if (!HTTP_VERSION_NAME.equals(protocol)) {
+                  if (!SUPPORTED_PROTOCOLS.contains(protocol)) {
                     RuntimeException e = new RuntimeException(
                         "Unsupported protocol selected via ALPN/NPN: " + protocol);
                     protocolNegotiated.setException(e);
@@ -310,7 +315,7 @@ public class Http2Negotiator {
                   @SuppressWarnings("unchecked")
                   List<String> names = (List<String>) args[0];
                   for (String name : names) {
-                    if (name.startsWith(HTTP_VERSION_NAME)) {
+                    if (SUPPORTED_PROTOCOLS.contains(name)) {
                       protocolNegotiated.set(null);
                       return name;
                     }
