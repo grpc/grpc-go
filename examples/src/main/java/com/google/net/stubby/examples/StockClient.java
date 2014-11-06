@@ -2,8 +2,8 @@ package com.google.net.stubby.examples;
 
 import com.google.net.stubby.ChannelImpl;
 import com.google.net.stubby.stub.StreamObserver;
+import com.google.net.stubby.transport.netty.NegotiationType;
 import com.google.net.stubby.transport.netty.NettyChannelBuilder;
-import com.google.net.stubby.transport.netty.NettyClientTransportFactory.NegotiationType;
 import com.google.protos.net.stubby.examples.StockGrpc;
 import com.google.protos.net.stubby.examples.StockGrpc.StockBlockingStub;
 import com.google.protos.net.stubby.examples.StockGrpc.StockStub;

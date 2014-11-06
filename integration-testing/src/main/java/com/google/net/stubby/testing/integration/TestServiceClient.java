@@ -1,26 +1,13 @@
 package com.google.net.stubby.testing.integration;
 
-import static com.google.net.stubby.testing.integration.Messages.PayloadType.COMPRESSABLE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.net.stubby.ChannelImpl;
-import com.google.net.stubby.stub.StreamRecorder;
-import com.google.net.stubby.testing.integration.Messages.SimpleRequest;
-import com.google.net.stubby.testing.integration.Messages.SimpleResponse;
-import com.google.net.stubby.testing.integration.Messages.StreamingOutputCallRequest;
-import com.google.net.stubby.testing.integration.Messages.StreamingOutputCallResponse;
-import com.google.net.stubby.testing.integration.TestServiceGrpc.TestService;
-import com.google.net.stubby.transport.okhttp.OkHttpChannelBuilder;
+import com.google.net.stubby.transport.netty.NegotiationType;
 import com.google.net.stubby.transport.netty.NettyChannelBuilder;
-import com.google.net.stubby.transport.netty.NettyClientTransportFactory;
+import com.google.net.stubby.transport.okhttp.OkHttpChannelBuilder;
 
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Application that starts a client for the {@link TestServiceGrpc.TestService} and runs through a
@@ -38,14 +25,14 @@ public class TestServiceClient {
       @Override
       public ChannelImpl createChannel(String serverHost, int serverPort) {
         return NettyChannelBuilder.forAddress(serverHost, serverPort)
-            .negotiationType(NettyClientTransportFactory.NegotiationType.PLAINTEXT).build();
+            .negotiationType(NegotiationType.PLAINTEXT).build();
       }
     },
     NETTY_TLS {
       @Override
       public ChannelImpl createChannel(String serverHost, int serverPort) {
         return NettyChannelBuilder.forAddress(serverHost, serverPort)
-            .negotiationType(NettyClientTransportFactory.NegotiationType.TLS).build();
+            .negotiationType(NegotiationType.TLS).build();
       }
     },
     OKHTTP {

@@ -10,7 +10,7 @@ import java.util.concurrent.ExecutorService;
 /**
  * Factory that manufactures instances of {@link OkHttpClientTransport}.
  */
-public class OkHttpClientTransportFactory implements ClientTransportFactory {
+class OkHttpClientTransportFactory implements ClientTransportFactory {
   private final InetSocketAddress address;
   private final ExecutorService executor;
 

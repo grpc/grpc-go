@@ -4,7 +4,6 @@ import com.google.common.util.concurrent.Service;
 import com.google.net.stubby.AbstractChannelBuilder;
 import com.google.net.stubby.SharedResourceHolder;
 import com.google.net.stubby.transport.ClientTransportFactory;
-import com.google.net.stubby.transport.netty.NettyClientTransportFactory.NegotiationType;
 
 import io.netty.channel.EventLoopGroup;
 

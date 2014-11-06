@@ -12,7 +12,6 @@ import com.google.net.stubby.transport.AbstractClientTransport;
 import com.google.net.stubby.transport.ClientStream;
 import com.google.net.stubby.transport.ClientStreamListener;
 import com.google.net.stubby.transport.ClientTransport;
-import com.google.net.stubby.transport.netty.NettyClientTransportFactory.NegotiationType;
 import com.google.net.stubby.util.ssl.SslContextFactory;
 
 import io.netty.bootstrap.Bootstrap;
