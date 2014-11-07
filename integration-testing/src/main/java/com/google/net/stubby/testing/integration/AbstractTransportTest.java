@@ -10,14 +10,18 @@ import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.Uninterruptibles;
+import com.google.net.stubby.AbstractServerBuilder;
 import com.google.net.stubby.Call;
 import com.google.net.stubby.ChannelImpl;
 import com.google.net.stubby.Metadata;
+import com.google.net.stubby.ServerImpl;
+import com.google.net.stubby.ServerInterceptors;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.proto.ProtoUtils;
 import com.google.net.stubby.stub.MetadataUtils;
 import com.google.net.stubby.stub.StreamObserver;
 import com.google.net.stubby.stub.StreamRecorder;
+import com.google.net.stubby.testing.TestUtils;
 import com.google.net.stubby.testing.integration.Messages.Payload;
 import com.google.net.stubby.testing.integration.Messages.PayloadType;
 import com.google.net.stubby.testing.integration.Messages.ResponseParameters;
@@ -43,6 +47,8 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -54,6 +60,23 @@ public abstract class AbstractTransportTest {
 
   public static final Metadata.Key<Messages.SimpleContext> METADATA_KEY =
       ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
+  private static ScheduledExecutorService testServiceExecutor;
+  private static ServerImpl server;
+
+  protected static void startStaticServer(AbstractServerBuilder<?> builder) {
+    testServiceExecutor = Executors.newScheduledThreadPool(2);
+
+    server = builder
+        .addService(ServerInterceptors.intercept(
+            TestServiceGrpc.bindService(new TestServiceImpl(testServiceExecutor)),
+            TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
+        .buildAndWaitForRunning();
+  }
+
+  protected static void stopStaticServer() {
+    server.stopAsync();
+    testServiceExecutor.shutdown();
+  }
 
   protected ChannelImpl channel;
   protected TestServiceGrpc.TestServiceBlockingStub blockingStub;
