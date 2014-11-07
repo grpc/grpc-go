@@ -14,7 +14,7 @@ import javax.annotation.Nullable;
  *
  * @param <BuilderT> The concrete type of this builder.
  */
-public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBuilder<?>>
+public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBuilder<BuilderT>>
     extends AbstractServiceBuilder<ChannelImpl, BuilderT> {
 
   @Override

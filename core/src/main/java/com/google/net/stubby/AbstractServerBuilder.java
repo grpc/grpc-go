@@ -11,7 +11,7 @@ import java.util.concurrent.ExecutorService;
  *
  * @param <BuilderT> The concrete type for this builder.
  */
-public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuilder<?>>
+public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuilder<BuilderT>>
     extends AbstractServiceBuilder<ServerImpl, BuilderT> {
 
   private final HandlerRegistry registry;

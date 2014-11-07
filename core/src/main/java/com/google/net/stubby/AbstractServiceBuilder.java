@@ -23,7 +23,7 @@ import javax.annotation.Nullable;
  * @param <BuilderT> The concrete type of this builder.
  */
 abstract class AbstractServiceBuilder<ProductT extends Service,
-    BuilderT extends AbstractServiceBuilder<?, ?>> {
+    BuilderT extends AbstractServiceBuilder<ProductT, BuilderT>> {
 
   private static final Resource<ExecutorService> DEFAULT_EXECUTOR =
       new Resource<ExecutorService>() {
