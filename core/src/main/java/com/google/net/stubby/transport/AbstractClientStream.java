@@ -34,9 +34,9 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   private final Object stateLock = new Object();
   private volatile StreamState state = StreamState.OPEN;
 
+  // Stored status & trailers to report when deframer completes.
   private Status stashedStatus;
   private Metadata.Trailers stashedTrailers;
-  private Status responseStatus = Status.UNKNOWN;
 
   protected AbstractClientStream(ClientStreamListener listener,
                                  @Nullable Decompressor decompressor,
@@ -68,10 +68,9 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
       return;
     }
     inboundPhase(Phase.STATUS);
-    responseStatus = errorStatus;
     // For transport errors we immediately report status to the application layer
     // and do not wait for additional payloads.
-    setStatus(responseStatus, new Metadata.Trailers());
+    setStatus(errorStatus, new Metadata.Trailers());
   }
 
   /**
@@ -130,7 +129,6 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
           new Object[]{id(), status, trailers});
     }
     inboundPhase(Phase.STATUS);
-    responseStatus = status;
     // Stash the status & trailers so they can be delivered by the deframer calls
     // remoteEndClosed
     stashedStatus = status;
@@ -207,7 +205,6 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
         // Disallow override of current status.
         return false;
       }
-
       status = newStatus;
       state = CLOSED;
     }
