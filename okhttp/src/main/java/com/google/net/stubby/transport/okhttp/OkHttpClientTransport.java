@@ -2,19 +2,13 @@ package com.google.net.stubby.transport.okhttp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.AbstractClientStream;
 import com.google.net.stubby.transport.AbstractClientTransport;
-import com.google.net.stubby.transport.Buffers;
 import com.google.net.stubby.transport.ClientStream;
 import com.google.net.stubby.transport.ClientStreamListener;
 import com.google.net.stubby.transport.ClientTransport;
-import com.google.net.stubby.transport.MessageDeframer2;
-import com.google.net.stubby.transport.StreamState;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
@@ -33,7 +27,6 @@ import okio.Okio;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -132,7 +125,17 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
                                            Metadata.Headers headers,
                                            ClientStreamListener listener) {
-    return new OkHttpClientStream(method, headers, listener);
+    OkHttpClientStream clientStream = OkHttpClientStream.newStream(executor, listener,
+        frameWriter, this);
+    if (goAway) {
+      clientStream.setStatus(goAwayStatus, new Metadata.Trailers());
+    } else {
+      assignStreamId(clientStream);
+    }
+    String defaultPath = "/" + method.getName();
+    frameWriter.synStream(false, false, clientStream.id(), 0,
+        Headers.createRequestHeaders(headers, defaultPath, defaultAuthority));
+    return clientStream;
   }
 
   @Override
@@ -211,7 +214,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       }
     }
 
-    // Starting stop, go into STOPPING state so that Channel know this Transport should not be used
+    // Starting stop, go into STOPPING state so that Channel knows this Transport should not be used
     // further, will become STOPPED once all streams are complete, or become FAILED immediately if
     // the transport is aborted by some error.
     State state = state();
@@ -233,7 +236,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
    *
    * <p> Return false if the stream has already finished.
    */
-  private boolean finishStream(int streamId, @Nullable Status status) {
+  boolean finishStream(int streamId, @Nullable Status status) {
     OkHttpClientStream stream;
     stream = streams.remove(streamId);
     if (stream != null) {
@@ -248,7 +251,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   /**
    * When the transport is in goAway states, we should stop it once all active streams finish.
    */
-  private void stopIfNecessary() {
+  void stopIfNecessary() {
     boolean shouldStop;
     synchronized (lock) {
       shouldStop = (goAway && streams.size() == 0);
@@ -321,7 +324,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
 
       Buffer buf = new Buffer();
       buf.write(in.buffer(), length);
-      stream.deliverData(buf, inFinished, length);
+      stream.transportDataReceived(buf, inFinished);
 
       // connection window update
       connectionUnacknowledgedBytesRead += length;
@@ -347,7 +350,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
         frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
         return;
       }
-      stream.deliverHeaders(headerBlock, inFinished);
+      stream.transportHeadersReceived(headerBlock, inFinished);
     }
 
     @Override
@@ -411,146 +414,13 @@ public class OkHttpClientTransport extends AbstractClientTransport {
 
   @GuardedBy("lock")
   private void assignStreamId(OkHttpClientStream stream) {
-    Preconditions.checkState(stream.streamId == 0, "StreamId already assigned");
-    stream.streamId = nextStreamId;
-    streams.put(stream.streamId, stream);
+    Preconditions.checkState(stream.id() == null, "StreamId already assigned");
+    stream.id(nextStreamId);
+    streams.put(stream.id(), stream);
     if (nextStreamId >= Integer.MAX_VALUE - 2) {
-      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream id exhaust"), null);
+      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream ids exhausted"), null);
     } else {
       nextStreamId += 2;
-    }
-  }
-
-  /**
-   * Client stream for the okhttp transport.
-   */
-  @VisibleForTesting
-  class OkHttpClientStream extends AbstractClientStream {
-    int streamId;
-    final MessageDeframer2 deframer;
-    @GuardedBy("this")
-    int unacknowledgedBytesRead;
-    @GuardedBy("this")
-    boolean windowUpdateDisabled;
-
-    OkHttpClientStream(MethodDescriptor<?, ?> method, Metadata.Headers headers,
-        ClientStreamListener listener) {
-      super(listener);
-      if (!GRPC_V2_PROTOCOL) {
-        throw new RuntimeException("okhttp transport can only work with V2 protocol!");
-      }
-      deframer = new MessageDeframer2(inboundMessageHandler(), new Executor() {
-        // An executor that synchronized on this stream before executing a task, so that flow
-        // control processing is properly synchronized.
-        @Override
-        public void execute(final Runnable command) {
-          executor.execute(new Runnable() {
-            @Override
-            public void run() {
-              synchronized (OkHttpClientStream.this) {
-                command.run();
-              }
-            }
-          });
-        }
-      });
-      synchronized (lock) {
-        if (goAway) {
-          setStatus(goAwayStatus, new Metadata.Trailers());
-          return;
-        }
-        assignStreamId(this);
-      }
-      String defaultPath = "/" + method.getName();
-      frameWriter.synStream(false, false, streamId, 0,
-          Headers.createRequestHeaders(headers, defaultPath, defaultAuthority));
-    }
-
-    /**
-     * We synchronized on "this" for delivering frames and updating window size, so that the future
-     * listeners (executed by synchronizedExecutor) will not be executed in the same time.
-     */
-    synchronized void deliverData(Buffer data, boolean endOfStream, int length) {
-      deframer.deframe(new OkHttpBuffer(data), endOfStream);
-      unacknowledgedBytesRead += length;
-      if (windowUpdateDisabled) {
-        return;
-      }
-      if (unacknowledgedBytesRead >= DEFAULT_INITIAL_WINDOW_SIZE / 2) {
-        frameWriter.windowUpdate(streamId, unacknowledgedBytesRead);
-        unacknowledgedBytesRead = 0;
-      }
-    }
-
-    synchronized void deliverHeaders(List<Header> headers, boolean endOfStream) {
-      if (inboundPhase == Phase.HEADERS) {
-        inboundPhase(Phase.MESSAGE);
-        // If endOfStream, we have trailers and no "headers" were sent.
-        if (!endOfStream) {
-          deframer.delayProcessing(receiveHeaders(Utils.convertHeaders(headers)));
-        }
-      }
-      if (endOfStream) {
-        stashTrailers(Utils.convertTrailers(headers));
-        inboundPhase(Phase.STATUS);
-        deframer.deframe(Buffers.empty(), endOfStream);
-      }
-    }
-
-    @Override
-    protected void sendFrame(ByteBuffer frame, boolean endOfStream) {
-      Preconditions.checkState(streamId != 0, "streamId should be set");
-      Buffer buffer = new Buffer();
-      // Read the data into a buffer.
-      // TODO(user): swap to NIO buffers or zero-copy if/when okhttp/okio supports it
-      buffer.write(frame.array(), frame.arrayOffset(), frame.remaining());
-      // Write the data to the remote endpoint.
-      // Per http2 SPEC, the max data length should be larger than 64K, while our frame size is
-      // only 4K.
-      Preconditions.checkState(buffer.size() < frameWriter.maxDataLength());
-      frameWriter.data(endOfStream, streamId, buffer, (int) buffer.size());
-      frameWriter.flush();
-    }
-
-    @Override
-    synchronized protected void disableWindowUpdate(ListenableFuture<Void> processingFuture) {
-      if (processingFuture == null || processingFuture.isDone()) {
-        return;
-      }
-      windowUpdateDisabled = true;
-      processingFuture.addListener(new Runnable() {
-        @Override
-        public void run() {
-          synchronized (OkHttpClientStream.this) {
-            windowUpdateDisabled = false;
-            if (unacknowledgedBytesRead >= DEFAULT_INITIAL_WINDOW_SIZE / 2) {
-              frameWriter.windowUpdate(streamId, unacknowledgedBytesRead);
-              unacknowledgedBytesRead = 0;
-            }
-          }
-        }
-      }, MoreExecutors.directExecutor());
-    }
-
-    @Override
-    public void cancel() {
-      if (streamId == 0) {
-        // This should only happens when the stream was failed in constructor.
-        Preconditions.checkState(state() == StreamState.CLOSED, "A unclosed stream has no id");
-      }
-      outboundPhase = Phase.STATUS;
-      if (finishStream(streamId, toGrpcStatus(ErrorCode.CANCEL))) {
-        frameWriter.rstStream(streamId, ErrorCode.CANCEL);
-        stopIfNecessary();
-      }
-    }
-
-    @Override
-    public void remoteEndClosed() {
-      super.remoteEndClosed();
-      if (finishStream(streamId, null)) {
-        stopIfNecessary();
-      }
     }
   }
 }

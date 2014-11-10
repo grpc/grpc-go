@@ -260,6 +260,19 @@ public final class Status {
     return new Status(this.code, description, this.cause);
   }
 
+  /**
+   * Create a derived instance of {@link Status} with the given description.
+   */
+  public Status augmentDescription(String additionalDetail) {
+    if (additionalDetail == null) {
+      return this;
+    } else if (this.description == null) {
+      return new Status(this.code, additionalDetail, this.cause);
+    } else {
+      return new Status(this.code, this.description + "\n" + additionalDetail, this.cause);
+    }
+  }
+
   public Code getCode() {
     return code;
   }

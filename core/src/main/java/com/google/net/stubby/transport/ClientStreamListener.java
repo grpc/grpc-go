@@ -9,7 +9,11 @@ import javax.annotation.Nullable;
 /** An observer of client-side stream events. */
 public interface ClientStreamListener extends StreamListener {
   /**
-   * Called upon receiving all header information from the remote end-point.
+   * Called upon receiving all header information from the remote end-point. Note that transports
+   * are not required to call this method if no header information is received, this would occur
+   * when a stream immediately terminates with an error and only
+   * {@link #closed(com.google.net.stubby.Status, Metadata.Trailers)} is called.
+   *
    * <p>This method should return quickly, as the same thread may be used to process other streams.
    *
    * @param headers the fully buffered received headers.

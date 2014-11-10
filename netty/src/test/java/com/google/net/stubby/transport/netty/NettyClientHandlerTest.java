@@ -173,7 +173,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
         .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
     ByteBuf headersFrame = headersFrame(3, headers);
     handler.channelRead(this.ctx, headersFrame);
-    verify(stream).inboundHeadersReceived(headers, false);
+    verify(stream).transportHeadersReceived(headers, false);
   }
 
   @Test
@@ -184,7 +184,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     // Need to retain to simulate what is done by the stream.
     ByteBuf frame = dataFrame(3, false).retain();
     handler.channelRead(this.ctx, frame);
-    verify(stream).inboundDataReceived(eq(content), eq(false));
+    verify(stream).transportDataReceived(eq(content), eq(false));
   }
 
   @Test

@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.SettableFuture;
+import com.google.net.stubby.transport.AbstractStream;
 import com.google.net.stubby.transport.StreamListener;
 
 import io.netty.buffer.UnpooledByteBufAllocator;
@@ -74,7 +75,7 @@ public abstract class NettyStreamTestBase {
 
   protected InputStream input;
 
-  protected NettyStream stream;
+  protected AbstractStream<Integer> stream;
 
   @Before
   public void setup() {
@@ -107,7 +108,11 @@ public abstract class NettyStreamTestBase {
 
   @Test
   public void inboundMessageShouldCallListener() throws Exception {
-    stream.inboundDataReceived(messageFrame(MESSAGE), false);
+    if (stream instanceof NettyServerStream) {
+      ((NettyServerStream) stream).inboundDataReceived(messageFrame(MESSAGE), false);
+    } else {
+      ((NettyClientStream) stream).transportDataReceived(messageFrame(MESSAGE), false);
+    }
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
     verify(listener()).messageRead(captor.capture(), eq(MESSAGE.length()));
 
@@ -124,7 +129,7 @@ public abstract class NettyStreamTestBase {
         eq(DEFAULT_WINDOW_UPDATE_RATIO));
   }
 
-  protected abstract NettyStream createStream();
+  protected abstract AbstractStream<Integer> createStream();
 
   protected abstract StreamListener listener();
 

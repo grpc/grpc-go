@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.transport.AbstractStream;
 import com.google.net.stubby.transport.ServerStreamListener;
 import com.google.net.stubby.transport.StreamState;
 
@@ -147,7 +148,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   }
 
   @Override
-  protected NettyStream createStream() {
+  protected AbstractStream<Integer> createStream() {
     NettyServerStream stream = new NettyServerStream(channel, STREAM_ID, inboundFlow);
     stream.setListener(serverListener);
     assertEquals(StreamState.OPEN, stream.state());

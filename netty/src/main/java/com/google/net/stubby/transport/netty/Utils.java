@@ -26,10 +26,9 @@ class Utils {
   public static final AsciiString HTTPS = new AsciiString("https");
   public static final AsciiString HTTP = new AsciiString("http");
   public static final AsciiString CONTENT_TYPE_HEADER =
-      new AsciiString(HttpUtil.CONTENT_TYPE_HEADER);
+      new AsciiString(HttpUtil.CONTENT_TYPE.name());
   public static final AsciiString CONTENT_TYPE_GRPC =
       new AsciiString(HttpUtil.CONTENT_TYPE_GRPC);
-  public static final AsciiString GRPC_STATUS_HEADER = new AsciiString(HttpUtil.GRPC_STATUS_HEADER);
 
   public static final Resource<EventLoopGroup> DEFAULT_BOSS_EVENT_LOOP_GROUP =
       new DefaultEventLoopGroupResource();

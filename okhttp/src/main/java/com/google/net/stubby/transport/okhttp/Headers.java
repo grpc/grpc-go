@@ -19,8 +19,7 @@ public class Headers {
   public static final Header SCHEME_HEADER = new Header(Header.TARGET_SCHEME, "https");
   public static final Header METHOD_HEADER = new Header(Header.TARGET_METHOD, HttpUtil.HTTP_METHOD);
   public static final Header CONTENT_TYPE_HEADER =
-      new Header(HttpUtil.CONTENT_TYPE_HEADER, HttpUtil.CONTENT_TYPE_GRPC);
-  public static final Header RESPONSE_STATUS_OK = new Header(Header.RESPONSE_STATUS, "200");
+      new Header(HttpUtil.CONTENT_TYPE.name(), HttpUtil.CONTENT_TYPE_GRPC);
 
   /**
    * Serializes the given headers and creates a list of OkHttp {@link Header}s to be used when
@@ -65,8 +64,8 @@ public class Headers {
    */
   private static boolean isApplicationHeader(ByteString key) {
     String keyString = key.utf8();
-    // Don't allow HTTP/2 pseudo headers or content-type to be added by the applciation.
+    // Don't allow HTTP/2 pseudo headers or content-type to be added by the application.
     return (!keyString.startsWith(":")
-        && !HttpUtil.CONTENT_TYPE_HEADER.equalsIgnoreCase(keyString));
+        && !HttpUtil.CONTENT_TYPE.name().equalsIgnoreCase(keyString));
   }
 }

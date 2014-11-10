@@ -11,6 +11,7 @@ import com.google.net.stubby.Status;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -18,7 +19,8 @@ import javax.annotation.concurrent.GuardedBy;
 /**
  * Abstract base class for {@link ServerStream} implementations.
  */
-public abstract class AbstractServerStream extends AbstractStream implements ServerStream {
+public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
+    implements ServerStream {
 
   private ServerStreamListener listener;
 
@@ -34,6 +36,12 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
   private boolean gracefulClose;
   /** Saved trailers from close() that need to be sent once the framer has sent all messages. */
   private Metadata.Trailers stashedTrailers;
+
+  protected AbstractServerStream(IdT id, @Nullable Decompressor decompressor,
+                                 Executor deframerExecutor) {
+    super(decompressor, deframerExecutor);
+    id(id);
+  }
 
   public final void setListener(ServerStreamListener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");
@@ -87,6 +95,26 @@ public abstract class AbstractServerStream extends AbstractStream implements Ser
     this.stashedTrailers = trailers;
     closeFramer(status);
     dispose();
+  }
+
+  /**
+   * Called in the network thread to process the content of an inbound DATA frame from the client.
+   *
+   * @param frame the inbound HTTP/2 DATA frame. If this buffer is not used immediately, it must
+   *              be retained.
+   */
+  public void inboundDataReceived(Buffer frame, boolean endOfStream) {
+    if (state() == StreamState.CLOSED) {
+      frame.close();
+      return;
+    }
+    // TODO(user): It sounds sub-optimal to deframe in the network thread. That means
+    // decompression is serialized.
+    if (!GRPC_V2_PROTOCOL) {
+      deframer.deframe(frame, endOfStream);
+    } else {
+      deframer2.deframe(frame, endOfStream);
+    }
   }
 
   @Override

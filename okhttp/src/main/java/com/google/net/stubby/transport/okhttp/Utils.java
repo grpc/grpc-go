@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * Common utility methods for OkHttp transport.
  */
-public class Utils {
+class Utils {
   public static Metadata.Headers convertHeaders(List<Header> http2Headers) {
     return new Metadata.Headers(convertHeadersToArray(http2Headers));
   }

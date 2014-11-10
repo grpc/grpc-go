@@ -69,8 +69,16 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void cancelShouldSendCommand() {
+    // Set stream id to indicate it has been created
+    stream().id(STREAM_ID);
     stream().cancel();
     verify(channel).writeAndFlush(any(CancelStreamCommand.class));
+  }
+
+  @Test
+  public void cancelShouldNotSendCommandIfStreamNotCreated() {
+    stream().cancel();
+    verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
   }
 
   @Test
@@ -123,7 +131,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   public void inboundMessageShouldCallListener() throws Exception {
     // Receive headers first so that it's a valid GRPC response.
     stream().id(1);
-    stream().inboundHeadersReceived(grpcResponseHeaders(), false);
+    stream().transportHeadersReceived(grpcResponseHeaders(), false);
     super.inboundMessageShouldCallListener();
   }
 
@@ -131,7 +139,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   public void inboundHeadersShouldCallListenerHeadersRead() throws Exception {
     stream().id(1);
     Http2Headers headers = grpcResponseHeaders();
-    stream().inboundHeadersReceived(headers, false);
+    stream().transportHeadersReceived(headers, false);
     verify(listener).headersRead(any(Metadata.Headers.class));
   }
 
@@ -139,9 +147,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   public void inboundTrailersClosesCall() throws Exception {
     Assume.assumeTrue(AbstractStream.GRPC_V2_PROTOCOL);
     stream().id(1);
-    stream().inboundHeadersReceived(grpcResponseHeaders(), false);
+    stream().transportHeadersReceived(grpcResponseHeaders(), false);
     super.inboundMessageShouldCallListener();
-    stream().inboundHeadersReceived(grpcResponseTrailers(Status.OK), true);
+    stream().transportHeadersReceived(grpcResponseTrailers(Status.OK), true);
   }
 
   @Test
@@ -149,12 +157,12 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     stream().id(1);
 
     // Receive headers first so that it's a valid GRPC response.
-    stream().inboundHeadersReceived(grpcResponseHeaders(), false);
+    stream().transportHeadersReceived(grpcResponseHeaders(), false);
 
     if (AbstractStream.GRPC_V2_PROTOCOL) {
-      stream().inboundHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
+      stream().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
     } else {
-      stream().inboundDataReceived(statusFrame(Status.INTERNAL), false);
+      stream().transportDataReceived(statusFrame(Status.INTERNAL), false);
     }
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
@@ -169,30 +177,35 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     headers.remove(CONTENT_TYPE_HEADER);
     // Remove once b/16290036 is fixed.
     headers.status(AsciiString.of("500"));
-    stream().inboundHeadersReceived(headers, false);
+    stream().transportHeadersReceived(headers, false);
+    verify(listener, never()).closed(any(Status.class), any(Metadata.Trailers.class));
+
+    // We are now waiting for 100 bytes of error context on the stream, cancel has not yet been sent
+    Mockito.verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
+    stream().transportDataReceived(Unpooled.buffer(100).writeZero(100), false);
+    Mockito.verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
+    stream().transportDataReceived(Unpooled.buffer(1000).writeZero(1000), false);
+
+    // Now verify that cancel is sent and an error is reported to the listener
+    verify(channel).writeAndFlush(any(CancelStreamCommand.class));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
     assertEquals(Status.INTERNAL.getCode(), captor.getValue().getCode());
     assertEquals(StreamState.CLOSED, stream.state());
-    // We are now waiting for 100 bytes of error context on the stream, cancel has not yet been sent
-    Mockito.verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
-    stream.inboundDataReceived(Unpooled.buffer(100).writeZero(100), false);
-    Mockito.verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
-    stream.inboundDataReceived(Unpooled.buffer(1000).writeZero(1000), false);
-    verify(channel).writeAndFlush(any(CancelStreamCommand.class));
+
   }
 
   @Test
   public void nonGrpcResponseShouldSetStatus() throws Exception {
-    stream.inboundDataReceived(Unpooled.copiedBuffer(MESSAGE, UTF_8), true);
+    stream().transportDataReceived(Unpooled.copiedBuffer(MESSAGE, UTF_8), true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
     assertEquals(Status.Code.INTERNAL, captor.getValue().getCode());
   }
 
   @Override
-  protected NettyStream createStream() {
-    NettyStream stream = new NettyClientStream(listener, channel, inboundFlow);
+  protected AbstractStream<Integer> createStream() {
+    AbstractStream<Integer> stream = new NettyClientStream(listener, channel, inboundFlow);
     assertEquals(StreamState.OPEN, stream.state());
     return stream;
   }

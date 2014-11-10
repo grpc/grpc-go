@@ -3,6 +3,7 @@ package com.google.net.stubby.transport.okhttp;
 import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -13,6 +14,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.Service.State;
@@ -23,10 +26,11 @@ import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.AbstractStream;
 import com.google.net.stubby.transport.ClientStreamListener;
 import com.google.net.stubby.transport.okhttp.OkHttpClientTransport.ClientFrameHandler;
-import com.google.net.stubby.transport.okhttp.OkHttpClientTransport.OkHttpClientStream;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
+import com.squareup.okhttp.internal.spdy.Header;
+import com.squareup.okhttp.internal.spdy.HeadersMode;
 
 import okio.Buffer;
 
@@ -47,6 +51,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -129,16 +134,37 @@ public class OkHttpClientTransportTest {
     MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method, new Metadata.Headers(), listener);
     assertTrue(streams.containsKey(3));
+    frameHandler.headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
+    assertNotNull(listener.headers);
     for (int i = 0; i < numMessages; i++) {
       Buffer buffer = createMessageFrame(message + i);
-      frameHandler.data(i == numMessages - 1 ? true : false, 3, buffer, (int) buffer.size());
+      frameHandler.data(false, 3, buffer, (int) buffer.size());
     }
+    frameHandler.headers(true, true, 3, 0, grpcResponseTrailers(), HeadersMode.HTTP_20_HEADERS);
     listener.waitUntilStreamClosed();
     assertEquals(Status.OK, listener.status);
+    assertNotNull(listener.trailers);
     assertEquals(numMessages, listener.messages.size());
     for (int i = 0; i < numMessages; i++) {
       assertEquals(message + i, listener.messages.get(i));
     }
+  }
+
+  @Test
+  public void invalidInboundHeadersCancelStream() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    clientTransport.newStream(method, new Metadata.Headers(), listener);
+    assertTrue(streams.containsKey(3));
+    // Empty headers block without correct content type or status
+    frameHandler.headers(false, false, 3, 0, Lists.<Header>newArrayList(),
+        HeadersMode.HTTP_20_HEADERS);
+    // Now wait to receive 1000 bytes of data so we can have a better error message before
+    // cancelling the streaam.
+    frameHandler.data(false, 3, createMessageFrame(new String(new char[1000])), 1000);
+    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
+    assertNull(listener.headers);
+    assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
+    assertNotNull(listener.trailers);
   }
 
   @Ignore
@@ -168,7 +194,8 @@ public class OkHttpClientTransportTest {
     stream.cancel();
     verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
     listener.waitUntilStreamClosed();
-    assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL), listener.status);
+    assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
+        listener.status.getCode());
   }
 
   @Test
@@ -196,6 +223,9 @@ public class OkHttpClientTransportTest {
     assertEquals(2, streams.size());
     OkHttpClientStream stream1 = streams.get(3);
     OkHttpClientStream stream2 = streams.get(5);
+
+    frameHandler.headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
+    frameHandler.headers(false, false, 5, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
 
     int messageLength = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 4;
     byte[] fakeMessage = new byte[messageLength];
@@ -228,12 +258,14 @@ public class OkHttpClientTransportTest {
     stream1.cancel();
     verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
     listener1.waitUntilStreamClosed();
-    assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL), listener1.status);
+    assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
+        listener1.status.getCode());
 
     stream2.cancel();
     verify(frameWriter).rstStream(eq(5), eq(ErrorCode.CANCEL));
     listener2.waitUntilStreamClosed();
-    assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL), listener2.status);
+    assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
+        listener2.status.getCode());
   }
 
   @Test
@@ -246,6 +278,7 @@ public class OkHttpClientTransportTest {
     int messageLength = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1;
     byte[] fakeMessage = new byte[messageLength];
 
+    frameHandler.headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
     Buffer buffer = createMessageFrame(fakeMessage);
     long messageFrameLength = buffer.size();
     frameHandler.data(false, 3, buffer, (int) messageFrameLength);
@@ -258,7 +291,8 @@ public class OkHttpClientTransportTest {
     stream.cancel();
     verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
     listener.waitUntilStreamClosed();
-    assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL), listener.status);
+    assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
+        listener.status.getCode());
   }
 
   @Test
@@ -322,9 +356,11 @@ public class OkHttpClientTransportTest {
     assertEquals(createMessageFrame(sentMessage), sentFrame);
 
     // And read.
+    frameHandler.headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
     final String receivedMessage = "No, you are fine.";
     Buffer buffer = createMessageFrame(receivedMessage);
-    frameHandler.data(true, 3, buffer, (int) buffer.size());
+    frameHandler.data(false, 3, buffer, (int) buffer.size());
+    frameHandler.headers(true, true, 3, 0, grpcResponseTrailers(), HeadersMode.HTTP_20_HEADERS);
     listener1.waitUntilStreamClosed();
     assertEquals(1, listener1.messages.size());
     assertEquals(receivedMessage, listener1.messages.get(0));
@@ -335,7 +371,7 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
-  public void streamIdExhaust() throws Exception {
+  public void streamIdExhausted() throws Exception {
     int startId = Integer.MAX_VALUE - 2;
     AsyncFrameWriter writer =  mock(AsyncFrameWriter.class);
     OkHttpClientTransport transport =
@@ -369,6 +405,19 @@ public class OkHttpClientTransportTest {
     buffer.writeInt(message.length);
     buffer.write(message);
     return buffer;
+  }
+
+  private List<Header> grpcResponseHeaders() {
+    return ImmutableList.<Header>builder()
+        .add(new Header(":status", "200"))
+        .add(Headers.CONTENT_TYPE_HEADER)
+        .build();
+  }
+
+  private List<Header> grpcResponseTrailers() {
+    return ImmutableList.<Header>builder()
+        .add(new Header(Status.CODE_KEY.name(), "0"))
+        .build();
   }
 
   private static class MockFrameReader implements FrameReader {
@@ -411,6 +460,8 @@ public class OkHttpClientTransportTest {
 
   private static class MockStreamListener implements ClientStreamListener {
     Status status;
+    Metadata.Headers headers;
+    Metadata.Trailers trailers;
     CountDownLatch closed = new CountDownLatch(1);
     ArrayList<String> messages = new ArrayList<String>();
     final ListenableFuture<Void> messageFuture;
@@ -425,6 +476,7 @@ public class OkHttpClientTransportTest {
 
     @Override
     public ListenableFuture<Void> headersRead(Metadata.Headers headers) {
+      this.headers = headers;
       return null;
     }
 
@@ -440,6 +492,7 @@ public class OkHttpClientTransportTest {
     @Override
     public void closed(Status status, Metadata.Trailers trailers) {
       this.status = status;
+      this.trailers = trailers;
       closed.countDown();
     }
 

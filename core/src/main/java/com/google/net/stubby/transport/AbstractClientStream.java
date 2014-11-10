@@ -11,6 +11,9 @@ import com.google.net.stubby.Status;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -18,7 +21,10 @@ import javax.annotation.concurrent.GuardedBy;
 /**
  * The abstract base class for {@link ClientStream} implementations.
  */
-public abstract class AbstractClientStream extends AbstractStream implements ClientStream {
+public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
+    implements ClientStream {
+
+  private static final Logger log = Logger.getLogger(AbstractClientStream.class.getName());
 
   private final ClientStreamListener listener;
 
@@ -30,13 +36,13 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
 
   private Status stashedStatus;
   private Metadata.Trailers stashedTrailers;
+  private Status responseStatus = Status.UNKNOWN;
 
-  protected AbstractClientStream(ClientStreamListener listener) {
+  protected AbstractClientStream(ClientStreamListener listener,
+                                 @Nullable Decompressor decompressor,
+                                 Executor deframerExecutor) {
+    super(decompressor, deframerExecutor);
     this.listener = Preconditions.checkNotNull(listener);
-  }
-
-  protected ListenableFuture<Void> receiveHeaders(Metadata.Headers headers) {
-    return listener.headersRead(headers);
   }
 
   @Override
@@ -47,6 +53,95 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
   @Override
   public final void writeMessage(InputStream message, int length, @Nullable Runnable accepted) {
     super.writeMessage(message, length, accepted);
+  }
+
+  /**
+   * The transport implementation has detected a protocol error on the stream. Transports are
+   * responsible for properly closing streams when protocol errors occur.
+   *
+   * @param errorStatus the error to report
+   */
+  protected void inboundTransportError(Status errorStatus) {
+    if (state() == CLOSED) {
+      log.log(Level.INFO, "Received transport error on closed stream {0} {1}",
+          new Object[]{id(), errorStatus});
+      return;
+    }
+    inboundPhase(Phase.STATUS);
+    responseStatus = errorStatus;
+    // For transport errors we immediately report status to the application layer
+    // and do not wait for additional payloads.
+    setStatus(responseStatus, new Metadata.Trailers());
+  }
+
+  /**
+   * Called by transport implementations when they receive headers. When receiving headers
+   * a transport may determine that there is an error in the protocol at this phase which is
+   * why this method takes an error {@link Status}. If a transport reports an
+   * {@link Status.Code#INTERNAL} error
+   *
+   * @param headers the parsed headers
+   */
+  protected void inboundHeadersReceived(Metadata.Headers headers) {
+    if (state() == CLOSED) {
+      log.log(Level.INFO, "Received headers on closed stream {0} {1}",
+          new Object[]{id(), headers});
+    }
+    inboundPhase(Phase.MESSAGE);
+    if (GRPC_V2_PROTOCOL) {
+      deframer2.delayProcessing(listener.headersRead(headers));
+    } else {
+      // This is a little broken as it doesn't strictly wait for the last payload handled
+      // by the deframer to be processed by the application layer. Not worth fixing as will
+      // be removed when the old deframer is removed.
+      listener.headersRead(headers);
+    }
+  }
+
+  /**
+   * Process the contents of a received data frame from the server.
+   */
+  protected void inboundDataReceived(Buffer frame) {
+    Preconditions.checkNotNull(frame, "frame");
+    if (state() == CLOSED) {
+      frame.close();
+      return;
+    }
+    if (inboundPhase == Phase.HEADERS) {
+      // Have not received headers yet so error
+      inboundTransportError(Status.INTERNAL.withDescription("headers not received before payload"));
+      frame.close();
+      return;
+    }
+    inboundPhase(Phase.MESSAGE);
+    if (!GRPC_V2_PROTOCOL) {
+      deframer.deframe(frame, false);
+    } else {
+      deframer2.deframe(frame, false);
+    }
+  }
+
+  /**
+   * Called by transport implementations when they receive trailers.
+   */
+  protected void inboundTrailersReceived(Metadata.Trailers trailers, Status status) {
+    if (state() == CLOSED) {
+      log.log(Level.INFO, "Received trailers on closed stream {0}\n {1}\n {3}",
+          new Object[]{id(), status, trailers});
+    }
+    inboundPhase(Phase.STATUS);
+    responseStatus = status;
+    // Stash the status & trailers so they can be delivered by the deframer calls
+    // remoteEndClosed
+    stashedStatus = status;
+    if (GRPC_V2_PROTOCOL) {
+      stashTrailers(trailers);
+    }
+    if (!GRPC_V2_PROTOCOL) {
+      deframer.deframe(Buffers.empty(), true);
+    } else {
+      deframer2.deframe(Buffers.empty(), true);
+    }
   }
 
   /** gRPC protocol v1 support */
@@ -139,4 +234,20 @@ public abstract class AbstractClientStream extends AbstractStream implements Cli
   public StreamState state() {
     return state;
   }
+
+  @Override
+  public void cancel() {
+    // Allow phase to go to cancelled regardless of prior phase.
+    outboundPhase = Phase.STATUS;
+    if (id() != null) {
+      // Only send a cancellation to remote side if we have actually been allocated
+      // a stream id. i.e. the server side is aware of the stream.
+      sendCancel();
+    }
+  }
+
+  /**
+   * Send a stream cancellation message to the remote server.
+   */
+  protected abstract void sendCancel();
 }

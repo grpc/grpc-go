@@ -1,5 +1,6 @@
 package com.google.net.stubby.transport;
 
+import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
 import java.net.HttpURLConnection;
@@ -12,13 +13,8 @@ public final class HttpUtil {
    * The Content-Type header name. Defined here since it is not explicitly defined by the HTTP/2
    * spec.
    */
-  public static final String CONTENT_TYPE_HEADER = "content-type";
-
-  /**
-   * The Content-Length header name. Defined here since it is not explicitly defined by the HTTP/2
-   * spec.
-   */
-  public static final String CONTENT_LENGTH_HEADER = "content-length";
+  public static final Metadata.Key<String> CONTENT_TYPE =
+      Metadata.Key.of("content-type", Metadata.STRING_MARSHALLER);
 
   /**
    * Content-Type used for GRPC-over-HTTP/2.
@@ -29,11 +25,6 @@ public final class HttpUtil {
    * The HTTP method used for GRPC requests.
    */
   public static final String HTTP_METHOD = "POST";
-
-  /**
-   * The Header name for the gRPC status found in the trailers.
-   */
-  public static final String GRPC_STATUS_HEADER = "grpc-status";
 
   /**
    * Maps HTTP error response status codes to transport codes.

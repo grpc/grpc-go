@@ -8,13 +8,14 @@ import com.google.net.stubby.Status;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
 
 /**
  * Abstract base class for {@link Stream} implementations.
  */
-public abstract class AbstractStream implements Stream {
+public abstract class AbstractStream<IdT> implements Stream {
   /**
    * Global to enable gRPC v2 protocol support, which may be incomplete. This is a complete hack
    * and should please, please, please be temporary to ease migration.
@@ -29,54 +30,72 @@ public abstract class AbstractStream implements Stream {
     HEADERS, MESSAGE, STATUS
   }
 
+  private volatile IdT id;
   private final Object writeLock = new Object();
   private final Framer framer;
-  protected Phase inboundPhase = Phase.HEADERS;
-  protected Phase outboundPhase = Phase.HEADERS;
+  final GrpcDeframer deframer;
+  final MessageDeframer2 deframer2;
+  Phase inboundPhase = Phase.HEADERS;
+  Phase outboundPhase = Phase.HEADERS;
 
-  /**
-   * Handler for Framer output.
-   */
-  private final Framer.Sink<ByteBuffer> outboundFrameHandler = new Framer.Sink<ByteBuffer>() {
-    @Override
-    public void deliverFrame(ByteBuffer frame, boolean endOfStream) {
-      internalSendFrame(frame, endOfStream);
-    }
-  };
-
-  /**
-   * Internal handler for deframer output. Informs stream of inbound messages.
-   */
-  private final GrpcDeframer.Sink inboundMessageHandler = new GrpcDeframer.Sink() {
-    @Override
-    public ListenableFuture<Void> messageRead(InputStream input, int length) {
-      ListenableFuture<Void> future = null;
-      try {
-        future = receiveMessage(input, length);
-        disableWindowUpdate(future);
-        return future;
-      } finally {
-        closeWhenDone(future, input);
+  AbstractStream(@Nullable Decompressor decompressor,
+                           Executor deframerExecutor) {
+    GrpcDeframer.Sink inboundMessageHandler = new GrpcDeframer.Sink() {
+      @Override
+      public ListenableFuture<Void> messageRead(InputStream input, int length) {
+        ListenableFuture<Void> future = null;
+        try {
+          future = receiveMessage(input, length);
+          disableWindowUpdate(future);
+          return future;
+        } finally {
+          closeWhenDone(future, input);
+        }
       }
-    }
 
-    @Override
-    public void statusRead(Status status) {
-      receiveStatus(status);
-    }
+      @Override
+      public void statusRead(Status status) {
+        receiveStatus(status);
+      }
 
-    @Override
-    public void endOfStream() {
-      remoteEndClosed();
-    }
-  };
-
-  protected AbstractStream() {
+      @Override
+      public void endOfStream() {
+        remoteEndClosed();
+      }
+    };
+    Framer.Sink<ByteBuffer> outboundFrameHandler = new Framer.Sink<ByteBuffer>() {
+      @Override
+      public void deliverFrame(ByteBuffer frame, boolean endOfStream) {
+        internalSendFrame(frame, endOfStream);
+      }
+    };
     if (!GRPC_V2_PROTOCOL) {
       framer = new MessageFramer(outboundFrameHandler, 4096);
+      this.deframer = new GrpcDeframer(decompressor, inboundMessageHandler, deframerExecutor);
+      this.deframer2 = null;
     } else {
       framer = new MessageFramer2(outboundFrameHandler, 4096);
+      this.deframer = null;
+      this.deframer2 = new MessageDeframer2(inboundMessageHandler, deframerExecutor);
     }
+  }
+
+  /**
+   * Returns the internal id for this stream. Note that Id can be {@code null} for client streams
+   * as the transport may defer creating the stream to the remote side until is has payload or
+   * metadata to send.
+   */
+  @Nullable
+  public IdT id() {
+    return id;
+  }
+
+  /**
+   * Set the internal id for this stream
+   */
+  public void id(IdT id) {
+    Preconditions.checkState(id != null, "Can only set id once");
+    this.id = id;
   }
 
   /**
@@ -141,18 +160,10 @@ public abstract class AbstractStream implements Stream {
   protected abstract void disableWindowUpdate(@Nullable ListenableFuture<Void> processingFuture);
 
   /**
-   * Gets the internal handler for inbound messages. Subclasses must use this as the target for a
-   * {@link GrpcDeframer} or {@link MessageDeframer2} (V2 protocol).
-   */
-  protected GrpcDeframer.Sink inboundMessageHandler() {
-    return inboundMessageHandler;
-  }
-
-  /**
    * Transitions the inbound phase. If the transition is disallowed, throws a
    * {@link IllegalStateException}.
    */
-  protected final void inboundPhase(Phase nextPhase) {
+  final void inboundPhase(Phase nextPhase) {
     inboundPhase = verifyNextPhase(inboundPhase, nextPhase);
   }
 
@@ -160,7 +171,7 @@ public abstract class AbstractStream implements Stream {
    * Transitions the outbound phase. If the transition is disallowed, throws a
    * {@link IllegalStateException}.
    */
-  protected final void outboundPhase(Phase nextPhase) {
+  final void outboundPhase(Phase nextPhase) {
     outboundPhase = verifyNextPhase(outboundPhase, nextPhase);
   }
 
@@ -171,7 +182,7 @@ public abstract class AbstractStream implements Stream {
    *
    * @param status if not null, will write the status to the framer before closing it
    */
-  protected final void closeFramer(@Nullable Status status) {
+  final void closeFramer(@Nullable Status status) {
     synchronized (writeLock) {
       if (!framer.isClosed()) {
         if (status != null) {

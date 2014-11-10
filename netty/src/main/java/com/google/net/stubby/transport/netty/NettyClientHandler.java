@@ -1,7 +1,5 @@
 package com.google.net.stubby.transport.netty;
 
-import static com.google.net.stubby.transport.netty.NettyClientStream.PENDING_STREAM_ID;
-
 import com.google.common.base.Preconditions;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
@@ -133,7 +131,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private void onHeadersRead(int streamId, Http2Headers headers, boolean endStream)
       throws Http2Exception {
     NettyClientStream stream = clientStream(connection().requireStream(streamId));
-    stream.inboundHeadersReceived(headers, endStream);
+    stream.transportHeadersReceived(headers, endStream);
   }
 
   /**
@@ -142,7 +140,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private void onDataRead(int streamId, ByteBuf data, boolean endOfStream) throws Http2Exception {
     Http2Stream http2Stream = connection().requireStream(streamId);
     NettyClientStream stream = clientStream(http2Stream);
-    stream.inboundDataReceived(data, endOfStream);
+    stream.transportDataReceived(data, endOfStream);
   }
 
   /**
@@ -219,7 +217,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     // set prior to sending the command.
 
     // If the stream hasn't been created yet, remove it from the pending queue.
-    if (stream.id() == PENDING_STREAM_ID) {
+    if (stream.id() == null) {
       removePendingStream(stream);
       promise.setSuccess();
       return;
