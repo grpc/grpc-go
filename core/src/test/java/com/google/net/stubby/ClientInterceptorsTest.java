@@ -81,6 +81,20 @@ public class ClientInterceptorsTest {
     verifyNoMoreInteractions(channel, interceptor);
   }
 
+  @Test(expected = IllegalStateException.class)
+  public void callNextTwice() {
+    ClientInterceptor interceptor = new ClientInterceptor() {
+      @Override
+      public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+          Channel next) {
+        next.newCall(method);
+        return next.newCall(method);
+      }
+    };
+    Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
+    intercepted.newCall(method);
+  }
+
   @Test
   public void ordered() {
     final List<String> order = new ArrayList<String>();

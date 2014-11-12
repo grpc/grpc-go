@@ -116,6 +116,21 @@ public class ServerInterceptorsTest {
     verifyNoMoreInteractions(handler2);
   }
 
+  @Test(expected = IllegalStateException.class)
+  public void callNextTwice() {
+    ServerInterceptor interceptor = new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(String method,
+          ServerCall<RespT> call, Headers headers, ServerCallHandler<ReqT, RespT> next) {
+        next.startCall(method, call, headers);
+        return next.startCall(method, call, headers);
+      }
+    };
+    ServerServiceDefinition intercepted = ServerInterceptors.intercept(serviceDefinition,
+        interceptor);
+    getSoleMethod(intercepted).getServerCallHandler().startCall(methodName, call, headers);
+  }
+
   @Test
   public void ordered() {
     final List<String> order = new ArrayList<String>();

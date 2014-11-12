@@ -53,7 +53,7 @@ public class ClientInterceptors {
 
   private static class ProcessInterceptorChannel implements Channel {
     private final Channel channel;
-    private final Iterator<ClientInterceptor> interceptors;
+    private Iterator<ClientInterceptor> interceptors;
 
     private ProcessInterceptorChannel(Channel channel, Iterable<ClientInterceptor> interceptors) {
       this.channel = channel;
@@ -62,9 +62,13 @@ public class ClientInterceptors {
 
     @Override
     public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
-      if (interceptors.hasNext()) {
+      if (interceptors != null && interceptors.hasNext()) {
         return interceptors.next().interceptCall(method, this);
       } else {
+        Preconditions.checkState(interceptors != null,
+            "The channel has already been called. "
+            + "Some interceptor must have called on \"next\" twice.");
+        interceptors = null;
         return channel.newCall(method);
       }
     }

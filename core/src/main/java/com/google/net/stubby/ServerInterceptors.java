@@ -93,6 +93,9 @@ public class ServerInterceptors {
       if (interceptors != null && interceptors.hasNext()) {
         return interceptors.next().interceptCall(method, call, headers, this);
       } else {
+        Preconditions.checkState(interceptors != null,
+            "The call handler has already been called. "
+            + "Some interceptor must have called on \"next\" twice.");
         interceptors = null;
         return callHandler.startCall(method, call, headers);
       }
