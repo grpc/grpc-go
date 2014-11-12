@@ -3,6 +3,7 @@ package com.google.net.stubby.transport;
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.net.stubby.Status;
 
 import java.io.ByteArrayInputStream;
 import java.io.Closeable;
@@ -154,7 +155,9 @@ public class MessageDeframer2 implements Closeable {
       if (nextFrame.readableBytes() != 0) {
         // TODO(user): Investigate how this should be propagated, so that stream is aborted and
         // application is properly notified of abortion.
-        throw new RuntimeException("Encountered end-of-stream mid-frame");
+        throw Status.INTERNAL
+            .withDescription("Encountered end-of-stream mid-frame")
+            .asRuntimeException();
       }
       sink.endOfStream();
     }
@@ -190,7 +193,9 @@ public class MessageDeframer2 implements Closeable {
   private void processHeader() {
     int type = nextFrame.readUnsignedByte();
     if ((type & RESERVED_MASK) != 0) {
-      throw new RuntimeException("Frame header malformed: reserved bits not zero");
+      throw Status.INTERNAL
+          .withDescription("Frame header malformed: reserved bits not zero")
+          .asRuntimeException();
     }
     compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
 
@@ -209,7 +214,9 @@ public class MessageDeframer2 implements Closeable {
     ListenableFuture<Void> future;
     if (compressedFlag) {
       if (compression == Compression.NONE) {
-        throw new IllegalStateException("Can't decode compressed frame with NONE compression");
+        throw Status.INTERNAL
+            .withDescription("Can't decode compressed frame as compression not configured.")
+            .asRuntimeException();
       } else if (compression == Compression.GZIP) {
         // Fully drain frame.
         byte[] bytes;

@@ -86,15 +86,19 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
       state = CLOSED;
     }
     gracefulClose = true;
-    trailers.removeAll(Status.CODE_KEY);
-    trailers.removeAll(Status.MESSAGE_KEY);
-    trailers.put(Status.CODE_KEY, status);
-    if (status.getDescription() != null) {
-      trailers.put(Status.MESSAGE_KEY, status.getDescription());
-    }
     this.stashedTrailers = trailers;
+    writeStatusToTrailers(status);
     closeFramer(status);
     dispose();
+  }
+
+  private void writeStatusToTrailers(Status status) {
+    stashedTrailers.removeAll(Status.CODE_KEY);
+    stashedTrailers.removeAll(Status.MESSAGE_KEY);
+    stashedTrailers.put(Status.CODE_KEY, status);
+    if (status.getDescription() != null) {
+      stashedTrailers.put(Status.MESSAGE_KEY, status.getDescription());
+    }
   }
 
   /**
@@ -222,6 +226,10 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
 
     try {
       if (notifyClient) {
+        if (stashedTrailers == null) {
+          stashedTrailers = new Metadata.Trailers();
+        }
+        writeStatusToTrailers(status);
         closeFramer(status);
       }
       dispose();
