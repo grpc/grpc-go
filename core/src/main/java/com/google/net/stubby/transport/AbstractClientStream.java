@@ -186,14 +186,6 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
 
   @Override
   protected void remoteEndClosed() {
-    // TODO(user): Delete this hack when trailers are supported by GFE with v2. Currently GFE
-    // doesn't support trailers, so when using gRPC v2 protocol GFE will not send any status. We
-    // paper over this for now by just assuming OK. For all properly functioning servers (both v1
-    // and v2), stashedStatus should not be null here.
-    if (stashedStatus == null) {
-      stashedStatus = Status.OK;
-      stashedTrailers = new Metadata.Trailers();
-    }
     Preconditions.checkState(stashedStatus != null, "Status and trailers should have been set");
     setStatus(stashedStatus, stashedTrailers);
   }
