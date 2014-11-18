@@ -104,24 +104,24 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
         }
       }
     } else {
-      if (endOfStream && GRPC_V2_PROTOCOL) {
-        if (false) {
-          // This is a protocol violation as we expect to receive trailers.
-          transportError = Status.INTERNAL.withDescription("Recevied EOS on DATA frame");
-          frame.close();
-          inboundTransportError(transportError);
+      inboundDataReceived(frame);
+      if (endOfStream) {
+        if (GRPC_V2_PROTOCOL) {
+          if (false) {
+            // This is a protocol violation as we expect to receive trailers.
+            transportError = Status.INTERNAL.withDescription("Recevied EOS on DATA frame");
+            frame.close();
+            inboundTransportError(transportError);
+          } else {
+            // TODO(user): Delete this hack when trailers are supported by GFE with v2. Currently
+            // GFE doesn't support trailers, so when using gRPC v2 protocol GFE will not send any
+            // status. We paper over this for now by just assuming OK. For all properly functioning
+            // servers (both v1 and v2), stashedStatus should not be null here.
+            Metadata.Trailers trailers = new Metadata.Trailers();
+            trailers.put(Status.CODE_KEY, Status.OK);
+            inboundTrailersReceived(trailers, Status.OK);
+          }
         } else {
-          // TODO(user): Delete this hack when trailers are supported by GFE with v2. Currently GFE
-          // doesn't support trailers, so when using gRPC v2 protocol GFE will not send any status.
-          // We paper over this for now by just assuming OK. For all properly functioning servers
-          // (both v1 and v2), stashedStatus should not be null here.
-          Metadata.Trailers trailers = new Metadata.Trailers();
-          trailers.put(Status.CODE_KEY, Status.OK);
-          inboundTrailersReceived(trailers, Status.OK);
-        }
-      } else {
-        inboundDataReceived(frame);
-        if (endOfStream && !GRPC_V2_PROTOCOL) {
           // Synthesize trailers until we get rid of v1.
           inboundTrailersReceived(new Metadata.Trailers(), Status.OK);
         }
