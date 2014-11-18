@@ -5,8 +5,6 @@ import static com.google.net.stubby.transport.StreamState.OPEN;
 import static com.google.net.stubby.transport.StreamState.READ_ONLY;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
@@ -39,16 +37,6 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   // Stored status & trailers to report when deframer completes.
   private Status stashedStatus;
   private Metadata.Trailers stashedTrailers;
-  private final FutureCallback<Object> failureCallback = new FutureCallback<Object>() {
-    @Override
-    public void onFailure(Throwable t) {
-      log.log(Level.WARNING, "Exception processing message", t);
-      cancel();
-    }
-
-    @Override
-    public void onSuccess(Object result) {}
-  };
 
   protected AbstractClientStream(ClientStreamListener listener,
                                  @Nullable Decompressor decompressor,
@@ -99,17 +87,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
           new Object[]{id(), headers});
     }
     inboundPhase(Phase.MESSAGE);
-    if (GRPC_V2_PROTOCOL) {
-      ListenableFuture<?> future = deframer2.delayProcessing(listener.headersRead(headers));
-      if (future != null) {
-        Futures.addCallback(future, failureCallback);
-      }
-    } else {
-      // This is a little broken as it doesn't strictly wait for the last payload handled
-      // by the deframer to be processed by the application layer. Not worth fixing as will
-      // be removed when the old deframer is removed.
-      listener.headersRead(headers);
-    }
+    delayDeframer(listener.headersRead(headers));
   }
 
   /**
@@ -128,14 +106,14 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
       return;
     }
     inboundPhase(Phase.MESSAGE);
-    if (!GRPC_V2_PROTOCOL) {
-      deframer.deframe(frame, false);
-    } else {
-      ListenableFuture<?> future = deframer2.deframe(frame, false);
-      if (future != null) {
-        Futures.addCallback(future, failureCallback);
-      }
-    }
+
+    deframe(frame, false);
+  }
+
+  @Override
+  protected final void deframeFailed(Throwable cause) {
+    log.log(Level.WARNING, "Exception processing message", cause);
+    cancel();
   }
 
   /**
@@ -153,14 +131,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     if (GRPC_V2_PROTOCOL) {
       stashTrailers(trailers);
     }
-    if (!GRPC_V2_PROTOCOL) {
-      deframer.deframe(Buffers.empty(), true);
-    } else {
-      ListenableFuture<?> future = deframer2.deframe(Buffers.empty(), true);
-      if (future != null) {
-        Futures.addCallback(future, failureCallback);
-      }
-    }
+    deframe(Buffers.empty(), true);
   }
 
   /** gRPC protocol v1 support */

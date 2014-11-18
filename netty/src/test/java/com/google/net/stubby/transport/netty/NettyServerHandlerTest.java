@@ -161,7 +161,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   public void clientCancelShouldForwardToStreamListener() throws Exception {
     createStream();
 
-    handler.channelRead(ctx, rstStreamFrame(STREAM_ID, Http2Error.CANCEL.code()));
+    handler.channelRead(ctx, rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
     verify(streamListener, never()).messageRead(any(InputStream.class), anyInt());
     verify(streamListener).closed(Status.CANCELLED);
     verifyNoMoreInteractions(streamListener);
@@ -198,7 +198,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     // Verify the expected GO_AWAY frame was written.
     Exception e = protocolError("Frame length 0 incorrect size for ping.");
-    ByteBuf expected = goAwayFrame(STREAM_ID, Http2Error.PROTOCOL_ERROR.code(), toByteBuf(ctx, e));
+    ByteBuf expected =
+        goAwayFrame(STREAM_ID, (int) Http2Error.PROTOCOL_ERROR.code(), toByteBuf(ctx, e));
     ByteBuf actual = captureWrite(ctx);
     assertEquals(expected, actual);
 
@@ -211,7 +212,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     handler.close(ctx, promise);
 
     // Verify the expected GO_AWAY frame was written.
-    ByteBuf expected = goAwayFrame(0, Http2Error.NO_ERROR.code(), Unpooled.EMPTY_BUFFER);
+    ByteBuf expected = goAwayFrame(0, (int) Http2Error.NO_ERROR.code(), Unpooled.EMPTY_BUFFER);
     ByteBuf actual = captureWrite(ctx);
     assertEquals(expected, actual);
 

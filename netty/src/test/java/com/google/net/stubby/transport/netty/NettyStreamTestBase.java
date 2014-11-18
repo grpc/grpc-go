@@ -1,8 +1,6 @@
 package com.google.net.stubby.transport.netty;
 
 import static com.google.net.stubby.transport.netty.NettyTestUtil.messageFrame;
-import static io.netty.handler.codec.http2.DefaultHttp2InboundFlowController.DEFAULT_WINDOW_UPDATE_RATIO;
-import static io.netty.handler.codec.http2.DefaultHttp2InboundFlowController.WINDOW_UPDATE_OFF;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
@@ -10,7 +8,6 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,7 +23,6 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
-import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -67,9 +63,6 @@ public abstract class NettyStreamTestBase {
 
   @Mock
   protected ChannelPromise promise;
-
-  @Mock
-  protected DefaultHttp2InboundFlowController inboundFlow;
 
   protected SettableFuture<Void> processingFuture;
 
@@ -117,16 +110,11 @@ public abstract class NettyStreamTestBase {
     verify(listener()).messageRead(captor.capture(), eq(MESSAGE.length()));
 
     // Verify that inbound flow control window update has been disabled for the stream.
-    verify(inboundFlow).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID), eq(WINDOW_UPDATE_OFF));
-    verify(inboundFlow, never()).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID),
-        eq(DEFAULT_WINDOW_UPDATE_RATIO));
     assertEquals(MESSAGE, NettyTestUtil.toString(captor.getValue()));
 
     // Verify that inbound flow control window update has been re-enabled for the stream after
     // the future completes.
     processingFuture.set(null);
-    verify(inboundFlow).setWindowUpdateRatio(eq(ctx), eq(STREAM_ID),
-        eq(DEFAULT_WINDOW_UPDATE_RATIO));
   }
 
   protected abstract AbstractStream<Integer> createStream();

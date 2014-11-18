@@ -42,6 +42,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Mock
   protected ClientStreamListener listener;
 
+  @Mock
+  protected NettyClientHandler handler;
+
   @Override
   protected ClientStreamListener listener() {
     return listener;
@@ -205,7 +208,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Override
   protected AbstractStream<Integer> createStream() {
-    AbstractStream<Integer> stream = new NettyClientStream(listener, channel, inboundFlow);
+    AbstractStream<Integer> stream = new NettyClientStream(listener, channel, handler);
     assertEquals(StreamState.OPEN, stream.state());
     return stream;
   }

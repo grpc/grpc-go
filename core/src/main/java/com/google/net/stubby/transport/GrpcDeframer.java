@@ -7,7 +7,11 @@ import static com.google.net.stubby.GrpcFramingUtil.PAYLOAD_FRAME;
 import static com.google.net.stubby.GrpcFramingUtil.STATUS_FRAME;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Status;
 
 import java.io.Closeable;
@@ -29,13 +33,13 @@ public class GrpcDeframer implements Closeable {
   private static final int HEADER_LENGTH = FRAME_TYPE_LENGTH + FRAME_LENGTH;
   private final Decompressor decompressor;
   private final Executor executor;
-  private final Runnable deliveryTask;
+  private final DeframerListener listener;
   private State state = State.HEADER;
   private int requiredLength = HEADER_LENGTH;
   private int frameType;
   private boolean statusNotified;
   private boolean endOfStream;
-  private boolean deliveryOutstanding;
+  private SettableFuture<?> deliveryOutstanding;
   private Sink sink;
   private CompositeBuffer nextFrame;
 
@@ -48,24 +52,26 @@ public class GrpcDeframer implements Closeable {
    *        {@link #deframe(Buffer, boolean)} must be made in the context of this executor. This
    *        executor must not allow concurrent access to this class, so it must be either a single
    *        thread or have sequential processing of events.
+   * @param listener a listener to deframing events
    */
-  public GrpcDeframer(Decompressor decompressor, Sink sink, Executor executor) {
+  public GrpcDeframer(Decompressor decompressor, Sink sink, Executor executor,
+      DeframerListener listener) {
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
     this.sink = Preconditions.checkNotNull(sink, "sink");
     this.executor = Preconditions.checkNotNull(executor, "executor");
-    deliveryTask = new Runnable() {
-      @Override
-      public void run() {
-        deliveryOutstanding = false;
-        deliver();
-      }
-    };
+    this.listener = Preconditions.checkNotNull(listener, "listener");
   }
 
   /**
    * Adds the given data to this deframer and attempts delivery to the sink.
+   *
+   * <p>If returned future is not {@code null}, then it completes when no more deliveries are
+   * occuring. Delivering completes if all available deframing input is consumed or if delivery
+   * resulted in an exception, in which case this method may throw the exception or the returned
+   * future will fail with the throwable. The future is guaranteed to complete within the executor
+   * provided during construction.
    */
-  public void deframe(Buffer data, boolean endOfStream) {
+  public ListenableFuture<?> deframe(Buffer data, boolean endOfStream) {
     Preconditions.checkNotNull(data, "data");
 
     // Add the data to the decompression buffer.
@@ -74,8 +80,11 @@ public class GrpcDeframer implements Closeable {
     // Indicate that all of the data for this stream has been received.
     this.endOfStream = endOfStream;
 
-    // Deliver the next message if not already delivering.
-    deliver();
+    if (deliveryOutstanding != null) {
+      // Only allow one outstanding delivery at a time.
+      return null;
+    }
+    return deliver();
   }
 
   @Override
@@ -87,15 +96,10 @@ public class GrpcDeframer implements Closeable {
   }
 
   /**
-   * If there is no outstanding delivery, attempts to read and deliver as many messages to the
-   * sink as possible. Only one outstanding delivery is allowed at a time.
+   * Reads and delivers as many messages to the sink as possible. May only be called when a delivery
+   * is known not to be outstanding.
    */
-  private void deliver() {
-    if (deliveryOutstanding) {
-      // Only allow one outstanding delivery at a time.
-      return;
-    }
-
+  private ListenableFuture<?> deliver() {
     // Process the uncompressed bytes.
     while (readRequiredBytes()) {
       if (statusNotified) {
@@ -108,28 +112,74 @@ public class GrpcDeframer implements Closeable {
           break;
         case BODY:
           // Read the body and deliver the message to the sink.
-          deliveryOutstanding = true;
-          ListenableFuture<Void> processingFuture = processBody();
+          ListenableFuture<?> processingFuture = processBody();
           if (processingFuture != null) {
-            // A sink was returned for the completion of processing the delivered
+            // A future was returned for the completion of processing the delivered
             // message. Once it's done, try to deliver the next message.
-            processingFuture.addListener(deliveryTask, executor);
-            return;
+            return delayProcessingInternal(processingFuture);
           }
 
-          // No future was returned, so assume processing is complete for the delivery.
-          deliveryOutstanding = false;
           break;
         default:
           throw new AssertionError("Invalid state: " + state);
       }
     }
 
-    // If reached the end of stream without reading a status frame, fabricate one
-    // and deliver to the target.
-    if (!statusNotified && endOfStream) {
-      notifyStatus(Status.OK);
+    if (endOfStream) {
+      if (nextFrame.readableBytes() != 0) {
+        throw Status.INTERNAL
+            .withDescription("Encountered end-of-stream mid-frame")
+            .asRuntimeException();
+      }
+      // If reached the end of stream without reading a status frame, fabricate one
+      // and deliver to the target.
+      if (!statusNotified) {
+        notifyStatus(Status.OK);
+      }
     }
+    // All available messages processed.
+    if (deliveryOutstanding != null) {
+      SettableFuture<?> previousOutstanding = deliveryOutstanding;
+      deliveryOutstanding = null;
+      previousOutstanding.set(null);
+    }
+    return null;
+  }
+
+  /**
+   * May only be called when a delivery is known not to be outstanding. If deliveryOutstanding is
+   * non-null, then it will be re-used and this method will return {@code null}.
+   */
+  private ListenableFuture<?> delayProcessingInternal(ListenableFuture<?> future) {
+    Preconditions.checkNotNull(future, "future");
+    // Return a separate future so that our callback is guaranteed to complete before any
+    // listeners on the returned future.
+    ListenableFuture<?> returnFuture = null;
+    if (deliveryOutstanding == null) {
+      returnFuture = deliveryOutstanding = SettableFuture.create();
+    }
+    Futures.addCallback(future, new FutureCallback<Object>() {
+      @Override
+      public void onFailure(Throwable t) {
+        SettableFuture<?> previousOutstanding = deliveryOutstanding;
+        deliveryOutstanding = null;
+        previousOutstanding.setException(t);
+      }
+
+      @Override
+      public void onSuccess(Object result) {
+        try {
+          deliver();
+        } catch (Throwable t) {
+          if (deliveryOutstanding == null) {
+            throw Throwables.propagate(t);
+          } else {
+            onFailure(t);
+          }
+        }
+      }
+    }, executor);
+    return returnFuture;
   }
 
   /**
@@ -138,24 +188,32 @@ public class GrpcDeframer implements Closeable {
    * @returns {@code true} if all of the required bytes have been read.
    */
   private boolean readRequiredBytes() {
-    if (nextFrame == null) {
-      nextFrame = new CompositeBuffer();
-    }
-
-    // Read until the buffer contains all the required bytes.
-    int missingBytes;
-    while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
-      Buffer buffer = decompressor.readBytes(missingBytes);
-      if (buffer == null) {
-        // No more data is available.
-        break;
+    int totalBytesRead = 0;
+    try {
+      if (nextFrame == null) {
+        nextFrame = new CompositeBuffer();
       }
-      // Add it to the composite buffer for the next frame.
-      nextFrame.addBuffer(buffer);
-    }
 
-    // Return whether or not all of the required bytes are now in the frame.
-    return nextFrame.readableBytes() == requiredLength;
+      // Read until the buffer contains all the required bytes.
+      int missingBytes;
+      while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
+        Buffer buffer = decompressor.readBytes(missingBytes);
+        if (buffer == null) {
+          // No more data is available.
+          break;
+        }
+        totalBytesRead += buffer.readableBytes();
+        // Add it to the composite buffer for the next frame.
+        nextFrame.addBuffer(buffer);
+      }
+
+      // Return whether or not all of the required bytes are now in the frame.
+      return nextFrame.readableBytes() == requiredLength;
+    } finally {
+      if (totalBytesRead > 0) {
+        listener.bytesRead(totalBytesRead);
+      }
+    }
   }
 
   /**

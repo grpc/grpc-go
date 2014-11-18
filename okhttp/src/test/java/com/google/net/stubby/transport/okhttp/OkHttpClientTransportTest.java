@@ -10,7 +10,6 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,7 +18,6 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.Service.State;
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
@@ -270,8 +268,7 @@ public class OkHttpClientTransportTest {
 
   @Test
   public void windowUpdateWithInboundFlowControl() throws Exception {
-    SettableFuture<Void> future = SettableFuture.create();
-    MockStreamListener listener = new MockStreamListener(future);
+    MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method, new Metadata.Headers(), listener);
     OkHttpClientStream stream = streams.get(3);
 
@@ -283,9 +280,7 @@ public class OkHttpClientTransportTest {
     long messageFrameLength = buffer.size();
     frameHandler.data(false, 3, buffer, (int) messageFrameLength);
     verify(frameWriter).windowUpdate(eq(0), eq(messageFrameLength));
-    verify(frameWriter, times(0)).windowUpdate(eq(3), eq(messageFrameLength));
-
-    future.set(null);
+    // We return the bytes for the stream window as we read the message.
     verify(frameWriter).windowUpdate(eq(3), eq(messageFrameLength));
 
     stream.cancel();
@@ -464,14 +459,8 @@ public class OkHttpClientTransportTest {
     Metadata.Trailers trailers;
     CountDownLatch closed = new CountDownLatch(1);
     ArrayList<String> messages = new ArrayList<String>();
-    final ListenableFuture<Void> messageFuture;
 
     MockStreamListener() {
-      messageFuture = null;
-    }
-
-    MockStreamListener(ListenableFuture<Void> future) {
-      messageFuture = future;
     }
 
     @Override
@@ -486,7 +475,7 @@ public class OkHttpClientTransportTest {
       if (msg != null) {
         messages.add(msg);
       }
-      return messageFuture;
+      return null;
     }
 
     @Override

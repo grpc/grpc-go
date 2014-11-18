@@ -1,8 +1,6 @@
 package com.google.net.stubby.transport.okhttp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.ClientStreamListener;
@@ -21,6 +19,9 @@ import javax.annotation.concurrent.GuardedBy;
  * Client stream for the okhttp transport.
  */
 class OkHttpClientStream extends Http2ClientStream {
+
+  private static int WINDOW_UPDATE_THRESHOLD =
+      OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2;
 
   /**
    * Construct a new client stream.
@@ -49,9 +50,9 @@ class OkHttpClientStream extends Http2ClientStream {
   }
 
   @GuardedBy("executorLock")
-  private int unacknowledgedBytesRead;
+  private int window = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE;
   @GuardedBy("executorLock")
-  private boolean windowUpdateDisabled;
+  private int processedWindow = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE;
   private final AsyncFrameWriter frameWriter;
   private final OkHttpClientTransport transport;
   // Lock used to synchronize with work done on the executor.
@@ -88,15 +89,8 @@ class OkHttpClientStream extends Http2ClientStream {
   public void transportDataReceived(okio.Buffer frame, boolean endOfStream) {
     synchronized (executorLock) {
       long length = frame.size();
+      window -= length;
       super.transportDataReceived(new OkHttpBuffer(frame), endOfStream);
-      unacknowledgedBytesRead += length;
-      if (windowUpdateDisabled) {
-        return;
-      }
-      if (unacknowledgedBytesRead >= OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2) {
-        frameWriter.windowUpdate(id(), unacknowledgedBytesRead);
-        unacknowledgedBytesRead = 0;
-      }
     }
   }
 
@@ -116,24 +110,15 @@ class OkHttpClientStream extends Http2ClientStream {
   }
 
   @Override
-  protected void disableWindowUpdate(ListenableFuture<Void> processingFuture) {
+  protected void returnProcessedBytes(int processedBytes) {
     synchronized (executorLock) {
-      if (processingFuture == null || processingFuture.isDone()) {
-        return;
+      processedWindow -= processedBytes;
+      if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
+        int delta = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE - processedWindow;
+        window += delta;
+        processedWindow += delta;
+        frameWriter.windowUpdate(id(), delta);
       }
-      windowUpdateDisabled = true;
-      processingFuture.addListener(new Runnable() {
-        @Override
-        public void run() {
-          synchronized (executorLock) {
-            windowUpdateDisabled = false;
-            if (unacknowledgedBytesRead >= OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2) {
-              frameWriter.windowUpdate(id(), unacknowledgedBytesRead);
-              unacknowledgedBytesRead = 0;
-            }
-          }
-        }
-      }, MoreExecutors.directExecutor());
     }
   }
 

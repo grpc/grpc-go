@@ -31,6 +31,8 @@ import org.mockito.Mock;
 public class NettyServerStreamTest extends NettyStreamTestBase {
   @Mock
   protected ServerStreamListener serverListener;
+  @Mock
+  private NettyServerHandler handler;
   private Metadata.Trailers trailers = new Metadata.Trailers();
 
   @Test
@@ -149,7 +151,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Override
   protected AbstractStream<Integer> createStream() {
-    NettyServerStream stream = new NettyServerStream(channel, STREAM_ID, inboundFlow);
+    NettyServerStream stream = new NettyServerStream(channel, STREAM_ID, handler);
     stream.setListener(serverListener);
     assertEquals(StreamState.OPEN, stream.state());
     verifyZeroInteractions(serverListener);

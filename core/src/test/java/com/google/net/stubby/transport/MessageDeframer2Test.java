@@ -38,7 +38,9 @@ import java.util.zip.GZIPOutputStream;
 @RunWith(JUnit4.class)
 public class MessageDeframer2Test {
   private Sink sink = mock(Sink.class);
-  private MessageDeframer2 deframer = new MessageDeframer2(sink, MoreExecutors.directExecutor());
+  private DeframerListener listener = mock(DeframerListener.class);
+  private MessageDeframer2 deframer =
+      new MessageDeframer2(sink, MoreExecutors.directExecutor(), listener);
   private ArgumentCaptor<InputStream> messages = ArgumentCaptor.forClass(InputStream.class);
 
   @Test
@@ -205,7 +207,7 @@ public class MessageDeframer2Test {
   @Test
   public void compressed() {
     deframer = new MessageDeframer2(
-        sink, MoreExecutors.directExecutor(), MessageDeframer2.Compression.GZIP);
+        sink, MoreExecutors.directExecutor(), MessageDeframer2.Compression.GZIP, listener);
     byte[] payload = compress(new byte[1000]);
     assertTrue(payload.length < 100);
     byte[] header = new byte[] {1, 0, 0, 0, (byte) payload.length};

@@ -1,6 +1,5 @@
 package com.google.net.stubby.transport.netty;
 
-import com.google.common.base.Preconditions;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
@@ -9,7 +8,6 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
@@ -19,6 +17,7 @@ import io.netty.handler.codec.http2.Http2FrameAdapter;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2InboundFlowController;
 import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamException;
@@ -50,7 +49,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
     }
   }
 
-  private final DefaultHttp2InboundFlowController inboundFlow;
   private final Deque<PendingStream> pendingStreams = new ArrayDeque<PendingStream>();
   private Throwable connectionError;
   private ChannelHandlerContext ctx;
@@ -58,11 +56,10 @@ class NettyClientHandler extends Http2ConnectionHandler {
   public NettyClientHandler(Http2Connection connection,
       Http2FrameReader frameReader,
       Http2FrameWriter frameWriter,
-      DefaultHttp2InboundFlowController inboundFlow,
+      Http2InboundFlowController inboundFlow,
       Http2OutboundFlowController outboundFlow) {
     super(connection, frameReader, frameWriter, inboundFlow, outboundFlow, new LazyFrameListener());
     initListener();
-    this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
 
     // Disallow stream creation by the server.
     connection.remote().maxStreams(0);
@@ -87,10 +84,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
         NettyClientHandler.this.goingAway();
       }
     });
-  }
-
-  public DefaultHttp2InboundFlowController inboundFlow() {
-    return inboundFlow;
   }
 
   @Nullable
@@ -121,6 +114,18 @@ class NettyClientHandler extends Http2ConnectionHandler {
       }
     } catch (Throwable t) {
       promise.setFailure(t);
+    }
+  }
+
+  /**
+   * Returns the given processed bytes back to inbound flow control.
+   */
+  void returnProcessedBytes(int streamId, int bytes) {
+    try {
+      Http2Stream http2Stream = connection().requireStream(streamId);
+      http2Stream.inboundFlow().returnProcessedBytes(ctx, bytes);
+    } catch (Http2Exception e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -410,9 +415,10 @@ class NettyClientHandler extends Http2ConnectionHandler {
     }
 
     @Override
-    public void onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
+    public int onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
         boolean endOfStream) throws Http2Exception {
       handler.onDataRead(streamId, data, endOfStream);
+      return padding;
     }
 
     @Override

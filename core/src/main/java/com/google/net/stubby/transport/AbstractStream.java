@@ -2,6 +2,8 @@ package com.google.net.stubby.transport;
 
 import com.google.common.base.Preconditions;
 import com.google.common.io.Closeables;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.net.stubby.Status;
@@ -33,6 +35,16 @@ public abstract class AbstractStream<IdT> implements Stream {
   private volatile IdT id;
   private final Object writeLock = new Object();
   private final Framer framer;
+  private final FutureCallback<Object> deframerErrorCallback = new FutureCallback<Object>() {
+    @Override
+    public void onSuccess(Object result) {}
+
+    @Override
+    public void onFailure(Throwable t) {
+      deframeFailed(t);
+    }
+  };
+
   final GrpcDeframer deframer;
   final MessageDeframer2 deframer2;
   Phase inboundPhase = Phase.HEADERS;
@@ -42,11 +54,10 @@ public abstract class AbstractStream<IdT> implements Stream {
                            Executor deframerExecutor) {
     GrpcDeframer.Sink inboundMessageHandler = new GrpcDeframer.Sink() {
       @Override
-      public ListenableFuture<Void> messageRead(InputStream input, int length) {
+      public ListenableFuture<Void> messageRead(InputStream input, final int length) {
         ListenableFuture<Void> future = null;
         try {
           future = receiveMessage(input, length);
-          disableWindowUpdate(future);
           return future;
         } finally {
           closeWhenDone(future, input);
@@ -69,14 +80,24 @@ public abstract class AbstractStream<IdT> implements Stream {
         internalSendFrame(frame, endOfStream);
       }
     };
+
+    // When the deframer reads the required number of bytes for the next message,
+    // immediately return those bytes to inbound flow control.
+    DeframerListener listener = new DeframerListener() {
+      @Override
+      public void bytesRead(int numBytes) {
+        returnProcessedBytes(numBytes);
+      }
+    };
     if (!GRPC_V2_PROTOCOL) {
       framer = new MessageFramer(outboundFrameHandler, 4096);
-      this.deframer = new GrpcDeframer(decompressor, inboundMessageHandler, deframerExecutor);
+      this.deframer =
+          new GrpcDeframer(decompressor, inboundMessageHandler, deframerExecutor, listener);
       this.deframer2 = null;
     } else {
       framer = new MessageFramer2(outboundFrameHandler, 4096);
       this.deframer = null;
-      this.deframer2 = new MessageDeframer2(inboundMessageHandler, deframerExecutor);
+      this.deframer2 = new MessageDeframer2(inboundMessageHandler, deframerExecutor, listener);
     }
   }
 
@@ -153,11 +174,47 @@ public abstract class AbstractStream<IdT> implements Stream {
   protected abstract void remoteEndClosed();
 
   /**
-   * If the given future is non-{@code null}, temporarily disables window updates for inbound flow
-   * control for this stream until the future completes. If the given future is {@code null}, does
-   * nothing.
+   * Returns the given number of processed bytes back to inbound flow control to enable receipt of
+   * more data.
    */
-  protected abstract void disableWindowUpdate(@Nullable ListenableFuture<Void> processingFuture);
+  protected abstract void returnProcessedBytes(int processedBytes);
+
+  /**
+   * Called when a {@link #deframe(Buffer, boolean)} operation failed.
+   */
+  protected abstract void deframeFailed(Throwable cause);
+
+  /**
+   * Called to parse a received frame and attempt delivery of any completed
+   * messages.
+   */
+  protected final void deframe(Buffer frame, boolean endOfStream) {
+    ListenableFuture<?> future;
+    if (GRPC_V2_PROTOCOL) {
+      future = deframer2.deframe(frame, endOfStream);
+    } else {
+      future = deframer.deframe(frame, endOfStream);
+    }
+    if (future != null) {
+      Futures.addCallback(future, deframerErrorCallback);
+    }
+  }
+
+  /**
+   * Delays delivery from the deframer until the given future completes.
+   */
+  protected final void delayDeframer(ListenableFuture<?> future) {
+    if (GRPC_V2_PROTOCOL) {
+      ListenableFuture<?> deliveryFuture = deframer2.delayProcessing(future);
+      if (deliveryFuture != null) {
+        Futures.addCallback(deliveryFuture, deframerErrorCallback);
+      }
+    } else {
+      // V1 is a little broken as it doesn't strictly wait for the last payload handled
+      // by the deframer to be processed by the application layer. Not worth fixing as will
+      // be removed when the v1 deframer is removed.
+    }
+  }
 
   /**
    * Transitions the inbound phase. If the transition is disallowed, throws a

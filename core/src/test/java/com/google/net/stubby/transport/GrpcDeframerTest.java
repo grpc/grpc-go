@@ -51,6 +51,9 @@ public class GrpcDeframerTest {
 
   private SettableFuture<Void> messageFuture;
 
+  @Mock
+  private DeframerListener listener;
+
   @Before
   public void setup() {
     MockitoAnnotations.initMocks(this);
@@ -58,7 +61,7 @@ public class GrpcDeframerTest {
     when(sink.messageRead(any(InputStream.class), anyInt())).thenReturn(messageFuture);
 
     decompressor = new StubDecompressor();
-    reader = new GrpcDeframer(decompressor, sink, MoreExecutors.directExecutor());
+    reader = new GrpcDeframer(decompressor, sink, MoreExecutors.directExecutor(), listener);
   }
 
   @Test

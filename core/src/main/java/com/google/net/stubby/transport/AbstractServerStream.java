@@ -5,8 +5,6 @@ import static com.google.net.stubby.transport.StreamState.OPEN;
 import static com.google.net.stubby.transport.StreamState.WRITE_ONLY;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
@@ -41,16 +39,6 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   private boolean gracefulClose;
   /** Saved trailers from close() that need to be sent once the framer has sent all messages. */
   private Metadata.Trailers stashedTrailers;
-  private final FutureCallback<Object> failureCallback = new FutureCallback<Object>() {
-    @Override
-    public void onFailure(Throwable t) {
-      log.log(Level.WARNING, "Exception processing message", t);
-      abortStream(Status.fromThrowable(t), true);
-    }
-
-    @Override
-    public void onSuccess(Object result) {}
-  };
 
   protected AbstractServerStream(IdT id, @Nullable Decompressor decompressor,
                                  Executor deframerExecutor) {
@@ -129,14 +117,13 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
     }
     // TODO(user): It sounds sub-optimal to deframe in the network thread. That means
     // decompression is serialized.
-    if (!GRPC_V2_PROTOCOL) {
-      deframer.deframe(frame, endOfStream);
-    } else {
-      ListenableFuture<?> future = deframer2.deframe(frame, endOfStream);
-      if (future != null) {
-        Futures.addCallback(future, failureCallback);
-      }
-    }
+    deframe(frame, endOfStream);
+  }
+
+  @Override
+  protected final void deframeFailed(Throwable cause) {
+    log.log(Level.WARNING, "Exception processing message", cause);
+    abortStream(Status.fromThrowable(cause), true);
   }
 
   @Override

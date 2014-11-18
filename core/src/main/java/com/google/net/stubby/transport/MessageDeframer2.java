@@ -46,6 +46,7 @@ public class MessageDeframer2 implements Closeable {
   private final Sink sink;
   private final Executor executor;
   private final Compression compression;
+  private final DeframerListener listener;
   private State state = State.HEADER;
   private int requiredLength = HEADER_LENGTH;
   private boolean compressedFlag;
@@ -56,14 +57,15 @@ public class MessageDeframer2 implements Closeable {
 
   /**
    * Create a deframer. All calls to this class must be made in the context of the provided
-   * executor, which also must not allow concurrent processing of Runnables. Compression will not
-   * be supported.
+   * executor, which also must not allow concurrent processing of Runnables. Compression will not be
+   * supported.
    *
    * @param sink callback for fully read GRPC messages
    * @param executor used for internal event processing
+   * @param listener a listener to deframing events
    */
-  public MessageDeframer2(Sink sink, Executor executor) {
-    this(sink, executor, Compression.NONE);
+  public MessageDeframer2(Sink sink, Executor executor, DeframerListener listener) {
+    this(sink, executor, Compression.NONE, listener);
   }
 
   /**
@@ -73,12 +75,15 @@ public class MessageDeframer2 implements Closeable {
    * @param sink callback for fully read GRPC messages
    * @param executor used for internal event processing
    * @param compression the compression used if a compressed frame is encountered, with NONE meaning
-   *     unsupported
+   *        unsupported
+   * @param listener a listener to deframing events
    */
-  public MessageDeframer2(Sink sink, Executor executor, Compression compression) {
+  public MessageDeframer2(Sink sink, Executor executor, Compression compression,
+      DeframerListener listener) {
     this.sink = Preconditions.checkNotNull(sink, "sink");
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.compression = Preconditions.checkNotNull(compression, "compression");
+    this.listener = Preconditions.checkNotNull(listener, "listener");
   }
 
   /**
@@ -213,21 +218,29 @@ public class MessageDeframer2 implements Closeable {
    * @returns {@code true} if all of the required bytes have been read.
    */
   private boolean readRequiredBytes() {
-    if (nextFrame == null) {
-      nextFrame = new CompositeBuffer();
-    }
-
-    // Read until the buffer contains all the required bytes.
-    int missingBytes;
-    while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
-      if (unprocessed.readableBytes() == 0) {
-        // No more data is available.
-        return false;
+    int totalBytesRead = 0;
+    try {
+      if (nextFrame == null) {
+        nextFrame = new CompositeBuffer();
       }
-      int toRead = Math.min(missingBytes, unprocessed.readableBytes());
-      nextFrame.addBuffer(unprocessed.readBytes(toRead));
+
+      // Read until the buffer contains all the required bytes.
+      int missingBytes;
+      while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
+        if (unprocessed.readableBytes() == 0) {
+          // No more data is available.
+          return false;
+        }
+        int toRead = Math.min(missingBytes, unprocessed.readableBytes());
+        totalBytesRead += toRead;
+        nextFrame.addBuffer(unprocessed.readBytes(toRead));
+      }
+      return true;
+    } finally {
+      if (totalBytesRead > 0) {
+        listener.bytesRead(totalBytesRead);
+      }
     }
-    return true;
   }
 
   /**

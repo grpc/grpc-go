@@ -93,7 +93,7 @@ class NettyClientTransport extends AbstractClientTransport {
   protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method, Metadata.Headers headers,
       ClientStreamListener listener) {
     // Create the stream.
-    NettyClientStream stream = new NettyClientStream(listener, channel, handler.inboundFlow());
+    NettyClientStream stream = new NettyClientStream(listener, channel, handler);
 
     try {
       // Convert the headers into Netty HTTP/2 headers.
