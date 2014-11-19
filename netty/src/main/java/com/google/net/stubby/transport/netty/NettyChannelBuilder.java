@@ -64,7 +64,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   @Override
   protected ChannelEssentials buildEssentials() {
     final EventLoopGroup group = (userEventLoopGroup == null)
-        ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP) : userEventLoopGroup;
+        ? SharedResourceHolder.get(Utils.DEFAULT_CHANNEL_EVENT_LOOP_GROUP) : userEventLoopGroup;
     ClientTransportFactory transportFactory = new NettyClientTransportFactory(
         serverAddress, negotiationType, group);
     Service.Listener listener = null;
@@ -72,7 +72,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
       listener = new ClosureHook() {
         @Override
         protected void onClosed() {
-          SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, group);
+          SharedResourceHolder.release(Utils.DEFAULT_CHANNEL_EVENT_LOOP_GROUP, group);
         }
       };
     }

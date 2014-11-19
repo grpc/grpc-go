@@ -3,6 +3,7 @@ package com.google.net.stubby;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.Service;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.net.stubby.SharedResourceHolder.Resource;
 
 import java.util.concurrent.ExecutorService;
@@ -27,14 +28,21 @@ abstract class AbstractServiceBuilder<ProductT extends Service,
 
   private static final Resource<ExecutorService> DEFAULT_EXECUTOR =
       new Resource<ExecutorService>() {
+        private static final String name = "grpc-default-executor";
         @Override
         public ExecutorService create() {
-          return Executors.newCachedThreadPool();
+          return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
+              .setNameFormat(name + "-%d").build());
         }
 
         @Override
         public void close(ExecutorService instance) {
           instance.shutdown();
+        }
+
+        @Override
+        public String toString() {
+          return name;
         }
       };
 

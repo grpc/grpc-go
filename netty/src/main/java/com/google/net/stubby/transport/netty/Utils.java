@@ -1,6 +1,7 @@
 package com.google.net.stubby.transport.netty;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.SharedResourceHolder.Resource;
 import com.google.net.stubby.transport.HttpUtil;
@@ -12,9 +13,12 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.util.concurrent.ExecutorServiceFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Common utility methods.
@@ -30,11 +34,14 @@ class Utils {
   public static final AsciiString CONTENT_TYPE_GRPC =
       new AsciiString(HttpUtil.CONTENT_TYPE_GRPC);
 
+  public static final Resource<EventLoopGroup> DEFAULT_CHANNEL_EVENT_LOOP_GROUP =
+      new DefaultEventLoopGroupResource("grpc-default-channel-ELG");
+
   public static final Resource<EventLoopGroup> DEFAULT_BOSS_EVENT_LOOP_GROUP =
-      new DefaultEventLoopGroupResource();
+      new DefaultEventLoopGroupResource("grpc-default-boss-ELG");
 
   public static final Resource<EventLoopGroup> DEFAULT_WORKER_EVENT_LOOP_GROUP =
-      new DefaultEventLoopGroupResource();
+      new DefaultEventLoopGroupResource("grpc-default-worker-ELG");
 
   /**
    * Copies the content of the given {@link ByteBuffer} to a new {@link ByteBuf} instance.
@@ -127,14 +134,31 @@ class Utils {
   }
 
   private static class DefaultEventLoopGroupResource implements Resource<EventLoopGroup> {
+    private final String name;
+
+    DefaultEventLoopGroupResource(String name) {
+      this.name = name;
+    }
+
     @Override
     public EventLoopGroup create() {
-      return new NioEventLoopGroup();
+      return new NioEventLoopGroup(0, new ExecutorServiceFactory() {
+        @Override
+        public ExecutorService newExecutorService(int parallelism) {
+          return Executors.newFixedThreadPool(parallelism, new ThreadFactoryBuilder()
+              .setNameFormat(name + "-%d").build());
+        }
+      });
     }
 
     @Override
     public void close(EventLoopGroup instance) {
       instance.shutdownGracefully();
+    }
+
+    @Override
+    public String toString() {
+      return name;
     }
   }
 
