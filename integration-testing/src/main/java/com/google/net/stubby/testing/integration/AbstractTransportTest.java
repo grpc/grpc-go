@@ -111,16 +111,15 @@ public abstract class AbstractTransportTest {
   @Test
   public void largeUnary() throws Exception {
     final SimpleRequest request = SimpleRequest.newBuilder()
-        // TODO(user): Use proper size once Netty HEADERS+DATA ordering is fixed (b/18192619).
-        .setResponseSize(31415/*9*/)
+        .setResponseSize(314159)
         .setResponseType(PayloadType.COMPRESSABLE)
         .setPayload(Payload.newBuilder()
-            .setBody(ByteString.copyFrom(new byte[27182/*8*/])))
+            .setBody(ByteString.copyFrom(new byte[271828])))
         .build();
     final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
         .setPayload(Payload.newBuilder()
             .setType(PayloadType.COMPRESSABLE)
-            .setBody(ByteString.copyFrom(new byte[31415/*9*/])))
+            .setBody(ByteString.copyFrom(new byte[314159])))
         .build();
 
     assertEquals(goldenResponse, blockingStub.unaryCall(request));
@@ -130,21 +129,20 @@ public abstract class AbstractTransportTest {
   public void serverStreaming() throws Exception {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .setResponseType(PayloadType.COMPRESSABLE)
-        // TODO(user): Use proper size once Netty HEADERS+DATA ordering is fixed (b/18192619).
         .addResponseParameters(ResponseParameters.newBuilder()
-            .setSize(3141/*5*/))
+            .setSize(31415))
         .addResponseParameters(ResponseParameters.newBuilder()
             .setSize(9))
         .addResponseParameters(ResponseParameters.newBuilder()
             .setSize(2653))
         .addResponseParameters(ResponseParameters.newBuilder()
-            .setSize(5897/*9*/))
+            .setSize(58979))
         .build();
     final List<StreamingOutputCallResponse> goldenResponses = Arrays.asList(
         StreamingOutputCallResponse.newBuilder()
             .setPayload(Payload.newBuilder()
                 .setType(PayloadType.COMPRESSABLE)
-                .setBody(ByteString.copyFrom(new byte[3141/*5*/])))
+                .setBody(ByteString.copyFrom(new byte[31415])))
             .build(),
         StreamingOutputCallResponse.newBuilder()
             .setPayload(Payload.newBuilder()
@@ -159,7 +157,7 @@ public abstract class AbstractTransportTest {
         StreamingOutputCallResponse.newBuilder()
             .setPayload(Payload.newBuilder()
                 .setType(PayloadType.COMPRESSABLE)
-                .setBody(ByteString.copyFrom(new byte[5897/*9*/])))
+                .setBody(ByteString.copyFrom(new byte[58979])))
             .build());
 
     StreamRecorder<StreamingOutputCallResponse> recorder = StreamRecorder.create();
@@ -173,10 +171,8 @@ public abstract class AbstractTransportTest {
   public void clientStreaming() throws Exception {
     final List<StreamingInputCallRequest> requests = Arrays.asList(
         StreamingInputCallRequest.newBuilder()
-            // TODO(user): Use proper size once window update race is fixed. Should be fixed at
-            // same time as b/18192619.
             .setPayload(Payload.newBuilder()
-                .setBody(ByteString.copyFrom(new byte[2718/*2*/])))
+                .setBody(ByteString.copyFrom(new byte[27182])))
             .build(),
         StreamingInputCallRequest.newBuilder()
             .setPayload(Payload.newBuilder()
@@ -188,10 +184,10 @@ public abstract class AbstractTransportTest {
             .build(),
         StreamingInputCallRequest.newBuilder()
             .setPayload(Payload.newBuilder()
-                .setBody(ByteString.copyFrom(new byte[4590/*4*/])))
+                .setBody(ByteString.copyFrom(new byte[45904])))
             .build());
     final StreamingInputCallResponse goldenResponse = StreamingInputCallResponse.newBuilder()
-        .setAggregatedPayloadSize(9144/*74922*/)
+        .setAggregatedPayloadSize(74922)
         .build();
 
     assertEquals(goldenResponse, blockingStub.streamingInputCall(requests.iterator()));
@@ -201,11 +197,10 @@ public abstract class AbstractTransportTest {
   public void pingPong() throws Exception {
     final List<StreamingOutputCallRequest> requests = Arrays.asList(
         StreamingOutputCallRequest.newBuilder()
-            // TODO(user): Use proper size once Netty HEADERS+DATA ordering is fixed (b/18192619).
             .addResponseParameters(ResponseParameters.newBuilder()
-                .setSize(3141/*5*/))
+                .setSize(31415))
             .setPayload(Payload.newBuilder()
-                .setBody(ByteString.copyFrom(new byte[2718/*2*/])))
+                .setBody(ByteString.copyFrom(new byte[27182])))
             .build(),
         StreamingOutputCallRequest.newBuilder()
             .addResponseParameters(ResponseParameters.newBuilder()
@@ -221,15 +216,15 @@ public abstract class AbstractTransportTest {
             .build(),
         StreamingOutputCallRequest.newBuilder()
             .addResponseParameters(ResponseParameters.newBuilder()
-                .setSize(5897/*9*/))
+                .setSize(58979))
             .setPayload(Payload.newBuilder()
-                .setBody(ByteString.copyFrom(new byte[4590/*4*/])))
+                .setBody(ByteString.copyFrom(new byte[45904])))
             .build());
     final List<StreamingOutputCallResponse> goldenResponses = Arrays.asList(
         StreamingOutputCallResponse.newBuilder()
             .setPayload(Payload.newBuilder()
                 .setType(PayloadType.COMPRESSABLE)
-                .setBody(ByteString.copyFrom(new byte[3141/*5*/])))
+                .setBody(ByteString.copyFrom(new byte[31415])))
             .build(),
         StreamingOutputCallResponse.newBuilder()
             .setPayload(Payload.newBuilder()
@@ -244,7 +239,7 @@ public abstract class AbstractTransportTest {
         StreamingOutputCallResponse.newBuilder()
             .setPayload(Payload.newBuilder()
                 .setType(PayloadType.COMPRESSABLE)
-                .setBody(ByteString.copyFrom(new byte[5897/*9*/])))
+                .setBody(ByteString.copyFrom(new byte[58979])))
             .build());
 
     final SynchronousQueue<Object> queue = new SynchronousQueue<Object>();
