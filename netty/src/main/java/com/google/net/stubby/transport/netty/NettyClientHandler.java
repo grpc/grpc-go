@@ -68,12 +68,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
     // Observe the HTTP/2 connection for events.
     connection.addListener(new Http2ConnectionAdapter() {
       @Override
-      public void streamHalfClosed(Http2Stream stream) {
-        // Check for disallowed state: HALF_CLOSED_REMOTE.
-        terminateIfInvalidState(stream);
-      }
-
-      @Override
       public void streamInactive(Http2Stream stream) {
         // Whenever a stream has been closed, try to create a pending stream to fill its place.
         createPendingStreams();
@@ -384,27 +378,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
    */
   private Http2Stream[] http2Streams() {
     return connection().activeStreams().toArray(new Http2Stream[0]);
-  }
-
-  /**
-   * Terminates the stream if it's in an unsupported state.
-   */
-  private void terminateIfInvalidState(Http2Stream stream) {
-    switch (stream.state()) {
-      case HALF_CLOSED_REMOTE:
-      case IDLE:
-      case RESERVED_LOCAL:
-      case RESERVED_REMOTE:
-        // Disallowed state, terminate the stream.
-        clientStream(stream).setStatus(
-            Status.INTERNAL.withDescription("Stream in invalid state: " + stream.state()),
-            new Metadata.Trailers());
-        encoder().writeRstStream(ctx, stream.id(), Http2Error.INTERNAL_ERROR.code(),
-            ctx.newPromise());
-        break;
-      default:
-        break;
-    }
   }
 
   private static class LazyFrameListener extends Http2FrameAdapter {
