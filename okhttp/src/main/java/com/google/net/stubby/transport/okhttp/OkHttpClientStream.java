@@ -28,7 +28,8 @@ class OkHttpClientStream extends Http2ClientStream {
    */
   static OkHttpClientStream newStream(final Executor executor, ClientStreamListener listener,
                                        AsyncFrameWriter frameWriter,
-                                       OkHttpClientTransport transport) {
+                                       OkHttpClientTransport transport,
+                                       OutboundFlowController outboundFlow) {
     // Create a lock object that can be used by both the executor and methods in the stream
     // to ensure consistent locking behavior.
     final Object executorLock = new Object();
@@ -46,7 +47,7 @@ class OkHttpClientStream extends Http2ClientStream {
       }
     };
     return new OkHttpClientStream(synchronizingExecutor, listener, frameWriter, transport,
-        executorLock);
+        executorLock, outboundFlow);
   }
 
   @GuardedBy("executorLock")
@@ -54,15 +55,18 @@ class OkHttpClientStream extends Http2ClientStream {
   @GuardedBy("executorLock")
   private int processedWindow = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE;
   private final AsyncFrameWriter frameWriter;
+  private final OutboundFlowController outboundFlow;
   private final OkHttpClientTransport transport;
   // Lock used to synchronize with work done on the executor.
   private final Object executorLock;
+  private Object outboundFlowState;
 
   private OkHttpClientStream(final Executor executor,
                      final ClientStreamListener listener,
                      AsyncFrameWriter frameWriter,
                      OkHttpClientTransport transport,
-                     Object executorLock) {
+                     Object executorLock,
+                     OutboundFlowController outboundFlow) {
     super(listener, null, executor);
     if (!GRPC_V2_PROTOCOL) {
       throw new RuntimeException("okhttp transport can only work with V2 protocol!");
@@ -70,6 +74,7 @@ class OkHttpClientStream extends Http2ClientStream {
     this.frameWriter = frameWriter;
     this.transport = transport;
     this.executorLock = executorLock;
+    this.outboundFlow = outboundFlow;
   }
 
   public void transportHeadersReceived(List<Header> headers, boolean endOfStream) {
@@ -105,8 +110,7 @@ class OkHttpClientStream extends Http2ClientStream {
     // Per http2 SPEC, the max data length should be larger than 64K, while our frame size is
     // only 4K.
     Preconditions.checkState(buffer.size() < frameWriter.maxDataLength());
-    frameWriter.data(endOfStream, id(), buffer, (int) buffer.size());
-    frameWriter.flush();
+    outboundFlow.data(endOfStream, id(), buffer);
   }
 
   @Override
@@ -143,5 +147,13 @@ class OkHttpClientStream extends Http2ClientStream {
     if (transport.finishStream(id(), null)) {
       transport.stopIfNecessary();
     }
+  }
+
+  void setOutboundFlowState(Object outboundFlowState) {
+    this.outboundFlowState = outboundFlowState;
+  }
+
+  Object getOutboundFlowState() {
+    return outboundFlowState;
   }
 }

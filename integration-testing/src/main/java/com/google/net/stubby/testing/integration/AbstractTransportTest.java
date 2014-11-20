@@ -3,7 +3,6 @@ package com.google.net.stubby.testing.integration;
 import static com.google.net.stubby.testing.integration.Messages.PayloadType.COMPRESSABLE;
 import static com.google.net.stubby.testing.integration.Util.assertEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Throwables;
@@ -41,8 +40,8 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;

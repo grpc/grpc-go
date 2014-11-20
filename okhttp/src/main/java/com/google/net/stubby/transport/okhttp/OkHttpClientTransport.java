@@ -82,6 +82,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   private final String defaultAuthority;
   private FrameReader frameReader;
   private AsyncFrameWriter frameWriter;
+  private OutboundFlowController outboundFlow;
   private final Object lock = new Object();
   @GuardedBy("lock")
   private int nextStreamId;
@@ -118,6 +119,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     this.executor = Preconditions.checkNotNull(executor);
     this.frameReader = Preconditions.checkNotNull(frameReader);
     this.frameWriter = Preconditions.checkNotNull(frameWriter);
+    this.outboundFlow = new OutboundFlowController(this, frameWriter);
     this.nextStreamId = nextStreamId;
   }
 
@@ -126,7 +128,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
                                            Metadata.Headers headers,
                                            ClientStreamListener listener) {
     OkHttpClientStream clientStream = OkHttpClientStream.newStream(executor, listener,
-        frameWriter, this);
+        frameWriter, this, outboundFlow);
     if (goAway) {
       clientStream.setStatus(goAwayStatus, new Metadata.Trailers());
     } else {
@@ -154,6 +156,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       Variant variant = new Http20Draft14();
       frameReader = variant.newReader(source, true);
       frameWriter = new AsyncFrameWriter(variant.newWriter(sink, true), this, executor);
+      outboundFlow = new OutboundFlowController(this, frameWriter);
       frameWriter.connectionPreface();
       Settings settings = new Settings();
       frameWriter.settings(settings);
@@ -185,7 +188,6 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     return clientFrameHandler;
   }
 
-  @VisibleForTesting
   Map<Integer, OkHttpClientStream> getStreams() {
     return streams;
   }
@@ -395,8 +397,8 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     }
 
     @Override
-    public void windowUpdate(int arg0, long arg1) {
-      // TODO(user): outbound flow control.
+    public void windowUpdate(int streamId, long delta) {
+      outboundFlow.windowUpdate(streamId, (int) delta);
     }
 
     @Override
