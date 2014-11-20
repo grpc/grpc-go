@@ -189,7 +189,14 @@ public abstract class AbstractTransportTest {
         .setAggregatedPayloadSize(74922)
         .build();
 
-    assertEquals(goldenResponse, blockingStub.streamingInputCall(requests.iterator()));
+    StreamRecorder<StreamingInputCallResponse> responseObserver = StreamRecorder.create();
+    StreamObserver<StreamingInputCallRequest> requestObserver =
+        asyncStub.streamingInputCall(responseObserver);
+    for (StreamingInputCallRequest request : requests) {
+      requestObserver.onValue(request);
+    }
+    requestObserver.onCompleted();
+    assertEquals(goldenResponse, responseObserver.firstValue().get());
   }
 
   @Test(timeout=5000)
@@ -303,7 +310,7 @@ public abstract class AbstractTransportTest {
 
     StreamRecorder<StreamingOutputCallResponse> recorder = StreamRecorder.create();
     StreamObserver<StreamingOutputCallRequest> requestStream =
-        blockingStub.fullDuplexCall(recorder);
+        asyncStub.fullDuplexCall(recorder);
 
     final int numRequests = 10;
     for (int ix = numRequests; ix > 0; --ix) {
@@ -465,8 +472,7 @@ public abstract class AbstractTransportTest {
   @org.junit.Test
   public void exchangeContextStreamingCall() throws Exception {
     Assume.assumeTrue(AbstractStream.GRPC_V2_PROTOCOL);
-    TestServiceGrpc.TestServiceBlockingStub stub =
-        TestServiceGrpc.newBlockingStub(channel);
+    TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
 
     // Capture the context exchange
     Metadata.Headers fixedHeaders = new Metadata.Headers();

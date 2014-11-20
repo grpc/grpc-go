@@ -13,10 +13,9 @@ import com.google.protos.net.stubby.examples.Math.DivReply;
 import com.google.protos.net.stubby.examples.Math.FibArgs;
 import com.google.protos.net.stubby.examples.Math.Num;
 
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Random;
-import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -144,26 +143,41 @@ public class MathClient {
   }
 
   /**
-   * This example shows how to make a blocking client streaming call.
-   *
-   * <p> The asynchronous usage is similar to {@link #divMany}.
+   * This example shows how to make a client streaming call.
    */
-  public void blockingSum() {
-    logger.info("*** Blocking Sum");
+  public void sum() throws Exception {
+    final CountDownLatch completed = new CountDownLatch(1);
+    logger.info("*** Sum");
     int count = 5;
-    Set<Num> numSet = new HashSet<Num>();
+    StreamObserver<Num> responseObserver = new StreamObserver<Num>() {
+      @Override
+      public void onValue(Num value) {
+        logger.info("Sum=" + value);
+      }
+
+      @Override
+      public void onError(Throwable t) {
+        logger.log(Level.SEVERE, "Error receiving response", t);
+      }
+
+      @Override
+      public void onCompleted() {
+        completed.countDown();
+      }
+    };
+    StreamObserver<Num> requestObserver = asyncStub.sum(responseObserver);
     StringBuilder numMsg = new StringBuilder();
     for (int i = 0; i < count; i++) {
       int value = rand.nextInt();
-      numSet.add(Num.newBuilder().setNum(value).build());
+      requestObserver.onValue(Num.newBuilder().setNum(value).build());
       numMsg.append(value);
       if (i != count - 1) {
         numMsg.append(" + ");
       }
     }
     logger.info(numMsg.toString());
-    Num reply = blockingStub.sum(numSet.iterator());
-    logger.info("Result: " + numMsg.toString() + " = " + reply.getNum());
+    requestObserver.onCompleted();
+    completed.await();
   }
 
   /**
@@ -196,7 +210,7 @@ public class MathClient {
       client.blockingDiv(73, 0);
       client.asyncDiv(1986, 12);
       client.divMany();
-      client.blockingSum();
+      client.sum();
       client.blockingFib();
     } finally {
       client.shutdown();
