@@ -117,7 +117,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   void returnProcessedBytes(int streamId, int bytes) {
     try {
       Http2Stream http2Stream = connection().requireStream(streamId);
-      http2Stream.inboundFlow().returnProcessedBytes(ctx, bytes);
+      http2Stream.garbageCollector().returnProcessedBytes(ctx, bytes);
     } catch (Http2Exception e) {
       throw new RuntimeException(e);
     }
@@ -334,7 +334,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
       throws Http2Exception {
     // Attach the client stream to the HTTP/2 stream object as user data.
     Http2Stream http2Stream = connection().requireStream(streamId);
-    http2Stream.data(stream);
+    http2Stream.setProperty(NettyClientStream.class, stream);
 
     // Notify the stream that it has been created.
     stream.id(streamId);
@@ -345,7 +345,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
    * Gets the client stream associated to the given HTTP/2 stream object.
    */
   private NettyClientStream clientStream(Http2Stream stream) {
-    return stream.<NettyClientStream>data();
+    return stream.getProperty(NettyClientStream.class);
   }
 
   /**
