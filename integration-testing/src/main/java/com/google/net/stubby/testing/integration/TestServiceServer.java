@@ -9,8 +9,8 @@ import com.google.net.stubby.testing.TestUtils;
 import com.google.net.stubby.transport.netty.NettyServerBuilder;
 
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.util.SelfSignedCertificate;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.Map;
@@ -173,11 +173,12 @@ public class TestServiceServer {
     private final ServerImpl server;
 
     public Http2NettyController(boolean enableSSL) throws Exception {
-      // TODO(user): support SSL
       SslContext sslContext = null;
       if (enableSSL) {
-        SelfSignedCertificate ssc = new SelfSignedCertificate();
-        sslContext = SslContext.newServerContext(ssc.certificate(), ssc.privateKey());
+        String dir = "integration-testing/certs";
+        sslContext = SslContext.newServerContext(
+            new File(dir + "/server1.pem"),
+            new File(dir + "/server1.key"));
       }
       server = NettyServerBuilder.forPort(port)
           .executor(executor)

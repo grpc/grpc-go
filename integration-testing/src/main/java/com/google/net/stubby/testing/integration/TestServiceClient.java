@@ -7,7 +7,15 @@ import com.google.net.stubby.transport.netty.NegotiationType;
 import com.google.net.stubby.transport.netty.NettyChannelBuilder;
 import com.google.net.stubby.transport.okhttp.OkHttpChannelBuilder;
 
+import io.netty.handler.ssl.SslContext;
+
+import java.io.File;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.Map;
+
+import javax.net.ssl.SSLException;
 
 /**
  * Application that starts a client for the {@link TestServiceGrpc.TestService} and runs through a
@@ -31,8 +39,26 @@ public class TestServiceClient {
     NETTY_TLS {
       @Override
       public ChannelImpl createChannel(String serverHost, int serverPort) {
-        return NettyChannelBuilder.forAddress(serverHost, serverPort)
-            .negotiationType(NegotiationType.TLS).build();
+        InetAddress address;
+        try {
+          address = InetAddress.getByName(serverHost);
+          // Force the hostname to match the cert the server uses.
+          address = InetAddress.getByAddress("foo.test.google.fr", address.getAddress());
+        } catch (UnknownHostException ex) {
+          throw new RuntimeException(ex);
+        }
+        SslContext sslContext;
+        try {
+          String dir = "integration-testing/certs";
+          sslContext = SslContext.newClientContext(
+              new File(dir + "/ca.pem"));
+        } catch (SSLException ex) {
+          throw new RuntimeException(ex);
+        }
+        return NettyChannelBuilder.forAddress(new InetSocketAddress(address, serverPort))
+            .negotiationType(NegotiationType.TLS)
+            .sslContext(sslContext)
+            .build();
       }
     },
     OKHTTP {
@@ -65,7 +91,7 @@ public class TestServiceClient {
     String testCase = getTestCase(argMap);
 
     com.google.net.stubby.transport.AbstractStream.GRPC_V2_PROTOCOL =
-        getGrpcVersion(argMap) == 2; 
+        getGrpcVersion(argMap) == 2;
 
     final Tester tester = new Tester(transport, serverHost, serverPort);
     Runtime.getRuntime().addShutdownHook(new Thread() {

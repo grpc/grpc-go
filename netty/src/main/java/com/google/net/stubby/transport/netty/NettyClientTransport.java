@@ -12,14 +12,12 @@ import com.google.net.stubby.transport.AbstractClientTransport;
 import com.google.net.stubby.transport.ClientStream;
 import com.google.net.stubby.transport.ClientStreamListener;
 import com.google.net.stubby.transport.ClientTransport;
-import com.google.net.stubby.util.ssl.SslContextFactory;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
@@ -36,12 +34,15 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
+import io.netty.handler.ssl.SslContext;
 import io.netty.util.internal.logging.InternalLogLevel;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutionException;
 
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLParameters;
 
 /**
  * A Netty-based {@link ClientTransport} implementation.
@@ -56,12 +57,8 @@ class NettyClientTransport extends AbstractClientTransport {
   private final AsciiString authority;
   private Channel channel;
 
-  NettyClientTransport(InetSocketAddress address, NegotiationType negotiationType) {
-    this(address, negotiationType, new NioEventLoopGroup());
-  }
-
   NettyClientTransport(InetSocketAddress address, NegotiationType negotiationType,
-      EventLoopGroup eventGroup) {
+      EventLoopGroup eventGroup, SslContext sslContext) {
     Preconditions.checkNotNull(negotiationType, "negotiationType");
     this.address = Preconditions.checkNotNull(address, "address");
     this.eventGroup = Preconditions.checkNotNull(eventGroup, "eventGroup");
@@ -79,8 +76,19 @@ class NettyClientTransport extends AbstractClientTransport {
         ssl = false;
         break;
       case TLS:
-        SSLEngine sslEngine = SslContextFactory.getClientContext().createSSLEngine();
-        sslEngine.setUseClientMode(true);
+        if (sslContext == null) {
+          try {
+            sslContext = SslContext.newClientContext();
+          } catch (SSLException ex) {
+            throw new RuntimeException(ex);
+          }
+        }
+        // TODO(user): specify allocator. The method currently ignores it though.
+        SSLEngine sslEngine
+            = sslContext.newEngine(null, address.getHostString(), address.getPort());
+        SSLParameters sslParams = new SSLParameters();
+        sslParams.setEndpointIdentificationAlgorithm("HTTPS");
+        sslEngine.setSSLParameters(sslParams);
         negotiation = Http2Negotiator.tls(handler, sslEngine);
         ssl = true;
         break;

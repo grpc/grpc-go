@@ -6,6 +6,7 @@ import com.google.net.stubby.SharedResourceHolder;
 import com.google.net.stubby.transport.ClientTransportFactory;
 
 import io.netty.channel.EventLoopGroup;
+import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
 
@@ -18,6 +19,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
 
   private NegotiationType negotiationType = NegotiationType.TLS;
   private EventLoopGroup userEventLoopGroup;
+  private SslContext sslContext;
 
   /**
    * Creates a new builder with the given server address.
@@ -61,12 +63,18 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     return this;
   }
 
+  /** SSL/TLS context to use instead of the system default. */
+  public NettyChannelBuilder sslContext(SslContext sslContext) {
+    this.sslContext = sslContext;
+    return this;
+  }
+
   @Override
   protected ChannelEssentials buildEssentials() {
     final EventLoopGroup group = (userEventLoopGroup == null)
         ? SharedResourceHolder.get(Utils.DEFAULT_CHANNEL_EVENT_LOOP_GROUP) : userEventLoopGroup;
     ClientTransportFactory transportFactory = new NettyClientTransportFactory(
-        serverAddress, negotiationType, group);
+        serverAddress, negotiationType, group, sslContext);
     Service.Listener listener = null;
     if (userEventLoopGroup == null) {
       listener = new ClosureHook() {
