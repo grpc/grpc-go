@@ -11,8 +11,6 @@ import com.google.net.stubby.transport.netty.NettyServerBuilder;
 import io.netty.handler.ssl.SslContext;
 
 import java.io.File;
-import java.io.IOException;
-import java.net.Socket;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -40,7 +38,7 @@ public class TestServiceServer {
 
   private final ScheduledExecutorService executor;
   private final int port;
-  private final ServerController serverController;
+  private final ServerImpl server;
 
   /**
    * Constructs the GRPC server.
@@ -59,10 +57,10 @@ public class TestServiceServer {
 
     switch (transport) {
       case HTTP2_NETTY:
-        serverController = new Http2NettyController(false);
+        server = createServer(false);
         break;
       case HTTP2_NETTY_TLS:
-        serverController = new Http2NettyController(true);
+        server = createServer(true);
         break;
       default:
         throw new IllegalArgumentException("Unsupported transport: " + transport);
@@ -70,14 +68,15 @@ public class TestServiceServer {
   }
 
   public void start() throws Exception {
-    serverController.start();
-    assertStart();
+    server.startAsync();
+    server.awaitRunning(STARTUP_TIMEOUT_MILLS, TimeUnit.MILLISECONDS);
     log.info("GRPC server started.");
   }
 
   public void stop() throws Exception {
     log.info("GRPC server stopping...");
-    serverController.stop();
+    server.stopAsync();
+    server.awaitTerminated();
     MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
   }
 
@@ -155,84 +154,19 @@ public class TestServiceServer {
     return argMap;
   }
 
-  /**
-   * A simple interface for an object controlling the lifecycle of the underlying server
-   * implementation.
-   */
-  private interface ServerController {
-
-    void start() throws Exception;
-
-    void stop() throws Exception;
-  }
-
-  /**
-   * A controller for a Netty-based Http2 server.
-   */
-  private class Http2NettyController implements ServerController {
-    private final ServerImpl server;
-
-    public Http2NettyController(boolean enableSSL) throws Exception {
-      SslContext sslContext = null;
-      if (enableSSL) {
-        String dir = "integration-testing/certs";
-        sslContext = SslContext.newServerContext(
-            new File(dir + "/server1.pem"),
-            new File(dir + "/server1.key"));
-      }
-      server = NettyServerBuilder.forPort(port)
-          .executor(executor)
-          .sslContext(sslContext)
-          .addService(ServerInterceptors.intercept(TestServiceGrpc.bindService(testService),
-                TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
-          .build();
+  private ServerImpl createServer(boolean enableSSL) throws Exception {
+    SslContext sslContext = null;
+    if (enableSSL) {
+      String dir = "integration-testing/certs";
+      sslContext = SslContext.newServerContext(
+          new File(dir + "/server1.pem"),
+          new File(dir + "/server1.key"));
     }
-
-    @Override
-    public void start() throws Exception {
-      executor.execute(new Runnable() {
-        @Override
-        public void run() {
-          server.startAsync();
-          server.awaitRunning();
-        }
-      });
-    }
-
-    @Override
-    public void stop() throws Exception {
-      server.stopAsync();
-      server.awaitTerminated();
-    }
-  }
-
-  // Asserts that the server has started listening.
-  private void assertStart() throws Exception {
-    long endTimeMillis = System.currentTimeMillis() + STARTUP_TIMEOUT_MILLS;
-    boolean timedOut = false;
-    while (!serverListening("localhost", port)) {
-      if (System.currentTimeMillis() > endTimeMillis) {
-        timedOut = true;
-        break;
-      }
-    }
-    if (timedOut) {
-      throw new RuntimeException("Failed to start server.");
-    }
-    log.info("Server is listening on port: " + port);
-  }
-
-  private boolean serverListening(String host, int port) {
-    Socket socket = null;
-    try {
-      socket = new Socket(host, port);
-      return true;
-    } catch (IOException e) {
-      return false;
-    } finally {
-      if (socket != null) {
-        try { socket.close(); } catch (IOException expected) {}
-      }
-    }
+    return NettyServerBuilder.forPort(port)
+        .executor(executor)
+        .sslContext(sslContext)
+        .addService(ServerInterceptors.intercept(TestServiceGrpc.bindService(testService),
+              TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
+        .build();
   }
 }
