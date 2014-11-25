@@ -10,12 +10,6 @@ import javax.annotation.Nullable;
  * <p>An implementation doesn't need to be thread-safe.
  */
 public interface Stream {
-
-  /**
-   * Gets the current state of this stream.
-   */
-  StreamState state();
-
   /**
    * Writes a message payload to the remote end-point. The bytes from the stream are immediate read
    * by the Transport. This method will always return immediately and will not wait for the write to

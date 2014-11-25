@@ -1,9 +1,5 @@
 package com.google.net.stubby.transport;
 
-import static com.google.net.stubby.transport.StreamState.CLOSED;
-import static com.google.net.stubby.transport.StreamState.OPEN;
-import static com.google.net.stubby.transport.StreamState.WRITE_ONLY;
-
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
@@ -16,7 +12,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Abstract base class for {@link ServerStream} implementations.
@@ -25,14 +20,11 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
     implements ServerStream {
   private static final Logger log = Logger.getLogger(AbstractServerStream.class.getName());
 
+  /** Whether listener.closed() has been called. */
+  private boolean listenerClosed;
   private ServerStreamListener listener;
 
-  private final Object stateLock = new Object();
-  private volatile StreamState state = StreamState.OPEN;
   private boolean headersSent = false;
-  /** Whether listener.closed() has been called. */
-  @GuardedBy("stateLock")
-  private boolean listenerClosed;
   /**
    * Whether the stream was closed gracefully by the application (vs. a transport-level failure).
    */
@@ -84,15 +76,12 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   public final void close(Status status, Metadata.Trailers trailers) {
     Preconditions.checkNotNull(status, "status");
     Preconditions.checkNotNull(trailers, "trailers");
-    outboundPhase(Phase.STATUS);
-    synchronized (stateLock) {
-      state = CLOSED;
+    if (outboundPhase(Phase.STATUS) != Phase.STATUS) {
+      gracefulClose = true;
+      this.stashedTrailers = trailers;
+      writeStatusToTrailers(status);
+      closeFramer(status);
     }
-    gracefulClose = true;
-    this.stashedTrailers = trailers;
-    writeStatusToTrailers(status);
-    closeFramer(status);
-    dispose();
   }
 
   private void writeStatusToTrailers(Status status) {
@@ -111,7 +100,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    *              be retained.
    */
   public void inboundDataReceived(Buffer frame, boolean endOfStream) {
-    if (state() == StreamState.CLOSED) {
+    if (inboundPhase() == Phase.STATUS) {
       frame.close();
       return;
     }
@@ -173,12 +162,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    * abortStream()} for abnormal.
    */
   public void complete() {
-    synchronized (stateLock) {
-      if (listenerClosed) {
-        return;
-      }
-      listenerClosed = true;
-    }
+    listenerClosed = true;
     if (!gracefulClose) {
       listener.closed(Status.INTERNAL.withDescription("successful complete() without close()"));
       throw new IllegalStateException("successful complete() without close()");
@@ -186,22 +170,14 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
     listener.closed(Status.OK);
   }
 
-  @Override
-  public StreamState state() {
-    return state;
-  }
-
   /**
    * Called when the remote end half-closes the stream.
    */
   @Override
   protected final void remoteEndClosed() {
-    synchronized (stateLock) {
-      Preconditions.checkState(state == OPEN, "Stream not OPEN");
-      state = WRITE_ONLY;
+    if (inboundPhase(Phase.STATUS) != Phase.STATUS) {
+      listener.halfClosed();
     }
-    inboundPhase(Phase.STATUS);
-    listener.halfClosed();
   }
 
   /**
@@ -217,31 +193,27 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    *                     about stream closure and send the status
    */
   public final void abortStream(Status status, boolean notifyClient) {
+    // TODO(user): Investigate whether we can remove the notification to the client
+    // and rely on a transport layer stream reset instead.
     Preconditions.checkArgument(!status.isOk(), "status must not be OK");
-    boolean closeListener;
-    synchronized (stateLock) {
-      if (state == CLOSED) {
-        // Can't actually notify client.
-        notifyClient = false;
-      }
-      state = CLOSED;
-      closeListener = !listenerClosed;
+    if (!listenerClosed) {
       listenerClosed = true;
+      listener.closed(status);
     }
-
-    try {
-      if (notifyClient) {
-        if (stashedTrailers == null) {
-          stashedTrailers = new Metadata.Trailers();
-        }
-        writeStatusToTrailers(status);
-        closeFramer(status);
+    if (notifyClient) {
+      // TODO(user): Remove
+      if (stashedTrailers == null) {
+        stashedTrailers = new Metadata.Trailers();
       }
+      writeStatusToTrailers(status);
+      closeFramer(status);
+    } else {
       dispose();
-    } finally {
-      if (closeListener) {
-        listener.closed(status);
-      }
     }
+  }
+
+  @Override
+  public boolean isClosed() {
+    return super.isClosed() || listenerClosed;
   }
 }

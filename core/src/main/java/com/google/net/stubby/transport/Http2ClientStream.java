@@ -85,7 +85,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
   }
 
   protected void transportDataReceived(Buffer frame, boolean endOfStream) {
-    if (inboundPhase == Phase.HEADERS) {
+    if (inboundPhase() == Phase.HEADERS) {
       // Must receive headers prior to receiving any payload as we use headers to check for
       // protocol correctness.
       transportError = Status.INTERNAL.withDescription("no headers received prior to data");
@@ -199,5 +199,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
    */
   private static void stripTransportDetails(Metadata metadata) {
     metadata.removeAll(HTTP2_STATUS);
+    metadata.removeAll(Status.CODE_KEY);
+    metadata.removeAll(Status.MESSAGE_KEY);
   }
 }

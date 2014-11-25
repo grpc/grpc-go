@@ -127,9 +127,9 @@ class OkHttpClientStream extends Http2ClientStream {
   }
 
   @Override
-  public boolean setStatus(Status newStatus, Metadata.Trailers trailers) {
+  public boolean transportReportStatus(Status newStatus, Metadata.Trailers trailers) {
     synchronized (executorLock) {
-      return super.setStatus(newStatus, trailers);
+      return super.transportReportStatus(newStatus, trailers);
     }
   }
 

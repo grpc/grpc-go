@@ -2,6 +2,7 @@ package com.google.net.stubby;
 
 import static com.google.common.base.Charsets.US_ASCII;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -346,16 +347,11 @@ public final class Status {
 
   @Override
   public String toString() {
-    StringBuilder builder = new StringBuilder();
-    builder.append("[").append(code);
-    if (description != null) {
-      builder.append(";").append(description);
-    }
-    if (cause != null) {
-      builder.append(";").append(cause);
-    }
-    builder.append("]");
-    return builder.toString();
+    return MoreObjects.toStringHelper(this)
+        .add("code", code.name())
+        .add("description", description)
+        .add("cause", cause)
+        .toString();
   }
 
   private static class StatusCodeMarshaller implements Metadata.Marshaller<Status> {

@@ -130,7 +130,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     OkHttpClientStream clientStream = OkHttpClientStream.newStream(executor, listener,
         frameWriter, this, outboundFlow);
     if (goAway) {
-      clientStream.setStatus(goAwayStatus, new Metadata.Trailers());
+      clientStream.transportReportStatus(goAwayStatus, new Metadata.Trailers());
     } else {
       assignStreamId(clientStream);
     }
@@ -229,7 +229,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     }
 
     for (OkHttpClientStream stream : goAwayStreams) {
-      stream.setStatus(status, new Metadata.Trailers());
+      stream.transportReportStatus(status, new Metadata.Trailers());
     }
   }
 
@@ -243,7 +243,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     stream = streams.remove(streamId);
     if (stream != null) {
       if (status != null) {
-        stream.setStatus(status, new Metadata.Trailers());
+        stream.transportReportStatus(status, new Metadata.Trailers());
       }
       return true;
     }

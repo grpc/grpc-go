@@ -18,7 +18,6 @@ import static org.mockito.Mockito.when;
 
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.StreamState;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -84,8 +83,6 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
         .method(HTTP_METHOD)
         .add(as("auth"), as("sometoken"))
         .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
-
-    when(stream.state()).thenReturn(StreamState.OPEN);
 
     // Simulate activation of the handler to force writing of the initial settings
     handler.handlerAdded(ctx);
@@ -226,7 +223,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     handler.channelRead(ctx, goAwayFrame(0));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     InOrder inOrder = inOrder(stream);
-    inOrder.verify(stream, calls(1)).setStatus(captor.capture(), notNull(Metadata.Trailers.class));
+    inOrder.verify(stream, calls(1)).transportReportStatus(captor.capture(),
+        notNull(Metadata.Trailers.class));
     assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
   }
 

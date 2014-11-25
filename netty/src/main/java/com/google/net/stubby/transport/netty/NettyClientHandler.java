@@ -150,7 +150,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     // TODO(user): do something with errorCode?
     Http2Stream http2Stream = connection().requireStream(streamId);
     NettyClientStream stream = clientStream(http2Stream);
-    stream.setStatus(Status.UNKNOWN, new Metadata.Trailers());
+    stream.transportReportStatus(Status.UNKNOWN, new Metadata.Trailers());
   }
 
   /**
@@ -166,7 +166,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
 
     // Any streams that are still active must be closed.
     for (Http2Stream stream : http2Streams()) {
-      clientStream(stream).setStatus(goAwayStatus, new Metadata.Trailers());
+      clientStream(stream).transportReportStatus(goAwayStatus, new Metadata.Trailers());
     }
   }
 
@@ -185,7 +185,8 @@ class NettyClientHandler extends Http2ConnectionHandler {
     // Close the stream with a status that contains the cause.
     Http2Stream stream = connection().stream(http2Ex.streamId());
     if (stream != null) {
-      clientStream(stream).setStatus(Status.fromThrowable(cause), new Metadata.Trailers());
+      clientStream(stream).transportReportStatus(Status.fromThrowable(cause),
+          new Metadata.Trailers());
     }
 
     // Delegate to the base class to send a RST_STREAM.
@@ -210,7 +211,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private void cancelStream(ChannelHandlerContext ctx, CancelStreamCommand cmd,
       ChannelPromise promise) throws Http2Exception {
     NettyClientStream stream = cmd.stream();
-    stream.setStatus(Status.CANCELLED, new Metadata.Trailers());
+    stream.transportReportStatus(Status.CANCELLED, new Metadata.Trailers());
 
     // No need to set the stream status for a cancellation. It should already have been
     // set prior to sending the command.
@@ -254,7 +255,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
       int lastKnownStream = connection().local().lastKnownStream();
       for (Http2Stream stream : http2Streams()) {
         if (lastKnownStream < stream.id()) {
-          clientStream(stream).setStatus(goAwayStatus, new Metadata.Trailers());
+          clientStream(stream).transportReportStatus(goAwayStatus, new Metadata.Trailers());
           stream.close();
         }
       }

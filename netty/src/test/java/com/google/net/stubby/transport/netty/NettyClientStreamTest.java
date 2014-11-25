@@ -7,6 +7,8 @@ import static com.google.net.stubby.transport.netty.Utils.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.transport.netty.Utils.STATUS_OK;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
@@ -17,7 +19,6 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.AbstractStream;
 import com.google.net.stubby.transport.ClientStreamListener;
-import com.google.net.stubby.transport.StreamState;
 
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.AsciiString;
@@ -67,7 +68,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     // Force stream creation.
     stream().id(STREAM_ID);
     stream().halfClose();
-    assertEquals(StreamState.READ_ONLY, stream.state());
+    assertTrue(stream().canReceive());
+    assertFalse(stream().canSend());
   }
 
   @Test
@@ -97,36 +99,36 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setStatusWithOkShouldCloseStream() {
     stream().id(1);
-    stream().setStatus(Status.OK, new Metadata.Trailers());
+    stream().transportReportStatus(Status.OK, new Metadata.Trailers());
     verify(listener).closed(same(Status.OK), any(Metadata.Trailers.class));
-    assertEquals(StreamState.CLOSED, stream.state());
+    assertTrue(stream.isClosed());
   }
 
   @Test
   public void setStatusWithErrorShouldCloseStream() {
     Status errorStatus = Status.INTERNAL;
-    stream().setStatus(errorStatus, new Metadata.Trailers());
+    stream().transportReportStatus(errorStatus, new Metadata.Trailers());
     verify(listener).closed(eq(errorStatus), any(Metadata.Trailers.class));
-    assertEquals(StreamState.CLOSED, stream.state());
+    assertTrue(stream.isClosed());
   }
 
   @Test
   public void setStatusWithOkShouldNotOverrideError() {
     Status errorStatus = Status.INTERNAL;
-    stream().setStatus(errorStatus, new Metadata.Trailers());
-    stream().setStatus(Status.OK, new Metadata.Trailers());
+    stream().transportReportStatus(errorStatus, new Metadata.Trailers());
+    stream().transportReportStatus(Status.OK, new Metadata.Trailers());
     verify(listener).closed(any(Status.class), any(Metadata.Trailers.class));
-    assertEquals(StreamState.CLOSED, stream.state());
+    assertTrue(stream.isClosed());
   }
 
   @Test
   public void setStatusWithErrorShouldNotOverridePreviousError() {
     Status errorStatus = Status.INTERNAL;
-    stream().setStatus(errorStatus, new Metadata.Trailers());
-    stream().setStatus(Status.fromThrowable(new RuntimeException("fake")),
+    stream().transportReportStatus(errorStatus, new Metadata.Trailers());
+    stream().transportReportStatus(Status.fromThrowable(new RuntimeException("fake")),
         new Metadata.Trailers());
     verify(listener).closed(any(Status.class), any(Metadata.Trailers.class));
-    assertEquals(StreamState.CLOSED, stream.state());
+    assertTrue(stream.isClosed());
   }
 
   @Override
@@ -170,7 +172,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
     assertEquals(Status.INTERNAL.getCode(), captor.getValue().getCode());
-    assertEquals(StreamState.CLOSED, stream.state());
+    assertTrue(stream.isClosed());
   }
 
   @Test
@@ -194,7 +196,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
     assertEquals(Status.INTERNAL.getCode(), captor.getValue().getCode());
-    assertEquals(StreamState.CLOSED, stream.state());
+    assertTrue(stream.isClosed());
 
   }
 
@@ -209,7 +211,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Override
   protected AbstractStream<Integer> createStream() {
     AbstractStream<Integer> stream = new NettyClientStream(listener, channel, handler);
-    assertEquals(StreamState.OPEN, stream.state());
+    assertTrue(stream.canSend());
+    assertTrue(stream.canReceive());
     return stream;
   }
 

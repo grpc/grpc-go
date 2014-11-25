@@ -1,5 +1,7 @@
 package com.google.net.stubby.transport;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.io.Closeables;
 import com.google.common.util.concurrent.FutureCallback;
@@ -33,7 +35,6 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   private volatile IdT id;
-  private final Object writeLock = new Object();
   private final Framer framer;
   private final FutureCallback<Object> deframerErrorCallback = new FutureCallback<Object>() {
     @Override
@@ -47,8 +48,16 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   final GrpcDeframer deframer;
   final MessageDeframer2 deframer2;
-  Phase inboundPhase = Phase.HEADERS;
-  Phase outboundPhase = Phase.HEADERS;
+
+  /**
+   * Inbound phase is exclusively written to by the transport thread.
+   */
+  private Phase inboundPhase = Phase.HEADERS;
+
+  /**
+   * Outbound phase is exclusively written to by the application thread.
+   */
+  private Phase outboundPhase = Phase.HEADERS;
 
   AbstractStream(@Nullable Decompressor decompressor,
                            Executor deframerExecutor) {
@@ -119,25 +128,13 @@ public abstract class AbstractStream<IdT> implements Stream {
     this.id = id;
   }
 
-  /**
-   * Free any resources associated with this stream. Subclass implementations must call this
-   * version.
-   */
-  public void dispose() {
-    synchronized (writeLock) {
-      framer.dispose();
-    }
-  }
-
   @Override
   public void writeMessage(InputStream message, int length, @Nullable Runnable accepted) {
     Preconditions.checkNotNull(message, "message");
     Preconditions.checkArgument(length >= 0, "length must be >= 0");
     outboundPhase(Phase.MESSAGE);
-    synchronized (writeLock) {
-      if (!framer.isClosed()) {
-        framer.writePayload(message, length);
-      }
+    if (!framer.isClosed()) {
+      framer.writePayload(message, length);
     }
 
     // TODO(user): add flow control.
@@ -148,11 +145,38 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   @Override
   public final void flush() {
-    synchronized (writeLock) {
-      if (!framer.isClosed()) {
-        framer.flush();
-      }
+    if (!framer.isClosed()) {
+      framer.flush();
     }
+  }
+
+  /**
+   * Closes the underlying framer.
+   *
+   * <p>No-op if the framer has already been closed.
+   *
+   * @param status if not null, will write the status to the framer before closing it
+   */
+  final void closeFramer(@Nullable Status status) {
+    if (!framer.isClosed()) {
+      if (status != null) {
+        framer.writeStatus(status);
+      }
+      framer.close();
+    }
+  }
+
+  /**
+   * Free any resources associated with this stream. Subclass implementations must call this
+   * version.
+   * <p>
+   * NOTE. Can be called by both the transport thread and the application thread. Transport
+   * threads need to dispose when the remote side has terminated the stream. Application threads
+   * will dispose when the application decides to close the stream as part of normal processing.
+   * </p>
+   */
+  public void dispose() {
+    framer.dispose();
   }
 
   /**
@@ -216,42 +240,36 @@ public abstract class AbstractStream<IdT> implements Stream {
     }
   }
 
+  final Phase inboundPhase() {
+    return inboundPhase;
+  }
+
   /**
-   * Transitions the inbound phase. If the transition is disallowed, throws a
-   * {@link IllegalStateException}.
+   * Transitions the inbound phase to the given phase and returns the previous phase.
+   * If the transition is disallowed, throws an {@link IllegalStateException}.
    */
-  final void inboundPhase(Phase nextPhase) {
+  final Phase inboundPhase(Phase nextPhase) {
+    Phase tmp = inboundPhase;
     inboundPhase = verifyNextPhase(inboundPhase, nextPhase);
+    return tmp;
+  }
+
+  final Phase outboundPhase() {
+    return outboundPhase;
   }
 
   /**
-   * Transitions the outbound phase. If the transition is disallowed, throws a
-   * {@link IllegalStateException}.
+   * Transitions the outbound phase to the given phase and returns the previous phase.
+   * If the transition is disallowed, throws an {@link IllegalStateException}.
    */
-  final void outboundPhase(Phase nextPhase) {
+  final Phase outboundPhase(Phase nextPhase) {
+    Phase tmp = outboundPhase;
     outboundPhase = verifyNextPhase(outboundPhase, nextPhase);
-  }
-
-  /**
-   * Closes the underlying framer.
-   *
-   * <p>No-op if the framer has already been closed.
-   *
-   * @param status if not null, will write the status to the framer before closing it
-   */
-  final void closeFramer(@Nullable Status status) {
-    synchronized (writeLock) {
-      if (!framer.isClosed()) {
-        if (status != null) {
-          framer.writeStatus(status);
-        }
-        framer.close();
-      }
-    }
+    return tmp;
   }
 
   private Phase verifyNextPhase(Phase currentPhase, Phase nextPhase) {
-    if (nextPhase.ordinal() < currentPhase.ordinal() || currentPhase == Phase.STATUS) {
+    if (nextPhase.ordinal() < currentPhase.ordinal()) {
       throw new IllegalStateException(
           String.format("Cannot transition phase from %s to %s", currentPhase, nextPhase));
     }
@@ -276,5 +294,41 @@ public abstract class AbstractStream<IdT> implements Stream {
         Closeables.closeQuietly(input);
       }
     }, MoreExecutors.directExecutor());
+  }
+
+  /**
+   * Can the stream receive data from its remote peer.
+   */
+  public boolean canReceive() {
+    return inboundPhase() != Phase.STATUS;
+  }
+
+  /**
+   * Can the stream send data to its remote peer.
+   */
+  public boolean canSend() {
+    return outboundPhase() != Phase.STATUS;
+  }
+
+  /**
+   * Is the stream fully closed. Note that this method is not thread-safe as inboundPhase and
+   * outboundPhase are mutated in different threads. Tests must account for thread coordination
+   * when calling.
+   */
+  @VisibleForTesting
+  public boolean isClosed() {
+    return inboundPhase() == Phase.STATUS && outboundPhase() == Phase.STATUS;
+  }
+
+  public String toString() {
+    return toStringHelper().toString();
+  }
+
+  protected MoreObjects.ToStringHelper toStringHelper() {
+    return MoreObjects.toStringHelper(this)
+        .add("id", id())
+        .add("inboundPhase", inboundPhase().name())
+        .add("outboundPhase", outboundPhase().name());
+
   }
 }

@@ -2,7 +2,7 @@ package com.google.net.stubby.transport.netty;
 
 import static com.google.net.stubby.transport.netty.NettyTestUtil.messageFrame;
 import static com.google.net.stubby.transport.netty.NettyTestUtil.statusFrame;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
@@ -14,7 +14,6 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.AbstractStream;
 import com.google.net.stubby.transport.ServerStreamListener;
-import com.google.net.stubby.transport.StreamState;
 
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
@@ -78,7 +77,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     // Sending complete. Listener gets closed()
     stream().complete();
     verify(serverListener).closed(Status.OK);
-    assertEquals(StreamState.CLOSED, stream.state());
+    assertTrue(stream().isClosed());
     verifyZeroInteractions(serverListener);
   }
 
@@ -92,7 +91,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     // Sending complete. Listener gets closed()
     stream().complete();
     verify(serverListener).closed(Status.OK);
-    assertEquals(StreamState.CLOSED, stream.state());
+    assertTrue(stream().isClosed());
     verifyZeroInteractions(serverListener);
   }
 
@@ -100,12 +99,12 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   public void closeAfterClientHalfCloseShouldSucceed() throws Exception {
     // Client half-closes. Listener gets halfClosed()
     stream().inboundDataReceived(new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
-    assertEquals(StreamState.WRITE_ONLY, stream.state());
+    assertTrue(stream().canSend());
     verify(serverListener).halfClosed();
     // Server closes. Status sent
     stream().close(Status.OK, trailers);
+    assertTrue(stream().isClosed());
     verifyNoMoreInteractions(serverListener);
-    assertEquals(StreamState.CLOSED, stream.state());
     verify(channel).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.OK), true));
     // Sending and receiving complete. Listener gets closed()
@@ -118,7 +117,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   public void abortStreamAndSendStatus() throws Exception {
     Status status = Status.INTERNAL.withCause(new Throwable());
     stream().abortStream(status, true);
-    assertEquals(StreamState.CLOSED, stream.state());
+    assertTrue(stream().isClosed());
     verify(serverListener).closed(same(status));
     verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
     verifyNoMoreInteractions(serverListener);
@@ -128,7 +127,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   public void abortStreamAndNotSendStatus() throws Exception {
     Status status = Status.INTERNAL.withCause(new Throwable());
     stream().abortStream(status, false);
-    assertEquals(StreamState.CLOSED, stream.state());
+    assertTrue(stream().isClosed());
     verify(serverListener).closed(same(status));
     verify(channel, never()).writeAndFlush(
         new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
@@ -140,20 +139,21 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     Status status = Status.INTERNAL.withCause(new Throwable());
     // Client half-closes. Listener gets halfClosed()
     stream().inboundDataReceived(new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
-    assertEquals(StreamState.WRITE_ONLY, stream.state());
+    assertTrue(stream().canSend());
     verify(serverListener).halfClosed();
-    // Abort
+    // Abort from the transport layer
     stream().abortStream(status, true);
     verify(serverListener).closed(same(status));
-    assertEquals(StreamState.CLOSED, stream.state());
     verifyNoMoreInteractions(serverListener);
+    assertTrue(stream().isClosed());
   }
 
   @Override
   protected AbstractStream<Integer> createStream() {
     NettyServerStream stream = new NettyServerStream(channel, STREAM_ID, handler);
     stream.setListener(serverListener);
-    assertEquals(StreamState.OPEN, stream.state());
+    assertTrue(stream.canReceive());
+    assertTrue(stream.canSend());
     verifyZeroInteractions(serverListener);
     return stream;
   }

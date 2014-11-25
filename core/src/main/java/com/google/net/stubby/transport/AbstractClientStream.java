@@ -1,9 +1,6 @@
 package com.google.net.stubby.transport;
 
-import static com.google.net.stubby.transport.StreamState.CLOSED;
-import static com.google.net.stubby.transport.StreamState.OPEN;
-import static com.google.net.stubby.transport.StreamState.READ_ONLY;
-
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
@@ -16,7 +13,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 
 /**
  * The abstract base class for {@link ClientStream} implementations.
@@ -27,16 +23,13 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   private static final Logger log = Logger.getLogger(AbstractClientStream.class.getName());
 
   private final ClientStreamListener listener;
+  private boolean listenerClosed;
 
-  @GuardedBy("stateLock")
+  // Stored status & trailers to report when deframer completes or
+  // transportReportStatus is directly called.
   private Status status;
+  private Metadata.Trailers trailers;
 
-  private final Object stateLock = new Object();
-  private volatile StreamState state = StreamState.OPEN;
-
-  // Stored status & trailers to report when deframer completes.
-  private Status stashedStatus;
-  private Metadata.Trailers stashedTrailers;
 
   protected AbstractClientStream(ClientStreamListener listener,
                                  @Nullable Decompressor decompressor,
@@ -62,15 +55,14 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * @param errorStatus the error to report
    */
   protected void inboundTransportError(Status errorStatus) {
-    if (state() == CLOSED) {
+    if (inboundPhase() == Phase.STATUS) {
       log.log(Level.INFO, "Received transport error on closed stream {0} {1}",
           new Object[]{id(), errorStatus});
       return;
     }
-    inboundPhase(Phase.STATUS);
     // For transport errors we immediately report status to the application layer
     // and do not wait for additional payloads.
-    setStatus(errorStatus, new Metadata.Trailers());
+    transportReportStatus(errorStatus, new Metadata.Trailers());
   }
 
   /**
@@ -82,7 +74,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * @param headers the parsed headers
    */
   protected void inboundHeadersReceived(Metadata.Headers headers) {
-    if (state() == CLOSED) {
+    if (inboundPhase() == Phase.STATUS) {
       log.log(Level.INFO, "Received headers on closed stream {0} {1}",
           new Object[]{id(), headers});
     }
@@ -95,11 +87,11 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    */
   protected void inboundDataReceived(Buffer frame) {
     Preconditions.checkNotNull(frame, "frame");
-    if (state() == CLOSED) {
+    if (inboundPhase() == Phase.STATUS) {
       frame.close();
       return;
     }
-    if (inboundPhase == Phase.HEADERS) {
+    if (inboundPhase() == Phase.HEADERS) {
       // Have not received headers yet so error
       inboundTransportError(Status.INTERNAL.withDescription("headers not received before payload"));
       frame.close();
@@ -120,16 +112,16 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * Called by transport implementations when they receive trailers.
    */
   protected void inboundTrailersReceived(Metadata.Trailers trailers, Status status) {
-    if (state() == CLOSED) {
+    Preconditions.checkNotNull(trailers, "trailers");
+    if (inboundPhase() == Phase.STATUS) {
       log.log(Level.INFO, "Received trailers on closed stream {0}\n {1}\n {3}",
           new Object[]{id(), status, trailers});
     }
-    inboundPhase(Phase.STATUS);
     // Stash the status & trailers so they can be delivered by the deframer calls
     // remoteEndClosed
-    stashedStatus = status;
+    this.status = status;
     if (GRPC_V2_PROTOCOL) {
-      stashTrailers(trailers);
+      this.trailers = trailers;
     }
     deframe(Buffers.empty(), true);
   }
@@ -138,27 +130,13 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   @Override
   protected void receiveStatus(Status status) {
     Preconditions.checkNotNull(status, "status");
-    stashedStatus = status;
-    stashedTrailers = new Metadata.Trailers();
-  }
-
-  /**
-   * If using gRPC v2 protocol, this method must be called with received trailers before notifying
-   * deframer of end of stream.
-   */
-  protected void stashTrailers(Metadata.Trailers trailers) {
-    Preconditions.checkNotNull(trailers, "trailers");
-    stashedStatus = trailers.get(Status.CODE_KEY)
-        .withDescription(trailers.get(Status.MESSAGE_KEY));
-    trailers.removeAll(Status.CODE_KEY);
-    trailers.removeAll(Status.MESSAGE_KEY);
-    stashedTrailers = trailers;
+    this.status = status;
+    trailers = new Metadata.Trailers();
   }
 
   @Override
   protected void remoteEndClosed() {
-    Preconditions.checkState(stashedStatus != null, "Status and trailers should have been set");
-    setStatus(stashedStatus, stashedTrailers);
+    transportReportStatus(status, trailers);
   }
 
   @Override
@@ -176,59 +154,63 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   protected abstract void sendFrame(ByteBuffer frame, boolean endOfStream);
 
   /**
-   * Sets the status if not already set and notifies the stream listener that the stream was closed.
+   * Report stream closure with status to the application layer if not already reported.
    * This method must be called from the transport thread.
    *
    * @param newStatus the new status to set
    * @return {@code} true if the status was not already set.
    */
-  public boolean setStatus(final Status newStatus, Metadata.Trailers trailers) {
+  public boolean transportReportStatus(final Status newStatus, Metadata.Trailers trailers) {
     Preconditions.checkNotNull(newStatus, "newStatus");
-    synchronized (stateLock) {
-      if (status != null) {
-        // Disallow override of current status.
-        return false;
-      }
-      status = newStatus;
-      state = CLOSED;
+    inboundPhase(Phase.STATUS);
+    status = newStatus;
+    // Invoke the observer callback which will schedule work onto an application thread
+    if (!listenerClosed) {
+      // Status has not been reported to the application layer
+      listenerClosed = true;
+      listener.closed(newStatus, trailers);
     }
-
-    // Invoke the observer callback.
-    listener.closed(newStatus, trailers);
-
-    // Free any resources.
-    dispose();
-
     return true;
   }
 
   @Override
   public final void halfClose() {
-    outboundPhase(Phase.STATUS);
-    synchronized (stateLock) {
-      state = state == OPEN ? READ_ONLY : CLOSED;
-    }
-    closeFramer(null);
-  }
-
-  @Override
-  public StreamState state() {
-    return state;
-  }
-
-  @Override
-  public void cancel() {
-    // Allow phase to go to cancelled regardless of prior phase.
-    outboundPhase = Phase.STATUS;
-    if (id() != null) {
-      // Only send a cancellation to remote side if we have actually been allocated
-      // a stream id. i.e. the server side is aware of the stream.
-      sendCancel();
+    if (outboundPhase(Phase.STATUS) != Phase.STATUS) {
+      closeFramer(null);
     }
   }
 
   /**
-   * Send a stream cancellation message to the remote server.
+   * Cancel the stream. Called by the application layer, never called by the transport.
+   */
+  @Override
+  public void cancel() {
+    outboundPhase(Phase.STATUS);
+    if (id() != null) {
+      // Only send a cancellation to remote side if we have actually been allocated
+      // a stream id and we are not already closed. i.e. the server side is aware of the stream.
+      sendCancel();
+    }
+    dispose();
+  }
+
+  /**
+   * Send a stream cancellation message to the remote server. Can be called by either the
+   * application or transport layers.
    */
   protected abstract void sendCancel();
+
+  @Override
+  protected MoreObjects.ToStringHelper toStringHelper() {
+    MoreObjects.ToStringHelper toStringHelper = super.toStringHelper();
+    if (status != null) {
+      toStringHelper.add("status", status);
+    }
+    return toStringHelper;
+  }
+
+  @Override
+  public boolean isClosed() {
+    return super.isClosed() || listenerClosed;
+  }
 }

@@ -12,7 +12,6 @@ import com.google.net.stubby.transport.ClientStream;
 import com.google.net.stubby.transport.ClientStreamListener;
 import com.google.net.stubby.transport.ClientTransport;
 import com.google.net.stubby.transport.ClientTransportFactory;
-import com.google.net.stubby.transport.StreamState;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -151,12 +150,9 @@ public class InProcessUtils {
       // Return implementation of ClientStream which delegates to the server listener.
       return new ClientStream() {
 
-        StreamState state = StreamState.OPEN;
-
         @Override
         public void cancel() {
           cancelled.set(true);
-          state = StreamState.CLOSED;
           serverWorkQueue.execute(new Runnable() {
             @Override
             public void run() {
@@ -167,18 +163,12 @@ public class InProcessUtils {
 
         @Override
         public void halfClose() {
-          state = StreamState.WRITE_ONLY;
           serverWorkQueue.execute(new Runnable() {
             @Override
             public void run() {
               serverListener.onHalfClose();
             }
           });
-        }
-
-        @Override
-        public StreamState state() {
-          return state;
         }
 
         @Override
@@ -218,11 +208,6 @@ public class InProcessUtils {
       @Override
       public void halfClose() {
         // No-op
-      }
-
-      @Override
-      public StreamState state() {
-        return StreamState.CLOSED;
       }
 
       @Override
