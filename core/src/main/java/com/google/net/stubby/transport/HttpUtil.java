@@ -27,6 +27,16 @@ public final class HttpUtil {
   public static final String HTTP_METHOD = "POST";
 
   /**
+   * The TE header name. Defined here since it is not explicitly defined by the HTTP/2 spec.
+   */
+  public static final Metadata.Key<String> TE = Metadata.Key.of("te", Metadata.STRING_MARSHALLER);
+
+  /**
+   * The TE (transport encoding) header for requests over HTTP/2
+   */
+  public static final String TE_TRAILERS = "trailers";
+
+  /**
    * Maps HTTP error response status codes to transport codes.
    */
   public static Status httpStatusToGrpcStatus(int httpStatusCode) {

@@ -3,6 +3,8 @@ package com.google.net.stubby.transport.netty;
 import static com.google.net.stubby.transport.netty.Utils.CONTENT_TYPE_GRPC;
 import static com.google.net.stubby.transport.netty.Utils.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.transport.netty.Utils.HTTP_METHOD;
+import static com.google.net.stubby.transport.netty.Utils.TE_HEADER;
+import static com.google.net.stubby.transport.netty.Utils.TE_TRAILERS;
 import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
 import static io.netty.handler.codec.http2.Http2Error.NO_ERROR;
@@ -18,6 +20,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2Error;
@@ -50,6 +53,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   private final ServerTransportListener transportListener;
   private Throwable connectionError;
   private ChannelHandlerContext ctx;
+  private boolean teWarningLogged;
 
   NettyServerHandler(ServerTransportListener transportListener,
       Http2Connection connection,
@@ -92,6 +96,13 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
   private void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers)
       throws Http2Exception {
+    if (!teWarningLogged && !TE_TRAILERS.equals(headers.get(TE_HEADER))) {
+      logger.warning(String.format("Expected header TE: %s, but %s is received. This means "
+            + "some intermediate proxy may not support trailers",
+            TE_TRAILERS, headers.get(TE_HEADER)));
+      teWarningLogged = true;
+    }
+
     try {
       NettyServerStream stream = new NettyServerStream(ctx.channel(), streamId, this);
       // The Http2Stream object was put by AbstractHttp2ConnectionHandler before calling this
@@ -268,17 +279,21 @@ class NettyServerHandler extends Http2ConnectionHandler {
       throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM,
           String.format("Method '%s' is not supported", headers.method()));
     }
-    if (!CONTENT_TYPE_GRPC.equals(headers.get(CONTENT_TYPE_HEADER))) {
-      throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM, String.format(
-          "Header '%s'='%s', while '%s' is expected", CONTENT_TYPE_HEADER,
-          headers.get(CONTENT_TYPE_HEADER), CONTENT_TYPE_GRPC));
-    }
+    checkHeader(streamId, headers, CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
     String methodName = TransportFrameUtil.getFullMethodNameFromPath(headers.path().toString());
     if (methodName == null) {
       throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM,
           String.format("Malformatted path: %s", headers.path()));
     }
     return methodName;
+  }
+
+  private static void checkHeader(int streamId, Http2Headers headers,
+      AsciiString header, AsciiString expectedValue) throws Http2StreamException {
+    if (!expectedValue.equals(headers.get(header))) {
+      throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM, String.format(
+          "Header '%s'='%s', while '%s' is expected", header, headers.get(header), expectedValue));
+    }
   }
 
   /**

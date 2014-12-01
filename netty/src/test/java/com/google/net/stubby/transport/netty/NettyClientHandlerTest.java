@@ -6,6 +6,8 @@ import static com.google.net.stubby.transport.netty.Utils.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.transport.netty.Utils.HTTPS;
 import static com.google.net.stubby.transport.netty.Utils.HTTP_METHOD;
 import static com.google.net.stubby.transport.netty.Utils.STATUS_OK;
+import static com.google.net.stubby.transport.netty.Utils.TE_HEADER;
+import static com.google.net.stubby.transport.netty.Utils.TE_TRAILERS;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -82,7 +84,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
         .path(as("/fakemethod"))
         .method(HTTP_METHOD)
         .add(as("auth"), as("sometoken"))
-        .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
+        .add(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC)
+        .add(TE_HEADER, TE_TRAILERS);
 
     // Simulate activation of the handler to force writing of the initial settings
     handler.handlerAdded(ctx);
@@ -121,6 +124,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     assertEquals(HTTP_METHOD, headers.method());
     assertEquals("www.fake.com", headers.authority().toString());
     assertEquals(CONTENT_TYPE_GRPC, headers.get(CONTENT_TYPE_HEADER));
+    assertEquals(TE_TRAILERS, headers.get(TE_HEADER));
     assertEquals("/fakemethod", headers.path().toString());
     assertEquals("sometoken", headers.get(as("auth")).toString());
   }

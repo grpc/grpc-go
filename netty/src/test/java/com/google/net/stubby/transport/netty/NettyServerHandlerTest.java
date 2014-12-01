@@ -4,6 +4,8 @@ import static com.google.common.base.Charsets.UTF_8;
 import static com.google.net.stubby.transport.netty.Utils.CONTENT_TYPE_GRPC;
 import static com.google.net.stubby.transport.netty.Utils.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.transport.netty.Utils.HTTP_METHOD;
+import static com.google.net.stubby.transport.netty.Utils.TE_HEADER;
+import static com.google.net.stubby.transport.netty.Utils.TE_TRAILERS;
 import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
 import static io.netty.handler.codec.http2.Http2Exception.protocolError;
 import static org.junit.Assert.assertArrayEquals;
@@ -224,6 +226,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     Http2Headers headers = new DefaultHttp2Headers()
         .method(HTTP_METHOD)
         .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC)
+        .set(TE_HEADER, TE_TRAILERS)
         .path(new AsciiString("/foo.bar"));
     ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
     handler.channelRead(ctx, headersFrame);

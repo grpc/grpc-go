@@ -33,6 +33,8 @@ class Utils {
       new AsciiString(HttpUtil.CONTENT_TYPE.name());
   public static final AsciiString CONTENT_TYPE_GRPC =
       new AsciiString(HttpUtil.CONTENT_TYPE_GRPC);
+  public static final AsciiString TE_HEADER = new AsciiString(HttpUtil.TE.name());
+  public static final AsciiString TE_TRAILERS = new AsciiString(HttpUtil.TE_TRAILERS);
 
   public static final Resource<EventLoopGroup> DEFAULT_CHANNEL_EVENT_LOOP_GROUP =
       new DefaultEventLoopGroupResource("grpc-default-channel-ELG");
@@ -93,7 +95,8 @@ class Utils {
         .path(defaultPath)
         .method(HTTP_METHOD)
         .scheme(ssl ? HTTPS : HTTP)
-        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC)
+        .set(TE_HEADER, TE_TRAILERS);
 
     // Override the default authority and path if provided by the headers.
     if (headers.getAuthority() != null) {

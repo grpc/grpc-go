@@ -20,6 +20,7 @@ public class Headers {
   public static final Header METHOD_HEADER = new Header(Header.TARGET_METHOD, HttpUtil.HTTP_METHOD);
   public static final Header CONTENT_TYPE_HEADER =
       new Header(HttpUtil.CONTENT_TYPE.name(), HttpUtil.CONTENT_TYPE_GRPC);
+  public static final Header TE_HEADER = new Header(HttpUtil.TE.name(), HttpUtil.TE_TRAILERS);
 
   /**
    * Serializes the given headers and creates a list of OkHttp {@link Header}s to be used when
@@ -44,6 +45,7 @@ public class Headers {
 
     // All non-pseudo headers must come after pseudo headers.
     okhttpHeaders.add(CONTENT_TYPE_HEADER);
+    okhttpHeaders.add(TE_HEADER);
 
     // Now add any application-provided headers.
     byte[][] serializedHeaders = headers.serialize();
