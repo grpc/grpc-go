@@ -1,0 +1,62 @@
+syntax = "proto2";
+
+package protobufrpc_test;
+option java_package = "com.google.net.stubby.test";
+
+enum ZodiacSign {
+  ARIES = 0;
+  TAURUS = 1;
+  GEMINI = 2;
+  CANCER = 3;
+  LEO = 4;
+  VIRGO = 5;
+  LIBRA = 6;
+  SCORPIO = 7;
+  SAGITTARIUS = 8;
+  CAPRICORN = 9;
+  AQUARIUS = 10;
+  PISCES = 11;
+}
+
+message HoroscopeRequest {
+  required int32 month_of_birth = 1;  // [1..12], January=1
+  required int32 day_of_birth = 2;  // [1..31]
+}
+
+message HoroscopeResponse {
+  // The predicted fate of the seeker.
+  required string horoscope = 1;
+
+  // The zodiac sign corresponding to the seeker's birthdate.
+  required ZodiacSign zodiac_sign = 2;
+
+  // The walltime since the returned horoscope was last updated.  May be missing
+  // if using a preset fortune.
+  optional double last_updated = 3;
+}
+
+message SuggestionRequest {
+  // The zodiac sign corresponding to the horoscope above.
+  required ZodiacSign zodiac_sign = 1;
+
+  // The suggested fate that should befall people born under the given sign.
+  required string horoscope = 2;
+}
+
+message SuggestionResponse {
+  // We do not return any data yet
+}
+
+service FortuneTeller {
+  // Returns the horoscope and zodiac sign for the given month and day.
+  rpc TellFortune(HoroscopeRequest) returns (HoroscopeResponse) {
+    // errors: INVALID_MONTH_DAY, FORTUNE_UNAVAILABLE
+    option deadline = 10.0;
+  }
+
+  // Replaces the fortune for the given zodiac sign with the provided one.
+  rpc SuggestFortune(SuggestionRequest) returns (SuggestionResponse) {
+    // errors: INVALID_ZODIAC_SIGN
+    option deadline = 1.0;
+  }
+}

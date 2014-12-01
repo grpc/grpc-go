@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+package stubby.test;
+
+option java_package = "com.google.net.stubby.test";
+
+import "third_party/stubby/testing/proto/echo.proto";
+
+service Reflector {
+  rpc reflectUnary(Echo) returns (Echo) {
+  }
+
+  rpc reflectStream(stream Echo) returns (stream Echo) {
+  }
+}
