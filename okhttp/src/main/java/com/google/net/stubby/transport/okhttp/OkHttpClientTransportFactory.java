@@ -13,15 +13,17 @@ import java.util.concurrent.ExecutorService;
 class OkHttpClientTransportFactory implements ClientTransportFactory {
   private final InetSocketAddress address;
   private final ExecutorService executor;
+  private final String authorityHost;
 
-  public OkHttpClientTransportFactory(InetSocketAddress address, ExecutorService executor) {
+  public OkHttpClientTransportFactory(InetSocketAddress address, String authorityHost, ExecutorService executor) {
     this.address = Preconditions.checkNotNull(address, "address");
     this.executor = Preconditions.checkNotNull(executor, "executor");
+    this.authorityHost = Preconditions.checkNotNull(authorityHost, "authorityHost");
   }
 
   @Override
   public ClientTransport newClientTransport() {
-    return new OkHttpClientTransport(address, executor);
+    return new OkHttpClientTransport(address, authorityHost, executor);
   }
 
 }

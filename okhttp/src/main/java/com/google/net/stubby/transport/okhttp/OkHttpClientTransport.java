@@ -99,9 +99,9 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   @GuardedBy("lock")
   private boolean stopped;
 
-  OkHttpClientTransport(InetSocketAddress address, Executor executor) {
+  OkHttpClientTransport(InetSocketAddress address, String authorityHost, Executor executor) {
     this.address = Preconditions.checkNotNull(address);
-    defaultAuthority = address.getHostString() + ":" + address.getPort();
+    defaultAuthority = authorityHost + ":" + address.getPort();
     this.executor = Preconditions.checkNotNull(executor);
     // Client initiated streams are odd, server initiated ones are even. Server should not need to
     // use it. We start clients at 3 to avoid conflicting with HTTP negotiation.

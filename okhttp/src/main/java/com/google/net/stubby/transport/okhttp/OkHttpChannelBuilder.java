@@ -29,21 +29,18 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
         }
       };
 
-  /** Creates a new builder for the given server address. */
-  public static OkHttpChannelBuilder forAddress(InetSocketAddress serverAddress) {
-    return new OkHttpChannelBuilder(serverAddress);
-  }
-
   /** Creates a new builder for the given server host and port. */
   public static OkHttpChannelBuilder forAddress(String host, int port) {
-    return forAddress(new InetSocketAddress(host, port));
+    return new OkHttpChannelBuilder(new InetSocketAddress(host, port), host);
   }
 
   private final InetSocketAddress serverAddress;
   private ExecutorService transportExecutor;
+  private String host;
 
-  private OkHttpChannelBuilder(InetSocketAddress serverAddress) {
+  private OkHttpChannelBuilder(InetSocketAddress serverAddress, String host) {
     this.serverAddress = Preconditions.checkNotNull(serverAddress, "serverAddress");
+    this.host = host;
   }
 
   /**
@@ -57,12 +54,22 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
     return this;
   }
 
+  /**
+   * Overrides the host used with TLS and HTTP virtual hosting. It does not change what host is
+   * actually connected to.
+   *
+   * <p>Should only used by tests.
+   */
+  public void overrideHostForAuthority(String host) {
+    this.host = host;
+  }
+
   @Override
   protected ChannelEssentials buildEssentials() {
     final ExecutorService executor = (transportExecutor == null)
         ? SharedResourceHolder.get(DEFAULT_TRANSPORT_THREAD_POOL) : transportExecutor;
     ClientTransportFactory transportFactory
-        = new OkHttpClientTransportFactory(serverAddress, executor);
+        = new OkHttpClientTransportFactory(serverAddress, host, executor);
     Service.Listener listener = null;
     // We shut down the executor only if we created it.
     if (transportExecutor == null) {
