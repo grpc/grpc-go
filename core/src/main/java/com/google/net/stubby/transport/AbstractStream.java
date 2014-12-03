@@ -104,6 +104,9 @@ public abstract class AbstractStream<IdT> implements Stream {
           new GrpcDeframer(decompressor, inboundMessageHandler, deframerExecutor, listener);
       this.deframer2 = null;
     } else {
+      if (decompressor != null) {
+        decompressor.close();
+      }
       framer = new MessageFramer2(outboundFrameHandler, 4096);
       this.deframer = null;
       this.deframer2 = new MessageDeframer2(inboundMessageHandler, deframerExecutor, listener);
