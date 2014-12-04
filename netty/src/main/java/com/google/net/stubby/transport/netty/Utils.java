@@ -5,6 +5,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.SharedResourceHolder.Resource;
 import com.google.net.stubby.transport.HttpUtil;
+import com.google.net.stubby.transport.TransportFrameUtil;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
@@ -78,7 +79,7 @@ class Utils {
       headerValues[i++] = entry.getKey().array();
       headerValues[i++] = entry.getValue().array();
     }
-    return headerValues;
+    return TransportFrameUtil.toRawSerializedHeaders(headerValues);
   }
 
   public static Http2Headers convertClientHeaders(Metadata.Headers headers,
@@ -128,10 +129,10 @@ class Utils {
   private static Http2Headers convertMetadata(Metadata headers) {
     Preconditions.checkNotNull(headers, "headers");
     Http2Headers http2Headers = new DefaultHttp2Headers();
-    byte[][] serializedHeaders = headers.serialize();
-    for (int i = 0; i < serializedHeaders.length; i++) {
+    byte[][] serializedHeaders = TransportFrameUtil.toHttp2Headers(headers);
+    for (int i = 0; i < serializedHeaders.length; i += 2) {
       http2Headers.add(new AsciiString(serializedHeaders[i], false),
-          new AsciiString(serializedHeaders[++i], false));
+          new AsciiString(serializedHeaders[i + 1], false));
     }
     return http2Headers;
   }

@@ -1,7 +1,5 @@
 package com.google.net.stubby;
 
-import static com.google.common.base.Charsets.US_ASCII;
-
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
@@ -210,7 +208,7 @@ public final class Status {
    * Key to bind status message to trailers.
    */
   public static final Metadata.Key<String> MESSAGE_KEY
-      = Metadata.Key.of("grpc-message", Metadata.STRING_MARSHALLER);
+      = Metadata.Key.of("grpc-message", Metadata.ASCII_STRING_MARSHALLER);
 
   /**
    * Extract an error {@link Status} from the causal chain of a {@link Throwable}.
@@ -354,25 +352,15 @@ public final class Status {
         .toString();
   }
 
-  private static class StatusCodeMarshaller implements Metadata.Marshaller<Status> {
+  private static class StatusCodeMarshaller implements Metadata.AsciiMarshaller<Status> {
     @Override
-    public byte[] toBytes(Status status) {
-      return toAscii(status).getBytes(US_ASCII);
-    }
-
-    @Override
-    public String toAscii(Status status) {
+    public String toAsciiString(Status status) {
       return status.getCode().valueAscii();
     }
 
     @Override
-    public Status parseBytes(byte[] serialized) {
-      return parseAscii(new String(serialized, US_ASCII));
-    }
-
-    @Override
-    public Status parseAscii(String ascii) {
-      return fromCodeValue(Integer.valueOf(ascii));
+    public Status parseAsciiString(String serialized) {
+      return fromCodeValue(Integer.valueOf(serialized));
     }
   }
 }

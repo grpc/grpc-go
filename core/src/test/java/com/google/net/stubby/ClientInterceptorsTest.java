@@ -128,7 +128,7 @@ public class ClientInterceptorsTest {
 
   @Test
   public void addOutboundHeaders() {
-    final Metadata.Key<String> credKey = Metadata.Key.of("Cred", Metadata.STRING_MARSHALLER);
+    final Metadata.Key<String> credKey = Metadata.Key.of("Cred", Metadata.ASCII_STRING_MARSHALLER);
     ClientInterceptor interceptor = new ClientInterceptor() {
       @Override
       public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,

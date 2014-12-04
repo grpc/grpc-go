@@ -19,26 +19,16 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
   /**
    * Metadata marshaller for HTTP status lines.
    */
-  private static final Metadata.Marshaller<Integer> HTTP_STATUS_LINE_MARSHALLER =
-      new Metadata.Marshaller<Integer>() {
+  private static final Metadata.AsciiMarshaller<Integer> HTTP_STATUS_LINE_MARSHALLER =
+      new Metadata.AsciiMarshaller<Integer>() {
         @Override
-        public byte[] toBytes(Integer value) {
-          return value.toString().getBytes(Charsets.US_ASCII);
-        }
-
-        @Override
-        public String toAscii(Integer value) {
+        public String toAsciiString(Integer value) {
           return value.toString();
         }
 
         @Override
-        public Integer parseBytes(byte[] serialized) {
-          return parseAscii(new String(serialized, Charsets.US_ASCII));
-        }
-
-        @Override
-        public Integer parseAscii(String ascii) {
-          return Integer.parseInt(ascii.split(" ", 2)[0]);
+        public Integer parseAsciiString(String serialized) {
+          return Integer.parseInt(serialized.split(" ", 2)[0]);
         }
       };
 

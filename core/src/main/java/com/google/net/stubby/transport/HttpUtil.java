@@ -14,7 +14,7 @@ public final class HttpUtil {
    * spec.
    */
   public static final Metadata.Key<String> CONTENT_TYPE =
-      Metadata.Key.of("content-type", Metadata.STRING_MARSHALLER);
+      Metadata.Key.of("content-type", Metadata.ASCII_STRING_MARSHALLER);
 
   /**
    * Content-Type used for GRPC-over-HTTP/2.
@@ -29,7 +29,8 @@ public final class HttpUtil {
   /**
    * The TE header name. Defined here since it is not explicitly defined by the HTTP/2 spec.
    */
-  public static final Metadata.Key<String> TE = Metadata.Key.of("te", Metadata.STRING_MARSHALLER);
+  public static final Metadata.Key<String> TE = Metadata.Key.of("te",
+      Metadata.ASCII_STRING_MARSHALLER);
 
   /**
    * The TE (transport encoding) header for requests over HTTP/2

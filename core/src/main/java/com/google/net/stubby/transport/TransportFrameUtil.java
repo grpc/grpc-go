@@ -1,5 +1,14 @@
 package com.google.net.stubby.transport;
 
+import static com.google.common.base.Charsets.US_ASCII;
+
+import com.google.common.io.BaseEncoding;
+import com.google.net.stubby.Metadata;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 /**
@@ -9,6 +18,12 @@ import javax.annotation.Nullable;
  * used for the contents of the transport frame.
  */
 public final class TransportFrameUtil {
+
+  private static final Logger logger = Logger.getLogger(TransportFrameUtil.class.getName());
+
+  private static final byte[] binaryHeaderSuffixBytes =
+      Metadata.BINARY_HEADER_SUFFIX.getBytes(US_ASCII);
+
 
   // Compression modes (lowest order 3 bits of frame flags)
   public static final byte NO_COMPRESS_FLAG = 0x0;
@@ -55,6 +70,89 @@ public final class TransportFrameUtil {
       return null;
     }
     return path;
+  }
+
+  /**
+   * Transform the given headers to a format where only spec-compliant ASCII characters are allowed.
+   * Binary header values are encoded by Base64 in the result.
+   *
+   * @return the interleaved keys and values.
+   */
+  public static byte[][] toHttp2Headers(Metadata headers) {
+    byte[][] serializedHeaders = headers.serialize();
+    ArrayList<byte[]> result = new ArrayList<byte[]>();
+    for (int i = 0; i < serializedHeaders.length; i += 2) {
+      byte[] key = serializedHeaders[i];
+      byte[] value = serializedHeaders[i + 1];
+      if (endsWith(key, binaryHeaderSuffixBytes)) {
+        // Binary header.
+        result.add(key);
+        result.add(BaseEncoding.base64().encode(value).getBytes(US_ASCII));
+      } else {
+        // Non-binary header.
+        // Filter out headers that contain non-spec-compliant ASCII characters.
+        // TODO(user): only do such check in development mode since it's expensive
+        if (isSpecCompliantAscii(value)) {
+          result.add(key);
+          result.add(value);
+        } else {
+          String keyString = new String(key, US_ASCII);
+          logger.warning("Metadata key=" + keyString + ", value=" + Arrays.toString(value)
+              + " contains invalid ASCII characters");
+        }
+      }
+    }
+    return result.toArray(new byte[result.size()][]);
+  }
+
+  /**
+   * Transform HTTP/2-compliant headers to the raw serialized format which can be deserialized by
+   * metadata marshallers. It decodes the Base64-encoded binary headers.
+   */
+  public static byte[][] toRawSerializedHeaders(byte[][] http2Headers) {
+    byte[][] result = new byte[http2Headers.length][];
+    for (int i = 0; i < http2Headers.length; i += 2) {
+      byte[] key = http2Headers[i];
+      byte[] value = http2Headers[i + 1];
+      result[i] = key;
+      if (endsWith(key, binaryHeaderSuffixBytes)) {
+        // Binary header
+        result[i + 1] = BaseEncoding.base64().decode(new String(value, US_ASCII));
+      } else {
+        // Non-binary header
+        result[i + 1] = value;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Returns true if <b>subject</b> ends with <b>suffix</b>.
+   */
+  private static boolean endsWith(byte[] subject, byte[] suffix) {
+    int start = subject.length - suffix.length;
+    if (start < 0) {
+      return false;
+    }
+    for (int i = start; i < subject.length; i++) {
+      if (subject[i] != suffix[i - start]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Returns true if <b>subject</b> contains only bytes that are spec-compliant ASCII characters and
+   * space.
+   */
+  private static boolean isSpecCompliantAscii(byte[] subject) {
+    for (byte b : subject) {
+      if (b < 32 || b > 126) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private TransportFrameUtil() {}

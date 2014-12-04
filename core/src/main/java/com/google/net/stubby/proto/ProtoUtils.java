@@ -1,6 +1,5 @@
 package com.google.net.stubby.proto;
 
-import com.google.common.io.BaseEncoding;
 import com.google.net.stubby.Marshaller;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
@@ -39,16 +38,12 @@ public class ProtoUtils {
    * Produce a metadata key for a generated protobuf type.
    */
   public static <T extends GeneratedMessage> Metadata.Key<T> keyForProto(final T instance) {
-    return Metadata.Key.of(instance.getDescriptorForType().getFullName(),
-        new  Metadata.Marshaller<T>() {
+    return Metadata.Key.of(
+        instance.getDescriptorForType().getFullName() + Metadata.BINARY_HEADER_SUFFIX,
+        new Metadata.BinaryMarshaller<T>() {
           @Override
           public byte[] toBytes(T value) {
             return value.toByteArray();
-          }
-
-          @Override
-          public String toAscii(T value) {
-            return BaseEncoding.base64().encode(value.toByteArray());
           }
 
           @Override
@@ -59,11 +54,6 @@ public class ProtoUtils {
             } catch (InvalidProtocolBufferException ipbe) {
               throw new IllegalArgumentException(ipbe);
             }
-          }
-
-          @Override
-          public T parseAscii(String ascii) {
-            return parseBytes(BaseEncoding.base64().decode(ascii));
           }
         });
   }

@@ -1,12 +1,10 @@
 package com.google.net.stubby;
 
 import static com.google.common.base.Charsets.US_ASCII;
-import static com.google.common.base.Charsets.UTF_8;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Iterators;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
@@ -27,6 +25,11 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public abstract class Metadata {
+
+  /**
+   * All binary headers should have this suffix in their names. Vice versa.
+   */
+  public static final String BINARY_HEADER_SUFFIX = "-bin";
 
   /**
    * Interleave keys and values into a single iterator.
@@ -60,65 +63,38 @@ public abstract class Metadata {
   }
 
   /**
-   * Simple metadata marshaller that encodes strings as either UTF-8 or ASCII bytes.
+   * Simple metadata marshaller that encodes strings as is.
+   *
+   * <p>This should be used with ASCII strings that only contain printable characters and space.
+   * Otherwise the output may be considered invalid and discarded by the transport.
    */
-  public static final Marshaller<String> STRING_MARSHALLER =
-      new Marshaller<String>() {
+  public static final AsciiMarshaller<String> ASCII_STRING_MARSHALLER =
+      new AsciiMarshaller<String>() {
 
     @Override
-    public byte[] toBytes(String value) {
-      return value.getBytes(UTF_8);
-    }
-
-    @Override
-    public String toAscii(String value) {
+    public String toAsciiString(String value) {
       return value;
     }
 
     @Override
-    public String parseBytes(byte[] serialized) {
-      return new String(serialized, UTF_8);
-    }
-
-    @Override
-    public String parseAscii(String ascii) {
-      return ascii;
+    public String parseAsciiString(String serialized) {
+      return serialized;
     }
   };
 
   /**
-   * Simple metadata marshaller that encodes an integer as a signed decimal string or as big endian
-   * binary with four bytes.
+   * Simple metadata marshaller that encodes an integer as a signed decimal string.
    */
-  public static final Marshaller<Integer> INTEGER_MARSHALLER = new Marshaller<Integer>() {
-    @Override
-    public byte[] toBytes(Integer value) {
-      return new byte[] {
-        (byte) (value >>> 24),
-        (byte) (value >>> 16),
-        (byte) (value >>> 8),
-        (byte) (value >>> 0)};
-    }
+  public static final AsciiMarshaller<Integer> INTEGER_MARSHALLER = new AsciiMarshaller<Integer>() {
 
     @Override
-    public String toAscii(Integer value) {
+    public String toAsciiString(Integer value) {
       return value.toString();
     }
 
     @Override
-    public Integer parseBytes(byte[] serialized) {
-      if (serialized.length != 4) {
-        throw new IllegalArgumentException("Can only deserialize 4 bytes into an integer");
-      }
-      return (serialized[0] << 24)
-          |  (serialized[1] << 16)
-          |  (serialized[2] << 8)
-          |   serialized[3];
-    }
-
-    @Override
-    public Integer parseAscii(String ascii) {
-      return Integer.valueOf(ascii);
+    public Integer parseAsciiString(String serialized) {
+      return Integer.parseInt(serialized);
     }
   };
 
@@ -134,17 +110,6 @@ public abstract class Metadata {
     for (int i = 0; i < binaryValues.length; i++) {
       String name = new String(binaryValues[i], US_ASCII);
       store.put(name, new MetadataEntry(binaryValues[++i]));
-    }
-    this.serializable = false;
-  }
-
-  /**
-   * Constructor called by the transport layer when it receives ASCII metadata.
-   */
-  private Metadata(String... asciiValues) {
-    store = LinkedListMultimap.create();
-    for (int i = 0; i < asciiValues.length; i++) {
-      store.put(asciiValues[i], new MetadataEntry(asciiValues[++i]));
     }
     this.serializable = false;
   }
@@ -227,7 +192,13 @@ public abstract class Metadata {
   }
 
   /**
-   * Serialize all the metadata entries
+   * Serialize all the metadata entries.
+   *
+   * <p>It produces serialized names and values interleaved. result[i*2] are names, while
+   * result[i*2+1] are values.
+   *
+   * <p>Names are ASCII string bytes. If the name ends with "-bin", the value can be raw binary.
+   * Otherwise, the value must be printable ASCII characters or space.
    */
   public byte[][] serialize() {
     Preconditions.checkState(serializable, "Can't serialize raw metadata");
@@ -236,20 +207,6 @@ public abstract class Metadata {
     for (Map.Entry<String, MetadataEntry> entry : store.entries()) {
       serialized[i++] = entry.getValue().key.asciiName();
       serialized[i++] = entry.getValue().getSerialized();
-    }
-    return serialized;
-  }
-
-  /**
-   * Serialize all the metadata entries
-   */
-  public String[] serializeAscii() {
-    Preconditions.checkState(serializable, "Can't serialize received metadata");
-    String[] serialized = new String[store.size() * 2];
-    int i = 0;
-    for (Map.Entry<String, MetadataEntry> entry : store.entries()) {
-      serialized[i++] = entry.getValue().key.name();
-      serialized[i++] = entry.getValue().getSerializedAscii();
     }
     return serialized;
   }
@@ -299,20 +256,6 @@ public abstract class Metadata {
      */
     public Headers(byte[]... headers) {
       super(headers);
-    }
-
-    /**
-     * Called by the transport layer to create headers from their ASCII serialized values.
-     */
-    public Headers(String... asciiValues) {
-      super(asciiValues);
-    }
-
-    /**
-     * Called by the transport layer to create headers from their ASCII serialized values.
-     */
-    public Headers(Iterable<Map.Entry<String, String>> mapEntries) {
-      super(Iterators.toArray(fromMapEntries(mapEntries), String.class));
     }
 
     /**
@@ -378,20 +321,6 @@ public abstract class Metadata {
     }
 
     /**
-     * Called by the transport layer to create trailers from their ASCII serialized values.
-     */
-    public Trailers(String... asciiValues) {
-      super(asciiValues);
-    }
-
-    /**
-     * Called by the transport layer to create headers from their ASCII serialized values.
-     */
-    public Trailers(Iterable<Map.Entry<String, String>> mapEntries) {
-      super(Iterators.toArray(fromMapEntries(mapEntries), String.class));
-    }
-
-    /**
      * Called by the application layer to construct trailers prior to passing them to the
      * transport for serialization.
      */
@@ -401,22 +330,15 @@ public abstract class Metadata {
 
 
   /**
-   * Marshaller for metadata values.
+   * Marshaller for metadata values that are serialized into raw binary.
    */
-  public static interface Marshaller<T> {
+  public static interface BinaryMarshaller<T> {
     /**
      * Serialize a metadata value to bytes.
      * @param value to serialize
-     * @return serialized version of value, or null if value cannot be transmitted.
+     * @return serialized version of value
      */
     public byte[] toBytes(T value);
-
-    /**
-     * Serialize a metadata value to an ASCII string
-     * @param value to serialize
-     * @return serialized ascii version of value, or null if value cannot be transmitted.
-     */
-    public String toAscii(T value);
 
     /**
      * Parse a serialized metadata value from bytes.
@@ -424,34 +346,59 @@ public abstract class Metadata {
      * @return a parsed instance of type T
      */
     public T parseBytes(byte[] serialized);
+  }
+
+  /**
+   * Marshaller for metadata values that are serialized into ASCII strings that contain only
+   * printable characters and space.
+   */
+  public static interface AsciiMarshaller<T> {
+    /**
+     * Serialize a metadata value to a ASCII string that contains only printable characters and
+     * space.
+     *
+     * @param value to serialize
+     * @return serialized version of value, or null if value cannot be transmitted.
+     */
+    public String toAsciiString(T value);
 
     /**
-     * Parse a serialized metadata value from an ascii string.
-     * @param ascii string value of metadata to parse
+     * Parse a serialized metadata value from an ASCII string.
+     * @param serialized value of metadata to parse
      * @return a parsed instance of type T
      */
-    public T parseAscii(String ascii);
+    public T parseAsciiString(String serialized);
   }
 
   /**
    * Key for metadata entries. Allows for parsing and serialization of metadata.
    */
-  public static class Key<T> {
-    public static <T> Key<T> of(String name, Marshaller<T> marshaller) {
-      return new Key<T>(name, marshaller);
+  public abstract static class Key<T> {
+
+    /**
+     * Creates a key for a binary header.
+     *
+     * @param name must end with {@link BINARY_HEADER_SUFFIX}
+     */
+    public static <T> Key<T> of(String name, BinaryMarshaller<T> marshaller) {
+      return new BinaryKey<T>(name, marshaller);
+    }
+
+    /**
+     * Creates a key for a ASCII header.
+     *
+     * @param name must not end with {@link BINARY_HEADER_SUFFIX}
+     */
+    public static <T> Key<T> of(String name, AsciiMarshaller<T> marshaller) {
+      return new AsciiKey<T>(name, marshaller);
     }
 
     private final String name;
     private final byte[] asciiName;
-    private final Marshaller<T> marshaller;
 
-    /**
-     * Keys have a name and a marshaller used for serialization.
-     */
-    private Key(String name, Marshaller<T> marshaller) {
+    private Key(String name) {
       this.name = Preconditions.checkNotNull(name, "name").toLowerCase().intern();
       this.asciiName = this.name.getBytes(US_ASCII);
-      this.marshaller = Preconditions.checkNotNull(marshaller);
     }
 
     public String name() {
@@ -461,10 +408,6 @@ public abstract class Metadata {
     // TODO (lryan): Migrate to ByteString
     public byte[] asciiName() {
       return asciiName;
-    }
-
-    public Marshaller<T> getMarshaller() {
-      return marshaller;
     }
 
     @Override
@@ -484,6 +427,68 @@ public abstract class Metadata {
     public String toString() {
       return "Key{name='" + name + "'}";
     }
+
+    /**
+     * Serialize a metadata value to bytes.
+     * @param value to serialize
+     * @return serialized version of value
+     */
+    abstract byte[] toBytes(T value);
+
+    /**
+     * Parse a serialized metadata value from bytes.
+     * @param serialized value of metadata to parse
+     * @return a parsed instance of type T
+     */
+    abstract T parseBytes(byte[] serialized);
+  }
+
+  private static class BinaryKey<T> extends Key<T> {
+    private final BinaryMarshaller<T> marshaller;
+
+    /**
+     * Keys have a name and a binary marshaller used for serialization.
+     */
+    private BinaryKey(String name, BinaryMarshaller<T> marshaller) {
+      super(name);
+      Preconditions.checkArgument(name.endsWith(BINARY_HEADER_SUFFIX),
+          "Binary header is named " + name + ". It must end with " + BINARY_HEADER_SUFFIX);
+      this.marshaller = Preconditions.checkNotNull(marshaller);
+    }
+
+    @Override
+    byte[] toBytes(T value) {
+      return marshaller.toBytes(value);
+    }
+
+    @Override
+    T parseBytes(byte[] serialized) {
+      return marshaller.parseBytes(serialized);
+    }
+  }
+
+  private static class AsciiKey<T> extends Key<T> {
+    private final AsciiMarshaller<T> marshaller;
+
+    /**
+     * Keys have a name and an ASCII marshaller used for serialization.
+     */
+    private AsciiKey(String name, AsciiMarshaller<T> marshaller) {
+      super(name);
+      Preconditions.checkArgument(!name.endsWith(BINARY_HEADER_SUFFIX),
+          "ASCII header is named " + name + ". It must not end with " + BINARY_HEADER_SUFFIX);
+      this.marshaller = Preconditions.checkNotNull(marshaller);
+    }
+
+    @Override
+    byte[] toBytes(T value) {
+      return marshaller.toAsciiString(value).getBytes(US_ASCII);
+    }
+
+    @Override
+    T parseBytes(byte[] serialized) {
+      return marshaller.parseAsciiString(new String(serialized, US_ASCII));
+    }
   }
 
   private static class MetadataEntry {
@@ -492,7 +497,6 @@ public abstract class Metadata {
     @SuppressWarnings("rawtypes")
     Key key;
     byte[] serializedBinary;
-    String serializedAscii;
 
     /**
      * Constructor used when application layer adds a parsed value.
@@ -510,29 +514,20 @@ public abstract class Metadata {
       this.serializedBinary = serialized;
     }
 
-    /**
-     * Constructor used when reading a value from the transport.
-     */
-    private MetadataEntry(String serializedAscii) {
-      this.serializedAscii = Preconditions.checkNotNull(serializedAscii);
-    }
-
     @SuppressWarnings("unchecked")
     public <T> T getParsed(Key<T> key) {
       T value = (T) parsed;
       if (value != null) {
         if (this.key != key) {
           // Keys don't match so serialize using the old key
-          serializedBinary = this.key.getMarshaller().toBytes(value);
+          serializedBinary = this.key.toBytes(value);
         } else {
           return value;
         }
       }
       this.key = key;
       if (serializedBinary != null) {
-        value = key.getMarshaller().parseBytes(serializedBinary);
-      } else if (serializedAscii != null) {
-        value = key.getMarshaller().parseAscii(serializedAscii);
+        value = key.parseBytes(serializedBinary);
       }
       parsed = value;
       return value;
@@ -542,16 +537,7 @@ public abstract class Metadata {
     public byte[] getSerialized() {
       return serializedBinary =
           serializedBinary == null
-              ? key.getMarshaller().toBytes(parsed) :
-              serializedBinary;
-    }
-
-    @SuppressWarnings("unchecked")
-    public String getSerializedAscii() {
-      return serializedAscii =
-          serializedAscii == null
-              ? key.getMarshaller().toAscii(parsed) :
-              serializedAscii;
+              ? key.toBytes(parsed) : serializedBinary;
     }
   }
 }

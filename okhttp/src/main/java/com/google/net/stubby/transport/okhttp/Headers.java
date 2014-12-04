@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.transport.HttpUtil;
+import com.google.net.stubby.transport.TransportFrameUtil;
 
 import com.squareup.okhttp.internal.spdy.Header;
 
@@ -48,10 +49,10 @@ public class Headers {
     okhttpHeaders.add(TE_HEADER);
 
     // Now add any application-provided headers.
-    byte[][] serializedHeaders = headers.serialize();
-    for (int i = 0; i < serializedHeaders.length; i++) {
+    byte[][] serializedHeaders = TransportFrameUtil.toHttp2Headers(headers);
+    for (int i = 0; i < serializedHeaders.length; i += 2) {
       ByteString key = ByteString.of(serializedHeaders[i]);
-      ByteString value = ByteString.of(serializedHeaders[++i]);
+      ByteString value = ByteString.of(serializedHeaders[i + 1]);
       if (isApplicationHeader(key)) {
         okhttpHeaders.add(new Header(key, value));
       }

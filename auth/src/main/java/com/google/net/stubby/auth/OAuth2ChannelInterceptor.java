@@ -15,7 +15,7 @@ import javax.inject.Provider;
 /** Client interceptor that authenticates all calls with OAuth2. */
 public class OAuth2ChannelInterceptor implements ClientInterceptor {
   private static final Metadata.Key<String> AUTHORIZATION =
-      Metadata.Key.of("Authorization", Metadata.STRING_MARSHALLER);
+      Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER);
 
   private final OAuth2AccessTokenProvider accessTokenProvider;
   private final Provider<String> authorizationHeaderProvider

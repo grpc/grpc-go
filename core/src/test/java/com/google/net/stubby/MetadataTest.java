@@ -7,8 +7,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
-import com.google.common.primitives.Bytes;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -22,31 +20,22 @@ import java.util.Iterator;
 @RunWith(JUnit4.class)
 public class MetadataTest {
 
-  private static final Metadata.Marshaller<Fish> FISH_MARSHALLER = new Metadata.Marshaller<Fish>() {
+  private static final Metadata.BinaryMarshaller<Fish> FISH_MARSHALLER =
+      new Metadata.BinaryMarshaller<Fish>() {
     @Override
     public byte[] toBytes(Fish fish) {
       return fish.name.getBytes(UTF_8);
     }
 
     @Override
-    public String toAscii(Fish value) {
-      return value.name;
-    }
-
-    @Override
     public Fish parseBytes(byte[] serialized) {
       return new Fish(new String(serialized, UTF_8));
-    }
-
-    @Override
-    public Fish parseAscii(String ascii) {
-      return new Fish(ascii);
     }
   };
 
   private static final String LANCE = "lance";
   private static final byte[] LANCE_BYTES = LANCE.getBytes(StandardCharsets.US_ASCII);
-  private static final Metadata.Key<Fish> KEY = Metadata.Key.of("test", FISH_MARSHALLER);
+  private static final Metadata.Key<Fish> KEY = Metadata.Key.of("test-bin", FISH_MARSHALLER);
 
   @Test
   public void testWriteParsed() {
@@ -61,7 +50,7 @@ public class MetadataTest {
     assertFalse(fishes.hasNext());
     byte[][] serialized = metadata.serialize();
     assertEquals(2, serialized.length);
-    assertEquals(new String(serialized[0], StandardCharsets.US_ASCII), "test");
+    assertEquals(new String(serialized[0], StandardCharsets.US_ASCII), "test-bin");
     assertArrayEquals(LANCE_BYTES, serialized[1]);
     assertSame(lance, metadata.get(KEY));
     // Serialized instance should be cached too
@@ -112,14 +101,8 @@ public class MetadataTest {
   }
 
   @Test
-  public void integerMarshallerBytesIsBigEndian() {
-    assertEquals(Bytes.asList(new byte[] {0x12, 0x34, 0x56, 0x78}),
-          Bytes.asList(Metadata.INTEGER_MARSHALLER.toBytes(0x12345678)));
-  }
-
-  @Test
-  public void integerMarshallerAsciiIsDecimal() {
-    assertEquals("12345678", Metadata.INTEGER_MARSHALLER.toAscii(12345678));
+  public void integerMarshallerIsDecimal() {
+    assertEquals("12345678", Metadata.INTEGER_MARSHALLER.toAsciiString(12345678));
   }
 
   @Test
@@ -132,8 +115,8 @@ public class MetadataTest {
   }
 
   private void roundTripInteger(Integer i) {
-    assertEquals(i, Metadata.INTEGER_MARSHALLER.parseBytes(Metadata.INTEGER_MARSHALLER.toBytes(i)));
-    assertEquals(i, Metadata.INTEGER_MARSHALLER.parseAscii(Metadata.INTEGER_MARSHALLER.toAscii(i)));
+    assertEquals(i, Metadata.INTEGER_MARSHALLER.parseAsciiString(
+        Metadata.INTEGER_MARSHALLER.toAsciiString(i)));
   }
 
   private static class Fish {

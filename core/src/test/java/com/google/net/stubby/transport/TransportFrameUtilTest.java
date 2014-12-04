@@ -1,0 +1,102 @@
+package com.google.net.stubby.transport;
+
+import static com.google.common.base.Charsets.US_ASCII;
+import static com.google.common.base.Charsets.UTF_8;
+import static com.google.net.stubby.Metadata.ASCII_STRING_MARSHALLER;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
+
+import com.google.common.io.BaseEncoding;
+import com.google.net.stubby.Metadata.BinaryMarshaller;
+import com.google.net.stubby.Metadata.Headers;
+import com.google.net.stubby.Metadata.Key;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+import java.util.Arrays;
+
+/** Unit tests for {@link TransportFrameUtil}. */
+@RunWith(JUnit4.class)
+public class TransportFrameUtilTest {
+
+  private static final String NONCOMPLIANT_ASCII_STRING = new String(new char[]{1, 2, 3});
+
+  private static final String COMPLIANT_ASCII_STRING = "Kyle";
+
+  private static final BinaryMarshaller<String> UTF8_STRING_MARSHALLER =
+      new BinaryMarshaller<String>() {
+    @Override
+    public byte[] toBytes(String value) {
+      return value.getBytes(UTF_8);
+    }
+
+    @Override
+    public String parseBytes(byte[] serialized) {
+      return new String(serialized, UTF_8);
+    }
+  };
+
+  private static final Key<String> PLAIN_STRING = Key.of("plainstring", ASCII_STRING_MARSHALLER);
+  private static final Key<String> BINARY_STRING = Key.of("string-bin", UTF8_STRING_MARSHALLER);
+  private static final Key<String> BINARY_STRING_WITHOUT_SUFFIX =
+      Key.of("string", ASCII_STRING_MARSHALLER);
+
+  @Test
+  public void testToHttp2Headers() {
+    Headers headers = new Headers();
+    headers.put(PLAIN_STRING, COMPLIANT_ASCII_STRING);
+    headers.put(BINARY_STRING, NONCOMPLIANT_ASCII_STRING);
+    headers.put(BINARY_STRING_WITHOUT_SUFFIX, NONCOMPLIANT_ASCII_STRING);
+    byte[][] http2Headers = TransportFrameUtil.toHttp2Headers(headers);
+    // BINARY_STRING_WITHOUT_SUFFIX should not get in because it contains non-compliant ASCII
+    // characters but doesn't have "-bin" in the name.
+    byte[][] answer = new byte[][] {
+        "plainstring".getBytes(US_ASCII), COMPLIANT_ASCII_STRING.getBytes(US_ASCII),
+        "string-bin".getBytes(US_ASCII),
+        base64Encode(NONCOMPLIANT_ASCII_STRING.getBytes(US_ASCII))};
+    assertEquals(answer.length, http2Headers.length);
+    // http2Headers may re-sort the keys, so we cannot compare it with the answer side-by-side.
+    for (int i = 0; i < answer.length; i += 2) {
+      assertContains(http2Headers, answer[i], answer[i + 1]);
+    }
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void binaryHeaderWithoutSuffix() {
+    Key.of("plainstring", UTF8_STRING_MARSHALLER);
+  }
+
+  @Test
+  public void testToAndFromHttp2Headers() {
+    Headers headers = new Headers();
+    headers.put(PLAIN_STRING, COMPLIANT_ASCII_STRING);
+    headers.put(BINARY_STRING, NONCOMPLIANT_ASCII_STRING);
+    headers.put(BINARY_STRING_WITHOUT_SUFFIX, NONCOMPLIANT_ASCII_STRING);
+    byte[][] http2Headers = TransportFrameUtil.toHttp2Headers(headers);
+    byte[][] rawSerialized = TransportFrameUtil.toRawSerializedHeaders(http2Headers);
+    Headers recoveredHeaders = new Headers(rawSerialized);
+    assertEquals(COMPLIANT_ASCII_STRING, recoveredHeaders.get(PLAIN_STRING));
+    assertEquals(NONCOMPLIANT_ASCII_STRING, recoveredHeaders.get(BINARY_STRING));
+    assertNull(recoveredHeaders.get(BINARY_STRING_WITHOUT_SUFFIX));
+  }
+
+  private static void assertContains(byte[][] headers, byte[] key, byte[] value) {
+    String keyString = new String(key, US_ASCII);
+    for (int i = 0; i < headers.length; i += 2) {
+      if (Arrays.equals(headers[i], key)) {
+        assertArrayEquals("value for key=" + keyString, value, headers[i + 1]);
+        return;
+      }
+    }
+    fail("key=" + keyString + " not found");
+  }
+
+  private static byte[] base64Encode(byte[] input) {
+    return BaseEncoding.base64().encode(input).getBytes(US_ASCII);
+  }
+
+}

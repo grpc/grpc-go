@@ -1,6 +1,7 @@
 package com.google.net.stubby.transport.okhttp;
 
 import com.google.net.stubby.Metadata;
+import com.google.net.stubby.transport.TransportFrameUtil;
 
 import com.squareup.okhttp.internal.spdy.Header;
 
@@ -29,7 +30,7 @@ class Utils {
       headerValues[i++] = header.name.toByteArray();
       headerValues[i++] = header.value.toByteArray();
     }
-    return headerValues;
+    return TransportFrameUtil.toRawSerializedHeaders(headerValues);
   }
 
   private Utils() {
