@@ -37,6 +37,7 @@ import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
+import javax.net.ssl.SSLSocketFactory;
 
 /**
  * A okhttp-based {@link ClientTransport} implementation.
@@ -79,6 +80,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   }
 
   private final InetSocketAddress address;
+  private final String authorityHost;
   private final String defaultAuthority;
   private FrameReader frameReader;
   private AsyncFrameWriter frameWriter;
@@ -98,14 +100,18 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   private Status goAwayStatus;
   @GuardedBy("lock")
   private boolean stopped;
+  private SSLSocketFactory sslSocketFactory;
 
-  OkHttpClientTransport(InetSocketAddress address, String authorityHost, Executor executor) {
+  OkHttpClientTransport(InetSocketAddress address, String authorityHost, Executor executor,
+                        SSLSocketFactory sslSocketFactory) {
     this.address = Preconditions.checkNotNull(address);
+    this.authorityHost = authorityHost;
     defaultAuthority = authorityHost + ":" + address.getPort();
     this.executor = Preconditions.checkNotNull(executor);
     // Client initiated streams are odd, server initiated ones are even. Server should not need to
     // use it. We start clients at 3 to avoid conflicting with HTTP negotiation.
     nextStreamId = 3;
+    this.sslSocketFactory = sslSocketFactory;
   }
 
   /**
@@ -115,6 +121,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   OkHttpClientTransport(Executor executor, FrameReader frameReader, AsyncFrameWriter frameWriter,
       int nextStreamId) {
     address = null;
+    authorityHost = null;
     defaultAuthority = "notarealauthority:80";
     this.executor = Preconditions.checkNotNull(executor);
     this.frameReader = Preconditions.checkNotNull(frameReader);
@@ -148,6 +155,10 @@ public class OkHttpClientTransport extends AbstractClientTransport {
       BufferedSink sink;
       try {
         Socket socket = new Socket(address.getAddress(), address.getPort());
+        if (sslSocketFactory != null) {
+          // We assume the sslSocketFactory will verify the server hostname.
+          socket = sslSocketFactory.createSocket(socket, authorityHost, address.getPort(), true);
+        }
         source = Okio.buffer(Okio.source(socket));
         sink = Okio.buffer(Okio.sink(socket));
       } catch (IOException e) {

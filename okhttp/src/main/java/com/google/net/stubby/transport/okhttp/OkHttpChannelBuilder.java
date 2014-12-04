@@ -12,6 +12,8 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
+import javax.net.ssl.SSLSocketFactory;
+
 /** Convenience class for building channels with the OkHttp transport. */
 public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpChannelBuilder> {
   private static final Resource<ExecutorService> DEFAULT_TRANSPORT_THREAD_POOL
@@ -37,6 +39,7 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
   private final InetSocketAddress serverAddress;
   private ExecutorService transportExecutor;
   private String host;
+  private SSLSocketFactory sslSocketFactory;
 
   private OkHttpChannelBuilder(InetSocketAddress serverAddress, String host) {
     this.serverAddress = Preconditions.checkNotNull(serverAddress, "serverAddress");
@@ -64,12 +67,20 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
     this.host = host;
   }
 
+  /**
+   * Provides a SSLSocketFactory to establish a secure connection. By default TLS is not enabled.
+   */
+  public OkHttpChannelBuilder sslSocketFactory(SSLSocketFactory factory) {
+    this.sslSocketFactory = factory;
+    return this;
+  }
+
   @Override
   protected ChannelEssentials buildEssentials() {
     final ExecutorService executor = (transportExecutor == null)
         ? SharedResourceHolder.get(DEFAULT_TRANSPORT_THREAD_POOL) : transportExecutor;
     ClientTransportFactory transportFactory
-        = new OkHttpClientTransportFactory(serverAddress, host, executor);
+        = new OkHttpClientTransportFactory(serverAddress, host, executor, sslSocketFactory);
     Service.Listener listener = null;
     // We shut down the executor only if we created it.
     if (transportExecutor == null) {
