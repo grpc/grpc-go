@@ -1,7 +1,6 @@
 package com.google.net.stubby.transport.netty;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
@@ -10,7 +9,6 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
-import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpClientUpgradeHandler;
@@ -58,7 +56,7 @@ public class Http2Negotiator {
     /**
      * Gets the {@link ChannelInitializer} for negotiating the protocol.
      */
-    ChannelInitializer<SocketChannel> initializer();
+    ChannelInitializer<Channel> initializer();
 
     void onConnected(Channel channel);
 
@@ -90,9 +88,9 @@ public class Http2Negotiator {
     if (!installJettyTLSProtocolSelection(sslEngine, completeFuture, false)) {
       throw new IllegalStateException("NPN/ALPN extensions not installed");
     }
-    final ChannelInitializer<SocketChannel> initializer = new ChannelInitializer<SocketChannel>() {
+    final ChannelInitializer<Channel> initializer = new ChannelInitializer<Channel>() {
       @Override
-      public void initChannel(final SocketChannel ch) throws Exception {
+      public void initChannel(final Channel ch) throws Exception {
         SslHandler sslHandler = new SslHandler(sslEngine, false);
         sslHandler.handshakeFuture().addListener(
             new GenericFutureListener<Future<? super Channel>>() {
@@ -112,7 +110,7 @@ public class Http2Negotiator {
 
     return new Negotiation() {
       @Override
-      public ChannelInitializer<SocketChannel> initializer() {
+      public ChannelInitializer<Channel> initializer() {
         return initializer;
       }
 
@@ -138,9 +136,9 @@ public class Http2Negotiator {
     final HttpClientUpgradeHandler upgrader =
         new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
     final UpgradeCompletionHandler completionHandler = new UpgradeCompletionHandler();
-    final ChannelInitializer<SocketChannel> initializer = new ChannelInitializer<SocketChannel>() {
+    final ChannelInitializer<Channel> initializer = new ChannelInitializer<Channel>() {
       @Override
-      public void initChannel(SocketChannel ch) throws Exception {
+      public void initChannel(Channel ch) throws Exception {
         ch.pipeline().addLast(upgrader);
         ch.pipeline().addLast(completionHandler);
       }
@@ -148,7 +146,7 @@ public class Http2Negotiator {
 
     return new Negotiation() {
       @Override
-      public ChannelInitializer<SocketChannel> initializer() {
+      public ChannelInitializer<Channel> initializer() {
         return initializer;
       }
 
@@ -172,16 +170,16 @@ public class Http2Negotiator {
    * Create a "no-op" negotiation that simply assumes the protocol to already be negotiated.
    */
   public static Negotiation plaintext(final ChannelHandler handler) {
-    final ChannelInitializer<SocketChannel> initializer = new ChannelInitializer<SocketChannel>() {
+    final ChannelInitializer<Channel> initializer = new ChannelInitializer<Channel>() {
       @Override
-      public void initChannel(SocketChannel ch) throws Exception {
+      public void initChannel(Channel ch) throws Exception {
         ch.pipeline().addLast(handler);
       }
     };
     return new Negotiation() {
       private final SettableFuture<Void> completeFuture = SettableFuture.create();
       @Override
-      public ChannelInitializer<SocketChannel> initializer() {
+      public ChannelInitializer<Channel> initializer() {
         return initializer;
       }
 

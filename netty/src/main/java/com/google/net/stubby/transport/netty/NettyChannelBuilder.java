@@ -9,13 +9,14 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 
 /**
  * Convenient class for building channels with the netty transport.
  */
 public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChannelBuilder> {
 
-  private final InetSocketAddress serverAddress;
+  private final SocketAddress serverAddress;
 
   private NegotiationType negotiationType = NegotiationType.TLS;
   private EventLoopGroup userEventLoopGroup;
@@ -24,7 +25,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   /**
    * Creates a new builder with the given server address.
    */
-  public static NettyChannelBuilder forAddress(InetSocketAddress serverAddress) {
+  public static NettyChannelBuilder forAddress(SocketAddress serverAddress) {
     return new NettyChannelBuilder(serverAddress);
   }
 
@@ -35,7 +36,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     return forAddress(new InetSocketAddress(host, port));
   }
 
-  private NettyChannelBuilder(InetSocketAddress serverAddress) {
+  private NettyChannelBuilder(SocketAddress serverAddress) {
     this.serverAddress = serverAddress;
   }
 

@@ -18,6 +18,8 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.local.LocalAddress;
+import io.netty.channel.local.LocalChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
@@ -38,6 +40,7 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.util.internal.logging.InternalLogLevel;
 
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.concurrent.ExecutionException;
 
 import javax.net.ssl.SSLEngine;
@@ -49,7 +52,7 @@ import javax.net.ssl.SSLParameters;
  */
 class NettyClientTransport extends AbstractClientTransport {
 
-  private final InetSocketAddress address;
+  private final SocketAddress address;
   private final EventLoopGroup eventGroup;
   private final Http2Negotiator.Negotiation negotiation;
   private final NettyClientHandler handler;
@@ -57,13 +60,23 @@ class NettyClientTransport extends AbstractClientTransport {
   private final AsciiString authority;
   private Channel channel;
 
-  NettyClientTransport(InetSocketAddress address, NegotiationType negotiationType,
+  NettyClientTransport(SocketAddress address, NegotiationType negotiationType,
       EventLoopGroup eventGroup, SslContext sslContext) {
     Preconditions.checkNotNull(negotiationType, "negotiationType");
     this.address = Preconditions.checkNotNull(address, "address");
     this.eventGroup = Preconditions.checkNotNull(eventGroup, "eventGroup");
 
-    authority = new AsciiString(address.getHostString() + ":" + address.getPort());
+    InetSocketAddress inetAddress = null;
+    if (address instanceof InetSocketAddress) {
+      inetAddress = (InetSocketAddress) address;
+      authority = new AsciiString(inetAddress.getHostString() + ":" + inetAddress.getPort());
+    } else if (address instanceof LocalAddress) {
+      authority = new AsciiString(address.toString());
+      Preconditions.checkArgument(negotiationType != NegotiationType.TLS,
+          "TLS not supported for in-process transport");
+    } else {
+      throw new IllegalStateException("Unknown socket address type " + address.toString());
+    }
 
     handler = newHandler();
     switch (negotiationType) {
@@ -85,7 +98,7 @@ class NettyClientTransport extends AbstractClientTransport {
         }
         // TODO(user): specify allocator. The method currently ignores it though.
         SSLEngine sslEngine
-            = sslContext.newEngine(null, address.getHostString(), address.getPort());
+            = sslContext.newEngine(null, inetAddress.getHostString(), inetAddress.getPort());
         SSLParameters sslParams = new SSLParameters();
         sslParams.setEndpointIdentificationAlgorithm("HTTPS");
         sslEngine.setSSLParameters(sslParams);
@@ -127,8 +140,12 @@ class NettyClientTransport extends AbstractClientTransport {
   protected void doStart() {
     Bootstrap b = new Bootstrap();
     b.group(eventGroup);
-    b.channel(NioSocketChannel.class);
-    b.option(SO_KEEPALIVE, true);
+    if (address instanceof LocalAddress) {
+      b.channel(LocalChannel.class);
+    } else {
+      b.channel(NioSocketChannel.class);
+      b.option(SO_KEEPALIVE, true);
+    }
     b.handler(negotiation.initializer());
 
     // Start the connection operation to the server.

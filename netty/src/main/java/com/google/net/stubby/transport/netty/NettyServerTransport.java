@@ -5,9 +5,9 @@ import com.google.common.util.concurrent.AbstractService;
 import com.google.net.stubby.transport.ServerListener;
 import com.google.net.stubby.transport.ServerTransportListener;
 
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
@@ -31,12 +31,12 @@ import javax.annotation.Nullable;
  */
 class NettyServerTransport extends AbstractService {
   private static final Http2FrameLogger frameLogger = new Http2FrameLogger(InternalLogLevel.DEBUG); 
-  private final SocketChannel channel;
+  private final Channel channel;
   private final ServerListener serverListener;
   private final SslContext sslContext;
   private NettyServerHandler handler;
 
-  NettyServerTransport(SocketChannel channel, ServerListener serverListener,
+  NettyServerTransport(Channel channel, ServerListener serverListener,
       @Nullable SslContext sslContext) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
     this.serverListener = Preconditions.checkNotNull(serverListener, "serverListener");

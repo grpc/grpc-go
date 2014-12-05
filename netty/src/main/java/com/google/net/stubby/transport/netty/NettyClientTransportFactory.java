@@ -6,19 +6,19 @@ import com.google.net.stubby.transport.ClientTransportFactory;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 
-import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 
 /**
  * Factory that manufactures instances of {@link NettyClientTransport}.
  */
 class NettyClientTransportFactory implements ClientTransportFactory {
 
-  private final InetSocketAddress address;
+  private final SocketAddress address;
   private final NegotiationType negotiationType;
   private final EventLoopGroup group;
   private final SslContext sslContext;
 
-  public NettyClientTransportFactory(InetSocketAddress address, NegotiationType negotiationType,
+  public NettyClientTransportFactory(SocketAddress address, NegotiationType negotiationType,
       EventLoopGroup group, SslContext sslContext) {
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");

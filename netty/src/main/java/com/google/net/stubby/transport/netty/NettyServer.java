@@ -7,13 +7,16 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.AbstractService;
 import com.google.net.stubby.transport.ServerListener;
 
+import java.net.SocketAddress;
+
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.local.LocalAddress;
+import io.netty.channel.local.LocalServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
 
@@ -24,26 +27,26 @@ import javax.annotation.Nullable;
  * Netty-based server.
  */
 public class NettyServer extends AbstractService {
-  private final int port;
-  private final ChannelInitializer<SocketChannel> channelInitializer;
+  private final SocketAddress address;
+  private final ChannelInitializer<Channel> channelInitializer;
   private final EventLoopGroup bossGroup;
   private final EventLoopGroup workerGroup;
   private Channel channel;
 
-  public NettyServer(ServerListener serverListener, int port, EventLoopGroup bossGroup,
+  public NettyServer(ServerListener serverListener, SocketAddress address, EventLoopGroup bossGroup,
       EventLoopGroup workerGroup) {
-    this(serverListener, port, bossGroup, workerGroup, null);
+    this(serverListener, address, bossGroup, workerGroup, null);
   }
 
-  public NettyServer(final ServerListener serverListener, int port, EventLoopGroup bossGroup,
+  public NettyServer(final ServerListener serverListener, SocketAddress address,
+                     EventLoopGroup bossGroup,
       EventLoopGroup workerGroup, @Nullable final SslContext sslContext) {
     Preconditions.checkNotNull(bossGroup, "bossGroup");
     Preconditions.checkNotNull(workerGroup, "workerGroup");
-    Preconditions.checkArgument(port >= 0, "port must be positive");
-    this.port = port;
-    this.channelInitializer = new ChannelInitializer<SocketChannel>() {
+    this.address = address;
+    this.channelInitializer = new ChannelInitializer<Channel>() {
       @Override
-      public void initChannel(SocketChannel ch) throws Exception {
+      public void initChannel(Channel ch) throws Exception {
         NettyServerTransport transport = new NettyServerTransport(ch, serverListener, sslContext);
         transport.startAsync();
         // TODO(user): Should we wait for transport shutdown before shutting down server?
@@ -57,13 +60,17 @@ public class NettyServer extends AbstractService {
   protected void doStart() {
     ServerBootstrap b = new ServerBootstrap();
     b.group(bossGroup, workerGroup);
-    b.channel(NioServerSocketChannel.class);
-    b.option(SO_BACKLOG, 128);
-    b.childOption(SO_KEEPALIVE, true);
+    if (address instanceof LocalAddress) {
+      b.channel(LocalServerChannel.class);
+    } else {
+      b.channel(NioServerSocketChannel.class);
+      b.option(SO_BACKLOG, 128);
+      b.childOption(SO_KEEPALIVE, true);
+    }
     b.childHandler(channelInitializer);
 
     // Bind and start to accept incoming connections.
-    b.bind(port).addListener(new ChannelFutureListener() {
+    b.bind(address).addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
         if (future.isSuccess()) {

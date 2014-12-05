@@ -7,6 +7,9 @@ import com.google.net.stubby.HandlerRegistry;
 import com.google.net.stubby.SharedResourceHolder;
 import com.google.net.stubby.transport.ServerListener;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 
@@ -15,7 +18,7 @@ import io.netty.handler.ssl.SslContext;
  */
 public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerBuilder> {
 
-  private final int port;
+  private final SocketAddress address;
 
   private EventLoopGroup userBossEventLoopGroup;
   private EventLoopGroup userWorkerEventLoopGroup;
@@ -29,13 +32,21 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
     return new NettyServerBuilder(registry, port);
   }
 
+  public static NettyServerBuilder forAddress(SocketAddress address) {
+    return new NettyServerBuilder(address);
+  }
+
   private NettyServerBuilder(int port) {
-    this.port = port;
+    this.address = new InetSocketAddress(port);
   }
 
   private NettyServerBuilder(HandlerRegistry registry, int port) {
     super(registry);
-    this.port = port;
+    this.address = new InetSocketAddress(port);
+  }
+
+  private NettyServerBuilder(SocketAddress address) {
+    this.address = address;
   }
 
   /**
@@ -81,7 +92,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
     final EventLoopGroup workerEventLoopGroup = (userWorkerEventLoopGroup == null)
         ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP)
         : userWorkerEventLoopGroup;
-    NettyServer server = new NettyServer(serverListener, port, bossEventLoopGroup,
+    NettyServer server = new NettyServer(serverListener, address, bossEventLoopGroup,
         workerEventLoopGroup, sslContext);
     if (userBossEventLoopGroup == null) {
       server.addListener(new ClosureHook() {
