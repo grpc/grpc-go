@@ -487,8 +487,8 @@ public abstract class AbstractTransportTest {
     fixedHeaders.put(METADATA_KEY, contextValue);
     stub = MetadataUtils.attachHeaders(stub, fixedHeaders);
     // .. and expect it to be echoed back in trailers
-    AtomicReference<Metadata.Trailers> trailersCapture = new AtomicReference<>();
-    AtomicReference<Metadata.Headers> headersCapture = new AtomicReference<>();
+    AtomicReference<Metadata.Trailers> trailersCapture = new AtomicReference<Metadata.Trailers>();
+    AtomicReference<Metadata.Headers> headersCapture = new AtomicReference<Metadata.Headers>();
     stub = MetadataUtils.captureMetadata(stub, headersCapture, trailersCapture);
 
     Assert.assertNotNull(stub.unaryCall(unaryRequest()));
@@ -513,8 +513,8 @@ public abstract class AbstractTransportTest {
     fixedHeaders.put(METADATA_KEY, contextValue);
     stub = MetadataUtils.attachHeaders(stub, fixedHeaders);
     // .. and expect it to be echoed back in trailers
-    AtomicReference<Metadata.Trailers> trailersCapture = new AtomicReference<>();
-    AtomicReference<Metadata.Headers> headersCapture = new AtomicReference<>();
+    AtomicReference<Metadata.Trailers> trailersCapture = new AtomicReference<Metadata.Trailers>();
+    AtomicReference<Metadata.Headers> headersCapture = new AtomicReference<Metadata.Headers>();
     stub = MetadataUtils.captureMetadata(stub, headersCapture, trailersCapture);
 
     List<Integer> responseSizes = Arrays.asList(50, 100, 150, 200);
@@ -564,7 +564,7 @@ public abstract class AbstractTransportTest {
 
   protected static void assertSuccess(StreamRecorder<?> recorder) {
     if (recorder.getError() != null) {
-      throw new AssertionError("Error in stream", recorder.getError());
+      throw new AssertionError(recorder.getError());
     }
   }
 }

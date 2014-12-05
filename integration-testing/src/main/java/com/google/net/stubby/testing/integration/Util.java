@@ -86,11 +86,7 @@ public class Util {
       Assert.assertEquals(expected, actual);
     } else {
       for (int i = 0; i < expected.size(); i++) {
-        try {
-          assertEquals(expected.get(i), actual.get(i));
-        } catch (Error e) {
-          throw new AssertionError("At index " + i, e);
-        }
+        assertEquals(expected.get(i), actual.get(i));
       }
     }
   }
