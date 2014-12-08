@@ -167,7 +167,7 @@ public class TestServiceServer {
   private static int getGrpcVersion(Map<String, String> argMap) {
     String value = argMap.get(GRPC_VERSION_ARG.toLowerCase());
     if (value == null) {
-      return 1;
+      return 2;
     }
     int version = Integer.parseInt(value);
     System.out.println(GRPC_VERSION_ARG + " set to version: " + version);

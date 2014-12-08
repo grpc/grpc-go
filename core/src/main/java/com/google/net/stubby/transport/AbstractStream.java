@@ -56,7 +56,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    * and should please, please, please be temporary to ease migration.
    */
   // TODO(user): remove this once v1 support is dropped.
-  public static boolean GRPC_V2_PROTOCOL = false;
+  public static boolean GRPC_V2_PROTOCOL = true;
 
   /**
    * Indicates the phase of the GRPC stream in one direction.

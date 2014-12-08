@@ -52,7 +52,6 @@ import com.google.common.util.concurrent.Service.State;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.AbstractStream;
 import com.google.net.stubby.transport.ClientStreamListener;
 import com.google.net.stubby.transport.okhttp.OkHttpClientTransport.ClientFrameHandler;
 
@@ -109,7 +108,6 @@ public class OkHttpClientTransportTest {
 
   @Before
   public void setup() {
-    AbstractStream.GRPC_V2_PROTOCOL = true;
     MockitoAnnotations.initMocks(this);
     streams = new HashMap<Integer, OkHttpClientStream>();
     frameReader = new MockFrameReader();

@@ -82,18 +82,6 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     return listener;
   }
 
-  @Override
-  @Before
-  public void setup() {
-    AbstractStream.GRPC_V2_PROTOCOL = false;
-    super.setup();
-  }
-
-  @After
-  public void tearDown() {
-    AbstractStream.GRPC_V2_PROTOCOL = false;
-  }
-
   @Test
   public void closeShouldSucceed() {
     // Force stream creation.

@@ -35,6 +35,7 @@ import static com.google.net.stubby.transport.netty.NettyTestUtil.messageFrame;
 import static com.google.net.stubby.transport.netty.NettyTestUtil.statusFrame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -48,6 +49,7 @@ import com.google.net.stubby.transport.ServerStreamListener;
 
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
 
@@ -103,7 +105,10 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   public void closeBeforeClientHalfCloseShouldSucceed() throws Exception {
     stream().close(Status.OK, new Metadata.Trailers());
     verify(channel).writeAndFlush(
-        new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.OK), true));
+        new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
+          .status(new AsciiString("200"))
+          .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
+          .set(new AsciiString("grpc-status"), new AsciiString("0")), true));
     verifyZeroInteractions(serverListener);
     // Sending complete. Listener gets closed()
     stream().complete();
@@ -117,7 +122,10 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     // Error is sent on wire and ends the stream
     stream().close(Status.CANCELLED, trailers);
     verify(channel).writeAndFlush(
-        new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.CANCELLED), true));
+        new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
+          .status(new AsciiString("200"))
+          .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
+          .set(new AsciiString("grpc-status"), new AsciiString("1")), true));
     verifyZeroInteractions(serverListener);
     // Sending complete. Listener gets closed()
     stream().complete();
@@ -137,7 +145,10 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     assertTrue(stream().isClosed());
     verifyNoMoreInteractions(serverListener);
     verify(channel).writeAndFlush(
-        new SendGrpcFrameCommand(STREAM_ID, statusFrame(Status.OK), true));
+        new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
+          .status(new AsciiString("200"))
+          .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
+          .set(new AsciiString("grpc-status"), new AsciiString("0")), true));
     // Sending and receiving complete. Listener gets closed()
     stream().complete();
     verify(serverListener).closed(Status.OK);
@@ -150,7 +161,12 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     stream().abortStream(status, true);
     assertTrue(stream().isClosed());
     verify(serverListener).closed(same(status));
-    verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
+    verify(channel).writeAndFlush(
+        new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
+            .status(new AsciiString("200"))
+            .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
+            .set(new AsciiString("grpc-status"), new AsciiString("" + status.getCode().value())),
+          true));
     verifyNoMoreInteractions(serverListener);
   }
 
@@ -160,8 +176,8 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     stream().abortStream(status, false);
     assertTrue(stream().isClosed());
     verify(serverListener).closed(same(status));
-    verify(channel, never()).writeAndFlush(
-        new SendGrpcFrameCommand(STREAM_ID, statusFrame(status), true));
+    verify(channel, never()).writeAndFlush(any(SendResponseHeadersCommand.class));
+    verify(channel, never()).writeAndFlush(any(SendGrpcFrameCommand.class));
     verifyNoMoreInteractions(serverListener);
   }
 
