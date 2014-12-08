@@ -115,7 +115,7 @@ public class TestServiceServer {
    * The main application allowing this server to be launched from the command line. Accepts the
    * following arguments:
    * <p>
-   * --transport=<HTTP|HTTP2_NETTY|HTTP2_OKHTTP> Identifies the transport
+   * --transport=<HTTP2_NETTY|HTTP2_NETTY_TLS> Identifies the transport
    * over which GRPC frames should be sent. <br>
    * --port=<port number> The port number for RPC communications.
    * --grpc_version=<1|2> Use gRPC v2 protocol. Default is v1.
