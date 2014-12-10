@@ -88,20 +88,51 @@
         </executions>
       </plugin>
 
-      <!-- run-test-xxx.sh invoke this plugin to launch a test client/server. -->
       <plugin>
-        <groupId>kr.motd.maven</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>assemble-all</id>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
         <configuration>
-          <executable>${java.home}/bin/java</executable>
-          <commandlineArgs>
-            ${argLine.bootcp}
-            -classpath
-            %classpath
-            ${exampleClass}
-            ${argLine.example}
-          </commandlineArgs>
+          <descriptorRefs>
+            <descriptorRef>jar-with-dependencies</descriptorRef>
+          </descriptorRefs>
         </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>com.internetitem</groupId>
+        <artifactId>write-properties-file-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>bootclasspath</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>write-properties-file</goal>
+            </goals>
+            <configuration>
+              <filename>bootclasspath.properties</filename>
+              <outputDirectory>${project.build.directory}</outputDirectory>
+              <properties>
+                <property>
+                  <name>bootclasspath</name>
+                  <value>${argLine.bootcp}</value>
+                </property>
+                <property>
+                  <name>jar</name>
+                  <value>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</value>
+                </property>
+              </properties>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

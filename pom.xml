@@ -290,6 +290,16 @@
           <artifactId>maven-protoc-plugin</artifactId>
           <version>0.3.2</version>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-assembly-plugin</artifactId>
+          <version>2.5.2</version>
+        </plugin>
+        <plugin>
+          <groupId>com.internetitem</groupId>
+          <artifactId>write-properties-file-maven-plugin</artifactId>
+          <version>1.0.1</version>
+        </plugin>
       </plugins>
     </pluginManagement>
 
