@@ -137,7 +137,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <okhttp.version>2.1.0</okhttp.version>
+    <okhttp.version>2.2.0-SNAPSHOT</okhttp.version>
     <netty.version>5.0.0.Alpha2-SNAPSHOT</netty.version>
     <jetty.alpn.version>8.0.0.v20140317</jetty.alpn.version>
     <jetty.alpn.path>

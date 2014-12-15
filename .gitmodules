@@ -1,3 +1,6 @@
 [submodule "lib/netty"]
 	path = lib/netty
 	url = https://github.com/netty/netty.git
+[submodule "lib/okhttp"]
+	path = lib/okhttp
+	url = https://github.com/square/okhttp.git
