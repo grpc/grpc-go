@@ -40,11 +40,6 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>test_proto_grpc</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <scope>compile</scope>
@@ -62,28 +57,6 @@
             <goals>
               <goal>compile</goal>
             </goals>
-          </execution>
-        </executions>
-      </plugin>
-
-      <!-- Install Test Service jars in the validate phase -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-install-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>install_test_proto_grpc</id>
-            <phase>validate</phase>
-            <goals>
-              <goal>install-file</goal>
-            </goals>
-            <configuration>
-              <file>../lib/libtest_proto_grpc.jar</file>
-              <groupId>${project.groupId}</groupId>
-              <artifactId>test_proto_grpc</artifactId>
-              <version>${project.version}</version>
-              <packaging>jar</packaging>
-            </configuration>
           </execution>
         </executions>
       </plugin>

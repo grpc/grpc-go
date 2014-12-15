@@ -18,6 +18,5 @@ dependencies {
             project(':stubby-okhttp'),
             project(':stubby-stub'),
             project(':stubby-testing'),
-            libraries.junit,
-            files("../lib/libtest_proto_grpc.jar")
+            libraries.junit
 }
