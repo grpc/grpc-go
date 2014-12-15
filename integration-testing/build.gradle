@@ -1,0 +1,23 @@
+apply plugin: 'protobuf'
+
+description = "Stubby: Integration Testing"
+
+// Add dependency on the protobuf plugin
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath libraries.protobuf_plugin
+    }
+}
+
+dependencies {
+    compile project(':stubby-core'),
+            project(':stubby-netty'),
+            project(':stubby-okhttp'),
+            project(':stubby-stub'),
+            project(':stubby-testing'),
+            libraries.junit,
+            files("../lib/libtest_proto_grpc.jar")
+}

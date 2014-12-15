@@ -1,0 +1,22 @@
+description = "Stubby: All"
+
+// Make sure that no transitive dependencies are included.
+configurations.compile.transitive = false
+
+dependencies {
+    compile project(':stubby-core'),
+            project(':stubby-stub'),
+            project(':stubby-auth'),
+            project(':stubby-netty'),
+            project(':stubby-okhttp')
+}
+
+// Create a fat jar containing only the direct dependencies
+jar {
+    from {
+        configurations.compile.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+}
+

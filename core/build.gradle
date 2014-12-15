@@ -1,0 +1,6 @@
+description = 'Stubby: Core'
+dependencies {
+    compile libraries.protobuf,
+            libraries.guava,
+            libraries.jsr305
+}

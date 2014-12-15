@@ -1,0 +1,6 @@
+description = "Stubby: OkHttp"
+dependencies {
+    compile project(':stubby-core'),
+            libraries.okio,
+            libraries.okhttp
+}

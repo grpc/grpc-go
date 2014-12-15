@@ -1,0 +1,18 @@
+rootProject.name = "stubby"
+include ":stubby-core"
+include ":stubby-stub"
+include ":stubby-auth"
+include ":stubby-okhttp"
+include ":stubby-netty"
+include ":stubby-testing"
+include ":stubby-integration-testing"
+include ":stubby-all"
+
+project(':stubby-core').projectDir = "$rootDir/core" as File
+project(':stubby-stub').projectDir = "$rootDir/stub" as File
+project(':stubby-auth').projectDir = "$rootDir/auth" as File
+project(':stubby-okhttp').projectDir = "$rootDir/okhttp" as File
+project(':stubby-netty').projectDir = "$rootDir/netty" as File
+project(':stubby-testing').projectDir = "$rootDir/testing" as File
+project(':stubby-integration-testing').projectDir = "$rootDir/integration-testing" as File
+project(':stubby-all').projectDir = "$rootDir/all" as File

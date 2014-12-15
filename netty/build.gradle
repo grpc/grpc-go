@@ -1,0 +1,9 @@
+description = "Stubby: Netty"
+dependencies {
+    compile project(':stubby-core'),
+            libraries.hpack,
+            libraries.netty
+
+    // Tests depend on base class defined by core module.
+    testCompile project(':stubby-core').sourceSets.test.output
+}

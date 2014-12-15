@@ -1,0 +1,41 @@
+subprojects {
+    apply plugin: "java"
+    apply plugin: "maven"
+
+    group = "com.google.net.stubby"
+    version = "0.1.0-SNAPSHOT"
+
+    sourceCompatibility = 1.6
+    targetCompatibility = 1.6
+
+    repositories {
+        mavenCentral()
+        mavenLocal()
+    }
+
+    // External dependency management
+    ext.libraries = [
+        protobuf: 'com.google.protobuf:protobuf-java:2.6.1',
+        guava: 'com.google.guava:guava:18.0',
+        jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
+        oauth_client: 'com.google.oauth-client:google-oauth-client:1.18.0-rc',
+        javaee_api: 'javax:javaee-api:7.0',
+        okio: 'com.squareup.okio:okio:1.0.1',
+        hpack: 'com.twitter:hpack:0.9.1',
+        protobuf_plugin: 'ws.antonov.gradle.plugins:gradle-plugin-protobuf:0.9.1',
+
+        // TODO: Unreleased dependencies.
+        // These must already be installed in the local maven repository.
+        netty: 'io.netty:netty-codec-http2:5.0.0.Alpha2-SNAPSHOT',
+        okhttp: 'com.squareup.okhttp:okhttp:2.2.0-SNAPSHOT',
+
+        // Test dependencies.
+        junit: 'junit:junit:4.11',
+        mockito: 'org.mockito:mockito-core:1.10.8'
+    ]
+
+    dependencies {
+        testCompile libraries.junit,
+                    libraries.mockito
+    }
+}

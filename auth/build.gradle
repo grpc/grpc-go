@@ -1,0 +1,6 @@
+description = "Stubby: Auth"
+dependencies {
+    compile project(':stubby-core'),
+            libraries.oauth_client,
+            libraries.javaee_api
+}

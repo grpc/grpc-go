@@ -1,0 +1,4 @@
+description = "Stubby: Stub"
+dependencies {
+    compile project(':stubby-core')
+}
