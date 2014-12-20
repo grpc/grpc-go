@@ -99,11 +99,11 @@ public abstract class AbstractTransportTest {
         .addService(ServerInterceptors.intercept(
             TestServiceGrpc.bindService(new TestServiceImpl(testServiceExecutor)),
             TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
-        .buildAndWaitForRunning();
+        .build().start();
   }
 
   protected static void stopStaticServer() {
-    server.stopAsync();
+    server.shutdownNow();
     testServiceExecutor.shutdown();
   }
 

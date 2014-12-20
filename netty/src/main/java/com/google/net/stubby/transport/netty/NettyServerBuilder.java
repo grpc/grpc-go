@@ -143,4 +143,18 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
     }
     return server;
   }
+
+  private abstract static class ClosureHook extends Service.Listener {
+    protected abstract void onClosed();
+
+    @Override
+    public void terminated(Service.State from) {
+      onClosed();
+    }
+
+    @Override
+    public void failed(Service.State from, Throwable failure) {
+      onClosed();
+    }
+  }
 }

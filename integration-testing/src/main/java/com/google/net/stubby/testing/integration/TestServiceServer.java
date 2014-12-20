@@ -138,14 +138,14 @@ public class TestServiceServer {
         .addService(ServerInterceptors.intercept(
             TestServiceGrpc.bindService(new TestServiceImpl(executor)),
             TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
-        .build();
-    server.startAsync();
-    server.awaitRunning(5, TimeUnit.SECONDS);
+        .build().start();
   }
 
   private void stop() throws Exception {
-    server.stopAsync();
-    server.awaitTerminated();
+    server.shutdownNow();
+    if (!server.awaitTerminated(5, TimeUnit.SECONDS)) {
+      System.err.println("Timed out waiting for server shutdown");
+    }
     MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
   }
 }

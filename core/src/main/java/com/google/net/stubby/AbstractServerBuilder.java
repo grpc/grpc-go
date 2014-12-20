@@ -31,21 +31,26 @@
 
 package com.google.net.stubby;
 
+import static com.google.net.stubby.AbstractChannelBuilder.DEFAULT_EXECUTOR;
+
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Service;
 import com.google.net.stubby.transport.ServerListener;
 
 import java.util.concurrent.ExecutorService;
 
+import javax.annotation.Nullable;
+
 /**
  * The base class for server builders.
  *
  * @param <BuilderT> The concrete type for this builder.
  */
-public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuilder<BuilderT>>
-    extends AbstractServiceBuilder<ServerImpl, BuilderT> {
+public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuilder<BuilderT>> {
 
   private final HandlerRegistry registry;
+  @Nullable
+  private ExecutorService userExecutor;
 
   /**
    * Constructs using a given handler registry.
@@ -59,6 +64,21 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
    */
   protected AbstractServerBuilder() {
     this.registry = new MutableHandlerRegistryImpl();
+  }
+
+  /**
+   * Provides a custom executor.
+   *
+   * <p>It's an optional parameter. If the user has not provided an executor when the server is
+   * built, the builder will use a static cached thread pool.
+   *
+   * <p>The server won't take ownership of the given executor. It's caller's responsibility to
+   * shut down the executor when it's desired.
+   */
+  @SuppressWarnings("unchecked")
+  public final BuilderT executor(ExecutorService executor) {
+    userExecutor = executor;
+    return (BuilderT) this;
   }
 
   /**
@@ -76,10 +96,33 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
     throw new UnsupportedOperationException("Underlying HandlerRegistry is not mutable");
   }
 
-  @Override
-  protected final ServerImpl buildImpl(ExecutorService executor) {
+  /**
+   * Builds a server using the given parameters.
+   *
+   * <p>The returned service will not been started or be bound a port. You will need to start it
+   * with {@link ServerImpl#start()}.
+   */
+  public ServerImpl build() {
+    final ExecutorService executor;
+    final boolean releaseExecutor;
+    if (userExecutor != null) {
+      executor = userExecutor;
+      releaseExecutor = false;
+    } else {
+      executor = SharedResourceHolder.get(DEFAULT_EXECUTOR);
+      releaseExecutor = true;
+    }
+
     ServerImpl server = new ServerImpl(executor, registry);
     server.setTransportServer(buildTransportServer(server.serverListener()));
+    server.setTerminationRunnable(new Runnable() {
+      @Override
+      public void run() {
+        if (releaseExecutor) {
+          SharedResourceHolder.release(DEFAULT_EXECUTOR, executor);
+        }
+      }
+    });
     return server;
   }
 

@@ -31,12 +31,13 @@
 
 package com.google.net.stubby;
 
-import static com.google.net.stubby.AbstractServiceBuilder.DEFAULT_EXECUTOR;
-
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.net.stubby.SharedResourceHolder.Resource;
 import com.google.net.stubby.transport.ClientTransportFactory;
 
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.annotation.Nullable;
 
@@ -46,6 +47,26 @@ import javax.annotation.Nullable;
  * @param <BuilderT> The concrete type of this builder.
  */
 public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBuilder<BuilderT>> {
+  static final Resource<ExecutorService> DEFAULT_EXECUTOR =
+      new Resource<ExecutorService>() {
+        private static final String name = "grpc-default-executor";
+        @Override
+        public ExecutorService create() {
+          return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
+              .setNameFormat(name + "-%d").build());
+        }
+
+        @Override
+        public void close(ExecutorService instance) {
+          instance.shutdown();
+        }
+
+        @Override
+        public String toString() {
+          return name;
+        }
+      };
+
   @Nullable
   private ExecutorService userExecutor;
 

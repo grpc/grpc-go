@@ -33,7 +33,6 @@ package com.google.net.stubby;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.AbstractService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.Service;
 import com.google.net.stubby.transport.ServerListener;
@@ -47,6 +46,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Default implementation of {@link Server}, for creation by transports.
@@ -64,7 +64,7 @@ import java.util.concurrent.Executor;
  * <p>Starting the server starts the underlying transport for servicing requests. Stopping the
  * server stops servicing new requests and waits for all connections to terminate.
  */
-public class ServerImpl extends AbstractService implements Server {
+public class ServerImpl implements Server {
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
 
   private final ServerListener serverListener = new ServerListenerImpl();
@@ -72,11 +72,14 @@ public class ServerImpl extends AbstractService implements Server {
   /** Executor for application processing. */
   private final Executor executor;
   private final HandlerRegistry registry;
+  private boolean started;
+  private boolean shutdown;
+  private boolean terminated;
+  private Runnable terminationRunnable;
   /** Service encapsulating something similar to an accept() socket. */
   private Service transportServer;
   /** {@code transportServer} and services encapsulating something similar to a TCP connection. */
-  private final Collection<Service> transports
-      = Collections.synchronizedSet(new HashSet<Service>());
+  private final Collection<Service> transports = new HashSet<Service>();
 
   /**
    * Construct a server. {@link #setTransportServer(Service)} must be called before starting the
@@ -96,18 +99,17 @@ public class ServerImpl extends AbstractService implements Server {
    *
    * @return this object
    */
-  public ServerImpl setTransportServer(Service transportServer) {
-    Preconditions.checkState(state() == Server.State.NEW, "server must be in NEW state");
+  public synchronized ServerImpl setTransportServer(Service transportServer) {
+    if (shutdown) {
+      throw new IllegalStateException("Already shutdown");
+    }
     Preconditions.checkState(this.transportServer == null, "transportServer already set");
     this.transportServer = Preconditions.checkNotNull(transportServer);
     Preconditions.checkArgument(
-        transportServer.state() == Server.State.NEW, "transport server not in NEW state");
-    transportServer.addListener(new TransportLifecycleListener(), MoreExecutors.directExecutor());
+        transportServer.state() == Service.State.NEW, "transport server not in NEW state");
+    transportServer.addListener(new TransportServiceListener(transportServer),
+        MoreExecutors.directExecutor());
     transports.add(transportServer);
-    // We assume that transport.state() won't change by another thread before we return from this
-    // call.
-    Preconditions.checkState(
-        transportServer.state() == Server.State.NEW, "transport server changed state!");
     return this;
   }
 
@@ -116,64 +118,114 @@ public class ServerImpl extends AbstractService implements Server {
     return serverListener;
   }
 
-  @Override
-  protected void doStart() {
-    Preconditions.checkState(transportServer != null, "setTransportServer not called");
-    transportServer.startAsync();
-  }
-
-  @Override
-  protected void doStop() {
-    stopTransports();
+  /** Hack to allow executors to auto-shutdown. Not for general use. */
+  // TODO(ejona): Replace with a real API.
+  synchronized void setTerminationRunnable(Runnable runnable) {
+    this.terminationRunnable = runnable;
   }
 
   /**
-   * Remove transport service from accounting list and notify of complete shutdown if necessary.
+   * Bind and start the server.
+   *
+   * @return {@code this} object
+   * @throws IllegalStateException if already started
+   */
+  public synchronized ServerImpl start() {
+    if (started) {
+      throw new IllegalStateException("Already started");
+    }
+    started = true;
+    try {
+      // Start and wait for any port to actually be bound.
+      transportServer.startAsync().awaitRunning();
+    } catch (IllegalStateException ex) {
+      Throwable t = transportServer.failureCause();
+      if (t != null) {
+        throw Throwables.propagate(t);
+      }
+      throw ex;
+    }
+    return this;
+  }
+
+  /**
+   * Initiates an orderly shutdown in which preexisting calls continue but new calls are rejected.
+   */
+  public synchronized ServerImpl shutdown() {
+    shutdown = true;
+    // transports collection can be modified during stopAsync(), even if we hold the lock, due to
+    // reentrancy.
+    for (Service transport : transports.toArray(new Service[transports.size()])) {
+      transport.stopAsync();
+    }
+    return this;
+  }
+
+  /**
+   * Initiates a forceful shutdown in which preexisting and new calls are rejected. Although
+   * forceful, the shutdown process is still not instantaneous; {@link #isTerminated()} will likely
+   * return {@code false} immediately after this method returns.
+   *
+   * <p>NOT YET IMPLEMENTED. This method currently behaves identically to shutdown().
+   */
+  // TODO(ejona): cancel preexisting calls.
+  public synchronized ServerImpl shutdownNow() {
+    shutdown();
+    return this;
+  }
+
+  /**
+   * Returns whether the server is shutdown. Shutdown servers reject any new calls, but may still
+   * have some calls being processed.
+   *
+   * @see #shutdown()
+   * @see #isTerminated()
+   */
+  public synchronized boolean isShutdown() {
+    return shutdown;
+  }
+
+  /**
+   * Waits for the server to become terminated, giving up if the timeout is reached.
+   *
+   * @return whether the server is terminated, as would be done by {@link #isTerminated()}.
+   */
+  public synchronized boolean awaitTerminated(long timeout, TimeUnit unit)
+      throws InterruptedException {
+    long timeoutNanos = unit.toNanos(timeout);
+    long endTimeNanos = System.nanoTime() + timeoutNanos;
+    while (!terminated && (timeoutNanos = endTimeNanos - System.nanoTime()) > 0) {
+      TimeUnit.NANOSECONDS.timedWait(this, timeoutNanos);
+    }
+    return terminated;
+  }
+
+  /**
+   * Returns whether the server is terminated. Terminated servers have no running calls and
+   * relevant resources released (like TCP connections).
+   *
+   * @see #isShutdown()
+   */
+  public synchronized boolean isTerminated() {
+    return terminated;
+  }
+
+  /**
+   * Remove transport service from accounting collection and notify of complete shutdown if
+   * necessary.
    *
    * @param transport service to remove
-   * @return {@code true} if shutting down and it is now complete
    */
-  private boolean transportClosed(Service transport) {
-    boolean shutdownComplete;
-    synchronized (transports) {
-      if (!transports.remove(transport)) {
-        throw new AssertionError("Transport already removed");
+  private synchronized void transportClosed(Service transport) {
+    if (!transports.remove(transport)) {
+      throw new AssertionError("Transport already removed");
+    }
+    if (shutdown && transports.isEmpty()) {
+      terminated = true;
+      notifyAll();
+      if (terminationRunnable != null) {
+        terminationRunnable.run();
       }
-      shutdownComplete = transports.isEmpty();
-    }
-    if (shutdownComplete) {
-      Service.State state = state();
-      if (state == Service.State.STOPPING) {
-        notifyStopped();
-      } else if (state == Service.State.FAILED) {
-        // NOOP: already failed
-      } else {
-        notifyFailed(new IllegalStateException("server transport terminated unexpectedly"));
-      }
-    }
-    return shutdownComplete;
-  }
-
-  /**
-   * The transport server closed, so cleanup its resources and start shutdown.
-   */
-  private void transportServerClosed() {
-    boolean shutdownComplete = transportClosed(transportServer);
-    if (shutdownComplete) {
-      return;
-    }
-    stopTransports();
-  }
-
-  /**
-   * Shutdown all transports (including transportServer). Safe to be called even if previously
-   * called.
-   */
-  private void stopTransports() {
-    for (Service transport : transports.toArray(new Service[0])) {
-      // transports list can be modified during this call, even if we hold the lock, due to
-      // reentrancy.
-      transport.stopAsync();
     }
   }
 
@@ -184,12 +236,14 @@ public class ServerImpl extends AbstractService implements Server {
       Preconditions.checkArgument(
           transportState == Service.State.STARTING || transportState == Service.State.RUNNING,
           "Created transport should be starting or running");
-      if (state() != Server.State.RUNNING) {
-        transport.stopAsync();
-        return serverTransportListener;
+      synchronized (this) {
+        if (shutdown) {
+          transport.stopAsync();
+          return serverTransportListener;
+        }
+        transports.add(transport);
       }
-      transports.add(transport);
-      // transports list can be modified during this call, even if we hold the lock, due to
+      // transports collection can be modified during this call, even if we hold the lock, due to
       // reentrancy.
       transport.addListener(new TransportServiceListener(transport),
           MoreExecutors.directExecutor());
@@ -198,28 +252,6 @@ public class ServerImpl extends AbstractService implements Server {
       Preconditions.checkState(
           transport.state() == transportState, "transport changed state unexpectedly!");
       return serverTransportListener;
-    }
-  }
-
-  /** Listens for lifecycle changes to the "accept() socket." */
-  private class TransportLifecycleListener extends Service.Listener {
-    @Override
-    public void running() {
-      notifyStarted();
-    }
-
-    @Override
-    public void terminated(Service.State from) {
-      transportServerClosed();
-    }
-
-    @Override
-    public void failed(Service.State from, Throwable failure) {
-      // TODO(ejona): Ideally we would want to force-stop transports before notifying application of
-      // failure, but that would cause us to have an unrepresentative state since we would be
-      // RUNNING but not accepting connections.
-      notifyFailed(failure);
-      transportServerClosed();
     }
   }
 

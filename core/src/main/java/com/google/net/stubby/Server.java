@@ -31,8 +31,6 @@
 
 package com.google.net.stubby;
 
-import com.google.common.util.concurrent.Service;
-
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -40,4 +38,4 @@ import javax.annotation.concurrent.ThreadSafe;
  * not expected to be implemented by application code or interceptors.
  */
 @ThreadSafe
-public interface Server extends Service {}
+public interface Server {}

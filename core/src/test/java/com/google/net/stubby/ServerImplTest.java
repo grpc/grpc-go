@@ -33,7 +33,10 @@ package com.google.net.stubby;
 
 import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isNull;
 import static org.mockito.Matchers.notNull;
@@ -68,6 +71,7 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Unit tests for {@link ServerImpl}. */
@@ -92,8 +96,7 @@ public class ServerImplTest {
   public void startup() {
     MockitoAnnotations.initMocks(this);
 
-    server.startAsync();
-    server.awaitRunning();
+    server.start();
   }
 
   @After
@@ -102,50 +105,33 @@ public class ServerImplTest {
   }
 
   @Test
-  public void startStopImmediate() {
+  public void startStopImmediate() throws InterruptedException {
     Service transportServer = new NoopService();
-    Server server = new ServerImpl(executor, registry).setTransportServer(transportServer);
-    assertEquals(Service.State.NEW, server.state());
+    ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer);
     assertEquals(Service.State.NEW, transportServer.state());
-    server.startAsync();
-    server.awaitRunning();
-    assertEquals(Service.State.RUNNING, server.state());
+    server.start();
     assertEquals(Service.State.RUNNING, transportServer.state());
-    server.stopAsync();
-    server.awaitTerminated();
-    assertEquals(Service.State.TERMINATED, server.state());
+    server.shutdown();
+    assertTrue(server.awaitTerminated(100, TimeUnit.MILLISECONDS));
     assertEquals(Service.State.TERMINATED, transportServer.state());
   }
 
   @Test
-  public void transportServerFailureFailsServer() {
-    class FailableService extends NoopService {
-      public void doNotifyFailed(Throwable cause) {
-        notifyFailed(cause);
-      }
-    }
-    FailableService transportServer = new FailableService();
-    Server server = new ServerImpl(executor, registry).setTransportServer(transportServer);
-    server.startAsync();
-    server.awaitRunning();
-    RuntimeException ex = new RuntimeException("force failure");
-    transportServer.doNotifyFailed(ex);
-    assertEquals(Service.State.FAILED, server.state());
-    assertEquals(ex, server.failureCause());
-  }
-
-  @Test
   public void transportServerFailsStartup() {
+    final Exception ex = new RuntimeException();
     class FailingStartupService extends NoopService {
       @Override
       public void doStart() {
-        notifyFailed(new RuntimeException());
+        notifyFailed(ex);
       }
     }
     FailingStartupService transportServer = new FailingStartupService();
-    Server server = new ServerImpl(executor, registry).setTransportServer(transportServer);
-    server.startAsync();
-    assertEquals(Service.State.FAILED, server.state());
+    ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer);
+    try {
+      server.start();
+    } catch (Exception e) {
+      assertSame(ex, e);
+    }
   }
 
   @Test
@@ -159,20 +145,20 @@ public class ServerImplTest {
       public void doStop() {} // Don't notify.
     }
     NoopService transportServer = new NoopService();
-    ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer);
-    server.startAsync();
-    server.awaitRunning();
+    ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer)
+        .start();
     ManualStoppedService transport = new ManualStoppedService();
     transport.startAsync();
     server.serverListener().transportCreated(transport);
-    server.stopAsync();
+    server.shutdown();
     assertEquals(Service.State.STOPPING, transport.state());
     assertEquals(Service.State.TERMINATED, transportServer.state());
-    assertEquals(Service.State.STOPPING, server.state());
+    assertTrue(server.isShutdown());
+    assertFalse(server.isTerminated());
 
     transport.doNotifyStopped();
     assertEquals(Service.State.TERMINATED, transport.state());
-    assertEquals(Service.State.TERMINATED, server.state());
+    assertTrue(server.isTerminated());
   }
 
   @Test
@@ -186,20 +172,20 @@ public class ServerImplTest {
       public void doStop() {} // Don't notify.
     }
     ManualStoppedService transportServer = new ManualStoppedService();
-    ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer);
-    server.startAsync();
-    server.awaitRunning();
+    ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer)
+        .start();
     Service transport = new NoopService();
     transport.startAsync();
     server.serverListener().transportCreated(transport);
-    server.stopAsync();
+    server.shutdown();
     assertEquals(Service.State.TERMINATED, transport.state());
     assertEquals(Service.State.STOPPING, transportServer.state());
-    assertEquals(Service.State.STOPPING, server.state());
+    assertTrue(server.isShutdown());
+    assertFalse(server.isTerminated());
 
     transportServer.doNotifyStopped();
     assertEquals(Service.State.TERMINATED, transportServer.state());
-    assertEquals(Service.State.TERMINATED, server.state());
+    assertTrue(server.isTerminated());
   }
 
   @Test
