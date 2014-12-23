@@ -90,7 +90,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
   public void unaryCall(SimpleRequest req,
         StreamObserver<SimpleResponse> responseObserver) {
     SimpleResponse.Builder responseBuilder = SimpleResponse.newBuilder();
-    if (req.hasResponseType() && req.hasResponseSize()) {
+    if (req.getResponseSize() != 0) {
       boolean compressable = compressableResponse(req.getResponseType());
       ByteString dataBuffer = compressable ? compressableBuffer : uncompressableBuffer;
       // For consistency with the c++ TestServiceImpl, use a random offset for unary calls.
