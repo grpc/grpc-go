@@ -221,6 +221,8 @@ public class TestServiceClient {
       tester.serverStreaming();
     } else if ("ping_pong".equals(testCase)) {
       tester.pingPong();
+    } else if ("empty_stream".equals(testCase)) {
+      tester.emptyStream();
     } else {
       throw new IllegalArgumentException("Unknown test case: " + testCase);
     }
