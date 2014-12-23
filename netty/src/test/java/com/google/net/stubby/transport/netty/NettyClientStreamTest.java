@@ -32,7 +32,6 @@
 package com.google.net.stubby.transport.netty;
 
 import static com.google.net.stubby.transport.netty.NettyTestUtil.messageFrame;
-import static com.google.net.stubby.transport.netty.NettyTestUtil.statusFrame;
 import static com.google.net.stubby.transport.netty.Utils.CONTENT_TYPE_GRPC;
 import static com.google.net.stubby.transport.netty.Utils.CONTENT_TYPE_HEADER;
 import static com.google.net.stubby.transport.netty.Utils.STATUS_OK;
@@ -56,9 +55,6 @@ import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
 
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -169,7 +165,6 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void inboundTrailersClosesCall() throws Exception {
-    Assume.assumeTrue(AbstractStream.GRPC_V2_PROTOCOL);
     stream().id(1);
     stream().transportHeadersReceived(grpcResponseHeaders(), false);
     super.inboundMessageShouldCallListener();
@@ -183,11 +178,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     // Receive headers first so that it's a valid GRPC response.
     stream().transportHeadersReceived(grpcResponseHeaders(), false);
 
-    if (AbstractStream.GRPC_V2_PROTOCOL) {
-      stream().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
-    } else {
-      stream().transportDataReceived(statusFrame(Status.INTERNAL), false);
-    }
+    stream().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
     assertEquals(Status.INTERNAL.getCode(), captor.getValue().getCode());

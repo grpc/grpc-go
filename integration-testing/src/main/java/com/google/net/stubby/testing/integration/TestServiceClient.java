@@ -112,7 +112,6 @@ public class TestServiceClient {
    * --serverHost=The host of the remote server.<br>
    * --serverPort=$port_number The port of the remote server.<br>
    * --test_case=empty_unary|server_streaming The client test to run.<br>
-   * --grpc_version=1|2 Use gRPC v2 protocol. Default is 1.
    */
   public static void main(String[] args) throws Exception {
     Map<String, String> argMap = parseArgs(args);
@@ -121,8 +120,11 @@ public class TestServiceClient {
     int serverPort = getPort(argMap);
     String testCase = getTestCase(argMap);
 
-    com.google.net.stubby.transport.AbstractStream.GRPC_V2_PROTOCOL =
-        getGrpcVersion(argMap) == 2;
+    // TODO(user): Remove. Ideally stop passing the arg in scripts first.
+    if (getGrpcVersion(argMap) != 2) {
+      System.err.println("Only grpc_version=2 is supported");
+      System.exit(1);
+    }
 
     final Tester tester = new Tester(transport, serverHost, serverPort);
     Runtime.getRuntime().addShutdownHook(new Thread() {

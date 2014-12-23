@@ -63,9 +63,8 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   /** Saved trailers from close() that need to be sent once the framer has sent all messages. */
   private Metadata.Trailers stashedTrailers;
 
-  protected AbstractServerStream(IdT id, @Nullable Decompressor decompressor,
-                                 Executor deframerExecutor) {
-    super(decompressor, deframerExecutor);
+  protected AbstractServerStream(IdT id, Executor deframerExecutor) {
+    super(deframerExecutor);
     id(id);
   }
 
@@ -77,12 +76,6 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   protected ListenableFuture<Void> receiveMessage(InputStream is, int length) {
     inboundPhase(Phase.MESSAGE);
     return listener.messageRead(is, length);
-  }
-
-  /** gRPC protocol v1 support */
-  @Override
-  protected void receiveStatus(Status status) {
-    Preconditions.checkState(status == Status.OK, "Received status can only be OK on server");
   }
 
   @Override
@@ -111,7 +104,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
       gracefulClose = true;
       this.stashedTrailers = trailers;
       writeStatusToTrailers(status);
-      closeFramer(status);
+      closeFramer();
     }
   }
 
@@ -148,17 +141,13 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
 
   @Override
   protected final void internalSendFrame(ByteBuffer frame, boolean endOfStream) {
-    if (!GRPC_V2_PROTOCOL) {
-      sendFrame(frame, endOfStream);
-    } else {
-      if (frame.hasRemaining()) {
-        sendFrame(frame, false);
-      }
-      if (endOfStream) {
-        sendTrailers(stashedTrailers, headersSent);
-        headersSent = true;
-        stashedTrailers = null;
-      }
+    if (frame.hasRemaining()) {
+      sendFrame(frame, false);
+    }
+    if (endOfStream) {
+      sendTrailers(stashedTrailers, headersSent);
+      headersSent = true;
+      stashedTrailers = null;
     }
   }
 
@@ -237,7 +226,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
         stashedTrailers = new Metadata.Trailers();
       }
       writeStatusToTrailers(status);
-      closeFramer(status);
+      closeFramer();
     } else {
       dispose();
     }

@@ -63,13 +63,11 @@ import com.google.net.stubby.testing.integration.Messages.StreamingInputCallRequ
 import com.google.net.stubby.testing.integration.Messages.StreamingInputCallResponse;
 import com.google.net.stubby.testing.integration.Messages.StreamingOutputCallRequest;
 import com.google.net.stubby.testing.integration.Messages.StreamingOutputCallResponse;
-import com.google.net.stubby.transport.AbstractStream;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 
 import org.junit.After;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -494,7 +492,6 @@ public abstract class AbstractTransportTest {
 
   @org.junit.Test
   public void exchangeContextUnaryCall() throws Exception {
-    Assume.assumeTrue(AbstractStream.GRPC_V2_PROTOCOL);
     TestServiceGrpc.TestServiceBlockingStub stub =
         TestServiceGrpc.newBlockingStub(channel);
 
@@ -514,14 +511,11 @@ public abstract class AbstractTransportTest {
 
     // Assert that our side channel object is echoed back in both headers and trailers
     Assert.assertEquals(contextValue, headersCapture.get().get(METADATA_KEY));
-    if (AbstractStream.GRPC_V2_PROTOCOL) {
-      Assert.assertEquals(contextValue, trailersCapture.get().get(METADATA_KEY));
-    }
+    Assert.assertEquals(contextValue, trailersCapture.get().get(METADATA_KEY));
   }
 
   @org.junit.Test
   public void exchangeContextStreamingCall() throws Exception {
-    Assume.assumeTrue(AbstractStream.GRPC_V2_PROTOCOL);
     TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
 
     // Capture the context exchange
@@ -560,9 +554,7 @@ public abstract class AbstractTransportTest {
 
     // Assert that our side channel object is echoed back in both headers and trailers
     Assert.assertEquals(contextValue, headersCapture.get().get(METADATA_KEY));
-    if (AbstractStream.GRPC_V2_PROTOCOL) {
-      Assert.assertEquals(contextValue, trailersCapture.get().get(METADATA_KEY));
-    }
+    Assert.assertEquals(contextValue, trailersCapture.get().get(METADATA_KEY));
   }
 
 

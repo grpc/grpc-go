@@ -60,8 +60,8 @@ public class MessageFramer2Test {
   private static final int TRANSPORT_FRAME_SIZE = 12;
 
   @Mock
-  private Framer.Sink<List<Byte>> sink;
-  private Framer.Sink<ByteBuffer> copyingSink;
+  private MessageFramer2.Sink<List<Byte>> sink;
+  private MessageFramer2.Sink<ByteBuffer> copyingSink;
   private MessageFramer2 framer;
 
   @Captor
@@ -191,10 +191,10 @@ public class MessageFramer2Test {
    * Since ByteBuffers are reused, this sink copies their value at the time of the call. Converting
    * to List<Byte> is convenience.
    */
-  private static class ByteArrayConverterSink implements Framer.Sink<ByteBuffer> {
-    private final Framer.Sink<List<Byte>> delegate;
+  private static class ByteArrayConverterSink implements MessageFramer2.Sink<ByteBuffer> {
+    private final MessageFramer2.Sink<List<Byte>> delegate;
 
-    public ByteArrayConverterSink(Framer.Sink<List<Byte>> delegate) {
+    public ByteArrayConverterSink(MessageFramer2.Sink<List<Byte>> delegate) {
       this.delegate = delegate;
     }
 

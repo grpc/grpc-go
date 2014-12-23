@@ -51,7 +51,7 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   private final NettyServerHandler handler;
 
   NettyServerStream(Channel channel, int id, NettyServerHandler handler) {
-    super(id, new NettyDecompressor(channel.alloc()), channel.eventLoop());
+    super(id, channel.eventLoop());
     this.channel = checkNotNull(channel, "channel");
     this.handler = checkNotNull(handler, "handler");
   }

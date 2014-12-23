@@ -118,15 +118,17 @@ public class TestServiceServer {
    * --transport=<HTTP2_NETTY|HTTP2_NETTY_TLS> Identifies the transport
    * over which GRPC frames should be sent. <br>
    * --port=<port number> The port number for RPC communications.
-   * --grpc_version=<1|2> Use gRPC v2 protocol. Default is v1.
    */
   public static void main(String[] args) throws Exception {
     Map<String, String> argMap = parseArgs(args);
     Transport transport = getTransport(argMap);
     int port = getPort(RPC_PORT_ARG, argMap);
 
-    com.google.net.stubby.transport.AbstractStream.GRPC_V2_PROTOCOL =
-        getGrpcVersion(argMap) == 2;
+    // TODO(user): Remove. Ideally stop passing the arg in scripts first.
+    if (getGrpcVersion(argMap) != 2) {
+      System.err.println("Only grpc_version=2 is supported");
+      System.exit(1);
+    }
 
     final TestServiceServer server = new TestServiceServer(transport, port);
 

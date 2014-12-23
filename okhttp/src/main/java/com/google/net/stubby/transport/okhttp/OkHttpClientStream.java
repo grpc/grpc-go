@@ -98,10 +98,7 @@ class OkHttpClientStream extends Http2ClientStream {
                      OkHttpClientTransport transport,
                      Object executorLock,
                      OutboundFlowController outboundFlow) {
-    super(listener, null, executor);
-    if (!GRPC_V2_PROTOCOL) {
-      throw new RuntimeException("okhttp transport can only work with V2 protocol!");
-    }
+    super(listener, executor);
     this.frameWriter = frameWriter;
     this.transport = transport;
     this.executorLock = executorLock;

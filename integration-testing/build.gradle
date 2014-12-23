@@ -18,5 +18,6 @@ dependencies {
             project(':stubby-okhttp'),
             project(':stubby-stub'),
             project(':stubby-testing'),
-            libraries.junit
+            libraries.junit,
+            libraries.mockito
 }

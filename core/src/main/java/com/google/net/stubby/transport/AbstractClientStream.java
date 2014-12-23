@@ -62,10 +62,8 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   private Metadata.Trailers trailers;
 
 
-  protected AbstractClientStream(ClientStreamListener listener,
-                                 @Nullable Decompressor decompressor,
-                                 Executor deframerExecutor) {
-    super(decompressor, deframerExecutor);
+  protected AbstractClientStream(ClientStreamListener listener, Executor deframerExecutor) {
+    super(deframerExecutor);
     this.listener = Preconditions.checkNotNull(listener);
   }
 
@@ -151,18 +149,8 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     // Stash the status & trailers so they can be delivered by the deframer calls
     // remoteEndClosed
     this.status = status;
-    if (GRPC_V2_PROTOCOL) {
-      this.trailers = trailers;
-    }
+    this.trailers = trailers;
     deframe(Buffers.empty(), true);
-  }
-
-  /** gRPC protocol v1 support */
-  @Override
-  protected void receiveStatus(Status status) {
-    Preconditions.checkNotNull(status, "status");
-    this.status = status;
-    trailers = new Metadata.Trailers();
   }
 
   @Override
@@ -207,7 +195,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   @Override
   public final void halfClose() {
     if (outboundPhase(Phase.STATUS) != Phase.STATUS) {
-      closeFramer(null);
+      closeFramer();
     }
   }
 

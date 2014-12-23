@@ -39,7 +39,6 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.net.stubby.Status;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -52,13 +51,6 @@ import javax.annotation.Nullable;
  */
 public abstract class AbstractStream<IdT> implements Stream {
   /**
-   * Global to enable gRPC v2 protocol support, which may be incomplete. This is a complete hack
-   * and should please, please, please be temporary to ease migration.
-   */
-  // TODO(user): remove this once v1 support is dropped.
-  public static boolean GRPC_V2_PROTOCOL = true;
-
-  /**
    * Indicates the phase of the GRPC stream in one direction.
    */
   protected enum Phase {
@@ -66,7 +58,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   private volatile IdT id;
-  private final Framer framer;
+  private final MessageFramer2 framer;
   private final FutureCallback<Object> deframerErrorCallback = new FutureCallback<Object>() {
     @Override
     public void onSuccess(Object result) {}
@@ -77,7 +69,6 @@ public abstract class AbstractStream<IdT> implements Stream {
     }
   };
 
-  final GrpcDeframer deframer;
   final MessageDeframer2 deframer2;
 
   /**
@@ -90,9 +81,8 @@ public abstract class AbstractStream<IdT> implements Stream {
    */
   private Phase outboundPhase = Phase.HEADERS;
 
-  AbstractStream(@Nullable Decompressor decompressor,
-                           Executor deframerExecutor) {
-    GrpcDeframer.Sink inboundMessageHandler = new GrpcDeframer.Sink() {
+  AbstractStream(Executor deframerExecutor) {
+    MessageDeframer2.Sink inboundMessageHandler = new MessageDeframer2.Sink() {
       @Override
       public ListenableFuture<Void> messageRead(InputStream input, final int length) {
         ListenableFuture<Void> future = null;
@@ -105,16 +95,11 @@ public abstract class AbstractStream<IdT> implements Stream {
       }
 
       @Override
-      public void statusRead(Status status) {
-        receiveStatus(status);
-      }
-
-      @Override
       public void endOfStream() {
         remoteEndClosed();
       }
     };
-    Framer.Sink<ByteBuffer> outboundFrameHandler = new Framer.Sink<ByteBuffer>() {
+    MessageFramer2.Sink<ByteBuffer> outboundFrameHandler = new MessageFramer2.Sink<ByteBuffer>() {
       @Override
       public void deliverFrame(ByteBuffer frame, boolean endOfStream) {
         internalSendFrame(frame, endOfStream);
@@ -129,19 +114,8 @@ public abstract class AbstractStream<IdT> implements Stream {
         returnProcessedBytes(numBytes);
       }
     };
-    if (!GRPC_V2_PROTOCOL) {
-      framer = new MessageFramer(outboundFrameHandler, 4096);
-      this.deframer =
-          new GrpcDeframer(decompressor, inboundMessageHandler, deframerExecutor, listener);
-      this.deframer2 = null;
-    } else {
-      if (decompressor != null) {
-        decompressor.close();
-      }
-      framer = new MessageFramer2(outboundFrameHandler, 4096);
-      this.deframer = null;
-      this.deframer2 = new MessageDeframer2(inboundMessageHandler, deframerExecutor, listener);
-    }
+    framer = new MessageFramer2(outboundFrameHandler, 4096);
+    this.deframer2 = new MessageDeframer2(inboundMessageHandler, deframerExecutor, listener);
   }
 
   /**
@@ -188,14 +162,9 @@ public abstract class AbstractStream<IdT> implements Stream {
    * Closes the underlying framer.
    *
    * <p>No-op if the framer has already been closed.
-   *
-   * @param status if not null, will write the status to the framer before closing it
    */
-  final void closeFramer(@Nullable Status status) {
+  final void closeFramer() {
     if (!framer.isClosed()) {
-      if (status != null) {
-        framer.writeStatus(status);
-      }
       framer.close();
     }
   }
@@ -225,9 +194,6 @@ public abstract class AbstractStream<IdT> implements Stream {
   /** A message was deframed. */
   protected abstract ListenableFuture<Void> receiveMessage(InputStream is, int length);
 
-  /** A status was deframed. */
-  protected abstract void receiveStatus(Status status);
-
   /** Deframer reached end of stream. */
   protected abstract void remoteEndClosed();
 
@@ -248,11 +214,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    */
   protected final void deframe(Buffer frame, boolean endOfStream) {
     ListenableFuture<?> future;
-    if (GRPC_V2_PROTOCOL) {
-      future = deframer2.deframe(frame, endOfStream);
-    } else {
-      future = deframer.deframe(frame, endOfStream);
-    }
+    future = deframer2.deframe(frame, endOfStream);
     if (future != null) {
       Futures.addCallback(future, deframerErrorCallback);
     }
@@ -262,15 +224,9 @@ public abstract class AbstractStream<IdT> implements Stream {
    * Delays delivery from the deframer until the given future completes.
    */
   protected final void delayDeframer(ListenableFuture<?> future) {
-    if (GRPC_V2_PROTOCOL) {
-      ListenableFuture<?> deliveryFuture = deframer2.delayProcessing(future);
-      if (deliveryFuture != null) {
-        Futures.addCallback(deliveryFuture, deframerErrorCallback);
-      }
-    } else {
-      // V1 is a little broken as it doesn't strictly wait for the last payload handled
-      // by the deframer to be processed by the application layer. Not worth fixing as will
-      // be removed when the v1 deframer is removed.
+    ListenableFuture<?> deliveryFuture = deframer2.delayProcessing(future);
+    if (deliveryFuture != null) {
+      Futures.addCallback(deliveryFuture, deframerErrorCallback);
     }
   }
 

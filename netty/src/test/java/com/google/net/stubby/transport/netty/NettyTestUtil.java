@@ -31,13 +31,11 @@
 
 package com.google.net.stubby.transport.netty;
 
-import static com.google.net.stubby.GrpcFramingUtil.PAYLOAD_FRAME;
 import static com.google.net.stubby.GrpcFramingUtil.STATUS_FRAME;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.io.ByteStreams;
 import com.google.net.stubby.Status;
-import com.google.net.stubby.transport.AbstractStream;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -60,10 +58,6 @@ public class NettyTestUtil {
   static ByteBuf messageFrame(String message) throws Exception {
     ByteArrayOutputStream os = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(os);
-    if (!AbstractStream.GRPC_V2_PROTOCOL) {
-      dos.write(PAYLOAD_FRAME);
-      dos.writeInt(message.length());
-    }
     dos.write(message.getBytes(UTF_8));
     dos.close();
 
@@ -86,9 +80,7 @@ public class NettyTestUtil {
 
   static ByteBuf compressionFrame(byte[] data) {
     ByteBuf buf = Unpooled.buffer();
-    if (AbstractStream.GRPC_V2_PROTOCOL) {
-      buf.writeByte(0);
-    }
+    buf.writeByte(0);
     buf.writeInt(data.length);
     buf.writeBytes(data);
     return buf;

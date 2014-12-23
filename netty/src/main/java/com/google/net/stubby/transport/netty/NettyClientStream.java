@@ -51,7 +51,7 @@ class NettyClientStream extends Http2ClientStream {
   private final NettyClientHandler handler;
 
   NettyClientStream(ClientStreamListener listener, Channel channel, NettyClientHandler handler) {
-    super(listener, new NettyDecompressor(channel.alloc()), channel.eventLoop());
+    super(listener, channel.eventLoop());
     this.channel = checkNotNull(channel, "channel");
     this.handler = checkNotNull(handler, "handler");
   }

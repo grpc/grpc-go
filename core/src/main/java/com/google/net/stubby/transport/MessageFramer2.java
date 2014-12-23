@@ -34,7 +34,6 @@ package com.google.net.stubby.transport;
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteStreams;
 import com.google.net.stubby.DeferredInputStream;
-import com.google.net.stubby.Status;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -45,9 +44,23 @@ import java.nio.ByteBuffer;
 import java.util.zip.GZIPOutputStream;
 
 /**
- * Default {@link Framer} implementation.
+ * Encodes gRPC messages to be delivered via the transport layer which implements {@link
+ * MessageFramer2.Sink}.
  */
-public class MessageFramer2 implements Framer {
+public class MessageFramer2 {
+  /**
+   * Sink implemented by the transport layer to receive frames and forward them to their destination
+   */
+  public interface Sink<T> {
+    /**
+     * Deliver a frame via the transport.
+     *
+     * @param frame the contents of the frame to deliver
+     * @param endOfStream whether the frame is the last one for the GRPC stream
+     */
+    public void deliverFrame(T frame, boolean endOfStream);
+  }
+
   private static final int HEADER_LENGTH = 5;
   private static final byte UNCOMPRESSED = 0;
   private static final byte COMPRESSED = 1;
@@ -72,7 +85,10 @@ public class MessageFramer2 implements Framer {
     this.compression = Preconditions.checkNotNull(compression, "compression");
   }
 
-  @Override
+  /**
+   * Write out a Payload message. {@code message} will be completely consumed.
+   * {@code message.available()} must return the number of remaining bytes to be read.
+   */
   public void writePayload(InputStream message, int messageLength) {
     try {
       if (compression == Compression.NONE) {
@@ -144,12 +160,9 @@ public class MessageFramer2 implements Framer {
     }
   }
 
-  @Override
-  public void writeStatus(Status status) {
-    // NOOP
-  }
-
-  @Override
+  /**
+   * Flush any buffered data in the framer to the sink.
+   */
   public void flush() {
     if (bytebuf.position() == 0) {
       return;
@@ -157,12 +170,18 @@ public class MessageFramer2 implements Framer {
     commitToSink(false);
   }
 
-  @Override
+  /**
+   * Indicates whether or not this {@link Framer} has been closed via a call to either
+   * {@link #close()} or {@link #dispose()}.
+   */
   public boolean isClosed() {
     return bytebuf == null;
   }
 
-  @Override
+  /**
+   * Flushes and closes the framer and releases any buffers. After the {@link Framer} is closed or
+   * disposed, additional calls to this method will have no affect.
+   */
   public void close() {
     if (!isClosed()) {
       commitToSink(true);
@@ -170,7 +189,10 @@ public class MessageFramer2 implements Framer {
     }
   }
 
-  @Override
+  /**
+   * Closes the framer and releases any buffers, but does not flush. After the {@link Framer} is
+   * closed or disposed, additional calls to this method will have no affect.
+   */
   public void dispose() {
     // TODO(user): Returning buffer to a pool would go here
     bytebuf = null;
