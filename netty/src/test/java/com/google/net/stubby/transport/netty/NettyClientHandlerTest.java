@@ -263,6 +263,29 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
   }
 
+  @Test
+  public void channelShutdownShouldFailQueuedStreams() throws Exception {
+    // Force a stream to get added to the pending queue.
+    setMaxConcurrentStreams(0);
+    handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream),
+        promise);
+
+    handler.channelInactive(ctx);
+    verify(promise).setFailure(any(Throwable.class));
+  }
+
+  @Test
+  public void channelShutdownShouldFailInFlightStreams() throws Exception {
+    createStream();
+
+    handler.channelInactive(ctx);
+    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
+    InOrder inOrder = inOrder(stream);
+    inOrder.verify(stream, calls(1)).transportReportStatus(captor.capture(),
+        notNull(Metadata.Trailers.class));
+    assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
+  }
+
   private void setMaxConcurrentStreams(int max) throws Exception {
     ByteBuf serializedSettings = serializeSettings(new Http2Settings().maxConcurrentStreams(max));
     handler.channelRead(ctx, serializedSettings);

@@ -189,15 +189,18 @@ class NettyClientHandler extends Http2ConnectionHandler {
    */
   @Override
   public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-    super.channelInactive(ctx);
+    try {
+      // Fail any streams that are awaiting creation.
+      Status goAwayStatus = goAwayStatus().withDescription("network channel closed");
+      failPendingStreams(goAwayStatus);
 
-    // Fail any streams that are awaiting creation.
-    Status goAwayStatus = goAwayStatus();
-    failPendingStreams(goAwayStatus);
-
-    // Any streams that are still active must be closed.
-    for (Http2Stream stream : http2Streams()) {
-      clientStream(stream).transportReportStatus(goAwayStatus, new Metadata.Trailers());
+      // Report status to the application layer for any open streams
+      for (Http2Stream stream : http2Streams()) {
+        clientStream(stream).transportReportStatus(goAwayStatus, new Metadata.Trailers());
+      }
+    } finally {
+      // Close any open streams
+      super.channelInactive(ctx);
     }
   }
 
