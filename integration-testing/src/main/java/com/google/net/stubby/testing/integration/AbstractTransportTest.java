@@ -72,6 +72,7 @@ import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -302,6 +303,46 @@ public abstract class AbstractTransportTest {
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onCompleted();
     verify(responseObserver, timeout(1000)).onCompleted();
+    verifyNoMoreInteractions(responseObserver);
+  }
+
+  @Test
+  public void cancelAfterBegin() throws Exception {
+    StreamRecorder<StreamingInputCallResponse> responseObserver = StreamRecorder.create();
+    StreamObserver<StreamingInputCallRequest> requestObserver =
+        asyncStub.streamingInputCall(responseObserver);
+    requestObserver.onError(new RuntimeException());
+    responseObserver.awaitCompletion();
+    assertEquals(Arrays.<StreamingInputCallResponse>asList(), responseObserver.getValues());
+    assertEquals(Status.CANCELLED, Status.fromThrowable(responseObserver.getError()));
+  }
+
+  @Test
+  public void cancelAfterFirstResponse() throws Exception {
+    final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
+        .addResponseParameters(ResponseParameters.newBuilder()
+            .setSize(31415))
+        .setPayload(Payload.newBuilder()
+            .setBody(ByteString.copyFrom(new byte[27182])))
+        .build();
+    final StreamingOutputCallResponse goldenResponse = StreamingOutputCallResponse.newBuilder()
+        .setPayload(Payload.newBuilder()
+            .setType(PayloadType.COMPRESSABLE)
+            .setBody(ByteString.copyFrom(new byte[31415])))
+        .build();
+
+    @SuppressWarnings("unchecked")
+    StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
+    StreamObserver<StreamingOutputCallRequest> requestObserver
+        = asyncStub.fullDuplexCall(responseObserver);
+    requestObserver.onValue(request);
+    verify(responseObserver, timeout(1000)).onValue(goldenResponse);
+    verifyNoMoreInteractions(responseObserver);
+
+    requestObserver.onError(new RuntimeException());
+    ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
+    verify(responseObserver, timeout(1000)).onError(captor.capture());
+    assertEquals(Status.CANCELLED, Status.fromThrowable(captor.getValue()));
     verifyNoMoreInteractions(responseObserver);
   }
 

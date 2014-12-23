@@ -223,6 +223,10 @@ public class TestServiceClient {
       tester.pingPong();
     } else if ("empty_stream".equals(testCase)) {
       tester.emptyStream();
+    } else if ("cancel_after_begin".equals(testCase)) {
+      tester.cancelAfterBegin();
+    } else if ("cancel_after_first_response".equals(testCase)) {
+      tester.cancelAfterFirstResponse();
     } else {
       throw new IllegalArgumentException("Unknown test case: " + testCase);
     }
