@@ -57,7 +57,6 @@ public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
   @Override
   @Nullable
   public Method lookupMethod(String methodName) {
-    methodName = methodName.replace('.', '/');
     if (!methodName.startsWith("/")) {
       return null;
     }

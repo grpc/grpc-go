@@ -87,17 +87,17 @@ public class TestServiceGrpc {
 
     private TestServiceServiceDescriptor() {
       emptyCall = createMethodDescriptor(
-          "TestService", METHOD_EMPTY_CALL);
+          "grpc.testing.TestService", METHOD_EMPTY_CALL);
       unaryCall = createMethodDescriptor(
-          "TestService", METHOD_UNARY_CALL);
+          "grpc.testing.TestService", METHOD_UNARY_CALL);
       streamingOutputCall = createMethodDescriptor(
-          "TestService", METHOD_STREAMING_OUTPUT_CALL);
+          "grpc.testing.TestService", METHOD_STREAMING_OUTPUT_CALL);
       streamingInputCall = createMethodDescriptor(
-          "TestService", METHOD_STREAMING_INPUT_CALL);
+          "grpc.testing.TestService", METHOD_STREAMING_INPUT_CALL);
       fullDuplexCall = createMethodDescriptor(
-          "TestService", METHOD_FULL_DUPLEX_CALL);
+          "grpc.testing.TestService", METHOD_FULL_DUPLEX_CALL);
       halfDuplexCall = createMethodDescriptor(
-          "TestService", METHOD_HALF_DUPLEX_CALL);
+          "grpc.testing.TestService", METHOD_HALF_DUPLEX_CALL);
     }
 
     private TestServiceServiceDescriptor(
@@ -302,7 +302,7 @@ public class TestServiceGrpc {
 
   public static com.google.net.stubby.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
-    return com.google.net.stubby.ServerServiceDefinition.builder("TestService")
+    return com.google.net.stubby.ServerServiceDefinition.builder("grpc.testing.TestService")
       .addMethod(createMethodDefinition(
           METHOD_EMPTY_CALL,
           asyncUnaryRequestCall(
