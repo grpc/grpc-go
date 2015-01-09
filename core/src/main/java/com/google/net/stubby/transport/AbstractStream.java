@@ -82,7 +82,12 @@ public abstract class AbstractStream<IdT> implements Stream {
   private Phase outboundPhase = Phase.HEADERS;
 
   AbstractStream(Executor deframerExecutor) {
-    MessageDeframer2.Sink inboundMessageHandler = new MessageDeframer2.Sink() {
+    MessageDeframer2.Listener inboundMessageHandler = new MessageDeframer2.Listener() {
+      @Override
+      public void bytesRead(int numBytes) {
+        returnProcessedBytes(numBytes);
+      }
+
       @Override
       public ListenableFuture<Void> messageRead(InputStream input, final int length) {
         ListenableFuture<Void> future = null;
@@ -92,6 +97,11 @@ public abstract class AbstractStream<IdT> implements Stream {
         } finally {
           closeWhenDone(future, input);
         }
+      }
+
+      @Override
+      public void deliveryStalled() {
+        inboundDeliveryPaused();
       }
 
       @Override
@@ -106,16 +116,8 @@ public abstract class AbstractStream<IdT> implements Stream {
       }
     };
 
-    // When the deframer reads the required number of bytes for the next message,
-    // immediately return those bytes to inbound flow control.
-    DeframerListener listener = new DeframerListener() {
-      @Override
-      public void bytesRead(int numBytes) {
-        returnProcessedBytes(numBytes);
-      }
-    };
     framer = new MessageFramer2(outboundFrameHandler, 4096);
-    this.deframer2 = new MessageDeframer2(inboundMessageHandler, deframerExecutor, listener);
+    this.deframer2 = new MessageDeframer2(inboundMessageHandler, deframerExecutor);
   }
 
   /**
@@ -193,6 +195,9 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   /** A message was deframed. */
   protected abstract ListenableFuture<Void> receiveMessage(InputStream is, int length);
+
+  /** Deframer has no pending deliveries. */
+  protected abstract void inboundDeliveryPaused();
 
   /** Deframer reached end of stream. */
   protected abstract void remoteEndClosed();
@@ -310,6 +315,7 @@ public abstract class AbstractStream<IdT> implements Stream {
     return inboundPhase() == Phase.STATUS && outboundPhase() == Phase.STATUS;
   }
 
+  @Override
   public String toString() {
     return toStringHelper().toString();
   }

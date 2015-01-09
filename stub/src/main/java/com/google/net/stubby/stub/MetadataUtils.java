@@ -103,7 +103,6 @@ public class MetadataUtils {
   /**
    * Capture the last received metadata on a channel. Useful for testing
    *
-   * @param channel to channel to capture for.
    * @param headersCapture to record the last received headers
    * @param trailersCapture to record the last received trailers
    * @return an implementation of the channel with captures installed.

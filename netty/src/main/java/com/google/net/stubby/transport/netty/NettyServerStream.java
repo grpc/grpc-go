@@ -61,6 +61,11 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   }
 
   @Override
+  protected void inboundDeliveryPaused() {
+    // Do nothing.
+  }
+
+  @Override
   protected void internalSendHeaders(Metadata.Headers headers) {
     channel.writeAndFlush(new SendResponseHeadersCommand(id(),
         Utils.convertServerHeaders(headers), false));

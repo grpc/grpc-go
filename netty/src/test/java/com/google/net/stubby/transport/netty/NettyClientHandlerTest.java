@@ -258,7 +258,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     handler.channelRead(ctx, goAwayFrame(0));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     InOrder inOrder = inOrder(stream);
-    inOrder.verify(stream, calls(1)).transportReportStatus(captor.capture(),
+    inOrder.verify(stream, calls(1)).transportReportStatus(captor.capture(), eq(false),
         notNull(Metadata.Trailers.class));
     assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
   }
@@ -281,7 +281,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     handler.channelInactive(ctx);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     InOrder inOrder = inOrder(stream);
-    inOrder.verify(stream, calls(1)).transportReportStatus(captor.capture(),
+    inOrder.verify(stream, calls(1)).transportReportStatus(captor.capture(), eq(false),
         notNull(Metadata.Trailers.class));
     assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
   }

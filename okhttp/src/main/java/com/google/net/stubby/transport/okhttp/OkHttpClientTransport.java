@@ -36,6 +36,7 @@ import com.google.common.base.Preconditions;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.Status;
+import com.google.net.stubby.Status.Code;
 import com.google.net.stubby.transport.AbstractClientTransport;
 import com.google.net.stubby.transport.ClientStream;
 import com.google.net.stubby.transport.ClientStreamListener;
@@ -168,7 +169,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     OkHttpClientStream clientStream = OkHttpClientStream.newStream(executor, listener,
         frameWriter, this, outboundFlow);
     if (goAway) {
-      clientStream.transportReportStatus(goAwayStatus, new Metadata.Trailers());
+      clientStream.transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
     } else {
       assignStreamId(clientStream);
     }
@@ -271,7 +272,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     }
 
     for (OkHttpClientStream stream : goAwayStreams) {
-      stream.transportReportStatus(status, new Metadata.Trailers());
+      stream.transportReportStatus(status, false, new Metadata.Trailers());
     }
   }
 
@@ -285,7 +286,8 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     stream = streams.remove(streamId);
     if (stream != null) {
       if (status != null) {
-        stream.transportReportStatus(status, new Metadata.Trailers());
+        boolean isCancelled = status.getCode() == Code.CANCELLED;
+        stream.transportReportStatus(status, isCancelled, new Metadata.Trailers());
       }
       return true;
     }

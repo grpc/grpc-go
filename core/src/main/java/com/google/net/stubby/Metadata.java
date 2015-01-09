@@ -40,7 +40,6 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -61,37 +60,6 @@ public abstract class Metadata {
    * All binary headers should have this suffix in their names. Vice versa.
    */
   public static final String BINARY_HEADER_SUFFIX = "-bin";
-
-  /**
-   * Interleave keys and values into a single iterator.
-   */
-  private static Iterator<String> fromMapEntries(Iterable<Map.Entry<String, String>> entries) {
-    final Iterator<Map.Entry<String, String>> iterator = entries.iterator();
-    return new Iterator<String>() {
-      Map.Entry<String, String> last;
-      @Override
-      public boolean hasNext() {
-        return last != null || iterator.hasNext();
-      }
-
-      @Override
-      public String next() {
-        if (last == null) {
-          last = iterator.next();
-          return last.getKey();
-        } else {
-          String val = last.getValue();
-          last = null;
-          return val;
-        }
-      }
-
-      @Override
-      public void remove() {
-        throw new UnsupportedOperationException();
-      }
-    };
-  }
 
   /**
    * Simple metadata marshaller that encodes strings as is.
@@ -409,7 +377,7 @@ public abstract class Metadata {
     /**
      * Creates a key for a binary header.
      *
-     * @param name must end with {@link BINARY_HEADER_SUFFIX}
+     * @param name must end with {@link #BINARY_HEADER_SUFFIX}
      */
     public static <T> Key<T> of(String name, BinaryMarshaller<T> marshaller) {
       return new BinaryKey<T>(name, marshaller);
@@ -418,7 +386,7 @@ public abstract class Metadata {
     /**
      * Creates a key for a ASCII header.
      *
-     * @param name must not end with {@link BINARY_HEADER_SUFFIX}
+     * @param name must not end with {@link #BINARY_HEADER_SUFFIX}
      */
     public static <T> Key<T> of(String name, AsciiMarshaller<T> marshaller) {
       return new AsciiKey<T>(name, marshaller);

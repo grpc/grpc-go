@@ -118,8 +118,9 @@ public final class SharedResourceHolder {
   /**
    * Visible to unit tests.
    *
-   * @see {@link #get(Resource)}.
+   * @see #get(Resource)
    */
+  @SuppressWarnings("unchecked")
   synchronized <T> T getInternal(Resource<T> resource) {
     Instance instance = instances.get(resource);
     if (instance == null) {
@@ -136,8 +137,6 @@ public final class SharedResourceHolder {
 
   /**
    * Visible to unit tests.
-   *
-   * @see {@link #releaseInternal(Resource, T)}.
    */
   synchronized <T> T releaseInternal(final Resource<T> resource, final T instance) {
     final Instance cached = instances.get(resource);

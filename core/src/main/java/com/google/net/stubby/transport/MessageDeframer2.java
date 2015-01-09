@@ -62,22 +62,51 @@ public class MessageDeframer2 implements Closeable {
   private static final int RESERVED_MASK = 0xFE;
 
   public enum Compression {
-    NONE, GZIP;
+    NONE, GZIP
   }
 
-  public interface Sink {
-    public ListenableFuture<Void> messageRead(InputStream is, int length);
-    public void endOfStream();
+  /**
+   * A listener of deframing events.
+   */
+  public interface Listener {
+
+    /**
+     * Called when the given number of bytes has been read from the input source of the deframer.
+     *
+     * @param numBytes the number of bytes read from the deframer's input source.
+     */
+    void bytesRead(int numBytes);
+
+    /**
+     * Called to deliver the next complete message.
+     *
+     * @param is stream containing the message.
+     * @param length the length in bytes of the message.
+     * @return a future indicating when the application has completed processing the message. The
+     * next delivery will not occur until this future completes. If {@code null}, it is assumed that
+     * the application has completed processing the message upon returning from the method call.
+     */
+    ListenableFuture<Void> messageRead(InputStream is, int length);
+
+    /**
+     * Called when end-of-stream has not yet been reached but there are no complete messages
+     * remaining to be delivered.
+     */
+    void deliveryStalled();
+
+    /**
+     * Called when the stream is complete and all messages have been successfully delivered.
+     */
+    void endOfStream();
   }
 
   private enum State {
     HEADER, BODY
   }
 
-  private final Sink sink;
+  private final Listener listener;
   private final Executor executor;
   private final Compression compression;
-  private final DeframerListener listener;
   private State state = State.HEADER;
   private int requiredLength = HEADER_LENGTH;
   private boolean compressedFlag;
@@ -91,30 +120,26 @@ public class MessageDeframer2 implements Closeable {
    * executor, which also must not allow concurrent processing of Runnables. Compression will not be
    * supported.
    *
-   * @param sink callback for fully read GRPC messages
+   * @param listener listener for deframer events.
    * @param executor used for internal event processing
-   * @param listener a listener to deframing events
    */
-  public MessageDeframer2(Sink sink, Executor executor, DeframerListener listener) {
-    this(sink, executor, Compression.NONE, listener);
+  public MessageDeframer2(Listener listener, Executor executor) {
+    this(listener, executor, Compression.NONE);
   }
 
   /**
    * Create a deframer. All calls to this class must be made in the context of the provided
    * executor, which also must not allow concurrent processing of Runnables.
    *
-   * @param sink callback for fully read GRPC messages
+   * @param listener listener for deframer events.
    * @param executor used for internal event processing
    * @param compression the compression used if a compressed frame is encountered, with NONE meaning
    *        unsupported
-   * @param listener a listener to deframing events
    */
-  public MessageDeframer2(Sink sink, Executor executor, Compression compression,
-      DeframerListener listener) {
-    this.sink = Preconditions.checkNotNull(sink, "sink");
+  public MessageDeframer2(Listener listener, Executor executor, Compression compression) {
+    this.listener = Preconditions.checkNotNull(listener, "sink");
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.compression = Preconditions.checkNotNull(compression, "compression");
-    this.listener = Preconditions.checkNotNull(listener, "listener");
   }
 
   /**
@@ -128,13 +153,13 @@ public class MessageDeframer2 implements Closeable {
    */
   public ListenableFuture<?> deframe(Buffer data, boolean endOfStream) {
     Preconditions.checkNotNull(data, "data");
-    Preconditions.checkState(this.endOfStream == false, "Past end of stream");
+    Preconditions.checkState(!this.endOfStream, "Past end of stream");
     unprocessed.addBuffer(data);
 
     // Indicate that all of the data for this stream has been received.
     this.endOfStream = endOfStream;
 
-    if (deliveryOutstanding != null) {
+    if (isDeliveryOutstanding()) {
       // Only allow one outstanding delivery at a time.
       return null;
     }
@@ -150,6 +175,13 @@ public class MessageDeframer2 implements Closeable {
   }
 
   /**
+   * Indicates whether or not there is currently a delivery outstanding to the application.
+   */
+  public final boolean isDeliveryOutstanding() {
+    return deliveryOutstanding != null;
+  }
+
+  /**
    * Consider {@code future} to be a message currently being processed. Messages will not be
    * delivered until the future completes. The returned future behaves as if it was returned by
    * {@link #deframe(Buffer, boolean)}.
@@ -157,7 +189,7 @@ public class MessageDeframer2 implements Closeable {
    * @throws IllegalStateException if a message is already being processed
    */
   public ListenableFuture<?> delayProcessing(ListenableFuture<?> future) {
-    Preconditions.checkState(deliveryOutstanding == null, "Only one delay allowed concurrently");
+    Preconditions.checkState(!isDeliveryOutstanding(), "Only one delay allowed concurrently");
     if (future == null) {
       return null;
     }
@@ -173,7 +205,7 @@ public class MessageDeframer2 implements Closeable {
     // Return a separate future so that our callback is guaranteed to complete before any
     // listeners on the returned future.
     ListenableFuture<?> returnFuture = null;
-    if (deliveryOutstanding == null) {
+    if (!isDeliveryOutstanding()) {
       returnFuture = deliveryOutstanding = SettableFuture.create();
     }
     Futures.addCallback(future, new FutureCallback<Object>() {
@@ -189,7 +221,7 @@ public class MessageDeframer2 implements Closeable {
         try {
           deliver();
         } catch (Throwable t) {
-          if (deliveryOutstanding == null) {
+          if (!isDeliveryOutstanding()) {
             throw Throwables.propagate(t);
           } else {
             onFailure(t);
@@ -232,13 +264,18 @@ public class MessageDeframer2 implements Closeable {
             .withDescription("Encountered end-of-stream mid-frame")
             .asRuntimeException();
       }
-      sink.endOfStream();
+      listener.endOfStream();
     }
-    // All available messagesed processed.
-    if (deliveryOutstanding != null) {
+
+    // All available messages have processed.
+    if (isDeliveryOutstanding()) {
       SettableFuture<?> previousOutstanding = deliveryOutstanding;
       deliveryOutstanding = null;
       previousOutstanding.set(null);
+      if (!endOfStream) {
+        // Notify that delivery is currently paused.
+        listener.deliveryStalled();
+      }
     }
     return null;
   }
@@ -246,7 +283,7 @@ public class MessageDeframer2 implements Closeable {
   /**
    * Attempts to read the required bytes into nextFrame.
    *
-   * @returns {@code true} if all of the required bytes have been read.
+   * @return {@code true} if all of the required bytes have been read.
    */
   private boolean readRequiredBytes() {
     int totalBytesRead = 0;
@@ -314,13 +351,13 @@ public class MessageDeframer2 implements Closeable {
         } catch (IOException ex) {
           throw new RuntimeException(ex);
         }
-        future = sink.messageRead(new ByteArrayInputStream(bytes), bytes.length);
+        future = listener.messageRead(new ByteArrayInputStream(bytes), bytes.length);
       } else {
         throw new AssertionError("Unknown compression type");
       }
     } else {
       // Don't close the frame, since the sink is now responsible for the life-cycle.
-      future = sink.messageRead(Buffers.openStream(nextFrame, true), nextFrame.readableBytes());
+      future = listener.messageRead(Buffers.openStream(nextFrame, true), nextFrame.readableBytes());
       nextFrame = null;
     }
 

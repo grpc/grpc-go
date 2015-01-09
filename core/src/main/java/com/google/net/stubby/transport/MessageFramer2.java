@@ -171,7 +171,7 @@ public class MessageFramer2 {
   }
 
   /**
-   * Indicates whether or not this {@link Framer} has been closed via a call to either
+   * Indicates whether or not this framer has been closed via a call to either
    * {@link #close()} or {@link #dispose()}.
    */
   public boolean isClosed() {
@@ -179,7 +179,7 @@ public class MessageFramer2 {
   }
 
   /**
-   * Flushes and closes the framer and releases any buffers. After the {@link Framer} is closed or
+   * Flushes and closes the framer and releases any buffers. After the framer is closed or
    * disposed, additional calls to this method will have no affect.
    */
   public void close() {
@@ -190,7 +190,7 @@ public class MessageFramer2 {
   }
 
   /**
-   * Closes the framer and releases any buffers, but does not flush. After the {@link Framer} is
+   * Closes the framer and releases any buffers, but does not flush. After the framer is
    * closed or disposed, additional calls to this method will have no affect.
    */
   public void dispose() {

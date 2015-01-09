@@ -181,7 +181,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     // TODO(user): do something with errorCode?
     Http2Stream http2Stream = connection().requireStream(streamId);
     NettyClientStream stream = clientStream(http2Stream);
-    stream.transportReportStatus(Status.UNKNOWN, new Metadata.Trailers());
+    stream.transportReportStatus(Status.UNKNOWN, false, new Metadata.Trailers());
   }
 
   /**
@@ -196,7 +196,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
 
       // Report status to the application layer for any open streams
       for (Http2Stream stream : http2Streams()) {
-        clientStream(stream).transportReportStatus(goAwayStatus, new Metadata.Trailers());
+        clientStream(stream).transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
       }
     } finally {
       // Close any open streams
@@ -219,7 +219,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     // Close the stream with a status that contains the cause.
     Http2Stream stream = connection().stream(http2Ex.streamId());
     if (stream != null) {
-      clientStream(stream).transportReportStatus(Status.fromThrowable(cause),
+      clientStream(stream).transportReportStatus(Status.fromThrowable(cause), false,
           new Metadata.Trailers());
     }
 
@@ -245,7 +245,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private void cancelStream(ChannelHandlerContext ctx, CancelStreamCommand cmd,
       ChannelPromise promise) throws Http2Exception {
     NettyClientStream stream = cmd.stream();
-    stream.transportReportStatus(Status.CANCELLED, new Metadata.Trailers());
+    stream.transportReportStatus(Status.CANCELLED, true, new Metadata.Trailers());
 
     // No need to set the stream status for a cancellation. It should already have been
     // set prior to sending the command.
@@ -289,7 +289,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
       int lastKnownStream = connection().local().lastKnownStream();
       for (Http2Stream stream : http2Streams()) {
         if (lastKnownStream < stream.id()) {
-          clientStream(stream).transportReportStatus(goAwayStatus, new Metadata.Trailers());
+          clientStream(stream).transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
           stream.close();
         }
       }

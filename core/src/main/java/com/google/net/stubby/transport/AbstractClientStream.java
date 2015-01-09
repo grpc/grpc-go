@@ -33,6 +33,7 @@ package com.google.net.stubby.transport;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
@@ -52,6 +53,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     implements ClientStream {
 
   private static final Logger log = Logger.getLogger(AbstractClientStream.class.getName());
+  private static final ListenableFuture<Void> COMPLETED_FUTURE = Futures.immediateFuture(null);
 
   private final ClientStreamListener listener;
   private boolean listenerClosed;
@@ -60,6 +62,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   // transportReportStatus is directly called.
   private Status status;
   private Metadata.Trailers trailers;
+  private Runnable closeListenerTask;
 
 
   protected AbstractClientStream(ClientStreamListener listener, Executor deframerExecutor) {
@@ -69,6 +72,9 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
 
   @Override
   protected ListenableFuture<Void> receiveMessage(InputStream is, int length) {
+    if (listenerClosed) {
+      return COMPLETED_FUTURE;
+    }
     return listener.messageRead(is, length);
   }
 
@@ -91,14 +97,14 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     }
     // For transport errors we immediately report status to the application layer
     // and do not wait for additional payloads.
-    transportReportStatus(errorStatus, new Metadata.Trailers());
+    transportReportStatus(errorStatus, false, new Metadata.Trailers());
   }
 
   /**
    * Called by transport implementations when they receive headers. When receiving headers
    * a transport may determine that there is an error in the protocol at this phase which is
    * why this method takes an error {@link Status}. If a transport reports an
-   * {@link Status.Code#INTERNAL} error
+   * {@link com.google.net.stubby.Status.Code#INTERNAL} error
    *
    * @param headers the parsed headers
    */
@@ -132,6 +138,11 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
+  protected void inboundDeliveryPaused() {
+    runCloseListenerTask();
+  }
+
+  @Override
   protected final void deframeFailed(Throwable cause) {
     log.log(Level.WARNING, "Exception processing message", cause);
     cancel();
@@ -155,7 +166,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
 
   @Override
   protected void remoteEndClosed() {
-    transportReportStatus(status, trailers);
+    transportReportStatus(status, true, trailers);
   }
 
   @Override
@@ -173,23 +184,66 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   protected abstract void sendFrame(ByteBuffer frame, boolean endOfStream);
 
   /**
-   * Report stream closure with status to the application layer if not already reported.
-   * This method must be called from the transport thread.
+   * Report stream closure with status to the application layer if not already reported. This method
+   * must be called from the transport thread.
    *
    * @param newStatus the new status to set
-   * @return {@code} true if the status was not already set.
+   * @param stopDelivery if {@code true}, interrupts any further delivery of inbound messages that
+   *        may already be queued up in the deframer. If {@code false}, the listener will be
+   *        notified immediately after all currently completed messages in the deframer have been
+   *        delivered to the application.
    */
-  public boolean transportReportStatus(final Status newStatus, Metadata.Trailers trailers) {
+  public void transportReportStatus(final Status newStatus, boolean stopDelivery,
+      final Metadata.Trailers trailers) {
     Preconditions.checkNotNull(newStatus, "newStatus");
+
+    boolean closingLater = closeListenerTask != null && !stopDelivery;
+    if (listenerClosed || closingLater) {
+      // We already closed (or are about to close) the listener.
+      return;
+    }
+
     inboundPhase(Phase.STATUS);
     status = newStatus;
-    // Invoke the observer callback which will schedule work onto an application thread
-    if (!listenerClosed) {
-      // Status has not been reported to the application layer
+    closeListenerTask = null;
+
+    // Determine if the deframer is stalled (i.e. currently has no complete messages to deliver).
+    boolean deliveryStalled = !deframer2.isDeliveryOutstanding();
+
+    if (stopDelivery || deliveryStalled) {
+      // Close the listener immediately.
       listenerClosed = true;
       listener.closed(newStatus, trailers);
+    } else {
+      // Delay close until inboundDeliveryStalled()
+      closeListenerTask = newCloseListenerTask(newStatus, trailers);
     }
-    return true;
+  }
+
+  /**
+   * Creates a new {@link Runnable} to close the listener with the given status/trailers.
+   */
+  private Runnable newCloseListenerTask(final Status status, final Metadata.Trailers trailers) {
+    return new Runnable() {
+      @Override
+      public void run() {
+        if (!listenerClosed) {
+          // Status has not been reported to the application layer
+          listenerClosed = true;
+          listener.closed(status, trailers);
+        }
+      }
+    };
+  }
+
+  /**
+   * Executes the pending listener close task, if one exists.
+   */
+  private void runCloseListenerTask() {
+    if (closeListenerTask != null) {
+      closeListenerTask.run();
+      closeListenerTask = null;
+    }
   }
 
   @Override

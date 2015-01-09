@@ -40,16 +40,20 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.AbstractStream;
 import com.google.net.stubby.transport.ClientStreamListener;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
@@ -61,6 +65,8 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+
+import java.io.InputStream;
 
 /**
  * Tests for {@link NettyClientStream}.
@@ -114,7 +120,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setStatusWithOkShouldCloseStream() {
     stream().id(1);
-    stream().transportReportStatus(Status.OK, new Metadata.Trailers());
+    stream().transportReportStatus(Status.OK, true, new Metadata.Trailers());
     verify(listener).closed(same(Status.OK), any(Metadata.Trailers.class));
     assertTrue(stream.isClosed());
   }
@@ -122,7 +128,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setStatusWithErrorShouldCloseStream() {
     Status errorStatus = Status.INTERNAL;
-    stream().transportReportStatus(errorStatus, new Metadata.Trailers());
+    stream().transportReportStatus(errorStatus, true, new Metadata.Trailers());
     verify(listener).closed(eq(errorStatus), any(Metadata.Trailers.class));
     assertTrue(stream.isClosed());
   }
@@ -130,8 +136,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setStatusWithOkShouldNotOverrideError() {
     Status errorStatus = Status.INTERNAL;
-    stream().transportReportStatus(errorStatus, new Metadata.Trailers());
-    stream().transportReportStatus(Status.OK, new Metadata.Trailers());
+    stream().transportReportStatus(errorStatus, true, new Metadata.Trailers());
+    stream().transportReportStatus(Status.OK, true, new Metadata.Trailers());
     verify(listener).closed(any(Status.class), any(Metadata.Trailers.class));
     assertTrue(stream.isClosed());
   }
@@ -139,8 +145,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setStatusWithErrorShouldNotOverridePreviousError() {
     Status errorStatus = Status.INTERNAL;
-    stream().transportReportStatus(errorStatus, new Metadata.Trailers());
-    stream().transportReportStatus(Status.fromThrowable(new RuntimeException("fake")),
+    stream().transportReportStatus(errorStatus, true, new Metadata.Trailers());
+    stream().transportReportStatus(Status.fromThrowable(new RuntimeException("fake")), true,
         new Metadata.Trailers());
     verify(listener).closed(any(Status.class), any(Metadata.Trailers.class));
     assertTrue(stream.isClosed());
@@ -218,12 +224,52 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     assertEquals(Status.Code.INTERNAL, captor.getValue().getCode());
   }
 
+  @Test
+  public void deframedDataAfterCancelShouldBeIgnored() throws Exception {
+    // Mock the listener to return this future when a message is read.
+    final SettableFuture<Void> future = SettableFuture.create();
+    when(listener.messageRead(any(InputStream.class), anyInt())).thenReturn(future);
+
+    stream().id(1);
+    // Receive headers first so that it's a valid GRPC response.
+    stream().transportHeadersReceived(grpcResponseHeaders(), false);
+
+    // Receive 2 consecutive empty frames. Only one is delivered at a time to the listener.
+    stream().transportDataReceived(simpleGrpcFrame(), false);
+    stream().transportDataReceived(simpleGrpcFrame(), false);
+
+    // Receive error trailers. The server status will not be processed until after all of the
+    // data frames have been processed. Since cancellation will interrupt message delivery,
+    // this status will never be processed and the listener will instead only see the
+    // cancellation.
+    stream().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
+
+    // Verify that the first was delivered.
+    verify(listener).messageRead(any(InputStream.class), anyInt());
+
+    // Now set the error status.
+    Metadata.Trailers trailers = Utils.convertTrailers(grpcResponseTrailers(Status.CANCELLED));
+    stream().transportReportStatus(Status.CANCELLED, true, trailers);
+
+    // Now complete the future to trigger the deframer to fire the next message to the
+    // stream.
+    future.set(null);
+
+    // Verify that the listener was only notified of the first message, not the second.
+    verify(listener).messageRead(any(InputStream.class), anyInt());
+    verify(listener).closed(eq(Status.CANCELLED), eq(trailers));
+  }
+
   @Override
   protected AbstractStream<Integer> createStream() {
     AbstractStream<Integer> stream = new NettyClientStream(listener, channel, handler);
     assertTrue(stream.canSend());
     assertTrue(stream.canReceive());
     return stream;
+  }
+
+  private ByteBuf simpleGrpcFrame() {
+    return Unpooled.wrappedBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14});
   }
 
   private NettyClientStream stream() {
