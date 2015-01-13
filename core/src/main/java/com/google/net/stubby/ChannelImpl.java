@@ -31,15 +31,13 @@
 
 package com.google.net.stubby;
 
-import static com.google.common.util.concurrent.Service.State.RUNNING;
-import static com.google.common.util.concurrent.Service.State.STARTING;
-
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.AbstractService;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.Service.Listener;
+import com.google.common.util.concurrent.Service.State;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.transport.ClientStream;
 import com.google.net.stubby.transport.ClientStreamListener;
@@ -52,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -60,9 +59,16 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
-public final class ChannelImpl extends AbstractService implements Channel {
+public final class ChannelImpl implements Channel {
 
   private static final Logger log = Logger.getLogger(ChannelImpl.class.getName());
+
+  private static class NoopClientStream implements ClientStream {
+    @Override public void writeMessage(InputStream message, int length, Runnable accepted) {}
+    @Override public void flush() {}
+    @Override public void cancel() {}
+    @Override public void halfClose() {}
+  }
 
   private final ClientTransportFactory transportFactory;
   private final ExecutorService executor;
@@ -76,79 +82,136 @@ public final class ChannelImpl extends AbstractService implements Channel {
   /** The transport for new outgoing requests. */
   @GuardedBy("this")
   private ClientTransport activeTransport;
+  @GuardedBy("this")
+  private boolean shutdown;
+  @GuardedBy("this")
+  private boolean terminated;
+  private Runnable terminationRunnable;
 
   public ChannelImpl(ClientTransportFactory transportFactory, ExecutorService executor) {
     this.transportFactory = transportFactory;
     this.executor = executor;
   }
 
-  @Override
-  protected void doStart() {
-    obtainActiveTransport(true);
+  /** Hack to allow executors to auto-shutdown. Not for general use. */
+  // TODO(user): Replace with a real API.
+  void setTerminationRunnable(Runnable runnable) {
+    this.terminationRunnable = runnable;
   }
 
-  @Override
-  protected synchronized void doStop() {
-    if (transports.isEmpty()) {
-      notifyStopped();
-    } else {
-      // The last TransportListener will call notifyStopped().
-      if (activeTransport != null) {
-        activeTransport.stopAsync();
-        activeTransport = null;
+  /**
+   * Initiates an orderly shutdown in which preexisting calls continue but new calls are immediately
+   * cancelled.
+   */
+  public synchronized ChannelImpl shutdown() {
+    shutdown = true;
+    if (activeTransport != null) {
+      activeTransport.stopAsync();
+      activeTransport = null;
+    } else if (transports.isEmpty()) {
+      terminated = true;
+      notifyAll();
+      if (terminationRunnable != null) {
+        terminationRunnable.run();
       }
     }
+    return this;
   }
 
+  /**
+   * Initiates a forceful shutdown in which preexisting and new calls are cancelled. Although
+   * forceful, the shutdown process is still not instantaneous; {@link #isTerminated()} will likely
+   * return {@code false} immediately after this method returns.
+   *
+   * <p>NOT YET IMPLEMENTED. This method currently behaves identically to shutdown().
+   */
+  // TODO(user): cancel preexisting calls.
+  public synchronized ChannelImpl shutdownNow() {
+    shutdown();
+    return this;
+  }
+
+  /**
+   * Returns whether the channel is shutdown. Shutdown channels immediately cancel any new calls,
+   * but may still have some calls being processed.
+   *
+   * @see #shutdown()
+   * @see #isTerminated()
+   */
+  public synchronized boolean isShutdown() {
+    return shutdown;
+  }
+
+  /**
+   * Waits for the channel to become terminated, giving up if the timeout is reached.
+   *
+   * @return whether the channel is terminated, as would be done by {@link #isTerminated()}.
+   */
+  public synchronized boolean awaitTerminated(long timeout, TimeUnit unit)
+      throws InterruptedException {
+    long timeoutNanos = unit.toNanos(timeout);
+    long endTimeNanos = System.nanoTime() + timeoutNanos;
+    while (!terminated && (timeoutNanos = endTimeNanos - System.nanoTime()) > 0) {
+      TimeUnit.NANOSECONDS.timedWait(this, timeoutNanos);
+    }
+    return terminated;
+  }
+
+  /**
+   * Returns whether the channel is terminated. Terminated channels have no running calls and
+   * relevant resources released (like TCP connections).
+   *
+   * @see #isShutdown()
+   */
+  public synchronized boolean isTerminated() {
+    return terminated;
+  }
+
+  /**
+   * Creates a new outgoing call on the channel.
+   */
   @Override
   public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
     return new CallImpl<ReqT, RespT>(method, new SerializingExecutor(executor));
   }
 
-  private synchronized ClientTransport obtainActiveTransport(boolean notifyWhenRunning) {
-    if (activeTransport == null) {
-      State state = state();
-      if (state != RUNNING && state != STARTING) {
-        throw new IllegalStateException("Not running");
-      }
-      ClientTransport newTransport = transportFactory.newClientTransport();
-      activeTransport = newTransport;
-      transports.add(newTransport);
-      // activeTransport reference can be changed during calls to the transport, even if we hold the
-      // lock, due to reentrancy.
-      newTransport.addListener(new TransportListener(newTransport, notifyWhenRunning),
-          MoreExecutors.directExecutor());
-      newTransport.startAsync();
-      return newTransport;
+  private synchronized ClientTransport obtainActiveTransport() {
+    if (shutdown) {
+      return null;
     }
-    return activeTransport;
+    if (activeTransport != null) {
+      return activeTransport;
+    }
+    ClientTransport newTransport = transportFactory.newClientTransport();
+    activeTransport = newTransport;
+    transports.add(newTransport);
+    // activeTransport reference can be changed during calls to the transport, even if we hold the
+    // lock, due to reentrancy.
+    newTransport.addListener(new TransportListener(newTransport),
+        MoreExecutors.directExecutor());
+    newTransport.startAsync();
+    return newTransport;
   }
 
-  private synchronized void transportFailedOrStopped(ClientTransport transport, Throwable t) {
-    if (transport.state() == State.FAILED) {
-      log.log(Level.SEVERE, "client transport failed " + transport.getClass().getName(),
-          transport.failureCause());
-    }
+  private synchronized void transportFailedOrTerminated(ClientTransport transport) {
     if (activeTransport == transport) {
       activeTransport = null;
     }
     transports.remove(transport);
-    if (state() != RUNNING && transports.isEmpty()) {
-      if (t != null) {
-        notifyFailed(t);
-      } else {
-        notifyStopped();
+    if (shutdown && transports.isEmpty()) {
+      terminated = true;
+      notifyAll();
+      if (terminationRunnable != null) {
+        terminationRunnable.run();
       }
     }
   }
 
   private class TransportListener extends Listener {
     private final ClientTransport transport;
-    private final boolean notifyWhenRunning;
 
-    public TransportListener(ClientTransport transport, boolean notifyWhenRunning) {
+    public TransportListener(ClientTransport transport) {
       this.transport = transport;
-      this.notifyWhenRunning = notifyWhenRunning;
     }
 
     @Override
@@ -162,20 +225,17 @@ public final class ChannelImpl extends AbstractService implements Channel {
 
     @Override
     public void failed(State from, Throwable failure) {
-      transportFailedOrStopped(transport, failure);
+      log.log(Level.SEVERE, "Client transport failed", failure);
+      transportFailedOrTerminated(transport);
     }
 
     @Override
     public void terminated(State from) {
-      transportFailedOrStopped(transport, null);
+      transportFailedOrTerminated(transport);
     }
 
     @Override
-    public void running() {
-      if (notifyWhenRunning) {
-        notifyStarted();
-      }
-    }
+    public void running() {}
   }
 
   private class CallImpl<ReqT, RespT> extends Call<ReqT, RespT> {
@@ -191,8 +251,23 @@ public final class ChannelImpl extends AbstractService implements Channel {
     @Override
     public void start(Listener<RespT> observer, Metadata.Headers headers) {
       Preconditions.checkState(stream == null, "Already started");
-      stream = obtainActiveTransport(false).newStream(method, headers,
-          new ClientStreamListenerImpl(observer));
+      ClientStreamListener listener = new ClientStreamListenerImpl(observer);
+      ClientTransport transport = obtainActiveTransport();
+      if (transport == null) {
+        stream = new NoopClientStream();
+        listener.closed(Status.CANCELLED.withDescription("Channel is shutdown"),
+            new Metadata.Trailers());
+        return;
+      }
+      try {
+        stream = transport.newStream(method, headers, listener);
+      } catch (IllegalStateException ex) {
+        // We can race with the transport and end up trying to use a terminated transport.
+        // TODO(user): Improve the API to remove the possibility of the race.
+        stream = new NoopClientStream();
+        listener.closed(Status.fromThrowable(ex), new Metadata.Trailers());
+        return;
+      }
     }
 
     @Override

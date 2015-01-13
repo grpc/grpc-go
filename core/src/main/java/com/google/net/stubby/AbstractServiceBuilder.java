@@ -57,7 +57,7 @@ import javax.annotation.Nullable;
 abstract class AbstractServiceBuilder<ProductT extends Service,
     BuilderT extends AbstractServiceBuilder<ProductT, BuilderT>> {
 
-  private static final Resource<ExecutorService> DEFAULT_EXECUTOR =
+  static final Resource<ExecutorService> DEFAULT_EXECUTOR =
       new Resource<ExecutorService>() {
         private static final String name = "grpc-default-executor";
         @Override

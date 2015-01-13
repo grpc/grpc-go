@@ -50,16 +50,12 @@ import java.util.concurrent.TimeUnit;
  */
 public class StockClient {
 
-  private final ChannelImpl channel;
+  private final ChannelImpl channel = NettyChannelBuilder.forAddress("localhost", 8980)
+      .negotiationType(NegotiationType.PLAINTEXT)
+      .build();
 
-  public StockClient() throws Exception {
-    channel = NettyChannelBuilder.forAddress("localhost", 8980)
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .buildAndWaitForRunning(5, TimeUnit.SECONDS);
-  }
-
-  public void shutdown() throws Exception {
-    channel.stopAsync().awaitTerminated(5, TimeUnit.SECONDS);
+  public void shutdown() throws InterruptedException {
+    channel.shutdown().awaitTerminated(5, TimeUnit.SECONDS);
   }
 
   public void makeBlockingSimpleCall() {
@@ -109,7 +105,7 @@ public class StockClient {
     System.out.println("Second response=" + response2);
   }
 
-  public void makeAsyncCalls() throws Exception {
+  public void makeAsyncCalls() throws InterruptedException {
     StockStub stub = StockGrpc.newStub(channel)
         .configureNewStub().setTimeout(2, TimeUnit.SECONDS).build();
     System.out.println("***Making two calls in parallel");
@@ -155,7 +151,7 @@ public class StockClient {
     completeLatch.await();
   }
 
-  public void makeServerStreamingCall() throws Exception {
+  public void makeServerStreamingCall() {
     StockBlockingStub stub = StockGrpc.newBlockingStub(channel)
         .configureNewStub().setTimeout(2, TimeUnit.SECONDS).build();
     StockRequest request = StockRequest.newBuilder().setSymbol("FB").setNumTradesToWatch(5).build();
@@ -167,7 +163,7 @@ public class StockClient {
     System.out.println("Completed");
   }
 
-  public void makeClientStreamingCall() throws Exception {
+  public void makeClientStreamingCall() throws InterruptedException {
     StockStub stub = StockGrpc.newStub(channel)
         .configureNewStub().setTimeout(2, TimeUnit.SECONDS).build();
     System.out.println("***Making a client streaming call");
@@ -200,7 +196,7 @@ public class StockClient {
     completeLatch.await();
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) throws InterruptedException {
     StockClient client = new StockClient();
     try {
       client.makeBlockingSimpleCall();

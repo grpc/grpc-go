@@ -116,10 +116,8 @@ public abstract class AbstractTransportTest {
    * Must be called by the subclass setup method.
    */
   @Before
-  public void setup() throws Exception {
+  public void setup() {
     channel = createChannel();
-    channel.startAsync();
-    channel.awaitRunning();
     blockingStub = TestServiceGrpc.newBlockingStub(channel);
     asyncStub = TestServiceGrpc.newStub(channel);
   }
@@ -127,7 +125,7 @@ public abstract class AbstractTransportTest {
   @After
   public void teardown() throws Exception {
     if (channel != null) {
-      channel.stopAsync();
+      channel.shutdown();
     }
   }
 

@@ -31,7 +31,6 @@
 
 package com.google.net.stubby.transport.netty;
 
-import com.google.common.util.concurrent.Service;
 import com.google.net.stubby.AbstractChannelBuilder;
 import com.google.net.stubby.SharedResourceHolder;
 import com.google.net.stubby.transport.ClientTransportFactory;
@@ -107,15 +106,15 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
         ? SharedResourceHolder.get(Utils.DEFAULT_CHANNEL_EVENT_LOOP_GROUP) : userEventLoopGroup;
     ClientTransportFactory transportFactory = new NettyClientTransportFactory(
         serverAddress, negotiationType, group, sslContext);
-    Service.Listener listener = null;
+    Runnable terminationRunnable = null;
     if (userEventLoopGroup == null) {
-      listener = new ClosureHook() {
+      terminationRunnable = new Runnable() {
         @Override
-        protected void onClosed() {
+        public void run() {
           SharedResourceHolder.release(Utils.DEFAULT_CHANNEL_EVENT_LOOP_GROUP, group);
         }
       };
     }
-    return new ChannelEssentials(transportFactory, listener);
+    return new ChannelEssentials(transportFactory, terminationRunnable);
   }
 }

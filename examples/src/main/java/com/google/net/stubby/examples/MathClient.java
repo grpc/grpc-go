@@ -62,16 +62,16 @@ public class MathClient {
   private final CalcBlockingStub blockingStub;
   private final CalcStub asyncStub;
 
-  public MathClient(String host, int port) throws Exception {
+  public MathClient(String host, int port) {
     channel = NettyChannelBuilder.forAddress(host, port)
         .negotiationType(NegotiationType.PLAINTEXT)
-        .buildAndWaitForRunning(5, TimeUnit.SECONDS);
+        .build();
     blockingStub = CalcGrpc.newBlockingStub(channel);
     asyncStub = CalcGrpc.newStub(channel);
   }
 
-  public void shutdown() throws Exception {
-    channel.stopAsync().awaitTerminated(5, TimeUnit.SECONDS);
+  public void shutdown() throws InterruptedException {
+    channel.shutdown().awaitTerminated(5, TimeUnit.SECONDS);
   }
 
   /**
@@ -176,7 +176,7 @@ public class MathClient {
   /**
    * This example shows how to make a client streaming call.
    */
-  public void sum() throws Exception {
+  public void sum() throws InterruptedException {
     final CountDownLatch completed = new CountDownLatch(1);
     logger.info("*** Sum");
     int count = 5;
@@ -232,7 +232,7 @@ public class MathClient {
     logger.info("The first " + realCount + " fibonacci numbers: " + resultMsg.toString());
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) throws InterruptedException {
     MathClient client = new MathClient("localhost", 8980);
     try {
       client.blockingDiv(2014, 4);

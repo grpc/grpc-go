@@ -31,9 +31,9 @@
 
 package com.google.net.stubby;
 
+import static com.google.net.stubby.AbstractServiceBuilder.DEFAULT_EXECUTOR;
+
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.Service;
 import com.google.net.stubby.transport.ClientTransportFactory;
 
 import java.util.concurrent.ExecutorService;
@@ -45,16 +45,52 @@ import javax.annotation.Nullable;
  *
  * @param <BuilderT> The concrete type of this builder.
  */
-public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBuilder<BuilderT>>
-    extends AbstractServiceBuilder<ChannelImpl, BuilderT> {
+public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBuilder<BuilderT>> {
+  @Nullable
+  private ExecutorService userExecutor;
 
-  @Override
-  protected final ChannelImpl buildImpl(ExecutorService executor) {
-    ChannelEssentials essentials = buildEssentials();
-    ChannelImpl channel = new ChannelImpl(essentials.transportFactory, executor);
-    if (essentials.listener != null) {
-      channel.addListener(essentials.listener, MoreExecutors.directExecutor());
+  /**
+   * Provides a custom executor.
+   *
+   * <p>It's an optional parameter. If the user has not provided an executor when the channel is
+   * built, the builder will use a static cached thread pool.
+   *
+   * <p>The channel won't take ownership of the given executor. It's caller's responsibility to
+   * shut down the executor when it's desired.
+   */
+  @SuppressWarnings("unchecked")
+  public final BuilderT executor(ExecutorService executor) {
+    userExecutor = executor;
+    return (BuilderT) this;
+  }
+
+  /**
+   * Builds a channel using the given parameters.
+   */
+  public ChannelImpl build() {
+    final ExecutorService executor;
+    final boolean releaseExecutor;
+    if (userExecutor != null) {
+      executor = userExecutor;
+      releaseExecutor = false;
+    } else {
+      executor = SharedResourceHolder.get(DEFAULT_EXECUTOR);
+      releaseExecutor = true;
     }
+
+    final ChannelEssentials essentials = buildEssentials();
+    ChannelImpl channel = new ChannelImpl(essentials.transportFactory, executor);
+    channel.setTerminationRunnable(new Runnable() {
+      @Override
+      public void run() {
+        if (releaseExecutor) {
+          SharedResourceHolder.release(DEFAULT_EXECUTOR, executor);
+        }
+        if (essentials.terminationRunnable != null) {
+          essentials.terminationRunnable.run();
+        }
+      }
+    });
     return channel;
   }
 
@@ -63,16 +99,16 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
    */
   protected static class ChannelEssentials {
     final ClientTransportFactory transportFactory;
-    @Nullable final Service.Listener listener;
+    @Nullable final Runnable terminationRunnable;
 
     /**
      * @param transportFactory the created channel uses this factory to create transports
-     * @param listener will be called at the channel's life-cycle events
+     * @param terminationRunnable will be called at the channel's life-cycle events
      */
     public ChannelEssentials(ClientTransportFactory transportFactory,
-        @Nullable Service.Listener listener) {
+        @Nullable Runnable terminationRunnable) {
       this.transportFactory = Preconditions.checkNotNull(transportFactory);
-      this.listener = listener;
+      this.terminationRunnable = terminationRunnable;
     }
   }
 

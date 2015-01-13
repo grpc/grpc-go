@@ -32,7 +32,6 @@
 package com.google.net.stubby.transport.okhttp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.net.stubby.AbstractChannelBuilder;
 import com.google.net.stubby.SharedResourceHolder;
@@ -112,16 +111,16 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
         ? SharedResourceHolder.get(DEFAULT_TRANSPORT_THREAD_POOL) : transportExecutor;
     ClientTransportFactory transportFactory
         = new OkHttpClientTransportFactory(serverAddress, host, executor, sslSocketFactory);
-    Service.Listener listener = null;
+    Runnable terminationRunnable = null;
     // We shut down the executor only if we created it.
     if (transportExecutor == null) {
-      listener = new ClosureHook() {
+      terminationRunnable = new Runnable() {
         @Override
-        protected void onClosed() {
+        public void run() {
           SharedResourceHolder.release(DEFAULT_TRANSPORT_THREAD_POOL, executor);
         }
       };
     }
-    return new ChannelEssentials(transportFactory, listener);
+    return new ChannelEssentials(transportFactory, terminationRunnable);
   }
 }
