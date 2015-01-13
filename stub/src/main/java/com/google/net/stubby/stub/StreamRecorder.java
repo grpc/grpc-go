@@ -31,10 +31,10 @@
 
 package com.google.net.stubby.stub;
 
-import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -63,7 +63,7 @@ public class StreamRecorder<T> implements StreamObserver<T> {
   private StreamRecorder() {
     firstValue = SettableFuture.create();
     latch = new CountDownLatch(1);
-    results = Collections.synchronizedList(Lists.<T>newArrayList());
+    results = Collections.synchronizedList(new ArrayList<T>());
   }
 
   @Override

@@ -32,7 +32,6 @@
 package com.google.net.stubby.transport.okhttp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.transport.HttpUtil;
 import com.google.net.stubby.transport.TransportFrameUtil;
@@ -41,6 +40,7 @@ import com.squareup.okhttp.internal.spdy.Header;
 
 import okio.ByteString;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -65,7 +65,7 @@ public class Headers {
     Preconditions.checkNotNull(defaultPath, "defaultPath");
     Preconditions.checkNotNull(defaultAuthority, "defaultAuthority");
 
-    List<Header> okhttpHeaders = Lists.newArrayListWithCapacity(6);
+    List<Header> okhttpHeaders = new ArrayList<Header>(6);
 
     // Set GRPC-specific headers.
     okhttpHeaders.add(SCHEME_HEADER);

@@ -45,7 +45,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.Service.State;
@@ -183,7 +182,7 @@ public class OkHttpClientTransportTest {
     clientTransport.newStream(method, new Metadata.Headers(), listener);
     assertTrue(streams.containsKey(3));
     // Empty headers block without correct content type or status
-    frameHandler.headers(false, false, 3, 0, Lists.<Header>newArrayList(),
+    frameHandler.headers(false, false, 3, 0, new ArrayList<Header>(),
         HeadersMode.HTTP_20_HEADERS);
     // Now wait to receive 1000 bytes of data so we can have a better error message before
     // cancelling the streaam.

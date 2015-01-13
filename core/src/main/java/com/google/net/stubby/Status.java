@@ -35,8 +35,8 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
-import com.google.common.collect.Lists;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
@@ -194,7 +194,7 @@ public final class Status {
             replaced.getCode().name() + " & " + code.name());
       }
     }
-    STATUS_LIST = Lists.newArrayList(canonicalizer.values());
+    STATUS_LIST = new ArrayList<Status>(canonicalizer.values());
   }
 
   // A pseudo-enum of Status instances mapped 1:1 with values in Code. This simplifies construction

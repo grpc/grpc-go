@@ -31,7 +31,6 @@
 
 package com.google.net.stubby.testing.integration;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Queues;
 import com.google.net.stubby.stub.StreamObserver;
 import com.google.net.stubby.testing.integration.Messages.Payload;
@@ -183,7 +182,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
   @Override
   public StreamObserver<Messages.StreamingOutputCallRequest> halfDuplexCall(
       final StreamObserver<Messages.StreamingOutputCallResponse> responseObserver) {
-    final Queue<Chunk> chunks = Lists.newLinkedList();
+    final Queue<Chunk> chunks = new LinkedList<Chunk>();
     return new StreamObserver<StreamingOutputCallRequest>() {
       @Override
       public void onValue(StreamingOutputCallRequest request) {
