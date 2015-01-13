@@ -40,6 +40,7 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,7 +109,7 @@ public abstract class Metadata {
     store = LinkedListMultimap.create();
     for (int i = 0; i < binaryValues.length; i++) {
       String name = new String(binaryValues[i], US_ASCII);
-      store.put(name, new MetadataEntry(binaryValues[++i]));
+      store.put(name, new MetadataEntry(name.endsWith(BINARY_HEADER_SUFFIX), binaryValues[++i]));
     }
     this.serializable = false;
   }
@@ -243,6 +244,10 @@ public abstract class Metadata {
     }
   }
 
+  private String toStringInternal() {
+    return store.toString();
+  }
+
   /**
    * Concrete instance for metadata attached to the start of a call.
    */
@@ -305,6 +310,13 @@ public abstract class Metadata {
         authority = otherHeaders.authority != null ? otherHeaders.authority : authority;
       }
     }
+
+    @Override
+    public String toString() {
+      return "Headers(path=" + path
+          + ",authority=" + authority
+          + ",metadata=" + super.toStringInternal() + ")";
+    }
   }
 
   /**
@@ -324,6 +336,11 @@ public abstract class Metadata {
      * transport for serialization.
      */
     public Trailers() {
+    }
+
+    @Override
+    public String toString() {
+      return "Trailers(" + super.toStringInternal() + ")";
     }
   }
 
@@ -495,6 +512,7 @@ public abstract class Metadata {
 
     @SuppressWarnings("rawtypes")
     Key key;
+    boolean isBinary;
     byte[] serializedBinary;
 
     /**
@@ -503,14 +521,16 @@ public abstract class Metadata {
     private MetadataEntry(Key<?> key, Object parsed) {
       this.parsed = Preconditions.checkNotNull(parsed);
       this.key = Preconditions.checkNotNull(key);
+      this.isBinary = key instanceof BinaryKey;
     }
 
     /**
      * Constructor used when reading a value from the transport.
      */
-    private MetadataEntry(byte[] serialized) {
+    private MetadataEntry(boolean isBinary, byte[] serialized) {
       Preconditions.checkNotNull(serialized);
       this.serializedBinary = serialized;
+      this.isBinary = isBinary;
     }
 
     @SuppressWarnings("unchecked")
@@ -537,6 +557,20 @@ public abstract class Metadata {
       return serializedBinary =
           serializedBinary == null
               ? key.toBytes(parsed) : serializedBinary;
+    }
+
+    @Override
+    public String toString() {
+      if (!isBinary) {
+        return new String(getSerialized(), US_ASCII);
+      } else {
+        // Assume that the toString of an Object is better than a binary encoding.
+        if (parsed != null) {
+          return "" + parsed;
+        } else {
+          return Arrays.toString(serializedBinary);
+        }
+      }
     }
   }
 }

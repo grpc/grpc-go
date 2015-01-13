@@ -31,6 +31,7 @@
 
 package com.google.net.stubby;
 
+import static com.google.common.base.Charsets.US_ASCII;
 import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -42,7 +43,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 
 /**
@@ -65,7 +65,7 @@ public class MetadataTest {
   };
 
   private static final String LANCE = "lance";
-  private static final byte[] LANCE_BYTES = LANCE.getBytes(StandardCharsets.US_ASCII);
+  private static final byte[] LANCE_BYTES = LANCE.getBytes(US_ASCII);
   private static final Metadata.Key<Fish> KEY = Metadata.Key.of("test-bin", FISH_MARSHALLER);
 
   @Test
@@ -81,7 +81,7 @@ public class MetadataTest {
     assertFalse(fishes.hasNext());
     byte[][] serialized = metadata.serialize();
     assertEquals(2, serialized.length);
-    assertEquals(new String(serialized[0], StandardCharsets.US_ASCII), "test-bin");
+    assertEquals(new String(serialized[0], US_ASCII), "test-bin");
     assertArrayEquals(LANCE_BYTES, serialized[1]);
     assertSame(lance, metadata.get(KEY));
     // Serialized instance should be cached too
@@ -150,6 +150,25 @@ public class MetadataTest {
         Metadata.INTEGER_MARSHALLER.toAsciiString(i)));
   }
 
+  @Test
+  public void verifyToString() {
+    Metadata.Headers h = new Metadata.Headers();
+    h.setPath("/path");
+    h.setAuthority("myauthority");
+    h.put(KEY, new Fish("binary"));
+    h.put(Metadata.Key.of("test", Metadata.ASCII_STRING_MARSHALLER), "ascii");
+    assertEquals("Headers(path=/path,authority=myauthority,"
+        + "metadata={test-bin=[Fish(binary)], test=[ascii]})", h.toString());
+
+    Metadata.Trailers t = new Metadata.Trailers();
+    t.put(Metadata.Key.of("test", Metadata.ASCII_STRING_MARSHALLER), "ascii");
+    assertEquals("Trailers({test=[ascii]})", t.toString());
+
+    t = new Metadata.Trailers("test".getBytes(US_ASCII), "ascii".getBytes(US_ASCII),
+        "test-bin".getBytes(US_ASCII), "binary".getBytes(US_ASCII));
+    assertEquals("Trailers({test=[ascii], test-bin=[[98, 105, 110, 97, 114, 121]]})", t.toString());
+  }
+
   private static class Fish {
     private String name;
 
@@ -170,6 +189,16 @@ public class MetadataTest {
         return false;
       }
       return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return name.hashCode();
+    }
+
+    @Override
+    public String toString() {
+      return "Fish(" + name + ")";
     }
   }
 }
