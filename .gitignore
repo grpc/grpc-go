@@ -1,6 +1,10 @@
 # Maven
 target
 
+# Gradle
+build
+.gradle
+
 # IntelliJ IDEA
 .idea
 *.iml
