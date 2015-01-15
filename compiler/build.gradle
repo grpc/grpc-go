@@ -1,0 +1,25 @@
+apply plugin: "cpp"
+
+executables {
+  java_plugin {}
+}
+
+binaries.all {
+  if (toolChain in Gcc) {
+    cppCompiler.args "-std=c++11"
+    linker.args "-lprotoc", "-lprotobuf"
+  }
+}
+
+sources {
+  java_plugin {
+    // Configure an existing CppSourceSet
+    cpp {
+      source {
+        srcDirs "src/"
+        include "**/*.cc"
+      }
+    }
+  }
+}
+
