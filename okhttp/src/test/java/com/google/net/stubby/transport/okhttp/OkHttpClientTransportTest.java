@@ -193,12 +193,14 @@ public class OkHttpClientTransportTest {
     assertNotNull(listener.trailers);
   }
 
-  @Ignore
-  /**
-   * TODO (simonma): Re-implement this test, since status is carried by header instead of data frame
-   * in V2 protocol.
-   */
+  @Test
   public void readStatus() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    clientTransport.newStream(method,new Metadata.Headers(), listener);
+    assertTrue(streams.containsKey(3));
+    frameHandler.headers(true, true, 3, 0, grpcResponseTrailers(), HeadersMode.HTTP_20_HEADERS);
+    listener.waitUntilStreamClosed();
+    assertEquals(Status.Code.OK, listener.status.getCode());
   }
 
   @Test
