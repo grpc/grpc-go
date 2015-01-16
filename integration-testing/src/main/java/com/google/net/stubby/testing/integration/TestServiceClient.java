@@ -31,8 +31,6 @@
 
 package com.google.net.stubby.testing.integration;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
 import com.google.net.stubby.ChannelImpl;
 import com.google.net.stubby.transport.netty.NegotiationType;
 import com.google.net.stubby.transport.netty.NettyChannelBuilder;
@@ -44,7 +42,6 @@ import java.io.File;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.util.Map;
 
 import javax.net.ssl.SSLException;
 
@@ -53,166 +50,135 @@ import javax.net.ssl.SSLException;
  * series of tests.
  */
 public class TestServiceClient {
-  private static final String SERVER_HOST_ARG = "--server_host";
-  private static final String SERVER_PORT_ARG = "--server_port";
-  private static final String TRANSPORT_ARG = "--transport";
-  private static final String TEST_CASE_ARG = "--test_case";
-  private static final String GRPC_VERSION_ARG = "--grpc_version";
-
-  private enum Transport {
-    NETTY {
-      @Override
-      public ChannelImpl createChannel(String serverHost, int serverPort) {
-        return NettyChannelBuilder.forAddress(serverHost, serverPort)
-            .negotiationType(NegotiationType.PLAINTEXT).build();
-      }
-    },
-    NETTY_TLS {
-      @Override
-      public ChannelImpl createChannel(String serverHost, int serverPort) {
-        InetAddress address;
-        try {
-          address = InetAddress.getByName(serverHost);
-          // Force the hostname to match the cert the server uses.
-          address = InetAddress.getByAddress("foo.test.google.fr", address.getAddress());
-        } catch (UnknownHostException ex) {
-          throw new RuntimeException(ex);
-        }
-        SslContext sslContext;
-        try {
-          String dir = "integration-testing/certs";
-          sslContext = SslContext.newClientContext(
-              new File(dir + "/ca.pem"));
-        } catch (SSLException ex) {
-          throw new RuntimeException(ex);
-        }
-        return NettyChannelBuilder.forAddress(new InetSocketAddress(address, serverPort))
-            .negotiationType(NegotiationType.TLS)
-            .sslContext(sslContext)
-            .build();
-      }
-    },
-    OKHTTP {
-      @Override
-      public ChannelImpl createChannel(String serverHost, int serverPort) {
-        return OkHttpChannelBuilder.forAddress(serverHost, serverPort).build();
-      }
-    },
-    ;
-
-    public abstract ChannelImpl createChannel(String serverHost, int serverPort);
-  }
-
   /**
-   * The main application allowing this client to be launched from the command line. Accepts the
-   * following arguments:
-   * <p>
-   * --transport=NETTY|NETTY_TLS|OKHTTP Identifies the concrete implementation of the
-   * transport. <br>
-   * --serverHost=The host of the remote server.<br>
-   * --serverPort=$port_number The port of the remote server.<br>
-   * --test_case=empty_unary|server_streaming The client test to run.<br>
+   * The main application allowing this client to be launched from the command line.
    */
   public static void main(String[] args) throws Exception {
-    Map<String, String> argMap = parseArgs(args);
-    Transport transport = getTransport(argMap);
-    String serverHost = getServerHost(argMap);
-    int serverPort = getPort(argMap);
-    String testCase = getTestCase(argMap);
+    final TestServiceClient client = new TestServiceClient();
+    client.parseArgs(args);
+    client.setup();
 
-    // TODO(user): Remove. Ideally stop passing the arg in scripts first.
-    if (getGrpcVersion(argMap) != 2) {
-      System.err.println("Only grpc_version=2 is supported");
-      System.exit(1);
-    }
-
-    final Tester tester = new Tester(transport, serverHost, serverPort);
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
         System.out.println("Shutting down");
         try {
-          tester.teardown();
+          client.teardown();
         } catch (Exception e) {
           e.printStackTrace();
         }
       }
     });
 
-    tester.setup();
-    System.out.println("Running test " + testCase);
     try {
-      runTest(tester, testCase);
-    } catch (Exception ex) {
-      ex.printStackTrace();
-      tester.teardown();
+      client.run();
+    } finally {
+      client.teardown();
+    }
+  }
+
+  private String serverHost = "localhost";
+  private String serverHostOverride;
+  private int serverPort = 8080;
+  private String testCase = "empty_unary";
+  private boolean useTls = true;
+  private boolean useTestCa;
+  private boolean useOkHttp;
+
+  private Tester tester = new Tester();
+
+  private void parseArgs(String[] args) {
+    boolean usage = false;
+    for (String arg : args) {
+      if (!arg.startsWith("--")) {
+        System.err.println("All arguments must start with '--': " + arg);
+        usage = true;
+        break;
+      }
+      String[] parts = arg.substring(2).split("=", 2);
+      String key = parts[0];
+      if ("help".equals(key)) {
+        usage = true;
+        break;
+      }
+      if (parts.length != 2) {
+        System.err.println("All arguments must be of the form --arg=value");
+        usage = true;
+        break;
+      }
+      String value = parts[1];
+      if ("server_host".equals(key)) {
+        serverHost = value;
+      } else if ("server_host_override".equals(key)) {
+        serverHostOverride = value;
+      } else if ("server_port".equals(key)) {
+        serverPort = Integer.parseInt(value);
+      } else if ("test_case".equals(key)) {
+        testCase = value;
+      } else if ("use_tls".equals(key)) {
+        useTls = Boolean.parseBoolean(value);
+      } else if ("use_test_ca".equals(key)) {
+        useTestCa = Boolean.parseBoolean(value);
+      } else if ("use_okhttp".equals(key)) {
+        useOkHttp = Boolean.parseBoolean(value);
+      } else if ("grpc_version".equals(key)) {
+        if (!"2".equals(value)) {
+          System.err.println("Only grpc version 2 is supported");
+          usage = true;
+          break;
+        }
+      } else {
+        System.err.println("Unknown argument: " + key);
+        usage = true;
+        break;
+      }
+    }
+    if (usage) {
+      TestServiceClient c = new TestServiceClient();
+      System.out.println(
+          "Usage: [ARGS...]"
+          + "\n"
+          + "\n  --server_host=HOST          Server to connect to. Default " + c.serverHost
+          + "\n  --server_host_override=HOST Claimed identification expected of server."
+          + "\n                              Defaults to server host"
+          + "\n  --server_port=PORT          Port to connect to. Default " + c.serverPort
+          + "\n  --test_case=TESTCASE        Test case to run. Default " + c.testCase
+          + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
+          + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Default " + c.useTestCa
+          + "\n  --use_okhttp=true|false     Whether to use OkHttp instead of Netty. Default "
+            + c.useOkHttp
+          );
       System.exit(1);
     }
+  }
+
+  private void setup() {
+    tester.setup();
+  }
+
+  private synchronized void teardown() {
+    try {
+      tester.teardown();
+    } catch (RuntimeException ex) {
+      throw ex;
+    } catch (Exception ex) {
+      throw new RuntimeException(ex);
+    }
+  }
+
+  private void run() {
+    System.out.println("Running test " + testCase);
+    try {
+      runTest(testCase);
+    } catch (RuntimeException ex) {
+      throw ex;
+    } catch (Exception ex) {
+      throw new RuntimeException(ex);
+    }
     System.out.println("Test completed.");
-    tester.teardown();
   }
 
-  private static Transport getTransport(Map<String, String> argMap) {
-    String value = argMap.get(TRANSPORT_ARG.toLowerCase());
-    Preconditions.checkNotNull(value, "%s argument must be provided.", TRANSPORT_ARG);
-    Transport transport = Transport.valueOf(value.toUpperCase().trim());
-    System.out.println(TRANSPORT_ARG + " set to: " + transport);
-    return transport;
-  }
-
-  private static String getServerHost(Map<String, String> argMap) {
-    String value = argMap.get(SERVER_HOST_ARG.toLowerCase());
-    if (value == null) {
-      throw new IllegalArgumentException(
-          "Must provide " + SERVER_HOST_ARG + " command-line argument");
-    }
-    System.out.println(SERVER_HOST_ARG + " set to: " + value);
-    return value;
-  }
-
-  private static int getPort(Map<String, String> argMap) {
-    String value = argMap.get(SERVER_PORT_ARG.toLowerCase());
-    if (value == null) {
-      throw new IllegalArgumentException(
-          "Must provide numeric " + SERVER_PORT_ARG + " command-line argument");
-    }
-    int port = Integer.parseInt(value);
-    System.out.println(SERVER_PORT_ARG + " set to port: " + port);
-    return port;
-  }
-
-  private static String getTestCase(Map<String, String> argMap) {
-    String value = argMap.get(TEST_CASE_ARG);
-    if (value == null) {
-      throw new IllegalArgumentException(
-          "Must provide " + TEST_CASE_ARG + " command-line argument");
-    }
-    System.out.println(TEST_CASE_ARG + " set to: " + value);
-    return value;
-  }
-
-  private static int getGrpcVersion(Map<String, String> argMap) {
-    String value = argMap.get(GRPC_VERSION_ARG.toLowerCase());
-    if (value == null) {
-      return 2;
-    }
-    int version = Integer.parseInt(value);
-    System.out.println(GRPC_VERSION_ARG + " set to version: " + version);
-    return version;
-  }
-
-  private static Map<String, String> parseArgs(String[] args) {
-    Map<String, String> argMap = Maps.newHashMap();
-    for (String arg : args) {
-      String[] parts = arg.split("=");
-      Preconditions.checkArgument(parts.length == 2, "Failed parsing argument: %s", arg);
-      argMap.put(parts[0].toLowerCase().trim(), parts[1].trim());
-    }
-
-    return argMap;
-  }
-
-  private static void runTest(Tester tester, String testCase) throws Exception {
+  private void runTest(String testCase) throws Exception {
     if ("empty_unary".equals(testCase)) {
       tester.emptyUnary();
     } else if ("large_unary".equals(testCase)) {
@@ -234,20 +200,43 @@ public class TestServiceClient {
     }
   }
 
-  private static class Tester extends AbstractTransportTest {
-    private final Transport transport;
-    private final String host;
-    private final int port;
-
-    public Tester(Transport transport, String host, int port) {
-      this.transport = transport;
-      this.host = host;
-      this.port = port;
-    }
-
+  private class Tester extends AbstractTransportTest {
     @Override
     protected ChannelImpl createChannel() {
-      return transport.createChannel(host, port);
+      if (!useOkHttp) {
+        InetAddress address;
+        try {
+          address = InetAddress.getByName(serverHost);
+          if (serverHostOverride != null) {
+            // Force the hostname to match the cert the server uses.
+            address = InetAddress.getByAddress(serverHostOverride, address.getAddress());
+          }
+        } catch (UnknownHostException ex) {
+          throw new RuntimeException(ex);
+        }
+        SslContext sslContext = null;
+        if (useTestCa) {
+          try {
+            String dir = "integration-testing/certs";
+            sslContext = SslContext.newClientContext(
+                new File(dir + "/ca.pem"));
+          } catch (SSLException ex) {
+            throw new RuntimeException(ex);
+          }
+        }
+        return NettyChannelBuilder.forAddress(new InetSocketAddress(address, serverPort))
+            .negotiationType(useTls ? NegotiationType.TLS : NegotiationType.PLAINTEXT)
+            .sslContext(sslContext)
+            .build();
+      } else {
+        if (serverHostOverride != null) {
+          throw new IllegalStateException("Server host override unsupported with okhttp");
+        }
+        if (useTls) {
+          throw new IllegalStateException("TLS unsupported with okhttp");
+        }
+        return OkHttpChannelBuilder.forAddress(serverHost, serverPort).build();
+      }
     }
   }
 }
