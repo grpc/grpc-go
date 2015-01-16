@@ -160,7 +160,7 @@ public class Calls {
       ReqT param,
       StreamObserver<RespT> responseObserver) {
     asyncServerStreamingCall(call, param,
-        new StreamObserverToCallListenerAdapter<RespT>(responseObserver));
+        new StreamObserverToCallListenerAdapter<RespT>(call, responseObserver));
   }
 
   private static <ReqT, RespT> void asyncServerStreamingCall(
@@ -168,6 +168,7 @@ public class Calls {
       ReqT param,
       Call.Listener<RespT> responseListener) {
     call.start(responseListener, new Metadata.Headers());
+    call.request(1);
     try {
       call.sendPayload(param);
       call.halfClose();
@@ -217,10 +218,11 @@ public class Calls {
    * Execute a duplex-streaming call.
    * @return request stream observer.
    */
-  public static <ReqT, RespT> StreamObserver<ReqT> duplexStreamingCall(
-      Call<ReqT, RespT> call, StreamObserver<RespT> responseObserver) {
-    call.start(new StreamObserverToCallListenerAdapter<RespT>(responseObserver),
+  public static <ReqT, RespT> StreamObserver<ReqT> duplexStreamingCall(Call<ReqT, RespT> call,
+      StreamObserver<RespT> responseObserver) {
+    call.start(new StreamObserverToCallListenerAdapter<RespT>(call, responseObserver),
         new Metadata.Headers());
+    call.request(1);
     return new CallToStreamObserverAdapter<ReqT>(call);
   }
 
@@ -248,22 +250,25 @@ public class Calls {
     }
   }
 
-  private static class StreamObserverToCallListenerAdapter<T> extends Call.Listener<T> {
-    private final StreamObserver<T> observer;
+  private static class StreamObserverToCallListenerAdapter<RespT> extends Call.Listener<RespT> {
+    private final Call<?, RespT> call;
+    private final StreamObserver<RespT> observer;
 
-    public StreamObserverToCallListenerAdapter(StreamObserver<T> observer) {
+    public StreamObserverToCallListenerAdapter(Call<?, RespT> call, StreamObserver<RespT> observer) {
+      this.call = call;
       this.observer = observer;
     }
 
     @Override
-    public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
-      return null;
+    public void onHeaders(Metadata.Headers headers) {
     }
 
     @Override
-    public ListenableFuture<Void> onPayload(T payload) {
+    public void onPayload(RespT payload) {
       observer.onValue(payload);
-      return null;
+
+      // Request delivery of the next inbound message.
+      call.request(1);
     }
 
     @Override
@@ -288,18 +293,16 @@ public class Calls {
     }
 
     @Override
-    public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
-      return null;
+    public void onHeaders(Metadata.Headers headers) {
     }
 
     @Override
-    public ListenableFuture<Void> onPayload(RespT value) {
+    public void onPayload(RespT value) {
       if (this.value != null) {
         throw Status.INTERNAL.withDescription("More than one value received for unary call")
             .asRuntimeException();
       }
       this.value = value;
-      return null;
     }
 
     @Override
@@ -357,11 +360,13 @@ public class Calls {
       if (!hasNext()) {
         throw new NoSuchElementException();
       }
-      @SuppressWarnings("unchecked")
-      Payload<T> tmp = (Payload<T>) last;
-      last = null;
-      tmp.processed.set(null);
-      return tmp.value;
+      try {
+        @SuppressWarnings("unchecked")
+        T tmp = (T) last;
+        return tmp;
+      } finally {
+        last = null;
+      }
     }
 
     @Override
@@ -373,16 +378,13 @@ public class Calls {
       private boolean done = false;
 
       @Override
-      public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
-        return null;
+      public void onHeaders(Metadata.Headers headers) {
       }
 
       @Override
-      public ListenableFuture<Void> onPayload(T value) {
+      public void onPayload(T value) {
         Preconditions.checkState(!done, "Call already closed");
-        SettableFuture<Void> future = SettableFuture.create();
-        buffer.add(new Payload<T>(value, future));
-        return future;
+        buffer.add(value);
       }
 
       @Override
@@ -395,16 +397,6 @@ public class Calls {
         }
         done = true;
       }
-    }
-  }
-
-  private static class Payload<T> {
-    public final T value;
-    public final SettableFuture<Void> processed;
-
-    public Payload(T value, SettableFuture<Void> processed) {
-      this.value = value;
-      this.processed = processed;
     }
   }
 }

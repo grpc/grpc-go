@@ -130,6 +130,7 @@ public class ClientInterceptorsTest {
   public void ordered() {
     final List<String> order = new ArrayList<String>();
     channel = new Channel() {
+      @SuppressWarnings("unchecked")
       @Override
       public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
         order.add("channel");
@@ -199,9 +200,9 @@ public class ClientInterceptorsTest {
           public void start(Call.Listener<RespT> responseListener, Metadata.Headers headers) {
             super.start(new ForwardingListener<RespT>(responseListener) {
               @Override
-              public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
+              public void onHeaders(Metadata.Headers headers) {
                 examinedHeaders.add(headers);
-                return super.onHeaders(headers);
+                super.onHeaders(headers);
               }
             }, headers);
           }

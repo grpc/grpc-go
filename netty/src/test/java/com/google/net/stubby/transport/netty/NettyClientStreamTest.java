@@ -45,9 +45,7 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.transport.AbstractStream;
@@ -64,7 +62,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 
 import java.io.InputStream;
 
@@ -202,9 +199,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     verify(listener, never()).closed(any(Status.class), any(Metadata.Trailers.class));
 
     // We are now waiting for 100 bytes of error context on the stream, cancel has not yet been sent
-    Mockito.verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
+    verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
     stream().transportDataReceived(Unpooled.buffer(100).writeZero(100), false);
-    Mockito.verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
+    verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
     stream().transportDataReceived(Unpooled.buffer(1000).writeZero(1000), false);
 
     // Now verify that cancel is sent and an error is reported to the listener
@@ -226,10 +223,6 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void deframedDataAfterCancelShouldBeIgnored() throws Exception {
-    // Mock the listener to return this future when a message is read.
-    final SettableFuture<Void> future = SettableFuture.create();
-    when(listener.messageRead(any(InputStream.class), anyInt())).thenReturn(future);
-
     stream().id(1);
     // Receive headers first so that it's a valid GRPC response.
     stream().transportHeadersReceived(grpcResponseHeaders(), false);
@@ -237,6 +230,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     // Receive 2 consecutive empty frames. Only one is delivered at a time to the listener.
     stream().transportDataReceived(simpleGrpcFrame(), false);
     stream().transportDataReceived(simpleGrpcFrame(), false);
+
+    // Only allow the first to be delivered.
+    stream().request(1);
 
     // Receive error trailers. The server status will not be processed until after all of the
     // data frames have been processed. Since cancellation will interrupt message delivery,
@@ -251,9 +247,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     Metadata.Trailers trailers = Utils.convertTrailers(grpcResponseTrailers(Status.CANCELLED));
     stream().transportReportStatus(Status.CANCELLED, true, trailers);
 
-    // Now complete the future to trigger the deframer to fire the next message to the
-    // stream.
-    future.set(null);
+    // Now allow the delivery of the second.
+    stream().request(1);
 
     // Verify that the listener was only notified of the first message, not the second.
     verify(listener).messageRead(any(InputStream.class), anyInt());

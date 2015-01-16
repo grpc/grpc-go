@@ -166,7 +166,7 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
                                            Metadata.Headers headers,
                                            ClientStreamListener listener) {
-    OkHttpClientStream clientStream = OkHttpClientStream.newStream(executor, listener,
+    OkHttpClientStream clientStream = OkHttpClientStream.newStream(listener,
         frameWriter, this, outboundFlow);
     if (goAway) {
       clientStream.transportReportStatus(goAwayStatus, false, new Metadata.Trailers());

@@ -42,7 +42,6 @@ import com.squareup.okhttp.internal.spdy.Header;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.concurrent.Executor;
 
 import javax.annotation.concurrent.GuardedBy;
 
@@ -57,28 +56,11 @@ class OkHttpClientStream extends Http2ClientStream {
   /**
    * Construct a new client stream.
    */
-  static OkHttpClientStream newStream(final Executor executor, ClientStreamListener listener,
+  static OkHttpClientStream newStream(ClientStreamListener listener,
                                        AsyncFrameWriter frameWriter,
                                        OkHttpClientTransport transport,
                                        OutboundFlowController outboundFlow) {
-    // Create a lock object that can be used by both the executor and methods in the stream
-    // to ensure consistent locking behavior.
-    final Object executorLock = new Object();
-    Executor synchronizingExecutor = new Executor() {
-      @Override
-      public void execute(final Runnable command) {
-        executor.execute(new Runnable() {
-          @Override
-          public void run() {
-            synchronized (executorLock) {
-              command.run();
-            }
-          }
-        });
-      }
-    };
-    return new OkHttpClientStream(synchronizingExecutor, listener, frameWriter, transport,
-        executorLock, outboundFlow);
+    return new OkHttpClientStream(listener, frameWriter, transport, outboundFlow);
   }
 
   @GuardedBy("executorLock")
@@ -88,25 +70,28 @@ class OkHttpClientStream extends Http2ClientStream {
   private final AsyncFrameWriter frameWriter;
   private final OutboundFlowController outboundFlow;
   private final OkHttpClientTransport transport;
-  // Lock used to synchronize with work done on the executor.
-  private final Object executorLock;
+  private final Object lock = new Object();
   private Object outboundFlowState;
 
-  private OkHttpClientStream(final Executor executor,
-                     final ClientStreamListener listener,
+  private OkHttpClientStream(ClientStreamListener listener,
                      AsyncFrameWriter frameWriter,
                      OkHttpClientTransport transport,
-                     Object executorLock,
                      OutboundFlowController outboundFlow) {
-    super(listener, executor);
+    super(listener);
     this.frameWriter = frameWriter;
     this.transport = transport;
-    this.executorLock = executorLock;
     this.outboundFlow = outboundFlow;
   }
 
+  @Override
+  public void request(final int numMessages) {
+    synchronized (lock) {
+      requestMessagesFromDeframer(numMessages);
+    }
+  }
+
   public void transportHeadersReceived(List<Header> headers, boolean endOfStream) {
-    synchronized (executorLock) {
+    synchronized (lock) {
       if (endOfStream) {
         transportTrailersReceived(Utils.convertTrailers(headers));
       } else {
@@ -120,7 +105,7 @@ class OkHttpClientStream extends Http2ClientStream {
    * the future listeners (executed by synchronizedExecutor) will not be executed in the same time.
    */
   public void transportDataReceived(okio.Buffer frame, boolean endOfStream) {
-    synchronized (executorLock) {
+    synchronized (lock) {
       long length = frame.size();
       window -= length;
       super.transportDataReceived(new OkHttpBuffer(frame), endOfStream);
@@ -143,7 +128,7 @@ class OkHttpClientStream extends Http2ClientStream {
 
   @Override
   protected void returnProcessedBytes(int processedBytes) {
-    synchronized (executorLock) {
+    synchronized (lock) {
       processedWindow -= processedBytes;
       if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
         int delta = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE - processedWindow;
@@ -157,7 +142,7 @@ class OkHttpClientStream extends Http2ClientStream {
   @Override
   public void transportReportStatus(Status newStatus, boolean stopDelivery,
       Metadata.Trailers trailers) {
-    synchronized (executorLock) {
+    synchronized (lock) {
       super.transportReportStatus(newStatus, stopDelivery, trailers);
     }
   }

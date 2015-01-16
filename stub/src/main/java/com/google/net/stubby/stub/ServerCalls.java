@@ -31,7 +31,6 @@
 
 package com.google.net.stubby.stub;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.ServerCall;
 import com.google.net.stubby.ServerCallHandler;
@@ -59,21 +58,24 @@ public class ServerCalls {
       public ServerCall.Listener<ReqT> startCall(
           String fullMethodName, final ServerCall<RespT> call, Metadata.Headers headers) {
         final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
+        call.request(1);
         return new EmptyServerCallListener<ReqT>() {
           ReqT request;
           @Override
-          public ListenableFuture<Void> onPayload(ReqT request) {
+          public void onPayload(ReqT request) {
             if (this.request == null) {
               // We delay calling method.invoke() until onHalfClose(), because application may call
               // close(OK) inside invoke(), while close(OK) is not allowed before onHalfClose().
               this.request = request;
+
+              // Request delivery of the next inbound message.
+              call.request(1);
             } else {
               call.close(
                   Status.INVALID_ARGUMENT.withDescription(
                       "More than one request payloads for unary call or server streaming call"),
                   new Metadata.Trailers());
             }
-            return null;
           }
 
           @Override
@@ -99,17 +101,20 @@ public class ServerCalls {
       final StreamingRequestMethod<ReqT, RespT> method) {
     return new ServerCallHandler<ReqT, RespT>() {
       @Override
-      public ServerCall.Listener<ReqT> startCall(String fullMethodName, ServerCall<RespT> call,
-          Metadata.Headers headers) {
+      public ServerCall.Listener<ReqT> startCall(String fullMethodName,
+          final ServerCall<RespT> call, Metadata.Headers headers) {
+        call.request(1);
         final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
         final StreamObserver<ReqT> requestObserver = method.invoke(responseObserver);
         return new EmptyServerCallListener<ReqT>() {
           boolean halfClosed = false;
 
           @Override
-          public ListenableFuture<Void> onPayload(ReqT request) {
+          public void onPayload(ReqT request) {
             requestObserver.onValue(request);
-            return null;
+
+            // Request delivery of the next inbound message.
+            call.request(1);
           }
 
           @Override
@@ -158,6 +163,9 @@ public class ServerCalls {
         throw Status.CANCELLED.asRuntimeException();
       }
       call.sendPayload(response);
+
+      // Request delivery of the next inbound message.
+      call.request(1);
     }
 
     @Override
@@ -177,8 +185,7 @@ public class ServerCalls {
 
   private static class EmptyServerCallListener<ReqT> extends ServerCall.Listener<ReqT> {
     @Override
-    public ListenableFuture<Void> onPayload(ReqT request) {
-      return null;
+    public void onPayload(ReqT request) {
     }
 
     @Override

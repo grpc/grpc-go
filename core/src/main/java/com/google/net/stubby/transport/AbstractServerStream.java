@@ -32,13 +32,11 @@
 package com.google.net.stubby.transport;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -63,8 +61,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   /** Saved trailers from close() that need to be sent once the framer has sent all messages. */
   private Metadata.Trailers stashedTrailers;
 
-  protected AbstractServerStream(IdT id, Executor deframerExecutor) {
-    super(deframerExecutor);
+  protected AbstractServerStream(IdT id) {
     id(id);
   }
 
@@ -73,9 +70,9 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
-  protected ListenableFuture<Void> receiveMessage(InputStream is, int length) {
+  protected void receiveMessage(InputStream is, int length) {
     inboundPhase(Phase.MESSAGE);
-    return listener.messageRead(is, length);
+    listener.messageRead(is, length);
   }
 
   @Override

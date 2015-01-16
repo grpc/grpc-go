@@ -32,25 +32,16 @@
 package com.google.net.stubby.transport;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Bytes;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.transport.MessageDeframer.Listener;
 
 import org.junit.Test;
@@ -62,7 +53,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.zip.GZIPOutputStream;
 
 /**
@@ -71,13 +61,13 @@ import java.util.zip.GZIPOutputStream;
 @RunWith(JUnit4.class)
 public class MessageDeframerTest {
   private Listener listener = mock(Listener.class);
-  private MessageDeframer deframer =
-      new MessageDeframer(listener, MoreExecutors.directExecutor());
+  private MessageDeframer deframer = new MessageDeframer(listener);
   private ArgumentCaptor<InputStream> messages = ArgumentCaptor.forClass(InputStream.class);
 
   @Test
   public void simplePayload() {
-    assertNull(deframer.deframe(buffer(new byte[]{0, 0, 0, 0, 2, 3, 14}), false));
+    deframer.request(1);
+    deframer.deframe(buffer(new byte[]{0, 0, 0, 0, 2, 3, 14}), false);
     verify(listener).messageRead(messages.capture(), eq(2));
     assertEquals(Bytes.asList(new byte[]{3, 14}), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
@@ -86,8 +76,8 @@ public class MessageDeframerTest {
 
   @Test
   public void smallCombinedPayloads() {
-    assertNull(
-        deframer.deframe(buffer(new byte[]{0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 2, 14, 15}), false));
+    deframer.request(2);
+    deframer.deframe(buffer(new byte[]{0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 2, 14, 15}), false);
     verify(listener).messageRead(messages.capture(), eq(1));
     assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
     verify(listener).messageRead(messages.capture(), eq(2));
@@ -98,7 +88,8 @@ public class MessageDeframerTest {
 
   @Test
   public void endOfStreamWithPayloadShouldNotifyEndOfStream() {
-    assertNull(deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3}), true));
+    deframer.request(1);
+    deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3}), true);
     verify(listener).messageRead(messages.capture(), eq(1));
     assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
     verify(listener).endOfStream();
@@ -108,17 +99,18 @@ public class MessageDeframerTest {
 
   @Test
   public void endOfStreamShouldNotifyEndOfStream() {
-    assertNull(deframer.deframe(buffer(new byte[0]), true));
+    deframer.deframe(buffer(new byte[0]), true);
     verify(listener).endOfStream();
     verifyNoMoreInteractions(listener);
   }
 
   @Test
   public void payloadSplitBetweenBuffers() {
-    assertNull(deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9}), false));
+    deframer.request(1);
+    deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9}), false);
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    assertNull(deframer.deframe(buffer(new byte[] {2, 6}), false));
+    deframer.deframe(buffer(new byte[] {2, 6}), false);
     verify(listener).messageRead(messages.capture(), eq(7));
     assertEquals(Bytes.asList(new byte[] {3, 14, 1, 5, 9, 2, 6}), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
@@ -127,10 +119,12 @@ public class MessageDeframerTest {
 
   @Test
   public void frameHeaderSplitBetweenBuffers() {
-    assertNull(deframer.deframe(buffer(new byte[] {0, 0}), false));
+    deframer.request(1);
+
+    deframer.deframe(buffer(new byte[] {0, 0}), false);
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    assertNull(deframer.deframe(buffer(new byte[] {0, 0, 1, 3}), false));
+    deframer.deframe(buffer(new byte[] {0, 0, 1, 3}), false);
     verify(listener).messageRead(messages.capture(), eq(1));
     assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
@@ -139,7 +133,8 @@ public class MessageDeframerTest {
 
   @Test
   public void emptyPayload() {
-    assertNull(deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 0}), false));
+    deframer.request(1);
+    deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 0}), false);
     verify(listener).messageRead(messages.capture(), eq(0));
     assertEquals(Bytes.asList(), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
@@ -148,8 +143,9 @@ public class MessageDeframerTest {
 
   @Test
   public void largerFrameSize() {
-    assertNull(deframer.deframe(
-        Buffers.wrap(Bytes.concat(new byte[] {0, 0, 0, 3, (byte) 232}, new byte[1000])), false));
+    deframer.request(1);
+    deframer.deframe(
+        Buffers.wrap(Bytes.concat(new byte[] {0, 0, 0, 3, (byte) 232}, new byte[1000])), false);
     verify(listener).messageRead(messages.capture(), eq(1000));
     assertEquals(Bytes.asList(new byte[1000]), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
@@ -157,110 +153,23 @@ public class MessageDeframerTest {
   }
 
   @Test
-  public void payloadCallbackShouldWaitForFutureCompletion() {
-    SettableFuture<Void> messageFuture = SettableFuture.create();
-    when(listener.messageRead(any(InputStream.class), eq(1))).thenReturn(messageFuture);
-    // Deframe a block with 2 messages.
-    ListenableFuture<?> deframeFuture
-        = deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 2, 14, 15}), false);
-    assertNotNull(deframeFuture);
-    verify(listener).messageRead(messages.capture(), eq(1));
-    assertEquals(Bytes.asList(new byte[]{3}), bytes(messages));
-    verify(listener, atLeastOnce()).bytesRead(anyInt());
+  public void endOfStreamCallbackShouldWaitForMessageDelivery() {
+    deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3}), true);
     verifyNoMoreInteractions(listener);
 
-    SettableFuture<Void> messageFuture2 = SettableFuture.create();
-    when(listener.messageRead(any(InputStream.class), eq(2))).thenReturn(messageFuture2);
-    messageFuture.set(null);
-    assertFalse(deframeFuture.isDone());
-    verify(listener).messageRead(messages.capture(), eq(2));
-    assertEquals(Bytes.asList(new byte[] {14, 15}), bytes(messages));
-    verify(listener, atLeastOnce()).bytesRead(anyInt());
-    verifyNoMoreInteractions(listener);
-
-    messageFuture2.set(null);
-    assertTrue(deframeFuture.isDone());
-
-    verify(listener, atLeastOnce()).bytesRead(anyInt());
-    verify(listener).deliveryStalled();
-    verifyNoMoreInteractions(listener);
-  }
-
-  @Test
-  public void endOfStreamCallbackShouldWaitForFutureCompletion() {
-    SettableFuture<Void> messageFuture = SettableFuture.create();
-    when(listener.messageRead(any(InputStream.class), eq(1))).thenReturn(messageFuture);
-    ListenableFuture<?> deframeFuture
-        = deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3}), true);
-    assertNotNull(deframeFuture);
+    deframer.request(1);
     verify(listener).messageRead(messages.capture(), eq(1));
     assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
-    verify(listener, atLeastOnce()).bytesRead(anyInt());
-    verifyNoMoreInteractions(listener);
-
-    messageFuture.set(null);
-    assertTrue(deframeFuture.isDone());
     verify(listener).endOfStream();
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
   }
 
   @Test
-  public void futureShouldPropagateThrownException() throws InterruptedException {
-    SettableFuture<Void> messageFuture = SettableFuture.create();
-    when(listener.messageRead(any(InputStream.class), eq(1))).thenReturn(messageFuture);
-    ListenableFuture<?> deframeFuture
-        = deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 2, 14, 15}), false);
-    assertNotNull(deframeFuture);
-    verify(listener).messageRead(messages.capture(), eq(1));
-    assertEquals(Bytes.asList(new byte[]{3}), bytes(messages));
-    verify(listener, atLeastOnce()).bytesRead(anyInt());
-    verifyNoMoreInteractions(listener);
-
-    RuntimeException thrownEx = new RuntimeException();
-    when(listener.messageRead(any(InputStream.class), eq(2))).thenThrow(thrownEx);
-    messageFuture.set(null);
-    verify(listener).messageRead(messages.capture(), eq(2));
-    assertTrue(deframeFuture.isDone());
-    try {
-      deframeFuture.get();
-      fail("Should have throws ExecutionException");
-    } catch (ExecutionException ex) {
-      assertEquals(thrownEx, ex.getCause());
-    }
-    verify(listener, atLeastOnce()).bytesRead(anyInt());
-    verifyNoMoreInteractions(listener);
-  }
-
-  @Test
-  public void futureFailureShouldStopAndPropagateFailure() throws InterruptedException {
-    SettableFuture<Void> messageFuture = SettableFuture.create();
-    when(listener.messageRead(any(InputStream.class), eq(1))).thenReturn(messageFuture);
-    ListenableFuture<?> deframeFuture
-        = deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 2, 14, 15}), false);
-    assertNotNull(deframeFuture);
-    verify(listener).messageRead(messages.capture(), eq(1));
-    assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
-    verify(listener, atLeastOnce()).bytesRead(anyInt());
-    verifyNoMoreInteractions(listener);
-
-    RuntimeException thrownEx = new RuntimeException();
-    messageFuture.setException(thrownEx);
-    assertTrue(deframeFuture.isDone());
-    try {
-      deframeFuture.get();
-      fail("Should have throws ExecutionException");
-    } catch (ExecutionException ex) {
-      assertEquals(thrownEx, ex.getCause());
-    }
-    verify(listener, atLeastOnce()).bytesRead(anyInt());
-    verifyNoMoreInteractions(listener);
-  }
-
-  @Test
   public void compressed() {
-    deframer = new MessageDeframer(
-        listener, MoreExecutors.directExecutor(), MessageDeframer.Compression.GZIP);
+    deframer = new MessageDeframer(listener, MessageDeframer.Compression.GZIP);
+    deframer.request(1);
+
     byte[] payload = compress(new byte[1000]);
     assertTrue(payload.length < 100);
     byte[] header = new byte[] {1, 0, 0, 0, (byte) payload.length};

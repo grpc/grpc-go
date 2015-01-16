@@ -32,7 +32,6 @@
 package com.google.net.stubby.transport.netty;
 
 import static com.google.net.stubby.transport.netty.NettyTestUtil.messageFrame;
-import static com.google.net.stubby.transport.netty.NettyTestUtil.statusFrame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;

@@ -49,5 +49,4 @@ public interface ClientStream extends Stream {
    * the remote end-point is closed.
    */
   void halfClose();
-
 }

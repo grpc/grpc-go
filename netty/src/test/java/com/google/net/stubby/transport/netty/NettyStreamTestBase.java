@@ -35,14 +35,12 @@ import static com.google.net.stubby.transport.netty.NettyTestUtil.messageFrame;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.transport.AbstractStream;
 import com.google.net.stubby.transport.StreamListener;
 
@@ -95,8 +93,6 @@ public abstract class NettyStreamTestBase {
   @Mock
   protected ChannelPromise promise;
 
-  protected SettableFuture<Void> processingFuture;
-
   protected InputStream input;
 
   protected AbstractStream<Integer> stream;
@@ -114,9 +110,6 @@ public abstract class NettyStreamTestBase {
     when(pipeline.firstContext()).thenReturn(ctx);
     when(eventLoop.inEventLoop()).thenReturn(true);
 
-    processingFuture = SettableFuture.create();
-    when(listener().messageRead(any(InputStream.class), anyInt())).thenReturn(processingFuture);
-
     doAnswer(new Answer<Void>() {
       @Override
       public Void answer(InvocationOnMock invocation) throws Throwable {
@@ -132,6 +125,8 @@ public abstract class NettyStreamTestBase {
 
   @Test
   public void inboundMessageShouldCallListener() throws Exception {
+    stream.request(1);
+
     if (stream instanceof NettyServerStream) {
       ((NettyServerStream) stream).inboundDataReceived(messageFrame(MESSAGE), false);
     } else {
@@ -142,10 +137,6 @@ public abstract class NettyStreamTestBase {
 
     // Verify that inbound flow control window update has been disabled for the stream.
     assertEquals(MESSAGE, NettyTestUtil.toString(captor.getValue()));
-
-    // Verify that inbound flow control window update has been re-enabled for the stream after
-    // the future completes.
-    processingFuture.set(null);
   }
 
   protected abstract AbstractStream<Integer> createStream();

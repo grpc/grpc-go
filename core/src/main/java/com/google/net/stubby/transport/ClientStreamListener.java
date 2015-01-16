@@ -31,11 +31,8 @@
 
 package com.google.net.stubby.transport;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
-
-import javax.annotation.Nullable;
 
 /** An observer of client-side stream events. */
 public interface ClientStreamListener extends StreamListener {
@@ -48,11 +45,8 @@ public interface ClientStreamListener extends StreamListener {
    * <p>This method should return quickly, as the same thread may be used to process other streams.
    *
    * @param headers the fully buffered received headers.
-   * @return a processing completion future, or {@code null} to indicate that processing of the
-   *         headers is immediately complete.
    */
-  @Nullable
-  ListenableFuture<Void> headersRead(Metadata.Headers headers);
+  void headersRead(Metadata.Headers headers);
 
   /**
    * Called when the stream is fully closed. {@link

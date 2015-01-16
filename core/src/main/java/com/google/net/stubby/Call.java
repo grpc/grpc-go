@@ -31,9 +31,6 @@
 
 package com.google.net.stubby;
 
-import com.google.common.util.concurrent.ListenableFuture;
-
-import javax.annotation.Nullable;
 
 /**
  * Low-level methods for communicating with a remote server during a single RPC. Unlike normal RPCs,
@@ -69,14 +66,13 @@ public abstract class Call<RequestT, ResponseT> {
      * This method is always called, if no headers were received then an empty {@link Metadata}
      * is passed.
      */
-    public abstract ListenableFuture<Void> onHeaders(Metadata.Headers headers);
+    public abstract void onHeaders(Metadata.Headers headers);
 
     /**
      * A response payload has been received. For streaming calls, there may be zero payload
      * messages.
      */
-    @Nullable
-    public abstract ListenableFuture<Void> onPayload(T payload);
+    public abstract void onPayload(T payload);
 
     /**
      * The Call has been closed. No further sending or receiving can occur. If {@code status} is
@@ -96,6 +92,22 @@ public abstract class Call<RequestT, ResponseT> {
    */
   // TODO(lryan): Might be better to put into Channel#newCall, might reduce decoration burden
   public abstract void start(Listener<ResponseT> responseListener, Metadata.Headers headers);
+
+  /**
+   * Requests up to the given number of messages from the call to be delivered to
+   * {@link Listener#onPayload(Object)}. No additional messages will be delivered.
+   *
+   * <p>Message delivery is guaranteed to be sequential in the order received. In addition, the
+   * listener methods will not be accessed concurrently. While it is not guaranteed that the same
+   * thread will always be used, it is guaranteed that only a single thread will access the listener
+   * at a time.
+   *
+   * <p>If it is desired to bypass inbound flow control, a very large number of messages can be
+   * specified (e.g. {@link Integer#MAX_VALUE}).
+   *
+   * @param numMessages the requested number of messages to be delivered to the listener.
+   */
+  public abstract void request(int numMessages);
 
   /**
    * Prevent any further processing for this Call. No further messages may be sent or will be

@@ -42,6 +42,15 @@ import javax.annotation.Nullable;
  */
 public interface Stream {
   /**
+   * Requests up to the given number of messages from the call to be delivered to
+   * {@link StreamListener#messageRead(java.io.InputStream, int)}. No additional messages will be
+   * delivered.
+   *
+   * @param numMessages the requested number of messages to be delivered to the listener.
+   */
+  void request(int numMessages);
+
+  /**
    * Writes a message payload to the remote end-point. The bytes from the stream are immediate read
    * by the Transport. This method will always return immediately and will not wait for the write to
    * complete.

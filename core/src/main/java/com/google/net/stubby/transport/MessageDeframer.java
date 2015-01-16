@@ -32,19 +32,13 @@
 package com.google.net.stubby.transport;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import com.google.common.io.ByteStreams;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.Status;
 
 import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.Executor;
 import java.util.zip.GZIPInputStream;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -52,8 +46,8 @@ import javax.annotation.concurrent.NotThreadSafe;
 /**
  * Deframer for GRPC frames.
  *
- * <p>This class is not thread-safe. All calls to this class must be made in the context of the
- * executor provided during creation. That executor must not allow concurrent execution of tasks.
+ * <p>This class is not thread-safe. All calls to public methods should be made in the transport
+ * thread.
  */
 @NotThreadSafe
 public class MessageDeframer implements Closeable {
@@ -82,11 +76,8 @@ public class MessageDeframer implements Closeable {
      *
      * @param is stream containing the message.
      * @param length the length in bytes of the message.
-     * @return a future indicating when the application has completed processing the message. The
-     * next delivery will not occur until this future completes. If {@code null}, it is assumed that
-     * the application has completed processing the message upon returning from the method call.
      */
-    ListenableFuture<Void> messageRead(InputStream is, int length);
+    void messageRead(InputStream is, int length);
 
     /**
      * Called when end-of-stream has not yet been reached but there are no complete messages
@@ -105,65 +96,67 @@ public class MessageDeframer implements Closeable {
   }
 
   private final Listener listener;
-  private final Executor executor;
   private final Compression compression;
   private State state = State.HEADER;
   private int requiredLength = HEADER_LENGTH;
   private boolean compressedFlag;
   private boolean endOfStream;
-  private SettableFuture<?> deliveryOutstanding;
   private CompositeBuffer nextFrame;
   private CompositeBuffer unprocessed = new CompositeBuffer();
+  private long pendingDeliveries;
+  private boolean deliveryStalled = true;
 
   /**
-   * Create a deframer. All calls to this class must be made in the context of the provided
-   * executor, which also must not allow concurrent processing of Runnables. Compression will not be
-   * supported.
+   * Create a deframer. Compression will not be supported.
    *
    * @param listener listener for deframer events.
-   * @param executor used for internal event processing
    */
-  public MessageDeframer(Listener listener, Executor executor) {
-    this(listener, executor, Compression.NONE);
+  public MessageDeframer(Listener listener) {
+    this(listener, Compression.NONE);
   }
 
   /**
-   * Create a deframer. All calls to this class must be made in the context of the provided
-   * executor, which also must not allow concurrent processing of Runnables.
+   * Create a deframer.
    *
    * @param listener listener for deframer events.
-   * @param executor used for internal event processing
    * @param compression the compression used if a compressed frame is encountered, with NONE meaning
    *        unsupported
    */
-  public MessageDeframer(Listener listener, Executor executor, Compression compression) {
+  public MessageDeframer(Listener listener, Compression compression) {
     this.listener = Preconditions.checkNotNull(listener, "sink");
-    this.executor = Preconditions.checkNotNull(executor, "executor");
     this.compression = Preconditions.checkNotNull(compression, "compression");
   }
 
   /**
-   * Adds the given data to this deframer and attempts delivery to the sink.
+   * Requests up to the given number of messages from the call to be delivered to
+   * {@link Listener#messageRead(InputStream, int)}. No additional messages will be delivered.
    *
-   * <p>If returned future is not {@code null}, then it completes when no more deliveries are
-   * occuring. Delivering completes if all available deframing input is consumed or if delivery
-   * resulted in an exception, in which case this method may throw the exception or the returned
-   * future will fail with the throwable. The future is guaranteed to complete within the executor
-   * provided during construction.
+   * @param numMessages the requested number of messages to be delivered to the listener.
    */
-  public ListenableFuture<?> deframe(Buffer data, boolean endOfStream) {
+  public void request(int numMessages) {
+    Preconditions.checkArgument(numMessages > 0, "numMessages must be > 0");
+    pendingDeliveries += numMessages;
+    deliver();
+  }
+
+  /**
+   * Adds the given data to this deframer and attempts delivery to the sink.
+   */
+  public void deframe(Buffer data, boolean endOfStream) {
     Preconditions.checkNotNull(data, "data");
     Preconditions.checkState(!this.endOfStream, "Past end of stream");
     unprocessed.addBuffer(data);
 
     // Indicate that all of the data for this stream has been received.
     this.endOfStream = endOfStream;
+    deliver();
+  }
 
-    if (isDeliveryOutstanding()) {
-      // Only allow one outstanding delivery at a time.
-      return null;
-    }
-    return deliver();
+  /**
+   * Indicates whether delivery is currently stalled, pending receipt of more data.
+   */
+  public boolean isStalled() {
+    return deliveryStalled;
   }
 
   @Override
@@ -175,83 +168,23 @@ public class MessageDeframer implements Closeable {
   }
 
   /**
-   * Indicates whether or not there is currently a delivery outstanding to the application.
+   * Reads and delivers as many messages to the sink as possible.
    */
-  public final boolean isDeliveryOutstanding() {
-    return deliveryOutstanding != null;
-  }
-
-  /**
-   * Consider {@code future} to be a message currently being processed. Messages will not be
-   * delivered until the future completes. The returned future behaves as if it was returned by
-   * {@link #deframe(Buffer, boolean)}.
-   *
-   * @throws IllegalStateException if a message is already being processed
-   */
-  public ListenableFuture<?> delayProcessing(ListenableFuture<?> future) {
-    Preconditions.checkState(!isDeliveryOutstanding(), "Only one delay allowed concurrently");
-    if (future == null) {
-      return null;
-    }
-    return delayProcessingInternal(future);
-  }
-
-  /**
-   * May only be called when a delivery is known not to be outstanding. If deliveryOutstanding is
-   * non-null, then it will be re-used and this method will return {@code null}.
-   */
-  private ListenableFuture<?> delayProcessingInternal(ListenableFuture<?> future) {
-    Preconditions.checkNotNull(future, "future");
-    // Return a separate future so that our callback is guaranteed to complete before any
-    // listeners on the returned future.
-    ListenableFuture<?> returnFuture = null;
-    if (!isDeliveryOutstanding()) {
-      returnFuture = deliveryOutstanding = SettableFuture.create();
-    }
-    Futures.addCallback(future, new FutureCallback<Object>() {
-      @Override
-      public void onFailure(Throwable t) {
-        SettableFuture<?> previousOutstanding = deliveryOutstanding;
-        deliveryOutstanding = null;
-        previousOutstanding.setException(t);
-      }
-
-      @Override
-      public void onSuccess(Object result) {
-        try {
-          deliver();
-        } catch (Throwable t) {
-          if (!isDeliveryOutstanding()) {
-            throw Throwables.propagate(t);
-          } else {
-            onFailure(t);
-          }
-        }
-      }
-    }, executor);
-    return returnFuture;
-  }
-
-  /**
-   * Reads and delivers as many messages to the sink as possible. May only be called when a delivery
-   * is known not to be outstanding.
-   */
-  private ListenableFuture<?> deliver() {
+  private void deliver() {
     // Process the uncompressed bytes.
-    while (readRequiredBytes()) {
+    boolean stalled = false;
+    while (pendingDeliveries > 0 && !(stalled = !readRequiredBytes())) {
       switch (state) {
         case HEADER:
           processHeader();
           break;
         case BODY:
-          // Read the body and deliver the message to the sink.
-          ListenableFuture<?> processingFuture = processBody();
-          if (processingFuture != null) {
-            // A future was returned for the completion of processing the delivered
-            // message. Once it's done, try to deliver the next message.
-            return delayProcessingInternal(processingFuture);
-          }
+          // Read the body and deliver the message.
+          processBody();
 
+          // Since we've delivered a message, decrement the number of pending
+          // deliveries remaining.
+          pendingDeliveries--;
           break;
         default:
           throw new AssertionError("Invalid state: " + state);
@@ -259,25 +192,29 @@ public class MessageDeframer implements Closeable {
     }
 
     if (endOfStream) {
-      if (nextFrame.readableBytes() != 0) {
-        throw Status.INTERNAL
-            .withDescription("Encountered end-of-stream mid-frame")
+      if (!isDataAvailable()) {
+        listener.endOfStream();
+      } else if (stalled) {
+        // We've received the entire stream and have data available but we don't have
+        // enough to read the next frame ... this is bad.
+        throw Status.INTERNAL.withDescription("Encountered end-of-stream mid-frame")
             .asRuntimeException();
       }
-      listener.endOfStream();
     }
 
-    // All available messages have processed.
-    if (isDeliveryOutstanding()) {
-      SettableFuture<?> previousOutstanding = deliveryOutstanding;
-      deliveryOutstanding = null;
-      previousOutstanding.set(null);
-      if (!endOfStream) {
-        // Notify that delivery is currently paused.
-        listener.deliveryStalled();
-      }
+    // Never indicate that we're stalled if we've received all the data for the stream.
+    stalled &= !endOfStream;
+
+    // If we're transitioning to the stalled state, notify the listener.
+    boolean previouslyStalled = deliveryStalled;
+    deliveryStalled = stalled;
+    if (stalled && !previouslyStalled) {
+      listener.deliveryStalled();
     }
-    return null;
+  }
+
+  private boolean isDataAvailable() {
+    return unprocessed.readableBytes() > 0 || (nextFrame != null && nextFrame.readableBytes() > 0);
   }
 
   /**
@@ -335,35 +272,32 @@ public class MessageDeframer implements Closeable {
    * Processes the body of the GRPC compression frame. A single compression frame may contain
    * several GRPC messages within it.
    */
-  private ListenableFuture<?> processBody() {
-    ListenableFuture<?> future;
+  private void processBody() {
     if (compressedFlag) {
       if (compression == Compression.NONE) {
-        throw Status.INTERNAL
-            .withDescription("Can't decode compressed frame as compression not configured.")
-            .asRuntimeException();
+        throw Status.INTERNAL.withDescription(
+            "Can't decode compressed frame as compression not configured.").asRuntimeException();
       } else if (compression == Compression.GZIP) {
         // Fully drain frame.
         byte[] bytes;
         try {
-          bytes = ByteStreams.toByteArray(
-              new GZIPInputStream(Buffers.openStream(nextFrame, false)));
+          bytes =
+              ByteStreams.toByteArray(new GZIPInputStream(Buffers.openStream(nextFrame, false)));
         } catch (IOException ex) {
           throw new RuntimeException(ex);
         }
-        future = listener.messageRead(new ByteArrayInputStream(bytes), bytes.length);
+        listener.messageRead(new ByteArrayInputStream(bytes), bytes.length);
       } else {
         throw new AssertionError("Unknown compression type");
       }
     } else {
       // Don't close the frame, since the sink is now responsible for the life-cycle.
-      future = listener.messageRead(Buffers.openStream(nextFrame, true), nextFrame.readableBytes());
+      listener.messageRead(Buffers.openStream(nextFrame, true), nextFrame.readableBytes());
       nextFrame = null;
     }
 
     // Done with this frame, begin processing the next header.
     state = State.HEADER;
     requiredLength = HEADER_LENGTH;
-    return future;
   }
 }

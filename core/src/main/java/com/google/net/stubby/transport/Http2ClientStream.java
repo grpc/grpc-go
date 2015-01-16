@@ -37,7 +37,6 @@ import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
 import java.nio.charset.Charset;
-import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
 
@@ -70,8 +69,8 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
   private Charset errorCharset = Charsets.UTF_8;
   private boolean contentTypeChecked;
 
-  protected Http2ClientStream(ClientStreamListener listener, Executor deframerExecutor) {
-    super(listener, deframerExecutor);
+  protected Http2ClientStream(ClientStreamListener listener) {
+    super(listener);
   }
 
   protected void transportHeadersReceived(Metadata.Headers headers) {

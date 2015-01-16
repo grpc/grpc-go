@@ -34,15 +34,9 @@ package com.google.net.stubby.transport;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.common.io.Closeables;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
 
@@ -59,15 +53,6 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   private volatile IdT id;
   private final MessageFramer framer;
-  private final FutureCallback<Object> deframerErrorCallback = new FutureCallback<Object>() {
-    @Override
-    public void onSuccess(Object result) {}
-
-    @Override
-    public void onFailure(Throwable t) {
-      deframeFailed(t);
-    }
-  };
 
   final MessageDeframer deframer;
 
@@ -81,7 +66,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    */
   private Phase outboundPhase = Phase.HEADERS;
 
-  AbstractStream(Executor deframerExecutor) {
+  AbstractStream() {
     MessageDeframer.Listener inboundMessageHandler = new MessageDeframer.Listener() {
       @Override
       public void bytesRead(int numBytes) {
@@ -89,14 +74,8 @@ public abstract class AbstractStream<IdT> implements Stream {
       }
 
       @Override
-      public ListenableFuture<Void> messageRead(InputStream input, final int length) {
-        ListenableFuture<Void> future = null;
-        try {
-          future = receiveMessage(input, length);
-          return future;
-        } finally {
-          closeWhenDone(future, input);
-        }
+      public void messageRead(InputStream input, final int length) {
+        receiveMessage(input, length);
       }
 
       @Override
@@ -117,7 +96,7 @@ public abstract class AbstractStream<IdT> implements Stream {
     };
 
     framer = new MessageFramer(outboundFrameHandler, 4096);
-    this.deframer = new MessageDeframer(inboundMessageHandler, deframerExecutor);
+    this.deframer = new MessageDeframer(inboundMessageHandler);
   }
 
   /**
@@ -194,7 +173,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   protected abstract void internalSendFrame(ByteBuffer frame, boolean endOfStream);
 
   /** A message was deframed. */
-  protected abstract ListenableFuture<Void> receiveMessage(InputStream is, int length);
+  protected abstract void receiveMessage(InputStream is, int length);
 
   /** Deframer has no pending deliveries. */
   protected abstract void inboundDeliveryPaused();
@@ -215,23 +194,25 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   /**
    * Called to parse a received frame and attempt delivery of any completed
-   * messages.
+   * messages. Must be called from the transport thread.
    */
   protected final void deframe(Buffer frame, boolean endOfStream) {
-    ListenableFuture<?> future;
-    future = deframer.deframe(frame, endOfStream);
-    if (future != null) {
-      Futures.addCallback(future, deframerErrorCallback);
+    try {
+      deframer.deframe(frame, endOfStream);
+    } catch (Throwable t) {
+      deframeFailed(t);
     }
   }
 
   /**
-   * Delays delivery from the deframer until the given future completes.
+   * Called to request the given number of messages from the deframer. Must be called
+   * from the transport thread.
    */
-  protected final void delayDeframer(ListenableFuture<?> future) {
-    ListenableFuture<?> deliveryFuture = deframer.delayProcessing(future);
-    if (deliveryFuture != null) {
-      Futures.addCallback(deliveryFuture, deframerErrorCallback);
+  protected final void requestMessagesFromDeframer(int numMessages) {
+    try {
+      deframer.request(numMessages);
+    } catch (Throwable t) {
+      deframeFailed(t);
     }
   }
 
@@ -269,26 +250,6 @@ public abstract class AbstractStream<IdT> implements Stream {
           String.format("Cannot transition phase from %s to %s", currentPhase, nextPhase));
     }
     return nextPhase;
-  }
-
-  /**
-   * If the given future is provided, closes the {@link InputStream} when it completes. Otherwise
-   * the {@link InputStream} is closed immediately.
-   */
-  private static void closeWhenDone(@Nullable ListenableFuture<Void> future,
-      final InputStream input) {
-    if (future == null) {
-      Closeables.closeQuietly(input);
-      return;
-    }
-
-    // Close the buffer when the future completes.
-    future.addListener(new Runnable() {
-      @Override
-      public void run() {
-        Closeables.closeQuietly(input);
-      }
-    }, MoreExecutors.directExecutor());
   }
 
   /**

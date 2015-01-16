@@ -51,13 +51,23 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   private final NettyServerHandler handler;
 
   NettyServerStream(Channel channel, int id, NettyServerHandler handler) {
-    super(id, channel.eventLoop());
+    super(id);
     this.channel = checkNotNull(channel, "channel");
     this.handler = checkNotNull(handler, "handler");
   }
 
   void inboundDataReceived(ByteBuf frame, boolean endOfStream) {
     super.inboundDataReceived(new NettyBuffer(frame.retain()), endOfStream);
+  }
+
+  @Override
+  public void request(final int numMessages) {
+    channel.eventLoop().execute(new Runnable() {
+      @Override
+      public void run() {
+        requestMessagesFromDeframer(numMessages);
+      }
+    });
   }
 
   @Override

@@ -44,6 +44,7 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -163,6 +164,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
   private void inboundDataShouldForwardToStreamListener(boolean endStream) throws Exception {
     createStream();
+    stream.request(1);
 
     // Create a data frame and then trigger the handler to read it.
     ByteBuf frame = dataFrame(STREAM_ID, endStream);
@@ -180,6 +182,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   @Test
   public void clientHalfCloseShouldForwardToStreamListener() throws Exception {
     createStream();
+    stream.request(1);
 
     handler.channelRead(ctx, emptyGrpcFrame(STREAM_ID, true));
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
@@ -202,11 +205,12 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   @Test
   public void streamErrorShouldNotCloseChannel() throws Exception {
     createStream();
+    stream.request(1);
 
     // When a DATA frame is read, throw an exception. It will be converted into an
     // Http2StreamException.
     RuntimeException e = new RuntimeException("Fake Exception");
-    when(streamListener.messageRead(any(InputStream.class), anyInt())).thenThrow(e);
+    doThrow(e).when(streamListener).messageRead(any(InputStream.class), anyInt());
 
     // Read a DATA frame to trigger the exception.
     handler.channelRead(ctx, emptyGrpcFrame(STREAM_ID, true));
@@ -217,7 +221,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     // Verify the stream was closed.
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(streamListener).closed(captor.capture());
-    assertEquals(e, captor.getValue().asException().getCause().getCause());
+    assertEquals(e, captor.getValue().asException().getCause());
     assertEquals(Code.INTERNAL, captor.getValue().getCode());
   }
 
@@ -225,7 +229,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   public void connectionErrorShouldCloseChannel() throws Exception {
     createStream();
 
-    // Read a DATA frame to trigger the exception.
+    // Read a bad frame to trigger the exception.
     handler.channelRead(ctx, badFrame());
 
     // Verify the expected GO_AWAY frame was written.

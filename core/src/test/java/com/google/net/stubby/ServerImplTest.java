@@ -34,21 +34,18 @@ package com.google.net.stubby;
 import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isNull;
 import static org.mockito.Matchers.notNull;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.AbstractService;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.net.stubby.transport.ServerStream;
 import com.google.net.stubby.transport.ServerStreamListener;
 import com.google.net.stubby.transport.ServerTransportListener;
@@ -71,8 +68,6 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Unit tests for {@link ServerImpl}. */
@@ -86,7 +81,9 @@ public class ServerImplTest {
   private Service transportServer = new NoopService();
   private ServerImpl server = new ServerImpl(executor, registry)
       .setTransportServer(transportServer);
-  private ServerStream stream = Mockito.mock(ServerStream.class);
+
+  @Mock
+  private ServerStream stream;
 
   @Mock
   private ServerCall.Listener<String> callListener;
@@ -238,9 +235,8 @@ public class ServerImplTest {
     assertNotNull(call);
 
     String order = "Lots of pizza, please";
-    ListenableFuture<Void> future = streamListener.messageRead(STRING_MARSHALLER.stream(order), 1);
-    future.get();
-    verify(callListener).onPayload(order);
+    streamListener.messageRead(STRING_MARSHALLER.stream(order), 1);
+    verify(callListener, timeout(2000)).onPayload(order);
 
     call.sendPayload(314);
     ArgumentCaptor<InputStream> inputCaptor = ArgumentCaptor.forClass(InputStream.class);
@@ -295,48 +291,6 @@ public class ServerImplTest {
     executeBarrier(executor).await();
     verify(stream).close(same(status), notNull(Metadata.Trailers.class));
     verifyNoMoreInteractions(stream);
-  }
-
-  @Test
-  public void futureStatusIsPropagatedToTransport() throws Exception {
-    final AtomicReference<ServerCall<Integer>> callReference
-        = new AtomicReference<ServerCall<Integer>>();
-    registry.addService(ServerServiceDefinition.builder("Waiter")
-        .addMethod("serve", STRING_MARSHALLER, INTEGER_MARSHALLER,
-          new ServerCallHandler<String, Integer>() {
-            @Override
-            public ServerCall.Listener<String> startCall(String fullMethodName,
-                ServerCall<Integer> call, Metadata.Headers headers) {
-              callReference.set(call);
-              return callListener;
-            }
-          }).build());
-    ServerTransportListener transportListener = newTransport(server);
-
-    ServerStreamListener streamListener
-        = transportListener.streamCreated(stream, "/Waiter/serve", new Metadata.Headers());
-    assertNotNull(streamListener);
-
-    executeBarrier(executor).await();
-    ServerCall<Integer> call = callReference.get();
-    assertNotNull(call);
-
-    String delay = "No, I've not looked over the menu yet";
-    SettableFuture<Void> appFuture = SettableFuture.create();
-    when(callListener.onPayload(delay)).thenReturn(appFuture);
-    ListenableFuture<Void> future = streamListener.messageRead(STRING_MARSHALLER.stream(delay), 1);
-    executeBarrier(executor).await();
-    verify(callListener).onPayload(delay);
-    try {
-      future.get(0, TimeUnit.SECONDS);
-      fail();
-    } catch (TimeoutException ex) {
-      // Expected.
-    }
-
-    appFuture.set(null);
-    // Shouldn't throw.
-    future.get(0, TimeUnit.SECONDS);
   }
 
   private static ServerTransportListener newTransport(ServerImpl server) {

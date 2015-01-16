@@ -39,7 +39,6 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.net.stubby.AbstractServerBuilder;
@@ -75,12 +74,12 @@ import org.mockito.ArgumentCaptor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -426,22 +425,18 @@ public abstract class AbstractTransportTest {
     // Start the call and prepare capture of results.
     final List<StreamingOutputCallResponse> results =
         Collections.synchronizedList(new ArrayList<StreamingOutputCallResponse>());
-    final List<SettableFuture<Void>> processedFutures =
-        Collections.synchronizedList(new LinkedList<SettableFuture<Void>>());
     final SettableFuture<Void> completionFuture = SettableFuture.create();
+    final AtomicInteger count = new AtomicInteger();
     call.start(new Call.Listener<StreamingOutputCallResponse>() {
 
       @Override
-      public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
-        return null;
+      public void onHeaders(Metadata.Headers headers) {
       }
 
       @Override
-      public ListenableFuture<Void> onPayload(final StreamingOutputCallResponse payload) {
-        SettableFuture<Void> processedFuture = SettableFuture.create();
+      public void onPayload(final StreamingOutputCallResponse payload) {
         results.add(payload);
-        processedFutures.add(processedFuture);
-        return processedFuture;
+        count.incrementAndGet();
       }
 
       @Override
@@ -460,17 +455,9 @@ public abstract class AbstractTransportTest {
 
     // Slowly set completion on all of the futures.
     int expectedResults = responseSizes.size();
-    int count = 0;
-    while (count < expectedResults) {
-      if (!processedFutures.isEmpty()) {
-        assertEquals(1, processedFutures.size());
-        assertEquals(count + 1, results.size());
-        count++;
-
-        // Remove and set the first future to allow receipt of additional messages
-        // from flow control.
-        processedFutures.remove(0).set(null);
-      }
+    while (count.get() < expectedResults) {
+      // Allow one more inbound message to be delivered to the application.
+      call.request(1);
 
       // Sleep a bit.
       Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);

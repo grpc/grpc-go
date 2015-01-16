@@ -45,7 +45,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.Service.State;
 import com.google.net.stubby.Metadata;
@@ -137,8 +136,8 @@ public class OkHttpClientTransportTest {
   public void nextFrameThrowIOException() throws Exception {
     MockStreamListener listener1 = new MockStreamListener();
     MockStreamListener listener2 = new MockStreamListener();
-    clientTransport.newStream(method, new Metadata.Headers(), listener1);
-    clientTransport.newStream(method, new Metadata.Headers(), listener2);
+    clientTransport.newStream(method, new Metadata.Headers(), listener1).request(1);
+    clientTransport.newStream(method, new Metadata.Headers(), listener2).request(1);
     assertEquals(2, streams.size());
     assertTrue(streams.containsKey(3));
     assertTrue(streams.containsKey(5));
@@ -158,7 +157,7 @@ public class OkHttpClientTransportTest {
     final int numMessages = 10;
     final String message = "Hello Client";
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method, new Metadata.Headers(), listener);
+    clientTransport.newStream(method, new Metadata.Headers(), listener).request(numMessages);
     assertTrue(streams.containsKey(3));
     frameHandler.headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
     assertNotNull(listener.headers);
@@ -179,7 +178,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void invalidInboundHeadersCancelStream() throws Exception {
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method, new Metadata.Headers(), listener);
+    clientTransport.newStream(method, new Metadata.Headers(), listener).request(1);
     assertTrue(streams.containsKey(3));
     // Empty headers block without correct content type or status
     frameHandler.headers(false, false, 3, 0, new ArrayList<Header>(),
@@ -246,8 +245,8 @@ public class OkHttpClientTransportTest {
   public void windowUpdate() throws Exception {
     MockStreamListener listener1 = new MockStreamListener();
     MockStreamListener listener2 = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener1);
-    clientTransport.newStream(method,new Metadata.Headers(), listener2);
+    clientTransport.newStream(method,new Metadata.Headers(), listener1).request(2);
+    clientTransport.newStream(method,new Metadata.Headers(), listener2).request(2);
     assertEquals(2, streams.size());
     OkHttpClientStream stream1 = streams.get(3);
     OkHttpClientStream stream2 = streams.get(5);
@@ -299,7 +298,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void windowUpdateWithInboundFlowControl() throws Exception {
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method, new Metadata.Headers(), listener);
+    clientTransport.newStream(method, new Metadata.Headers(), listener).request(1);
     OkHttpClientStream stream = streams.get(3);
 
     int messageLength = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1;
@@ -342,8 +341,8 @@ public class OkHttpClientTransportTest {
     // start 2 streams.
     MockStreamListener listener1 = new MockStreamListener();
     MockStreamListener listener2 = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener1);
-    clientTransport.newStream(method,new Metadata.Headers(), listener2);
+    clientTransport.newStream(method,new Metadata.Headers(), listener1).request(1);
+    clientTransport.newStream(method,new Metadata.Headers(), listener2).request(1);
     assertEquals(2, streams.size());
 
     // Receive goAway, max good id is 3.
@@ -494,18 +493,16 @@ public class OkHttpClientTransportTest {
     }
 
     @Override
-    public ListenableFuture<Void> headersRead(Metadata.Headers headers) {
+    public void headersRead(Metadata.Headers headers) {
       this.headers = headers;
-      return null;
     }
 
     @Override
-    public ListenableFuture<Void> messageRead(InputStream message, int length) {
+    public void messageRead(InputStream message, int length) {
       String msg = getContent(message);
       if (msg != null) {
         messages.add(msg);
       }
-      return null;
     }
 
     @Override
@@ -522,13 +519,18 @@ public class OkHttpClientTransportTest {
     }
 
     static String getContent(InputStream message) {
-      BufferedReader br =
-          new BufferedReader(new InputStreamReader(message, UTF_8));
+      BufferedReader br = new BufferedReader(new InputStreamReader(message, UTF_8));
       try {
         // Only one line message is used in this test.
         return br.readLine();
       } catch (IOException e) {
         return null;
+      } finally {
+        try {
+          message.close();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
     }
   }

@@ -51,9 +51,19 @@ class NettyClientStream extends Http2ClientStream {
   private final NettyClientHandler handler;
 
   NettyClientStream(ClientStreamListener listener, Channel channel, NettyClientHandler handler) {
-    super(listener, channel.eventLoop());
+    super(listener);
     this.channel = checkNotNull(channel, "channel");
     this.handler = checkNotNull(handler, "handler");
+  }
+
+  @Override
+  public void request(final int numMessages) {
+    channel.eventLoop().execute(new Runnable() {
+      @Override
+      public void run() {
+        requestMessagesFromDeframer(numMessages);
+      }
+    });
   }
 
   void transportHeadersReceived(Http2Headers headers, boolean endOfStream) {

@@ -33,7 +33,6 @@ package com.google.net.stubby;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.util.concurrent.ListenableFuture;
 
 import java.util.Arrays;
 import java.util.Iterator;
@@ -122,6 +121,11 @@ public class ClientInterceptors {
     }
 
     @Override
+    public void request(int numMessages) {
+      this.delegate.request(numMessages);
+    }
+
+    @Override
     public void cancel() {
       this.delegate.cancel();
     }
@@ -150,13 +154,13 @@ public class ClientInterceptors {
     }
 
     @Override
-    public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
-      return delegate.onHeaders(headers);
+    public void onHeaders(Metadata.Headers headers) {
+      delegate.onHeaders(headers);
     }
 
     @Override
-    public ListenableFuture<Void> onPayload(T payload) {
-      return delegate.onPayload(payload);
+    public void onPayload(T payload) {
+      delegate.onPayload(payload);
     }
 
     @Override

@@ -31,7 +31,6 @@
 
 package com.google.net.stubby.stub;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.net.stubby.Call;
 import com.google.net.stubby.Channel;
 import com.google.net.stubby.ClientInterceptor;
@@ -122,9 +121,9 @@ public class MetadataUtils {
             trailersCapture.set(null);
             super.start(new ForwardingListener<RespT>(responseListener) {
               @Override
-              public ListenableFuture<Void> onHeaders(Metadata.Headers headers) {
+              public void onHeaders(Metadata.Headers headers) {
                 headersCapture.set(headers);
-                return super.onHeaders(headers);
+                super.onHeaders(headers);
               }
 
               @Override

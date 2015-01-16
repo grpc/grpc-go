@@ -145,6 +145,11 @@ public class ServerInterceptors {
     }
 
     @Override
+    public void request(int numMessages) {
+      delegate.request(numMessages);
+    }
+
+    @Override
     public void sendHeaders(Metadata.Headers headers) {
       delegate.sendHeaders(headers);
     }
