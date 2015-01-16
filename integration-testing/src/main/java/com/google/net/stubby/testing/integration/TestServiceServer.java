@@ -31,8 +31,6 @@
 
 package com.google.net.stubby.testing.integration;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.net.stubby.ServerImpl;
 import com.google.net.stubby.ServerInterceptors;
@@ -42,100 +40,26 @@ import com.google.net.stubby.transport.netty.NettyServerBuilder;
 import io.netty.handler.ssl.SslContext;
 
 import java.io.File;
-import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
 /**
- * Server that manages startup/shutdown of a single {@code TestService}. The server can be started
- * with any one of the supported transports.
+ * Server that manages startup/shutdown of a single {@code TestService}.
  */
 public class TestServiceServer {
-  private static final int DEFAULT_NUM_THREADS = 100;
-  private static final int STARTUP_TIMEOUT_MILLS = 5000;
-  private static final String RPC_PORT_ARG = "--port";
-  private static final String TRANSPORT_ARG = "--transport";
-  private static final String GRPC_VERSION_ARG = "--grpc_version";
-  private final TestServiceImpl testService;
-
-  /** Supported transport protocols */
-  public enum Transport {
-    HTTP2_NETTY, HTTP2_NETTY_TLS
-  }
-
-  private static final Logger log = Logger.getLogger(TestServiceServer.class.getName());
-
-  private final ScheduledExecutorService executor;
-  private final int port;
-  private final ServerImpl server;
-
   /**
-   * Constructs the GRPC server.
-   *
-   * @param transport the transport over which to send GRPC frames.
-   * @param port the port to be used for RPC communications.
-   */
-  public TestServiceServer(Transport transport, int port)
-      throws Exception {
-    Preconditions.checkNotNull(transport, "transport");
-    this.executor = Executors.newScheduledThreadPool(DEFAULT_NUM_THREADS);
-    this.port = port;
-
-    // Create the GRPC service.
-    testService = new TestServiceImpl(executor);
-
-    switch (transport) {
-      case HTTP2_NETTY:
-        server = createServer(false);
-        break;
-      case HTTP2_NETTY_TLS:
-        server = createServer(true);
-        break;
-      default:
-        throw new IllegalArgumentException("Unsupported transport: " + transport);
-    }
-  }
-
-  public void start() throws Exception {
-    server.startAsync();
-    server.awaitRunning(STARTUP_TIMEOUT_MILLS, TimeUnit.MILLISECONDS);
-    log.info("GRPC server started.");
-  }
-
-  public void stop() throws Exception {
-    log.info("GRPC server stopping...");
-    server.stopAsync();
-    server.awaitTerminated();
-    MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
-  }
-
-  /**
-   * The main application allowing this server to be launched from the command line. Accepts the
-   * following arguments:
-   * <p>
-   * --transport=<HTTP2_NETTY|HTTP2_NETTY_TLS> Identifies the transport
-   * over which GRPC frames should be sent. <br>
-   * --port=<port number> The port number for RPC communications.
+   * The main application allowing this server to be launched from the command line.
    */
   public static void main(String[] args) throws Exception {
-    Map<String, String> argMap = parseArgs(args);
-    Transport transport = getTransport(argMap);
-    int port = getPort(RPC_PORT_ARG, argMap);
-
-    // TODO(user): Remove. Ideally stop passing the arg in scripts first.
-    if (getGrpcVersion(argMap) != 2) {
-      System.err.println("Only grpc_version=2 is supported");
-      System.exit(1);
-    }
-
-    final TestServiceServer server = new TestServiceServer(transport, port);
+    final TestServiceServer server = new TestServiceServer();
+    server.parseArgs(args);
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
         try {
+          System.out.println("Shutting down");
           server.stop();
         } catch (Exception e) {
           e.printStackTrace();
@@ -143,63 +67,85 @@ public class TestServiceServer {
       }
     });
     server.start();
+    System.out.println("Server started");
   }
 
-  private static Transport getTransport(Map<String, String> argMap) {
-    String value = argMap.get(TRANSPORT_ARG.toLowerCase());
-    Preconditions.checkNotNull(value, "%s argument must be provided.", TRANSPORT_ARG);
-    Transport transport = Transport.valueOf(value.toUpperCase().trim());
-    System.out.println(TRANSPORT_ARG + " set to: " + transport);
-    return transport;
-  }
+  private int port = 8080;
+  private boolean useTls = true;
 
-  private static int getPort(String argName, Map<String, String> argMap) {
-    String value = argMap.get(argName.toLowerCase());
-    if (value != null) {
-      int port = Integer.parseInt(value);
-      System.out.println(argName + " set to port: " + port);
-      return port;
-    }
+  private ScheduledExecutorService executor;
+  private ServerImpl server;
 
-    int port = Util.pickUnusedPort();
-    System.out.println(argName + " not, provided. Using port: " + port);
-    return port;
-  }
-
-  private static int getGrpcVersion(Map<String, String> argMap) {
-    String value = argMap.get(GRPC_VERSION_ARG.toLowerCase());
-    if (value == null) {
-      return 2;
-    }
-    int version = Integer.parseInt(value);
-    System.out.println(GRPC_VERSION_ARG + " set to version: " + version);
-    return version;
-  }
-
-  private static Map<String, String> parseArgs(String[] args) {
-    Map<String, String> argMap = Maps.newHashMap();
+  private void parseArgs(String[] args) {
+    boolean usage = false;
     for (String arg : args) {
-      String[] parts = arg.split("=");
-      Preconditions.checkArgument(parts.length == 2, "Failed parsing argument: %s", arg);
-      argMap.put(parts[0].toLowerCase().trim(), parts[1].trim());
+      if (!arg.startsWith("--")) {
+        System.err.println("All arguments must start with '--': " + arg);
+        usage = true;
+        break;
+      }
+      String[] parts = arg.substring(2).split("=", 2);
+      String key = parts[0];
+      if ("help".equals(key)) {
+        usage = true;
+        break;
+      }
+      if (parts.length != 2) {
+        System.err.println("All arguments must be of the form --arg=value");
+        usage = true;
+        break;
+      }
+      String value = parts[1];
+      if ("port".equals(key)) {
+        port = Integer.parseInt(value);
+      } else if ("use_tls".equals(key)) {
+        useTls = Boolean.parseBoolean(value);
+      } else if ("grpc_version".equals(key)) {
+        if (!"2".equals(value)) {
+          System.err.println("Only grpc version 2 is supported");
+          usage = true;
+          break;
+        }
+      } else {
+        System.err.println("Unknown argument: " + key);
+        usage = true;
+        break;
+      }
     }
-
-    return argMap;
+    if (usage) {
+      TestServiceServer s = new TestServiceServer();
+      System.out.println(
+          "Usage: [ARGS...]"
+          + "\n"
+          + "\n  --port=PORT           Port to connect to. Default " + s.port
+          + "\n  --use_tls=true|false  Whether to use TLS. Default " + s.useTls
+          );
+      System.exit(1);
+    }
   }
 
-  private ServerImpl createServer(boolean enableSSL) throws Exception {
+  private void start() throws Exception {
+    executor = Executors.newSingleThreadScheduledExecutor();
     SslContext sslContext = null;
-    if (enableSSL) {
+    if (useTls) {
       String dir = "integration-testing/certs";
       sslContext = SslContext.newServerContext(
           new File(dir + "/server1.pem"),
           new File(dir + "/server1.key"));
     }
-    return NettyServerBuilder.forPort(port)
-        .executor(executor)
+    server = NettyServerBuilder.forPort(port)
         .sslContext(sslContext)
-        .addService(ServerInterceptors.intercept(TestServiceGrpc.bindService(testService),
-              TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
+        .addService(ServerInterceptors.intercept(
+            TestServiceGrpc.bindService(new TestServiceImpl(executor)),
+            TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
         .build();
+    server.startAsync();
+    server.awaitRunning(5, TimeUnit.SECONDS);
+  }
+
+  private void stop() throws Exception {
+    server.stopAsync();
+    server.awaitTerminated();
+    MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
   }
 }
