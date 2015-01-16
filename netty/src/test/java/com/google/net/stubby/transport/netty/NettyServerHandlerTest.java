@@ -53,7 +53,7 @@ import com.google.common.io.ByteStreams;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 import com.google.net.stubby.Status.Code;
-import com.google.net.stubby.transport.MessageFramer2;
+import com.google.net.stubby.transport.MessageFramer;
 import com.google.net.stubby.transport.ServerStream;
 import com.google.net.stubby.transport.ServerStreamListener;
 import com.google.net.stubby.transport.ServerTransportListener;
@@ -271,7 +271,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
   private ByteBuf dataFrame(int streamId, boolean endStream) {
     final ByteBuf compressionFrame = Unpooled.buffer(CONTENT.length);
-    MessageFramer2 framer = new MessageFramer2(new MessageFramer2.Sink<ByteBuffer>() {
+    MessageFramer framer = new MessageFramer(new MessageFramer.Sink<ByteBuffer>() {
       @Override
       public void deliverFrame(ByteBuffer frame, boolean endOfStream) {
         compressionFrame.writeBytes(frame);

@@ -51,7 +51,7 @@ import com.google.common.primitives.Bytes;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.net.stubby.transport.MessageDeframer2.Listener;
+import com.google.net.stubby.transport.MessageDeframer.Listener;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -66,13 +66,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.zip.GZIPOutputStream;
 
 /**
- * Tests for {@link MessageDeframer2}.
+ * Tests for {@link MessageDeframer}.
  */
 @RunWith(JUnit4.class)
-public class MessageDeframer2Test {
+public class MessageDeframerTest {
   private Listener listener = mock(Listener.class);
-  private MessageDeframer2 deframer =
-      new MessageDeframer2(listener, MoreExecutors.directExecutor());
+  private MessageDeframer deframer =
+      new MessageDeframer(listener, MoreExecutors.directExecutor());
   private ArgumentCaptor<InputStream> messages = ArgumentCaptor.forClass(InputStream.class);
 
   @Test
@@ -259,8 +259,8 @@ public class MessageDeframer2Test {
 
   @Test
   public void compressed() {
-    deframer = new MessageDeframer2(
-        listener, MoreExecutors.directExecutor(), MessageDeframer2.Compression.GZIP);
+    deframer = new MessageDeframer(
+        listener, MoreExecutors.directExecutor(), MessageDeframer.Compression.GZIP);
     byte[] payload = compress(new byte[1000]);
     assertTrue(payload.length < 100);
     byte[] header = new byte[] {1, 0, 0, 0, (byte) payload.length};

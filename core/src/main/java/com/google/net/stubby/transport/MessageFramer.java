@@ -45,9 +45,9 @@ import java.util.zip.GZIPOutputStream;
 
 /**
  * Encodes gRPC messages to be delivered via the transport layer which implements {@link
- * MessageFramer2.Sink}.
+ * MessageFramer.Sink}.
  */
-public class MessageFramer2 {
+public class MessageFramer {
   /**
    * Sink implemented by the transport layer to receive frames and forward them to their destination
    */
@@ -75,11 +75,11 @@ public class MessageFramer2 {
   private final OutputStreamAdapter outputStreamAdapter = new OutputStreamAdapter();
   private final byte[] headerScratch = new byte[HEADER_LENGTH];
 
-  public MessageFramer2(Sink<ByteBuffer> sink, int maxFrameSize) {
+  public MessageFramer(Sink<ByteBuffer> sink, int maxFrameSize) {
     this(sink, maxFrameSize, Compression.NONE);
   }
 
-  public MessageFramer2(Sink<ByteBuffer> sink, int maxFrameSize, Compression compression) {
+  public MessageFramer(Sink<ByteBuffer> sink, int maxFrameSize, Compression compression) {
     this.sink = Preconditions.checkNotNull(sink, "sink");
     this.bytebuf = ByteBuffer.allocate(maxFrameSize);
     this.compression = Preconditions.checkNotNull(compression, "compression");

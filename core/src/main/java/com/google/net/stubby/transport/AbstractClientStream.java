@@ -208,7 +208,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     closeListenerTask = null;
 
     // Determine if the deframer is stalled (i.e. currently has no complete messages to deliver).
-    boolean deliveryStalled = !deframer2.isDeliveryOutstanding();
+    boolean deliveryStalled = !deframer.isDeliveryOutstanding();
 
     if (stopDelivery || deliveryStalled) {
       // Close the listener immediately.

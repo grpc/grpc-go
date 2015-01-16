@@ -56,7 +56,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * executor provided during creation. That executor must not allow concurrent execution of tasks.
  */
 @NotThreadSafe
-public class MessageDeframer2 implements Closeable {
+public class MessageDeframer implements Closeable {
   private static final int HEADER_LENGTH = 5;
   private static final int COMPRESSED_FLAG_MASK = 1;
   private static final int RESERVED_MASK = 0xFE;
@@ -123,7 +123,7 @@ public class MessageDeframer2 implements Closeable {
    * @param listener listener for deframer events.
    * @param executor used for internal event processing
    */
-  public MessageDeframer2(Listener listener, Executor executor) {
+  public MessageDeframer(Listener listener, Executor executor) {
     this(listener, executor, Compression.NONE);
   }
 
@@ -136,7 +136,7 @@ public class MessageDeframer2 implements Closeable {
    * @param compression the compression used if a compressed frame is encountered, with NONE meaning
    *        unsupported
    */
-  public MessageDeframer2(Listener listener, Executor executor, Compression compression) {
+  public MessageDeframer(Listener listener, Executor executor, Compression compression) {
     this.listener = Preconditions.checkNotNull(listener, "sink");
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.compression = Preconditions.checkNotNull(compression, "compression");

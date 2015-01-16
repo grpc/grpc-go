@@ -58,7 +58,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   private volatile IdT id;
-  private final MessageFramer2 framer;
+  private final MessageFramer framer;
   private final FutureCallback<Object> deframerErrorCallback = new FutureCallback<Object>() {
     @Override
     public void onSuccess(Object result) {}
@@ -69,7 +69,7 @@ public abstract class AbstractStream<IdT> implements Stream {
     }
   };
 
-  final MessageDeframer2 deframer2;
+  final MessageDeframer deframer;
 
   /**
    * Inbound phase is exclusively written to by the transport thread.
@@ -82,7 +82,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   private Phase outboundPhase = Phase.HEADERS;
 
   AbstractStream(Executor deframerExecutor) {
-    MessageDeframer2.Listener inboundMessageHandler = new MessageDeframer2.Listener() {
+    MessageDeframer.Listener inboundMessageHandler = new MessageDeframer.Listener() {
       @Override
       public void bytesRead(int numBytes) {
         returnProcessedBytes(numBytes);
@@ -109,15 +109,15 @@ public abstract class AbstractStream<IdT> implements Stream {
         remoteEndClosed();
       }
     };
-    MessageFramer2.Sink<ByteBuffer> outboundFrameHandler = new MessageFramer2.Sink<ByteBuffer>() {
+    MessageFramer.Sink<ByteBuffer> outboundFrameHandler = new MessageFramer.Sink<ByteBuffer>() {
       @Override
       public void deliverFrame(ByteBuffer frame, boolean endOfStream) {
         internalSendFrame(frame, endOfStream);
       }
     };
 
-    framer = new MessageFramer2(outboundFrameHandler, 4096);
-    this.deframer2 = new MessageDeframer2(inboundMessageHandler, deframerExecutor);
+    framer = new MessageFramer(outboundFrameHandler, 4096);
+    this.deframer = new MessageDeframer(inboundMessageHandler, deframerExecutor);
   }
 
   /**
@@ -219,7 +219,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    */
   protected final void deframe(Buffer frame, boolean endOfStream) {
     ListenableFuture<?> future;
-    future = deframer2.deframe(frame, endOfStream);
+    future = deframer.deframe(frame, endOfStream);
     if (future != null) {
       Futures.addCallback(future, deframerErrorCallback);
     }
@@ -229,7 +229,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    * Delays delivery from the deframer until the given future completes.
    */
   protected final void delayDeframer(ListenableFuture<?> future) {
-    ListenableFuture<?> deliveryFuture = deframer2.delayProcessing(future);
+    ListenableFuture<?> deliveryFuture = deframer.delayProcessing(future);
     if (deliveryFuture != null) {
       Futures.addCallback(deliveryFuture, deframerErrorCallback);
     }

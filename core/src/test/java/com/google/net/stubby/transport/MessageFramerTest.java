@@ -53,16 +53,16 @@ import java.nio.ByteBuffer;
 import java.util.List;
 
 /**
- * Tests for {@link MessageFramer2}
+ * Tests for {@link MessageFramer}
  */
 @RunWith(JUnit4.class)
-public class MessageFramer2Test {
+public class MessageFramerTest {
   private static final int TRANSPORT_FRAME_SIZE = 12;
 
   @Mock
-  private MessageFramer2.Sink<List<Byte>> sink;
-  private MessageFramer2.Sink<ByteBuffer> copyingSink;
-  private MessageFramer2 framer;
+  private MessageFramer.Sink<List<Byte>> sink;
+  private MessageFramer.Sink<ByteBuffer> copyingSink;
+  private MessageFramer framer;
 
   @Captor
   private ArgumentCaptor<List<Byte>> frameCaptor;
@@ -72,7 +72,7 @@ public class MessageFramer2Test {
     MockitoAnnotations.initMocks(this);
 
     copyingSink = new ByteArrayConverterSink(sink);
-    framer = new MessageFramer2(copyingSink, TRANSPORT_FRAME_SIZE);
+    framer = new MessageFramer(copyingSink, TRANSPORT_FRAME_SIZE);
   }
 
   @Test
@@ -156,7 +156,7 @@ public class MessageFramer2Test {
   @Test
   public void largerFrameSize() throws Exception {
     final int transportFrameSize = 10000;
-    MessageFramer2 framer = new MessageFramer2(copyingSink, transportFrameSize);
+    MessageFramer framer = new MessageFramer(copyingSink, transportFrameSize);
     writePayload(framer, new byte[1000]);
     framer.flush();
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false));
@@ -169,8 +169,8 @@ public class MessageFramer2Test {
   @Test
   public void compressed() throws Exception {
     final int transportFrameSize = 100;
-    MessageFramer2 framer = new MessageFramer2(copyingSink, transportFrameSize,
-        MessageFramer2.Compression.GZIP);
+    MessageFramer framer = new MessageFramer(copyingSink, transportFrameSize,
+        MessageFramer.Compression.GZIP);
     writePayload(framer, new byte[1000]);
     framer.flush();
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false));
@@ -183,7 +183,7 @@ public class MessageFramer2Test {
     verifyNoMoreInteractions(sink);
   }
 
-  private static void writePayload(MessageFramer2 framer, byte[] bytes) {
+  private static void writePayload(MessageFramer framer, byte[] bytes) {
     framer.writePayload(new ByteArrayInputStream(bytes), bytes.length);
   }
 
@@ -191,10 +191,10 @@ public class MessageFramer2Test {
    * Since ByteBuffers are reused, this sink copies their value at the time of the call. Converting
    * to List<Byte> is convenience.
    */
-  private static class ByteArrayConverterSink implements MessageFramer2.Sink<ByteBuffer> {
-    private final MessageFramer2.Sink<List<Byte>> delegate;
+  private static class ByteArrayConverterSink implements MessageFramer.Sink<ByteBuffer> {
+    private final MessageFramer.Sink<List<Byte>> delegate;
 
-    public ByteArrayConverterSink(MessageFramer2.Sink<List<Byte>> delegate) {
+    public ByteArrayConverterSink(MessageFramer.Sink<List<Byte>> delegate) {
       this.delegate = delegate;
     }
 
