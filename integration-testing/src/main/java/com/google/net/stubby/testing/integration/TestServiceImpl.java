@@ -93,7 +93,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
       boolean compressable = compressableResponse(req.getResponseType());
       ByteString dataBuffer = compressable ? compressableBuffer : uncompressableBuffer;
       // For consistency with the c++ TestServiceImpl, use a random offset for unary calls.
-      // TODO(user): whether or not this is a good approach needs further discussion.
+      // TODO(wonderfly): whether or not this is a good approach needs further discussion.
       int offset = random.nextInt(
           compressable ? compressableBuffer.size() : uncompressableBuffer.size());
       ByteString payload = generatePayload(dataBuffer, offset, req.getResponseSize());

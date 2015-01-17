@@ -37,7 +37,7 @@ package com.google.net.stubby.stub;
  * <p>Implementations are expected to be thread-compatible. Separate StreamObservers do not need to
  * be sychronized together; incoming and outgoing directions are independent.
  */
-// TODO(user): Consider whether we need to interact with flow-control at this layer. E.g.
+// TODO(lryan): Consider whether we need to interact with flow-control at this layer. E.g.
 // public ListenableFuture<Void> onValue(V value). Do we layer it in here or as an additional
 // interface? Interaction with flow control can be done by blocking here.
 public interface StreamObserver<V>  {

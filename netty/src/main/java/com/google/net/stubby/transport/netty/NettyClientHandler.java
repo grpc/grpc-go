@@ -178,7 +178,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
    */
   private void onRstStreamRead(int streamId)
       throws Http2Exception {
-    // TODO(user): do something with errorCode?
+    // TODO(nathanmittler): do something with errorCode?
     Http2Stream http2Stream = connection().requireStream(streamId);
     NettyClientStream stream = clientStream(http2Stream);
     stream.transportReportStatus(Status.UNKNOWN, false, new Metadata.Trailers());
@@ -318,7 +318,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
       if (streamId <= 0) {
         // The HTTP/2 connection has exhausted its stream IDs. Permanently fail all stream creation
         // attempts for this transport.
-        // TODO(user): send GO_AWAY?
+        // TODO(nathanmittler): send GO_AWAY?
         failPendingStreams(goAwayStatus);
         return;
       }

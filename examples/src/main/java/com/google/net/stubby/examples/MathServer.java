@@ -61,7 +61,7 @@ public class MathServer {
         .addService(CalcGrpc.bindService(new CalcService()))
         .buildAndWaitForRunning();
     logger.info("Server started, listening on " + port);
-    // TODO(user): gRPC server should register JVM shutdown hook to shutdown itself, remove this
+    // TODO(simonma): gRPC server should register JVM shutdown hook to shutdown itself, remove this
     // after we support that.
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
@@ -131,7 +131,7 @@ public class MathServer {
     public void fib(FibArgs request, StreamObserver<Num> responseObserver) {
       int limit = (int) request.getLimit();
       if (limit <= 0) {
-        // TODO(user): Support "send until cancel". Currently, client application can not
+        // TODO(simonma): Support "send until cancel". Currently, client application can not
         // cancel a server streaming call.
         return;
       }

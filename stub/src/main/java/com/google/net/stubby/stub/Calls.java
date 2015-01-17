@@ -65,7 +65,7 @@ public class Calls {
    */
   public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> createMethodDescriptor(
       String fullServiceName, Method<RequestT, ResponseT> method) {
-    // TODO(user): if timeout is not defined in proto file, use a default timeout here.
+    // TODO(zhangkun): if timeout is not defined in proto file, use a default timeout here.
     // If timeout is defined in proto file, Method should carry the timeout.
     return MethodDescriptor.create(method.getType(), fullServiceName + "/" + method.getName(),
         1, TimeUnit.SECONDS, method.getRequestMarshaller(), method.getResponseMarshaller());
@@ -144,7 +144,7 @@ public class Calls {
    * response stream.
    * @return an iterator over the response stream.
    */
-  // TODO(user): Not clear if we want to use this idiom for 'simple' stubs.
+  // TODO(lryan): Not clear if we want to use this idiom for 'simple' stubs.
   public static <ReqT, RespT> Iterator<RespT> blockingServerStreamingCall(
       Call<ReqT, RespT> call, ReqT param) {
     BlockingResponseStream<RespT> result = new BlockingResponseStream<RespT>();
@@ -238,7 +238,7 @@ public class Calls {
 
     @Override
     public void onError(Throwable t) {
-      // TODO(user): log?
+      // TODO(ejona): log?
       call.cancel();
     }
 
@@ -325,7 +325,7 @@ public class Calls {
    * <p>The class is not thread-safe, but it does permit Call.Listener calls in a separate thread
    * from Iterator calls.
    */
-  // TODO(user): determine how to allow Call.cancel() in case of application error.
+  // TODO(ejona): determine how to allow Call.cancel() in case of application error.
   private static class BlockingResponseStream<T> implements Iterator<T> {
     private final LinkedBlockingQueue<Object> buffer = new LinkedBlockingQueue<Object>();
     private final Call.Listener<T> listener = new QueuingListener();

@@ -64,7 +64,7 @@ public class OAuth2ChannelInterceptor implements ClientInterceptor {
   @Override
   public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
       Channel next) {
-    // TODO(user): If the call fails for Auth reasons, this does not properly propagate info that
+    // TODO(ejona): If the call fails for Auth reasons, this does not properly propagate info that
     // would be in WWW-Authenticate, because it does not yet have access to the header.
     return new ForwardingCall<ReqT, RespT>(next.newCall(method)) {
       @Override

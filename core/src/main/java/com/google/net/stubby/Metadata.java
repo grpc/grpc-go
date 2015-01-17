@@ -104,7 +104,7 @@ public abstract class Metadata {
   /**
    * Constructor called by the transport layer when it receives binary metadata.
    */
-  // TODO(user): Convert to use ByteString so we can cache transformations
+  // TODO(lryan): Convert to use ByteString so we can cache transformations
   private Metadata(byte[]... binaryValues) {
     store = LinkedListMultimap.create();
     for (int i = 0; i < binaryValues.length; i++) {

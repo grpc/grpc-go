@@ -221,7 +221,7 @@ public class ServerImpl extends AbstractService implements Server {
 
     @Override
     public void failed(Service.State from, Throwable failure) {
-      // TODO(user): Ideally we would want to force-stop transports before notifying application of
+      // TODO(ejona): Ideally we would want to force-stop transports before notifying application of
       // failure, but that would cause us to have an unrepresentative state since we would be
       // RUNNING but not accepting connections.
       notifyFailed(failure);
@@ -285,7 +285,7 @@ public class ServerImpl extends AbstractService implements Server {
     /** Never returns {@code null}. */
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Metadata.Headers headers) {
-      // TODO(user): should we update fullMethodName to have the canonical path of the method?
+      // TODO(ejona): should we update fullMethodName to have the canonical path of the method?
       final ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(stream, methodDef);
       ServerCall.Listener<ReqT> listener
           = methodDef.getServerCallHandler().startCall(fullMethodName, call, headers);
@@ -344,7 +344,7 @@ public class ServerImpl extends AbstractService implements Server {
      * Like {@link ServerCall#close(Status, Metadata.Trailers)}, but thread-safe for internal use.
      */
     private void internalClose(Status status, Metadata.Trailers trailers) {
-      // TODO(user): this is not thread-safe :)
+      // TODO(ejona): this is not thread-safe :)
       stream.close(status, trailers);
     }
 

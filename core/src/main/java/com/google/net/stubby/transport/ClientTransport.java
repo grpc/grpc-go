@@ -47,7 +47,7 @@ public interface ClientTransport extends Service {
   /**
    * Creates a new stream for sending messages to the remote end-point. If the service is already
    * stopped, throws an {@link IllegalStateException}.
-   * TODO(user): Consider also throwing for stopping.
+   * TODO(nathanmittler): Consider also throwing for stopping.
    * <p>
    * This method returns immediately and does not wait for any validation of the request. If
    * creation fails for any reason, {@link ClientStreamListener#closed} will be called to provide

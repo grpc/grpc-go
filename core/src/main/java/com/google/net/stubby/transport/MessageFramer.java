@@ -194,7 +194,7 @@ public class MessageFramer {
    * closed or disposed, additional calls to this method will have no affect.
    */
   public void dispose() {
-    // TODO(user): Returning buffer to a pool would go here
+    // TODO(lryan): Returning buffer to a pool would go here
     bytebuf = null;
   }
 

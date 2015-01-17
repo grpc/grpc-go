@@ -147,7 +147,7 @@ public abstract class AbstractStream<IdT> implements Stream {
       framer.writePayload(message, length);
     }
 
-    // TODO(user): add flow control.
+    // TODO(nathanmittler): add flow control.
     if (accepted != null) {
       accepted.run();
     }

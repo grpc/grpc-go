@@ -448,13 +448,13 @@ public class OkHttpClientTransport extends AbstractClientTransport {
     @Override
     public void priority(int streamId, int streamDependency, int weight, boolean exclusive) {
       // Ignore priority change.
-      // TODO(user): log
+      // TODO(simonma): log
     }
 
     @Override
     public void alternateService(int streamId, String origin, ByteString protocol, String host,
         int port, long maxAge) {
-      // TODO(user): Deal with alternateService propagation
+      // TODO(simonma): Deal with alternateService propagation
     }
   }
 

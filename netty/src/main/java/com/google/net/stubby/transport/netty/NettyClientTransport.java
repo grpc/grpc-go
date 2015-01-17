@@ -127,7 +127,7 @@ class NettyClientTransport extends AbstractClientTransport {
             throw new RuntimeException(ex);
           }
         }
-        // TODO(user): specify allocator. The method currently ignores it though.
+        // TODO(ejona): specify allocator. The method currently ignores it though.
         SSLEngine sslEngine
             = sslContext.newEngine(null, inetAddress.getHostString(), inetAddress.getPort());
         SSLParameters sslParams = new SSLParameters();
