@@ -1,4 +1,5 @@
 apply plugin: 'protobuf'
+apply plugin: 'idea'
 
 description = "Stubby: Integration Testing"
 
@@ -20,4 +21,15 @@ dependencies {
             project(':stubby-testing'),
             libraries.junit,
             libraries.mockito
+}
+
+// Allow intellij projects to refer to generated-sources
+idea {
+    module {
+        // The whole build dir is excluded by default, but we need build/generated-sources,
+        // which contains the generated proto classes.
+        excludeDirs = [file('.gradle')]
+        excludeDirs += files(file("$buildDir/").listFiles())
+        excludeDirs -= file("$buildDir/generated-sources")
+    }
 }
