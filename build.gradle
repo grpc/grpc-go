@@ -1,6 +1,7 @@
 subprojects {
     apply plugin: "java"
     apply plugin: "maven"
+    apply plugin: "idea"
 
     group = "com.google.net.stubby"
     version = "0.1.0-SNAPSHOT"

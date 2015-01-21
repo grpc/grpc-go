@@ -1,5 +1,4 @@
 apply plugin: 'protobuf'
-apply plugin: 'idea'
 
 description = "Stubby: Integration Testing"
 
