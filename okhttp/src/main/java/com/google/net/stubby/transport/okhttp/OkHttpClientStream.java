@@ -63,9 +63,9 @@ class OkHttpClientStream extends Http2ClientStream {
     return new OkHttpClientStream(listener, frameWriter, transport, outboundFlow);
   }
 
-  @GuardedBy("executorLock")
+  @GuardedBy("lock")
   private int window = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE;
-  @GuardedBy("executorLock")
+  @GuardedBy("lock")
   private int processedWindow = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE;
   private final AsyncFrameWriter frameWriter;
   private final OutboundFlowController outboundFlow;
@@ -101,7 +101,7 @@ class OkHttpClientStream extends Http2ClientStream {
   }
 
   /**
-   * We synchronized on "executorLock" for delivering frames and updating window size, so that
+   * We synchronized on "lock" for delivering frames and updating window size, so that
    * the future listeners (executed by synchronizedExecutor) will not be executed in the same time.
    */
   public void transportDataReceived(okio.Buffer frame, boolean endOfStream) {
