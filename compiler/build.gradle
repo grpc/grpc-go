@@ -1,5 +1,7 @@
 apply plugin: "cpp"
 
+description = 'The protoc plugin for gRPC Java'
+
 executables {
   java_plugin {}
 }
@@ -23,3 +25,7 @@ sources {
   }
 }
 
+task test(type: Exec, dependsOn: 'java_pluginExecutable') {
+  environment 'TEST_TMP_DIR', temporaryDir
+  commandLine './run_test.sh'
+}
