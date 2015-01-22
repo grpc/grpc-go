@@ -56,14 +56,13 @@ import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
+import io.netty.handler.codec.http2.Http2Exception.StreamException;
 import io.netty.handler.codec.http2.Http2FrameAdapter;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2InboundFlowController;
-import io.netty.handler.codec.http2.Http2OutboundFlowController;
+import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Stream;
-import io.netty.handler.codec.http2.Http2StreamException;
 import io.netty.util.ReferenceCountUtil;
 
 import java.util.logging.Level;
@@ -82,6 +81,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   private static final Status GOAWAY_STATUS = Status.UNAVAILABLE;
 
   private final ServerTransportListener transportListener;
+  private final Http2LocalFlowController inboundFlow;
   private Throwable connectionError;
   private ChannelHandlerContext ctx;
   private boolean teWarningLogged;
@@ -90,10 +90,10 @@ class NettyServerHandler extends Http2ConnectionHandler {
       Http2Connection connection,
       Http2FrameReader frameReader,
       Http2FrameWriter frameWriter,
-      Http2InboundFlowController inboundFlow,
-      Http2OutboundFlowController outboundFlow) {
-    super(connection, frameReader, frameWriter, inboundFlow, outboundFlow, new LazyFrameListener());
+      Http2LocalFlowController inboundFlow) {
+    super(connection, frameReader, frameWriter, new LazyFrameListener());
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
+    this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
     initListener();
     connection.local().allowPushTo(false);
   }
@@ -189,9 +189,9 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
   @Override
   protected void onStreamError(ChannelHandlerContext ctx, Throwable cause,
-      Http2StreamException http2Ex) {
+      StreamException http2Ex) {
     logger.log(Level.WARNING, "Stream Error", cause);
-    Http2Stream stream = connection().stream(http2Ex.streamId());
+    Http2Stream stream = connection().stream(http2Ex.streamId(http2Ex));
     if (stream != null) {
       // Abort the stream with a status to help the client with debugging.
       // Don't need to send a RST_STREAM since the end-of-stream flag will
@@ -240,7 +240,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   void returnProcessedBytes(int streamId, int bytes) {
     try {
       Http2Stream http2Stream = connection().requireStream(streamId);
-      http2Stream.garbageCollector().returnProcessedBytes(ctx, bytes);
+      inboundFlow.consumeBytes(ctx, http2Stream, bytes);
     } catch (Http2Exception e) {
       throw new RuntimeException(e);
     }
@@ -305,25 +305,25 @@ class NettyServerHandler extends Http2ConnectionHandler {
     });
   }
 
-  private String determineMethod(int streamId, Http2Headers headers) throws Http2StreamException {
+  private String determineMethod(int streamId, Http2Headers headers) throws Http2Exception {
     if (!HTTP_METHOD.equals(headers.method())) {
-      throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM,
-          String.format("Method '%s' is not supported", headers.method()));
+      throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
+          "Method '%s' is not supported", headers.method());
     }
     checkHeader(streamId, headers, CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
     String methodName = TransportFrameUtil.getFullMethodNameFromPath(headers.path().toString());
     if (methodName == null) {
-      throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM,
-          String.format("Malformatted path: %s", headers.path()));
+      throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
+          "Malformatted path: %s", headers.path());
     }
     return methodName;
   }
 
   private static void checkHeader(int streamId, Http2Headers headers,
-      AsciiString header, AsciiString expectedValue) throws Http2StreamException {
+      AsciiString header, AsciiString expectedValue) throws Http2Exception {
     if (!expectedValue.equals(headers.get(header))) {
-      throw new Http2StreamException(streamId, Http2Error.REFUSED_STREAM, String.format(
-          "Header '%s'='%s', while '%s' is expected", header, headers.get(header), expectedValue));
+      throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
+          "Header '%s'='%s', while '%s' is expected", header, headers.get(header), expectedValue);
     }
   }
 
@@ -334,8 +334,8 @@ class NettyServerHandler extends Http2ConnectionHandler {
     return stream.getProperty(NettyServerStream.class);
   }
 
-  private Http2StreamException newStreamException(int streamId, Throwable cause) {
-    return new Http2StreamException(streamId, Http2Error.INTERNAL_ERROR, cause.getMessage(), cause);
+  private Http2Exception newStreamException(int streamId, Throwable cause) {
+    return Http2Exception.streamError(streamId, Http2Error.INTERNAL_ERROR, cause.getMessage(), cause);
   }
 
   private static class LazyFrameListener extends Http2FrameAdapter {

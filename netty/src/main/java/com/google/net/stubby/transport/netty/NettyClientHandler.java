@@ -31,6 +31,7 @@
 
 package com.google.net.stubby.transport.netty;
 
+import com.google.common.base.Preconditions;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
 
@@ -48,10 +49,8 @@ import io.netty.handler.codec.http2.Http2FrameAdapter;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2InboundFlowController;
-import io.netty.handler.codec.http2.Http2OutboundFlowController;
+import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Stream;
-import io.netty.handler.codec.http2.Http2StreamException;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -81,15 +80,17 @@ class NettyClientHandler extends Http2ConnectionHandler {
   }
 
   private final Deque<PendingStream> pendingStreams = new ArrayDeque<PendingStream>();
+  private final Http2LocalFlowController inboundFlow;
   private Throwable connectionError;
   private ChannelHandlerContext ctx;
 
   public NettyClientHandler(Http2Connection connection,
       Http2FrameReader frameReader,
       Http2FrameWriter frameWriter,
-      Http2InboundFlowController inboundFlow,
-      Http2OutboundFlowController outboundFlow) {
-    super(connection, frameReader, frameWriter, inboundFlow, outboundFlow, new LazyFrameListener());
+      Http2LocalFlowController inboundFlow) {
+    super(connection, frameReader, frameWriter, new LazyFrameListener());
+    this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
+
     initListener();
 
     // Disallow stream creation by the server.
@@ -148,7 +149,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   void returnProcessedBytes(int streamId, int bytes) {
     try {
       Http2Stream http2Stream = connection().requireStream(streamId);
-      http2Stream.garbageCollector().returnProcessedBytes(ctx, bytes);
+      inboundFlow.consumeBytes(ctx, http2Stream, bytes);
     } catch (Http2Exception e) {
       throw new RuntimeException(e);
     }
@@ -215,7 +216,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
 
   @Override
   protected void onStreamError(ChannelHandlerContext ctx, Throwable cause,
-      Http2StreamException http2Ex) {
+      Http2Exception.StreamException http2Ex) {
     // Close the stream with a status that contains the cause.
     Http2Stream stream = connection().stream(http2Ex.streamId());
     if (stream != null) {

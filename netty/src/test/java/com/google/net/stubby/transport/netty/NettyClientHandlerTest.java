@@ -60,15 +60,13 @@ import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
-import io.netty.handler.codec.http2.DefaultHttp2OutboundFlowController;
+import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
 
 import org.junit.Before;
@@ -314,15 +312,12 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     Http2Connection connection = new DefaultHttp2Connection(false);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
-    DefaultHttp2InboundFlowController inboundFlow =
-        new DefaultHttp2InboundFlowController(connection, frameWriter);
-    Http2OutboundFlowController outboundFlow =
-        new DefaultHttp2OutboundFlowController(connection, frameWriter);
+    DefaultHttp2LocalFlowController inboundFlow =
+        new DefaultHttp2LocalFlowController(connection, frameWriter);
     return new NettyClientHandler(connection,
         frameReader,
         frameWriter,
-        inboundFlow,
-        outboundFlow);
+        inboundFlow);
   }
 
   private AsciiString as(String string) {

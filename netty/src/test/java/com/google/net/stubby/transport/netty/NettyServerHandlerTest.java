@@ -38,7 +38,7 @@ import static com.google.net.stubby.transport.netty.Utils.HTTP_METHOD;
 import static com.google.net.stubby.transport.netty.Utils.TE_HEADER;
 import static com.google.net.stubby.transport.netty.Utils.TE_TRAILERS;
 import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
-import static io.netty.handler.codec.http2.Http2Exception.protocolError;
+import static io.netty.handler.codec.http2.Http2Exception.connectionError;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
@@ -68,15 +68,14 @@ import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
-import io.netty.handler.codec.http2.DefaultHttp2OutboundFlowController;
+import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
+import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
 
 import org.junit.Before;
@@ -233,9 +232,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     handler.channelRead(ctx, badFrame());
 
     // Verify the expected GO_AWAY frame was written.
-    Exception e = protocolError("Frame length 0 incorrect size for ping.");
+    Exception e = connectionError(Http2Error.PROTOCOL_ERROR,
+        "Frame length 0 incorrect size for ping.");
     ByteBuf expected =
-        goAwayFrame(STREAM_ID, (int) Http2Error.PROTOCOL_ERROR.code(), toByteBuf(ctx, e));
+        goAwayFrame(STREAM_ID, (int) Http2Error.FRAME_SIZE_ERROR.code(), toByteBuf(ctx, e));
     ByteBuf actual = captureWrite(ctx);
     assertEquals(expected, actual);
 
@@ -264,6 +264,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
         .path(new AsciiString("/foo.bar"));
     ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
     handler.channelRead(ctx, headersFrame);
+
     ArgumentCaptor<NettyServerStream> streamCaptor =
         ArgumentCaptor.forClass(NettyServerStream.class);
     @SuppressWarnings("rawtypes")
@@ -309,15 +310,12 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     Http2Connection connection = new DefaultHttp2Connection(true);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
-    DefaultHttp2InboundFlowController inboundFlow =
-        new DefaultHttp2InboundFlowController(connection, frameWriter);
-    Http2OutboundFlowController outboundFlow =
-        new DefaultHttp2OutboundFlowController(connection, frameWriter);
+    DefaultHttp2LocalFlowController inboundFlow =
+        new DefaultHttp2LocalFlowController(connection, frameWriter);
     return new NettyServerHandler(transportListener,
         connection,
         frameReader,
         frameWriter,
-        inboundFlow,
-        outboundFlow);
+        inboundFlow);
   }
 }

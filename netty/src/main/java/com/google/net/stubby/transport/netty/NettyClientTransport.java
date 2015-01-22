@@ -56,8 +56,7 @@ import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
-import io.netty.handler.codec.http2.DefaultHttp2InboundFlowController;
-import io.netty.handler.codec.http2.DefaultHttp2OutboundFlowController;
+import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
 import io.netty.handler.codec.http2.DefaultHttp2StreamRemovalPolicy;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2FrameLogger;
@@ -65,7 +64,6 @@ import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
-import io.netty.handler.codec.http2.Http2OutboundFlowController;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.ssl.SslContext;
 import io.netty.util.internal.logging.InternalLogLevel;
@@ -250,10 +248,8 @@ class NettyClientTransport extends AbstractClientTransport {
     frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
     frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
 
-    DefaultHttp2InboundFlowController inboundFlow =
-        new DefaultHttp2InboundFlowController(connection, frameWriter);
-    Http2OutboundFlowController outboundFlow =
-        new DefaultHttp2OutboundFlowController(connection, frameWriter);
-    return new NettyClientHandler(connection, frameReader, frameWriter, inboundFlow, outboundFlow);
+    DefaultHttp2LocalFlowController inboundFlow =
+        new DefaultHttp2LocalFlowController(connection, frameWriter);
+    return new NettyClientHandler(connection, frameReader, frameWriter, inboundFlow);
   }
 }
