@@ -64,15 +64,15 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 
 func newPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error) {
 	if size < 0 {
-		return nil, fmt.Errorf("Requested a response with invalid length %d", size)
+		return nil, fmt.Errorf("requested a response with invalid length %d", size)
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		return nil, fmt.Errorf("PayloadType UNCOMPRESSABLE is not supported")
+		return nil, fmt.Errorf("payloadType UNCOMPRESSABLE is not supported")
 	default:
-		return nil, fmt.Errorf("Unsupported payload type: %d", t)
+		return nil, fmt.Errorf("unsupported payload type: %d", t)
 	}
 	return &testpb.Payload{
 		Type: t.Enum(),

@@ -39,19 +39,20 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/google/grpc-go"
 	"github.com/google/grpc-go/credentials"
 	testpb "github.com/google/grpc-go/interop/testdata"
-	"github.com/google/grpc-go"
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 )
 
 var (
-	useTLS     = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
-	caFile     = flag.String("tls_ca_file", "testdata/ca.pem", "The file containning the CA root cert file")
-	serverHost = flag.String("server_host", "127.0.0.1", "The server host name")
-	serverPort = flag.Int("server_port", 10000, "The server port number")
-	testCase   = flag.String("test_case", "large_unary", "The RPC method to be tested: large_unary|empty_unary|client_streaming|server_streaming|ping_pong")
+	useTLS        = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
+	caFile        = flag.String("tls_ca_file", "testdata/ca.pem", "The file containning the CA root cert file")
+	serverHost    = flag.String("server_host", "127.0.0.1", "The server host name")
+	serverPort    = flag.Int("server_port", 10000, "The server port number")
+	tlsServerName = flag.String("tls_server_name", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
+	testCase      = flag.String("test_case", "large_unary", "The RPC method to be tested: large_unary|empty_unary|client_streaming|server_streaming|ping_pong|all")
 )
 
 var (
@@ -225,7 +226,11 @@ func main() {
 	serverAddr := net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
 	var opts []rpc.DialOption
 	if *useTLS {
-		creds, err := credentials.NewClientTLSFromFile(*caFile, "x.test.youtube.com")
+		sn := *serverHost
+		if *tlsServerName != "" {
+			sn = *tlsServerName
+		}
+		creds, err := credentials.NewClientTLSFromFile(*caFile, sn)
 		if err != nil {
 			log.Fatalf("Failed to create credentials %v", err)
 		}
@@ -247,6 +252,12 @@ func main() {
 	case "server_streaming":
 		doServerStreaming(tc)
 	case "ping_pong":
+		doPingPong(tc)
+	case "all":
+		doEmptyUnaryCall(tc)
+		doLargeUnaryCall(tc)
+		doClientStreaming(tc)
+		doServerStreaming(tc)
 		doPingPong(tc)
 	default:
 		log.Fatal("Unsupported test case: ", *testCase)
