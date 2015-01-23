@@ -227,7 +227,7 @@ func main() {
 	serverAddr := net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
 	var opts []rpc.DialOption
 	if *useTLS {
-		sn := *serverHost
+		var sn string
 		if *tlsServerName != "" {
 			sn = *tlsServerName
 		}
