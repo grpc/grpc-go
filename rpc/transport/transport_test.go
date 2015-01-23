@@ -45,8 +45,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/grpc-go/codes"
-	"github.com/google/grpc-go/credentials"
+	"github.com/google/grpc-go/rpc/codes"
+	"github.com/google/grpc-go/rpc/credentials"
 	"golang.org/x/net/context"
 )
 

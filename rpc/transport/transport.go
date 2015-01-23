@@ -44,9 +44,9 @@ import (
 	"net"
 	"sync"
 
-	"github.com/google/grpc-go/codes"
-	"github.com/google/grpc-go/credentials"
-	"github.com/google/grpc-go/metadata"
+	"github.com/google/grpc-go/rpc/codes"
+	"github.com/google/grpc-go/rpc/credentials"
+	"github.com/google/grpc-go/rpc/metadata"
 	"golang.org/x/net/context"
 )
 

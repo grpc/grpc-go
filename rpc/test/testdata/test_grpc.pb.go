@@ -36,7 +36,7 @@ package test
 import (
 	"fmt"
 	"io"
-	"github.com/google/grpc-go"
+	"github.com/google/grpc-go/rpc"
 	context "golang.org/x/net/context"
 	proto "github.com/golang/protobuf/proto"
 )
