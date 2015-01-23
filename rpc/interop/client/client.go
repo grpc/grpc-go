@@ -43,7 +43,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/grpc-go/go"
 	"github.com/google/grpc-go/rpc/credentials"
-	testpb "github.com/google/grpc-go/interop/testdata"
+	testpb "github.com/google/grpc-go/rpc/interop/testdata"
 	"golang.org/x/net/context"
 )
 

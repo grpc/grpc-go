@@ -50,7 +50,7 @@ import (
 	"github.com/google/grpc-go/rpc/credentials"
 	"github.com/google/grpc-go/rpc/metadata"
 	"github.com/google/grpc-go/rpc"
-	testpb "github.com/google/grpc-go/test/testdata"
+	testpb "github.com/google/grpc-go/rpc/test/testdata"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 )
