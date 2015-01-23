@@ -41,9 +41,9 @@ import (
 	"strconv"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/google/grpc-go"
-	"github.com/google/grpc-go/credentials"
-	testpb "github.com/google/grpc-go/interop/testdata"
+	"github.com/google/grpc-go/rpc"
+	"github.com/google/grpc-go/rpc/credentials"
+	testpb "github.com/google/grpc-go/rpc/interop/testdata"
 	"golang.org/x/net/context"
 )
 

@@ -43,8 +43,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/google/grpc-go/codes"
-	"github.com/google/grpc-go/metadata"
+	"github.com/google/grpc-go/rpc/codes"
+	"github.com/google/grpc-go/rpc/metadata"
 	"golang.org/x/net/context"
 	"github.com/bradfitz/http2/hpack"
 	"github.com/bradfitz/http2"

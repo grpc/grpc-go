@@ -41,8 +41,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/grpc-go/credentials"
-	"github.com/google/grpc-go/transport"
+	"github.com/google/grpc-go/rpc/credentials"
+	"github.com/google/grpc-go/rpc/transport"
 	"golang.org/x/net/context"
 )
 

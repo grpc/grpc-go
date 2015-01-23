@@ -39,8 +39,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/google/grpc-go/codes"
-	"github.com/google/grpc-go/metadata"
+	"github.com/google/grpc-go/rpc/codes"
+	"github.com/google/grpc-go/rpc/metadata"
 	"github.com/bradfitz/http2/hpack"
 	"github.com/bradfitz/http2"
 )
