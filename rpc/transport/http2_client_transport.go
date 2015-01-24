@@ -304,12 +304,12 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 // Close kicks off the shutdown process of the transport. This should be called
 // only once on a transport. Once it is called, the transport should not be
 // accessed any more.
-func (t *http2Client) Close() {
+func (t *http2Client) Close() (err error) {
 	t.mu.Lock()
 	t.state = closing
 	t.mu.Unlock()
 	close(t.shutdownChan)
-	t.conn.Close()
+	err = t.conn.Close()
 	t.mu.Lock()
 	streams := t.activeStreams
 	t.activeStreams = nil
@@ -324,6 +324,7 @@ func (t *http2Client) Close() {
 		s.mu.Unlock()
 		s.write(recvMsg{err: ErrConnClosing})
 	}
+	return
 }
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
