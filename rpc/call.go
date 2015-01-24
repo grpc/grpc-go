@@ -115,7 +115,7 @@ func Invoke(ctx context.Context, method string, args, reply proto.Message, cc *C
 		Delay: false,
 	}
 	ts := 0
-	var lastErr error // record the error happened in the last iteration
+	var lastErr error // record the error that happened
 	for {
 		var (
 			err    error

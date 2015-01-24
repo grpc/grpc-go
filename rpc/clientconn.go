@@ -49,7 +49,6 @@ import (
 type dialOptions struct {
 	protocol    string
 	authOptions []credentials.Credentials
-	// TBD: other options
 }
 
 // DialOption configures how we set up the connection including auth
@@ -64,8 +63,8 @@ func WithClientTLS(creds credentials.TransportAuthenticator) DialOption {
 	}
 }
 
-// WithComputeEngine returns a DialOption which sets a
-// credentials which uses application default credentials as provided to
+// WithComputeEngine returns a DialOption which sets
+// credentials which use application default credentials as provided to
 // Google Compute Engine. Note that TLS credentials is typically also
 // needed. If it is the case, users need to pass WithTLS option too.
 func WithComputeEngine(creds credentials.Credentials) DialOption {
@@ -76,7 +75,7 @@ func WithComputeEngine(creds credentials.Credentials) DialOption {
 
 // Dial creates a client connection the given target.
 // TODO(zhaoq): Have an option to make Dial return immediately without waiting
-// for connection complete.
+// for connection to complete.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	if target == "" {
 		return nil, fmt.Errorf("rpc.Dial: target is empty")
