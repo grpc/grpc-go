@@ -35,11 +35,11 @@
 // consistent across various languages.
 package codes
 
-// An Code is an unsigned 32-bit error code as defined gRPC spec.
+// A Code is an unsigned 32-bit error code as defined in the gRPC spec.
 type Code uint32
 
 const (
-	// OK means returned on success
+	// OK is returned on success.
 	OK Code = 0
 
 	// Canceled indicates the operation was cancelled (typically by the caller).
@@ -69,7 +69,7 @@ const (
 	// not found.
 	NotFound Code = 5
 
-	// AlreadyExists means some entity that we attempted to create
+	// AlreadyExists means an attempt to create an entity failed because one
 	// already exists.
 	AlreadyExists Code = 6
 

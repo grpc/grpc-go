@@ -561,7 +561,7 @@ func (t *http2Server) controller() {
 // Close starts shutting down the http2Server transport.
 // TODO(zhaoq): Now the destruction is not blocked on any pending streams. This
 // could cause some resource issue. Revisit this later.
-func (t *http2Server) Close() {
+func (t *http2Server) Close() (err error) {
 	t.mu.Lock()
 	if t.state == closing {
 		t.mu.Unlock()
@@ -572,11 +572,12 @@ func (t *http2Server) Close() {
 	t.activeStreams = nil
 	t.mu.Unlock()
 	close(t.shutdownChan)
-	t.conn.Close()
+	err = t.conn.Close()
 	// Notify all active streams.
 	for _, s := range streams {
 		s.write(recvMsg{err: ErrConnClosing})
 	}
+	return
 }
 
 // closeStream clears the footprint of a stream when the stream is not needed
