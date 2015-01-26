@@ -14,6 +14,10 @@ subprojects {
         mavenLocal()
     }
 
+    compileJava {
+        options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+    }
+
     // External dependency management
     ext.libraries = [
         protobuf: 'com.google.protobuf:protobuf-java:2.6.1',

@@ -1,4 +1,5 @@
 apply plugin: 'protobuf'
+apply plugin:'application'
 
 description = "Stubby: Integration Testing"
 
@@ -12,6 +13,10 @@ buildscript {
     }
 }
 
+configurations {
+  alpnboot
+}
+
 dependencies {
     compile project(':stubby-core'),
             project(':stubby-netty'),
@@ -20,6 +25,29 @@ dependencies {
             project(':stubby-testing'),
             libraries.junit,
             libraries.mockito
+
+    // Determine the correct version of Jetty ALPN boot to use based
+    // on the Java version.
+    def alpnboot_prefix = 'org.mortbay.jetty.alpn:alpn-boot:'
+    def alpnboot_version = '8.1.2.v20141202'
+    if (JavaVersion.current().ordinal() < JavaVersion.VERSION_1_8.ordinal()) {
+      alpnboot_version = '7.1.2.v20141202'
+    }
+
+    alpnboot alpnboot_prefix + alpnboot_version
+}
+
+// Allow execution of test client and server.
+task execute(dependsOn: classes, type:JavaExec) {
+    main = project.hasProperty('mainClass') ? project.mainClass : ''
+    classpath = sourceSets.main.runtimeClasspath
+    jvmArgs = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+    workingDir = project.rootDir
+
+    // If appArgs were provided, set the program arguments.
+    if (project.hasProperty("appArgs")) {  
+        args = Eval.me(appArgs)  
+    } 
 }
 
 // Allow intellij projects to refer to generated-sources
@@ -28,7 +56,9 @@ idea {
         // The whole build dir is excluded by default, but we need build/generated-sources,
         // which contains the generated proto classes.
         excludeDirs = [file('.gradle')]
-        excludeDirs += files(file("$buildDir/").listFiles())
-        excludeDirs -= file("$buildDir/generated-sources")
+        if (buildDir.exists()) {
+          excludeDirs += files(buildDir.listFiles())
+          excludeDirs -= file("$buildDir/generated-sources")
+        }
     }
 }

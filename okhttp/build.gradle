@@ -1,6 +1,15 @@
+plugins {
+    id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
+}
+
 description = "Stubby: OkHttp"
 dependencies {
     compile project(':stubby-core'),
             libraries.okio,
             libraries.okhttp
+}
+
+// Configure the animal sniffer plugin
+animalsniffer {
+    signature = "org.codehaus.mojo.signature:java16:+@signature"
 }

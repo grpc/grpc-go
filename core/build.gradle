@@ -1,6 +1,16 @@
+plugins {
+    id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
+}
+
 description = 'Stubby: Core'
+
 dependencies {
     compile libraries.protobuf,
             libraries.guava,
             libraries.jsr305
+}
+
+// Configure the animal sniffer plugin
+animalsniffer {
+    signature = "org.codehaus.mojo.signature:java16:+@signature"
 }
