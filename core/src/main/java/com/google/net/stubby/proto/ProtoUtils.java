@@ -34,8 +34,8 @@ package com.google.net.stubby.proto;
 import com.google.net.stubby.Marshaller;
 import com.google.net.stubby.Metadata;
 import com.google.net.stubby.Status;
-import com.google.protobuf.GeneratedMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.Message;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.Parser;
 
@@ -68,7 +68,7 @@ public class ProtoUtils {
   /**
    * Produce a metadata key for a generated protobuf type.
    */
-  public static <T extends GeneratedMessage> Metadata.Key<T> keyForProto(final T instance) {
+  public static <T extends Message> Metadata.Key<T> keyForProto(final T instance) {
     return Metadata.Key.of(
         instance.getDescriptorForType().getFullName() + Metadata.BINARY_HEADER_SUFFIX,
         new Metadata.BinaryMarshaller<T>() {
