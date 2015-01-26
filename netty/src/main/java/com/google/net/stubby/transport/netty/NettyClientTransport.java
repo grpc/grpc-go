@@ -42,7 +42,6 @@ import com.google.net.stubby.MethodDescriptor;
 import com.google.net.stubby.transport.AbstractClientTransport;
 import com.google.net.stubby.transport.ClientStream;
 import com.google.net.stubby.transport.ClientStreamListener;
-import com.google.net.stubby.transport.ClientTransport;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;

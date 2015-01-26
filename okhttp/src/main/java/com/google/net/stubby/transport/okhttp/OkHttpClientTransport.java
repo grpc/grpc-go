@@ -40,7 +40,6 @@ import com.google.net.stubby.Status.Code;
 import com.google.net.stubby.transport.AbstractClientTransport;
 import com.google.net.stubby.transport.ClientStream;
 import com.google.net.stubby.transport.ClientStreamListener;
-import com.google.net.stubby.transport.ClientTransport;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;

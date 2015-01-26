@@ -34,7 +34,6 @@ package com.google.net.stubby.transport.netty;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.net.stubby.transport.AbstractBuffer;
-import com.google.net.stubby.transport.Buffer;
 
 import io.netty.buffer.ByteBuf;
 
