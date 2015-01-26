@@ -9,8 +9,8 @@
 #include <google/protobuf/descriptor.h>
 
 class LogHelper {
-  bool abort;
   std::ostream* os;
+  bool abort;
 
  public:
   LogHelper(std::ostream* os, bool abort) : os(os), abort(abort) {}
