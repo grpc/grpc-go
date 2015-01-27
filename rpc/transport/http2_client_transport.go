@@ -42,12 +42,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bradfitz/http2"
+	"github.com/bradfitz/http2/hpack"
 	"github.com/google/grpc-go/rpc/codes"
 	"github.com/google/grpc-go/rpc/credentials"
 	"github.com/google/grpc-go/rpc/metadata"
 	"golang.org/x/net/context"
-	"github.com/bradfitz/http2/hpack"
-	"github.com/bradfitz/http2"
 )
 
 // http2Client implements the ClientTransport interface with HTTP2.
@@ -201,6 +201,14 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			t.writableChan <- 0
 		}
 	}()
+	// Record the timeout value on the context.
+	var timeout time.Duration
+	if dl, ok := ctx.Deadline(); ok {
+		timeout = dl.Sub(time.Now())
+		if timeout <= 0 {
+			return nil, ContextErr(context.DeadlineExceeded)
+		}
+	}
 	// HPACK encodes various headers.
 	t.hBuf.Reset()
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":method", Value: "POST"})
@@ -218,12 +226,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
 		}
 	}
-	if dl, ok := ctx.Deadline(); ok {
-		to := dl.Sub(time.Now())
-		if to <= 0 {
-			return nil, ContextErr(context.DeadlineExceeded)
-		}
-		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: timeoutEncode(to)})
+	if timeout > 0 {
+		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: timeoutEncode(timeout)})
 	}
 	if md, ok := metadata.FromContext(ctx); ok {
 		for k, v := range md.Copy() {
