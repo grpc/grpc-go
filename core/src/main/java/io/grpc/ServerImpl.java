@@ -325,7 +325,7 @@ public class ServerImpl implements Server {
 
   private static class NoopListener implements ServerStreamListener {
     @Override
-    public void messageRead(InputStream value, int length) {
+    public void messageRead(InputStream value) {
       try {
         value.close();
       } catch (IOException e) {
@@ -378,12 +378,12 @@ public class ServerImpl implements Server {
     }
 
     @Override
-    public void messageRead(final InputStream message, final int length) {
+    public void messageRead(final InputStream message) {
       callExecutor.execute(new Runnable() {
         @Override
         public void run() {
           try {
-            getListener().messageRead(message, length);
+            getListener().messageRead(message);
           } catch (Throwable t) {
             internalClose(Status.fromThrowable(t), new Metadata.Trailers());
             throw Throwables.propagate(t);
@@ -476,7 +476,7 @@ public class ServerImpl implements Server {
       }
 
       @Override
-      public void messageRead(final InputStream message, int length) {
+      public void messageRead(final InputStream message) {
         if (cancelled) {
           return;
         }

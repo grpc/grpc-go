@@ -67,9 +67,9 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
-  protected void receiveMessage(InputStream is, int length) {
+  protected void receiveMessage(InputStream is) {
     if (!listenerClosed) {
-      listener.messageRead(is, length);
+      listener.messageRead(is);
     }
   }
 
@@ -203,12 +203,11 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     closeListenerTask = null;
 
     // Determine if the deframer is stalled (i.e. currently has no complete messages to deliver).
-    boolean deliveryStalled = deframer.isStalled();
+    boolean deliveryStalled = isDeframerStalled();
 
     if (stopDelivery || deliveryStalled) {
       // Close the listener immediately.
-      listenerClosed = true;
-      listener.closed(newStatus, trailers);
+      closeListener(newStatus, trailers);
     } else {
       // Delay close until inboundDeliveryStalled()
       closeListenerTask = newCloseListenerTask(newStatus, trailers);
@@ -222,13 +221,20 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     return new Runnable() {
       @Override
       public void run() {
-        if (!listenerClosed) {
-          // Status has not been reported to the application layer
-          listenerClosed = true;
-          listener.closed(status, trailers);
-        }
+        closeListener(status, trailers);
       }
     };
+  }
+
+  /**
+   * Closes the listener if not previously closed.
+   */
+  private void closeListener(Status newStatus, Metadata.Trailers trailers) {
+    if (!listenerClosed) {
+      listenerClosed = true;
+      closeDeframer();
+      listener.closed(newStatus, trailers);
+    }
   }
 
   /**

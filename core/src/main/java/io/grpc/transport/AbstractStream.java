@@ -53,8 +53,7 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   private volatile IdT id;
   private final MessageFramer framer;
-
-  final MessageDeframer deframer;
+  private final MessageDeframer deframer;
 
   /**
    * Inbound phase is exclusively written to by the transport thread.
@@ -74,8 +73,8 @@ public abstract class AbstractStream<IdT> implements Stream {
       }
 
       @Override
-      public void messageRead(InputStream input, final int length) {
-        receiveMessage(input, length);
+      public void messageRead(InputStream input) {
+        receiveMessage(input);
       }
 
       @Override
@@ -173,7 +172,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   protected abstract void internalSendFrame(ByteBuffer frame, boolean endOfStream);
 
   /** A message was deframed. */
-  protected abstract void receiveMessage(InputStream is, int length);
+  protected abstract void receiveMessage(InputStream is);
 
   /** Deframer has no pending deliveries. */
   protected abstract void inboundDeliveryPaused();
@@ -193,6 +192,14 @@ public abstract class AbstractStream<IdT> implements Stream {
   protected abstract void deframeFailed(Throwable cause);
 
   /**
+   * Closes this deframer and frees any resources. After this method is called, additional calls
+   * will have no effect.
+   */
+  protected final void closeDeframer() {
+    deframer.close();
+  }
+
+  /**
    * Called to parse a received frame and attempt delivery of any completed
    * messages. Must be called from the transport thread.
    */
@@ -202,6 +209,13 @@ public abstract class AbstractStream<IdT> implements Stream {
     } catch (Throwable t) {
       deframeFailed(t);
     }
+  }
+
+  /**
+   * Indicates whether delivery is currently stalled, pending receipt of more data.
+   */
+  protected final boolean isDeframerStalled() {
+    return deframer.isStalled();
   }
 
   /**

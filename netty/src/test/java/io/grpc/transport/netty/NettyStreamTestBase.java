@@ -36,7 +36,6 @@ import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -132,7 +131,7 @@ public abstract class NettyStreamTestBase {
       ((NettyClientStream) stream).transportDataReceived(messageFrame(MESSAGE), false);
     }
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(listener()).messageRead(captor.capture(), eq(MESSAGE.length()));
+    verify(listener()).messageRead(captor.capture());
 
     // Verify that inbound flow control window update has been disabled for the stream.
     assertEquals(MESSAGE, NettyTestUtil.toString(captor.getValue()));

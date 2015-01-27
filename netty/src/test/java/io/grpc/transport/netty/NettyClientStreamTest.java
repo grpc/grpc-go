@@ -40,7 +40,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
@@ -240,7 +239,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     stream().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
 
     // Verify that the first was delivered.
-    verify(listener).messageRead(any(InputStream.class), anyInt());
+    verify(listener).messageRead(any(InputStream.class));
 
     // Now set the error status.
     Metadata.Trailers trailers = Utils.convertTrailers(grpcResponseTrailers(Status.CANCELLED));
@@ -250,7 +249,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     stream().request(1);
 
     // Verify that the listener was only notified of the first message, not the second.
-    verify(listener).messageRead(any(InputStream.class), anyInt());
+    verify(listener).messageRead(any(InputStream.class));
     verify(listener).closed(eq(Status.CANCELLED), eq(trailers));
   }
 

@@ -221,7 +221,7 @@ public class ServerImplTest {
     assertNotNull(call);
 
     String order = "Lots of pizza, please";
-    streamListener.messageRead(STRING_MARSHALLER.stream(order), 1);
+    streamListener.messageRead(STRING_MARSHALLER.stream(order));
     verify(callListener, timeout(2000)).onPayload(order);
 
     call.sendPayload(314);

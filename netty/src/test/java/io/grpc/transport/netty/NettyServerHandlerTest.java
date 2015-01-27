@@ -42,7 +42,6 @@ import static io.netty.handler.codec.http2.Http2Exception.connectionError;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -168,7 +167,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     ByteBuf frame = dataFrame(STREAM_ID, endStream);
     handler.channelRead(ctx, frame);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(captor.capture(), eq(CONTENT.length));
+    verify(streamListener).messageRead(captor.capture());
     assertArrayEquals(CONTENT, ByteStreams.toByteArray(captor.getValue()));
 
     if (endStream) {
@@ -184,7 +183,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     handler.channelRead(ctx, emptyGrpcFrame(STREAM_ID, true));
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(captor.capture(), anyInt());
+    verify(streamListener).messageRead(captor.capture());
     assertArrayEquals(new byte[0], ByteStreams.toByteArray(captor.getValue()));
     verify(streamListener).halfClosed();
     verifyNoMoreInteractions(streamListener);
@@ -195,7 +194,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     createStream();
 
     handler.channelRead(ctx, rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
-    verify(streamListener, never()).messageRead(any(InputStream.class), anyInt());
+    verify(streamListener, never()).messageRead(any(InputStream.class));
     verify(streamListener).closed(Status.CANCELLED);
     verifyNoMoreInteractions(streamListener);
   }
@@ -208,7 +207,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     // When a DATA frame is read, throw an exception. It will be converted into an
     // Http2StreamException.
     RuntimeException e = new RuntimeException("Fake Exception");
-    doThrow(e).when(streamListener).messageRead(any(InputStream.class), anyInt());
+    doThrow(e).when(streamListener).messageRead(any(InputStream.class));
 
     // Read a DATA frame to trigger the exception.
     handler.channelRead(ctx, emptyGrpcFrame(STREAM_ID, true));
@@ -266,7 +265,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     ArgumentCaptor<NettyServerStream> streamCaptor =
         ArgumentCaptor.forClass(NettyServerStream.class);
-    @SuppressWarnings("rawtypes")
     ArgumentCaptor<String> methodCaptor = ArgumentCaptor.forClass(String.class);
     verify(transportListener).streamCreated(streamCaptor.capture(), methodCaptor.capture(),
         any(Metadata.Headers.class));

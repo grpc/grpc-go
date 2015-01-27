@@ -191,7 +191,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   protected void onStreamError(ChannelHandlerContext ctx, Throwable cause,
       StreamException http2Ex) {
     logger.log(Level.WARNING, "Stream Error", cause);
-    Http2Stream stream = connection().stream(http2Ex.streamId(http2Ex));
+    Http2Stream stream = connection().stream(Http2Exception.streamId(http2Ex));
     if (stream != null) {
       // Abort the stream with a status to help the client with debugging.
       // Don't need to send a RST_STREAM since the end-of-stream flag will

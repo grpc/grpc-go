@@ -47,7 +47,6 @@ public interface StreamListener {
    * <p>This method should return quickly, as the same thread may be used to process other streams.
    *
    * @param message the bytes of the message.
-   * @param length the length of the message {@link InputStream}.
    */
-  void messageRead(InputStream message, int length);
+  void messageRead(InputStream message);
 }

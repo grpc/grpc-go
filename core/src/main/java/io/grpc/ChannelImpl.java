@@ -349,7 +349,7 @@ public final class ChannelImpl implements Channel {
       }
 
       @Override
-      public void messageRead(final InputStream message, final int length) {
+      public void messageRead(final InputStream message) {
         callExecutor.execute(new Runnable() {
           @Override
           public void run() {

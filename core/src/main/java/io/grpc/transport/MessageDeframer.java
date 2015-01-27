@@ -32,11 +32,9 @@
 package io.grpc.transport;
 
 import com.google.common.base.Preconditions;
-import com.google.common.io.ByteStreams;
 
 import io.grpc.Status;
 
-import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -76,9 +74,8 @@ public class MessageDeframer implements Closeable {
      * Called to deliver the next complete message.
      *
      * @param is stream containing the message.
-     * @param length the length in bytes of the message.
      */
-    void messageRead(InputStream is, int length);
+    void messageRead(InputStream is);
 
     /**
      * Called when end-of-stream has not yet been reached but there are no complete messages
@@ -135,6 +132,7 @@ public class MessageDeframer implements Closeable {
    * @param numMessages the requested number of messages to be delivered to the listener.
    */
   public void request(int numMessages) {
+    checkNotClosed();
     Preconditions.checkArgument(numMessages > 0, "numMessages must be > 0");
     pendingDeliveries += numMessages;
     deliver();
@@ -144,6 +142,7 @@ public class MessageDeframer implements Closeable {
    * Adds the given data to this deframer and attempts delivery to the sink.
    */
   public void deframe(Buffer data, boolean endOfStream) {
+    checkNotClosed();
     Preconditions.checkNotNull(data, "data");
     Preconditions.checkState(!this.endOfStream, "Past end of stream");
     unprocessed.addBuffer(data);
@@ -160,12 +159,30 @@ public class MessageDeframer implements Closeable {
     return deliveryStalled;
   }
 
+  /**
+   * Closes this deframer and frees any resources. After this method is called, additional
+   * calls will have no effect.
+   */
   @Override
   public void close() {
-    unprocessed.close();
-    if (nextFrame != null) {
-      nextFrame.close();
+    try {
+      if (unprocessed != null) {
+        unprocessed.close();
+      }
+      if (nextFrame != null) {
+        nextFrame.close();
+      }
+    } finally {
+      unprocessed = null;
+      nextFrame = null;
     }
+  }
+
+  /**
+   * Throws if this deframer has already been closed.
+   */
+  private void checkNotClosed() {
+    Preconditions.checkState(unprocessed != null, "MessageDeframer is already closed");
   }
 
   /**
@@ -256,8 +273,7 @@ public class MessageDeframer implements Closeable {
   private void processHeader() {
     int type = nextFrame.readUnsignedByte();
     if ((type & RESERVED_MASK) != 0) {
-      throw Status.INTERNAL
-          .withDescription("Frame header malformed: reserved bits not zero")
+      throw Status.INTERNAL.withDescription("Frame header malformed: reserved bits not zero")
           .asRuntimeException();
     }
     compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
@@ -274,31 +290,33 @@ public class MessageDeframer implements Closeable {
    * several GRPC messages within it.
    */
   private void processBody() {
-    if (compressedFlag) {
-      if (compression == Compression.NONE) {
-        throw Status.INTERNAL.withDescription(
-            "Can't decode compressed frame as compression not configured.").asRuntimeException();
-      } else if (compression == Compression.GZIP) {
-        // Fully drain frame.
-        byte[] bytes;
-        try {
-          bytes =
-              ByteStreams.toByteArray(new GZIPInputStream(Buffers.openStream(nextFrame, false)));
-        } catch (IOException ex) {
-          throw new RuntimeException(ex);
-        }
-        listener.messageRead(new ByteArrayInputStream(bytes), bytes.length);
-      } else {
-        throw new AssertionError("Unknown compression type");
-      }
-    } else {
-      // Don't close the frame, since the sink is now responsible for the life-cycle.
-      listener.messageRead(Buffers.openStream(nextFrame, true), nextFrame.readableBytes());
-      nextFrame = null;
-    }
+    InputStream stream = compressedFlag ? getCompressedBody() : getUncompressedBody();
+    nextFrame = null;
+    listener.messageRead(stream);
 
     // Done with this frame, begin processing the next header.
     state = State.HEADER;
     requiredLength = HEADER_LENGTH;
+  }
+
+  private InputStream getUncompressedBody() {
+    return Buffers.openStream(nextFrame, true);
+  }
+
+  private InputStream getCompressedBody() {
+    if (compression == Compression.NONE) {
+      throw Status.INTERNAL.withDescription(
+          "Can't decode compressed frame as compression not configured.").asRuntimeException();
+    }
+
+    if (compression != Compression.GZIP) {
+      throw new AssertionError("Unknown compression type");
+    }
+
+    try {
+      return new GZIPInputStream(Buffers.openStream(nextFrame, true));
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

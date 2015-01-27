@@ -498,7 +498,7 @@ public class OkHttpClientTransportTest {
     }
 
     @Override
-    public void messageRead(InputStream message, int length) {
+    public void messageRead(InputStream message) {
       String msg = getContent(message);
       if (msg != null) {
         messages.add(msg);

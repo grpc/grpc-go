@@ -71,9 +71,9 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
-  protected void receiveMessage(InputStream is, int length) {
+  protected void receiveMessage(InputStream is) {
     inboundPhase(Phase.MESSAGE);
-    listener.messageRead(is, length);
+    listener.messageRead(is);
   }
 
   @Override
@@ -180,12 +180,11 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    * abortStream()} for abnormal.
    */
   public void complete() {
-    listenerClosed = true;
     if (!gracefulClose) {
-      listener.closed(Status.INTERNAL.withDescription("successful complete() without close()"));
+      closeListener(Status.INTERNAL.withDescription("successful complete() without close()"));
       throw new IllegalStateException("successful complete() without close()");
     }
-    listener.closed(Status.OK);
+    closeListener(Status.OK);
   }
 
   /**
@@ -193,9 +192,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    */
   @Override
   protected final void remoteEndClosed() {
-    if (inboundPhase(Phase.STATUS) != Phase.STATUS) {
-      listener.halfClosed();
-    }
+    halfCloseListener();
   }
 
   /**
@@ -214,10 +211,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
     // TODO(lryan): Investigate whether we can remove the notification to the client
     // and rely on a transport layer stream reset instead.
     Preconditions.checkArgument(!status.isOk(), "status must not be OK");
-    if (!listenerClosed) {
-      listenerClosed = true;
-      listener.closed(status);
-    }
+    closeListener(status);
     if (notifyClient) {
       // TODO(lryan): Remove
       if (stashedTrailers == null) {
@@ -233,5 +227,26 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   @Override
   public boolean isClosed() {
     return super.isClosed() || listenerClosed;
+  }
+
+  /**
+   * Fires a half-closed event to the listener and frees inbound resources.
+   */
+  private void halfCloseListener() {
+    if (inboundPhase(Phase.STATUS) != Phase.STATUS && !listenerClosed) {
+      closeDeframer();
+      listener.halfClosed();
+    }
+  }
+
+  /**
+   * Closes the listener if not previously closed and frees resources.
+   */
+  private void closeListener(Status newStatus) {
+    if (!listenerClosed) {
+      listenerClosed = true;
+      closeDeframer();
+      listener.closed(newStatus);
+    }
   }
 }
