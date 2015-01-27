@@ -132,6 +132,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		}
 		newTransport, err := transport.NewClientTransport(cc.dopts.protocol, cc.target, cc.dopts.authOptions)
 		if err != nil {
+			// TODO(zhaoq): Record the error with glog.V.
 			closeTransport = false
 			time.Sleep(backoff(retries))
 			retries++
