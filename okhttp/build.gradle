@@ -5,7 +5,6 @@ plugins {
 description = "gRPC: OkHttp"
 dependencies {
     compile project(':grpc-core'),
-            libraries.okio,
             libraries.okhttp
 }
 

@@ -25,14 +25,13 @@ subprojects {
         jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
         oauth_client: 'com.google.oauth-client:google-oauth-client:1.18.0-rc',
         javaee_api: 'javax:javaee-api:7.0',
-        okio: 'com.squareup.okio:okio:1.0.1',
         hpack: 'com.twitter:hpack:0.9.1',
         protobuf_plugin: 'ws.antonov.gradle.plugins:gradle-plugin-protobuf:0.9.1',
+        okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
 
         // TODO: Unreleased dependencies.
         // These must already be installed in the local maven repository.
         netty: 'io.netty:netty-codec-http2:5.0.0.Alpha2-SNAPSHOT',
-        okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
 
         // Test dependencies.
         junit: 'junit:junit:4.11',
