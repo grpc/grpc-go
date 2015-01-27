@@ -43,11 +43,11 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/bradfitz/http2"
+	"github.com/bradfitz/http2/hpack"
 	"github.com/google/grpc-go/rpc/codes"
 	"github.com/google/grpc-go/rpc/metadata"
 	"golang.org/x/net/context"
-	"github.com/bradfitz/http2/hpack"
-	"github.com/bradfitz/http2"
 )
 
 // http2Server implements the ServerTransport interface with HTTP2.

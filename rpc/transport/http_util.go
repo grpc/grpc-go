@@ -39,10 +39,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/bradfitz/http2"
+	"github.com/bradfitz/http2/hpack"
 	"github.com/google/grpc-go/rpc/codes"
 	"github.com/google/grpc-go/rpc/metadata"
-	"github.com/bradfitz/http2/hpack"
-	"github.com/bradfitz/http2"
 )
 
 const (
