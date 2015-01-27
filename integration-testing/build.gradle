@@ -1,7 +1,7 @@
 apply plugin: 'protobuf'
 apply plugin:'application'
 
-description = "Stubby: Integration Testing"
+description = "gRPC: Integration Testing"
 
 // Add dependency on the protobuf plugin
 buildscript {
@@ -18,11 +18,11 @@ configurations {
 }
 
 dependencies {
-    compile project(':stubby-core'),
-            project(':stubby-netty'),
-            project(':stubby-okhttp'),
-            project(':stubby-stub'),
-            project(':stubby-testing'),
+    compile project(':grpc-core'),
+            project(':grpc-netty'),
+            project(':grpc-okhttp'),
+            project(':grpc-stub'),
+            project(':grpc-testing'),
             libraries.junit,
             libraries.mockito
 

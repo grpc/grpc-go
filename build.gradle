@@ -3,7 +3,7 @@ subprojects {
     apply plugin: "maven"
     apply plugin: "idea"
 
-    group = "com.google.net.stubby"
+    group = "io.grpc"
     version = "0.1.0-SNAPSHOT"
 
     sourceCompatibility = 1.6

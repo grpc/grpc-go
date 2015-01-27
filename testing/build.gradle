@@ -1,4 +1,4 @@
-description = "Stubby: Testing"
+description = "gRPC: Testing"
 dependencies {
-    compile project(':stubby-core')
+    compile project(':grpc-core')
 }

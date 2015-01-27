@@ -2,9 +2,9 @@ plugins {
     id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
 }
 
-description = "Stubby: Auth"
+description = "gRpc: Auth"
 dependencies {
-    compile project(':stubby-core'),
+    compile project(':grpc-core'),
             libraries.oauth_client,
             libraries.javaee_api
 }

@@ -15,6 +15,6 @@ GOLDEN_FILE="$TEST_SRC_DIR/TestService.java.txt"
 protoc --plugin=protoc-gen-java_rpc=build/binaries/java_pluginExecutable/java_plugin \
   --java_rpc_out="$OUTPUT_FILE" --proto_path="$TEST_SRC_DIR" "$INPUT_FILE" && \
   unzip -o -d "$TEST_TMP_DIR" "$OUTPUT_FILE" && \
-  diff "$TEST_TMP_DIR/com/google/net/stubby/testing/integration/TestServiceGrpc.java" \
+  diff "$TEST_TMP_DIR/io/grpc/testing/integration/TestServiceGrpc.java" \
     "$GOLDEN_FILE" && \
   echo "PASS"

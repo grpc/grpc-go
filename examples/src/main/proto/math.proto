@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-package net.stubby.examples;
+package io.grpc.examples;
 option java_outer_classname = "Math";
 
 message DivArgs {

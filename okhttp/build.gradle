@@ -2,9 +2,9 @@ plugins {
     id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
 }
 
-description = "Stubby: OkHttp"
+description = "gRPC: OkHttp"
 dependencies {
-    compile project(':stubby-core'),
+    compile project(':grpc-core'),
             libraries.okio,
             libraries.okhttp
 }

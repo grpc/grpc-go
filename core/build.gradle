@@ -2,7 +2,7 @@ plugins {
     id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
 }
 
-description = 'Stubby: Core'
+description = 'gRPC: Core'
 
 dependencies {
     compile libraries.protobuf,

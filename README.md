@@ -11,7 +11,7 @@ datamodel/IDL/interface you are adapting. An example is provided of a binding to
 
 #### Key Interfaces
 
-[Stream Observer](https://github.com/google/grpc-java/blob/master/stub/src/main/java/com/google/net/stubby/stub/StreamObserver.java)
+[Stream Observer](https://github.com/google/grpc-java/blob/master/stub/src/main/java/io/grpc/stub/StreamObserver.java)
 
 
 ## Channel
@@ -20,17 +20,17 @@ The 'channel' layer is an abstraction over transport handling that is suitable f
 
 #### Common
 
-* [Metadata - headers & trailers](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/Metadata.java)
-* [Status - error code namespace & handling](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/Status.java)
+* [Metadata - headers & trailers](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/Metadata.java)
+* [Status - error code namespace & handling](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/Status.java)
 
 #### Client
-* [Channel - client side binding](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/Channel.java)
-* [Call](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/Call.java)
-* [Client Interceptor](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/ClientInterceptor.java)
+* [Channel - client side binding](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/Channel.java)
+* [Call](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/Call.java)
+* [Client Interceptor](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/ClientInterceptor.java)
 
 #### Server
-* [Server call handler - analog to Channel on server](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/ServerCallHandler.java)
-* [Server Call](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/ServerCall.java)
+* [Server call handler - analog to Channel on server](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/ServerCallHandler.java)
+* [Server Call](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/ServerCall.java)
 
 
 ## Transport
@@ -39,20 +39,20 @@ The 'transport' layer does the heavy lifting of putting & taking bytes off the w
 
 #### Common
 
-* [Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/transport/Stream.java)
-* [Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/transport/StreamListener.java)
+* [Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/Stream.java)
+* [Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/StreamListener.java)
 
 #### Client
 
-* [Client Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/transport/ClientStream.java)
-* [Client Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/transport/ClientStreamListener.java)
+* [Client Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/ClientStream.java)
+* [Client Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/ClientStreamListener.java)
 
 #### Server
 
-* [Server Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/transport/ServerStream.java)
-* [Server Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/com/google/net/stubby/transport/ServerStreamListener.java)
+* [Server Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/ServerStream.java)
+* [Server Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/ServerStreamListener.java)
 
 
 # Examples
 
-Tests showing how these layers are composed to execute calls using protobuf messages can be found here https://github.com/google/grpc-java/tree/master/integration-testing/src/main/java/com/google/net/stubby/testing/integration
+Tests showing how these layers are composed to execute calls using protobuf messages can be found here https://github.com/google/grpc-java/tree/master/integration-testing/src/main/java/io/grpc/testing/integration

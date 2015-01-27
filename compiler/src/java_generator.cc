@@ -470,11 +470,11 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
     if (client_streaming) {
       (*vars)["calls_method"] = "asyncStreamingRequestCall";
       (*vars)["invocation_class"] =
-          "com.google.net.stubby.stub.ServerCalls.StreamingRequestMethod";
+          "io.grpc.stub.ServerCalls.StreamingRequestMethod";
     } else {
       (*vars)["calls_method"] = "asyncUnaryRequestCall";
       (*vars)["invocation_class"] =
-          "com.google.net.stubby.stub.ServerCalls.UnaryRequestMethod";
+          "io.grpc.stub.ServerCalls.UnaryRequestMethod";
     }
     p->Print(*vars, ".addMethod(createMethodDefinition(\n");
     p->Indent();
@@ -586,27 +586,27 @@ static void PrintService(const ServiceDescriptor* service,
 void PrintImports(Printer* p) {
   p->Print(
       "import static "
-      "com.google.net.stubby.stub.Calls.createMethodDescriptor;\n"
+      "io.grpc.stub.Calls.createMethodDescriptor;\n"
       "import static "
-      "com.google.net.stubby.stub.Calls.asyncUnaryCall;\n"
+      "io.grpc.stub.Calls.asyncUnaryCall;\n"
       "import static "
-      "com.google.net.stubby.stub.Calls.asyncServerStreamingCall;\n"
+      "io.grpc.stub.Calls.asyncServerStreamingCall;\n"
       "import static "
-      "com.google.net.stubby.stub.Calls.asyncClientStreamingCall;\n"
+      "io.grpc.stub.Calls.asyncClientStreamingCall;\n"
       "import static "
-      "com.google.net.stubby.stub.Calls.duplexStreamingCall;\n"
+      "io.grpc.stub.Calls.duplexStreamingCall;\n"
       "import static "
-      "com.google.net.stubby.stub.Calls.blockingUnaryCall;\n"
+      "io.grpc.stub.Calls.blockingUnaryCall;\n"
       "import static "
-      "com.google.net.stubby.stub.Calls.blockingServerStreamingCall;\n"
+      "io.grpc.stub.Calls.blockingServerStreamingCall;\n"
       "import static "
-      "com.google.net.stubby.stub.Calls.unaryFutureCall;\n"
+      "io.grpc.stub.Calls.unaryFutureCall;\n"
       "import static "
-      "com.google.net.stubby.stub.ServerCalls.createMethodDefinition;\n"
+      "io.grpc.stub.ServerCalls.createMethodDefinition;\n"
       "import static "
-      "com.google.net.stubby.stub.ServerCalls.asyncUnaryRequestCall;\n"
+      "io.grpc.stub.ServerCalls.asyncUnaryRequestCall;\n"
       "import static "
-      "com.google.net.stubby.stub.ServerCalls.asyncStreamingRequestCall;\n\n");
+      "io.grpc.stub.ServerCalls.asyncStreamingRequestCall;\n\n");
 }
 
 void GenerateService(const ServiceDescriptor* service,
@@ -616,18 +616,18 @@ void GenerateService(const ServiceDescriptor* service,
   map<string, string> vars;
   vars["String"] = "java.lang.String";
   vars["Override"] = "java.lang.Override";
-  vars["Channel"] = "com.google.net.stubby.Channel";
-  vars["MethodType"] = "com.google.net.stubby.MethodType";
+  vars["Channel"] = "io.grpc.Channel";
+  vars["MethodType"] = "io.grpc.MethodType";
   vars["ServerServiceDefinition"] =
-      "com.google.net.stubby.ServerServiceDefinition";
-  vars["AbstractStub"] = "com.google.net.stubby.stub.AbstractStub";
-  vars["Method"] = "com.google.net.stubby.stub.Method";
+      "io.grpc.ServerServiceDefinition";
+  vars["AbstractStub"] = "io.grpc.stub.AbstractStub";
+  vars["Method"] = "io.grpc.stub.Method";
   vars["AbstractServiceDescriptor"] =
-      "com.google.net.stubby.stub.AbstractServiceDescriptor";
+      "io.grpc.stub.AbstractServiceDescriptor";
   vars["ImmutableList"] = "com.google.common.collect.ImmutableList";
-  vars["MethodDescriptor"] = "com.google.net.stubby.MethodDescriptor";
-  vars["ProtoUtils"] = "com.google.net.stubby.proto.ProtoUtils";
-  vars["StreamObserver"] = "com.google.net.stubby.stub.StreamObserver";
+  vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
+  vars["ProtoUtils"] = "io.grpc.proto.ProtoUtils";
+  vars["StreamObserver"] = "io.grpc.stub.StreamObserver";
   vars["Iterator"] = "java.util.Iterator";
   vars["Map"] = "java.util.Map";
   vars["TimeUnit"] = "java.util.concurrent.TimeUnit";

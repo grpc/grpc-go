@@ -1,14 +1,14 @@
-description = "Stubby: All"
+description = "gRPC: All"
 
 // Make sure that no transitive dependencies are included.
 configurations.compile.transitive = false
 
 dependencies {
-    compile project(':stubby-core'),
-            project(':stubby-stub'),
-            project(':stubby-auth'),
-            project(':stubby-netty'),
-            project(':stubby-okhttp')
+    compile project(':grpc-core'),
+            project(':grpc-stub'),
+            project(':grpc-auth'),
+            project(':grpc-netty'),
+            project(':grpc-okhttp')
 }
 
 // Create a fat jar containing only the direct dependencies
