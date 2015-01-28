@@ -156,7 +156,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	s.windowHandler = func(n int) {
 		t.addRecvQuota(s, n)
 	}
-	if hDec.state.timeout > 0 {
+	if hDec.state.timeoutSet {
 		s.ctx, s.cancel = context.WithTimeout(context.TODO(), hDec.state.timeout)
 	} else {
 		s.ctx, s.cancel = context.WithCancel(context.TODO())
@@ -426,6 +426,7 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 	}
 	s.mu.RUnlock()
 	if _, err := wait(s.ctx, t.shutdownChan, t.writableChan); err != nil {
+		// TODO(zhaoq): Print some errors using glog, e.g., glog.V(1).
 		return err
 	}
 	t.hBuf.Reset()
