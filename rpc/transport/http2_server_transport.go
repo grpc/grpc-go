@@ -156,7 +156,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	s.windowHandler = func(n int) {
 		t.addRecvQuota(s, n)
 	}
-	if hDec.state.timeoutSet > 0 {
+	if hDec.state.timeoutSet {
 		s.ctx, s.cancel = context.WithTimeout(context.TODO(), hDec.state.timeout)
 	} else {
 		s.ctx, s.cancel = context.WithCancel(context.TODO())
