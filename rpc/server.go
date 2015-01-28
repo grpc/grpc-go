@@ -42,11 +42,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/google/grpc-go/rpc/codes"
 	"github.com/google/grpc-go/rpc/credentials"
 	"github.com/google/grpc-go/rpc/metadata"
 	"github.com/google/grpc-go/rpc/transport"
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 )
 

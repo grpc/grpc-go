@@ -41,9 +41,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/google/grpc-go/rpc/codes"
 	"github.com/google/grpc-go/rpc/transport"
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 )
 
