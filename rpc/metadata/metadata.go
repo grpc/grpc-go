@@ -84,33 +84,28 @@ func DecodeKeyValue(k, v string) (string, string, error) {
 }
 
 // MD is a mapping from metadata keys to values.
-type MD struct {
-	m map[string]string
-}
+type MD map[string]string
 
 // New creates a MD from given key-value map.
-func New(m map[string]string) (md MD) {
+func New(m map[string]string) MD {
+	md := MD{}
 	if len(m) == 0 {
-		return
+		return md
 	}
-	md.m = make(map[string]string)
 	for k, v := range m {
 		key, val := encodeKeyValue(k, v)
-		md.m[key] = val
+		md[key] = val
 	}
-	return
+	return md
 }
 
 // Pairs returns an MD formed by the mapping of key, value ...
 // Pairs panics if len(kv) is odd.
-func Pairs(kv ...string) (md MD) {
+func Pairs(kv ...string) MD {
 	if len(kv)%2 == 1 {
 		panic(fmt.Sprintf("Got the odd number of input pairs for metadata: %d", len(kv)))
 	}
-	if len(kv) == 0 {
-		return
-	}
-	md.m = make(map[string]string)
+	md := MD{}
 	var k string
 	for i, s := range kv {
 		if i%2 == 0 {
@@ -118,23 +113,23 @@ func Pairs(kv ...string) (md MD) {
 			continue
 		}
 		key, val := encodeKeyValue(k, s)
-		md.m[key] = val
+		md[key] = val
 	}
-	return
+	return md
 }
 
 // Len returns the length of md.
 func (md MD) Len() int {
-	return len(md.m)
+	return len(md)
 }
 
 // Copy returns a copy of md's mapping.
-func (md MD) Copy() (m map[string]string) {
-	m = make(map[string]string)
-	for k, v := range md.m {
+func (md MD) Copy() map[string]string {
+	m := make(map[string]string)
+	for k, v := range md {
 		m[k] = v
 	}
-	return
+	return m
 }
 
 type mdKey struct{}
