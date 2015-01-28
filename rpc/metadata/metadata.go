@@ -89,9 +89,6 @@ type MD map[string]string
 // New creates a MD from given key-value map.
 func New(m map[string]string) MD {
 	md := MD{}
-	if len(m) == 0 {
-		return md
-	}
 	for k, v := range m {
 		key, val := encodeKeyValue(k, v)
 		md[key] = val
