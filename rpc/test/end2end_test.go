@@ -170,20 +170,25 @@ func setUp(useTLS bool, maxStream uint32) (s *rpc.Server, mc testpb.MathClient) 
 	testpb.RegisterService(s, ms)
 	go s.Run()
 	addr := "localhost:" + port
-	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
-	if err != nil {
-		log.Fatalf("Failed to create credentials %v", err)
+	var conn *rpc.ClientConn
+	if useTLS {
+		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+		if err != nil {
+			log.Fatalf("Failed to create credentials %v", err)
+		}
+		conn, err = rpc.Dial(addr, rpc.WithClientTLS(creds))
+	} else {
+		conn, err = rpc.Dial(addr)
 	}
-	conn, err := rpc.Dial(addr, rpc.WithClientTLS(creds))
 	if err != nil {
-		log.Fatalf("Dial(%v) = %v", conn, err)
+		log.Fatalf("Dial(%q) = %v", addr, err)
 	}
 	mc = testpb.NewMathClient(conn)
 	return
 }
 
 func TestFailedRPC(t *testing.T) {
-	s, mc := setUp(true, math.MaxUint32)
+	s, mc := setUp(false, math.MaxUint32)
 	defer s.Stop()
 	args := &testpb.DivArgs{
 		Dividend: proto.Int64(8),
