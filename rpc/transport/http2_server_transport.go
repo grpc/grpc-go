@@ -167,7 +167,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	s.ctx = newContextWithStream(s.ctx, s)
 	// Attach the received metadata to the context.
 	if len(hDec.state.mdata) > 0 {
-		s.ctx = metadata.NewContext(s.ctx, metadata.New(hDec.state.mdata))
+		s.ctx = metadata.NewContext(s.ctx, hDec.state.mdata)
 	}
 
 	s.dec = &recvBufferReader{
@@ -404,7 +404,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	t.hBuf.Reset()
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
-	for k, v := range md.Copy() {
+	for k, v := range md {
 		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
 	}
 	if err := t.writeHeaders(s, t.hBuf, false); err != nil {

@@ -181,9 +181,9 @@ type Stream struct {
 	// Close headerChan to indicate the end of reception of header metadata.
 	headerChan chan struct{}
 	// header caches the received header metadata.
-	header map[string]string
+	header metadata.MD
 	// The key-value map of trailer metadata.
-	trailer map[string]string
+	trailer metadata.MD
 
 	mu sync.RWMutex
 	// headerOK becomes true from the first header is about to send.
@@ -200,12 +200,12 @@ type Stream struct {
 // Header acquires the key-value pairs of header metadata once it
 // is available. It blocks until i) the metadata is ready or ii) there is no
 // header metadata or iii) the stream is cancelled/expired.
-func (s *Stream) Header() (map[string]string, error) {
+func (s *Stream) Header() (metadata.MD, error) {
 	select {
 	case <-s.ctx.Done():
 		return nil, ContextErr(s.ctx.Err())
 	case <-s.headerChan:
-		return s.header, nil
+		return s.header.Copy(), nil
 	}
 }
 
@@ -215,7 +215,7 @@ func (s *Stream) Header() (map[string]string, error) {
 func (s *Stream) Trailer() metadata.MD {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return metadata.New(s.trailer)
+	return s.trailer.Copy()
 }
 
 // ServerTransport returns the underlying ServerTransport for the stream.

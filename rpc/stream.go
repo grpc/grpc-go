@@ -110,11 +110,7 @@ func (cs *clientStream) Context() context.Context {
 // is any. Empty metadata.MD is returned if there is no header metadata.
 // It blocks if the metadata is not ready to read.
 func (cs *clientStream) Header() (md metadata.MD, err error) {
-	m, err := cs.s.Header()
-	if err != nil {
-		return md, err
-	}
-	return metadata.New(m), nil
+	return cs.s.Header()
 }
 
 // Trailer returns the trailer metadata from the server. It must be called

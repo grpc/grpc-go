@@ -86,16 +86,6 @@ func DecodeKeyValue(k, v string) (string, string, error) {
 // MD is a mapping from metadata keys to values.
 type MD map[string]string
 
-// New creates a MD from given key-value map.
-func New(m map[string]string) MD {
-	md := MD{}
-	for k, v := range m {
-		key, val := encodeKeyValue(k, v)
-		md[key] = val
-	}
-	return md
-}
-
 // Pairs returns an MD formed by the mapping of key, value ...
 // Pairs panics if len(kv) is odd.
 func Pairs(kv ...string) MD {
@@ -115,18 +105,18 @@ func Pairs(kv ...string) MD {
 	return md
 }
 
-// Len returns the length of md.
+// Len returns the number of items in md.
 func (md MD) Len() int {
 	return len(md)
 }
 
-// Copy returns a copy of md's mapping.
-func (md MD) Copy() map[string]string {
-	m := make(map[string]string)
+// Copy returns a copy of md.
+func (md MD) Copy() MD {
+	out := MD{}
 	for k, v := range md {
-		m[k] = v
+		out[k] = v
 	}
-	return m
+	return out
 }
 
 type mdKey struct{}

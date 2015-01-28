@@ -146,11 +146,10 @@ func Invoke(ctx context.Context, method string, args, reply proto.Message, cc *C
 			return toRPCErr(err)
 		}
 		// Try to acquire header metadata from the server if there is any.
-		m, err := stream.Header()
+		c.headerMD, err = stream.Header()
 		if err != nil {
 			return toRPCErr(err)
 		}
-		c.headerMD = metadata.New(m)
 		// Receive the response
 		lastErr = recv(stream, reply)
 		if _, ok := lastErr.(transport.ConnectionError); ok {
