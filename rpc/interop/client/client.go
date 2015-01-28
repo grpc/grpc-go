@@ -231,9 +231,15 @@ func main() {
 		if *tlsServerName != "" {
 			sn = *tlsServerName
 		}
-		creds, err := credentials.NewClientTLSFromFile(*caFile, sn)
-		if err != nil {
-			log.Fatalf("Failed to create credentials %v", err)
+		var creds credentials.TransportAuthenticator
+		if *caFile != "" {
+			var err error
+			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
+			if err != nil {
+				log.Fatalf("Failed to create credentials %v", err)
+			}
+		} else {
+			creds = credentials.NewClientTLSFromCert(nil, sn)
 		}
 		opts = append(opts, rpc.WithClientTLS(creds))
 	}
