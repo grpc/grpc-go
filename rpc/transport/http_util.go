@@ -87,8 +87,9 @@ type decodeState struct {
 	statusCode codes.Code
 	statusDesc string
 	// Server side only fields.
-	timeout time.Duration
-	method  string
+	timeoutSet bool
+	timeout    time.Duration
+	method     string
 	// key-value metadata map from the peer.
 	mdata map[string]string
 }
@@ -144,6 +145,7 @@ func newHPACKDecoder() *hpackDecoder {
 		case "grpc-message":
 			d.state.statusDesc = f.Value
 		case "grpc-timeout":
+			d.state.timeoutSet = true
 			var err error
 			d.state.timeout, err = timeoutDecode(f.Value)
 			if err != nil {
