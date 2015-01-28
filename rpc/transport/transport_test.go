@@ -258,7 +258,6 @@ func performOneRPC(ct ClientTransport) {
 	}
 	s, err := ct.NewStream(context.Background(), callHdr)
 	if err != nil {
-		log.Printf("failed to open stream: %v", err)
 		return
 	}
 	opts := Options{
