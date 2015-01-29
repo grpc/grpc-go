@@ -507,7 +507,7 @@ string GetServices(const google::protobuf::FileDescriptor* file) {
         "\t\"io\"\n");
   }
   printer.Print(
-      "\t\"github.com/google/grpc-go\"\n"
+      "\t\"github.com/google/grpc-go/rpc\"\n"
       "\tcontext \"golang.org/x/net/context\"\n"
       "\tproto \"github.com/golang/protobuf/proto\"\n"
       ")\n\n");
