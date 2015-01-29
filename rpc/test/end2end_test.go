@@ -56,7 +56,7 @@ import (
 )
 
 var (
-	testMetadata = map[string]string{
+	testMetadata = metadata.MD{
 		"key1": "value1",
 		"key2": "value2",
 	}
@@ -208,18 +208,17 @@ func TestMetadataUnaryRPC(t *testing.T) {
 		Dividend: proto.Int64(8),
 		Divisor:  proto.Int64(2),
 	}
-	md := metadata.New(testMetadata)
-	ctx := metadata.NewContext(context.Background(), md)
+	ctx := metadata.NewContext(context.Background(), testMetadata)
 	var header, trailer metadata.MD
 	_, err := mc.Div(ctx, args, rpc.Header(&header), rpc.Trailer(&trailer))
 	if err != nil {
 		t.Fatalf("mathClient.Div(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
-	if !reflect.DeepEqual(testMetadata, header.Copy()) {
-		t.Fatalf("Received header metadata %v, want %v", header.Copy(), testMetadata)
+	if !reflect.DeepEqual(testMetadata, header) {
+		t.Fatalf("Received header metadata %v, want %v", header, testMetadata)
 	}
-	if !reflect.DeepEqual(testMetadata, trailer.Copy()) {
-		t.Fatalf("Received trailer metadata %v, want %v", trailer.Copy(), testMetadata)
+	if !reflect.DeepEqual(testMetadata, trailer) {
+		t.Fatalf("Received trailer metadata %v, want %v", trailer, testMetadata)
 	}
 }
 
@@ -234,7 +233,7 @@ func performOneRPC(t *testing.T, mc testpb.MathClient, wg *sync.WaitGroup) {
 		Remainder: proto.Int64(2),
 	}
 	if err != nil || !proto.Equal(reply, want) {
-		t.Fatalf(`mathClient.Div(_, _) = %v, %v; want %v, <nil>`, reply, err, want)
+		t.Errorf(`mathClient.Div(_, _) = %v, %v; want %v, <nil>`, reply, err, want)
 	}
 	wg.Done()
 }
@@ -322,7 +321,7 @@ func TestBidiStreaming(t *testing.T) {
 		go func() {
 			for _, args := range parseArgs(test.divs) {
 				if err := stream.Send(args); err != nil {
-					t.Fatal("Send failed: ", err)
+					t.Errorf("Send failed: ", err)
 					return
 				}
 			}
@@ -367,25 +366,24 @@ func parseArgs(divs []string) (args []*testpb.DivArgs) {
 func TestMetadataStreamingRPC(t *testing.T) {
 	s, mc := setUp(true, math.MaxUint32)
 	defer s.Stop()
-	md := metadata.New(testMetadata)
-	ctx := metadata.NewContext(context.Background(), md)
+	ctx := metadata.NewContext(context.Background(), testMetadata)
 	stream, err := mc.DivMany(ctx)
 	if err != nil {
 		t.Fatalf("Failed to create stream %v", err)
 	}
 	go func() {
 		headerMD, err := stream.Header()
-		if err != nil || !reflect.DeepEqual(testMetadata, headerMD.Copy()) {
-			t.Fatalf("#1 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
+		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
+			t.Errorf("#1 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
 		// test the cached value.
 		headerMD, err = stream.Header()
-		if err != nil || !reflect.DeepEqual(testMetadata, headerMD.Copy()) {
-			t.Fatalf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
+		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
+			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
 		for _, args := range parseArgs([]string{"1/1", "3/2", "2/3"}) {
 			if err := stream.Send(args); err != nil {
-				t.Fatalf("%v.Send(_) failed: %v", stream, err)
+				t.Errorf("%v.Send(_) failed: %v", stream, err)
 				return
 			}
 		}
@@ -399,7 +397,7 @@ func TestMetadataStreamingRPC(t *testing.T) {
 		}
 	}
 	trailerMD := stream.Trailer()
-	if !reflect.DeepEqual(testMetadata, trailerMD.Copy()) {
+	if !reflect.DeepEqual(testMetadata, trailerMD) {
 		t.Fatalf("%v.Trailer() = %v, want %v", stream, trailerMD, testMetadata)
 	}
 }

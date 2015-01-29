@@ -230,7 +230,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: timeoutEncode(timeout)})
 	}
 	if md, ok := metadata.FromContext(ctx); ok {
-		for k, v := range md.Copy() {
+		for k, v := range md {
 			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
 		}
 	}
