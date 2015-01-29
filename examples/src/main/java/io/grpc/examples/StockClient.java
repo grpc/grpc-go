@@ -31,11 +31,11 @@
 
 package io.grpc.examples;
 
-import com.google.protos.net.stubby.examples.StockGrpc;
-import com.google.protos.net.stubby.examples.StockGrpc.StockBlockingStub;
-import com.google.protos.net.stubby.examples.StockGrpc.StockStub;
-import com.google.protos.net.stubby.examples.StockOuterClass.StockReply;
-import com.google.protos.net.stubby.examples.StockOuterClass.StockRequest;
+import com.google.protos.io.grpc.examples.StockGrpc;
+import com.google.protos.io.grpc.examples.StockGrpc.StockBlockingStub;
+import com.google.protos.io.grpc.examples.StockGrpc.StockStub;
+import com.google.protos.io.grpc.examples.StockOuterClass.StockReply;
+import com.google.protos.io.grpc.examples.StockOuterClass.StockRequest;
 
 import io.grpc.ChannelImpl;
 import io.grpc.stub.StreamObserver;
