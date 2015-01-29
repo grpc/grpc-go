@@ -69,7 +69,7 @@ func TestPairsMD(t *testing.T) {
 		md MD
 	}{
 		{[]string{}, MD{}},
-		{[]string{"k1", "v1", "k2", binaryValue}, New(map[string]string{
+		{[]string{"k1", "v1", "k2", binaryValue}, MD(map[string]string{
 			"k1":     "v1",
 			"k2-bin": "woA=",
 		})},
