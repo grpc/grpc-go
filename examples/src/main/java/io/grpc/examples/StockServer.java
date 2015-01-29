@@ -31,9 +31,9 @@
 
 package io.grpc.examples;
 
-import com.google.protos.net.stubby.examples.StockGrpc;
-import com.google.protos.net.stubby.examples.StockOuterClass.StockReply;
-import com.google.protos.net.stubby.examples.StockOuterClass.StockRequest;
+import com.google.protos.io.grpc.examples.StockGrpc;
+import com.google.protos.io.grpc.examples.StockOuterClass.StockReply;
+import com.google.protos.io.grpc.examples.StockOuterClass.StockRequest;
 
 import io.grpc.ServerImpl;
 import io.grpc.stub.StreamObserver;
@@ -134,8 +134,7 @@ public class StockServer implements StockGrpc.Stock {
   public static void main(String[] args) throws Exception {
     ServerImpl server = NettyServerBuilder.forPort(8980)
         .addService(StockGrpc.bindService(new StockServer()))
-        .buildAndWaitForRunning();
+        .build().start();
     System.out.println("Server started");
-    server.awaitTerminated();
   }
 }

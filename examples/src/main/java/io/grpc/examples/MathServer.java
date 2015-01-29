@@ -31,11 +31,11 @@
 
 package io.grpc.examples;
 
-import com.google.protos.net.stubby.examples.CalcGrpc;
-import com.google.protos.net.stubby.examples.Math.DivArgs;
-import com.google.protos.net.stubby.examples.Math.DivReply;
-import com.google.protos.net.stubby.examples.Math.FibArgs;
-import com.google.protos.net.stubby.examples.Math.Num;
+import com.google.protos.io.grpc.examples.CalcGrpc;
+import com.google.protos.io.grpc.examples.Math.DivArgs;
+import com.google.protos.io.grpc.examples.Math.DivReply;
+import com.google.protos.io.grpc.examples.Math.FibArgs;
+import com.google.protos.io.grpc.examples.Math.Num;
 
 import io.grpc.ServerImpl;
 import io.grpc.stub.StreamObserver;
@@ -60,7 +60,7 @@ public class MathServer {
   public void start() {
     gRpcServer = NettyServerBuilder.forPort(port)
         .addService(CalcGrpc.bindService(new CalcService()))
-        .buildAndWaitForRunning();
+        .build().start();
     logger.info("Server started, listening on " + port);
     // TODO(simonma): gRPC server should register JVM shutdown hook to shutdown itself, remove this
     // after we support that.
@@ -77,15 +77,13 @@ public class MathServer {
 
   public void stop() {
     if (gRpcServer != null) {
-      gRpcServer.stopAsync();
-      gRpcServer.awaitTerminated();
+      gRpcServer.shutdown();
     }
   }
 
   public static void main(String[] args) throws Exception {
     MathServer server = new MathServer(8980);
     server.start();
-    server.gRpcServer.awaitTerminated();
   }
 
   /**
