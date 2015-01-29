@@ -9,7 +9,16 @@ executables {
 binaries.all {
   if (toolChain in Gcc) {
     cppCompiler.args "-std=c++11"
+    if (System.env.CXXFLAGS) {
+      cppCompiler.args System.env.CXXFLAGS
+    }
+    if (System.env.CPPFLAGS) {
+      cppCompiler.args System.env.CPPFLAGS
+    }
     linker.args "-lprotoc", "-lprotobuf"
+    if (System.env.LDFLAGS) {
+      linker.args System.env.LDFLAGS
+    }
   }
 }
 
