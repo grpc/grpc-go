@@ -83,8 +83,19 @@ func DecodeKeyValue(k, v string) (string, string, error) {
 	return key, string(val), nil
 }
 
-// MD is a mapping from metadata keys to values.
+// MD is a mapping from metadata keys to values. Users should use the following
+// two convenience functions New and Pairs to generate MD.
 type MD map[string]string
+
+// New creates a MD from given key-value map.
+func New(m map[string]string) MD {
+	md := MD{}
+	for k, v := range m {
+		key, val := encodeKeyValue(k, v)
+		md[key] = val
+	}
+	return md
+}
 
 // Pairs returns an MD formed by the mapping of key, value ...
 // Pairs panics if len(kv) is odd.
