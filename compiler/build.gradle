@@ -1,9 +1,24 @@
 apply plugin: "cpp"
+apply plugin: "protobuf"
 
 description = 'The protoc plugin for gRPC Java'
 
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath libraries.protobuf_plugin
+    }
+}
+
 executables {
   java_plugin {}
+}
+
+dependencies {
+  compile project(':grpc-stub'),
+          libraries.protobuf
 }
 
 binaries.all {
@@ -22,19 +37,13 @@ binaries.all {
   }
 }
 
-sources {
-  java_plugin {
-    // Configure an existing CppSourceSet
-    cpp {
-      source {
-        srcDirs "src/"
-        include "**/*.cc"
-      }
-    }
-  }
-}
+protobufCodeGenPlugins = ["java_plugin:$buildDir/binaries/java_pluginExecutable/java_plugin"]
 
-task test(type: Exec, dependsOn: 'java_pluginExecutable') {
-  environment 'TEST_TMP_DIR', temporaryDir
-  commandLine './run_test.sh'
+generateTestProto.dependsOn 'java_pluginExecutable'
+test.dependsOn 'testGolden'
+
+task testGolden(type: Exec, dependsOn: 'generateTestProto') {
+  executable "diff"
+  args "$buildDir/generated-sources/test/io/grpc/testing/integration/TestServiceGrpc.java",
+       "$projectDir/src/test/golden/TestService.java.txt"
 }

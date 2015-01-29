@@ -20,7 +20,7 @@ subprojects {
 
     // External dependency management
     ext.libraries = [
-        protobuf: 'com.google.protobuf:protobuf-java:2.6.1',
+        protobuf: 'com.google.protobuf:protobuf-java:3.0.0-pre',
         guava: 'com.google.guava:guava:18.0',
         jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
         oauth_client: 'com.google.oauth-client:google-oauth-client:1.18.0-rc',

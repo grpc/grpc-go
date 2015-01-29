@@ -5,6 +5,7 @@ include ":grpc-auth"
 include ":grpc-okhttp"
 include ":grpc-netty"
 include ":grpc-testing"
+include ":grpc-compiler"
 include ":grpc-integration-testing"
 include ":grpc-all"
 
@@ -14,5 +15,6 @@ project(':grpc-auth').projectDir = "$rootDir/auth" as File
 project(':grpc-okhttp').projectDir = "$rootDir/okhttp" as File
 project(':grpc-netty').projectDir = "$rootDir/netty" as File
 project(':grpc-testing').projectDir = "$rootDir/testing" as File
+project(':grpc-compiler').projectDir = "$rootDir/compiler" as File
 project(':grpc-integration-testing').projectDir = "$rootDir/integration-testing" as File
 project(':grpc-all').projectDir = "$rootDir/all" as File
