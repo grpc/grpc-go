@@ -58,6 +58,10 @@ class GoGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
                         const string& parameter,
                         google::protobuf::compiler::GeneratorContext* context,
                         string* error) const {
+    if (file->service_count() <= 0) {
+      // Do not generate anything if there is no rpc service defined.
+      return true;
+    }
     // Get output file name.
     string file_name;
     if (file->name().size() > 6 &&

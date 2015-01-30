@@ -1,8 +1,14 @@
 #!/bin/bash
 
-# Please run this under the same directory where the input proto stays. The
-# output will stay in the same directory. If this is not the behavior you want,
-# feel free to make your own scripts.
+# This script serves as an example to demonstrate how to generate the gRPC-Go
+# interface and the related messages.
+#
+# We suggest the importing paths in proto file are relative to $GOPATH/src and
+# this script should be run at $GOPATH/src.
+#
+# If this is not what you need, feel free to make your own scripts. Again, this
+# script is for demonstration purpose.
+# 
 locProtocGenGo=$1
 locGoPlugIn=$2
 proto=$3

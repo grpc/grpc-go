@@ -79,12 +79,34 @@ string LowerCaseService(const string& service) {
   return ret;
 }
 
+std::string BadToUnderscore(std::string str) {
+  for (unsigned i = 0; i < str.size(); ++i) {
+    if (!std::isalnum(str[i])) {
+      str[i] = '_';
+    }
+  }
+  return str;
+}
+
+const string GetFullName(const string& selfPkg,
+                         const string& msgPkg,
+                         const string& msgName) {
+  if (selfPkg == msgPkg) {
+    return msgName;
+  }
+  return BadToUnderscore(msgPkg) + "." + msgName;
+}
+
 void PrintClientMethodDef(google::protobuf::io::Printer* printer,
                           const google::protobuf::MethodDescriptor* method,
                           map<string, string>* vars) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = method->input_type()->name();
-  (*vars)["Response"] = method->output_type()->name();
+  (*vars)["Request"] = GetFullName((*vars)["PackageName"],
+                                   method->input_type()->file()->package(),
+                                   method->input_type()->name());
+  (*vars)["Response"] = GetFullName((*vars)["PackageName"],
+                                   method->output_type()->file()->package(),
+                                   method->output_type()->name());
   if (NoStreaming(method)) {
     printer->Print(*vars,
                    "\t$Method$(ctx context.Context, in *$Request$, opts "
@@ -110,9 +132,12 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
                            const google::protobuf::MethodDescriptor* method,
                            map<string, string>* vars) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = method->input_type()->name();
-  (*vars)["Response"] = method->output_type()->name();
-
+  (*vars)["Request"] = GetFullName((*vars)["PackageName"],
+                                   method->input_type()->file()->package(),
+                                   method->input_type()->name());
+  (*vars)["Response"] = GetFullName((*vars)["PackageName"],
+                                   method->output_type()->file()->package(),
+                                   method->output_type()->name());
   if (NoStreaming(method)) {
     printer->Print(
         *vars,
@@ -281,8 +306,12 @@ void PrintServerMethodDef(google::protobuf::io::Printer* printer,
                           const google::protobuf::MethodDescriptor* method,
                           map<string, string>* vars) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = method->input_type()->name();
-  (*vars)["Response"] = method->output_type()->name();
+  (*vars)["Request"] = GetFullName((*vars)["PackageName"],
+                                   method->input_type()->file()->package(),
+                                   method->input_type()->name());
+  (*vars)["Response"] = GetFullName((*vars)["PackageName"],
+                                   method->output_type()->file()->package(),
+                                   method->output_type()->name());
   if (NoStreaming(method)) {
     printer->Print(
         *vars,
@@ -301,8 +330,12 @@ void PrintServerHandler(google::protobuf::io::Printer* printer,
                         const google::protobuf::MethodDescriptor* method,
                         map<string, string>* vars) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = method->input_type()->name();
-  (*vars)["Response"] = method->output_type()->name();
+  (*vars)["Request"] = GetFullName((*vars)["PackageName"],
+                                   method->input_type()->file()->package(),
+                                   method->input_type()->name());
+  (*vars)["Response"] = GetFullName((*vars)["PackageName"],
+                                   method->output_type()->file()->package(),
+                                   method->output_type()->name());
   if (NoStreaming(method)) {
     printer->Print(
         *vars,
@@ -480,13 +513,46 @@ void PrintServer(google::protobuf::io::Printer* printer,
       "}\n\n");
 }
 
-std::string BadToUnderscore(std::string str) {
-  for (unsigned i = 0; i < str.size(); ++i) {
-    if (!std::isalnum(str[i])) {
-      str[i] = '_';
+void PrintMessageImports(
+    google::protobuf::io::Printer* printer,
+    const google::protobuf::FileDescriptor* file,
+    map<string, string>* vars) {
+  set<const google::protobuf::FileDescriptor*> descs;
+  set<string> importedPkgs;
+  for (int i = 0; i < file->service_count(); ++i) {
+    const google::protobuf::ServiceDescriptor* service = file->service(i);
+    for (int j = 0; j < service->method_count(); ++j) {
+      const google::protobuf::MethodDescriptor* method = service->method(i);
+      // Remove duplicated imports.
+      if (importedPkgs.find(
+          method->input_type()->file()->package()) == importedPkgs.end()) {
+        descs.insert(method->input_type()->file());
+        importedPkgs.insert(method->input_type()->file()->package());
+      }
+      if (importedPkgs.find(
+          method->output_type()->file()->package()) == importedPkgs.end()) {
+        descs.insert(method->output_type()->file());
+        importedPkgs.insert(method->output_type()->file()->package());
+      }
     }
   }
-  return str;
+
+  for (auto fd : descs) {
+    if (fd->package() == (*vars)["PackageName"]) {
+      continue;
+    }
+    string name = fd->name();
+    string import_path = "import \"";
+    if (name.find('/') == string::npos) {
+      // Assume all the proto in the same directory belong to the same package.
+      continue;
+    } else {
+      import_path += name.substr(0, name.find_last_of('/')) + "\"";
+    }
+    printer->Print(import_path.c_str());
+    printer->Print("\n");
+  }
+  printer->Print("\n");
 }
 
 string GetServices(const google::protobuf::FileDescriptor* file) {
@@ -511,6 +577,8 @@ string GetServices(const google::protobuf::FileDescriptor* file) {
       "\tcontext \"golang.org/x/net/context\"\n"
       "\tproto \"github.com/golang/protobuf/proto\"\n"
       ")\n\n");
+
+  PrintMessageImports(&printer, file, &vars);
 
   // $Package$ is used to fully qualify method names.
   vars["Package"] = file->package();
