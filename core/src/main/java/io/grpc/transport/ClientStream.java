@@ -39,7 +39,8 @@ public interface ClientStream extends Stream {
   /**
    * Used to abnormally terminate the stream. After calling this method, no further messages will be
    * sent or received, however it may still be possible to receive buffered messages for a brief
-   * period until {@link ClientStreamListener#closed} is called.
+   * period until {@link ClientStreamListener#closed} is called. This method is safe to be called
+   * at any time and multiple times.
    */
   void cancel();
 

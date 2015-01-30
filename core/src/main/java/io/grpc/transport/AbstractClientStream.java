@@ -260,17 +260,14 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   @Override
   public void cancel() {
     outboundPhase(Phase.STATUS);
-    if (id() != null) {
-      // Only send a cancellation to remote side if we have actually been allocated
-      // a stream id and we are not already closed. i.e. the server side is aware of the stream.
-      sendCancel();
-    }
+    sendCancel();
     dispose();
   }
 
   /**
-   * Send a stream cancellation message to the remote server. Can be called by either the
-   * application or transport layers.
+   * Cancel the stream and send a stream cancellation message to the remote server, if necessary.
+   * Can be called by either the application or transport layers. This method is safe to be called
+   * at any time and multiple times.
    */
   protected abstract void sendCancel();
 

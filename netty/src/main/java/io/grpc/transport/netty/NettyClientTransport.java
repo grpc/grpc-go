@@ -155,11 +155,11 @@ class NettyClientTransport extends AbstractClientTransport {
     } catch (InterruptedException e) {
       // Restore the interrupt.
       Thread.currentThread().interrupt();
-      stream.dispose();
+      stream.cancel();
       throw new RuntimeException(e);
     } catch (ExecutionException e) {
-      stream.dispose();
-      throw new RuntimeException(e);
+      stream.cancel();
+      throw new RuntimeException(e.getCause() != null ? e.getCause() : e);
     }
 
     return stream;

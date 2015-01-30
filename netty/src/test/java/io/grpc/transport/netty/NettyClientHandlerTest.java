@@ -47,6 +47,7 @@ import static org.mockito.Mockito.calls;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import io.grpc.Metadata;
@@ -173,6 +174,19 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     when(stream.id()).thenReturn(3);
     handler.write(ctx, new CancelStreamCommand(stream), promise);
     verify(promise).setFailure(any(Throwable.class));
+  }
+
+  @Test
+  public void cancelBeforeStreamAssignedShouldSucceed() throws Exception {
+    handler.connection().local().maxStreams(0);
+    handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream), promise);
+    mockContext();
+    verify(stream, never()).id(any(Integer.class));
+    when(stream.id()).thenReturn(null);
+
+    handler.write(ctx, new CancelStreamCommand(stream), promise);
+    verify(promise).setSuccess();
+    verifyNoMoreInteractions(ctx);
   }
 
   @Test

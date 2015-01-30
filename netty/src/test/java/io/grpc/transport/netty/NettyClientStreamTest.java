@@ -97,9 +97,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   }
 
   @Test
-  public void cancelShouldNotSendCommandIfStreamNotCreated() {
+  public void cancelShouldStillSendCommandIfStreamNotCreatedToCancelCreation() {
     stream().cancel();
-    verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
+    verify(channel).writeAndFlush(any(CancelStreamCommand.class));
   }
 
   @Test
