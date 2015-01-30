@@ -54,6 +54,12 @@ public class TestServiceServer {
   public static void main(String[] args) throws Exception {
     final TestServiceServer server = new TestServiceServer();
     server.parseArgs(args);
+    if (server.useTls) {
+      System.out.println(
+          "\nUsing fake CA for TLS certificate. Test clients should expect host\n"
+          + "*.test.google.fr and our test CA. For the Java test client binary, use:\n"
+          + "--server_host_override=foo.test.google.fr --use_test_ca=true\n");
+    }
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
@@ -67,7 +73,7 @@ public class TestServiceServer {
       }
     });
     server.start();
-    System.out.println("Server started");
+    System.out.println("Server started on port " + server.port);
   }
 
   private int port = 8080;
