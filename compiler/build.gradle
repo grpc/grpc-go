@@ -22,7 +22,7 @@ dependencies {
 }
 
 binaries.all {
-  if (toolChain in Gcc) {
+  if (toolChain in Gcc || toolChain in Clang) {
     cppCompiler.args "-std=c++11"
     if (System.env.CXXFLAGS) {
       cppCompiler.args System.env.CXXFLAGS
