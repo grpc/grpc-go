@@ -127,19 +127,30 @@ public class MessageDeframer implements Closeable {
 
   /**
    * Requests up to the given number of messages from the call to be delivered to
-   * {@link Listener#messageRead(InputStream, int)}. No additional messages will be delivered.
+   * {@link Listener#messageRead(InputStream)}. No additional messages will be delivered.
+   *
+   * <p>If {@link #close()} has been called, this method will have no effect.
    *
    * @param numMessages the requested number of messages to be delivered to the listener.
    */
   public void request(int numMessages) {
-    checkNotClosed();
     Preconditions.checkArgument(numMessages > 0, "numMessages must be > 0");
+    if (isClosed()) {
+      return;
+    }
     pendingDeliveries += numMessages;
     deliver();
   }
 
   /**
    * Adds the given data to this deframer and attempts delivery to the sink.
+   *
+   * @param data the raw data read from the remote endpoint. Must be non-null.
+   * @param endOfStream if {@code true}, indicates that {@code data} is the end of the stream from
+   *        the remote endpoint.
+   * @throws IllegalStateException if {@link #close()} has been called previously or if
+   *         {@link #deframe(Buffer, boolean)} has previously been called with
+   *         {@code endOfStream=true}.
    */
   public void deframe(Buffer data, boolean endOfStream) {
     checkNotClosed();
@@ -179,10 +190,17 @@ public class MessageDeframer implements Closeable {
   }
 
   /**
+   * Indicates whether or not this deframer has been closed.
+   */
+  public boolean isClosed() {
+    return unprocessed == null;
+  }
+
+  /**
    * Throws if this deframer has already been closed.
    */
   private void checkNotClosed() {
-    Preconditions.checkState(unprocessed != null, "MessageDeframer is already closed");
+    Preconditions.checkState(!isClosed(), "MessageDeframer is already closed");
   }
 
   /**
