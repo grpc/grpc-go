@@ -31,19 +31,14 @@
 
 package io.grpc.transport;
 
-import com.google.common.util.concurrent.Service;
-
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 
 /**
  * The client-side transport encapsulating a single connection to a remote server. Allows creation
  * of new {@link Stream} instances for communication with the server.
- * <p>
- * Transport life cycle (i.e. startup/shutdown) is exposed via the {@link Service} interface.
- * Observers of the transport life-cycle may be added via {@link Service#addListener}.
  */
-public interface ClientTransport extends Service {
+public interface ClientTransport {
 
   /**
    * Creates a new stream for sending messages to the remote end-point. If the service is already
@@ -63,4 +58,30 @@ public interface ClientTransport extends Service {
   ClientStream newStream(MethodDescriptor<?, ?> method,
                          Metadata.Headers headers,
                          ClientStreamListener listener);
+
+  /**
+   * Starts transport. Implementations must not call {@code listener} until after start returns.
+   *
+   * @param listener non-{@code null} listener of transport events
+   */
+  void start(Listener listener);
+
+  /**
+   * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
+   * fail (once transportShutdown() callback called).
+   */
+  void shutdown();
+
+  interface Listener {
+    /**
+     * The transport is shutting down. No new streams will be processed, but existing streams may
+     * continue. Shutdown could have been caused by an error or normal operation.
+     */
+    void transportShutdown();
+
+    /**
+     * The transport completed shutting down. All resources have been released.
+     */
+    void transportTerminated();
+  }
 }

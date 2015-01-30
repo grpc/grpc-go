@@ -40,6 +40,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,6 +58,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.transport.ClientStreamListener;
+import io.grpc.transport.ClientTransport;
 import io.grpc.transport.okhttp.OkHttpClientTransport.ClientFrameHandler;
 
 import okio.Buffer;
@@ -89,7 +91,7 @@ import java.util.concurrent.TimeUnit;
  */
 @RunWith(JUnit4.class)
 public class OkHttpClientTransportTest {
-  private static final int TIME_OUT_MS = 5000000;
+  private static final int TIME_OUT_MS = 500;
   private static final String NETWORK_ISSUE_MESSAGE = "network issue";
   // The gRPC header length, which includes 1 byte compression flag and 4 bytes message length.
   private static final int HEADER_LENGTH = 5;
@@ -98,6 +100,8 @@ public class OkHttpClientTransportTest {
   private AsyncFrameWriter frameWriter;
   @Mock
   MethodDescriptor<?, ?> method;
+  @Mock
+  private ClientTransport.Listener listener;
   private OkHttpClientTransport clientTransport;
   private MockFrameReader frameReader;
   private Map<Integer, OkHttpClientStream> streams;
@@ -111,7 +115,7 @@ public class OkHttpClientTransportTest {
     frameReader = new MockFrameReader();
     executor = Executors.newCachedThreadPool();
     clientTransport = new OkHttpClientTransport(executor, frameReader, frameWriter, 3);
-    clientTransport.startAsync();
+    clientTransport.start(listener);
     frameHandler = clientTransport.getHandler();
     streams = clientTransport.getStreams();
     when(method.getName()).thenReturn("fakemethod");
@@ -120,12 +124,9 @@ public class OkHttpClientTransportTest {
 
   @After
   public void tearDown() {
-    State state = clientTransport.state();
-    if (state == State.NEW || state == State.RUNNING) {
-      clientTransport.stopAsync();
-      assertTrue(frameReader.closed);
-      verify(frameWriter).close();
-    }
+    clientTransport.shutdown();
+    assertTrue(frameReader.closed);
+    verify(frameWriter).close();
     executor.shutdown();
   }
 
@@ -149,7 +150,8 @@ public class OkHttpClientTransportTest {
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
     assertEquals(Status.INTERNAL.getCode(), listener1.status.getCode());
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
-    assertEquals(Service.State.FAILED, clientTransport.state());
+    verify(listener).transportShutdown();
+    verify(listener).transportTerminated();
   }
 
   @Test
@@ -239,6 +241,7 @@ public class OkHttpClientTransportTest {
     verify(frameWriter).data(eq(false), eq(3), captor.capture(), eq(12 + HEADER_LENGTH));
     Buffer sentFrame = captor.getValue();
     assertEquals(createMessageFrame(message), sentFrame);
+    stream.cancel();
   }
 
   @Test
@@ -323,17 +326,24 @@ public class OkHttpClientTransportTest {
   public void stopNormally() throws Exception {
     MockStreamListener listener1 = new MockStreamListener();
     MockStreamListener listener2 = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener1);
-    clientTransport.newStream(method,new Metadata.Headers(), listener2);
+    OkHttpClientStream stream1
+        = clientTransport.newStream(method, new Metadata.Headers(), listener1);
+    OkHttpClientStream stream2
+        = clientTransport.newStream(method, new Metadata.Headers(), listener2);
     assertEquals(2, streams.size());
-    clientTransport.stopAsync();
+    clientTransport.shutdown();
+    verify(frameWriter).goAway(eq(0), eq(ErrorCode.NO_ERROR), (byte[]) any());
+    assertEquals(2, streams.size());
+    verify(listener).transportShutdown();
+
+    stream1.cancel();
+    stream2.cancel();
     listener1.waitUntilStreamClosed();
     listener2.waitUntilStreamClosed();
-    verify(frameWriter).goAway(eq(0), eq(ErrorCode.NO_ERROR), (byte[]) any());
     assertEquals(0, streams.size());
-    assertEquals(Status.INTERNAL.getCode(), listener1.status.getCode());
-    assertEquals(Status.INTERNAL.getCode(), listener2.status.getCode());
-    assertEquals(Service.State.TERMINATED, clientTransport.state());
+    assertEquals(Status.CANCELLED.getCode(), listener1.status.getCode());
+    assertEquals(Status.CANCELLED.getCode(), listener2.status.getCode());
+    verify(listener).transportTerminated();
   }
 
   @Test
@@ -349,7 +359,8 @@ public class OkHttpClientTransportTest {
     frameHandler.goAway(3, ErrorCode.CANCEL, null);
 
     // Transport should be in STOPPING state.
-    assertEquals(Service.State.STOPPING, clientTransport.state());
+    verify(listener).transportShutdown();
+    verify(listener, never()).transportTerminated();
 
     // Stream 2 should be closed.
     listener2.waitUntilStreamClosed();
@@ -390,8 +401,7 @@ public class OkHttpClientTransportTest {
     assertEquals(receivedMessage, listener1.messages.get(0));
 
     // The transport should be stopped after all active streams finished.
-    assertTrue("Service state: " + clientTransport.state(),
-        Service.State.TERMINATED == clientTransport.state());
+    verify(listener).transportTerminated();
   }
 
   @Test
@@ -400,7 +410,7 @@ public class OkHttpClientTransportTest {
     AsyncFrameWriter writer =  mock(AsyncFrameWriter.class);
     OkHttpClientTransport transport =
         new OkHttpClientTransport(executor, frameReader, writer, startId);
-    transport.startAsync();
+    transport.start(listener);
     streams = transport.getStreams();
 
     MockStreamListener listener1 = new MockStreamListener();
@@ -416,7 +426,8 @@ public class OkHttpClientTransportTest {
     streams.get(startId).cancel();
     listener1.waitUntilStreamClosed();
     verify(writer).rstStream(eq(startId), eq(ErrorCode.CANCEL));
-    assertEquals(Service.State.TERMINATED, transport.state());
+    verify(listener).transportShutdown();
+    verify(listener).transportTerminated();
   }
 
   private static Buffer createMessageFrame(String message) {

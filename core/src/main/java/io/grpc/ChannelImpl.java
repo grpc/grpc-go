@@ -107,7 +107,7 @@ public final class ChannelImpl implements Channel {
     }
     shutdown = true;
     if (activeTransport != null) {
-      activeTransport.stopAsync();
+      activeTransport.shutdown();
       activeTransport = null;
     } else if (transports.isEmpty()) {
       terminated = true;
@@ -183,32 +183,13 @@ public final class ChannelImpl implements Channel {
     if (activeTransport != null) {
       return activeTransport;
     }
-    ClientTransport newTransport = transportFactory.newClientTransport();
-    activeTransport = newTransport;
-    transports.add(newTransport);
-    // activeTransport reference can be changed during calls to the transport, even if we hold the
-    // lock, due to reentrancy.
-    newTransport.addListener(new TransportListener(newTransport),
-        MoreExecutors.directExecutor());
-    newTransport.startAsync();
-    return newTransport;
+    activeTransport = transportFactory.newClientTransport();
+    transports.add(activeTransport);
+    activeTransport.start(new TransportListener(activeTransport));
+    return activeTransport;
   }
 
-  private synchronized void transportFailedOrTerminated(ClientTransport transport) {
-    if (activeTransport == transport) {
-      activeTransport = null;
-    }
-    transports.remove(transport);
-    if (shutdown && transports.isEmpty()) {
-      terminated = true;
-      notifyAll();
-      if (terminationRunnable != null) {
-        terminationRunnable.run();
-      }
-    }
-  }
-
-  private class TransportListener extends Listener {
+  private class TransportListener implements ClientTransport.Listener {
     private final ClientTransport transport;
 
     public TransportListener(ClientTransport transport) {
@@ -216,7 +197,7 @@ public final class ChannelImpl implements Channel {
     }
 
     @Override
-    public void stopping(State from) {
+    public void transportShutdown() {
       synchronized (ChannelImpl.this) {
         if (activeTransport == transport) {
           activeTransport = null;
@@ -225,18 +206,26 @@ public final class ChannelImpl implements Channel {
     }
 
     @Override
-    public void failed(State from, Throwable failure) {
-      log.log(Level.SEVERE, "Client transport failed", failure);
-      transportFailedOrTerminated(transport);
+    public void transportTerminated() {
+      synchronized (ChannelImpl.this) {
+        if (activeTransport == transport) {
+          log.warning("transportTerminated called without previous transportShutdown");
+          activeTransport = null;
+        }
+        transportShutdown();
+        transports.remove(transport);
+        if (shutdown && transports.isEmpty()) {
+          if (terminated) {
+            log.warning("transportTerminated called after already terminated");
+          }
+          terminated = true;
+          ChannelImpl.this.notifyAll();
+          if (terminationRunnable != null) {
+            terminationRunnable.run();
+          }
+        }
+      }
     }
-
-    @Override
-    public void terminated(State from) {
-      transportFailedOrTerminated(transport);
-    }
-
-    @Override
-    public void running() {}
   }
 
   private class CallImpl<ReqT, RespT> extends Call<ReqT, RespT> {

@@ -33,7 +33,6 @@ package io.grpc.transport.okhttp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.AbstractService;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
@@ -67,6 +66,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -75,12 +76,14 @@ import javax.net.ssl.SSLSocketFactory;
 /**
  * A okhttp-based {@link ClientTransport} implementation.
  */
-public class OkHttpClientTransport extends AbstractService implements ClientTransport {
+public class OkHttpClientTransport implements ClientTransport {
   /** The default initial window size in HTTP/2 is 64 KiB for the stream and connection. */
   @VisibleForTesting
   static final int DEFAULT_INITIAL_WINDOW_SIZE = 64 * 1024;
 
   private static final Map<ErrorCode, Status> ERROR_CODE_TO_STATUS;
+  private static final Logger log = Logger.getLogger(OkHttpClientTransport.class.getName());
+
   static {
     Map<ErrorCode, Status> errorToStatus = new HashMap<ErrorCode, Status>();
     errorToStatus.put(ErrorCode.NO_ERROR, Status.OK);
@@ -115,6 +118,7 @@ public class OkHttpClientTransport extends AbstractService implements ClientTran
   private final InetSocketAddress address;
   private final String authorityHost;
   private final String defaultAuthority;
+  private Listener listener;
   private FrameReader frameReader;
   private AsyncFrameWriter frameWriter;
   private OutboundFlowController outboundFlow;
@@ -164,7 +168,7 @@ public class OkHttpClientTransport extends AbstractService implements ClientTran
   }
 
   @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata.Headers headers,
+  public OkHttpClientStream newStream(MethodDescriptor<?, ?> method, Metadata.Headers headers,
       ClientStreamListener listener) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
@@ -185,7 +189,8 @@ public class OkHttpClientTransport extends AbstractService implements ClientTran
   }
 
   @Override
-  protected void doStart() {
+  public void start(Listener listener) {
+    this.listener = Preconditions.checkNotNull(listener, "listener");
     // We set host to null for test.
     if (address != null) {
       BufferedSource source;
@@ -212,11 +217,10 @@ public class OkHttpClientTransport extends AbstractService implements ClientTran
 
     clientFrameHandler = new ClientFrameHandler();
     executor.execute(clientFrameHandler);
-    notifyStarted();
   }
 
   @Override
-  protected void doStop() {
+  public void shutdown() {
     boolean normalClose;
     synchronized (lock) {
       normalClose = !goAway;
@@ -226,7 +230,7 @@ public class OkHttpClientTransport extends AbstractService implements ClientTran
       // The GOAWAY is part of graceful shutdown.
       frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
 
-      onGoAway(0, Status.INTERNAL.withDescription("Transport stopped"), null);
+      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Transport stopped"));
     }
     stopIfNecessary();
   }
@@ -244,12 +248,15 @@ public class OkHttpClientTransport extends AbstractService implements ClientTran
    * Finish all active streams due to a failure, then close the transport.
    */
   void abort(Throwable failureCause) {
-    onGoAway(0, Status.fromThrowable(failureCause), failureCause);
+    log.log(Level.SEVERE, "Transport failed", failureCause);
+    onGoAway(0, Status.fromThrowable(failureCause));
   }
 
-  private void onGoAway(int lastKnownStreamId, Status status, @Nullable Throwable failureCause) {
+  private void onGoAway(int lastKnownStreamId, Status status) {
+    boolean notifyShutdown;
     ArrayList<OkHttpClientStream> goAwayStreams = new ArrayList<OkHttpClientStream>();
     synchronized (lock) {
+      notifyShutdown = !goAway;
       goAway = true;
       goAwayStatus = status;
       synchronized (streams) {
@@ -264,21 +271,13 @@ public class OkHttpClientTransport extends AbstractService implements ClientTran
       }
     }
 
-    // Starting stop, go into STOPPING state so that Channel knows this Transport should not be used
-    // further, will become STOPPED once all streams are complete, or become FAILED immediately if
-    // the transport is aborted by some error.
-    State state = state();
-    if (state == State.RUNNING || state == State.NEW) {
-      if (failureCause != null) {
-        notifyFailed(failureCause);
-      } else {
-        stopAsync();
-      }
+    if (notifyShutdown) {
+      listener.transportShutdown();
     }
-
     for (OkHttpClientStream stream : goAwayStreams) {
       stream.transportReportStatus(status, false, new Metadata.Trailers());
     }
+    stopIfNecessary();
   }
 
   /**
@@ -322,7 +321,7 @@ public class OkHttpClientTransport extends AbstractService implements ClientTran
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-      notifyStopped();
+      listener.transportTerminated();
     }
   }
 
@@ -435,7 +434,7 @@ public class OkHttpClientTransport extends AbstractService implements ClientTran
 
     @Override
     public void goAway(int lastGoodStreamId, ErrorCode errorCode, ByteString debugData) {
-      onGoAway(lastGoodStreamId, Status.UNAVAILABLE.withDescription("Go away"), null);
+      onGoAway(lastGoodStreamId, Status.UNAVAILABLE.withDescription("Go away"));
     }
 
     @Override
@@ -469,7 +468,7 @@ public class OkHttpClientTransport extends AbstractService implements ClientTran
     stream.id(nextStreamId);
     streams.put(stream.id(), stream);
     if (nextStreamId >= Integer.MAX_VALUE - 2) {
-      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream ids exhausted"), null);
+      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream ids exhausted"));
     } else {
       nextStreamId += 2;
     }

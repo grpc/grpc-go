@@ -34,7 +34,6 @@ package io.grpc.transport.netty;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.AbstractService;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -71,7 +70,10 @@ import io.netty.util.internal.logging.InternalLogLevel;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
+import javax.annotation.concurrent.GuardedBy;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
@@ -79,7 +81,8 @@ import javax.net.ssl.SSLParameters;
 /**
  * A Netty-based {@link ClientTransport} implementation.
  */
-class NettyClientTransport extends AbstractService implements ClientTransport {
+class NettyClientTransport implements ClientTransport {
+  private static final Logger log = Logger.getLogger(NettyClientTransport.class.getName());
 
   private final SocketAddress address;
   private final EventLoopGroup eventGroup;
@@ -88,8 +91,21 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
   private final boolean ssl;
   private final AsciiString authority;
   private Channel channel;
+  private Listener listener;
+  /**
+   * Whether the transport started or failed during starting. Only transitions to true. When
+   * changed, this.notifyAll() must be called.
+   */
+  private volatile boolean started;
   /** Guaranteed to be true when RUNNING. */
-  private boolean negotiationComplete;
+  private volatile boolean negotiationComplete;
+  /** Whether the transport started shutting down. */
+  @GuardedBy("this")
+  private boolean shutdown;
+  private Throwable shutdownCause;
+  /** Whether the transport completed shutting down. */
+  @GuardedBy("this")
+  private boolean terminated;
 
   NettyClientTransport(SocketAddress address, NegotiationType negotiationType,
       EventLoopGroup eventGroup, SslContext sslContext) {
@@ -148,18 +164,10 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
     Preconditions.checkNotNull(headers, "headers");
     Preconditions.checkNotNull(listener, "listener");
 
-    // We can't write to the channel until negotiation is complete. Use state() instead of blindly
-    // calling awaitRunning() in order to avoid obtaining a lock in the common case.
-    if (state() != State.RUNNING) {
-      try {
-        awaitRunning();
-      } catch (IllegalStateException ex) {
-        if (!negotiationComplete) {
-          // Still can't write to channel. Ex should already contain failureCause() information.
-          throw ex;
-        }
-      }
-      // negotiationComplete is now guaranteed to be true
+    // We can't write to the channel until negotiation is complete.
+    awaitStarted();
+    if (!negotiationComplete) {
+      throw new IllegalStateException("Negotiation failed to complete", shutdownCause);
     }
 
     // Create the stream.
@@ -186,7 +194,8 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
   }
 
   @Override
-  protected void doStart() {
+  public void start(Listener transportListener) {
+    listener = Preconditions.checkNotNull(transportListener, "listener");
     Bootstrap b = new Bootstrap();
     b.group(eventGroup);
     if (address instanceof LocalAddress) {
@@ -204,7 +213,7 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
       public void operationComplete(ChannelFuture future) throws Exception {
         if (!future.isSuccess()) {
           // The connection attempt failed.
-          notifyFailed(future.cause());
+          notifyTerminated(future.cause());
           return;
         }
 
@@ -223,7 +232,7 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
       @Override
       public void onFailure(Throwable t) {
         // The negotiation failed.
-        notifyFailed(t);
+        notifyTerminated(t);
       }
     });
 
@@ -236,27 +245,80 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
       public void operationComplete(ChannelFuture future) throws Exception {
         if (!future.isSuccess()) {
           // The close failed. Just notify that transport shutdown failed.
-          notifyFailed(future.cause());
+          notifyTerminated(future.cause());
           return;
         }
 
         if (handler.connectionError() != null) {
           // The handler encountered a connection error.
-          notifyFailed(handler.connectionError());
+          notifyTerminated(handler.connectionError());
         } else {
           // Normal termination of the connection.
-          notifyStopped();
+          notifyTerminated(null);
         }
       }
     });
   }
 
   @Override
-  protected void doStop() {
-    // No explicit call to notifyStopped() here, since this is automatically done when the
-    // channel closes.
+  public void shutdown() {
+    notifyShutdown(null);
+    // Notifying of termination is automatically done when the channel closes.
     if (channel != null && channel.isOpen()) {
       channel.close();
+    }
+  }
+
+  /**
+   * Waits until started. Does not throw an exception if the transport has now failed.
+   */
+  private void awaitStarted() {
+    if (!started) {
+      try {
+        synchronized (this) {
+          while (!started) {
+            wait();
+          }
+        }
+      } catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException("Interrupted while waiting for transport to start", ex);
+      }
+    }
+  }
+
+  private synchronized void notifyStarted() {
+    started = true;
+    notifyAll();
+  }
+
+  private void notifyShutdown(Throwable t) {
+    if (t != null) {
+      log.log(Level.SEVERE, "Transport failed", t);
+    }
+    boolean notifyShutdown;
+    synchronized (this) {
+      notifyShutdown = !shutdown;
+      if (!shutdown) {
+        shutdownCause = t;
+        shutdown = true;
+        notifyStarted();
+      }
+    }
+    if (notifyShutdown) {
+      listener.transportShutdown();
+    }
+  }
+
+  private void notifyTerminated(Throwable t) {
+    notifyShutdown(t);
+    boolean notifyTerminated;
+    synchronized (this) {
+      notifyTerminated = !terminated;
+      terminated = true;
+    }
+    if (notifyTerminated) {
+      listener.transportTerminated();
     }
   }
 
