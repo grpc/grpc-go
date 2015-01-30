@@ -47,6 +47,7 @@ import java.io.InputStream;
  */
 public class ProtoUtils {
 
+  /** Adapt a {@code Parser} to a {@code Marshaller}. */
   public static <T extends MessageLite> Marshaller<T> marshaller(final Parser<T> parser) {
     return new Marshaller<T>() {
       @Override

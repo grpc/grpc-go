@@ -106,8 +106,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
   private NettyServerHandler handler;
 
+  /** Set up for test. */
   @Before
-  public void setup() throws Exception {
+  public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
 
     when(transportListener.streamCreated(any(ServerStream.class),
@@ -156,13 +157,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   }
 
   @Test
-  public void inboundDataShouldForwardToStreamListener() throws Exception {
-    inboundDataShouldForwardToStreamListener(false);
+  public void inboundDataWithEndStreamShouldForwardToStreamListener() throws Exception {
+    inboundDataShouldForwardToStreamListener(true);
   }
 
   @Test
-  public void inboundDataWithEndStreamShouldForwardToStreamListener() throws Exception {
-    inboundDataShouldForwardToStreamListener(true);
+  public void inboundDataShouldForwardToStreamListener() throws Exception {
+    inboundDataShouldForwardToStreamListener(false);
   }
 
   private void inboundDataShouldForwardToStreamListener(boolean endStream) throws Exception {

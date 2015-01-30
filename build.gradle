@@ -1,6 +1,7 @@
 import org.apache.tools.ant.taskdefs.condition.Os
 
 subprojects {
+    apply plugin: "checkstyle"
     apply plugin: "java"
     apply plugin: "maven"
     apply plugin: "idea"
@@ -85,6 +86,21 @@ subprojects {
           options.addStringOption('Xdoclint:none', '-quiet')
         }
       }
+    }
+
+    checkstyle {
+        configFile = file("$rootDir/checkstyle.xml")
+        toolVersion = "6.2"
+    }
+
+    checkstyleMain {
+        source = fileTree(dir: "src", include: "**/*.java",
+            excludes: ["${buildDir}/generated-sources", "**/TestServiceGrpc.java"])
+    }
+
+    checkstyleTest {
+        source = fileTree(dir: "test", include: "**/*.java",
+            exclude: "${buildDir}/generated-sources")
     }
 
     task javadocJar(type: Jar) {

@@ -71,6 +71,7 @@ public class ServerInterceptorsTest {
       .addMethod("flow", requestMarshaller, responseMarshaller, handler).build();
   private Headers headers = new Headers();
 
+  /** Set up for test. */
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
@@ -79,6 +80,7 @@ public class ServerInterceptorsTest {
         .thenReturn(listener);
   }
 
+  /** Final checks for all tests. */
   @After
   public void makeSureExpectedMocksUnused() {
     verifyZeroInteractions(requestMarshaller);

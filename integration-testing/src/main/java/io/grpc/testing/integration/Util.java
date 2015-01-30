@@ -42,8 +42,8 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.util.List;
 
@@ -92,6 +92,7 @@ public class Util {
     return tmpFile;
   }
 
+  /** Assert that two messages are equal, producing a useful message if not. */
   public static void assertEquals(MessageLite expected, MessageLite actual) {
     if (expected == null || actual == null) {
       Assert.assertEquals(expected, actual);
@@ -106,6 +107,7 @@ public class Util {
     }
   }
 
+  /** Assert that two lists of messages are equal, producing a useful message if not. */
   public static void assertEquals(List<? extends MessageLite> expected,
       List<? extends MessageLite> actual) {
     if (expected == null || actual == null) {

@@ -78,7 +78,7 @@ public class Method<RequestT, ResponseT> {
   }
 
   /**
-   * The name of the method, not including the service name
+   * The name of the method, not including the service name.
    */
   public String getName() {
     return name;

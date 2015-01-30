@@ -113,17 +113,18 @@ public abstract class AbstractTransportTest {
   protected TestServiceGrpc.TestService asyncStub;
 
   /**
-   * Must be called by the subclass setup method.
+   * Must be called by the subclass setup method if overriden.
    */
   @Before
-  public void setup() {
+  public void setUp() {
     channel = createChannel();
     blockingStub = TestServiceGrpc.newBlockingStub(channel);
     asyncStub = TestServiceGrpc.newStub(channel);
   }
 
+  /** Clean up. */
   @After
-  public void teardown() throws Exception {
+  public void tearDown() throws Exception {
     if (channel != null) {
       channel.shutdown();
     }

@@ -46,8 +46,8 @@ import io.grpc.testing.integration.Messages.StreamingInputCallResponse;
 import io.grpc.testing.integration.Messages.StreamingOutputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingOutputCallResponse;
 
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Random;
@@ -321,8 +321,8 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
 
       // Increment the offset past this chunk.
       // Both buffers need to be circular.
-      offset = (offset + params.getSize()) %
-          (compressable ? compressableBuffer.size() : uncompressableBuffer.size());
+      offset = (offset + params.getSize())
+          % (compressable ? compressableBuffer.size() : uncompressableBuffer.size());
     }
     return chunkQueue;
   }

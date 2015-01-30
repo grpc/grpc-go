@@ -40,8 +40,8 @@ import io.grpc.DeferredInputStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.zip.GZIPOutputStream;
@@ -52,7 +52,8 @@ import java.util.zip.GZIPOutputStream;
  */
 public class MessageFramer {
   /**
-   * Sink implemented by the transport layer to receive frames and forward them to their destination
+   * Sink implemented by the transport layer to receive frames and forward them to their
+   * destination.
    */
   public interface Sink {
     /**
@@ -98,7 +99,8 @@ public class MessageFramer {
    * @param maxFrameSize the maximum frame size that this framer will deliver
    * @param compression the compression type
    */
-  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator, int maxFrameSize, Compression compression) {
+  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator, int maxFrameSize,
+      Compression compression) {
     this.sink = Preconditions.checkNotNull(sink, "sink");
     this.bufferAllocator = bufferAllocator;
     this.maxFrameSize = maxFrameSize;
@@ -114,7 +116,7 @@ public class MessageFramer {
    */
   public void writePayload(InputStream message, int messageLength) {
     try {
-      switch(compression) {
+      switch (compression) {
         case NONE:
           writeFrame(message, messageLength, false);
           break;

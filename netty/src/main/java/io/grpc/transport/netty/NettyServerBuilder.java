@@ -37,13 +37,13 @@ import com.google.common.util.concurrent.Service;
 
 import io.grpc.AbstractServerBuilder;
 import io.grpc.HandlerRegistry;
+import io.grpc.ServerImpl;
 import io.grpc.SharedResourceHolder;
 import io.grpc.transport.ServerListener;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
-import io.grpc.ServerImpl;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;

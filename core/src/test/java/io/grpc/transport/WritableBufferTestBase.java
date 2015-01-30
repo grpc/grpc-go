@@ -86,7 +86,7 @@ public abstract class WritableBufferTestBase {
 
   @Test
   public void testWriteSrcIndex() {
-    byte b[] = new byte[10];
+    byte[] b = new byte[10];
     for (byte i = 5; i < 10; i++) {
       b[i] = i;
     }
@@ -94,10 +94,10 @@ public abstract class WritableBufferTestBase {
     buffer().write(b, 5, 5);
 
     assertEquals(5, buffer().readableBytes());
-    byte writtenBytes[] = writtenBytes();
+    byte[] writtenBytes = writtenBytes();
     assertEquals(5, writtenBytes.length);
     for (int i = 0; i < writtenBytes.length; i++) {
-      assertEquals(5+i, writtenBytes[i]);
+      assertEquals(5 + i, writtenBytes[i]);
     }
   }
 

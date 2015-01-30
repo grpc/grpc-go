@@ -31,11 +31,11 @@
 
 package io.grpc.benchmarks.qps;
 
-import static grpc.testing.TestServiceGrpc.TestServiceStub;
 import static grpc.testing.Qpstest.SimpleRequest;
 import static grpc.testing.Qpstest.SimpleResponse;
-import static java.lang.Math.max;
+import static grpc.testing.TestServiceGrpc.TestServiceStub;
 import static io.grpc.testing.integration.Util.loadCert;
+import static java.lang.Math.max;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -63,8 +63,8 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 /**
@@ -96,6 +96,7 @@ public class QpsClient {
     new QpsClient().run(args);
   }
 
+  /** Equivalent of "main", but non-static. */
   public void run(String[] args) throws Exception {
     if (!parseArgs(args)) {
       return;
@@ -161,11 +162,11 @@ public class QpsClient {
     InetAddress address = InetAddress.getByName(serverHost);
     NegotiationType negotiationType = enableTls ? NegotiationType.TLS : NegotiationType.PLAINTEXT;
     if (enableTls && useTestCa) {
-        // Force the hostname to match the cert the server uses.
-        address = InetAddress.getByAddress("foo.test.google.fr", address.getAddress());
-        File cert = loadCert("ca.pem");
-        context = SslContext.newClientContext(cert);
-      }
+      // Force the hostname to match the cert the server uses.
+      address = InetAddress.getByAddress("foo.test.google.fr", address.getAddress());
+      File cert = loadCert("ca.pem");
+      context = SslContext.newClientContext(cert);
+    }
 
     return NettyChannelBuilder.forAddress(new InetSocketAddress(address, serverPort))
                               .negotiationType(negotiationType)
@@ -254,21 +255,21 @@ public class QpsClient {
   private void printUsage() {
     QpsClient c = new QpsClient();
     System.out.println(
-      "Usage: [ARGS...]"
-      + "\n"
-      + "\n  --server_port=INT           Port of the server. Required. No default."
-      + "\n  --server_host=STR           Hostname of the server. Default " + c.serverHost
-      + "\n  --client_channels=INT       Number of client channels. Default " + c.clientChannels
-      + "\n  --concurrent_calls=INT      Number of concurrent calls. Default " + c.concurrentCalls
-      + "\n  --payload_size=INT          Payload size in bytes. Default " + c.payloadSize
-      + "\n  --enable_tls                Enable TLS. Default disabled."
-      + "\n  --use_testca                Use the provided test certificate for TLS."
-      + "\n  --okhttp                    Use OkHttp as the transport. Default netty"
-      + "\n  --duration=TIME             Duration of the benchmark in either seconds or minutes."
-      + "\n                              For N seconds duration specify Ns and for minutes Nm. "
-      + "\n                              Default " + c.duration + "s."
-      + "\n  --warmup_duration=TIME      How long to run the warmup."
-      + "\n                              Default " + c.warmupDuration + "s."
+        "Usage: [ARGS...]"
+        + "\n"
+        + "\n  --server_port=INT           Port of the server. Required. No default."
+        + "\n  --server_host=STR           Hostname of the server. Default " + c.serverHost
+        + "\n  --client_channels=INT       Number of client channels. Default " + c.clientChannels
+        + "\n  --concurrent_calls=INT      Number of concurrent calls. Default " + c.concurrentCalls
+        + "\n  --payload_size=INT          Payload size in bytes. Default " + c.payloadSize
+        + "\n  --enable_tls                Enable TLS. Default disabled."
+        + "\n  --use_testca                Use the provided test certificate for TLS."
+        + "\n  --okhttp                    Use OkHttp as the transport. Default netty"
+        + "\n  --duration=TIME             Duration of the benchmark in either seconds or minutes."
+        + "\n                              For N seconds duration specify Ns and for minutes Nm. "
+        + "\n                              Default " + c.duration + "s."
+        + "\n  --warmup_duration=TIME      How long to run the warmup."
+        + "\n                              Default " + c.warmupDuration + "s."
     );
   }
 
@@ -288,13 +289,13 @@ public class QpsClient {
         int actualSize = value.getPayload().getBody().size();
 
         if (!PayloadType.COMPRESSABLE.equals(type)) {
-          throw new RuntimeException("type was '" + type + "', expected '" +
-                                     PayloadType.COMPRESSABLE + "'.");
+          throw new RuntimeException("type was '" + type + "', expected '"
+                                     + PayloadType.COMPRESSABLE + "'.");
         }
 
         if (payloadSize != actualSize) {
-          throw new RuntimeException("size was '" + actualSize + "', expected '" +
-                                     payloadSize + "'");
+          throw new RuntimeException("size was '" + actualSize + "', expected '"
+                                     + payloadSize + "'");
         }
       }
 
@@ -336,7 +337,7 @@ public class QpsClient {
   }
 
   private void printStats(Histogram histogram, long elapsedTime) {
-    double percentiles[] = {50, 90, 95, 99, 99.9, 99.99};
+    double[] percentiles = {50, 90, 95, 99, 99.9, 99.99};
 
     // Generate a comma-separated string of percentiles
     StringBuilder header = new StringBuilder();

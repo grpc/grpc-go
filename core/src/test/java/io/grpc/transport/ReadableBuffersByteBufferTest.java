@@ -36,7 +36,8 @@ import static com.google.common.base.Charsets.UTF_8;
 import java.nio.ByteBuffer;
 
 /**
- * Tests for the array-backed {@link ReadableBuffer} returned by {@link ReadableBuffers#wrap(ByteBuffer)}.
+ * Tests for the array-backed {@link ReadableBuffer} returned by {@link
+ * ReadableBuffers#wrap(ByteBuffer)}.
  */
 public class ReadableBuffersByteBufferTest extends ReadableBufferTestBase {
 

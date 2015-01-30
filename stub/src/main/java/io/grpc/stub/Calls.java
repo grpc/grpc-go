@@ -259,7 +259,8 @@ public class Calls {
     private final Call<?, RespT> call;
     private final StreamObserver<RespT> observer;
 
-    public StreamObserverToCallListenerAdapter(Call<?, RespT> call, StreamObserver<RespT> observer) {
+    public StreamObserverToCallListenerAdapter(
+        Call<?, RespT> call, StreamObserver<RespT> observer) {
       this.call = call;
       this.observer = observer;
     }

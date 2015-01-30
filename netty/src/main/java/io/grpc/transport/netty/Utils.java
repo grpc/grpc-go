@@ -50,8 +50,8 @@ import io.netty.util.concurrent.GenericFutureListener;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
 
 /**
@@ -96,14 +96,10 @@ class Utils {
     return headers;
   }
 
-  public static Metadata.Trailers convertTrailers(Http2Headers http2Headers) {
-    return new Metadata.Trailers(convertHeadersToArray(http2Headers));
-  }
-
   private static byte[][] convertHeadersToArray(Http2Headers http2Headers) {
     // The Netty AsciiString class is really just a wrapper around a byte[] and supports
     // arbitrary binary data, not just ASCII.
-    byte[][] headerValues = new byte[http2Headers.size()*2][];
+    byte[][] headerValues = new byte[http2Headers.size() * 2][];
     int i = 0;
     for (Map.Entry<AsciiString, AsciiString> entry : http2Headers) {
       headerValues[i++] = entry.getKey().array();
@@ -147,6 +143,10 @@ class Utils {
     return http2Headers;
   }
 
+  public static Metadata.Trailers convertTrailers(Http2Headers http2Headers) {
+    return new Metadata.Trailers(convertHeadersToArray(http2Headers));
+  }
+
   public static Http2Headers convertTrailers(Metadata.Trailers trailers, boolean headersSent) {
     Http2Headers http2Trailers = convertMetadata(trailers);
     if (!headersSent) {
@@ -169,27 +169,28 @@ class Utils {
 
   private static class DefaultEventLoopGroupResource implements Resource<EventLoopGroup> {
     private final String name;
-    private final int nEventLoops;
+    private final int numEventLoops;
 
-    DefaultEventLoopGroupResource(int nEventLoops, String name) {
+    DefaultEventLoopGroupResource(int numEventLoops, String name) {
       this.name = name;
-      this.nEventLoops = nEventLoops;
+      this.numEventLoops = numEventLoops;
     }
 
     @Override
     public EventLoopGroup create() {
       // Use the executor based constructor so we can work with both Netty4 & Netty5.
       ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat(name + "-%d").build();
-      int parallelism = nEventLoops == 0 ?
-          Runtime.getRuntime().availableProcessors() * 2 : nEventLoops;
+      int parallelism = numEventLoops == 0
+          ? Runtime.getRuntime().availableProcessors() * 2 : numEventLoops;
       final ExecutorService executor = Executors.newFixedThreadPool(parallelism, threadFactory);
       NioEventLoopGroup nioEventLoopGroup = new NioEventLoopGroup(parallelism, executor);
-      nioEventLoopGroup.terminationFuture().addListener(new GenericFutureListener<Future<Object>>() {
-        @Override
-        public void operationComplete(Future<Object> future) throws Exception {
-          executor.shutdown();
-        }
-      });
+      nioEventLoopGroup.terminationFuture().addListener(
+          new GenericFutureListener<Future<Object>>() {
+            @Override
+            public void operationComplete(Future<Object> future) throws Exception {
+              executor.shutdown();
+            }
+          });
       return nioEventLoopGroup;
     }
 

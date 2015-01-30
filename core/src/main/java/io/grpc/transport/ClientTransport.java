@@ -52,8 +52,8 @@ public interface ClientTransport {
    * @param method the descriptor of the remote method to be called for this stream.
    * @param headers to send at the beginning of the call
    * @param listener the listener for the newly created stream.
-   * @throws IllegalStateException if the service is already stopped.
    * @return the newly created stream.
+   * @throws IllegalStateException if the service is already stopped.
    */
   // TODO(nmittler): Consider also throwing for stopping.
   ClientStream newStream(MethodDescriptor<?, ?> method,
@@ -61,7 +61,8 @@ public interface ClientTransport {
                          ClientStreamListener listener);
 
   /**
-   * Starts transport. Implementations must not call {@code listener} until after {@code start()} returns.
+   * Starts transport. Implementations must not call {@code listener} until after {@code start()}
+   * returns.
    *
    * @param listener non-{@code null} listener of transport events
    */

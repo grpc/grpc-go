@@ -31,8 +31,8 @@
 
 package io.grpc;
 
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 
 import javax.annotation.Nullable;

@@ -73,16 +73,16 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -107,8 +107,9 @@ public class OkHttpClientTransportTest {
   private ClientFrameHandler frameHandler;
   private ExecutorService executor;
 
+  /** Set up for test. */
   @Before
-  public void setup() {
+  public void setUp() {
     MockitoAnnotations.initMocks(this);
     streams = new HashMap<Integer, OkHttpClientStream>();
     frameReader = new MockFrameReader();
@@ -121,6 +122,7 @@ public class OkHttpClientTransportTest {
     when(frameWriter.maxDataLength()).thenReturn(Integer.MAX_VALUE);
   }
 
+  /** Final test checks and clean up. */
   @After
   public void tearDown() {
     clientTransport.shutdown();
@@ -133,7 +135,7 @@ public class OkHttpClientTransportTest {
    * When nextFrame throws IOException, the transport should be aborted.
    */
   @Test
-  public void nextFrameThrowIOException() throws Exception {
+  public void nextFrameThrowIoException() throws Exception {
     MockStreamListener listener1 = new MockStreamListener();
     MockStreamListener listener2 = new MockStreamListener();
     clientTransport.newStream(method, new Metadata.Headers(), listener1).request(1);
@@ -141,7 +143,7 @@ public class OkHttpClientTransportTest {
     assertEquals(2, streams.size());
     assertTrue(streams.containsKey(3));
     assertTrue(streams.containsKey(5));
-    frameReader.throwIOExceptionForNextFrame();
+    frameReader.throwIoExceptionForNextFrame();
     listener1.waitUntilStreamClosed();
     listener2.waitUntilStreamClosed();
     assertEquals(0, streams.size());
@@ -495,7 +497,7 @@ public class OkHttpClientTransportTest {
       return true;
     }
 
-    synchronized void throwIOExceptionForNextFrame() {
+    synchronized void throwIoExceptionForNextFrame() {
       throwExceptionForNextFrame = true;
       notifyAll();
     }

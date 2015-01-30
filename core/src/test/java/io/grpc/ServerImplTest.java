@@ -64,13 +64,13 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -92,15 +92,17 @@ public class ServerImplTest {
   @Mock
   private ServerCall.Listener<String> callListener;
 
+  /** Set up for test. */
   @Before
-  public void startup() {
+  public void startUp() {
     MockitoAnnotations.initMocks(this);
 
     server.start();
   }
 
+  /** Tear down after test. */
   @After
-  public void teardown() {
+  public void tearDown() {
     executor.shutdownNow();
   }
 
@@ -125,6 +127,7 @@ public class ServerImplTest {
         notifyFailed(ex);
       }
     }
+
     FailingStartupService transportServer = new FailingStartupService();
     ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer);
     try {
@@ -144,6 +147,7 @@ public class ServerImplTest {
       @Override
       public void doStop() {} // Don't notify.
     }
+
     NoopService transportServer = new NoopService();
     ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer)
         .start();
@@ -171,6 +175,7 @@ public class ServerImplTest {
       @Override
       public void doStop() {} // Don't notify.
     }
+
     ManualStoppedService transportServer = new ManualStoppedService();
     ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer)
         .start();

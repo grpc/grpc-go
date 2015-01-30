@@ -51,8 +51,8 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.util.List;
 import java.util.zip.GZIPOutputStream;
 
@@ -148,8 +148,8 @@ public class MessageDeframerTest {
   @Test
   public void largerFrameSize() {
     deframer.request(1);
-    deframer.deframe(
-        ReadableBuffers.wrap(Bytes.concat(new byte[] {0, 0, 0, 3, (byte) 232}, new byte[1000])), false);
+    deframer.deframe(ReadableBuffers.wrap(
+        Bytes.concat(new byte[] {0, 0, 0, 3, (byte) 232}, new byte[1000])), false);
     verify(listener).messageRead(messages.capture());
     assertEquals(Bytes.asList(new byte[1000]), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());

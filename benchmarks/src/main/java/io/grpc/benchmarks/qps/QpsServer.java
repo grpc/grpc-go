@@ -31,21 +31,21 @@
 
 package io.grpc.benchmarks.qps;
 
-import static grpc.testing.Qpstest.StatsRequest;
-import static grpc.testing.Qpstest.ServerStats;
 import static grpc.testing.Qpstest.Latencies;
-import static grpc.testing.Qpstest.StartArgs;
 import static grpc.testing.Qpstest.Payload;
 import static grpc.testing.Qpstest.PayloadType;
-import static grpc.testing.Qpstest.SimpleResponse;
+import static grpc.testing.Qpstest.ServerStats;
 import static grpc.testing.Qpstest.SimpleRequest;
-import static grpc.testing.Qpstest.StreamingInputCallResponse;
-import static grpc.testing.Qpstest.StreamingOutputCallResponse;
+import static grpc.testing.Qpstest.SimpleResponse;
+import static grpc.testing.Qpstest.StartArgs;
+import static grpc.testing.Qpstest.StatsRequest;
 import static grpc.testing.Qpstest.StreamingInputCallRequest;
+import static grpc.testing.Qpstest.StreamingInputCallResponse;
 import static grpc.testing.Qpstest.StreamingOutputCallRequest;
-import static java.lang.Math.max;
+import static grpc.testing.Qpstest.StreamingOutputCallResponse;
 import static io.grpc.testing.integration.Util.loadCert;
 import static io.grpc.testing.integration.Util.pickUnusedPort;
+import static java.lang.Math.max;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
@@ -65,20 +65,21 @@ import java.util.concurrent.TimeUnit;
 
 public class QpsServer {
 
-  private boolean enable_tls;
+  private boolean enableTls;
   private int port = 0;
 
   public static void main(String... args) throws Exception {
     new QpsServer().run(args);
   }
 
+  /** Equivalent of "main", but non-static. */
   public void run(String[] args) throws Exception {
     if (!parseArgs(args)) {
       return;
     }
 
     SslContext sslContext = null;
-    if (enable_tls) {
+    if (enableTls) {
       System.out.println("Using fake CA for TLS certificate.\n"
                          + "Run the Java client with --enable_tls --use_testca");
 
@@ -136,7 +137,7 @@ public class QpsServer {
         } else if ("port".equals(key)) {
           port = Integer.parseInt(value);
         } else if ("enable_tls".equals(key)) {
-          enable_tls = true;
+          enableTls = true;
         } else {
           System.err.println("Unrecognized argument '" + key + "'.");
         }
@@ -215,20 +216,20 @@ public class QpsServer {
     }
 
     @Override
-    public StreamObserver<StreamingInputCallRequest>
-    streamingInputCall(StreamObserver<StreamingInputCallResponse> responseObserver) {
+    public StreamObserver<StreamingInputCallRequest> streamingInputCall(
+        StreamObserver<StreamingInputCallResponse> responseObserver) {
       throw Status.UNIMPLEMENTED.asRuntimeException();
     }
 
     @Override
-    public StreamObserver<StreamingOutputCallRequest>
-    fullDuplexCall(StreamObserver<StreamingOutputCallResponse> responseObserver) {
+    public StreamObserver<StreamingOutputCallRequest> fullDuplexCall(
+        StreamObserver<StreamingOutputCallResponse> responseObserver) {
       throw Status.UNIMPLEMENTED.asRuntimeException();
     }
 
     @Override
-    public StreamObserver<StreamingOutputCallRequest>
-    halfDuplexCall(StreamObserver<StreamingOutputCallResponse> responseObserver) {
+    public StreamObserver<StreamingOutputCallRequest> halfDuplexCall(
+        StreamObserver<StreamingOutputCallResponse> responseObserver) {
       throw Status.UNIMPLEMENTED.asRuntimeException();
     }
   }

@@ -39,7 +39,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Utility methods for working with {@link ClientInterceptor}s
+ * Utility methods for working with {@link ClientInterceptor}s.
  */
 public class ClientInterceptors {
 

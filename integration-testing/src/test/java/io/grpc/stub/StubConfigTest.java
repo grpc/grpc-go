@@ -45,7 +45,7 @@ import org.junit.runners.JUnit4;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Tests for stub reconfiguration
+ * Tests for stub reconfiguration.
  */
 @RunWith(JUnit4.class)
 public class StubConfigTest {

@@ -55,14 +55,14 @@ public class TestServiceClient {
   public static void main(String[] args) throws Exception {
     final TestServiceClient client = new TestServiceClient();
     client.parseArgs(args);
-    client.setup();
+    client.setUp();
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
         System.out.println("Shutting down");
         try {
-          client.teardown();
+          client.tearDown();
         } catch (Exception e) {
           e.printStackTrace();
         }
@@ -72,7 +72,7 @@ public class TestServiceClient {
     try {
       client.run();
     } finally {
-      client.teardown();
+      client.tearDown();
     }
   }
 
@@ -146,18 +146,18 @@ public class TestServiceClient {
           + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Default " + c.useTestCa
           + "\n  --use_okhttp=true|false     Whether to use OkHttp instead of Netty. Default "
             + c.useOkHttp
-          );
+      );
       System.exit(1);
     }
   }
 
-  private void setup() {
-    tester.setup();
+  private void setUp() {
+    tester.setUp();
   }
 
-  private synchronized void teardown() {
+  private synchronized void tearDown() {
     try {
-      tester.teardown();
+      tester.tearDown();
     } catch (RuntimeException ex) {
       throw ex;
     } catch (Exception ex) {

@@ -37,8 +37,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.grpc.SharedResourceHolder.Resource;
 import io.grpc.transport.ClientTransportFactory;
 
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 
 import javax.annotation.Nullable;
 
@@ -124,6 +124,8 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
     @Nullable final Runnable terminationRunnable;
 
     /**
+     * Constructor.
+     *
      * @param transportFactory the created channel uses this factory to create transports
      * @param terminationRunnable will be called at the channel's life-cycle events
      */

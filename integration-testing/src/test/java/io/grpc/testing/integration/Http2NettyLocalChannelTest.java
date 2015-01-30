@@ -28,10 +28,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package io.grpc.testing.integration;
 
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+package io.grpc.testing.integration;
 
 import io.grpc.ChannelImpl;
 import io.grpc.transport.netty.NegotiationType;
@@ -41,11 +39,15 @@ import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalServerChannel;
 
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+
 /**
  * Run transport tests over the Netty in-process channel.
  */
 public class Http2NettyLocalChannelTest extends AbstractTransportTest {
 
+  /** Start server. */
   @BeforeClass
   public static void startServer() {
     startStaticServer(
@@ -54,6 +56,7 @@ public class Http2NettyLocalChannelTest extends AbstractTransportTest {
             .channelType(LocalServerChannel.class));
   }
 
+  /** Stop server. */
   @AfterClass
   public static void stopServer() {
     stopStaticServer();

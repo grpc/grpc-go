@@ -31,12 +31,12 @@
 
 package io.grpc.transport;
 
+import static io.grpc.transport.MessageFramer.Compression;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static io.grpc.transport.MessageFramer.Compression;
 
 import com.google.common.base.Preconditions;
 
@@ -53,7 +53,7 @@ import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 
 /**
- * Tests for {@link MessageFramer}
+ * Tests for {@link MessageFramer}.
  */
 @RunWith(JUnit4.class)
 public class MessageFramerTest {
@@ -67,8 +67,9 @@ public class MessageFramerTest {
   private ArgumentCaptor<ByteWritableBuffer> frameCaptor;
   private WritableBufferAllocator allocator = new BytesWritableBufferAllocator();
 
+  /** Set up for test. */
   @Before
-  public void setup() {
+  public void setUp() {
     MockitoAnnotations.initMocks(this);
 
     framer = new MessageFramer(sink, allocator, TRANSPORT_FRAME_SIZE);
@@ -90,7 +91,8 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {14});
     verifyNoMoreInteractions(sink);
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false);
+    verify(sink).deliverFrame(
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false);
     verifyNoMoreInteractions(sink);
   }
 
@@ -99,7 +101,8 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {3, 14, 1, 5, 9, 2, 6});
     verifyNoMoreInteractions(sink);
     framer.close();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true);
+    verify(sink).deliverFrame(
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true);
     verifyNoMoreInteractions(sink);
   }
 
@@ -113,7 +116,8 @@ public class MessageFramerTest {
   @Test
   public void payloadSplitBetweenSinks() {
     writePayload(framer, new byte[] {3, 14, 1, 5, 9, 2, 6, 5});
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 8, 3, 14, 1, 5, 9, 2, 6}), false);
+    verify(sink).deliverFrame(
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 8, 3, 14, 1, 5, 9, 2, 6}), false);
     verifyNoMoreInteractions(sink);
 
     framer.flush();
@@ -160,7 +164,7 @@ public class MessageFramerTest {
     ByteWritableBuffer buffer = frameCaptor.getValue();
     assertEquals(1005, buffer.size());
 
-    byte data[] = new byte[1005];
+    byte[] data = new byte[1005];
     data[3] = 3;
     data[4] = (byte) 232;
 
@@ -242,9 +246,9 @@ public class MessageFramerTest {
 
       ByteWritableBuffer other = (ByteWritableBuffer) buffer;
 
-      return writableBytes() == other.writableBytes() &&
-             readableBytes() == other.readableBytes() &&
-             Arrays.equals(data, other.data);
+      return writableBytes() == other.writableBytes()
+          && readableBytes() == other.readableBytes()
+          && Arrays.equals(data, other.data);
     }
 
     @Override

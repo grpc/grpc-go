@@ -327,15 +327,14 @@ class NettyClientHandler extends Http2ConnectionHandler {
   /**
    * Processes the pending stream creation requests. This considers several conditions:
    *
-   * <p>
-   * 1) The HTTP/2 connection has exhausted its stream IDs. In this case all pending streams are
+   * <ol>
+   * <li>The HTTP/2 connection has exhausted its stream IDs. In this case all pending streams are
    * immediately failed.
-   * <p>
-   * 2) The HTTP/2 connection is going away. In this case all pending streams are immediately
+   * <li>The HTTP/2 connection is going away. In this case all pending streams are immediately
    * failed.
-   * <p>
-   * 3) The HTTP/2 connection's MAX_CONCURRENT_STREAMS limit has been reached. In this case,
+   * <li>The HTTP/2 connection's MAX_CONCURRENT_STREAMS limit has been reached. In this case,
    * processing of pending streams stops until an active stream has been closed.
+   * </ol>
    */
   private void createPendingStreams() {
     Http2Connection connection = connection();

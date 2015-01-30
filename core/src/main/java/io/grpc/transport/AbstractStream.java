@@ -108,7 +108,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   /**
-   * Set the internal ID for this stream
+   * Set the internal ID for this stream.
    */
   public void id(IdT id) {
     Preconditions.checkState(id != null, "Can only set id once");

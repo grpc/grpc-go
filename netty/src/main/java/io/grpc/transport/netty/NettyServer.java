@@ -64,13 +64,13 @@ public class NettyServer extends AbstractService {
   private final EventLoopGroup workerGroup;
   private Channel channel;
 
-  public NettyServer(ServerListener serverListener, SocketAddress address,
+  NettyServer(ServerListener serverListener, SocketAddress address,
       Class<? extends ServerChannel> channelType, EventLoopGroup bossGroup,
       EventLoopGroup workerGroup) {
     this(serverListener, address, channelType, bossGroup, workerGroup, null);
   }
 
-  public NettyServer(final ServerListener serverListener, SocketAddress address,
+  NettyServer(final ServerListener serverListener, SocketAddress address,
       Class<? extends ServerChannel> channelType, EventLoopGroup bossGroup,
       EventLoopGroup workerGroup, @Nullable final SslContext sslContext) {
     this.address = address;

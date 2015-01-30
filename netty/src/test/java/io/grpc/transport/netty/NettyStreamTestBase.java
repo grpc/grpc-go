@@ -95,8 +95,9 @@ public abstract class NettyStreamTestBase {
 
   protected AbstractStream<Integer> stream;
 
+  /** Set up for test. */
   @Before
-  public void setup() {
+  public void setUp() {
     MockitoAnnotations.initMocks(this);
 
     mockChannelFuture(true);

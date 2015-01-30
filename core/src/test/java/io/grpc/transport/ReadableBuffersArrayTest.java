@@ -40,7 +40,8 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 /**
- * Tests for the array-backed {@link ReadableBuffer} returned by {@link ReadableBuffers#wrap(byte[], int, int)};
+ * Tests for the array-backed {@link ReadableBuffer} returned by {@link ReadableBuffers#wrap(byte[],
+ * int, int)}.
  */
 public class ReadableBuffersArrayTest extends ReadableBufferTestBase {
 

@@ -122,8 +122,8 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
     if (transportError != null) {
       // We've already detected a transport error and now we're just accumulating more detail
       // for it.
-      transportError = transportError.augmentDescription("DATA-----------------------------\n" +
-          ReadableBuffers.readAsString(frame, errorCharset));
+      transportError = transportError.augmentDescription("DATA-----------------------------\n"
+          + ReadableBuffers.readAsString(frame, errorCharset));
       frame.close();
       if (transportError.getDescription().length() > 1000 || endOfStream) {
         inboundTransportError(transportError);

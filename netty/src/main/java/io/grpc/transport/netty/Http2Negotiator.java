@@ -102,7 +102,7 @@ public class Http2Negotiator {
    */
   public static ChannelHandler serverTls(SSLEngine sslEngine) {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
-    if (!installJettyTLSProtocolSelection(sslEngine, SettableFuture.<Void>create(), true)) {
+    if (!installJettyTlsProtocolSelection(sslEngine, SettableFuture.<Void>create(), true)) {
       throw new IllegalStateException("NPN/ALPN extensions not installed");
     }
     return new SslHandler(sslEngine, false);
@@ -116,7 +116,7 @@ public class Http2Negotiator {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
 
     final SettableFuture<Void> completeFuture = SettableFuture.create();
-    if (!installJettyTLSProtocolSelection(sslEngine, completeFuture, false)) {
+    if (!installJettyTlsProtocolSelection(sslEngine, completeFuture, false)) {
       throw new IllegalStateException("NPN/ALPN extensions not installed");
     }
     final ChannelInitializer<Channel> initializer = new ChannelInitializer<Channel>() {
@@ -279,7 +279,7 @@ public class Http2Negotiator {
    *
    * @return true if NPN/ALPN support is available.
    */
-  private static boolean installJettyTLSProtocolSelection(final SSLEngine engine,
+  private static boolean installJettyTlsProtocolSelection(final SSLEngine engine,
       final SettableFuture<Void> protocolNegotiated, boolean server) {
     for (String protocolNegoClassName : JETTY_TLS_NEGOTIATION_IMPL) {
       try {

@@ -46,7 +46,7 @@ import org.junit.runners.JUnit4;
 import java.util.Iterator;
 
 /**
- * Tests for {@link Metadata}
+ * Tests for {@link Metadata}.
  */
 @RunWith(JUnit4.class)
 public class MetadataTest {

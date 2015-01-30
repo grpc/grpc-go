@@ -38,8 +38,8 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 
 /**
- * A {@link ReadableBuffer} that is composed of 0 or more {@link ReadableBuffer}s. This provides a facade that
- * allows multiple buffers to be treated as one.
+ * A {@link ReadableBuffer} that is composed of 0 or more {@link ReadableBuffer}s. This provides a
+ * facade that allows multiple buffers to be treated as one.
  *
  * <p>When a buffer is added to a composite, its life cycle is controlled by the composite. Once
  * the composite has read past the end of a given buffer, that buffer is automatically closed and
@@ -175,8 +175,8 @@ public class CompositeReadableBuffer extends AbstractReadableBuffer {
   }
 
   /**
-   * Executes the given {@link ReadOperation} against the {@link ReadableBuffer}s required to satisfy the
-   * requested {@code length}.
+   * Executes the given {@link ReadOperation} against the {@link ReadableBuffer}s required to
+   * satisfy the requested {@code length}.
    */
   private void execute(ReadOperation op, int length) {
     checkReadable(length);
@@ -212,8 +212,8 @@ public class CompositeReadableBuffer extends AbstractReadableBuffer {
   }
 
   /**
-   * A simple read operation to perform on a single {@link ReadableBuffer}. All state management for the
-   * buffers is done by {@link CompositeReadableBuffer#execute(ReadOperation, int)}.
+   * A simple read operation to perform on a single {@link ReadableBuffer}. All state management for
+   * the buffers is done by {@link CompositeReadableBuffer#execute(ReadOperation, int)}.
    */
   private abstract class ReadOperation {
     /**
@@ -222,7 +222,7 @@ public class CompositeReadableBuffer extends AbstractReadableBuffer {
     int value;
 
     /**
-     * Only used by {@link CompositeReadableBuffer#readBytes(OutputStream, int)};
+     * Only used by {@link CompositeReadableBuffer#readBytes(OutputStream, int)}.
      */
     IOException ex;
 

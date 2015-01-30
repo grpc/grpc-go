@@ -63,7 +63,7 @@ public class RouteGuideServer {
 
   private final int port;
   private final Collection<Feature> features;
-  private ServerImpl gRpcServer;
+  private ServerImpl grpcServer;
 
   public RouteGuideServer(int port) {
     this(port, RouteGuideUtil.getDefaultFeaturesFile());
@@ -79,7 +79,7 @@ public class RouteGuideServer {
   }
 
   public void start() {
-    gRpcServer = NettyServerBuilder.forPort(port)
+    grpcServer = NettyServerBuilder.forPort(port)
         .addService(RouteGuideGrpc.bindService(new RouteGuideService(features)))
         .build().start();
     logger.info("Server started, listening on " + port);
@@ -95,8 +95,8 @@ public class RouteGuideServer {
   }
 
   public void stop() {
-    if (gRpcServer != null) {
-      gRpcServer.shutdown();
+    if (grpcServer != null) {
+      grpcServer.shutdown();
     }
   }
 
@@ -280,16 +280,16 @@ public class RouteGuideServer {
       double lat2 = RouteGuideUtil.getLatitude(end);
       double lon1 = RouteGuideUtil.getLongitude(start);
       double lon2 = RouteGuideUtil.getLongitude(end);
-      int R = 6371000; // metres
+      int r = 6371000; // metres
       double φ1 = toRadians(lat1);
       double φ2 = toRadians(lat2);
-      double Δφ = toRadians(lat2-lat1);
-      double Δλ = toRadians(lon2-lon1);
+      double Δφ = toRadians(lat2 - lat1);
+      double Δλ = toRadians(lon2 - lon1);
 
-      double a = sin(Δφ/2) * sin(Δφ/2) + cos(φ1) * cos(φ2) * sin(Δλ/2) * sin(Δλ/2);
-      double c = 2 * atan2(sqrt(a), sqrt(1-a));
+      double a = sin(Δφ / 2) * sin(Δφ / 2) + cos(φ1) * cos(φ2) * sin(Δλ / 2) * sin(Δλ / 2);
+      double c = 2 * atan2(sqrt(a), sqrt(1 - a));
 
-      return R * c;
+      return r * c;
     }
   }
 }

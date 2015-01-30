@@ -40,7 +40,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
- * A {@link io.grpc.transport.ReadableBuffer} implementation that is backed by an {@link okio.Buffer}.
+ * A {@link ReadableBuffer} implementation that is backed by an {@link okio.Buffer}.
  */
 class OkHttpReadableBuffer extends AbstractReadableBuffer {
   private final okio.Buffer buffer;

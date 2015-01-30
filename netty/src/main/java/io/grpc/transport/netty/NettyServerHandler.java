@@ -204,7 +204,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   }
 
   /**
-   * Handler for the Channel shutting down
+   * Handler for the Channel shutting down.
    */
   @Override
   public void channelInactive(ChannelHandlerContext ctx) throws Exception {
@@ -328,14 +328,15 @@ class NettyServerHandler extends Http2ConnectionHandler {
   }
 
   /**
-   * Returns the server stream associated to the given HTTP/2 stream object
+   * Returns the server stream associated to the given HTTP/2 stream object.
    */
   private NettyServerStream serverStream(Http2Stream stream) {
     return stream.getProperty(NettyServerStream.class);
   }
 
   private Http2Exception newStreamException(int streamId, Throwable cause) {
-    return Http2Exception.streamError(streamId, Http2Error.INTERNAL_ERROR, cause.getMessage(), cause);
+    return Http2Exception.streamError(
+        streamId, Http2Error.INTERNAL_ERROR, cause.getMessage(), cause);
   }
 
   private static class LazyFrameListener extends Http2FrameAdapter {

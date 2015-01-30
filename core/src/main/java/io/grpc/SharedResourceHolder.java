@@ -195,6 +195,7 @@ public final class SharedResourceHolder {
     final Object payload;
     int refcount;
     ScheduledFuture<?> destroyTask;
+
     Instance(Object payload) {
       this.payload = payload;
     }

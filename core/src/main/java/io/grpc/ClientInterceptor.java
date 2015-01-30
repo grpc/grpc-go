@@ -48,8 +48,8 @@ import javax.annotation.concurrent.ThreadSafe;
 public interface ClientInterceptor {
   /**
    * Intercept {@link Call} creation by the {@code next} {@link Channel}.
-   * <p>
-   * Many variations of interception are possible. Complex implementations may return a wrapper
+   *
+   * <p>Many variations of interception are possible. Complex implementations may return a wrapper
    * around the result of {@code next.newCall()}, whereas a simpler implementation may just modify
    * the header metadata prior to returning the result of {@code next.newCall()}.
    *

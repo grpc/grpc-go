@@ -41,8 +41,8 @@ import io.grpc.transport.ServerStream;
 import io.grpc.transport.ServerStreamListener;
 import io.grpc.transport.ServerTransportListener;
 
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.concurrent.Executor;
@@ -205,7 +205,7 @@ public class ServerImpl implements Server {
    * Waits for the server to become terminated.
    */
   public synchronized void awaitTerminated() throws InterruptedException {
-    while(!terminated) {
+    while (!terminated) {
       wait();
     }
   }

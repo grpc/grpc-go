@@ -39,8 +39,8 @@ import java.io.IOException;
 /**
  * Parser for parsing nano proto messages.
  *
- * Should be implemented by generated code.
+ * <p>Should be implemented by generated code.
  */
-public interface Parser <T extends MessageNano> {
+public interface Parser<T extends MessageNano> {
   T parse(CodedInputByteBufferNano input) throws IOException;
 }

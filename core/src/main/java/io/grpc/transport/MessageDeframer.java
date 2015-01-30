@@ -36,8 +36,8 @@ import com.google.common.base.Preconditions;
 import io.grpc.Status;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.util.zip.GZIPInputStream;
 
 import javax.annotation.concurrent.NotThreadSafe;

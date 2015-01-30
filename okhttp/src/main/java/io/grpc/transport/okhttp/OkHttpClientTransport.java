@@ -342,7 +342,7 @@ public class OkHttpClientTransport implements ClientTransport {
   }
 
   /**
-   * Runnable which reads frames and dispatches them to in flight calls
+   * Runnable which reads frames and dispatches them to in flight calls.
    */
   @VisibleForTesting
   class ClientFrameHandler implements FrameReader.Handler, Runnable {
@@ -365,7 +365,7 @@ public class OkHttpClientTransport implements ClientTransport {
     }
 
     /**
-     * Handle a HTTP2 DATA frame
+     * Handle a HTTP2 DATA frame.
      */
     @Override
     public void data(boolean inFinished, int streamId, BufferedSource in, int length)
@@ -393,7 +393,7 @@ public class OkHttpClientTransport implements ClientTransport {
     }
 
     /**
-     * Handle HTTP2 HEADER and CONTINUATION frames
+     * Handle HTTP2 HEADER and CONTINUATION frames.
      */
     @Override
     public void headers(boolean outFinished,

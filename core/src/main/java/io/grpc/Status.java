@@ -231,13 +231,14 @@ public final class Status {
 
   // Create the canonical list of Status instances indexed by their code values.
   private static List<Status> STATUS_LIST;
+
   static {
     TreeMap<Integer, Status> canonicalizer = new TreeMap<Integer, Status>();
     for (Code code : Code.values()) {
       Status replaced = canonicalizer.put(code.value(), new Status(code));
       if (replaced != null) {
-        throw new IllegalStateException("Code value duplication between " +
-            replaced.getCode().name() + " & " + code.name());
+        throw new IllegalStateException("Code value duplication between "
+            + replaced.getCode().name() + " & " + code.name());
       }
     }
     STATUS_LIST = new ArrayList<Status>(canonicalizer.values());

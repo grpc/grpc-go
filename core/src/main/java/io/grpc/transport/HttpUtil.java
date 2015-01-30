@@ -37,7 +37,7 @@ import io.grpc.Status;
 import java.net.HttpURLConnection;
 
 /**
- * Constants for GRPC-over-HTTP (or HTTP/2)
+ * Constants for GRPC-over-HTTP (or HTTP/2).
  */
 public final class HttpUtil {
   /**
@@ -64,7 +64,7 @@ public final class HttpUtil {
       Metadata.ASCII_STRING_MARSHALLER);
 
   /**
-   * The TE (transport encoding) header for requests over HTTP/2
+   * The TE (transport encoding) header for requests over HTTP/2.
    */
   public static final String TE_TRAILERS = "trailers";
 
@@ -96,6 +96,7 @@ public final class HttpUtil {
         return Status.UNAVAILABLE;
       case HttpURLConnection.HTTP_GATEWAY_TIMEOUT:  // 504
         return Status.DEADLINE_EXCEEDED;
+      default:
     }
     // Generic HTTP code handling.
     if (httpStatusCode < 200) {

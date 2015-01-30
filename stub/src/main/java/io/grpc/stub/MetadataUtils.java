@@ -43,7 +43,7 @@ import io.grpc.Status;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Utility functions for binding and receiving headers
+ * Utility functions for binding and receiving headers.
  */
 public class MetadataUtils {
 

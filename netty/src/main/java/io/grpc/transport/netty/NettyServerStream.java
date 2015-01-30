@@ -41,7 +41,7 @@ import io.netty.channel.Channel;
 import io.netty.handler.codec.http2.Http2Headers;
 
 /**
- * Server stream for a Netty HTTP2 transport
+ * Server stream for a Netty HTTP2 transport.
  */
 class NettyServerStream extends AbstractServerStream<Integer> {
 

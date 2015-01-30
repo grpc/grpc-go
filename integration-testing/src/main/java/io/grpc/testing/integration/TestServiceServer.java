@@ -125,7 +125,7 @@ public class TestServiceServer {
           + "\n"
           + "\n  --port=PORT           Port to connect to. Default " + s.port
           + "\n  --use_tls=true|false  Whether to use TLS. Default " + s.useTls
-          );
+      );
       System.exit(1);
     }
   }

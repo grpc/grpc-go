@@ -35,8 +35,8 @@ import static com.google.common.base.Charsets.UTF_8;
 
 import com.google.common.base.Preconditions;
 
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -73,16 +73,16 @@ public final class ReadableBuffers {
   }
 
   /**
-   * Creates a new {@link ReadableBuffer} that is backed by the given {@link ByteBuffer}. Calls to read from
-   * the buffer will increment the position of the {@link ByteBuffer}.
+   * Creates a new {@link ReadableBuffer} that is backed by the given {@link ByteBuffer}. Calls to
+   * read from the buffer will increment the position of the {@link ByteBuffer}.
    */
   public static ReadableBuffer wrap(ByteBuffer bytes) {
     return new ByteReadableBufferWrapper(bytes);
   }
 
   /**
-   * Reads an entire {@link ReadableBuffer} to a new array. After calling this method, the buffer will
-   * contain no readable bytes.
+   * Reads an entire {@link ReadableBuffer} to a new array. After calling this method, the buffer
+   * will contain no readable bytes.
    */
   public static byte[] readArray(ReadableBuffer buffer) {
     Preconditions.checkNotNull(buffer, "buffer");

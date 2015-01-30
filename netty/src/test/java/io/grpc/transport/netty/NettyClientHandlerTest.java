@@ -34,8 +34,8 @@ package io.grpc.transport.netty;
 import static com.google.common.base.Charsets.UTF_8;
 import static io.grpc.transport.netty.Utils.CONTENT_TYPE_GRPC;
 import static io.grpc.transport.netty.Utils.CONTENT_TYPE_HEADER;
-import static io.grpc.transport.netty.Utils.HTTPS;
 import static io.grpc.transport.netty.Utils.HTTP_METHOD;
+import static io.grpc.transport.netty.Utils.HTTPS;
 import static io.grpc.transport.netty.Utils.STATUS_OK;
 import static io.grpc.transport.netty.Utils.TE_HEADER;
 import static io.grpc.transport.netty.Utils.TE_TRAILERS;
@@ -96,8 +96,9 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   private ByteBuf content;
   private Http2Headers grpcHeaders;
 
+  /** Set up for test. */
   @Before
-  public void setup() throws Exception {
+  public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
 
     frameWriter = new DefaultHttp2FrameWriter();

@@ -39,8 +39,8 @@ import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
 import io.grpc.transport.ClientTransportFactory;
 
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.ExecutorService;
@@ -58,9 +58,13 @@ public final class ChannelImpl implements Channel {
 
   private static class NoopClientStream implements ClientStream {
     @Override public void writeMessage(InputStream message, int length, Runnable accepted) {}
+
     @Override public void flush() {}
+
     @Override public void cancel() {}
+
     @Override public void halfClose() {}
+
     @Override public void request(int numMessages) {}
   }
 

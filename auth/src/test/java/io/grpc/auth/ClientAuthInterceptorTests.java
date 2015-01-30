@@ -61,8 +61,9 @@ public class ClientAuthInterceptorTests {
 
   ClientAuthInterceptor interceptor;
 
+  /** Set up for test. */
   @Before
-  public void startup() throws IOException {
+  public void startUp() throws IOException {
     MockitoAnnotations.initMocks(this);
     when(channel.newCall(descriptor)).thenReturn(call);
     interceptor = new ClientAuthInterceptor(credentials,

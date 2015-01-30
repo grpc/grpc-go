@@ -38,8 +38,8 @@ import com.google.protobuf.nano.MessageNano;
 import io.grpc.Marshaller;
 import io.grpc.Status;
 
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 
 /**
  * Utility methods for using nano proto with grpc.
@@ -48,6 +48,7 @@ public class NanoUtils {
 
   private NanoUtils() {}
 
+  /** Adapt {@code parser} to a {@code Marshaller}. */
   public static <T extends MessageNano> Marshaller<T> marshaller(final Parser<T> parser) {
     return new Marshaller<T>() {
       @Override

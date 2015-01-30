@@ -69,6 +69,7 @@ public class MutableHandlerRegistryImplTest {
   @SuppressWarnings("rawtypes")
   private ServerMethodDefinition fewMethodDefinition = multiServiceDefinition.getMethod("few");
 
+  /** Final checks for all tests. */
   @After
   public void makeSureMocksUnused() {
     Mockito.verifyZeroInteractions(requestMarshaller);

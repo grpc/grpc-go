@@ -66,7 +66,7 @@ public class NettyWritableBufferTest extends WritableBufferTestBase {
 
   @Override
   protected byte[] writtenBytes() {
-    byte b[] = buffer.bytebuf().array();
+    byte[] b = buffer.bytebuf().array();
     int fromIdx = buffer.bytebuf().arrayOffset();
     return Arrays.copyOfRange(b, fromIdx, buffer.readableBytes());
   }
