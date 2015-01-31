@@ -44,6 +44,9 @@ using namespace std;
 
 namespace grpc_go_generator {
 
+static map<string, string> g_import_alias;
+static set<string> g_imports;
+
 bool NoStreaming(const google::protobuf::MethodDescriptor* method) {
   return !method->client_streaming() && !method->server_streaming();
 }
@@ -88,25 +91,32 @@ std::string BadToUnderscore(std::string str) {
   return str;
 }
 
-const string GetFullName(const string& selfPkg,
-                         const string& msgPkg,
-                         const string& msgName) {
-  if (selfPkg == msgPkg) {
-    return msgName;
+string GenerateFullPackage(const google::protobuf::FileDescriptor* file) {
+  // In opensouce environment, assume each directory has at most one package.
+  size_t pos = file->name().find_last_of('/');
+  if (pos != string::npos) {
+    return file->name().substr(0, pos);
   }
-  return BadToUnderscore(msgPkg) + "." + msgName;
+  return "";
+}
+
+const string GetFullName(const google::protobuf::Descriptor* desc) {
+  string pkg = GenerateFullPackage(desc->file());
+  if (g_imports.find(pkg) == g_imports.end()) {
+    return desc->name();
+  }
+  if (g_import_alias.find(pkg) != g_import_alias.end()) {
+    return g_import_alias[pkg] + "." + desc->name();
+  }
+  return BadToUnderscore(desc->file()->package()) + "." + desc->name();
 }
 
 void PrintClientMethodDef(google::protobuf::io::Printer* printer,
                           const google::protobuf::MethodDescriptor* method,
                           map<string, string>* vars) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = GetFullName((*vars)["PackageName"],
-                                   method->input_type()->file()->package(),
-                                   method->input_type()->name());
-  (*vars)["Response"] = GetFullName((*vars)["PackageName"],
-                                   method->output_type()->file()->package(),
-                                   method->output_type()->name());
+  (*vars)["Request"] = GetFullName(method->input_type());
+  (*vars)["Response"] = GetFullName(method->output_type());
   if (NoStreaming(method)) {
     printer->Print(*vars,
                    "\t$Method$(ctx context.Context, in *$Request$, opts "
@@ -132,12 +142,8 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
                            const google::protobuf::MethodDescriptor* method,
                            map<string, string>* vars) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = GetFullName((*vars)["PackageName"],
-                                   method->input_type()->file()->package(),
-                                   method->input_type()->name());
-  (*vars)["Response"] = GetFullName((*vars)["PackageName"],
-                                   method->output_type()->file()->package(),
-                                   method->output_type()->name());
+  (*vars)["Request"] = GetFullName(method->input_type());
+  (*vars)["Response"] = GetFullName(method->output_type());
   if (NoStreaming(method)) {
     printer->Print(
         *vars,
@@ -306,12 +312,8 @@ void PrintServerMethodDef(google::protobuf::io::Printer* printer,
                           const google::protobuf::MethodDescriptor* method,
                           map<string, string>* vars) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = GetFullName((*vars)["PackageName"],
-                                   method->input_type()->file()->package(),
-                                   method->input_type()->name());
-  (*vars)["Response"] = GetFullName((*vars)["PackageName"],
-                                   method->output_type()->file()->package(),
-                                   method->output_type()->name());
+  (*vars)["Request"] = GetFullName(method->input_type());
+  (*vars)["Response"] = GetFullName(method->output_type());
   if (NoStreaming(method)) {
     printer->Print(
         *vars,
@@ -330,12 +332,8 @@ void PrintServerHandler(google::protobuf::io::Printer* printer,
                         const google::protobuf::MethodDescriptor* method,
                         map<string, string>* vars) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = GetFullName((*vars)["PackageName"],
-                                   method->input_type()->file()->package(),
-                                   method->input_type()->name());
-  (*vars)["Response"] = GetFullName((*vars)["PackageName"],
-                                   method->output_type()->file()->package(),
-                                   method->output_type()->name());
+  (*vars)["Request"] = GetFullName(method->input_type());
+  (*vars)["Response"] = GetFullName(method->output_type());
   if (NoStreaming(method)) {
     printer->Print(
         *vars,
@@ -513,42 +511,49 @@ void PrintServer(google::protobuf::io::Printer* printer,
       "}\n\n");
 }
 
+bool IsSelfImport(const google::protobuf::FileDescriptor* self,
+                  const google::protobuf::FileDescriptor* import) {
+  if (GenerateFullPackage(self) == GenerateFullPackage(import)) {
+    return true;
+  }
+  return false;
+}
+
 void PrintMessageImports(
     google::protobuf::io::Printer* printer,
     const google::protobuf::FileDescriptor* file,
     map<string, string>* vars) {
   set<const google::protobuf::FileDescriptor*> descs;
-  set<string> importedPkgs;
   for (int i = 0; i < file->service_count(); ++i) {
     const google::protobuf::ServiceDescriptor* service = file->service(i);
     for (int j = 0; j < service->method_count(); ++j) {
-      const google::protobuf::MethodDescriptor* method = service->method(i);
-      // Remove duplicated imports.
-      if (importedPkgs.find(
-          method->input_type()->file()->package()) == importedPkgs.end()) {
+      const google::protobuf::MethodDescriptor* method = service->method(j);
+      if (!IsSelfImport(file, method->input_type()->file())) {
         descs.insert(method->input_type()->file());
-        importedPkgs.insert(method->input_type()->file()->package());
       }
-      if (importedPkgs.find(
-          method->output_type()->file()->package()) == importedPkgs.end()) {
+      if (!IsSelfImport(file, method->output_type()->file())) {
         descs.insert(method->output_type()->file());
-        importedPkgs.insert(method->output_type()->file()->package());
       }
     }
   }
 
+  int idx = 0;
   for (auto fd : descs) {
-    if (fd->package() == (*vars)["PackageName"]) {
-      continue;
+    string pkg = GenerateFullPackage(fd);
+    if (pkg != "") {
+      g_imports.insert(pkg);
+      if (file->package() == fd->package()) {
+        // the same package name in different directories. Require an alias.
+        g_import_alias[pkg] = "apb" + std::to_string(idx++);
+      }
     }
-    string name = fd->name();
-    string import_path = "import \"";
-    if (name.find('/') == string::npos) {
-      // Assume all the proto in the same directory belong to the same package.
-      continue;
-    } else {
-      import_path += name.substr(0, name.find_last_of('/')) + "\"";
+  }
+  for (auto import : g_imports) {
+    string import_path = "import ";
+    if (g_import_alias.find(import) != g_import_alias.end()) {
+      import_path += g_import_alias[import] + " ";
     }
+    import_path += "\"" + import + "\"";
     printer->Print(import_path.c_str());
     printer->Print("\n");
   }
