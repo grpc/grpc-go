@@ -104,9 +104,12 @@ const string GetFullMessageQualifiedName(
     map<string, string>& import_alias) {
   string pkg = GenerateFullGoPackage(desc->file());
   if (imports.find(pkg) == imports.end()) {
+    // The message is in the same package as the services definition.
     return desc->name();
   }
   if (import_alias.find(pkg) != import_alias.end()) {
+    // The message is in a package whose name is as same as the one consisting
+    // of the service definition. Use the alias to differentiate.
     return import_alias[pkg] + "." + desc->name();
   }
   return BadToUnderscore(desc->file()->package()) + "." + desc->name();
@@ -565,7 +568,7 @@ void PrintMessageImports(
     string pkg = GenerateFullGoPackage(fd);
     if (pkg != "") {
       auto ret = imports->insert(pkg);
-      if (ret.second == true && file->package() == fd->package()) {
+      if (ret.second && file->package() == fd->package()) {
         // the same package name in different directories. Require an alias.
         (*import_alias)[pkg] = "apb" + std::to_string(idx++);
       }
