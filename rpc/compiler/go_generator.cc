@@ -42,10 +42,8 @@
 
 using namespace std;
 
+// TODO(zhaoq): Support go_package option.
 namespace grpc_go_generator {
-
-static map<string, string> g_import_alias;
-static set<string> g_imports;
 
 bool NoStreaming(const google::protobuf::MethodDescriptor* method) {
   return !method->client_streaming() && !method->server_streaming();
@@ -91,7 +89,7 @@ std::string BadToUnderscore(std::string str) {
   return str;
 }
 
-string GenerateFullPackage(const google::protobuf::FileDescriptor* file) {
+string GenerateFullGoPackage(const google::protobuf::FileDescriptor* file) {
   // In opensouce environment, assume each directory has at most one package.
   size_t pos = file->name().find_last_of('/');
   if (pos != string::npos) {
@@ -100,23 +98,30 @@ string GenerateFullPackage(const google::protobuf::FileDescriptor* file) {
   return "";
 }
 
-const string GetFullName(const google::protobuf::Descriptor* desc) {
-  string pkg = GenerateFullPackage(desc->file());
-  if (g_imports.find(pkg) == g_imports.end()) {
+const string GetFullMessageQualifiedName(
+    const google::protobuf::Descriptor* desc,
+    set<string>& imports,
+    map<string, string>& import_alias) {
+  string pkg = GenerateFullGoPackage(desc->file());
+  if (imports.find(pkg) == imports.end()) {
     return desc->name();
   }
-  if (g_import_alias.find(pkg) != g_import_alias.end()) {
-    return g_import_alias[pkg] + "." + desc->name();
+  if (import_alias.find(pkg) != import_alias.end()) {
+    return import_alias[pkg] + "." + desc->name();
   }
   return BadToUnderscore(desc->file()->package()) + "." + desc->name();
 }
 
 void PrintClientMethodDef(google::protobuf::io::Printer* printer,
                           const google::protobuf::MethodDescriptor* method,
-                          map<string, string>* vars) {
+                          map<string, string>* vars,
+                          set<string>& imports,
+                          map<string, string>& import_alias) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = GetFullName(method->input_type());
-  (*vars)["Response"] = GetFullName(method->output_type());
+  (*vars)["Request"] =
+      GetFullMessageQualifiedName(method->input_type(), imports, import_alias);
+  (*vars)["Response"] =
+      GetFullMessageQualifiedName(method->output_type(), imports, import_alias);
   if (NoStreaming(method)) {
     printer->Print(*vars,
                    "\t$Method$(ctx context.Context, in *$Request$, opts "
@@ -140,10 +145,14 @@ void PrintClientMethodDef(google::protobuf::io::Printer* printer,
 
 void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
                            const google::protobuf::MethodDescriptor* method,
-                           map<string, string>* vars) {
+                           map<string, string>* vars,
+                           set<string>& imports,
+                           map<string, string>& import_alias) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = GetFullName(method->input_type());
-  (*vars)["Response"] = GetFullName(method->output_type());
+  (*vars)["Request"] =
+      GetFullMessageQualifiedName(method->input_type(), imports, import_alias);
+  (*vars)["Response"] =
+      GetFullMessageQualifiedName(method->output_type(), imports, import_alias);
   if (NoStreaming(method)) {
     printer->Print(
         *vars,
@@ -285,12 +294,14 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
 
 void PrintClient(google::protobuf::io::Printer* printer,
                  const google::protobuf::ServiceDescriptor* service,
-                 map<string, string>* vars) {
+                 map<string, string>* vars,
+                 set<string>& imports,
+                 map<string, string>& import_alias) {
   (*vars)["Service"] = service->name();
   (*vars)["ServiceStruct"] = LowerCaseService(service->name());
   printer->Print(*vars, "type $Service$Client interface {\n");
   for (int i = 0; i < service->method_count(); ++i) {
-    PrintClientMethodDef(printer, service->method(i), vars);
+    PrintClientMethodDef(printer, service->method(i), vars, imports, import_alias);
   }
   printer->Print("}\n\n");
 
@@ -304,16 +315,20 @@ void PrintClient(google::protobuf::io::Printer* printer,
       "\treturn &$ServiceStruct$Client{cc}\n"
       "}\n\n");
   for (int i = 0; i < service->method_count(); ++i) {
-    PrintClientMethodImpl(printer, service->method(i), vars);
+    PrintClientMethodImpl(printer, service->method(i), vars, imports, import_alias);
   }
 }
 
 void PrintServerMethodDef(google::protobuf::io::Printer* printer,
                           const google::protobuf::MethodDescriptor* method,
-                          map<string, string>* vars) {
+                          map<string, string>* vars,
+                          set<string>& imports,
+                          map<string, string>& import_alias) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = GetFullName(method->input_type());
-  (*vars)["Response"] = GetFullName(method->output_type());
+  (*vars)["Request"] =
+      GetFullMessageQualifiedName(method->input_type(), imports, import_alias);
+  (*vars)["Response"] =
+      GetFullMessageQualifiedName(method->output_type(), imports, import_alias);
   if (NoStreaming(method)) {
     printer->Print(
         *vars,
@@ -330,10 +345,14 @@ void PrintServerMethodDef(google::protobuf::io::Printer* printer,
 
 void PrintServerHandler(google::protobuf::io::Printer* printer,
                         const google::protobuf::MethodDescriptor* method,
-                        map<string, string>* vars) {
+                        map<string, string>* vars,
+                        set<string>& imports,
+                        map<string, string>& import_alias) {
   (*vars)["Method"] = method->name();
-  (*vars)["Request"] = GetFullName(method->input_type());
-  (*vars)["Response"] = GetFullName(method->output_type());
+  (*vars)["Request"] =
+      GetFullMessageQualifiedName(method->input_type(), imports, import_alias);
+  (*vars)["Response"] =
+      GetFullMessageQualifiedName(method->output_type(), imports, import_alias);
   if (NoStreaming(method)) {
     printer->Print(
         *vars,
@@ -471,11 +490,13 @@ void PrintServerStreamingMethodDesc(
 
 void PrintServer(google::protobuf::io::Printer* printer,
                  const google::protobuf::ServiceDescriptor* service,
-                 map<string, string>* vars) {
+                 map<string, string>* vars,
+                 set<string>& imports,
+                 map<string, string>& import_alias) {
   (*vars)["Service"] = service->name();
   printer->Print(*vars, "type $Service$Server interface {\n");
   for (int i = 0; i < service->method_count(); ++i) {
-    PrintServerMethodDef(printer, service->method(i), vars);
+    PrintServerMethodDef(printer, service->method(i), vars, imports, import_alias);
   }
   printer->Print("}\n\n");
 
@@ -485,7 +506,7 @@ void PrintServer(google::protobuf::io::Printer* printer,
                  "}\n\n");
 
   for (int i = 0; i < service->method_count(); ++i) {
-    PrintServerHandler(printer, service->method(i), vars);
+    PrintServerHandler(printer, service->method(i), vars, imports, import_alias);
   }
 
   printer->Print(*vars,
@@ -513,7 +534,7 @@ void PrintServer(google::protobuf::io::Printer* printer,
 
 bool IsSelfImport(const google::protobuf::FileDescriptor* self,
                   const google::protobuf::FileDescriptor* import) {
-  if (GenerateFullPackage(self) == GenerateFullPackage(import)) {
+  if (GenerateFullGoPackage(self) == GenerateFullGoPackage(import)) {
     return true;
   }
   return false;
@@ -522,7 +543,9 @@ bool IsSelfImport(const google::protobuf::FileDescriptor* self,
 void PrintMessageImports(
     google::protobuf::io::Printer* printer,
     const google::protobuf::FileDescriptor* file,
-    map<string, string>* vars) {
+    map<string, string>* vars,
+    set<string>* imports,
+    map<string, string>* import_alias) {
   set<const google::protobuf::FileDescriptor*> descs;
   for (int i = 0; i < file->service_count(); ++i) {
     const google::protobuf::ServiceDescriptor* service = file->service(i);
@@ -539,19 +562,19 @@ void PrintMessageImports(
 
   int idx = 0;
   for (auto fd : descs) {
-    string pkg = GenerateFullPackage(fd);
+    string pkg = GenerateFullGoPackage(fd);
     if (pkg != "") {
-      g_imports.insert(pkg);
-      if (file->package() == fd->package()) {
+      auto ret = imports->insert(pkg);
+      if (ret.second == true && file->package() == fd->package()) {
         // the same package name in different directories. Require an alias.
-        g_import_alias[pkg] = "apb" + std::to_string(idx++);
+        (*import_alias)[pkg] = "apb" + std::to_string(idx++);
       }
     }
   }
-  for (auto import : g_imports) {
+  for (auto import : *imports) {
     string import_path = "import ";
-    if (g_import_alias.find(import) != g_import_alias.end()) {
-      import_path += g_import_alias[import] + " ";
+    if (import_alias->find(import) != import_alias->end()) {
+      import_path += (*import_alias)[import] + " ";
     }
     import_path += "\"" + import + "\"";
     printer->Print(import_path.c_str());
@@ -565,7 +588,8 @@ string GetServices(const google::protobuf::FileDescriptor* file) {
   google::protobuf::io::StringOutputStream output_stream(&output);
   google::protobuf::io::Printer printer(&output_stream, '$');
   map<string, string> vars;
-
+  map<string, string> import_alias;
+  set<string> imports;
   string package_name = !file->options().go_package().empty()
                             ? file->options().go_package()
                             : file->package();
@@ -583,7 +607,7 @@ string GetServices(const google::protobuf::FileDescriptor* file) {
       "\tproto \"github.com/golang/protobuf/proto\"\n"
       ")\n\n");
 
-  PrintMessageImports(&printer, file, &vars);
+  PrintMessageImports(&printer, file, &vars, &imports, &import_alias);
 
   // $Package$ is used to fully qualify method names.
   vars["Package"] = file->package();
@@ -592,9 +616,9 @@ string GetServices(const google::protobuf::FileDescriptor* file) {
   }
 
   for (int i = 0; i < file->service_count(); ++i) {
-    PrintClient(&printer, file->service(0), &vars);
+    PrintClient(&printer, file->service(0), &vars, imports, import_alias);
     printer.Print("\n");
-    PrintServer(&printer, file->service(0), &vars);
+    PrintServer(&printer, file->service(0), &vars, imports, import_alias);
     printer.Print("\n");
   }
   return output;
