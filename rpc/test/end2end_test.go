@@ -157,18 +157,18 @@ func setUp(useTLS bool, maxStream uint32) (s *rpc.Server, mc testpb.MathClient) 
 	if err != nil {
 		log.Fatalf("Failed to parse listener address: %v", err)
 	}
+	s = rpc.NewServer(rpc.MaxConcurrentStreams(maxStream))
+	ms := &mathServer{}
+	testpb.RegisterService(s, ms)
 	if useTLS {
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
 			log.Fatalf("Failed to generate credentials %v", err)
 		}
-		s = rpc.NewServer(lis, rpc.MaxConcurrentStreams(maxStream), rpc.WithServerTLS(creds))
+		go s.Serve(creds.NewListener(lis))
 	} else {
-		s = rpc.NewServer(lis, rpc.MaxConcurrentStreams(maxStream))
+		go s.Serve(lis)
 	}
-	ms := &mathServer{}
-	testpb.RegisterService(s, ms)
-	go s.Run()
 	addr := "localhost:" + port
 	var conn *rpc.ClientConn
 	if useTLS {

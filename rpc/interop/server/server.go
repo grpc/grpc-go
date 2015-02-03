@@ -195,16 +195,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	var server *rpc.Server
+	server := rpc.NewServer()
+	testpb.RegisterService(server, &testServer{})
 	if *useTLS {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
 			log.Fatalf("Failed to generate credentials %v", err)
 		}
-		server = rpc.NewServer(lis, rpc.WithServerTLS(creds))
+		server.Serve(creds.NewListener(lis))
 	} else {
-		server = rpc.NewServer(lis)
+		server.Serve(lis)
 	}
-	testpb.RegisterService(server, &testServer{})
-	server.Run()
 }

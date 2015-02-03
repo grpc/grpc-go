@@ -44,7 +44,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/grpc-go/rpc/codes"
-	"github.com/google/grpc-go/rpc/credentials"
 	"github.com/google/grpc-go/rpc/metadata"
 	"github.com/google/grpc-go/rpc/transport"
 	"golang.org/x/net/context"
@@ -86,16 +85,15 @@ type service struct {
 
 // Server is a gRPC server to serve RPC requests.
 type Server struct {
-	lis   net.Listener
 	opts  options
 	mu    sync.Mutex
+	lis   map[net.Listener]bool
 	conns map[transport.ServerTransport]bool
 	m     map[string]*service // service name -> service info
 }
 
 type options struct {
 	maxConcurrentStreams uint32
-	connCreds            credentials.TransportAuthenticator
 }
 
 // ServerOption sets options.
@@ -109,25 +107,15 @@ func MaxConcurrentStreams(n uint32) ServerOption {
 	}
 }
 
-// WithServerTLS returns an Option that consists of the input TLSCredentials.
-func WithServerTLS(creds credentials.TransportAuthenticator) ServerOption {
-	return func(o *options) {
-		o.connCreds = creds
-	}
-}
-
 // NewServer creates a gRPC server which has no service registered and has not
 // started to accept requests yet.
-func NewServer(lis net.Listener, opt ...ServerOption) *Server {
+func NewServer(opt ...ServerOption) *Server {
 	var opts options
 	for _, o := range opt {
 		o(&opts)
 	}
-	if opts.connCreds != nil {
-		lis = opts.connCreds.NewListener(lis)
-	}
 	return &Server{
-		lis:   lis,
+		lis:   make(map[net.Listener]bool),
 		opts:  opts,
 		conns: make(map[transport.ServerTransport]bool),
 		m:     make(map[string]*service),
@@ -135,7 +123,8 @@ func NewServer(lis net.Listener, opt ...ServerOption) *Server {
 }
 
 // RegisterService register a service and its implementation to the gRPC
-// server. Called from the IDL generated code.
+// server. Called from the IDL generated code. This must be called before
+// invoking Serve.
 func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -164,12 +153,26 @@ func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
-// Run makes the server start to accept connections on s.lis. Upon each received
-// connection request, it creates a ServerTransport and starts receiving gRPC
-// requests from it. Non-nil error returns if something goes wrong.
-func (s *Server) Run() error {
+// Serve accepts incoming connections on the listener lis, creating a new
+// ServerTransport and service goroutine for each. The service goroutines
+// read gRPC request and then call the registered handlers to reply to them.
+// Service returns when lis.Accept fails.
+func (s *Server) Serve(lis net.Listener) error {
+	s.mu.Lock()
+	if s.lis == nil {
+		s.mu.Unlock()
+		return fmt.Errorf("the server has been stopped")
+	}
+	s.lis[lis] = true
+	s.mu.Unlock()
+	defer func() {
+		lis.Close()
+		s.mu.Lock()
+		delete(s.lis, lis)
+		s.mu.Unlock()
+	}()
 	for {
-		c, err := s.lis.Accept()
+		c, err := lis.Accept()
 		if err != nil {
 			return err
 		}
@@ -312,11 +315,15 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 // Stop stops the gRPC server. Once it returns, the server stops accepting
 // connection requests and closes all the connected connections.
 func (s *Server) Stop() {
-	s.lis.Close()
 	s.mu.Lock()
+	listeners := s.lis
+	s.lis = nil
 	cs := s.conns
 	s.conns = nil
 	s.mu.Unlock()
+	for lis := range listeners {
+		lis.Close()
+	}
 	for c := range cs {
 		c.Close()
 	}
