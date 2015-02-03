@@ -568,6 +568,8 @@ void PrintMessageImports(
     string pkg = GenerateFullGoPackage(fd);
     if (pkg != "") {
       auto ret = imports->insert(pkg);
+      // Use ret.second to guarantee if a package spans multiple files, it only
+      // gets 1 alias.
       if (ret.second && file->package() == fd->package()) {
         // the same package name in different directories. Require an alias.
         (*import_alias)[pkg] = "apb" + std::to_string(idx++);
