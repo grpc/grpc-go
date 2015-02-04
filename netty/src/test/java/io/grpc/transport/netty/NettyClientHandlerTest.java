@@ -45,6 +45,7 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
 import static org.mockito.Mockito.calls;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -55,6 +56,7 @@ import io.grpc.Status;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
@@ -170,13 +172,6 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   }
 
   @Test
-  public void cancelForUnknownStreamShouldFail() throws Exception {
-    when(stream.id()).thenReturn(3);
-    handler.write(ctx, new CancelStreamCommand(stream), promise);
-    verify(promise).setFailure(any(Throwable.class));
-  }
-
-  @Test
   public void cancelBeforeStreamAssignedShouldSucceed() throws Exception {
     handler.connection().local().maxStreams(0);
     handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream), promise);
@@ -187,6 +182,26 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     handler.write(ctx, new CancelStreamCommand(stream), promise);
     verify(promise).setSuccess();
     verifyNoMoreInteractions(ctx);
+  }
+
+  /**
+   * Although nobody is listening to an exception should it occur during cancel(), we don't want an
+   * exception to be thrown because it would negatively impact performance, and we don't want our
+   * users workarounding around such performance issues.
+   */
+  @Test
+  public void cancelTwiceShouldSucceed() throws Exception {
+    createStream();
+
+    handler.write(ctx, new CancelStreamCommand(stream), promise);
+
+    ByteBuf expected = rstStreamFrame(3, (int) Http2Error.CANCEL.code());
+    verify(ctx).write(eq(expected), eq(promise));
+    verify(ctx).flush();
+
+    promise = mock(ChannelPromise.class);
+    handler.write(ctx, new CancelStreamCommand(stream), promise);
+    verify(promise).setSuccess();
   }
 
   @Test
