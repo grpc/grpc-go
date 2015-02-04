@@ -73,10 +73,12 @@ class GoGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
       return false;
     }
 
+    vector<pair<string, string> > options;
+    google::protobuf::compiler::ParseGeneratorParameter(parameter, &options);
     unique_ptr<google::protobuf::io::ZeroCopyOutputStream> output(
         context->Open(file_name));
     google::protobuf::io::CodedOutputStream coded_out(output.get());
-    string code = grpc_go_generator::GetServices(file);
+    string code = grpc_go_generator::GetServices(file, options);
     coded_out.WriteRaw(code.data(), code.size());
     return true;
   }

@@ -547,6 +547,7 @@ void PrintMessageImports(
     google::protobuf::io::Printer* printer,
     const google::protobuf::FileDescriptor* file,
     map<string, string>* vars,
+    const string& import_prefix,
     set<string>* imports,
     map<string, string>* import_alias) {
   set<const google::protobuf::FileDescriptor*> descs;
@@ -581,14 +582,15 @@ void PrintMessageImports(
     if (import_alias->find(import) != import_alias->end()) {
       import_path += (*import_alias)[import] + " ";
     }
-    import_path += "\"" + import + "\"";
+    import_path += "\"" + import_prefix + import + "\"";
     printer->Print(import_path.c_str());
     printer->Print("\n");
   }
   printer->Print("\n");
 }
 
-string GetServices(const google::protobuf::FileDescriptor* file) {
+string GetServices(const google::protobuf::FileDescriptor* file,
+                   vector<pair<string, string> >& options) {
   string output;
   google::protobuf::io::StringOutputStream output_stream(&output);
   google::protobuf::io::Printer printer(&output_stream, '$');
@@ -612,7 +614,15 @@ string GetServices(const google::protobuf::FileDescriptor* file) {
       "\tproto \"github.com/golang/protobuf/proto\"\n"
       ")\n\n");
 
-  PrintMessageImports(&printer, file, &vars, &imports, &import_alias);
+  // TODO(zhaoq): Support other command line parameters supported by
+  // the protoc-gen-go plugin.
+  string import_prefix = "";
+  for (auto& p : options) {
+    if (p.first == "import_prefix") {
+      import_prefix = p.second;
+    }
+  }
+  PrintMessageImports(&printer, file, &vars, import_prefix, &imports, &import_alias);
 
   // $Package$ is used to fully qualify method names.
   vars["Package"] = file->package();
