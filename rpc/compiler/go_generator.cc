@@ -42,7 +42,6 @@
 
 using namespace std;
 
-// TODO(zhaoq): Support go_package option.
 namespace grpc_go_generator {
 
 bool NoStreaming(const google::protobuf::MethodDescriptor* method) {
@@ -100,8 +99,8 @@ string GenerateFullGoPackage(const google::protobuf::FileDescriptor* file) {
 
 const string GetFullMessageQualifiedName(
     const google::protobuf::Descriptor* desc,
-    set<string>& imports,
-    map<string, string>& import_alias) {
+    const set<string>& imports,
+    const map<string, string>& import_alias) {
   string pkg = GenerateFullGoPackage(desc->file());
   if (imports.find(pkg) == imports.end()) {
     // The message is in the same package as the services definition.
@@ -110,16 +109,18 @@ const string GetFullMessageQualifiedName(
   if (import_alias.find(pkg) != import_alias.end()) {
     // The message is in a package whose name is as same as the one consisting
     // of the service definition. Use the alias to differentiate.
-    return import_alias[pkg] + "." + desc->name();
+    return import_alias.find(pkg)->second + "." + desc->name();
   }
-  return BadToUnderscore(desc->file()->package()) + "." + desc->name();
+  string prefix = !desc->file()->options().go_package().empty()
+      ? desc->file()->options().go_package() : desc->file()->package();
+  return BadToUnderscore(prefix) + "." + desc->name();
 }
 
 void PrintClientMethodDef(google::protobuf::io::Printer* printer,
                           const google::protobuf::MethodDescriptor* method,
                           map<string, string>* vars,
-                          set<string>& imports,
-                          map<string, string>& import_alias) {
+                          const set<string>& imports,
+                          const map<string, string>& import_alias) {
   (*vars)["Method"] = method->name();
   (*vars)["Request"] =
       GetFullMessageQualifiedName(method->input_type(), imports, import_alias);
@@ -149,8 +150,8 @@ void PrintClientMethodDef(google::protobuf::io::Printer* printer,
 void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
                            const google::protobuf::MethodDescriptor* method,
                            map<string, string>* vars,
-                           set<string>& imports,
-                           map<string, string>& import_alias) {
+                           const set<string>& imports,
+                           const map<string, string>& import_alias) {
   (*vars)["Method"] = method->name();
   (*vars)["Request"] =
       GetFullMessageQualifiedName(method->input_type(), imports, import_alias);
@@ -298,8 +299,8 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
 void PrintClient(google::protobuf::io::Printer* printer,
                  const google::protobuf::ServiceDescriptor* service,
                  map<string, string>* vars,
-                 set<string>& imports,
-                 map<string, string>& import_alias) {
+                 const set<string>& imports,
+                 const map<string, string>& import_alias) {
   (*vars)["Service"] = service->name();
   (*vars)["ServiceStruct"] = LowerCaseService(service->name());
   printer->Print(*vars, "type $Service$Client interface {\n");
@@ -325,8 +326,8 @@ void PrintClient(google::protobuf::io::Printer* printer,
 void PrintServerMethodDef(google::protobuf::io::Printer* printer,
                           const google::protobuf::MethodDescriptor* method,
                           map<string, string>* vars,
-                          set<string>& imports,
-                          map<string, string>& import_alias) {
+                          const set<string>& imports,
+                          const map<string, string>& import_alias) {
   (*vars)["Method"] = method->name();
   (*vars)["Request"] =
       GetFullMessageQualifiedName(method->input_type(), imports, import_alias);
@@ -349,8 +350,8 @@ void PrintServerMethodDef(google::protobuf::io::Printer* printer,
 void PrintServerHandler(google::protobuf::io::Printer* printer,
                         const google::protobuf::MethodDescriptor* method,
                         map<string, string>* vars,
-                        set<string>& imports,
-                        map<string, string>& import_alias) {
+                        const set<string>& imports,
+                        const map<string, string>& import_alias) {
   (*vars)["Method"] = method->name();
   (*vars)["Request"] =
       GetFullMessageQualifiedName(method->input_type(), imports, import_alias);
@@ -494,8 +495,8 @@ void PrintServerStreamingMethodDesc(
 void PrintServer(google::protobuf::io::Printer* printer,
                  const google::protobuf::ServiceDescriptor* service,
                  map<string, string>* vars,
-                 set<string>& imports,
-                 map<string, string>& import_alias) {
+                 const set<string>& imports,
+                 const map<string, string>& import_alias) {
   (*vars)["Service"] = service->name();
   printer->Print(*vars, "type $Service$Server interface {\n");
   for (int i = 0; i < service->method_count(); ++i) {
@@ -547,6 +548,7 @@ void PrintMessageImports(
     google::protobuf::io::Printer* printer,
     const google::protobuf::FileDescriptor* file,
     map<string, string>* vars,
+    const string& import_prefix,
     set<string>* imports,
     map<string, string>* import_alias) {
   set<const google::protobuf::FileDescriptor*> descs;
@@ -564,15 +566,22 @@ void PrintMessageImports(
   }
 
   int idx = 0;
+  set<string> pkgs;
+  pkgs.insert((*vars)["PackageName"]);
   for (auto fd : descs) {
-    string pkg = GenerateFullGoPackage(fd);
-    if (pkg != "") {
-      auto ret = imports->insert(pkg);
-      // Use ret.second to guarantee if a package spans multiple files, it only
-      // gets 1 alias.
-      if (ret.second && file->package() == fd->package()) {
+    string full_pkg = GenerateFullGoPackage(fd);
+    if (full_pkg != "") {
+      // Use ret_full to guarantee it only gets an alias once if a
+      // package spans multiple files,
+      auto ret_full = imports->insert(full_pkg);
+      string fd_pkg = !fd->options().go_package().empty()
+          ? fd->options().go_package() : fd->package();
+      // Use ret_pkg to guarantee the packages get the different alias
+      // names if they are on different paths but use the same name.
+      auto ret_pkg = pkgs.insert(fd_pkg);
+      if (ret_full.second && !ret_pkg.second) {
         // the same package name in different directories. Require an alias.
-        (*import_alias)[pkg] = "apb" + std::to_string(idx++);
+        (*import_alias)[full_pkg] = "apb" + std::to_string(idx++);
       }
     }
   }
@@ -581,14 +590,15 @@ void PrintMessageImports(
     if (import_alias->find(import) != import_alias->end()) {
       import_path += (*import_alias)[import] + " ";
     }
-    import_path += "\"" + import + "\"";
+    import_path += "\"" + import_prefix + import + "\"";
     printer->Print(import_path.c_str());
     printer->Print("\n");
   }
   printer->Print("\n");
 }
 
-string GetServices(const google::protobuf::FileDescriptor* file) {
+string GetServices(const google::protobuf::FileDescriptor* file,
+                   const vector<pair<string, string> >& options) {
   string output;
   google::protobuf::io::StringOutputStream output_stream(&output);
   google::protobuf::io::Printer printer(&output_stream, '$');
@@ -612,7 +622,16 @@ string GetServices(const google::protobuf::FileDescriptor* file) {
       "\tproto \"github.com/golang/protobuf/proto\"\n"
       ")\n\n");
 
-  PrintMessageImports(&printer, file, &vars, &imports, &import_alias);
+  // TODO(zhaoq): Support other command line parameters supported by
+  // the protoc-gen-go plugin.
+  string import_prefix = "";
+  for (auto& p : options) {
+    if (p.first == "import_prefix") {
+      import_prefix = p.second;
+    }
+  }
+  PrintMessageImports(
+      &printer, file, &vars, import_prefix, &imports, &import_alias);
 
   // $Package$ is used to fully qualify method names.
   vars["Package"] = file->package();

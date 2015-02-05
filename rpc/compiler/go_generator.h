@@ -35,6 +35,9 @@
 #define NET_GRPC_COMPILER_GO_GENERATOR_H_
 
 #include <string>
+#include <vector>
+
+using namespace std;
 
 namespace google {
 namespace protobuf {
@@ -44,7 +47,8 @@ class FileDescriptor;
 
 namespace grpc_go_generator {
 
-std::string GetServices(const google::protobuf::FileDescriptor* file);
+string GetServices(const google::protobuf::FileDescriptor* file,
+                   const vector<std::pair<string, string> >& options);
 
 }  // namespace grpc_go_generator
 
