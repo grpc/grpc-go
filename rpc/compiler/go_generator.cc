@@ -574,7 +574,7 @@ void PrintMessageImports(
       // Use ret_full to guarantee it only gets an alias once if a
       // package spans multiple files,
       auto ret_full = imports->insert(full_pkg);
-      string  fd_pkg = !fd->options().go_package().empty()
+      string fd_pkg = !fd->options().go_package().empty()
           ? fd->options().go_package() : fd->package();
       // Use ret_pkg to guarantee the packages get the different alias
       // names if they are on different paths but use the same name.
