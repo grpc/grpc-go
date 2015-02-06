@@ -33,6 +33,7 @@ package io.grpc.transport.okhttp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.AbstractService;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
@@ -46,7 +47,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.Status.Code;
-import io.grpc.transport.AbstractClientTransport;
 import io.grpc.transport.ClientStream;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
@@ -75,7 +75,7 @@ import javax.net.ssl.SSLSocketFactory;
 /**
  * A okhttp-based {@link ClientTransport} implementation.
  */
-public class OkHttpClientTransport extends AbstractClientTransport {
+public class OkHttpClientTransport extends AbstractService implements ClientTransport {
   /** The default initial window size in HTTP/2 is 64 KiB for the stream and connection. */
   @VisibleForTesting
   static final int DEFAULT_INITIAL_WINDOW_SIZE = 64 * 1024;
@@ -164,15 +164,19 @@ public class OkHttpClientTransport extends AbstractClientTransport {
   }
 
   @Override
-  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method,
-                                           Metadata.Headers headers,
-                                           ClientStreamListener listener) {
+  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata.Headers headers,
+      ClientStreamListener listener) {
+    Preconditions.checkNotNull(method, "method");
+    Preconditions.checkNotNull(headers, "headers");
+    Preconditions.checkNotNull(listener, "listener");
     OkHttpClientStream clientStream = OkHttpClientStream.newStream(listener,
         frameWriter, this, outboundFlow);
-    if (goAway) {
-      clientStream.transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
-    } else {
-      assignStreamId(clientStream);
+    synchronized (lock) {
+      if (goAway) {
+        throw new IllegalStateException("Transport not running", goAwayStatus.asRuntimeException());
+      } else {
+        assignStreamId(clientStream);
+      }
     }
     String defaultPath = "/" + method.getName();
     frameWriter.synStream(false, false, clientStream.id(), 0,

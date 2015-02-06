@@ -34,13 +34,13 @@ package io.grpc.transport.netty;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.AbstractService;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.transport.AbstractClientTransport;
 import io.grpc.transport.ClientStream;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
@@ -79,7 +79,7 @@ import javax.net.ssl.SSLParameters;
 /**
  * A Netty-based {@link ClientTransport} implementation.
  */
-class NettyClientTransport extends AbstractClientTransport {
+class NettyClientTransport extends AbstractService implements ClientTransport {
 
   private final SocketAddress address;
   private final EventLoopGroup eventGroup;
@@ -87,7 +87,7 @@ class NettyClientTransport extends AbstractClientTransport {
   private final NettyClientHandler handler;
   private final boolean ssl;
   private final AsciiString authority;
-  private Channel channel;
+  private volatile Channel channel;
 
   NettyClientTransport(SocketAddress address, NegotiationType negotiationType,
       EventLoopGroup eventGroup, SslContext sslContext) {
@@ -140,8 +140,27 @@ class NettyClientTransport extends AbstractClientTransport {
   }
 
   @Override
-  protected ClientStream newStreamInternal(MethodDescriptor<?, ?> method, Metadata.Headers headers,
+  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata.Headers headers,
       ClientStreamListener listener) {
+    Preconditions.checkNotNull(method, "method");
+    Preconditions.checkNotNull(headers, "headers");
+    Preconditions.checkNotNull(listener, "listener");
+
+    // We can't write to the channel until negotiation is complete. Use state() instead of blindly
+    // calling awaitRunning() in order to avoid obtaining a lock in the common case.
+    if (state() != State.RUNNING) {
+      try {
+        awaitRunning();
+      } catch (IllegalStateException ex) {
+        if (channel == null) {
+          // Negotiation did not complete, so still can't write to channel. Ex should already
+          // contain failureCause() information.
+          throw ex;
+        }
+      }
+      // channel is now guaranteed to be non-null
+    }
+
     // Create the stream.
     NettyClientStream stream = new NettyClientStream(listener, channel, handler);
 
