@@ -52,7 +52,7 @@ const (
 	// may be converted to this error.
 	Unknown Code = 2
 
-	// InvalidArgument indicattes client specified an invalid argument.
+	// InvalidArgument indicates client specified an invalid argument.
 	// Note that this differs from FailedPrecondition. It indicates arguments
 	// that are problematic regardless of the state of the system
 	// (e.g., a malformed file name).
@@ -77,7 +77,7 @@ const (
 	// execute the specified operation. It must not be used for rejections
 	// caused by exhausting some resource (use ResourceExhausted
 	// instead for those errors).  It must not be
-	// used if the caller can not be identified (use Unauthenticated
+	// used if the caller cannot be identified (use Unauthenticated
 	// instead for those errors).
 	PermissionDenied Code = 7
 
@@ -95,9 +95,9 @@ const (
 	// operation is applied to a non-directory, etc.
 	//
 	// A litmus test that may help a service implementor in deciding
-	// between FailedPrecondition, ABORTED, and Unavailable:
+	// between FailedPrecondition, Aborted, and Unavailable:
 	//  (a) Use Unavailable if the client can retry just the failing call.
-	//  (b) Use ABORTED if the client should retry at a higher-level
+	//  (b) Use Aborted if the client should retry at a higher-level
 	//      (e.g., restarting a read-modify-write sequence).
 	//  (c) Use FailedPrecondition if the client should not retry until
 	//      the system state has been explicitly fixed.  E.g., if an "rmdir"
@@ -115,10 +115,10 @@ const (
 	// etc.
 	//
 	// See litmus test above for deciding between FailedPrecondition,
-	// ABORTED, and Unavailable.
+	// Aborted, and Unavailable.
 	Aborted Code = 10
 
-	// OutOfRange means oOperation was attempted past the valid range.
+	// OutOfRange means operation was attempted past the valid range.
 	// E.g., seeking or reading past end of file.
 	//
 	// Unlike InvalidArgument, this error indicates a problem that may
