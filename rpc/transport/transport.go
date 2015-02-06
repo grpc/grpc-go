@@ -44,9 +44,15 @@ import (
 	"net"
 	"sync"
 
+<<<<<<< HEAD
 	"github.com/grpc/grpc-go/rpc/codes"
 	"github.com/grpc/grpc-go/rpc/credentials"
 	"github.com/grpc/grpc-go/rpc/metadata"
+=======
+	"github.com/google/grpc-go/rpc/codes"
+	"github.com/google/grpc-go/rpc/credentials"
+	"github.com/google/grpc-go/rpc/metadata"
+>>>>>>> 81da9cb2119d434a468b0be62fe3b4bc895be400
 	"golang.org/x/net/context"
 )
 

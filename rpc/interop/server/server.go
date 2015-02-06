@@ -42,9 +42,15 @@ import (
 	"strconv"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/grpc/grpc-go/rpc/credentials"
 	testpb "github.com/grpc/grpc-go/rpc/interop/testdata"
 	"github.com/grpc/grpc-go/rpc"
+=======
+	"github.com/google/grpc-go/rpc/credentials"
+	testpb "github.com/google/grpc-go/rpc/interop/testdata"
+	"github.com/google/grpc-go/rpc"
+>>>>>>> 81da9cb2119d434a468b0be62fe3b4bc895be400
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 )

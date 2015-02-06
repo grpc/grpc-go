@@ -35,7 +35,11 @@ package grpc_testing
 
 import (
 	"fmt"
+<<<<<<< HEAD
 	"github.com/grpc/grpc-go/rpc"
+=======
+	"github.com/google/grpc-go/rpc"
+>>>>>>> 81da9cb2119d434a468b0be62fe3b4bc895be400
 	proto "github.com/golang/protobuf/proto"
 	context "golang.org/x/net/context"
 	"io"
