@@ -2,7 +2,6 @@
 // of unary/streaming requests/responses.
 syntax = "proto2";
 
-import "github.com/google/grpc_go/interop/testdata/empty.proto";
 import "github.com/google/grpc_go/interop/testdata/messages.proto";
 
 package grpc.testing;
@@ -11,7 +10,7 @@ package grpc.testing;
 // performance with various types of payload.
 service TestService {
   // One empty request followed by one empty response.
-  rpc EmptyCall(grpc.testing.Empty) returns (grpc.testing.Empty);
+  rpc EmptyCall(Empty) returns (Empty);
 
   // One request followed by one response.
   // The server returns the client payload as-is.
