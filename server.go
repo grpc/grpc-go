@@ -43,9 +43,9 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/grpc/grpc-go/rpc/codes"
-	"github.com/grpc/grpc-go/rpc/metadata"
-	"github.com/grpc/grpc-go/rpc/transport"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/transport"
 	"golang.org/x/net/context"
 )
 

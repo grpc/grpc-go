@@ -47,11 +47,11 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/grpc/grpc-go/rpc"
-	"github.com/grpc/grpc-go/rpc/codes"
-	"github.com/grpc/grpc-go/rpc/credentials"
-	"github.com/grpc/grpc-go/rpc/metadata"
-	testpb "github.com/grpc/grpc-go/rpc/test/testdata"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
+	testpb "google.golang.org/grpc/test/testdata"
 	"golang.org/x/net/context"
 )
 
