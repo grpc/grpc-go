@@ -169,4 +169,36 @@ public class ServerInterceptors {
       return delegate.isCancelled();
     }
   }
+
+  /**
+   * Utility base class for decorating {@link ServerCall.Listener} instances.
+   */
+  public static class ForwardingListener<RespT> extends ServerCall.Listener<RespT> {
+
+    private final ServerCall.Listener<RespT> delegate;
+
+    public ForwardingListener(ServerCall.Listener<RespT> delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public void onPayload(RespT payload) {
+      delegate.onPayload(payload);
+    }
+
+    @Override
+    public void onHalfClose() {
+      delegate.onHalfClose();
+    }
+
+    @Override
+    public void onCancel() {
+      delegate.onCancel();
+    }
+
+    @Override
+    public void onComplete() {
+      delegate.onComplete();
+    }
+  }
 }
