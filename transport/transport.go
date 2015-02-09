@@ -35,7 +35,7 @@
 Package transport defines and implements message oriented communication channel
 to complete various transactions (e.g., an RPC).
 */
-package transport
+package transport // import "google.golang.org/grpc/transport"
 
 import (
 	"bytes"
@@ -44,10 +44,10 @@ import (
 	"net"
 	"sync"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	"golang.org/x/net/context"
 )
 
 // recvMsg represents the received msg from the transport. All transport
