@@ -31,18 +31,15 @@
  *
  */
 
-/*
-Package rpc implements various components to perform RPC on top of transport package.
-*/
-package rpc
+package grpc
 
 import (
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/grpc/grpc-go/rpc/credentials"
-	"github.com/grpc/grpc-go/rpc/transport"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/transport"
 	"golang.org/x/net/context"
 )
 

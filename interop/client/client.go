@@ -41,10 +41,10 @@ import (
 	"strconv"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/grpc/grpc-go/rpc"
-	"github.com/grpc/grpc-go/rpc/credentials"
-	testpb "github.com/grpc/grpc-go/rpc/interop/testdata"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	testpb "google.golang.org/grpc/interop/testdata"
 )
 
 var (
@@ -225,7 +225,7 @@ func doPingPong(tc testpb.TestServiceClient) {
 func main() {
 	flag.Parse()
 	serverAddr := net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
-	var opts []rpc.DialOption
+	var opts []grpc.DialOption
 	if *useTLS {
 		var sn string
 		if *tlsServerName != "" {
@@ -241,9 +241,9 @@ func main() {
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
 		}
-		opts = append(opts, rpc.WithClientTLS(creds))
+		opts = append(opts, grpc.WithClientTLS(creds))
 	}
-	conn, err := rpc.Dial(serverAddr, opts...)
+	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}

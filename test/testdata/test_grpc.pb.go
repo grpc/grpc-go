@@ -35,38 +35,38 @@ package test
 
 import (
 	"fmt"
-	"io"
-	"github.com/grpc/grpc-go/rpc"
-	context "golang.org/x/net/context"
 	proto "github.com/golang/protobuf/proto"
+	context "golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"io"
 )
 
 type MathClient interface {
-	Div(ctx context.Context, in *DivArgs, opts ...rpc.CallOption) (*DivReply, error)
-	DivMany(ctx context.Context, opts ...rpc.CallOption) (Math_DivManyClient, error)
-	Fib(ctx context.Context, m *FibArgs, opts ...rpc.CallOption) (Math_FibClient, error)
-	Sum(ctx context.Context, opts ...rpc.CallOption) (Math_SumClient, error)
+	Div(ctx context.Context, in *DivArgs, opts ...grpc.CallOption) (*DivReply, error)
+	DivMany(ctx context.Context, opts ...grpc.CallOption) (Math_DivManyClient, error)
+	Fib(ctx context.Context, m *FibArgs, opts ...grpc.CallOption) (Math_FibClient, error)
+	Sum(ctx context.Context, opts ...grpc.CallOption) (Math_SumClient, error)
 }
 
 type mathClient struct {
-	cc *rpc.ClientConn
+	cc *grpc.ClientConn
 }
 
-func NewMathClient(cc *rpc.ClientConn) MathClient {
+func NewMathClient(cc *grpc.ClientConn) MathClient {
 	return &mathClient{cc}
 }
 
-func (c *mathClient) Div(ctx context.Context, in *DivArgs, opts ...rpc.CallOption) (*DivReply, error) {
+func (c *mathClient) Div(ctx context.Context, in *DivArgs, opts ...grpc.CallOption) (*DivReply, error) {
 	out := new(DivReply)
-	err := rpc.Invoke(ctx, "/test.Math/Div", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/test.Math/Div", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *mathClient) DivMany(ctx context.Context, opts ...rpc.CallOption) (Math_DivManyClient, error) {
-	stream, err := rpc.NewClientStream(ctx, c.cc, "/test.Math/DivMany", opts...)
+func (c *mathClient) DivMany(ctx context.Context, opts ...grpc.CallOption) (Math_DivManyClient, error) {
+	stream, err := grpc.NewClientStream(ctx, c.cc, "/test.Math/DivMany", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -76,11 +76,11 @@ func (c *mathClient) DivMany(ctx context.Context, opts ...rpc.CallOption) (Math_
 type Math_DivManyClient interface {
 	Send(*DivArgs) error
 	Recv() (*DivReply, error)
-	rpc.ClientStream
+	grpc.ClientStream
 }
 
 type mathDivManyClient struct {
-	rpc.ClientStream
+	grpc.ClientStream
 }
 
 func (x *mathDivManyClient) Send(m *DivArgs) error {
@@ -95,8 +95,8 @@ func (x *mathDivManyClient) Recv() (*DivReply, error) {
 	return m, nil
 }
 
-func (c *mathClient) Fib(ctx context.Context, m *FibArgs, opts ...rpc.CallOption) (Math_FibClient, error) {
-	stream, err := rpc.NewClientStream(ctx, c.cc, "/test.Math/Fib", opts...)
+func (c *mathClient) Fib(ctx context.Context, m *FibArgs, opts ...grpc.CallOption) (Math_FibClient, error) {
+	stream, err := grpc.NewClientStream(ctx, c.cc, "/test.Math/Fib", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +112,11 @@ func (c *mathClient) Fib(ctx context.Context, m *FibArgs, opts ...rpc.CallOption
 
 type Math_FibClient interface {
 	Recv() (*Num, error)
-	rpc.ClientStream
+	grpc.ClientStream
 }
 
 type mathFibClient struct {
-	rpc.ClientStream
+	grpc.ClientStream
 }
 
 func (x *mathFibClient) Recv() (*Num, error) {
@@ -127,8 +127,8 @@ func (x *mathFibClient) Recv() (*Num, error) {
 	return m, nil
 }
 
-func (c *mathClient) Sum(ctx context.Context, opts ...rpc.CallOption) (Math_SumClient, error) {
-	stream, err := rpc.NewClientStream(ctx, c.cc, "/test.Math/Sum", opts...)
+func (c *mathClient) Sum(ctx context.Context, opts ...grpc.CallOption) (Math_SumClient, error) {
+	stream, err := grpc.NewClientStream(ctx, c.cc, "/test.Math/Sum", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -138,11 +138,11 @@ func (c *mathClient) Sum(ctx context.Context, opts ...rpc.CallOption) (Math_SumC
 type Math_SumClient interface {
 	Send(*Num) error
 	CloseAndRecv() (*Num, error)
-	rpc.ClientStream
+	grpc.ClientStream
 }
 
 type mathSumClient struct {
-	rpc.ClientStream
+	grpc.ClientStream
 }
 
 func (x *mathSumClient) Send(m *Num) error {
@@ -165,7 +165,6 @@ func (x *mathSumClient) CloseAndRecv() (*Num, error) {
 	return m, fmt.Errorf("Violate gRPC client streaming protocol: no EOF after the response.")
 }
 
-
 type MathServer interface {
 	Div(context.Context, *DivArgs) (*DivReply, error)
 	DivMany(Math_DivManyServer) error
@@ -173,7 +172,7 @@ type MathServer interface {
 	Sum(Math_SumServer) error
 }
 
-func RegisterService(s *rpc.Server, srv MathServer) {
+func RegisterService(s *grpc.Server, srv MathServer) {
 	s.RegisterService(&_Math_serviceDesc, srv)
 }
 
@@ -189,18 +188,18 @@ func _Math_Div_Handler(srv interface{}, ctx context.Context, buf []byte) (proto.
 	return out, nil
 }
 
-func _Math_DivMany_Handler(srv interface{}, stream rpc.ServerStream) error {
+func _Math_DivMany_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(MathServer).DivMany(&mathDivManyServer{stream})
 }
 
 type Math_DivManyServer interface {
 	Send(*DivReply) error
 	Recv() (*DivArgs, error)
-	rpc.ServerStream
+	grpc.ServerStream
 }
 
 type mathDivManyServer struct {
-	rpc.ServerStream
+	grpc.ServerStream
 }
 
 func (x *mathDivManyServer) Send(m *DivReply) error {
@@ -215,7 +214,7 @@ func (x *mathDivManyServer) Recv() (*DivArgs, error) {
 	return m, nil
 }
 
-func _Math_Fib_Handler(srv interface{}, stream rpc.ServerStream) error {
+func _Math_Fib_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(FibArgs)
 	if err := stream.RecvProto(m); err != nil {
 		return err
@@ -225,29 +224,29 @@ func _Math_Fib_Handler(srv interface{}, stream rpc.ServerStream) error {
 
 type Math_FibServer interface {
 	Send(*Num) error
-	rpc.ServerStream
+	grpc.ServerStream
 }
 
 type mathFibServer struct {
-	rpc.ServerStream
+	grpc.ServerStream
 }
 
 func (x *mathFibServer) Send(m *Num) error {
 	return x.ServerStream.SendProto(m)
 }
 
-func _Math_Sum_Handler(srv interface{}, stream rpc.ServerStream) error {
+func _Math_Sum_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(MathServer).Sum(&mathSumServer{stream})
 }
 
 type Math_SumServer interface {
 	SendAndClose(*Num) error
 	Recv() (*Num, error)
-	rpc.ServerStream
+	grpc.ServerStream
 }
 
 type mathSumServer struct {
-	rpc.ServerStream
+	grpc.ServerStream
 }
 
 func (x *mathSumServer) SendAndClose(m *Num) error {
@@ -265,29 +264,27 @@ func (x *mathSumServer) Recv() (*Num, error) {
 	return m, nil
 }
 
-var _Math_serviceDesc = rpc.ServiceDesc{
+var _Math_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "test.Math",
 	HandlerType: (*MathServer)(nil),
-	Methods: []rpc.MethodDesc{
+	Methods: []grpc.MethodDesc{
 		{
-			MethodName:	"Div",
-			Handler:	_Math_Div_Handler,
+			MethodName: "Div",
+			Handler:    _Math_Div_Handler,
 		},
 	},
-	Streams: []rpc.StreamDesc{
+	Streams: []grpc.StreamDesc{
 		{
-			StreamName:	"DivMany",
-			Handler:	_Math_DivMany_Handler,
+			StreamName: "DivMany",
+			Handler:    _Math_DivMany_Handler,
 		},
 		{
-			StreamName:	"Fib",
-			Handler:	_Math_Fib_Handler,
+			StreamName: "Fib",
+			Handler:    _Math_Fib_Handler,
 		},
 		{
-			StreamName:	"Sum",
-			Handler:	_Math_Sum_Handler,
+			StreamName: "Sum",
+			Handler:    _Math_Sum_Handler,
 		},
 	},
 }
-
-
