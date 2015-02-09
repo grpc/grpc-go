@@ -32,7 +32,7 @@
  */
 
 // Package credentials implements various credentials supported by gRPC library.
-package credentials
+package credentials // import "google.golang.org/grpc/credentials"
 
 import (
 	"crypto/tls"
