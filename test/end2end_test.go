@@ -47,12 +47,12 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	testpb "google.golang.org/grpc/test/testdata"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -68,10 +68,10 @@ type mathServer struct {
 func (s *mathServer) Div(ctx context.Context, in *testpb.DivArgs) (*testpb.DivReply, error) {
 	md, ok := metadata.FromContext(ctx)
 	if ok {
-		if err := rpc.SendHeader(ctx, md); err != nil {
-			log.Fatalf("rpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
+		if err := grpc.SendHeader(ctx, md); err != nil {
+			log.Fatalf("grpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
 		}
-		rpc.SetTrailer(ctx, md)
+		grpc.SetTrailer(ctx, md)
 	}
 	n, d := in.GetDividend(), in.GetDivisor()
 	if d == 0 {
@@ -148,7 +148,7 @@ func (s *mathServer) Sum(stream testpb.Math_SumServer) error {
 
 const tlsDir = "testdata/"
 
-func setUp(useTLS bool, maxStream uint32) (s *rpc.Server, mc testpb.MathClient) {
+func setUp(useTLS bool, maxStream uint32) (s *grpc.Server, mc testpb.MathClient) {
 	lis, err := net.Listen("tcp", ":0")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
@@ -157,7 +157,7 @@ func setUp(useTLS bool, maxStream uint32) (s *rpc.Server, mc testpb.MathClient) 
 	if err != nil {
 		log.Fatalf("Failed to parse listener address: %v", err)
 	}
-	s = rpc.NewServer(rpc.MaxConcurrentStreams(maxStream))
+	s = grpc.NewServer(grpc.MaxConcurrentStreams(maxStream))
 	ms := &mathServer{}
 	testpb.RegisterService(s, ms)
 	if useTLS {
@@ -170,15 +170,15 @@ func setUp(useTLS bool, maxStream uint32) (s *rpc.Server, mc testpb.MathClient) 
 		go s.Serve(lis)
 	}
 	addr := "localhost:" + port
-	var conn *rpc.ClientConn
+	var conn *grpc.ClientConn
 	if useTLS {
 		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 		if err != nil {
 			log.Fatalf("Failed to create credentials %v", err)
 		}
-		conn, err = rpc.Dial(addr, rpc.WithClientTLS(creds))
+		conn, err = grpc.Dial(addr, grpc.WithClientTLS(creds))
 	} else {
-		conn, err = rpc.Dial(addr)
+		conn, err = grpc.Dial(addr)
 	}
 	if err != nil {
 		log.Fatalf("Dial(%q) = %v", addr, err)
@@ -194,7 +194,7 @@ func TestFailedRPC(t *testing.T) {
 		Dividend: proto.Int64(8),
 		Divisor:  proto.Int64(0),
 	}
-	expectedErr := rpc.Errorf(codes.Unknown, "math: divide by 0")
+	expectedErr := grpc.Errorf(codes.Unknown, "math: divide by 0")
 	reply, rpcErr := mc.Div(context.Background(), args)
 	if fmt.Sprint(rpcErr) != fmt.Sprint(expectedErr) {
 		t.Fatalf(`mathClient.Div(_, _) = %v, %v; want <nil>, %v`, reply, rpcErr, expectedErr)
@@ -210,7 +210,7 @@ func TestMetadataUnaryRPC(t *testing.T) {
 	}
 	ctx := metadata.NewContext(context.Background(), testMetadata)
 	var header, trailer metadata.MD
-	_, err := mc.Div(ctx, args, rpc.Header(&header), rpc.Trailer(&trailer))
+	_, err := mc.Div(ctx, args, grpc.Header(&header), grpc.Trailer(&trailer))
 	if err != nil {
 		t.Fatalf("mathClient.Div(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
@@ -277,7 +277,7 @@ func TestTimeout(t *testing.T) {
 	for i := 1; i <= 100; i++ {
 		ctx, _ := context.WithTimeout(context.Background(), time.Duration(i)*time.Microsecond)
 		reply, err := mc.Div(ctx, args)
-		if rpc.Code(err) != codes.DeadlineExceeded {
+		if grpc.Code(err) != codes.DeadlineExceeded {
 			t.Fatalf(`mathClient.Div(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.DeadlineExceeded)
 		}
 	}
@@ -293,7 +293,7 @@ func TestCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(1*time.Millisecond, cancel)
 	reply, err := mc.Div(ctx, args)
-	if rpc.Code(err) != codes.Canceled {
+	if grpc.Code(err) != codes.Canceled {
 		t.Fatalf(`mathClient.Div(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.Canceled)
 	}
 }
@@ -311,7 +311,7 @@ func TestBidiStreaming(t *testing.T) {
 		status error
 	}{
 		{[]string{"1/1", "3/2", "2/3", "1/2"}, io.EOF},
-		{[]string{"2/5", "2/3", "3/0", "5/4"}, rpc.Errorf(codes.Unknown, "math: divide by 0")},
+		{[]string{"2/5", "2/3", "3/0", "5/4"}, grpc.Errorf(codes.Unknown, "math: divide by 0")},
 	} {
 		stream, err := mc.DivMany(context.Background())
 		if err != nil {
@@ -460,7 +460,7 @@ func TestExceedMaxStreamsLimit(t *testing.T) {
 			break
 		}
 	}
-	if rpc.Code(err) != codes.Unavailable {
+	if grpc.Code(err) != codes.Unavailable {
 		t.Fatalf("got %v, want error code %d", err, codes.Unavailable)
 	}
 }

@@ -42,11 +42,11 @@ import (
 	"strconv"
 	"time"
 
-	"google.golang.org/grpc/credentials"
-	testpb "google.golang.org/grpc/interop/testdata"
-	"google.golang.org/grpc"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	testpb "google.golang.org/grpc/interop/testdata"
 )
 
 var (
@@ -195,7 +195,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	server := rpc.NewServer()
+	server := grpc.NewServer()
 	testpb.RegisterService(server, &testServer{})
 	if *useTLS {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
