@@ -31,10 +31,7 @@
  *
  */
 
-/*
-Package rpc implements various components to perform RPC on top of transport package.
-*/
-package rpc
+package grpc
 
 import (
 	"fmt"

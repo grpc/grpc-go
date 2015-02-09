@@ -31,7 +31,7 @@
  *
  */
 
-package rpc
+package grpc
 
 import (
 	"fmt"
