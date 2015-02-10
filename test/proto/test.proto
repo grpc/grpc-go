@@ -1,8 +1,8 @@
 syntax = "proto2";
 
-package test;
+package proto;
 
-option go_package = "test";
+//option go_package = "test";
 
 message DivArgs {
   required int64 dividend = 1;

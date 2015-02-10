@@ -1,45 +1,13 @@
-/*
- *
- * Copyright 2014, Google Inc.
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
-package test
+package proto
 
 import (
 	"fmt"
-	proto "github.com/golang/protobuf/proto"
-	context "golang.org/x/net/context"
-	"google.golang.org/grpc"
 	"io"
+	"google.golang.org/grpc"
+	context "golang.org/x/net/context"
+	proto "github.com/golang/protobuf/proto"
 )
+
 
 type MathClient interface {
 	Div(ctx context.Context, in *DivArgs, opts ...grpc.CallOption) (*DivReply, error)
@@ -58,7 +26,7 @@ func NewMathClient(cc *grpc.ClientConn) MathClient {
 
 func (c *mathClient) Div(ctx context.Context, in *DivArgs, opts ...grpc.CallOption) (*DivReply, error) {
 	out := new(DivReply)
-	err := grpc.Invoke(ctx, "/test.Math/Div", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/proto.Math/Div", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +34,7 @@ func (c *mathClient) Div(ctx context.Context, in *DivArgs, opts ...grpc.CallOpti
 }
 
 func (c *mathClient) DivMany(ctx context.Context, opts ...grpc.CallOption) (Math_DivManyClient, error) {
-	stream, err := grpc.NewClientStream(ctx, c.cc, "/test.Math/DivMany", opts...)
+	stream, err := grpc.NewClientStream(ctx, c.cc, "/proto.Math/DivMany", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +64,7 @@ func (x *mathDivManyClient) Recv() (*DivReply, error) {
 }
 
 func (c *mathClient) Fib(ctx context.Context, m *FibArgs, opts ...grpc.CallOption) (Math_FibClient, error) {
-	stream, err := grpc.NewClientStream(ctx, c.cc, "/test.Math/Fib", opts...)
+	stream, err := grpc.NewClientStream(ctx, c.cc, "/proto.Math/Fib", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +96,7 @@ func (x *mathFibClient) Recv() (*Num, error) {
 }
 
 func (c *mathClient) Sum(ctx context.Context, opts ...grpc.CallOption) (Math_SumClient, error) {
-	stream, err := grpc.NewClientStream(ctx, c.cc, "/test.Math/Sum", opts...)
+	stream, err := grpc.NewClientStream(ctx, c.cc, "/proto.Math/Sum", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +132,7 @@ func (x *mathSumClient) CloseAndRecv() (*Num, error) {
 	// gRPC protocol violation.
 	return m, fmt.Errorf("Violate gRPC client streaming protocol: no EOF after the response.")
 }
+
 
 type MathServer interface {
 	Div(context.Context, *DivArgs) (*DivReply, error)
@@ -265,26 +234,28 @@ func (x *mathSumServer) Recv() (*Num, error) {
 }
 
 var _Math_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "test.Math",
+	ServiceName: "proto.Math",
 	HandlerType: (*MathServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Div",
-			Handler:    _Math_Div_Handler,
+			MethodName:	"Div",
+			Handler:	_Math_Div_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName: "DivMany",
-			Handler:    _Math_DivMany_Handler,
+			StreamName:	"DivMany",
+			Handler:	_Math_DivMany_Handler,
 		},
 		{
-			StreamName: "Fib",
-			Handler:    _Math_Fib_Handler,
+			StreamName:	"Fib",
+			Handler:	_Math_Fib_Handler,
 		},
 		{
-			StreamName: "Sum",
-			Handler:    _Math_Sum_Handler,
+			StreamName:	"Sum",
+			Handler:	_Math_Sum_Handler,
 		},
 	},
 }
+
+

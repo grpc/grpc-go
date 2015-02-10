@@ -44,7 +44,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	testpb "google.golang.org/grpc/interop/testdata"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
