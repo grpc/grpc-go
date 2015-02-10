@@ -2,8 +2,6 @@ syntax = "proto2";
 
 package proto;
 
-//option go_package = "test";
-
 message DivArgs {
   required int64 dividend = 1;
   required int64 divisor = 2;
