@@ -321,7 +321,7 @@ func TestBidiStreaming(t *testing.T) {
 		go func() {
 			for _, args := range parseArgs(test.divs) {
 				if err := stream.Send(args); err != nil {
-					t.Errorf("Send failed: ", err)
+					t.Errorf("Send failed: %v", err)
 					return
 				}
 			}
