@@ -52,7 +52,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	testpb "google.golang.org/grpc/test/testdata"
+	testpb "google.golang.org/grpc/test/proto"
 )
 
 var (
