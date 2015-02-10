@@ -87,7 +87,9 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
   private final NettyClientHandler handler;
   private final boolean ssl;
   private final AsciiString authority;
-  private volatile Channel channel;
+  private Channel channel;
+  /** Guaranteed to be true when RUNNING. */
+  private boolean negotiationComplete;
 
   NettyClientTransport(SocketAddress address, NegotiationType negotiationType,
       EventLoopGroup eventGroup, SslContext sslContext) {
@@ -152,13 +154,12 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
       try {
         awaitRunning();
       } catch (IllegalStateException ex) {
-        if (channel == null) {
-          // Negotiation did not complete, so still can't write to channel. Ex should already
-          // contain failureCause() information.
+        if (!negotiationComplete) {
+          // Still can't write to channel. Ex should already contain failureCause() information.
           throw ex;
         }
       }
-      // channel is now guaranteed to be non-null
+      // negotiationComplete is now guaranteed to be true
     }
 
     // Create the stream.
@@ -215,9 +216,7 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
       @Override
       public void onSuccess(Void result) {
         // The negotiation was successful.
-        // We should not send on the channel until negotiation completes. This is a hard requirement
-        // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
-        channel = connectFuture.channel();
+        negotiationComplete = true;
         notifyStarted();
       }
 
@@ -228,7 +227,9 @@ class NettyClientTransport extends AbstractService implements ClientTransport {
       }
     });
 
-    Channel channel = connectFuture.channel();
+    // We should not send on the channel until negotiation completes. This is a hard requirement
+    // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
+    channel = connectFuture.channel();
     // Handle transport shutdown when the channel is closed.
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override
