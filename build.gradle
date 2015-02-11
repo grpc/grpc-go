@@ -28,6 +28,8 @@ subprojects {
         hpack: 'com.twitter:hpack:0.9.1',
         protobuf_plugin: 'ws.antonov.gradle.plugins:gradle-plugin-protobuf:0.9.1',
         okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
+        // used to collect benchmark results
+        hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.4',
 
         // TODO: Unreleased dependencies.
         // These must already be installed in the local maven repository.

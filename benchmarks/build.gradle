@@ -1,0 +1,41 @@
+apply plugin: 'application'
+apply plugin: 'protobuf'
+
+description = "gRPC Benchmarks"
+
+mainClassName = "io.grpc.benchmarks.qps.Client"
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath libraries.protobuf_plugin
+    }
+}
+
+dependencies {
+    compile project(':grpc-core'),
+            project(':grpc-netty'),
+            project(':grpc-okhttp'),
+            project(':grpc-stub'),
+            project(':grpc-testing'),
+            libraries.junit,
+            libraries.mockito,
+            libraries.hdrhistogram
+}
+
+protobufCodeGenPlugins = ["java_plugin:$rootDir/compiler/build/binaries/java_pluginExecutable/java_plugin"]
+compileJava.dependsOn = ['generateProto']
+
+// Allow execution of test client and server.
+task execute(dependsOn: classes, type:JavaExec) {
+    main = project.hasProperty('mainClass') ? project.mainClass : 'io.grpc.benchmarks.qps.Client'
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.rootDir
+
+    // If appArgs were provided, set the program arguments.
+    if (project.hasProperty("appArgs")) {
+        args = Eval.me(appArgs)
+    }
+}

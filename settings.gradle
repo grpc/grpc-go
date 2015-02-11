@@ -8,6 +8,7 @@ include ":grpc-testing"
 include ":grpc-compiler"
 include ":grpc-integration-testing"
 include ":grpc-all"
+include ":grpc-benchmarks"
 
 project(':grpc-core').projectDir = "$rootDir/core" as File
 project(':grpc-stub').projectDir = "$rootDir/stub" as File
@@ -18,3 +19,4 @@ project(':grpc-testing').projectDir = "$rootDir/testing" as File
 project(':grpc-compiler').projectDir = "$rootDir/compiler" as File
 project(':grpc-integration-testing').projectDir = "$rootDir/integration-testing" as File
 project(':grpc-all').projectDir = "$rootDir/all" as File
+project(':grpc-benchmarks').projectDir = "$rootDir/benchmarks" as File
