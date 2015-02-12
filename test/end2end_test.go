@@ -248,7 +248,7 @@ func TestLargeUnary(t *testing.T) {
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
-		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)) ,
+		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
@@ -269,7 +269,7 @@ func TestMetadataUnaryRPC(t *testing.T) {
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
-		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)) ,
+		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 	}
 	var header, trailer metadata.MD
 	ctx := metadata.NewContext(context.Background(), testMetadata)
@@ -291,7 +291,7 @@ func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
-		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)) ,
+		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
@@ -339,7 +339,7 @@ func TestTimeout(t *testing.T) {
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
-		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)) ,
+		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 	}
 	// Performs 100 RPCs with various timeout values so that
 	// the RPCs could timeout on different stages of their lifetime. This
@@ -361,7 +361,7 @@ func TestCancel(t *testing.T) {
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
-		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)) ,
+		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(1*time.Millisecond, cancel)
