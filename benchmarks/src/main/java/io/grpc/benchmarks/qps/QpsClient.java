@@ -35,8 +35,10 @@ import static grpc.testing.TestServiceGrpc.TestServiceStub;
 import static grpc.testing.Qpstest.SimpleRequest;
 import static grpc.testing.Qpstest.SimpleResponse;
 import static java.lang.Math.max;
+import static io.grpc.testing.integration.Util.loadCert;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.MoreExecutors;
 
 import grpc.testing.Qpstest.PayloadType;
 import grpc.testing.TestServiceGrpc;
@@ -47,9 +49,14 @@ import io.grpc.stub.StreamObserver;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
+import io.netty.handler.ssl.SslContext;
 import org.HdrHistogram.Histogram;
 import org.HdrHistogram.HistogramIterationValue;
 
+import java.io.File;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -61,15 +68,13 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
-// TODO: Add OkHttp and Netty TLS Support
-
 /**
  * Runs lots of RPCs against a QPS Server to test for throughput and latency.
  * It's a Java clone of the C version at
  * https://github.com/grpc/grpc/blob/master/test/cpp/qps/client.cc
  */
-public class Client {
-  private static final Logger log = Logger.getLogger(Client.class.getName());
+public class QpsClient {
+  private static final Logger log = Logger.getLogger(QpsClient.class.getName());
 
   // Can record values between 1 ns and 1 min (60 BILLION NS)
   private static final long HISTOGRAM_MAX_VALUE = 60000000000L;
@@ -84,13 +89,10 @@ public class Client {
   private String serverHost  = "127.0.0.1";
   private int serverPort;
   private boolean okhttp;
+  private boolean enableTls;
+  private boolean useTestCa;
 
-  public static void main(String... args) throws Exception {
-    Client c = new Client();
-    c.run(args);
-  }
-
-  private void run(String[] args) throws Exception {
+  public void run(String[] args) throws Exception {
     if (!parseArgs(args)) {
       return;
     }
@@ -143,14 +145,33 @@ public class Client {
     }
   }
 
-  private Channel newChannel() {
+  private Channel newChannel() throws IOException {
     if (okhttp) {
-      return OkHttpChannelBuilder.forAddress(serverHost, serverPort).build();
-    } else {
-      return NettyChannelBuilder.forAddress(serverHost, serverPort)
-                                .negotiationType(NegotiationType.PLAINTEXT)
-                                .build();
+      if (enableTls) {
+        throw new IllegalStateException("TLS unsupported with okhttp");
+      }
+
+      return OkHttpChannelBuilder.forAddress(serverHost, serverPort)
+                                 // TODO(buchgr): Figure out what "server_threads" means in java
+                                 .executor(MoreExecutors.newDirectExecutorService())
+                                 .build();
     }
+
+    SslContext context = null;
+    InetAddress address = InetAddress.getByName(serverHost);
+    NegotiationType negotiationType = enableTls ? NegotiationType.TLS : NegotiationType.PLAINTEXT;
+    if (enableTls && useTestCa) {
+        // Force the hostname to match the cert the server uses.
+        address = InetAddress.getByAddress("foo.test.google.fr", address.getAddress());
+        File cert = loadCert("ca.pem");
+        context = SslContext.newClientContext(cert);
+      }
+
+    return NettyChannelBuilder.forAddress(new InetSocketAddress(address, serverPort))
+                              .executor(MoreExecutors.newDirectExecutorService())
+                              .negotiationType(negotiationType)
+                              .sslContext(context)
+                              .build();
   }
 
   private boolean parseArgs(String[] args) {
@@ -165,11 +186,11 @@ public class Client {
         }
 
         String[] pair = arg.substring(2).split("=", 2);
-        if (pair.length < 2) {
-          continue;
-        }
         String key = pair[0];
-        String value = pair[1];
+        String value = "";
+        if (pair.length == 2) {
+          value = pair[1];
+        }
 
         if ("client_channels".equals(key)) {
           clientChannels = max(Integer.parseInt(value), 1);
@@ -184,8 +205,14 @@ public class Client {
         } else if ("server_port".equals(key)) {
           serverPort = Integer.parseInt(value);
           hasServerPort = true;
-        } else if ("transport".equals(key)) {
-          okhttp = "okhttp".equals(value);
+        } else if ("okhttp".equals(key)) {
+          okhttp = true;
+        } else if ("enable_tls".equals(key)) {
+          enableTls = true;
+        } else if ("use_testca".equals(key)) {
+          useTestCa = true;
+        } else {
+          System.err.println("Unrecognized argument '" + key + "'.");
         }
       }
 
@@ -204,7 +231,7 @@ public class Client {
   }
 
   private void printUsage() {
-    Client c = new Client();
+    QpsClient c = new QpsClient();
     System.out.println(
       "Usage: [ARGS...]"
       + "\n"
@@ -214,7 +241,8 @@ public class Client {
       + "\n  --client_threads=INT        Number of client threads. Default " + c.clientThreads
       + "\n  --num_rpcs=INT              Number of RPCs per thread. Default " + c.numRpcs
       + "\n  --payload_size=INT          Payload size in bytes. Default " + c.payloadSize
-      + "\n  --transport=(okhttp|netty)  The transport to use. Default netty"
+      + "\n  --enable_tls                Enable TLS. Default disabled."
+      + "\n  --use_testca                Use the provided test certificate for TLS."
     );
   }
 
