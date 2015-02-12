@@ -34,14 +34,11 @@
 package grpc_test
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"math"
 	"net"
 	"reflect"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -52,7 +49,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	testpb "google.golang.org/grpc/test/proto"
+	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
 var (
@@ -62,10 +59,32 @@ var (
 	}
 )
 
-type mathServer struct {
+type testServer struct {
 }
 
-func (s *mathServer) Div(ctx context.Context, in *testpb.DivArgs) (*testpb.DivReply, error) {
+func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	return new(testpb.Empty), nil
+}
+
+func newPayload(t testpb.PayloadType, size int32) *testpb.Payload {
+	if size < 0 {
+		log.Fatalf("Requested a response with invalid length %d", size)
+	}
+	body := make([]byte, size)
+	switch t {
+	case testpb.PayloadType_COMPRESSABLE:
+	case testpb.PayloadType_UNCOMPRESSABLE:
+		log.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+	default:
+		log.Fatalf("Unsupported payload type: %d", t)
+	}
+	return &testpb.Payload{
+		Type: t.Enum(),
+		Body: body,
+	}
+}
+
+func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	md, ok := metadata.FromContext(ctx)
 	if ok {
 		if err := grpc.SendHeader(ctx, md); err != nil {
@@ -73,19 +92,46 @@ func (s *mathServer) Div(ctx context.Context, in *testpb.DivArgs) (*testpb.DivRe
 		}
 		grpc.SetTrailer(ctx, md)
 	}
-	n, d := in.GetDividend(), in.GetDivisor()
-	if d == 0 {
-		return nil, fmt.Errorf("math: divide by 0")
-	}
-	out := new(testpb.DivReply)
-	out.Quotient = proto.Int64(n / d)
-	out.Remainder = proto.Int64(n % d)
 	// Simulate some service delay.
 	time.Sleep(2 * time.Millisecond)
-	return out, nil // no error
+	return &testpb.SimpleResponse{
+		Payload: newPayload(in.GetResponseType(), in.GetResponseSize()),
+	}, nil
 }
 
-func (s *mathServer) DivMany(stream testpb.Math_DivManyServer) error {
+func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
+	cs := args.GetResponseParameters()
+	for _, c := range cs {
+		if us := c.GetIntervalUs(); us > 0 {
+			time.Sleep(time.Duration(us) * time.Microsecond)
+		}
+		if err := stream.Send(&testpb.StreamingOutputCallResponse{
+			Payload: newPayload(args.GetResponseType(), c.GetSize()),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
+	var sum int
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			return stream.SendAndClose(&testpb.StreamingInputCallResponse{
+				AggregatedPayloadSize: proto.Int32(int32(sum)),
+			})
+		}
+		if err != nil {
+			return err
+		}
+		p := in.GetPayload().GetBody()
+		sum += len(p)
+	}
+}
+
+func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
 	md, ok := metadata.FromContext(stream.Context())
 	if ok {
 		if err := stream.SendHeader(md); err != nil {
@@ -102,53 +148,52 @@ func (s *mathServer) DivMany(stream testpb.Math_DivManyServer) error {
 		if err != nil {
 			return err
 		}
-		n, d := in.GetDividend(), in.GetDivisor()
-		if d == 0 {
-			return fmt.Errorf("math: divide by 0")
-		}
-		err = stream.Send(&testpb.DivReply{
-			Quotient:  proto.Int64(n / d),
-			Remainder: proto.Int64(n % d),
-		})
-		if err != nil {
-			return err
+		cs := in.GetResponseParameters()
+		for _, c := range cs {
+			if us := c.GetIntervalUs(); us > 0 {
+				time.Sleep(time.Duration(us) * time.Microsecond)
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: newPayload(in.GetResponseType(), c.GetSize()),
+			}); err != nil {
+				return err
+			}
 		}
 	}
 }
 
-func (s *mathServer) Fib(args *testpb.FibArgs, stream testpb.Math_FibServer) error {
-	var (
-		limit = args.GetLimit()
-		count int64
-		x, y  int64 = 0, 1
-	)
-	for count = 0; limit == 0 || count < limit; count++ {
-		// Send the next number in the Fibonacci sequence.
-		stream.Send(&testpb.Num{
-			Num: proto.Int64(x),
-		})
-		x, y = y, x+y
-	}
-	return nil // The RPC library will call stream.CloseSend for us.
-}
-
-func (s *mathServer) Sum(stream testpb.Math_SumServer) error {
-	var sum int64
+func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServer) error {
+	msgBuf := make([]*testpb.StreamingOutputCallRequest, 0)
 	for {
-		m, err := stream.Recv()
+		in, err := stream.Recv()
 		if err == io.EOF {
-			return stream.SendAndClose(&testpb.Num{Num: &sum})
+			// read done.
+			break
 		}
 		if err != nil {
 			return err
 		}
-		sum += m.GetNum()
+		msgBuf = append(msgBuf, in)
 	}
+	for _, m := range msgBuf {
+		cs := m.GetResponseParameters()
+		for _, c := range cs {
+			if us := c.GetIntervalUs(); us > 0 {
+				time.Sleep(time.Duration(us) * time.Microsecond)
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: newPayload(m.GetResponseType(), c.GetSize()),
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 const tlsDir = "testdata/"
 
-func setUp(useTLS bool, maxStream uint32) (s *grpc.Server, mc testpb.MathClient) {
+func setUp(useTLS bool, maxStream uint32) (s *grpc.Server, tc testpb.TestServiceClient) {
 	lis, err := net.Listen("tcp", ":0")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
@@ -158,8 +203,7 @@ func setUp(useTLS bool, maxStream uint32) (s *grpc.Server, mc testpb.MathClient)
 		log.Fatalf("Failed to parse listener address: %v", err)
 	}
 	s = grpc.NewServer(grpc.MaxConcurrentStreams(maxStream))
-	ms := &mathServer{}
-	testpb.RegisterService(s, ms)
+	testpb.RegisterService(s, &testServer{})
 	if useTLS {
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
@@ -183,36 +227,55 @@ func setUp(useTLS bool, maxStream uint32) (s *grpc.Server, mc testpb.MathClient)
 	if err != nil {
 		log.Fatalf("Dial(%q) = %v", addr, err)
 	}
-	mc = testpb.NewMathClient(conn)
+	tc = testpb.NewTestServiceClient(conn)
 	return
 }
 
-func TestFailedRPC(t *testing.T) {
-	s, mc := setUp(false, math.MaxUint32)
+func TestEmptyUnary(t *testing.T) {
+	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()
-	args := &testpb.DivArgs{
-		Dividend: proto.Int64(8),
-		Divisor:  proto.Int64(0),
+	reply, err := tc.EmptyCall(context.Background(), &testpb.Empty{})
+	if err != nil || !proto.Equal(&testpb.Empty{}, reply) {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want %v, <nil>", reply, err, &testpb.Empty{})
 	}
-	expectedErr := grpc.Errorf(codes.Unknown, "math: divide by 0")
-	reply, rpcErr := mc.Div(context.Background(), args)
-	if fmt.Sprint(rpcErr) != fmt.Sprint(expectedErr) {
-		t.Fatalf(`mathClient.Div(_, _) = %v, %v; want <nil>, %v`, reply, rpcErr, expectedErr)
+}
+
+func TestLargeUnary(t *testing.T) {
+	s, tc := setUp(true, math.MaxUint32)
+	defer s.Stop()
+	argSize := 271828
+	respSize := 314159
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(int32(respSize)),
+		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
+	}
+	reply, err := tc.UnaryCall(context.Background(), req)
+	if err != nil {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	pt := reply.GetPayload().GetType()
+	ps := len(reply.GetPayload().GetBody())
+	if pt != testpb.PayloadType_COMPRESSABLE || ps != respSize {
+		t.Fatalf("Got the reply with type %d len %d; want %d, %d", pt, ps, testpb.PayloadType_COMPRESSABLE, respSize)
 	}
 }
 
 func TestMetadataUnaryRPC(t *testing.T) {
-	s, mc := setUp(true, math.MaxUint32)
+	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()
-	args := &testpb.DivArgs{
-		Dividend: proto.Int64(8),
-		Divisor:  proto.Int64(2),
+	argSize := 2718
+	respSize := 314
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(int32(respSize)),
+		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 	}
-	ctx := metadata.NewContext(context.Background(), testMetadata)
 	var header, trailer metadata.MD
-	_, err := mc.Div(ctx, args, grpc.Header(&header), grpc.Trailer(&trailer))
+	ctx := metadata.NewContext(context.Background(), testMetadata)
+	_, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.Trailer(&trailer))
 	if err != nil {
-		t.Fatalf("mathClient.Div(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
+		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
 	if !reflect.DeepEqual(testMetadata, header) {
 		t.Fatalf("Received header metadata %v, want %v", header, testMetadata)
@@ -222,18 +285,22 @@ func TestMetadataUnaryRPC(t *testing.T) {
 	}
 }
 
-func performOneRPC(t *testing.T, mc testpb.MathClient, wg *sync.WaitGroup) {
-	args := &testpb.DivArgs{
-		Dividend: proto.Int64(8),
-		Divisor:  proto.Int64(3),
+func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup) {
+	argSize := 2718
+	respSize := 314
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(int32(respSize)),
+		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 	}
-	reply, err := mc.Div(context.Background(), args)
-	want := &testpb.DivReply{
-		Quotient:  proto.Int64(2),
-		Remainder: proto.Int64(2),
+	reply, err := tc.UnaryCall(context.Background(), req)
+	if err != nil {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	if err != nil || !proto.Equal(reply, want) {
-		t.Errorf(`mathClient.Div(_, _) = %v, %v; want %v, <nil>`, reply, err, want)
+	pt := reply.GetPayload().GetType()
+	ps := len(reply.GetPayload().GetBody())
+	if pt != testpb.PayloadType_COMPRESSABLE || ps != respSize {
+		t.Fatalf("Got the reply with type %d len %d; want %d, %d", pt, ps, testpb.PayloadType_COMPRESSABLE, respSize)
 	}
 	wg.Done()
 }
@@ -242,7 +309,7 @@ func performOneRPC(t *testing.T, mc testpb.MathClient, wg *sync.WaitGroup) {
 // TODO(zhaoq): Refactor to make this clearer and add more cases to test racy
 // and error-prone paths.
 func TestRetry(t *testing.T) {
-	s, mc := setUp(true, math.MaxUint32)
+	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -258,118 +325,110 @@ func TestRetry(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		time.Sleep(2 * time.Millisecond)
 		wg.Add(1)
-		go performOneRPC(t, mc, &wg)
+		go performOneRPC(t, tc, &wg)
 	}
 	wg.Wait()
 }
 
 // TODO(zhaoq): Have a better test coverage of timeout and cancellation mechanism.
 func TestTimeout(t *testing.T) {
-	s, mc := setUp(true, math.MaxUint32)
+	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()
-	args := &testpb.DivArgs{
-		Dividend: proto.Int64(8),
-		Divisor:  proto.Int64(3),
+	argSize := 2718
+	respSize := 314
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(int32(respSize)),
+		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 	}
 	// Performs 100 RPCs with various timeout values so that
 	// the RPCs could timeout on different stages of their lifetime. This
 	// is the best-effort to cover various cases when an rpc gets cancelled.
 	for i := 1; i <= 100; i++ {
 		ctx, _ := context.WithTimeout(context.Background(), time.Duration(i)*time.Microsecond)
-		reply, err := mc.Div(ctx, args)
+		reply, err := tc.UnaryCall(ctx, req)
 		if grpc.Code(err) != codes.DeadlineExceeded {
-			t.Fatalf(`mathClient.Div(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.DeadlineExceeded)
+			t.Fatalf(`TestService/UnaryCallv(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.DeadlineExceeded)
 		}
 	}
 }
 
 func TestCancel(t *testing.T) {
-	s, mc := setUp(true, math.MaxUint32)
+	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()
-	args := &testpb.DivArgs{
-		Dividend: proto.Int64(8),
-		Divisor:  proto.Int64(3),
+	argSize := 2718
+	respSize := 314
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(int32(respSize)),
+		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(1*time.Millisecond, cancel)
-	reply, err := mc.Div(ctx, args)
+	reply, err := tc.UnaryCall(ctx, req)
 	if grpc.Code(err) != codes.Canceled {
-		t.Fatalf(`mathClient.Div(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.Canceled)
+		t.Fatalf(`TestService/UnaryCall(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.Canceled)
 	}
 }
 
 // The following tests the gRPC streaming RPC implementations.
 // TODO(zhaoq): Have better coverage on error cases.
+var (
+	reqSizes  = []int{27182, 8, 1828, 45904}
+	respSizes = []int{31415, 9, 2653, 58979}
+)
 
-func TestBidiStreaming(t *testing.T) {
-	s, mc := setUp(true, math.MaxUint32)
+func TestPingPong(t *testing.T) {
+	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()
-	for _, test := range []struct {
-		// input
-		divs []string
-		// output
-		status error
-	}{
-		{[]string{"1/1", "3/2", "2/3", "1/2"}, io.EOF},
-		{[]string{"2/5", "2/3", "3/0", "5/4"}, grpc.Errorf(codes.Unknown, "math: divide by 0")},
-	} {
-		stream, err := mc.DivMany(context.Background())
-		if err != nil {
-			t.Fatalf("failed to create stream %v", err)
-		}
-		// Start a goroutine to parse and send the args.
-		go func() {
-			for _, args := range parseArgs(test.divs) {
-				if err := stream.Send(args); err != nil {
-					t.Errorf("Send failed: %v", err)
-					return
-				}
-			}
-			// Tell the server we're done sending args.
-			stream.CloseSend()
-		}()
-		var rpcStatus error
-		for {
-			_, err := stream.Recv()
-			if err != nil {
-				rpcStatus = err
-				break
-			}
-		}
-		if rpcStatus != test.status {
-			t.Fatalf(`mathClient.DivMany got %v ; want %v`, rpcStatus, test.status)
-		}
+	stream, err := tc.FullDuplexCall(context.Background())
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-}
-
-// parseArgs converts a list of "n/d" strings into DivArgs.
-// parseArgs crashes the process on error.
-func parseArgs(divs []string) (args []*testpb.DivArgs) {
-	for _, div := range divs {
-		parts := strings.Split(div, "/")
-		n, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil {
-			log.Fatal(err)
+	var index int
+	for index < len(reqSizes) {
+		respParam := []*testpb.ResponseParameters{
+			&testpb.ResponseParameters{
+				Size: proto.Int32(int32(respSizes[index])),
+			},
 		}
-		d, err := strconv.ParseInt(parts[1], 10, 64)
-		if err != nil {
-			log.Fatal(err)
+		req := &testpb.StreamingOutputCallRequest{
+			ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+			ResponseParameters: respParam,
+			Payload:            newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index])),
 		}
-		args = append(args, &testpb.DivArgs{
-			Dividend: &n,
-			Divisor:  &d,
-		})
+		if err := stream.Send(req); err != nil {
+			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+		}
+		reply, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
+		}
+		pt := reply.GetPayload().GetType()
+		if pt != testpb.PayloadType_COMPRESSABLE {
+			t.Fatalf("Got the reply of type %d, want %d", pt, testpb.PayloadType_COMPRESSABLE)
+		}
+		size := len(reply.GetPayload().GetBody())
+		if size != int(respSizes[index]) {
+			t.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
+		}
+		index++
 	}
-	return
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("%v failed to complele the ping pong test: %v", stream, err)
+	}
 }
 
 func TestMetadataStreamingRPC(t *testing.T) {
-	s, mc := setUp(true, math.MaxUint32)
+	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()
 	ctx := metadata.NewContext(context.Background(), testMetadata)
-	stream, err := mc.DivMany(ctx)
+	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
-		t.Fatalf("Failed to create stream %v", err)
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
 	go func() {
 		headerMD, err := stream.Header()
@@ -381,11 +440,23 @@ func TestMetadataStreamingRPC(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
-		for _, args := range parseArgs([]string{"1/1", "3/2", "2/3"}) {
-			if err := stream.Send(args); err != nil {
-				t.Errorf("%v.Send(_) failed: %v", stream, err)
+		var index int
+		for index < len(reqSizes) {
+			respParam := []*testpb.ResponseParameters{
+				&testpb.ResponseParameters{
+					Size: proto.Int32(int32(respSizes[index])),
+				},
+			}
+			req := &testpb.StreamingOutputCallRequest{
+				ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+				ResponseParameters: respParam,
+				Payload:            newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index])),
+			}
+			if err := stream.Send(req); err != nil {
+				t.Errorf("%v.Send(%v) = %v, want <nil>", stream, req, err)
 				return
 			}
+			index++
 		}
 		// Tell the server we're done sending args.
 		stream.CloseSend()
@@ -403,57 +474,85 @@ func TestMetadataStreamingRPC(t *testing.T) {
 }
 
 func TestServerStreaming(t *testing.T) {
-	s, mc := setUp(true, math.MaxUint32)
+	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()
-
-	args := &testpb.FibArgs{}
-	// Requests the first 10 Fibonnaci numbers.
-	args.Limit = proto.Int64(10)
-
-	// Start the stream and send the args.
-	stream, err := mc.Fib(context.Background(), args)
+	respParam := make([]*testpb.ResponseParameters, len(respSizes))
+	for i, s := range respSizes {
+		respParam[i] = &testpb.ResponseParameters{
+			Size: proto.Int32(int32(s)),
+		}
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParam,
+	}
+	stream, err := tc.StreamingOutputCall(context.Background(), req)
 	if err != nil {
-		t.Fatalf("failed to create stream %v", err)
+		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
 	}
 	var rpcStatus error
+	var respCnt int
+	var index int
 	for {
-		_, err := stream.Recv()
+		reply, err := stream.Recv()
 		if err != nil {
 			rpcStatus = err
 			break
 		}
+		pt := reply.GetPayload().GetType()
+		if pt != testpb.PayloadType_COMPRESSABLE {
+			t.Fatalf("Got the reply of type %d, want %d", pt, testpb.PayloadType_COMPRESSABLE)
+		}
+		size := len(reply.GetPayload().GetBody())
+		if size != int(respSizes[index]) {
+			t.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
+		}
+		index++
+		respCnt++
 	}
 	if rpcStatus != io.EOF {
-		t.Fatalf(`mathClient.Fib got %v ; want <EOF>`, rpcStatus)
+		t.Fatalf("Failed to finish the server streaming rpc: %v, want <EOF>", err)
+	}
+	if respCnt != len(respSizes) {
+		t.Fatalf("Got %d reply, want %d", len(respSizes), respCnt)
 	}
 }
 
 func TestClientStreaming(t *testing.T) {
-	s, mc := setUp(true, math.MaxUint32)
+	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()
-
-	stream, err := mc.Sum(context.Background())
+	stream, err := tc.StreamingInputCall(context.Background())
 	if err != nil {
-		t.Fatalf("failed to create stream: %v", err)
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
 	}
-	for _, n := range []int64{1, -2, 0, 7} {
-		if err := stream.Send(&testpb.Num{Num: &n}); err != nil {
-			t.Fatalf("failed to send requests %v", err)
+	var sum int
+	for _, s := range reqSizes {
+		pl := newPayload(testpb.PayloadType_COMPRESSABLE, int32(s))
+		req := &testpb.StreamingInputCallRequest{
+			Payload: pl,
 		}
+		if err := stream.Send(req); err != nil {
+			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+		}
+		sum += s
 	}
-	if _, err := stream.CloseAndRecv(); err != io.EOF {
-		t.Fatalf("stream.CloseAndRecv() got %v; want <EOF>", err)
+	reply, err := stream.CloseAndRecv()
+	if err != io.EOF {
+		t.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, io.EOF)
+	}
+	if reply.GetAggregatedPayloadSize() != int32(sum) {
+		t.Fatalf("%v.CloseAndRecv().GetAggregatePayloadSize() = %v; want %v", stream, reply.GetAggregatedPayloadSize(), sum)
 	}
 }
 
 func TestExceedMaxStreamsLimit(t *testing.T) {
 	// Only allows 1 live stream per server transport.
-	s, mc := setUp(true, 1)
+	s, tc := setUp(true, 1)
 	defer s.Stop()
 	var err error
 	for {
 		time.Sleep(2 * time.Millisecond)
-		_, err = mc.Sum(context.Background())
+		_, err = tc.StreamingInputCall(context.Background())
 		// Loop until the settings of max concurrent streams is
 		// received by the client.
 		if err != nil {
