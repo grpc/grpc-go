@@ -102,6 +102,9 @@ public final class ChannelImpl implements Channel {
    * cancelled.
    */
   public synchronized ChannelImpl shutdown() {
+    if (shutdown) {
+      return this;
+    }
     shutdown = true;
     if (activeTransport != null) {
       activeTransport.stopAsync();
