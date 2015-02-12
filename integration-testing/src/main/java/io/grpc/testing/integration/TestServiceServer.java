@@ -134,10 +134,8 @@ public class TestServiceServer {
     executor = Executors.newSingleThreadScheduledExecutor();
     SslContext sslContext = null;
     if (useTls) {
-      String dir = "integration-testing/certs";
-      sslContext = SslContext.newServerContext(
-          new File(dir + "/server1.pem"),
-          new File(dir + "/server1.key"));
+      sslContext = SslContext.newServerContext(Util.loadCert("server1.pem"),
+                                               Util.loadCert("server1.key"));
     }
     server = NettyServerBuilder.forPort(port)
         .sslContext(sslContext)

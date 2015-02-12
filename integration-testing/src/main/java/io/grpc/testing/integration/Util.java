@@ -38,7 +38,12 @@ import io.grpc.proto.ProtoUtils;
 
 import org.junit.Assert;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.ServerSocket;
 import java.util.List;
 
@@ -54,15 +59,37 @@ public class Util {
    * Picks an unused port.
    */
   public static int pickUnusedPort() {
-    ServerSocket serverSocket = null;
     try {
-      serverSocket = new ServerSocket(0);
+      ServerSocket serverSocket = new ServerSocket(0);
       int port = serverSocket.getLocalPort();
       serverSocket.close();
       return port;
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  /**
+   * Load a file from the resources folder.
+   *
+   * @param name  name of a file in src/main/resources/certs.
+   */
+  public static File loadCert(String name) throws IOException {
+    InputStream in = Util.class.getResourceAsStream("/certs/" + name);
+    File tmpFile = File.createTempFile(name, "");
+    tmpFile.deleteOnExit();
+
+    BufferedWriter writer = new BufferedWriter(new FileWriter(tmpFile));
+    try {
+      int b;
+      while ((b = in.read()) != -1) {
+        writer.write(b);
+      }
+    } finally {
+      writer.close();
+    }
+
+    return tmpFile;
   }
 
   public static void assertEquals(MessageLite expected, MessageLite actual) {

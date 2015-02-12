@@ -216,10 +216,8 @@ public class TestServiceClient {
         SslContext sslContext = null;
         if (useTestCa) {
           try {
-            String dir = "integration-testing/certs";
-            sslContext = SslContext.newClientContext(
-                new File(dir + "/ca.pem"));
-          } catch (SSLException ex) {
+            sslContext = SslContext.newClientContext(Util.loadCert("ca.pem"));
+          } catch (Exception ex) {
             throw new RuntimeException(ex);
           }
         }
