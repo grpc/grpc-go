@@ -88,7 +88,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	md, ok := metadata.FromContext(ctx)
 	if ok {
 		if err := grpc.SendHeader(ctx, md); err != nil {
-			log.Fatalf("rpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
+			log.Fatalf("grpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
 		}
 		grpc.SetTrailer(ctx, md)
 	}
