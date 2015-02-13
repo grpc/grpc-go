@@ -161,8 +161,12 @@ type SimpleRequest struct {
 	// If response_type is COMPRESSABLE, this denotes the size before compression.
 	ResponseSize *int32 `protobuf:"varint,2,opt,name=response_size" json:"response_size,omitempty"`
 	// Optional input payload sent along with the request.
-	Payload          *Payload `protobuf:"bytes,3,opt,name=payload" json:"payload,omitempty"`
-	XXX_unrecognized []byte   `json:"-"`
+	Payload *Payload `protobuf:"bytes,3,opt,name=payload" json:"payload,omitempty"`
+	// Whether SimpleResponse should include username.
+	FillUsername *bool `protobuf:"varint,4,opt,name=fill_username" json:"fill_username,omitempty"`
+	// Whether SimpleResponse should include OAuth scope.
+	FillOauthScope   *bool  `protobuf:"varint,5,opt,name=fill_oauth_scope" json:"fill_oauth_scope,omitempty"`
+	XXX_unrecognized []byte `json:"-"`
 }
 
 func (m *SimpleRequest) Reset()                    { *m = SimpleRequest{} }
@@ -191,14 +195,30 @@ func (m *SimpleRequest) GetPayload() *Payload {
 	return nil
 }
 
+func (m *SimpleRequest) GetFillUsername() bool {
+	if m != nil && m.FillUsername != nil {
+		return *m.FillUsername
+	}
+	return false
+}
+
+func (m *SimpleRequest) GetFillOauthScope() bool {
+	if m != nil && m.FillOauthScope != nil {
+		return *m.FillOauthScope
+	}
+	return false
+}
+
 // Unary response, as configured by the request.
 type SimpleResponse struct {
 	// Payload to increase message size.
 	Payload *Payload `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
 	// The user the request came from, for verifying authentication was
 	// successful when the client expected it.
-	EffectiveGaiaUserId *int64 `protobuf:"varint,2,opt,name=effective_gaia_user_id" json:"effective_gaia_user_id,omitempty"`
-	XXX_unrecognized    []byte `json:"-"`
+	Username *string `protobuf:"bytes,2,opt,name=username" json:"username,omitempty"`
+	// OAuth scope.
+	OauthScope       *string `protobuf:"bytes,3,opt,name=oauth_scope" json:"oauth_scope,omitempty"`
+	XXX_unrecognized []byte  `json:"-"`
 }
 
 func (m *SimpleResponse) Reset()                    { *m = SimpleResponse{} }
@@ -213,11 +233,18 @@ func (m *SimpleResponse) GetPayload() *Payload {
 	return nil
 }
 
-func (m *SimpleResponse) GetEffectiveGaiaUserId() int64 {
-	if m != nil && m.EffectiveGaiaUserId != nil {
-		return *m.EffectiveGaiaUserId
+func (m *SimpleResponse) GetUsername() string {
+	if m != nil && m.Username != nil {
+		return *m.Username
 	}
-	return 0
+	return ""
+}
+
+func (m *SimpleResponse) GetOauthScope() string {
+	if m != nil && m.OauthScope != nil {
+		return *m.OauthScope
+	}
+	return ""
 }
 
 // Client-streaming request.
