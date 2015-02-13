@@ -26,7 +26,7 @@ dependencies {
 }
 
 protobufCodeGenPlugins = ["java_plugin:$rootDir/compiler/build/binaries/java_pluginExecutable/java_plugin"]
-compileJava.dependsOn = ['generateProto']
+generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
 
 // Allow execution of test client and server.
 task execute(dependsOn: classes, type:JavaExec) {
