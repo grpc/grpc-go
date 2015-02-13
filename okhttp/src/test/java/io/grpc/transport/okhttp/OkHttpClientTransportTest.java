@@ -42,6 +42,7 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -151,7 +152,7 @@ public class OkHttpClientTransportTest {
     assertEquals(Status.INTERNAL.getCode(), listener1.status.getCode());
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
     verify(listener).transportShutdown();
-    verify(listener).transportTerminated();
+    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
