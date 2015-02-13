@@ -196,7 +196,7 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	server := grpc.NewServer()
-	testpb.RegisterService(server, &testServer{})
+	testpb.RegisterTestServiceServer(server, &testServer{})
 	if *useTLS {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {

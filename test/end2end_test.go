@@ -203,7 +203,7 @@ func setUp(useTLS bool, maxStream uint32) (s *grpc.Server, tc testpb.TestService
 		log.Fatalf("Failed to parse listener address: %v", err)
 	}
 	s = grpc.NewServer(grpc.MaxConcurrentStreams(maxStream))
-	testpb.RegisterService(s, &testServer{})
+	testpb.RegisterTestServiceServer(s, &testServer{})
 	if useTLS {
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
