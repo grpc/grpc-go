@@ -537,8 +537,8 @@ func TestClientStreaming(t *testing.T) {
 		sum += s
 	}
 	reply, err := stream.CloseAndRecv()
-	if err != io.EOF {
-		t.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, io.EOF)
+	if err != nil {
+		t.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
 	}
 	if reply.GetAggregatedPayloadSize() != int32(sum) {
 		t.Fatalf("%v.CloseAndRecv().GetAggregatePayloadSize() = %v; want %v", stream, reply.GetAggregatedPayloadSize(), sum)
