@@ -96,7 +96,7 @@ type options struct {
 	maxConcurrentStreams uint32
 }
 
-// ServerOption sets options.
+// A ServerOption sets options.
 type ServerOption func(*options)
 
 // MaxConcurrentStreams returns an Option that will apply a limit on the number
@@ -312,7 +312,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	t.WriteStatus(stream, codes.Unimplemented, fmt.Sprintf("unknown method %v", method))
 }
 
-// Stop stops the gRPC server. Once it returns, the server stops accepting
+// Stop stops the gRPC server. Once Stop returns, the server stops accepting
 // connection requests and closes all the connected connections.
 func (s *Server) Stop() {
 	s.mu.Lock()
@@ -329,9 +329,9 @@ func (s *Server) Stop() {
 	}
 }
 
-// CloseConns closes all exiting transports but keeps s.lis accepting new
+// TestingCloseConns closes all exiting transports but keeps s.lis accepting new
 // connections. This is for test only now.
-func (s *Server) CloseConns() {
+func (s *Server) TestingCloseConns() {
 	s.mu.Lock()
 	for c := range s.conns {
 		c.Close()
