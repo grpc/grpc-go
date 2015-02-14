@@ -15,7 +15,7 @@ subprojects {
     }
 
     compileJava {
-        options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+        options.compilerArgs << "-Xlint:unchecked"
     }
 
     // External dependency management

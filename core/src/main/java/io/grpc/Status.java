@@ -31,7 +31,6 @@
 
 package io.grpc;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -376,7 +375,7 @@ public final class Status {
 
   @Override
   public String toString() {
-    return MoreObjects.toStringHelper(this)
+    return Objects.toStringHelper(this)
         .add("code", code.name())
         .add("description", description)
         .add("cause", cause)

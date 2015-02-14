@@ -32,7 +32,7 @@
 package io.grpc.transport;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import java.io.InputStream;
@@ -295,8 +295,8 @@ public abstract class AbstractStream<IdT> implements Stream {
     return toStringHelper().toString();
   }
 
-  protected MoreObjects.ToStringHelper toStringHelper() {
-    return MoreObjects.toStringHelper(this)
+  protected Objects.ToStringHelper toStringHelper() {
+    return Objects.toStringHelper(this)
         .add("id", id())
         .add("inboundPhase", inboundPhase().name())
         .add("outboundPhase", outboundPhase().name());

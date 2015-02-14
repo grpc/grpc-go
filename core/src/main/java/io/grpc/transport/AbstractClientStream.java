@@ -31,7 +31,7 @@
 
 package io.grpc.transport;
 
-import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Metadata;
@@ -272,8 +272,8 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   protected abstract void sendCancel();
 
   @Override
-  protected MoreObjects.ToStringHelper toStringHelper() {
-    MoreObjects.ToStringHelper toStringHelper = super.toStringHelper();
+  protected Objects.ToStringHelper toStringHelper() {
+    Objects.ToStringHelper toStringHelper = super.toStringHelper();
     if (status != null) {
       toStringHelper.add("status", status);
     }
