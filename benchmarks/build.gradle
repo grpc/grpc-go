@@ -28,15 +28,7 @@ dependencies {
             libraries.mockito,
             libraries.hdrhistogram
 
-    // Determine the correct version of Jetty ALPN boot to use based
-    // on the Java version.
-    def alpnboot_prefix = 'org.mortbay.jetty.alpn:alpn-boot:'
-    def alpnboot_version = '8.1.2.v20141202'
-    if (JavaVersion.current().ordinal() < JavaVersion.VERSION_1_8.ordinal()) {
-        alpnboot_version = '7.1.2.v20141202'
-    }
-
-    alpnboot alpnboot_prefix + alpnboot_version
+    alpnboot alpnboot_package_name
 
     applicationDefaultJvmArgs = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
 }

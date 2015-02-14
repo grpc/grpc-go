@@ -18,27 +18,37 @@ subprojects {
         options.compilerArgs << "-Xlint:unchecked"
     }
 
-    // External dependency management
-    ext.libraries = [
-        protobuf: 'com.google.protobuf:protobuf-java:3.0.0-pre',
-        guava: 'com.google.guava:guava:18.0',
-        jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
-        oauth_client: 'com.google.oauth-client:google-oauth-client:1.18.0-rc',
-        javaee_api: 'javax:javaee-api:7.0',
-        hpack: 'com.twitter:hpack:0.9.1',
-        protobuf_plugin: 'ws.antonov.gradle.plugins:gradle-plugin-protobuf:0.9.1',
-        okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
-        // used to collect benchmark results
-        hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.4',
+    ext {
+        libraries = [
+                protobuf: 'com.google.protobuf:protobuf-java:3.0.0-pre',
+                guava: 'com.google.guava:guava:18.0',
+                jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
+                oauth_client: 'com.google.oauth-client:google-oauth-client:1.18.0-rc',
+                javaee_api: 'javax:javaee-api:7.0',
+                hpack: 'com.twitter:hpack:0.9.1',
+                protobuf_plugin: 'ws.antonov.gradle.plugins:gradle-plugin-protobuf:0.9.1',
+                okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
+                // used to collect benchmark results
+                hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.4',
 
-        // TODO: Unreleased dependencies.
-        // These must already be installed in the local maven repository.
-        netty: 'io.netty:netty-codec-http2:5.0.0.Alpha2-SNAPSHOT',
+                // TODO: Unreleased dependencies.
+                // These must already be installed in the local maven repository.
+                netty: 'io.netty:netty-codec-http2:5.0.0.Alpha2-SNAPSHOT',
 
-        // Test dependencies.
-        junit: 'junit:junit:4.11',
-        mockito: 'org.mockito:mockito-core:1.10.8'
-    ]
+                // Test dependencies.
+                junit: 'junit:junit:4.11',
+                mockito: 'org.mockito:mockito-core:1.10.8'
+        ]
+
+        // Determine the correct version of Jetty ALPN boot to use based
+        // on the Java version.
+        def alpnboot_version = '8.1.2.v20141202'
+        if (JavaVersion.current().ordinal() < JavaVersion.VERSION_1_8.ordinal()) {
+            alpnboot_version = '7.1.2.v20141202'
+        }
+
+        alpnboot_package_name = 'org.mortbay.jetty.alpn:alpn-boot:' + alpnboot_version
+    }
 
     dependencies {
         testCompile libraries.junit,
