@@ -318,7 +318,7 @@ func TestRetry(t *testing.T) {
 		// The server shuts down the network connection to make a
 		// transport error which will be detected by the client side
 		// code.
-		s.CloseConns()
+		s.TestingCloseConns()
 		wg.Done()
 	}()
 	// All these RPCs should succeed eventually.
