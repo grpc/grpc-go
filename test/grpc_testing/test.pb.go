@@ -498,7 +498,7 @@ func (x *testServiceStreamingInputCallClient) CloseAndRecv() (*StreamingInputCal
 		// gRPC protocol violation.
 		return nil, errors.New("gRPC client streaming protocol violation: no EOF after final response")
 	}
-	return m, io.EOF
+	return m, nil
 }
 
 func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error) {

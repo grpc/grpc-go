@@ -287,7 +287,7 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
         "\t}\n"
         "\t// Read EOF.\n"
         "\tif err := x.ClientStream.RecvProto(m); err == io.EOF {\n"
-        "\t\treturn m, io.EOF\n"
+        "\t\treturn m, nil\n"
         "\t}\n"
         "\t// gRPC protocol violation.\n"
         "\treturn m, fmt.Errorf(\"Violate gRPC client streaming protocol: no "

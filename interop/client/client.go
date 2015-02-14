@@ -53,12 +53,20 @@ var (
 	serverHost    = flag.String("server_host", "127.0.0.1", "The server host name")
 	serverPort    = flag.Int("server_port", 10000, "The server port number")
 	tlsServerName = flag.String("tls_server_name", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
-	testCase      = flag.String("test_case", "large_unary", "The RPC method to be tested: large_unary|empty_unary|client_streaming|server_streaming|ping_pong|all")
+	testCase      = flag.String("test_case", "large_unary",
+		`Configure different test cases. Valid options are:
+        empty_unary : empty (zero bytes) request and response;
+        large_unary : single request and (large) response;
+        client_streaming : request streaming with single response;
+        server_streaming : single request with response streaming;
+        ping_pong : full-duplex streaming`)
 )
 
 var (
-	reqSizes  = []int{27182, 8, 1828, 45904}
-	respSizes = []int{31415, 9, 2653, 58979}
+	reqSizes      = []int{27182, 8, 1828, 45904}
+	respSizes     = []int{31415, 9, 2653, 58979}
+	largeReqSize  = 271828
+	largeRespSize = 314159
 )
 
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
@@ -90,12 +98,10 @@ func doEmptyUnaryCall(tc testpb.TestServiceClient) {
 }
 
 func doLargeUnaryCall(tc testpb.TestServiceClient) {
-	argSize := 271828
-	respSize := 314159
-	pl := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
+	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(respSize)),
+		ResponseSize: proto.Int32(int32(largeRespSize)),
 		Payload:      pl,
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
@@ -104,8 +110,8 @@ func doLargeUnaryCall(tc testpb.TestServiceClient) {
 	}
 	t := reply.GetPayload().GetType()
 	s := len(reply.GetPayload().GetBody())
-	if t != testpb.PayloadType_COMPRESSABLE || s != respSize {
-		log.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, respSize)
+	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
+		log.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
 	}
 }
 
@@ -128,8 +134,8 @@ func doClientStreaming(tc testpb.TestServiceClient) {
 
 	}
 	reply, err := stream.CloseAndRecv()
-	if err != io.EOF {
-		log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, io.EOF)
+	if err != nil {
+		log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
 	}
 	if reply.GetAggregatedPayloadSize() != int32(sum) {
 		log.Fatalf("%v.CloseAndRecv().GetAggregatePayloadSize() = %v; want %v", stream, reply.GetAggregatedPayloadSize(), sum)
@@ -236,7 +242,7 @@ func main() {
 			var err error
 			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
 			if err != nil {
-				log.Fatalf("Failed to create credentials %v", err)
+				log.Fatalf("Failed to create TLS credentials %v", err)
 			}
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
@@ -259,12 +265,6 @@ func main() {
 	case "server_streaming":
 		doServerStreaming(tc)
 	case "ping_pong":
-		doPingPong(tc)
-	case "all":
-		doEmptyUnaryCall(tc)
-		doLargeUnaryCall(tc)
-		doClientStreaming(tc)
-		doServerStreaming(tc)
 		doPingPong(tc)
 	default:
 		log.Fatal("Unsupported test case: ", *testCase)
