@@ -8,5 +8,6 @@ for i in "$@"; do
 done
 TARGET_ARGS="${TARGET_ARGS:2}"
 
+cd "$(dirname "$(readlink -f "$0")")"
 echo "[INFO] Running: $TARGET ($TARGET_CLASS $TARGET_ARGS)"
 ./gradlew -PmainClass="$TARGET_CLASS" -PappArgs="[$TARGET_ARGS]" :grpc-integration-testing:execute
