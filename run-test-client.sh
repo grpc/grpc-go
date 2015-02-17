@@ -9,4 +9,4 @@ done
 TARGET_ARGS="${TARGET_ARGS:2}"
 
 echo "[INFO] Running: $TARGET ($TARGET_CLASS $TARGET_ARGS)"
-gradle -PmainClass="$TARGET_CLASS" -PappArgs="[$TARGET_ARGS]" :grpc-integration-testing:execute
+./gradlew -PmainClass="$TARGET_CLASS" -PappArgs="[$TARGET_ARGS]" :grpc-integration-testing:execute
