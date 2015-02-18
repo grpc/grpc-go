@@ -201,6 +201,15 @@ public class ServerImpl implements Server {
   }
 
   /**
+   * Waits for the server to become terminated.
+   */
+  public synchronized void awaitTerminated() throws InterruptedException {
+    while(!terminated) {
+      wait();
+    }
+  }
+
+  /**
    * Returns whether the server is terminated. Terminated servers have no running calls and
    * relevant resources released (like TCP connections).
    *
