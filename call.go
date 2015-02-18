@@ -37,26 +37,34 @@ import (
 	"io"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
-	"golang.org/x/net/context"
 )
 
 // recv receives and parses an RPC response.
 // On error, it returns the error and indicates whether the call should be retried.
 //
 // TODO(zhaoq): Check whether the received message sequence is valid.
-func recv(stream *transport.Stream, reply proto.Message) error {
+func recv(t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply proto.Message) error {
+	// Try to acquire header metadata from the server if there is any.
+	var err error
+	c.headerMD, err = stream.Header()
+	if err != nil {
+		return err
+	}
 	p := &parser{s: stream}
 	for {
-		if err := recvProto(p, reply); err != nil {
+		if err = recvProto(p, reply); err != nil {
 			if err == io.EOF {
-				return nil
+				break
 			}
 			return err
 		}
 	}
+	c.trailerMD = stream.Trailer()
+	return nil
 }
 
 // sendRPC writes out various information of an RPC such as Context and Message.
@@ -145,17 +153,11 @@ func Invoke(ctx context.Context, method string, args, reply proto.Message, cc *C
 			}
 			return toRPCErr(err)
 		}
-		// Try to acquire header metadata from the server if there is any.
-		c.headerMD, err = stream.Header()
-		if err != nil {
-			return toRPCErr(err)
-		}
 		// Receive the response
-		lastErr = recv(stream, reply)
+		lastErr = recv(t, &c, stream, reply)
 		if _, ok := lastErr.(transport.ConnectionError); ok {
 			continue
 		}
-		c.trailerMD = stream.Trailer()
 		t.CloseStream(stream, lastErr)
 		if lastErr != nil {
 			return toRPCErr(lastErr)

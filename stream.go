@@ -37,10 +37,10 @@ import (
 	"io"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
-	"golang.org/x/net/context"
 )
 
 // Stream defines the common interface a client or server stream has to satisfy.
@@ -112,8 +112,14 @@ func (cs *clientStream) Context() context.Context {
 	return cs.s.Context()
 }
 
-func (cs *clientStream) Header() (md metadata.MD, err error) {
-	return cs.s.Header()
+func (cs *clientStream) Header() (metadata.MD, error) {
+	m, err := cs.s.Header()
+	if err != nil {
+		if _, ok := err.(transport.ConnectionError); !ok {
+			cs.t.CloseStream(cs.s, err)
+		}
+	}
+	return m, err
 }
 
 func (cs *clientStream) Trailer() metadata.MD {
@@ -142,15 +148,15 @@ func (cs *clientStream) RecvProto(m proto.Message) (err error) {
 	if err == nil {
 		return
 	}
+	if _, ok := err.(transport.ConnectionError); !ok {
+		cs.t.CloseStream(cs.s, err)
+	}
 	if err == io.EOF {
 		if cs.s.StatusCode() == codes.OK {
 			// Returns io.EOF to indicate the end of the stream.
 			return
 		}
 		return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
-	}
-	if _, ok := err.(transport.ConnectionError); !ok {
-		cs.t.CloseStream(cs.s, err)
 	}
 	return toRPCErr(err)
 }
