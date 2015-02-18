@@ -50,7 +50,7 @@ import java.util.concurrent.TimeUnit;
 @RunWith(JUnit4.class)
 public class StubConfigTest {
 
-  @Test
+  @Test(timeout = 10000)
   public void testConfigureTimeout() {
     // Create a default stub
     TestServiceGrpc.TestServiceBlockingStub stub =

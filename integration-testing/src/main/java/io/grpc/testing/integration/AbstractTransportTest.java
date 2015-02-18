@@ -131,12 +131,12 @@ public abstract class AbstractTransportTest {
 
   protected abstract ChannelImpl createChannel();
 
-  @Test
+  @Test(timeout = 10000)
   public void emptyUnary() throws Exception {
     assertEquals(Empty.getDefaultInstance(), blockingStub.emptyCall(Empty.getDefaultInstance()));
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void largeUnary() throws Exception {
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setResponseSize(314159)
@@ -153,7 +153,7 @@ public abstract class AbstractTransportTest {
     assertEquals(goldenResponse, blockingStub.unaryCall(request));
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void serverStreaming() throws Exception {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .setResponseType(PayloadType.COMPRESSABLE)
@@ -195,7 +195,7 @@ public abstract class AbstractTransportTest {
     assertEquals(goldenResponses, recorder.getValues());
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void clientStreaming() throws Exception {
     final List<StreamingInputCallRequest> requests = Arrays.asList(
         StreamingInputCallRequest.newBuilder()
@@ -228,7 +228,7 @@ public abstract class AbstractTransportTest {
     assertEquals(goldenResponse, responseObserver.firstValue().get());
   }
 
-  @Test(timeout=5000)
+  @Test(timeout = 10000)
   public void pingPong() throws Exception {
     final List<StreamingOutputCallRequest> requests = Arrays.asList(
         StreamingOutputCallRequest.newBuilder()
@@ -291,7 +291,7 @@ public abstract class AbstractTransportTest {
     verifyNoMoreInteractions(responseObserver);
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void emptyStream() throws Exception {
     @SuppressWarnings("unchecked")
     StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
@@ -302,7 +302,7 @@ public abstract class AbstractTransportTest {
     verifyNoMoreInteractions(responseObserver);
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void cancelAfterBegin() throws Exception {
     StreamRecorder<StreamingInputCallResponse> responseObserver = StreamRecorder.create();
     StreamObserver<StreamingInputCallRequest> requestObserver =
@@ -313,7 +313,7 @@ public abstract class AbstractTransportTest {
     assertEquals(Status.CANCELLED, Status.fromThrowable(responseObserver.getError()));
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void cancelAfterFirstResponse() throws Exception {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder()
@@ -342,7 +342,7 @@ public abstract class AbstractTransportTest {
     verifyNoMoreInteractions(responseObserver);
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void fullDuplexCallShouldSucceed() throws Exception {
     // Build the request.
     List<Integer> responseSizes = Arrays.asList(50, 100, 150, 200);
@@ -375,7 +375,7 @@ public abstract class AbstractTransportTest {
     }
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void halfDuplexCallShouldSucceed() throws Exception {
     // Build the request.
     List<Integer> responseSizes = Arrays.asList(50, 100, 150, 200);
@@ -407,7 +407,7 @@ public abstract class AbstractTransportTest {
     }
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void streamingOutputShouldBeFlowControlled() throws Exception {
     // Create the call object.
     Call<StreamingOutputCallRequest, StreamingOutputCallResponse> call =
@@ -476,7 +476,7 @@ public abstract class AbstractTransportTest {
     }
   }
 
-  @org.junit.Test
+  @Test(timeout = 10000)
   public void exchangeContextUnaryCall() throws Exception {
     TestServiceGrpc.TestServiceBlockingStub stub =
         TestServiceGrpc.newBlockingStub(channel);
@@ -500,7 +500,7 @@ public abstract class AbstractTransportTest {
     Assert.assertEquals(contextValue, trailersCapture.get().get(METADATA_KEY));
   }
 
-  @org.junit.Test
+  @Test(timeout = 10000)
   public void exchangeContextStreamingCall() throws Exception {
     TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
 
