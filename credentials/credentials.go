@@ -99,8 +99,6 @@ type tlsCreds struct {
 
 // GetRequestMetadata returns nil, nil since TLS credentials does not have
 // metadata.
-// TODO(zhaoq): Define the set of the qualified keys instead of leaving it as an
-// arbitrary string.
 func (c *tlsCreds) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
 	return nil, nil
 }
