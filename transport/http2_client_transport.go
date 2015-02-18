@@ -44,10 +44,10 @@ import (
 
 	"github.com/bradfitz/http2"
 	"github.com/bradfitz/http2/hpack"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	"golang.org/x/net/context"
 )
 
 // http2Client implements the ClientTransport interface with HTTP2.
@@ -218,7 +218,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "te", Value: "trailers"})
 	for _, c := range t.authCreds {
-		m, err := c.GetRequestMetadata()
+		m, err := c.GetRequestMetadata(ctx)
+		select {
+		case <-ctx.Done():
+			return nil, ContextErr(ctx.Err())
+		default:
+		}
 		if err != nil {
 			return nil, StreamErrorf(codes.InvalidArgument, "%v", err)
 		}

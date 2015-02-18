@@ -60,11 +60,9 @@ func WithClientTLS(creds credentials.TransportAuthenticator) DialOption {
 	}
 }
 
-// WithComputeEngine returns a DialOption which sets
-// credentials which use application default credentials as provided to
-// Google Compute Engine. Note that TLS credentials is typically also
-// needed. If it is the case, users need to pass WithTLS option too.
-func WithComputeEngine(creds credentials.Credentials) DialOption {
+// WithPerRPCCredentials returns a DialOption which sets
+// credentials which will place auth state on each outbound RPC.
+func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
 	return func(o *dialOptions) {
 		o.authOptions = append(o.authOptions, creds)
 	}
