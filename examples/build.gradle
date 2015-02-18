@@ -1,0 +1,47 @@
+apply plugin: 'application'
+apply plugin: 'protobuf'
+
+description = "grpc Examples"
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath libraries.protobuf_plugin
+    }
+}
+
+dependencies {
+    compile project(':grpc-core'),
+            project(':grpc-netty'),
+            project(':grpc-okhttp'),
+            project(':grpc-stub')
+}
+
+protobufCodeGenPlugins = ["java_plugin:$rootDir/compiler/build/binaries/java_pluginExecutable/java_plugin"]
+generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
+
+task mathserver(type: JavaExec) {
+    main = "io.grpc.examples.MathServer"
+    description = "Executes the math server."
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+task mathclient(type: JavaExec) {
+    main = "io.grpc.examples.MathClient"
+    description = "Executes the math client."
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+task stockserver(type: JavaExec) {
+    main = "io.grpc.examples.StockServer"
+    description = "Executes the stock server."
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+task stockclient(type: JavaExec) {
+    main = "io.grpc.examples.StockClient"
+    description = "Executes the stock client."
+    classpath = sourceSets.main.runtimeClasspath
+}

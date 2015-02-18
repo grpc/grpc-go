@@ -31,9 +31,9 @@
 
 package io.grpc.examples;
 
-import com.google.protos.io.grpc.examples.StockGrpc;
-import com.google.protos.io.grpc.examples.StockOuterClass.StockReply;
-import com.google.protos.io.grpc.examples.StockOuterClass.StockRequest;
+import io.grpc.examples.StockGrpc;
+import io.grpc.examples.StockOuterClass.StockReply;
+import io.grpc.examples.StockOuterClass.StockRequest;
 
 import io.grpc.ServerImpl;
 import io.grpc.stub.StreamObserver;

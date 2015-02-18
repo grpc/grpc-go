@@ -31,11 +31,11 @@
 
 package io.grpc.examples;
 
-import com.google.protos.io.grpc.examples.CalcGrpc;
-import com.google.protos.io.grpc.examples.Math.DivArgs;
-import com.google.protos.io.grpc.examples.Math.DivReply;
-import com.google.protos.io.grpc.examples.Math.FibArgs;
-import com.google.protos.io.grpc.examples.Math.Num;
+import io.grpc.examples.CalcGrpc;
+import io.grpc.examples.Math.DivArgs;
+import io.grpc.examples.Math.DivReply;
+import io.grpc.examples.Math.FibArgs;
+import io.grpc.examples.Math.Num;
 
 import io.grpc.ServerImpl;
 import io.grpc.stub.StreamObserver;
