@@ -42,9 +42,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/transport"
-	"golang.org/x/net/context"
 )
 
 func TestSimpleParsing(t *testing.T) {

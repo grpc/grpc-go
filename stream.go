@@ -34,6 +34,7 @@
 package grpc
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/golang/protobuf/proto"
@@ -42,6 +43,18 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
 )
+
+type streamHandler func(srv interface{}, stream ServerStream) error
+
+// StreamDesc represents a streaming RPC service's method specification.
+type StreamDesc struct {
+	StreamName string
+	Handler    streamHandler
+
+	// At least one of these is true.
+	ServerStreams bool
+	ClientStreams bool
+}
 
 // Stream defines the common interface a client or server stream has to satisfy.
 type Stream interface {
@@ -80,7 +93,7 @@ type ClientStream interface {
 
 // NewClientStream creates a new Stream for the client side. This is called
 // by generated code.
-func NewClientStream(ctx context.Context, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
+func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
 	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
 	callHdr := &transport.CallHdr{
 		Host:   cc.target,
@@ -95,17 +108,19 @@ func NewClientStream(ctx context.Context, cc *ClientConn, method string, opts ..
 		return nil, toRPCErr(err)
 	}
 	return &clientStream{
-		t: t,
-		s: s,
-		p: &parser{s: s},
+		t:    t,
+		s:    s,
+		p:    &parser{s: s},
+		desc: desc,
 	}, nil
 }
 
 // clientStream implements a client side Stream.
 type clientStream struct {
-	t transport.ClientTransport
-	s *transport.Stream
-	p *parser
+	t    transport.ClientTransport
+	s    *transport.Stream
+	p    *parser
+	desc *StreamDesc
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -146,7 +161,14 @@ func (cs *clientStream) SendProto(m proto.Message) (err error) {
 func (cs *clientStream) RecvProto(m proto.Message) (err error) {
 	err = recvProto(cs.p, m)
 	if err == nil {
-		return
+		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
+			return
+		}
+		// Special handling for client streaming rpc.
+		if err = recvProto(cs.p, m); err != io.EOF {
+			cs.t.CloseStream(cs.s, err)
+			return fmt.Errorf("gRPC client streaming protocol violation: %v, want <EOF>", err)
+		}
 	}
 	if _, ok := err.(transport.ConnectionError); !ok {
 		cs.t.CloseStream(cs.s, err)

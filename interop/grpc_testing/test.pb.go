@@ -59,9 +59,9 @@ import math "math"
 
 import (
 	errors "errors"
-	io "io"
 	context "golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
+	io "io"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -430,7 +430,7 @@ func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, op
 }
 
 func (c *testServiceClient) StreamingOutputCall(ctx context.Context, in *StreamingOutputCallRequest, opts ...grpc.CallOption) (TestService_StreamingOutputCallClient, error) {
-	stream, err := grpc.NewClientStream(ctx, c.cc, "/grpc.testing.TestService/StreamingOutputCall", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_TestService_serviceDesc.Streams[0], c.cc, "/grpc.testing.TestService/StreamingOutputCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +462,7 @@ func (x *testServiceStreamingOutputCallClient) Recv() (*StreamingOutputCallRespo
 }
 
 func (c *testServiceClient) StreamingInputCall(ctx context.Context, opts ...grpc.CallOption) (TestService_StreamingInputCallClient, error) {
-	stream, err := grpc.NewClientStream(ctx, c.cc, "/grpc.testing.TestService/StreamingInputCall", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_TestService_serviceDesc.Streams[1], c.cc, "/grpc.testing.TestService/StreamingInputCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -489,20 +489,14 @@ func (x *testServiceStreamingInputCallClient) CloseAndRecv() (*StreamingInputCal
 		return nil, err
 	}
 	m := new(StreamingInputCallResponse)
-	if err := x.ClientStream.RecvProto(m); err != nil {
+	if err := x.ClientStream.RecvProto(m); err != io.EOF {
 		return nil, err
-	}
-	// Read EOF.
-	dummy := new(StreamingInputCallResponse)
-	if err := x.ClientStream.RecvProto(dummy); err != io.EOF {
-		// gRPC protocol violation.
-		return nil, errors.New("gRPC client streaming protocol violation: no EOF after final response")
 	}
 	return m, nil
 }
 
 func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error) {
-	stream, err := grpc.NewClientStream(ctx, c.cc, "/grpc.testing.TestService/FullDuplexCall", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_TestService_serviceDesc.Streams[2], c.cc, "/grpc.testing.TestService/FullDuplexCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +527,7 @@ func (x *testServiceFullDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 }
 
 func (c *testServiceClient) HalfDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_HalfDuplexCallClient, error) {
-	stream, err := grpc.NewClientStream(ctx, c.cc, "/grpc.testing.TestService/HalfDuplexCall", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_TestService_serviceDesc.Streams[3], c.cc, "/grpc.testing.TestService/HalfDuplexCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -730,20 +724,26 @@ var _TestService_serviceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName: "StreamingOutputCall",
-			Handler:    _TestService_StreamingOutputCall_Handler,
+			StreamName:    "StreamingOutputCall",
+			Handler:       _TestService_StreamingOutputCall_Handler,
+			ServerStreams: true,
 		},
 		{
-			StreamName: "StreamingInputCall",
-			Handler:    _TestService_StreamingInputCall_Handler,
+			StreamName:    "StreamingInputCall",
+			Handler:       _TestService_StreamingInputCall_Handler,
+			ClientStreams: true,
 		},
 		{
-			StreamName: "FullDuplexCall",
-			Handler:    _TestService_FullDuplexCall_Handler,
+			StreamName:    "FullDuplexCall",
+			Handler:       _TestService_FullDuplexCall_Handler,
+			ClientStreams: true,
+			ServerStreams: true,
 		},
 		{
-			StreamName: "HalfDuplexCall",
-			Handler:    _TestService_HalfDuplexCall_Handler,
+			StreamName:    "HalfDuplexCall",
+			Handler:       _TestService_HalfDuplexCall_Handler,
+			ClientStreams: true,
+			ServerStreams: true,
 		},
 	},
 }
