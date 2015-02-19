@@ -326,7 +326,7 @@ type Options struct {
 	Delay bool
 }
 
-// CallHdr carries the metadata from client to server.
+// CallHdr carries the information of a particular RPC.
 type CallHdr struct {
 	Host   string // peer host
 	Method string // the operation to perform on the specified host
