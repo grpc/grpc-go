@@ -151,7 +151,8 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
                            const google::protobuf::MethodDescriptor* method,
                            map<string, string>* vars,
                            const set<string>& imports,
-                           const map<string, string>& import_alias) {
+                           const map<string, string>& import_alias,
+                           int* stream_ind) {
   (*vars)["Method"] = method->name();
   (*vars)["Request"] =
       GetFullMessageQualifiedName(method->input_type(), imports, import_alias);
@@ -171,12 +172,15 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
     printer->Print("\t}\n");
     printer->Print("\treturn out, nil\n");
     printer->Print("}\n\n");
-  } else if (BidiStreaming(method)) {
+    return;
+  }
+  (*vars)["StreamInd"] = std::to_string(*stream_ind);
+  if (BidiStreaming(method)) {
     printer->Print(
         *vars,
         "func (c *$ServiceStruct$Client) $Method$(ctx context.Context, opts "
         "...grpc.CallOption) ($Service$_$Method$Client, error) {\n"
-        "\tstream, err := grpc.NewClientStream(ctx, c.cc, "
+        "\tstream, err := grpc.NewClientStream(ctx, &_$Service$_serviceDesc.Streams[$StreamInd$], c.cc, "
         "\"/$Package$$Service$/$Method$\", opts...)\n"
         "\tif err != nil {\n"
         "\t\treturn nil, err\n"
@@ -214,7 +218,7 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
         "func (c *$ServiceStruct$Client) $Method$(ctx context.Context, m "
         "*$Request$, "
         "opts ...grpc.CallOption) ($Service$_$Method$Client, error) {\n"
-        "\tstream, err := grpc.NewClientStream(ctx, c.cc, "
+        "\tstream, err := grpc.NewClientStream(ctx, &_$Service$_serviceDesc.Streams[$StreamInd$], c.cc, "
         "\"/$Package$$Service$/$Method$\", opts...)\n"
         "\tif err != nil {\n"
         "\t\treturn nil, err\n"
@@ -252,7 +256,7 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
         *vars,
         "func (c *$ServiceStruct$Client) $Method$(ctx context.Context, opts "
         "...grpc.CallOption) ($Service$_$Method$Client, error) {\n"
-        "\tstream, err := grpc.NewClientStream(ctx, c.cc, "
+        "\tstream, err := grpc.NewClientStream(ctx, &_$Service$_serviceDesc.Streams[$StreamInd$], c.cc, "
         "\"/$Package$$Service$/$Method$\", opts...)\n"
         "\tif err != nil {\n"
         "\t\treturn nil, err\n"
@@ -282,18 +286,13 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
         "\t\treturn nil, err\n"
         "\t}\n"
         "\tm := new($Response$)\n"
-        "\tif err := x.ClientStream.RecvProto(m); err != nil {\n"
+        "\tif err := x.ClientStream.RecvProto(m); err != io.EOF {\n"
         "\t\treturn nil, err\n"
         "\t}\n"
-        "\t// Read EOF.\n"
-        "\tif err := x.ClientStream.RecvProto(m); err == io.EOF {\n"
-        "\t\treturn m, nil\n"
-        "\t}\n"
-        "\t// gRPC protocol violation.\n"
-        "\treturn m, fmt.Errorf(\"Violate gRPC client streaming protocol: no "
-        "EOF after the response.\")\n"
+        "\treturn m, nil\n"
         "}\n\n");
   }
+  (*stream_ind)++;
 }
 
 void PrintClient(google::protobuf::io::Printer* printer,
@@ -318,8 +317,10 @@ void PrintClient(google::protobuf::io::Printer* printer,
       "func New$Service$Client(cc *grpc.ClientConn) $Service$Client {\n"
       "\treturn &$ServiceStruct$Client{cc}\n"
       "}\n\n");
+  int stream_ind = 0;
   for (int i = 0; i < service->method_count(); ++i) {
-    PrintClientMethodImpl(printer, service->method(i), vars, imports, import_alias);
+    PrintClientMethodImpl(
+        printer, service->method(i), vars, imports, import_alias, &stream_ind);
   }
 }
 
@@ -489,6 +490,12 @@ void PrintServerStreamingMethodDesc(
   printer->Print("\t\t{\n");
   printer->Print(*vars, "\t\t\tStreamName:\t\"$Method$\",\n");
   printer->Print(*vars, "\t\t\tHandler:\t_$Service$_$Method$_Handler,\n");
+  if (method->client_streaming()) {
+    printer->Print(*vars, "\t\t\tClientStreams:\ttrue,\n");
+  }
+  if (method->server_streaming()) {
+    printer->Print(*vars, "\t\t\tServerStreams:\ttrue,\n");
+  }
   printer->Print("\t\t},\n");
 }
 
@@ -505,7 +512,7 @@ void PrintServer(google::protobuf::io::Printer* printer,
   printer->Print("}\n\n");
 
   printer->Print(*vars,
-                 "func RegisterService(s *grpc.Server, srv $Service$Server) {\n"
+                 "func Register$Service$Server(s *grpc.Server, srv $Service$Server) {\n"
                  "\ts.RegisterService(&_$Service$_serviceDesc, srv)\n"
                  "}\n\n");
 
@@ -613,7 +620,6 @@ string GetServices(const google::protobuf::FileDescriptor* file,
   printer.Print("import (\n");
   if (HasClientOnlyStreaming(file)) {
     printer.Print(
-        "\t\"fmt\"\n"
         "\t\"io\"\n");
   }
   printer.Print(

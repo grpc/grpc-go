@@ -43,10 +43,10 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
-	"golang.org/x/net/context"
 )
 
 // CallOption configures a Call before it starts or extracts information from

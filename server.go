@@ -43,10 +43,10 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
-	"golang.org/x/net/context"
 )
 
 type methodHandler func(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error)
@@ -55,14 +55,6 @@ type methodHandler func(srv interface{}, ctx context.Context, buf []byte) (proto
 type MethodDesc struct {
 	MethodName string
 	Handler    methodHandler
-}
-
-type streamHandler func(srv interface{}, stream ServerStream) error
-
-// StreamDesc represents a streaming RPC service's method specification.
-type StreamDesc struct {
-	StreamName string
-	Handler    streamHandler
 }
 
 // ServiceDesc represents an RPC service's specification.
