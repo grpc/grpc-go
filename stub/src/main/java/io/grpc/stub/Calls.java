@@ -45,10 +45,11 @@ import io.grpc.Status;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -148,7 +149,7 @@ public class Calls {
   // TODO(lryan): Not clear if we want to use this idiom for 'simple' stubs.
   public static <ReqT, RespT> Iterator<RespT> blockingServerStreamingCall(
       Call<ReqT, RespT> call, ReqT param) {
-    BlockingResponseStream<RespT> result = new BlockingResponseStream<RespT>();
+    BlockingResponseStream<RespT> result = new BlockingResponseStream<RespT>(call);
     asyncServerStreamingCall(call, param, result.listener());
     return result;
   }
@@ -331,10 +332,16 @@ public class Calls {
    */
   // TODO(ejona): determine how to allow Call.cancel() in case of application error.
   private static class BlockingResponseStream<T> implements Iterator<T> {
-    private final LinkedBlockingQueue<Object> buffer = new LinkedBlockingQueue<Object>();
+    // Due to flow control, only needs to hold up to 2 items: 1 for value, 1 for close.
+    private final BlockingQueue<Object> buffer = new ArrayBlockingQueue<Object>(2);
     private final Call.Listener<T> listener = new QueuingListener();
+    private final Call<?, T> call;
     // Only accessed when iterating.
     private Object last;
+
+    private BlockingResponseStream(Call<?, T> call) {
+      this.call = call;
+    }
 
     Call.Listener<T> listener() {
       return listener;
@@ -362,6 +369,7 @@ public class Calls {
         throw new NoSuchElementException();
       }
       try {
+        call.request(1);
         @SuppressWarnings("unchecked")
         T tmp = (T) last;
         return tmp;
