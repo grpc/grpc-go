@@ -116,8 +116,7 @@ func isReservedHeader(hdr string) bool {
 		return true
 	}
 	switch hdr {
-	case "authority",
-		"content-type",
+	case "content-type",
 		"grpc-message-type",
 		"grpc-encoding",
 		"grpc-message",
