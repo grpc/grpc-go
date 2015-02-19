@@ -1,9 +1,10 @@
 apply plugin: 'application'
 apply plugin: 'protobuf'
 
-description = "gRPC Benchmarks"
-mainClassName = "io.grpc.benchmarks.qps.Main"
+description = "grpc Benchmarks"
 
+startScripts.enabled = false
+run.enabled = false
 
 buildscript {
     repositories {
@@ -29,8 +30,28 @@ dependencies {
             libraries.hdrhistogram
 
     alpnboot alpnboot_package_name
+}
 
-    applicationDefaultJvmArgs = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+task qps_client(type: CreateStartScripts) {
+    mainClassName = "io.grpc.benchmarks.qps.QpsClient"
+    applicationName = "qps_client"
+    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
+
+task qps_server(type: CreateStartScripts) {
+    mainClassName = "io.grpc.benchmarks.qps.QpsServer"
+    applicationName = "qps_server"
+    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
+
+applicationDistribution.into("bin") {
+    from(qps_client)
+    from(qps_server)
+    fileMode = 0755
 }
 
 protobufCodeGenPlugins = ["java_plugin:$rootDir/compiler/build/binaries/java_pluginExecutable/java_plugin"]

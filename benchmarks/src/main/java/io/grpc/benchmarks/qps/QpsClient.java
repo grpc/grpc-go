@@ -58,14 +58,13 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
 /**
@@ -79,18 +78,23 @@ public class QpsClient {
   // Can record values between 1 ns and 1 min (60 BILLION NS)
   private static final long HISTOGRAM_MAX_VALUE = 60000000000L;
   private static final int HISTOGRAM_PRECISION = 3;
-  // How long (in ns) to do RPCs before it counts
-  private static final long WARMUP_TIME = 5000000000L;
 
   private int clientChannels = 4;
-  private int clientThreads  = 4;
-  private int numRpcs        = 100000;
+  private int concurrentCalls = 4;
   private int payloadSize    = 1;
   private String serverHost  = "127.0.0.1";
   private int serverPort;
   private boolean okhttp;
   private boolean enableTls;
   private boolean useTestCa;
+  // seconds
+  private int duration = 60;
+  // seconds
+  private int warmupDuration = 10;
+
+  public static void main(String... args) throws Exception {
+    new QpsClient().run(args);
+  }
 
   public void run(String[] args) throws Exception {
     if (!parseArgs(args)) {
@@ -107,25 +111,19 @@ public class QpsClient {
       channels.add(newChannel());
     }
 
-    long warmupEnd = System.nanoTime() + WARMUP_TIME;
-    do {
-      doRpcs(channels.get(0), req, 10000).get();
-    } while (System.nanoTime() < warmupEnd);
+    warmup(req, channels.get(0));
 
-    long startTime = System.nanoTime();
+    final long startTime = System.nanoTime();
+    final long endTime = startTime + TimeUnit.SECONDS.toNanos(duration);
 
-    List<Future<Histogram>> futures = new ArrayList<Future<Histogram>>(clientThreads);
-    for (int i = 0; i < clientThreads; i++) {
-      // The channel to thread assignment works a bit different than in the C++ version.
-      // It's the same for the "interesting cases": clientThreads == clientChannels and
-      // clientChannels == 1.
-      // It however doesn't support "cache thrashing" as mentioned in the comments of the
-      // C++ client. That's because it's my understanding that it doesn't make sense for our API
-      // as we neither use fixed threads per call nor do we pin them to specific cores.
+    // Initiate the concurrent calls
+    List<Future<Histogram>> futures = new ArrayList<Future<Histogram>>(concurrentCalls);
+    for (int i = 0; i < concurrentCalls; i++) {
       Channel channel = channels.get(i % clientChannels);
-      futures.add(doRpcs(channel, req, numRpcs));
+      futures.add(doRpcs(channel, req, endTime));
     }
 
+    // Wait for completion
     List<Histogram> histograms = new ArrayList<Histogram>(futures.size());
     for (Future<Histogram> future : futures) {
       histograms.add(future.get());
@@ -133,16 +131,20 @@ public class QpsClient {
 
     long elapsedTime = System.nanoTime() - startTime;
 
-    Histogram merged = merge(histograms);
+    printStats(merge(histograms), elapsedTime);
 
-    assert merged.getTotalCount() == numRpcs * clientThreads;
+    shutdown(channels);
+  }
 
-    printStats(merged, elapsedTime);
-
-    // shutdown
+  private void shutdown(List<Channel> channels) {
     for (Channel channel : channels) {
       ((ChannelImpl) channel).shutdown();
     }
+  }
+
+  private void warmup(SimpleRequest req, Channel ch) throws Exception {
+    long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(warmupDuration);
+    doRpcs(ch, req, end).get();
   }
 
   private Channel newChannel() throws IOException {
@@ -152,8 +154,6 @@ public class QpsClient {
       }
 
       return OkHttpChannelBuilder.forAddress(serverHost, serverPort)
-                                 // TODO(buchgr): Figure out what "server_threads" means in java
-                                 .executor(MoreExecutors.newDirectExecutorService())
                                  .build();
     }
 
@@ -168,7 +168,6 @@ public class QpsClient {
       }
 
     return NettyChannelBuilder.forAddress(new InetSocketAddress(address, serverPort))
-                              .executor(MoreExecutors.newDirectExecutorService())
                               .negotiationType(negotiationType)
                               .sslContext(context)
                               .build();
@@ -192,25 +191,30 @@ public class QpsClient {
           value = pair[1];
         }
 
-        if ("client_channels".equals(key)) {
-          clientChannels = max(Integer.parseInt(value), 1);
-        } else if ("client_threads".equals(key)) {
-          clientThreads = max(Integer.parseInt(value), 1);
-        } else if ("num_rpcs".equals(key)) {
-          numRpcs = max(Integer.parseInt(value), 1);
-        } else if ("payload_size".equals(key)) {
-          payloadSize = max(Integer.parseInt(value), 0);
-        } else if ("server_host".equals(key)) {
-          serverHost = value;
+        if ("help".equals(key)) {
+          printUsage();
+          return false;
         } else if ("server_port".equals(key)) {
           serverPort = Integer.parseInt(value);
           hasServerPort = true;
-        } else if ("okhttp".equals(key)) {
-          okhttp = true;
+        } else if ("server_host".equals(key)) {
+          serverHost = value;
+        } else if ("client_channels".equals(key)) {
+          clientChannels = max(Integer.parseInt(value), 1);
+        } else if ("concurrent_calls".equals(key)) {
+          concurrentCalls = max(Integer.parseInt(value), 1);
+        } else if ("payload_size".equals(key)) {
+          payloadSize = max(Integer.parseInt(value), 0);
         } else if ("enable_tls".equals(key)) {
           enableTls = true;
         } else if ("use_testca".equals(key)) {
           useTestCa = true;
+        } else if ("okhttp".equals(key)) {
+          okhttp = true;
+        } else if ("duration".equals(key)) {
+          duration = parseDuration(value);
+        } else if ("warmup_duration".equals(key)) {
+          warmupDuration = parseDuration(value);
         } else {
           System.err.println("Unrecognized argument '" + key + "'.");
         }
@@ -230,6 +234,23 @@ public class QpsClient {
     return true;
   }
 
+  private int parseDuration(String value) {
+    if (value == null || value.length() < 2) {
+      throw new IllegalArgumentException("value must be a number followed by a unit.");
+    }
+
+    char last = value.charAt(value.length() - 1);
+    int duration = Integer.parseInt(value.substring(0, value.length() - 1));
+
+    if (last == 's') {
+      return duration;
+    } else if (last == 'm') {
+      return duration * 60;
+    } else {
+      throw new IllegalArgumentException("Unknown unit " + last);
+    }
+  }
+
   private void printUsage() {
     QpsClient c = new QpsClient();
     System.out.println(
@@ -238,21 +259,25 @@ public class QpsClient {
       + "\n  --server_port=INT           Port of the server. Required. No default."
       + "\n  --server_host=STR           Hostname of the server. Default " + c.serverHost
       + "\n  --client_channels=INT       Number of client channels. Default " + c.clientChannels
-      + "\n  --client_threads=INT        Number of client threads. Default " + c.clientThreads
-      + "\n  --num_rpcs=INT              Number of RPCs per thread. Default " + c.numRpcs
+      + "\n  --concurrent_calls=INT      Number of concurrent calls. Default " + c.concurrentCalls
       + "\n  --payload_size=INT          Payload size in bytes. Default " + c.payloadSize
       + "\n  --enable_tls                Enable TLS. Default disabled."
       + "\n  --use_testca                Use the provided test certificate for TLS."
+      + "\n  --okhttp                    Use OkHttp as the transport. Default netty"
+      + "\n  --duration=TIME             Duration of the benchmark in either seconds or minutes."
+      + "\n                              For N seconds duration specify Ns and for minutes Nm. "
+      + "\n                              Default " + c.duration + "s."
+      + "\n  --warmup_duration=TIME      How long to run the warmup."
+      + "\n                              Default " + c.warmupDuration + "s."
     );
   }
 
   private Future<Histogram> doRpcs(Channel channel,
                                    final SimpleRequest request,
-                                   final int numRpcs) {
+                                   final long endTime) {
     final TestServiceStub stub = TestServiceGrpc.newStub(channel);
-    final CountDownLatch remainingRpcs = new CountDownLatch(numRpcs);
     final Histogram histogram = new Histogram(HISTOGRAM_MAX_VALUE, HISTOGRAM_PRECISION);
-    final HistogramFuture future = new HistogramFuture(histogram, remainingRpcs);
+    final HistogramFuture future = new HistogramFuture(histogram);
 
     stub.unaryCall(request, new StreamObserver<SimpleResponse>() {
       long lastCall = System.nanoTime();
@@ -287,10 +312,10 @@ public class QpsClient {
         histogram.recordValue(now - lastCall);
         lastCall = now;
 
-        remainingRpcs.countDown();
-
-        if (remainingRpcs.getCount() > 0) {
+        if (endTime > now) {
           stub.unaryCall(request, this);
+        } else {
+          future.done();
         }
       }
     });
@@ -317,8 +342,8 @@ public class QpsClient {
     StringBuilder header = new StringBuilder();
     StringBuilder values = new StringBuilder();
 
-    header.append("Threads, Channels, Payload Size, ");
-    values.append(String.format("%s, %d, %d, ", clientThreads, clientChannels, payloadSize));
+    header.append("Concurrent Calls, Channels, Payload Size, ");
+    values.append(String.format("%d, %d, %d, ", concurrentCalls, clientChannels, payloadSize));
 
     for (double percentile : percentiles) {
       header.append(percentile).append("%ile").append(", ");
@@ -334,47 +359,45 @@ public class QpsClient {
 
   private static class HistogramFuture implements Future<Histogram> {
     private final Histogram histogram;
-    private final CountDownLatch latch;
+    private boolean canceled;
+    private boolean done;
 
-    private final AtomicBoolean canceled = new AtomicBoolean();
-
-    HistogramFuture(Histogram histogram, CountDownLatch latch) {
+    HistogramFuture(Histogram histogram) {
       Preconditions.checkNotNull(histogram, "histogram");
-      Preconditions.checkNotNull(histogram, "latch");
-
       this.histogram = histogram;
-      this.latch = latch;
     }
 
     @Override
-    public boolean cancel(boolean mayInterruptIfRunning) {
-      if (latch.getCount() > 0 && canceled.compareAndSet(false, true)) {
-        while (latch.getCount() > 0) {
-          latch.countDown();
-        }
+    public synchronized boolean cancel(boolean mayInterruptIfRunning) {
+      if (!done && !canceled) {
+        canceled = true;
+        notifyAll();
         return true;
       }
       return false;
     }
 
     @Override
-    public boolean isCancelled() {
-      return canceled.get();
+    public synchronized boolean isCancelled() {
+      return canceled;
     }
 
     @Override
-    public boolean isDone() {
-      return latch.getCount() == 0 || canceled.get();
+    public synchronized boolean isDone() {
+      return done || canceled;
     }
 
     @Override
-    public Histogram get() throws InterruptedException, ExecutionException {
-      latch.await();
+    public synchronized Histogram get() throws InterruptedException, ExecutionException {
+      while (!isDone() && !isCancelled()) {
+        wait();
+      }
 
-      if (canceled.get()) {
+      if (isCancelled()) {
         throw new CancellationException();
       }
 
+      done = true;
       return histogram;
     }
 
@@ -383,6 +406,11 @@ public class QpsClient {
                                                              ExecutionException,
                                                              TimeoutException {
       throw new UnsupportedOperationException();
+    }
+
+    private synchronized void done() {
+      done = true;
+      notifyAll();
     }
   }
 }

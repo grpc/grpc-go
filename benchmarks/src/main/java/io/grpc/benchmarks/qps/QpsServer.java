@@ -67,7 +67,10 @@ public class QpsServer {
 
   private boolean enable_tls;
   private int port = 0;
-  private int serverThreads = 4;
+
+  public static void main(String... args) throws Exception {
+    new QpsServer().run(args);
+  }
 
   public void run(String[] args) throws Exception {
     if (!parseArgs(args)) {
@@ -88,17 +91,10 @@ public class QpsServer {
       port = pickUnusedPort();
     }
 
-    final EventLoopGroup boss = new NioEventLoopGroup(1);
-    final EventLoopGroup worker = new NioEventLoopGroup(serverThreads);
-
     final ServerImpl server = NettyServerBuilder
             .forPort(port)
-            .userBossEventLoopGroup(boss)
-            .workerEventLoopGroup(worker)
             .addService(TestServiceGrpc.bindService(new TestServiceImpl()))
             .sslContext(sslContext)
-            // TODO(buchgr): Figure out what "server_threads" means in java
-            .executor(MoreExecutors.newDirectExecutorService())
             .build();
     server.start();
 
@@ -111,18 +107,11 @@ public class QpsServer {
           System.out.println("QPS Server shutting down");
           server.shutdown();
           server.awaitTerminated(5, TimeUnit.SECONDS);
-          boss.shutdownGracefully(0, 5, TimeUnit.SECONDS);
-          worker.shutdownGracefully(0, 5, TimeUnit.SECONDS);
         } catch (Exception e) {
           e.printStackTrace();
         }
       }
     });
-
-    // This is a hack to remain there until we have figured out how
-    // we deal with daemon threads, because Netty's EventLoops by default
-    // use daemon threads the application would just exit immediately.
-    server.awaitTerminated(100, TimeUnit.DAYS);
   }
 
   private boolean parseArgs(String[] args) {
@@ -141,8 +130,9 @@ public class QpsServer {
           value = pair[1];
         }
 
-        if ("server_threads".equals(key)) {
-          serverThreads = max(Integer.parseInt(value), 1);
+        if ("help".equals(key)) {
+          printUsage();
+          return false;
         } else if ("port".equals(key)) {
           port = Integer.parseInt(value);
         } else if ("enable_tls".equals(key)) {
@@ -166,7 +156,6 @@ public class QpsServer {
             "Usage: [ARGS...]"
             + "\n"
             + "\n  --port             Port of the server. By default a random port is chosen."
-            + "\n  --server_threads   Number of client threads. Default " + s.serverThreads
             + "\n  --enable_tls       Enable TLS. Default disabled."
     );
   }
