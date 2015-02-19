@@ -193,7 +193,7 @@ func doPingPong(tc testpb.TestServiceClient) {
 	var index int
 	for index < len(reqSizes) {
 		respParam := []*testpb.ResponseParameters{
-			&testpb.ResponseParameters{
+			{
 				Size: proto.Int32(int32(respSizes[index])),
 			},
 		}

@@ -83,7 +83,7 @@ func sendRPC(ctx context.Context, callHdr *transport.CallHdr, t transport.Client
 	// TODO(zhaoq): Support compression.
 	outBuf, err := encode(args, compressionNone)
 	if err != nil {
-		return nil, transport.StreamErrorf(codes.Internal, "%v", err)
+		return nil, transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
 	err = t.Write(stream, outBuf, opts)
 	if err != nil {

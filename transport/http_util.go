@@ -138,7 +138,7 @@ func newHPACKDecoder() *hpackDecoder {
 		case "grpc-status":
 			code, err := strconv.Atoi(f.Value)
 			if err != nil {
-				d.err = StreamErrorf(codes.Internal, "malformed grpc-status: %v", err)
+				d.err = StreamErrorf(codes.Internal, "grpc/transport: malformed grpc-status: %v", err)
 				return
 			}
 			d.state.statusCode = codes.Code(code)
@@ -149,7 +149,7 @@ func newHPACKDecoder() *hpackDecoder {
 			var err error
 			d.state.timeout, err = timeoutDecode(f.Value)
 			if err != nil {
-				d.err = StreamErrorf(codes.Internal, "malformed time-out: %v", err)
+				d.err = StreamErrorf(codes.Internal, "grpc/transport: malformed time-out: %v", err)
 				return
 			}
 		case ":path":
@@ -175,12 +175,12 @@ func (d *hpackDecoder) decodeClientHTTP2Headers(s *Stream, frame headerFrame) (e
 	d.err = nil
 	_, err = d.h.Write(frame.HeaderBlockFragment())
 	if err != nil {
-		err = StreamErrorf(codes.Internal, "HPACK header decode error: %v", err)
+		err = StreamErrorf(codes.Internal, "grpc/transport: HPACK header decode error: %v", err)
 	}
 
 	if frame.HeadersEnded() {
 		if closeErr := d.h.Close(); closeErr != nil && err == nil {
-			err = StreamErrorf(codes.Internal, "HPACK decoder close error: %v", closeErr)
+			err = StreamErrorf(codes.Internal, "grpc/transport: HPACK decoder close error: %v", closeErr)
 		}
 		endHeaders = true
 	}
@@ -195,12 +195,12 @@ func (d *hpackDecoder) decodeServerHTTP2Headers(s *Stream, frame headerFrame) (e
 	d.err = nil
 	_, err = d.h.Write(frame.HeaderBlockFragment())
 	if err != nil {
-		err = StreamErrorf(codes.Internal, "HPACK header decode error: %v", err)
+		err = StreamErrorf(codes.Internal, "grpc/transport: HPACK header decode error: %v", err)
 	}
 
 	if frame.HeadersEnded() {
 		if closeErr := d.h.Close(); closeErr != nil && err == nil {
-			err = StreamErrorf(codes.Internal, "HPACK decoder close error: %v", closeErr)
+			err = StreamErrorf(codes.Internal, "grpc/transport: HPACK decoder close error: %v", closeErr)
 		}
 		endHeaders = true
 	}
@@ -276,12 +276,12 @@ func timeoutEncode(t time.Duration) string {
 func timeoutDecode(s string) (time.Duration, error) {
 	size := len(s)
 	if size < 2 {
-		return 0, fmt.Errorf("timeout string is too short: %q", s)
+		return 0, fmt.Errorf("grpc/transport: timeout string is too short: %q", s)
 	}
 	unit := timeoutUnit(s[size-1])
 	d, ok := timeoutUnitToDuration(unit)
 	if !ok {
-		return 0, fmt.Errorf("timeout unit is not recognized: %q", s)
+		return 0, fmt.Errorf("grpc/transport: timeout unit is not recognized: %q", s)
 	}
 	t, err := strconv.ParseInt(s[:size-1], 10, 64)
 	if err != nil {

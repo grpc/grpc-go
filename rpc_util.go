@@ -165,10 +165,10 @@ func recvProto(p *parser, m proto.Message) error {
 	switch pf {
 	case compressionNone:
 		if err := proto.Unmarshal(d, m); err != nil {
-			return Errorf(codes.Internal, "%v", err)
+			return Errorf(codes.Internal, "grpc: %v", err)
 		}
 	default:
-		return Errorf(codes.Internal, "compression is not supported yet.")
+		return Errorf(codes.Internal, "gprc: compression is not supported yet.")
 	}
 	return nil
 }
@@ -219,7 +219,7 @@ func toRPCErr(err error) error {
 			desc: e.Desc,
 		}
 	}
-	return Errorf(codes.Unknown, "failed to convert %v to rpcErr", err)
+	return Errorf(codes.Unknown, "grpc: failed to convert %v to rpcErr", err)
 }
 
 // convertCode converts a standard Go error into its canonical code. Note that

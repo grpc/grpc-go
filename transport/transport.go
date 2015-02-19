@@ -39,6 +39,7 @@ package transport // import "google.golang.org/grpc/transport"
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -244,13 +245,17 @@ func (s *Stream) StatusDesc() string {
 	return s.statusDesc
 }
 
+// ErrIllegalTrailerSet indicates that the trailer has already been set or it
+// is too late to do so.
+var ErrIllegalTrailerSet = errors.New("grpc/transport: trailer has been set")
+
 // SetTrailer sets the trailer metadata which will be sent with the RPC status
 // by the server. This can only be called at most once. Server side only.
 func (s *Stream) SetTrailer(md metadata.MD) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.trailer != nil {
-		return fmt.Errorf("transport: Trailer has been set")
+		return ErrIllegalTrailerSet
 	}
 	s.trailer = md.Copy()
 	return nil
