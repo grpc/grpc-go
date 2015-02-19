@@ -36,6 +36,7 @@ package grpc
 import (
 	"fmt"
 	"io"
+	"net"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -95,8 +96,12 @@ type ClientStream interface {
 // by generated code.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
 	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
+	host, _, err := net.SplitHostPort(cc.target)
+	if err != nil {
+		return nil, toRPCErr(err)
+	}
 	callHdr := &transport.CallHdr{
-		Host:   cc.target,
+		Host:   host,
 		Method: method,
 	}
 	t, _, err := cc.wait(ctx, 0)
