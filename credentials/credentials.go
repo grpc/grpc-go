@@ -235,4 +235,3 @@ func NewServiceAccountFromFile(keyFile string, scope ...string) (Credentials, er
 	}
 	return NewServiceAccountFromKey(jsonKey, scope...)
 }
-

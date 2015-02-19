@@ -45,9 +45,9 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"golang.org/x/net/context"
 )
 
 type server struct {

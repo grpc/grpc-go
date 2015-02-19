@@ -34,13 +34,21 @@
 package grpc
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/transport"
+)
+
+var (
+	// ErrUnspecTarget indicates that the target address is unspecified.
+	ErrUnspecTarget = errors.New("grpc: target is unspecified")
+	// ErrClosingChan indicates that the operation is illegal because the session
+	// is closing.
+	ErrClosingChan = errors.New("grpc: the channel is closing")
 )
 
 type dialOptions struct {
@@ -73,7 +81,7 @@ func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
 // for connection to complete.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	if target == "" {
-		return nil, fmt.Errorf("rpc.Dial: target is empty")
+		return nil, ErrUnspecTarget
 	}
 	cc := &ClientConn{
 		target: target,
@@ -119,7 +127,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		cc.transportSeq = 0
 		if cc.closing {
 			cc.mu.Unlock()
-			return fmt.Errorf("rpc.ClientConn.resetTransport: the channel is closing")
+			return ErrClosingChan
 		}
 		cc.mu.Unlock()
 		if closeTransport {
@@ -174,7 +182,7 @@ func (cc *ClientConn) wait(ctx context.Context, ts int) (transport.ClientTranspo
 		switch {
 		case cc.closing:
 			cc.mu.Unlock()
-			return nil, 0, fmt.Errorf("ClientConn is closing")
+			return nil, 0, ErrClosingChan
 		case ts < cc.transportSeq:
 			// Worked on a dying transport. Try the new one immediately.
 			defer cc.mu.Unlock()

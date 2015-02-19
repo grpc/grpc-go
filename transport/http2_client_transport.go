@@ -117,7 +117,7 @@ func newHTTP2Client(addr string, authOpts []credentials.Credentials) (_ ClientTr
 		conn, connErr = net.Dial("tcp", addr)
 	}
 	if connErr != nil {
-		return nil, ConnectionErrorf("%v", connErr)
+		return nil, ConnectionErrorf("grpc/transport: %v", connErr)
 	}
 	defer func() {
 		if err != nil {
@@ -127,14 +127,14 @@ func newHTTP2Client(addr string, authOpts []credentials.Credentials) (_ ClientTr
 	// Send connection preface to server.
 	n, err := conn.Write(clientPreface)
 	if err != nil {
-		return nil, ConnectionErrorf("%v", err)
+		return nil, ConnectionErrorf("grpc/transport: %v", err)
 	}
 	if n != len(clientPreface) {
-		return nil, ConnectionErrorf("Wrting client preface, wrote %d bytes; want %d", n, len(clientPreface))
+		return nil, ConnectionErrorf("grpc/transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
 	}
 	framer := http2.NewFramer(conn, conn)
 	if err := framer.WriteSettings(); err != nil {
-		return nil, ConnectionErrorf("%v", err)
+		return nil, ConnectionErrorf("grpc/transport: %v", err)
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
@@ -225,7 +225,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		default:
 		}
 		if err != nil {
-			return nil, StreamErrorf(codes.InvalidArgument, "%v", err)
+			return nil, StreamErrorf(codes.InvalidArgument, "grpc/transport: %v", err)
 		}
 		for k, v := range m {
 			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
@@ -265,7 +265,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 		if err != nil {
 			t.notifyError()
-			return nil, ConnectionErrorf("%v", err)
+			return nil, ConnectionErrorf("grpc/transport: %v", err)
 		}
 	}
 	s := t.newStream(ctx, callHdr)
@@ -276,7 +276,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
-		return nil, StreamErrorf(codes.Unavailable, "failed to create new stream because the limit has been reached.")
+		return nil, StreamErrorf(codes.Unavailable, "grpc/transport: failed to create new stream because the limit has been reached.")
 	}
 	t.activeStreams[s.id] = s
 	t.mu.Unlock()
@@ -391,7 +391,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 		// invoked.
 		if err := t.framer.WriteData(s.id, endStream, p); err != nil {
 			t.notifyError()
-			return ConnectionErrorf("%v", err)
+			return ConnectionErrorf("grpc/transport: %v", err)
 		}
 		t.writableChan <- 0
 		if r.Len() == 0 {

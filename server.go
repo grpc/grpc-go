@@ -34,6 +34,7 @@
 package grpc
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -145,6 +146,12 @@ func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
+var (
+	// ErrServerStopped indicates that the operation is now illegal because of
+	// the server being stopped.
+	ErrServerStopped = errors.New("grpc: the server has been stopped")
+)
+
 // Serve accepts incoming connections on the listener lis, creating a new
 // ServerTransport and service goroutine for each. The service goroutines
 // read gRPC request and then call the registered handlers to reply to them.
@@ -153,7 +160,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	s.mu.Lock()
 	if s.lis == nil {
 		s.mu.Unlock()
-		return fmt.Errorf("the server has been stopped")
+		return ErrServerStopped
 	}
 	s.lis[lis] = true
 	s.mu.Unlock()
@@ -340,7 +347,7 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 	}
 	stream, ok := transport.StreamFromContext(ctx)
 	if !ok {
-		return fmt.Errorf("rpc: failed to fetch the stream from the context %v", ctx)
+		return fmt.Errorf("grpc: failed to fetch the stream from the context %v", ctx)
 	}
 	t := stream.ServerTransport()
 	if t == nil {
@@ -358,7 +365,7 @@ func SetTrailer(ctx context.Context, md metadata.MD) error {
 	}
 	stream, ok := transport.StreamFromContext(ctx)
 	if !ok {
-		return fmt.Errorf("rpc: failed to fetch the stream from the context %v", ctx)
+		return fmt.Errorf("grpc: failed to fetch the stream from the context %v", ctx)
 	}
 	return stream.SetTrailer(md)
 }

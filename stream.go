@@ -153,7 +153,7 @@ func (cs *clientStream) SendProto(m proto.Message) (err error) {
 	}()
 	out, err := encode(m, compressionNone)
 	if err != nil {
-		return transport.StreamErrorf(codes.Internal, "%v", err)
+		return transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
 	return cs.t.Write(cs.s, out, &transport.Options{Last: false})
 }
@@ -167,7 +167,7 @@ func (cs *clientStream) RecvProto(m proto.Message) (err error) {
 		// Special handling for client streaming rpc.
 		if err = recvProto(cs.p, m); err != io.EOF {
 			cs.t.CloseStream(cs.s, err)
-			return fmt.Errorf("gRPC client streaming protocol violation: %v, want <EOF>", err)
+			return fmt.Errorf("grpc: client streaming protocol violation: %v, want <EOF>", err)
 		}
 	}
 	if _, ok := err.(transport.ConnectionError); !ok {
@@ -235,7 +235,7 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 func (ss *serverStream) SendProto(m proto.Message) error {
 	out, err := encode(m, compressionNone)
 	if err != nil {
-		err = transport.StreamErrorf(codes.Internal, "%v", err)
+		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 		return err
 	}
 	return ss.t.Write(ss.s, out, &transport.Options{Last: false})

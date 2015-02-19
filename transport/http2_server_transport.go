@@ -35,7 +35,7 @@ package transport
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
 	"log"
 	"math"
@@ -45,10 +45,14 @@ import (
 
 	"github.com/bradfitz/http2"
 	"github.com/bradfitz/http2/hpack"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"golang.org/x/net/context"
 )
+
+// ErrIllegalHeaderWrite indicates that setting header is illegal because of
+// the stream's state.
+var ErrIllegalHeaderWrite = errors.New("grpc/transport: the stream is done or WriteHeader was already called")
 
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
@@ -383,7 +387,7 @@ func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) e
 		}
 		if err != nil {
 			t.Close()
-			return ConnectionErrorf("%v", err)
+			return ConnectionErrorf("grpc/transport: %v", err)
 		}
 	}
 	return nil
@@ -394,7 +398,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	s.mu.Lock()
 	if s.headerOk || s.state == streamDone {
 		s.mu.Unlock()
-		return fmt.Errorf("transport: the stream is done or WriteHeader was already called")
+		return ErrIllegalHeaderWrite
 	}
 	s.headerOk = true
 	s.mu.Unlock()
@@ -474,7 +478,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		}
 		if err := t.framer.WriteHeaders(p); err != nil {
 			t.Close()
-			return ConnectionErrorf("%v", err)
+			return ConnectionErrorf("grpc/transport: %v", err)
 		}
 		t.writableChan <- 0
 	}
@@ -522,7 +526,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		}
 		if err := t.framer.WriteData(s.id, false, p); err != nil {
 			t.Close()
-			return ConnectionErrorf("%v", err)
+			return ConnectionErrorf("grpc/transport: %v", err)
 		}
 		t.writableChan <- 0
 	}
