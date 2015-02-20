@@ -168,23 +168,29 @@ public class OkHttpClientTransport implements ClientTransport {
   }
 
   @Override
-  public OkHttpClientStream newStream(MethodDescriptor<?, ?> method, Metadata.Headers headers,
-      ClientStreamListener listener) {
+  public OkHttpClientStream newStream(MethodDescriptor<?, ?> method,
+                                      Metadata.Headers headers,
+                                      ClientStreamListener listener) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     Preconditions.checkNotNull(listener, "listener");
-    OkHttpClientStream clientStream = OkHttpClientStream.newStream(listener,
-        frameWriter, this, outboundFlow);
+
+    OkHttpClientStream clientStream =
+        OkHttpClientStream.newStream(listener, frameWriter, this, outboundFlow);
+
+    String defaultPath = "/" + method.getName();
+    List<Header> requestHeaders =
+        Headers.createRequestHeaders(headers, defaultPath, defaultAuthority);
+
     synchronized (lock) {
       if (goAway) {
         throw new IllegalStateException("Transport not running", goAwayStatus.asRuntimeException());
-      } else {
-        assignStreamId(clientStream);
       }
+      
+      assignStreamId(clientStream);
+      frameWriter.synStream(false, false, clientStream.id(), 0, requestHeaders);
     }
-    String defaultPath = "/" + method.getName();
-    frameWriter.synStream(false, false, clientStream.id(), 0,
-        Headers.createRequestHeaders(headers, defaultPath, defaultAuthority));
+
     return clientStream;
   }
 
