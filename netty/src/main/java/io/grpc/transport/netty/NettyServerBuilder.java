@@ -99,7 +99,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
    * A simple solution to this problem is to call {@link ServerImpl#awaitTerminated()} to
    * keep the main thread alive until the server has terminated.
    */
-  public NettyServerBuilder userBossEventLoopGroup(EventLoopGroup group) {
+  public NettyServerBuilder bossEventLoopGroup(EventLoopGroup group) {
     this.userBossEventLoopGroup = group;
     return this;
   }
