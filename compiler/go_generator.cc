@@ -286,7 +286,7 @@ void PrintClientMethodImpl(google::protobuf::io::Printer* printer,
         "\t\treturn nil, err\n"
         "\t}\n"
         "\tm := new($Response$)\n"
-        "\tif err := x.ClientStream.RecvProto(m); err != io.EOF {\n"
+        "\tif err := x.ClientStream.RecvProto(m); err != nil {\n"
         "\t\treturn nil, err\n"
         "\t}\n"
         "\treturn m, nil\n"
@@ -618,10 +618,6 @@ string GetServices(const google::protobuf::FileDescriptor* file,
   vars["PackageName"] = BadToUnderscore(package_name);
   printer.Print(vars, "package $PackageName$\n\n");
   printer.Print("import (\n");
-  if (HasClientOnlyStreaming(file)) {
-    printer.Print(
-        "\t\"io\"\n");
-  }
   printer.Print(
       "\t\"google.golang.org/grpc\"\n"
       "\tcontext \"golang.org/x/net/context\"\n"

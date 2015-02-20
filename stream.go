@@ -34,7 +34,7 @@
 package grpc
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"net"
 
@@ -170,10 +170,18 @@ func (cs *clientStream) RecvProto(m proto.Message) (err error) {
 			return
 		}
 		// Special handling for client streaming rpc.
-		if err = recvProto(cs.p, m); err != io.EOF {
-			cs.t.CloseStream(cs.s, err)
-			return fmt.Errorf("grpc: client streaming protocol violation: %v, want <EOF>", err)
+		err = recvProto(cs.p, m)
+		cs.t.CloseStream(cs.s, err)
+		if err == nil {
+			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 		}
+		if err == io.EOF {
+			if cs.s.StatusCode() == codes.OK {
+				return nil
+			}
+			return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
+		}
+		return toRPCErr(err)
 	}
 	if _, ok := err.(transport.ConnectionError); !ok {
 		cs.t.CloseStream(cs.s, err)

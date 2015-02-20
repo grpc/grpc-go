@@ -58,15 +58,11 @@ import proto "github.com/golang/protobuf/proto"
 import math "math"
 
 import (
-	errors "errors"
 	context "golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
-	io "io"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ = errors.New
-var _ = io.EOF
 var _ context.Context
 var _ grpc.ClientConn
 
@@ -489,7 +485,7 @@ func (x *testServiceStreamingInputCallClient) CloseAndRecv() (*StreamingInputCal
 		return nil, err
 	}
 	m := new(StreamingInputCallResponse)
-	if err := x.ClientStream.RecvProto(m); err != io.EOF {
+	if err := x.ClientStream.RecvProto(m); err != nil {
 		return nil, err
 	}
 	return m, nil
