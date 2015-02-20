@@ -486,11 +486,11 @@ public class ServerImpl implements Server {
 
       @Override
       public void messageRead(final InputStream message) {
-        if (cancelled) {
-          return;
-        }
-
         try {
+          if (cancelled) {
+            return;
+          }
+
           listener.onPayload(methodDef.parseRequest(message));
         } finally {
           try {
