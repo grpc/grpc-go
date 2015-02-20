@@ -47,7 +47,8 @@ string ServiceClassName(const google::protobuf::ServiceDescriptor* service);
 
 // Writes the generated service interface into the given ZeroCopyOutputStream
 void GenerateService(const google::protobuf::ServiceDescriptor* service,
-                     google::protobuf::io::ZeroCopyOutputStream* out);
+                     google::protobuf::io::ZeroCopyOutputStream* out,
+                     bool generate_nano);
 
 }  // namespace java_grpc_generator
 

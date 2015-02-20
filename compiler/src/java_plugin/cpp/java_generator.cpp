@@ -60,7 +60,8 @@ static inline string MessageFullJavaName(const Descriptor* desc) {
 }
 
 static void PrintMethodFields(
-    const ServiceDescriptor* service, map<string, string>* vars, Printer* p) {
+    const ServiceDescriptor* service, map<string, string>* vars, Printer* p,
+    bool generate_nano) {
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
     (*vars)["method_name"] = method->name();
@@ -82,14 +83,43 @@ static void PrintMethodFields(
         (*vars)["method_type"] = "UNARY";
       }
     }
-    p->Print(
-        *vars,
-        "private static final $Method$<$input_type$,\n"
-        "    $output_type$> $method_field_name$ =\n"
-        "    $Method$.create(\n"
-        "        $MethodType$.$method_type$, \"$method_name$\",\n"
-        "        $ProtoUtils$.marshaller($input_type$.PARSER),\n"
-        "        $ProtoUtils$.marshaller($output_type$.PARSER));\n");
+
+    if (generate_nano) {
+      // TODO(zsurocking): we're creating two Parsers for each method right now.
+      // We could instead create static Parsers and reuse them if some methods
+      // share the same request or response messages.
+      p->Print(
+          *vars,
+          "private static final $Method$<$input_type$,\n"
+          "    $output_type$> $method_field_name$ =\n"
+          "    $Method$.create(\n"
+          "        $MethodType$.$method_type$, \"$method_name$\",\n"
+          "        $NanoUtils$.<$input_type$>marshaller(\n"
+          "            new io.grpc.nano.Parser<$input_type$>() {\n"
+          "                @Override\n"
+          "                public $input_type$ parse("
+          "$CodedInputByteBufferNano$ input) throws IOException {\n"
+          "                    return $input_type$.parseFrom(input);\n"
+          "                }\n"
+          "        }),\n"
+          "        $NanoUtils$.<$output_type$>marshaller(\n"
+          "            new io.grpc.nano.Parser<$output_type$>() {\n"
+          "                @Override\n"
+          "                public $output_type$ parse("
+          "$CodedInputByteBufferNano$ input) throws IOException {\n"
+          "                    return $output_type$.parseFrom(input);\n"
+          "                }\n"
+          "        }));\n");
+    } else {
+      p->Print(
+          *vars,
+          "private static final $Method$<$input_type$,\n"
+          "    $output_type$> $method_field_name$ =\n"
+          "    $Method$.create(\n"
+          "        $MethodType$.$method_type$, \"$method_name$\",\n"
+          "        $ProtoUtils$.marshaller($input_type$.PARSER),\n"
+          "        $ProtoUtils$.marshaller($output_type$.PARSER));\n");
+    }
   }
   p->Print("\n");
 }
@@ -526,7 +556,8 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
 
 static void PrintService(const ServiceDescriptor* service,
                          map<string, string>* vars,
-                         Printer* p) {
+                         Printer* p,
+                         bool generate_nano) {
   (*vars)["service_name"] = service->name();
   (*vars)["service_class_name"] = ServiceClassName(service);
   p->Print(
@@ -535,7 +566,7 @@ static void PrintService(const ServiceDescriptor* service,
       "public class $service_class_name$ {\n\n");
   p->Indent();
 
-  PrintMethodFields(service, vars, p);
+  PrintMethodFields(service, vars, p, generate_nano);
 
   p->Print(
       *vars,
@@ -583,7 +614,7 @@ static void PrintService(const ServiceDescriptor* service,
   p->Print("}\n");
 }
 
-void PrintImports(Printer* p) {
+void PrintImports(Printer* p, bool generate_nano) {
   p->Print(
       "import static "
       "io.grpc.stub.Calls.createMethodDescriptor;\n"
@@ -607,10 +638,14 @@ void PrintImports(Printer* p) {
       "io.grpc.stub.ServerCalls.asyncUnaryRequestCall;\n"
       "import static "
       "io.grpc.stub.ServerCalls.asyncStreamingRequestCall;\n\n");
+  if (generate_nano) {
+    p->Print("import java.io.IOException;\n\n");
+  }
 }
 
 void GenerateService(const ServiceDescriptor* service,
-                     google::protobuf::io::ZeroCopyOutputStream* out) {
+                     google::protobuf::io::ZeroCopyOutputStream* out,
+                     bool generate_nano) {
   // All non-generated classes must be referred by fully qualified names to
   // avoid collision with generated classes.
   map<string, string> vars;
@@ -627,6 +662,7 @@ void GenerateService(const ServiceDescriptor* service,
   vars["ImmutableList"] = "com.google.common.collect.ImmutableList";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
   vars["ProtoUtils"] = "io.grpc.proto.ProtoUtils";
+  vars["NanoUtils"] = "io.grpc.nano.NanoUtils";
   vars["StreamObserver"] = "io.grpc.stub.StreamObserver";
   vars["Iterator"] = "java.util.Iterator";
   vars["Map"] = "java.util.Map";
@@ -635,20 +671,22 @@ void GenerateService(const ServiceDescriptor* service,
   vars["Immutable"] = "javax.annotation.concurrent.Immutable";
   vars["ListenableFuture"] =
       "com.google.common.util.concurrent.ListenableFuture";
+  vars["CodedInputByteBufferNano"] = 
+      "com.google.protobuf.nano.CodedInputByteBufferNano";
 
   Printer printer(out, '$');
   string package_name = ServiceJavaPackage(service->file());
   printer.Print(
       "package $package_name$;\n\n",
       "package_name", package_name);
-  PrintImports(&printer);
+  PrintImports(&printer, generate_nano);
 
   // Package string is used to fully qualify method names.
   vars["Package"] = service->file()->package();
   if (!vars["Package"].empty()) {
     vars["Package"].append(".");
   }
-  PrintService(service, &vars, &printer);
+  PrintService(service, &vars, &printer, generate_nano);
 }
 
 string ServiceJavaPackage(const FileDescriptor* file) {
