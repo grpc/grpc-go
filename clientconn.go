@@ -89,8 +89,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
-	err := cc.resetTransport(false)
-	if err != nil {
+	if err := cc.resetTransport(false); err != nil {
 		return nil, err
 	}
 	cc.shutdownChan = make(chan struct{})
@@ -163,8 +162,7 @@ func (cc *ClientConn) transportMonitor() {
 		case <-cc.shutdownChan:
 			return
 		case <-cc.transport.Error():
-			err := cc.resetTransport(true)
-			if err != nil {
+			if err := cc.resetTransport(true); err != nil {
 				// The channel is closing.
 				return
 			}
