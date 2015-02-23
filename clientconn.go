@@ -46,9 +46,9 @@ import (
 var (
 	// ErrUnspecTarget indicates that the target address is unspecified.
 	ErrUnspecTarget = errors.New("grpc: target is unspecified")
-	// ErrClosingConn indicates that the operation is illegal because the session
-	// is closing.
-	ErrClosingConn = errors.New("grpc: the client connection is closing")
+	// ErrClientConnClosing indicates that the operation is illegal because
+	// the session is closing.
+	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
 )
 
 type dialOptions struct {
@@ -126,7 +126,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		cc.transportSeq = 0
 		if cc.closing {
 			cc.mu.Unlock()
-			return ErrClosingConn
+			return ErrClientConnClosing
 		}
 		cc.mu.Unlock()
 		if closeTransport {
@@ -180,7 +180,7 @@ func (cc *ClientConn) wait(ctx context.Context, ts int) (transport.ClientTranspo
 		switch {
 		case cc.closing:
 			cc.mu.Unlock()
-			return nil, 0, ErrClosingConn
+			return nil, 0, ErrClientConnClosing
 		case ts < cc.transportSeq:
 			// Worked on a dying transport. Try the new one immediately.
 			defer cc.mu.Unlock()
