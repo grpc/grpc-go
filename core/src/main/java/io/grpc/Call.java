@@ -90,7 +90,7 @@ public abstract class Call<RequestT, ResponseT> {
    * @param headers which can contain extra information like authentication.
    * @throws IllegalStateException if call is already started
    */
-  // TODO(lryan): Might be better to put into Channel#newCall, might reduce decoration burden
+  // TODO(louiscryan): Might be better to put into Channel#newCall, might reduce decoration burden
   public abstract void start(Listener<ResponseT> responseListener, Metadata.Headers headers);
 
   /**

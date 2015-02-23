@@ -119,7 +119,7 @@ public class ServerImpl implements Server {
   }
 
   /** Hack to allow executors to auto-shutdown. Not for general use. */
-  // TODO(ejona): Replace with a real API.
+  // TODO(ejona86): Replace with a real API.
   synchronized void setTerminationRunnable(Runnable runnable) {
     this.terminationRunnable = runnable;
   }
@@ -168,7 +168,7 @@ public class ServerImpl implements Server {
    *
    * <p>NOT YET IMPLEMENTED. This method currently behaves identically to shutdown().
    */
-  // TODO(ejona): cancel preexisting calls.
+  // TODO(ejona86): cancel preexisting calls.
   public synchronized ServerImpl shutdownNow() {
     shutdown();
     return this;
@@ -320,7 +320,7 @@ public class ServerImpl implements Server {
     /** Never returns {@code null}. */
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Metadata.Headers headers) {
-      // TODO(ejona): should we update fullMethodName to have the canonical path of the method?
+      // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       final ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(stream, methodDef);
       ServerCall.Listener<ReqT> listener
           = methodDef.getServerCallHandler().startCall(fullMethodName, call, headers);
@@ -382,7 +382,7 @@ public class ServerImpl implements Server {
      * Like {@link ServerCall#close(Status, Metadata.Trailers)}, but thread-safe for internal use.
      */
     private void internalClose(Status status, Metadata.Trailers trailers) {
-      // TODO(ejona): this is not thread-safe :)
+      // TODO(ejona86): this is not thread-safe :)
       stream.close(status, trailers);
     }
 

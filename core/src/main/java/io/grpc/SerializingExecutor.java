@@ -49,7 +49,7 @@ import javax.annotation.concurrent.GuardedBy;
  * @author JJ Furman
  */
 
-// TODO(simonma): figure out a way to not expose it or move it to transport package.
+// TODO(madongfly): figure out a way to not expose it or move it to transport package.
 public final class SerializingExecutor implements Executor {
   private static final Logger log =
       Logger.getLogger(SerializingExecutor.class.getName());

@@ -218,7 +218,7 @@ public class MathClient {
    * <p> The asynchronous usage is similar to {@link #divMany}.
    */
   public void blockingFib() {
-    // TODO(simonma): Support "send until cancel". Currently, client application can not
+    // TODO(madongfly): Support "send until cancel". Currently, client application can not
     // cancel a server streaming call.
     int limit = rand.nextInt(20) + 10;
     logger.info("*** Blocking Fib, print the first " + limit + " fibonacci numbers.");

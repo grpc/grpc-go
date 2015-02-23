@@ -44,6 +44,6 @@ public interface Channel {
   /**
    * Create a call to the given service method.
    */
-  // TODO(ejona): perform start() as part of new Call creation?
+  // TODO(ejona86): perform start() as part of new Call creation?
   public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method);
 }

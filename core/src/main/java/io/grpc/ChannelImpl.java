@@ -92,7 +92,7 @@ public final class ChannelImpl implements Channel {
   }
 
   /** Hack to allow executors to auto-shutdown. Not for general use. */
-  // TODO(ejona): Replace with a real API.
+  // TODO(ejona86): Replace with a real API.
   void setTerminationRunnable(Runnable runnable) {
     this.terminationRunnable = runnable;
   }
@@ -126,7 +126,7 @@ public final class ChannelImpl implements Channel {
    *
    * <p>NOT YET IMPLEMENTED. This method currently behaves identically to shutdown().
    */
-  // TODO(ejona): cancel preexisting calls.
+  // TODO(ejona86): cancel preexisting calls.
   public synchronized ChannelImpl shutdownNow() {
     shutdown();
     return this;
@@ -256,7 +256,7 @@ public final class ChannelImpl implements Channel {
         stream = transport.newStream(method, headers, listener);
       } catch (IllegalStateException ex) {
         // We can race with the transport and end up trying to use a terminated transport.
-        // TODO(ejona): Improve the API to remove the possibility of the race.
+        // TODO(ejona86): Improve the API to remove the possibility of the race.
         stream = new NoopClientStream();
         listener.closed(Status.fromThrowable(ex), new Metadata.Trailers());
         return;

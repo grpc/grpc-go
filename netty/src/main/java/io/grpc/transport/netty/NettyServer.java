@@ -80,7 +80,7 @@ public class NettyServer extends AbstractService {
       public void initChannel(Channel ch) throws Exception {
         NettyServerTransport transport = new NettyServerTransport(ch, serverListener, sslContext);
         transport.startAsync();
-        // TODO(nathanmittler): Should we wait for transport shutdown before shutting down server?
+        // TODO(nmittler): Should we wait for transport shutdown before shutting down server?
       }
     };
     this.bossGroup = bossGroup;

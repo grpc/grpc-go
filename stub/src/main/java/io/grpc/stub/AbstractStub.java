@@ -49,8 +49,8 @@ import java.util.concurrent.TimeUnit;
  * @param <S> the concrete type of this stub.
  * @param <C> the service descriptor type
  */
-// TODO(lryan): Move into 3rd party when tidy
-// TODO(lryan/kevinb): Excessive parameterization can be a pain, try to eliminate once the generated
+// TODO(louiscryan): Move into 3rd party when tidy
+// TODO(louiscryan): Excessive parameterization can be a pain, try to eliminate once the generated
 // code is more tangible.
 public abstract class AbstractStub<S extends AbstractStub<?, ?>,
     C extends AbstractServiceDescriptor<C>> {

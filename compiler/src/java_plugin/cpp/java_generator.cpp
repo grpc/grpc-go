@@ -337,7 +337,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
     p->Print("public ");
     switch (call_type) {
       case BLOCKING_CALL:
-        // TODO(zhangkun): decide the blocking server interface
+        // TODO(zhangkun83): decide the blocking server interface
         CHECK(type != BLOCKING_SERVER_INTERFACE)
             << "Blocking server interface is not available";
         CHECK(!client_streaming)

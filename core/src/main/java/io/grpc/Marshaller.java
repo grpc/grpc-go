@@ -41,7 +41,7 @@ public interface Marshaller<T> {
   /**
    * Given a message produce an {@link InputStream} for it.
    */
-  // TODO(lryan): Switch to ByteSource equivalent when ready
+  // TODO(louiscryan): Switch to ByteSource equivalent when ready
   public InputStream stream(T value);
 
   /**

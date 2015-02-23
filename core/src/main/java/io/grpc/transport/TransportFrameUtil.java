@@ -56,7 +56,7 @@ public final class TransportFrameUtil {
   private static final byte[] binaryHeaderSuffixBytes =
       Metadata.BINARY_HEADER_SUFFIX.getBytes(US_ASCII);
 
-  // TODO(lryan): This needs proper namespacing support, this is currently just a hack
+  // TODO(louiscryan): This needs proper namespacing support, this is currently just a hack
   /**
    * Converts the path from the HTTP request to the full qualified method name.
    *
@@ -89,7 +89,7 @@ public final class TransportFrameUtil {
       } else {
         // Non-binary header.
         // Filter out headers that contain non-spec-compliant ASCII characters.
-        // TODO(zhangkun): only do such check in development mode since it's expensive
+        // TODO(zhangkun83): only do such check in development mode since it's expensive
         if (isSpecCompliantAscii(value)) {
           result.add(key);
           result.add(value);

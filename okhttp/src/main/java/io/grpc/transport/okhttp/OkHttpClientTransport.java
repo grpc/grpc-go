@@ -458,13 +458,13 @@ public class OkHttpClientTransport implements ClientTransport {
     @Override
     public void priority(int streamId, int streamDependency, int weight, boolean exclusive) {
       // Ignore priority change.
-      // TODO(simonma): log
+      // TODO(madongfly): log
     }
 
     @Override
     public void alternateService(int streamId, String origin, ByteString protocol, String host,
         int port, long maxAge) {
-      // TODO(simonma): Deal with alternateService propagation
+      // TODO(madongfly): Deal with alternateService propagation
     }
   }
 

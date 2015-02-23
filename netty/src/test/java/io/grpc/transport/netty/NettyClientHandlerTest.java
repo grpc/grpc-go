@@ -88,7 +88,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
   private NettyClientHandler handler;
 
-  // TODO(zhangkun): mocking concrete classes is not safe. Consider making NettyClientStream an
+  // TODO(zhangkun83): mocking concrete classes is not safe. Consider making NettyClientStream an
   // interface.
   @Mock
   private NettyClientStream stream;

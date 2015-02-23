@@ -126,7 +126,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
       frame.close();
       return;
     }
-    // TODO(zhangkun): It sounds sub-optimal to deframe in the network thread. That means
+    // TODO(zhangkun83): It sounds sub-optimal to deframe in the network thread. That means
     // decompression is serialized.
     deframe(frame, endOfStream);
   }
@@ -208,12 +208,12 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    *                     about stream closure and send the status
    */
   public final void abortStream(Status status, boolean notifyClient) {
-    // TODO(lryan): Investigate whether we can remove the notification to the client
+    // TODO(louiscryan): Investigate whether we can remove the notification to the client
     // and rely on a transport layer stream reset instead.
     Preconditions.checkArgument(!status.isOk(), "status must not be OK");
     closeListener(status);
     if (notifyClient) {
-      // TODO(lryan): Remove
+      // TODO(louiscryan): Remove
       if (stashedTrailers == null) {
         stashedTrailers = new Metadata.Trailers();
       }

@@ -118,7 +118,7 @@ class OkHttpClientStream extends Http2ClientStream {
     Preconditions.checkState(id() != 0, "streamId should be set");
     okio.Buffer buffer = new okio.Buffer();
     // Read the data into a buffer.
-    // TODO(simonma): swap to NIO buffers or zero-copy if/when okhttp/okio supports it
+    // TODO(madongfly): swap to NIO buffers or zero-copy if/when okhttp/okio supports it
     buffer.write(frame.array(), frame.arrayOffset(), frame.remaining());
     // Write the data to the remote endpoint.
     // Per http2 SPEC, the max data length should be larger than 64K, while our frame size is
