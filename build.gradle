@@ -20,16 +20,17 @@ subprojects {
 
     ext {
         libraries = [
-                protobuf: 'com.google.protobuf:protobuf-java:3.0.0-pre',
                 guava: 'com.google.guava:guava:18.0',
-                jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
-                oauth_client: 'com.google.oauth-client:google-oauth-client:1.18.0-rc',
-                javaee_api: 'javax:javaee-api:7.0',
-                hpack: 'com.twitter:hpack:0.9.1',
-                protobuf_plugin: 'ws.antonov.gradle.plugins:gradle-plugin-protobuf:0.9.1',
-                okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
                 // used to collect benchmark results
                 hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.4',
+                hpack: 'com.twitter:hpack:0.9.1',
+                javaee_api: 'javax:javaee-api:7.0',
+                jsonp: 'org.glassfish:javax.json:1.0.4',
+                jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
+                oauth_client: 'com.google.oauth-client:google-oauth-client:1.18.0-rc',
+                okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
+                protobuf: 'com.google.protobuf:protobuf-java:3.0.0-pre',
+                protobuf_plugin: 'ws.antonov.gradle.plugins:gradle-plugin-protobuf:0.9.1',
 
                 // TODO: Unreleased dependencies.
                 // These must already be installed in the local maven repository.
