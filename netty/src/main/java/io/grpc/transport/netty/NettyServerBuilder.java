@@ -46,7 +46,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
 /**
- * The convenient builder for a netty-based GRPC server.
+ * A builder to help simplify the construction of a Netty-based GRPC server.
  */
 public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerBuilder> {
 
@@ -56,14 +56,34 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
   private EventLoopGroup userWorkerEventLoopGroup;
   private SslContext sslContext;
 
+  /**
+   * Creates a server builder that will bind to the given port.
+   *
+   * @param port the port on which the server is to be bound.
+   * @return the server builder.
+   */
   public static NettyServerBuilder forPort(int port) {
     return new NettyServerBuilder(port);
   }
 
+  /**
+   * Creates a server builder that will bind to the given port and use the {@link HandlerRegistry}
+   * for call dispatching.
+   *
+   * @param registry the registry of handlers used for dispatching incoming calls.
+   * @param port the port on which to the server is to be bound.
+   * @return the server builder.
+   */
   public static NettyServerBuilder forRegistryAndPort(HandlerRegistry registry, int port) {
     return new NettyServerBuilder(registry, port);
   }
 
+  /**
+   * Creates a server builder configured with the given {@link SocketAddress}.
+   *
+   * @param address the socket address on which the server is to be bound.
+   * @return the server builder
+   */
   public static NettyServerBuilder forAddress(SocketAddress address) {
     return new NettyServerBuilder(address);
   }

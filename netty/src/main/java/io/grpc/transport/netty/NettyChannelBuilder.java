@@ -41,7 +41,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
 /**
- * Convenient class for building channels with the netty transport.
+ * A builder to help simplify construction of channels using the Netty transport.
  */
 public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChannelBuilder> {
 
