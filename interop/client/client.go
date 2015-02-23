@@ -36,9 +36,11 @@ package main
 import (
 	"flag"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"strconv"
+	"strings"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -48,18 +50,23 @@ import (
 )
 
 var (
-	useTLS        = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
-	caFile        = flag.String("tls_ca_file", "testdata/ca.pem", "The file containning the CA root cert file")
-	serverHost    = flag.String("server_host", "127.0.0.1", "The server host name")
-	serverPort    = flag.Int("server_port", 10000, "The server port number")
-	tlsServerName = flag.String("tls_server_name", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
-	testCase      = flag.String("test_case", "large_unary",
+	useTLS                = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
+	caFile                = flag.String("tls_ca_file", "testdata/ca.pem", "The file containning the CA root cert file")
+	serviceAccountKeyFile = flag.String("service_account_key_file", "", "Path to service account json key file")
+	oauthScope            = flag.String("oauth_scope", "", "The scope for OAuth2 tokens")
+	defaultServiceAccount = flag.String("default_service_account", "", "Email of GCE default service account")
+	serverHost            = flag.String("server_host", "127.0.0.1", "The server host name")
+	serverPort            = flag.Int("server_port", 10000, "The server port number")
+	tlsServerName         = flag.String("tls_server_name", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
+	testCase              = flag.String("test_case", "large_unary",
 		`Configure different test cases. Valid options are:
         empty_unary : empty (zero bytes) request and response;
         large_unary : single request and (large) response;
         client_streaming : request streaming with single response;
         server_streaming : single request with response streaming;
-        ping_pong : full-duplex streaming`)
+        ping_pong : full-duplex streaming;
+        compute_engine_creds: large_unary with compute engine auth;
+	service_account_creds: large_unary with service account auth.`)
 )
 
 var (
@@ -95,6 +102,7 @@ func doEmptyUnaryCall(tc testpb.TestServiceClient) {
 	if !proto.Equal(&testpb.Empty{}, reply) {
 		log.Fatalf("/TestService/EmptyCall receives %v, want %v", reply, testpb.Empty{})
 	}
+	log.Println("EmptyUnaryCall done")
 }
 
 func doLargeUnaryCall(tc testpb.TestServiceClient) {
@@ -113,6 +121,7 @@ func doLargeUnaryCall(tc testpb.TestServiceClient) {
 	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
 		log.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
 	}
+	log.Println("LargeUnaryCall done")
 }
 
 func doClientStreaming(tc testpb.TestServiceClient) {
@@ -140,6 +149,7 @@ func doClientStreaming(tc testpb.TestServiceClient) {
 	if reply.GetAggregatedPayloadSize() != int32(sum) {
 		log.Fatalf("%v.CloseAndRecv().GetAggregatePayloadSize() = %v; want %v", stream, reply.GetAggregatedPayloadSize(), sum)
 	}
+	log.Println("ClientStreaming done")
 }
 
 func doServerStreaming(tc testpb.TestServiceClient) {
@@ -183,6 +193,7 @@ func doServerStreaming(tc testpb.TestServiceClient) {
 	if respCnt != len(respSizes) {
 		log.Fatalf("Got %d reply, want %d", len(respSizes), respCnt)
 	}
+	log.Println("ServerStreaming done")
 }
 
 func doPingPong(tc testpb.TestServiceClient) {
@@ -226,6 +237,64 @@ func doPingPong(tc testpb.TestServiceClient) {
 	if _, err := stream.Recv(); err != io.EOF {
 		log.Fatalf("%v failed to complele the ping pong test: %v", stream, err)
 	}
+	log.Println("Pingpong done")
+}
+
+func doComputeEngineCreds(tc testpb.TestServiceClient) {
+	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	req := &testpb.SimpleRequest{
+		ResponseType:   testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize:   proto.Int32(int32(largeRespSize)),
+		Payload:        pl,
+		FillUsername:   proto.Bool(true),
+		FillOauthScope: proto.Bool(true),
+	}
+	reply, err := tc.UnaryCall(context.Background(), req)
+	if err != nil {
+		log.Fatal("/TestService/UnaryCall RPC failed: ", err)
+	}
+	user := reply.GetUsername()
+	scope := reply.GetOauthScope()
+	if user != *defaultServiceAccount {
+		log.Fatalf("Got user name %q, want %q.", user, *defaultServiceAccount)
+	}
+	if !strings.Contains(*oauthScope, scope) {
+		log.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
+	}
+	log.Println("ComputeEngineCreds done")
+}
+
+func getServiceAccountJsonKey() []byte {
+	jsonKey, err := ioutil.ReadFile(*serviceAccountKeyFile)
+	if err != nil {
+		log.Fatalf("Failed to read the service account key file: %v", err)
+	}
+	return jsonKey
+}
+
+func doServiceAccountCreds(tc testpb.TestServiceClient) {
+	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	req := &testpb.SimpleRequest{
+		ResponseType:   testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize:   proto.Int32(int32(largeRespSize)),
+		Payload:        pl,
+		FillUsername:   proto.Bool(true),
+		FillOauthScope: proto.Bool(true),
+	}
+	reply, err := tc.UnaryCall(context.Background(), req)
+	if err != nil {
+		log.Fatal("/TestService/UnaryCall RPC failed: ", err)
+	}
+	jsonKey := getServiceAccountJsonKey()
+	user := reply.GetUsername()
+	scope := reply.GetOauthScope()
+	if !strings.Contains(string(jsonKey), user) {
+		log.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
+	}
+	if !strings.Contains(*oauthScope, scope) {
+		log.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
+	}
+	log.Println("ServiceAccountCreds done")
 }
 
 func main() {
@@ -248,10 +317,19 @@ func main() {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
 		}
 		opts = append(opts, grpc.WithClientTLS(creds))
+		if *testCase == "compute_engine_creds" {
+			opts = append(opts, grpc.WithPerRPCCredentials(credentials.NewComputeEngine()))
+		} else if *testCase == "service_account_creds" {
+			jwtCreds, err := credentials.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
+			if err != nil {
+				log.Fatalf("Failed to create JWT credentials: %v", err)
+			}
+			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
+		}
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		log.Fatalf("Fail to dial: %v", err)
 	}
 	defer conn.Close()
 	tc := testpb.NewTestServiceClient(conn)
@@ -266,6 +344,16 @@ func main() {
 		doServerStreaming(tc)
 	case "ping_pong":
 		doPingPong(tc)
+	case "compute_engine_creds":
+		if !*useTLS {
+			log.Fatalf("TLS is not enabled. TLS is required to execute compute_engine_creds test case.")
+		}
+		doComputeEngineCreds(tc)
+	case "service_account_creds":
+		if !*useTLS {
+			log.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+		}
+		doServiceAccountCreds(tc)
 	default:
 		log.Fatal("Unsupported test case: ", *testCase)
 	}
