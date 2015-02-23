@@ -186,7 +186,7 @@ type Stream struct {
 	// The key-value map of trailer metadata.
 	trailer metadata.MD
 
-	mu sync.RWMutex
+	mu sync.RWMutex // guard the following
 	// headerOK becomes true from the first header is about to send.
 	headerOk bool
 	state    streamState

@@ -79,7 +79,7 @@ type http2Server struct {
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
 
-	mu            sync.Mutex
+	mu            sync.Mutex // guard the following
 	state         transportState
 	activeStreams map[uint32]*Stream
 	// Inbound quota for flow control
@@ -570,7 +570,7 @@ func (t *http2Server) Close() (err error) {
 	t.mu.Lock()
 	if t.state == closing {
 		t.mu.Unlock()
-		return
+		return errors.New("transport: Close() was already called")
 	}
 	t.state = closing
 	streams := t.activeStreams
