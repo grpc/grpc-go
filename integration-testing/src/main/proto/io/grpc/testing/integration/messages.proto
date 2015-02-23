@@ -4,11 +4,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file or at
 // https://developers.google.com/open-source/licenses/bsd
-syntax = "proto2";
+syntax = "proto3";
 
 package stubby.testing;
-
-import "io/grpc/testing/integration/message_set.proto";
 
 option java_package = "io.grpc.testing.integration";
 
@@ -56,10 +54,6 @@ message SimpleResponse {
 }
 
 message SimpleContext {
-  // Register MessageSet extension.
-  extend proto2.bridge.MessageSet {
-    optional SimpleContext message_set_extension = 71139615;
-  }
   optional string value = 1;
 }
 

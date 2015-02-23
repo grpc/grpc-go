@@ -1,5 +1,5 @@
 // A simple service definition for testing the protoc plugin.
-syntax = "proto2";
+syntax = "proto3";
 
 package grpc.testing;
 

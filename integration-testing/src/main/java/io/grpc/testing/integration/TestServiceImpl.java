@@ -129,10 +129,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
 
       @Override
       public void onValue(StreamingInputCallRequest message) {
-        Payload payload = message.getPayload();
-        if (payload.hasBody()) {
-          totalPayloadSize += payload.getBody().size();
-        }
+        totalPayloadSize += message.getPayload().getBody().size();
       }
 
       @Override
@@ -320,8 +317,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
     int offset = 0;
     boolean compressable = compressableResponse(request.getResponseType());
     for (ResponseParameters params : request.getResponseParametersList()) {
-      int interval = params.hasIntervalUs() ? params.getIntervalUs() : 0;
-      chunkQueue.add(new Chunk(interval, offset, params.getSize(), compressable));
+      chunkQueue.add(new Chunk(params.getIntervalUs(), offset, params.getSize(), compressable));
 
       // Increment the offset past this chunk.
       // Both buffers need to be circular.
