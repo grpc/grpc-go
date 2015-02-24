@@ -31,7 +31,6 @@
 
 package io.grpc.transport.netty;
 
-import static io.grpc.GrpcFramingUtil.STATUS_FRAME;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.io.ByteStreams;
@@ -60,19 +59,6 @@ public class NettyTestUtil {
     DataOutputStream dos = new DataOutputStream(os);
     dos.write(message.getBytes(UTF_8));
     dos.close();
-
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
-  }
-
-  static ByteBuf statusFrame(Status status) throws Exception {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    short code = (short) status.getCode().value();
-    dos.write(STATUS_FRAME);
-    int length = 2;
-    dos.writeInt(length);
-    dos.writeShort(code);
 
     // Write the compression header followed by the context frame.
     return compressionFrame(os.toByteArray());
