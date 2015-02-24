@@ -36,7 +36,6 @@ import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -64,6 +63,7 @@ import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
+import io.netty.handler.codec.http2.Http2StreamRemovalPolicy;
 import io.netty.handler.ssl.SslContext;
 import io.netty.util.internal.logging.InternalLogLevel;
 
@@ -125,7 +125,8 @@ class NettyClientTransport implements ClientTransport {
       throw new IllegalStateException("Unknown socket address type " + address.toString());
     }
 
-    handler = newHandler();
+    DefaultHttp2StreamRemovalPolicy streamRemovalPolicy = new DefaultHttp2StreamRemovalPolicy();
+    handler = newHandler(streamRemovalPolicy);
     switch (negotiationType) {
       case PLAINTEXT:
         negotiation = Http2Negotiator.plaintext(handler);
@@ -149,7 +150,7 @@ class NettyClientTransport implements ClientTransport {
         SSLParameters sslParams = new SSLParameters();
         sslParams.setEndpointIdentificationAlgorithm("HTTPS");
         sslEngine.setSSLParameters(sslParams);
-        negotiation = Http2Negotiator.tls(handler, sslEngine);
+        negotiation = Http2Negotiator.tls(sslEngine, streamRemovalPolicy, handler);
         ssl = true;
         break;
       default:
@@ -322,9 +323,9 @@ class NettyClientTransport implements ClientTransport {
     }
   }
 
-  private static NettyClientHandler newHandler() {
+  private static NettyClientHandler newHandler(Http2StreamRemovalPolicy streamRemovalPolicy) {
     Http2Connection connection =
-        new DefaultHttp2Connection(false, new DefaultHttp2StreamRemovalPolicy());
+        new DefaultHttp2Connection(false, streamRemovalPolicy);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
 
