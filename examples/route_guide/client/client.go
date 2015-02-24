@@ -42,10 +42,10 @@ import (
 	"strconv"
 	"time"
 
-	pb "github.com/wonderfly/grpc-go/examples/route_guide"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	pb "google.golang.org/grpc/examples/route_guide"
 )
 
 var (

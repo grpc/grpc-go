@@ -49,7 +49,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	pb "github.com/wonderfly/grpc-go/examples/route_guide"
+	pb "google.golang.org/grpc/examples/route_guide"
 )
 
 var (
