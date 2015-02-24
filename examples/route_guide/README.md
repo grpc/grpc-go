@@ -19,4 +19,7 @@ The server and client both take optional command line flags. For example, the
 client and server run without TLS by default. To enable TSL:
 
 `go run server/server.go -use_tls=true`
+
+and
+
 `go run client/client.go -use_tls=true`
