@@ -38,14 +38,20 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
-/** Utility class for {@link ServerInterceptor}s. */
+/**
+ * Utility methods for working with {@link ServerInterceptor}s.
+ */
 public class ServerInterceptors {
   // Prevent instantiation
   private ServerInterceptors() {}
 
   /**
-   * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call {@code
-   * interceptors} before calling the pre-existing {@code ServerCallHandler}.
+   * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call
+   * {@code interceptors} before calling the pre-existing {@code ServerCallHandler}.
+   *
+   * @param serviceDef the service definition for which to intercept all its methods.
+   * @param interceptors array of interceptors to apply to the service.
+   * @return a wrapped version of {@code serviceDef} with the interceptors applied.
    */
   public static ServerServiceDefinition intercept(ServerServiceDefinition serviceDef,
                                                   ServerInterceptor... interceptors) {
@@ -53,8 +59,12 @@ public class ServerInterceptors {
   }
 
   /**
-   * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call {@code
-   * interceptors} before calling the pre-existing {@code ServerCallHandler}.
+   * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call
+   * {@code interceptors} before calling the pre-existing {@code ServerCallHandler}.
+   *
+   * @param serviceDef the service definition for which to intercept all its methods.
+   * @param interceptors list of interceptors to apply to the service.
+   * @return a wrapped version of {@code serviceDef} with the interceptors applied.
    */
   public static ServerServiceDefinition intercept(ServerServiceDefinition serviceDef,
       List<ServerInterceptor> interceptors) {

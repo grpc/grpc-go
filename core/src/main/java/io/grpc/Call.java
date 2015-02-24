@@ -31,30 +31,31 @@
 
 package io.grpc;
 
-
 /**
- * Low-level methods for communicating with a remote server during a single RPC. Unlike normal RPCs,
- * calls may stream any number of requests and responses, although a single request and single
- * response is most common. This API is generally intended for use by stubs, but advanced
- * applications may have need for it.
+ * An instance of a call to to a remote method. A call will send zero or more
+ * request messages to the server and receive zero or more response messages back.
  *
- * <p>{@link #start} is required to be the first of any methods called.
+ * <p>Instances are created
+ * by a {@link Channel} and used by stubs to invoke their remote behavior.
  *
- * <p>Any headers must be sent before any payloads, which must be sent before half closing.
+ * <p>More advanced usages may consume this interface directly as opposed to using a stub. Common
+ * reasons for doing so would be the need to interact with flow-control or when acting as a generic
+ * proxy for arbitrary operations.
+ *
+ * <p>{@link #start} must be called prior to calling any other methods.
  *
  * <p>No generic method for determining message receipt or providing acknowledgement is provided.
  * Applications are expected to utilize normal payload messages for such signals, as a response
- * natually acknowledges its request.
+ * naturally acknowledges its request.
  *
  * <p>Methods are guaranteed to be non-blocking. Implementations are not required to be thread-safe.
+ *
+ * @param <RequestT> type of message sent one or more times to the server.
+ * @param <ResponseT> type of message received one or more times from the server.
  */
 public abstract class Call<RequestT, ResponseT> {
   /**
-   * Callbacks for consuming incoming RPC messages.
-   *
-   * <p>Response headers are guaranteed to arrive before any payloads, which are guaranteed
-   * to arrive before close. An additional block of headers called 'trailers' can be delivered with
-   * close.
+   * Callbacks for receiving metadata, response messages and completion status from the server.
    *
    * <p>Implementations are free to block for extended periods of time. Implementations are not
    * required to be thread-safe.
@@ -65,20 +66,27 @@ public abstract class Call<RequestT, ResponseT> {
      * The response headers have been received. Headers always precede payloads.
      * This method is always called, if no headers were received then an empty {@link Metadata}
      * is passed.
+     *
+     * @param headers containing metadata sent by the server at the start of the response.
      */
     public abstract void onHeaders(Metadata.Headers headers);
 
     /**
-     * A response payload has been received. For streaming calls, there may be zero payload
-     * messages.
+     * A response payload has been received. May be called zero or more times depending on whether
+     * the call response is empty, a single message or a stream of messages.
+     *
+     * @param  payload returned by the server
      */
     public abstract void onPayload(T payload);
 
     /**
      * The Call has been closed. No further sending or receiving can occur. If {@code status} is
-     * not equal to {@link Status#OK}, then the call failed. An additional block of headers may be
-     * received at the end of the call from the server. An empty {@link Metadata} object is passed
-     * if no trailers are received.
+     * not equal to {@link Status#OK}, then the call failed. An additional block of trailer metadata
+     * may be received at the end of the call from the server. An empty {@link Metadata} object is
+     * passed if no trailers are received.
+     *
+     * @param status the result of the remote call.
+     * @param trailers metadata provided at call completion.
      */
     public abstract void onClose(Status status, Metadata.Trailers trailers);
   }
@@ -87,10 +95,9 @@ public abstract class Call<RequestT, ResponseT> {
    * Start a call, using {@code responseListener} for processing response messages.
    *
    * @param responseListener receives response messages
-   * @param headers which can contain extra information like authentication.
+   * @param headers which can contain extra call metadata, e.g. authentication credentials.
    * @throws IllegalStateException if call is already started
    */
-  // TODO(louiscryan): Might be better to put into Channel#newCall, might reduce decoration burden
   public abstract void start(Listener<ResponseT> responseListener, Metadata.Headers headers);
 
   /**
@@ -117,17 +124,17 @@ public abstract class Call<RequestT, ResponseT> {
   public abstract void cancel();
 
   /**
-   * Close call for message sending. Incoming messages are unaffected.
+   * Close the call for request message sending. Incoming response messages are unaffected.
    *
    * @throws IllegalStateException if call is already {@code halfClose()}d or {@link #cancel}ed
    */
   public abstract void halfClose();
 
   /**
-   * Send a payload message. Payload messages are the primary form of communication associated with
-   * RPCs. Multiple payload messages may exist for streaming calls.
+   * Send a request message to the server. May be called zero or more times depending on how many
+   * messages the server is willing to accept for the operation.
    *
-   * @param payload message
+   * @param payload message to be sent to the server.
    * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed
    */
   public abstract void sendPayload(RequestT payload);

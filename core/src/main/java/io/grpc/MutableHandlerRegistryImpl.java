@@ -37,7 +37,12 @@ import java.util.concurrent.ConcurrentMap;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
-/** Mutable registry implementation of services and their methods for dispatching incoming calls. */
+/**
+ * Default implementation of {@link MutableHandlerRegistry}.
+ *
+ * <p>Uses {@link ConcurrentHashMap} to avoid service registration excessively
+ * blocking method lookup.
+ */
 @ThreadSafe
 public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
   private final ConcurrentMap<String, ServerServiceDefinition> services

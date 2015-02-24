@@ -34,11 +34,11 @@ package io.grpc;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * Interface to begin processing incoming RPCs. Advanced applications and generated code implement
- * this interface to implement service methods.
+ * Interface to initiate processing of incoming remote calls. Advanced applications and generated
+ * code will implement this interface to allows {@link Server}s to invoke service methods.
  */
 @ThreadSafe
-public interface ServerCallHandler<ReqT, RespT> {
+public interface ServerCallHandler<RequestT, ResponseT> {
   /**
    * Produce a non-{@code null} listener for the incoming call. Implementations are free to call
    * methods on {@code call} before this method has returned.
@@ -47,10 +47,10 @@ public interface ServerCallHandler<ReqT, RespT> {
    * Implementations must not throw an exception if they started processing that may use {@code
    * call} on another thread.
    *
-   * @param fullMethodName full method name of call
-   * @param call object for responding
-   * @return listener for processing incoming messages for {@code call}
+   * @param fullMethodName full qualified method name of call.
+   * @param call object for responding to the remote client.
+   * @return listener for processing incoming request messages for {@code call}
    */
-  ServerCall.Listener<ReqT> startCall(String fullMethodName, ServerCall<RespT> call,
+  ServerCall.Listener<RequestT> startCall(String fullMethodName, ServerCall<ResponseT> call,
       Metadata.Headers headers);
 }

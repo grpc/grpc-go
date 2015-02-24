@@ -34,16 +34,29 @@ package io.grpc;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * An abstraction layer between stubs and the transport details for use with outgoing calls.
- * Channels are responsible for call initiation and tracking. Channels can be decorated to provide
- * cross-cutting behaviors across all operations in a stub.
+ * A Channel provides an abstraction over the transport layer that is designed to be consumed
+ * by stub implementations. Channel and its associated types {@link Call} and
+ * {@link Call.Listener} exchange parsed request and response objects whereas the
+ * transport layer only works with serialized data.
+ *
+ * <p>Applications can add common cross-cutting behaviors to stubs by decorating Channel
+ * implementations using {@link ClientInterceptor}. It is expected that most application
+ * code will not use this interface directly but rather work with stubs that have been bound to a
+ * Channel that was decorated during application initialization,
  */
 @ThreadSafe
 public interface Channel {
 
   /**
-   * Create a call to the given service method.
+   * Create a {@link Call} to the remote operation specified by the given
+   * {@link MethodDescriptor}. The returned {@link Call} does not trigger any remote
+   * behavior until {@link Call#start(Call.Listener, Metadata.Headers)} is
+   * invoked.
+   *
+   * @param methodDescriptor describes the name and parameter types of the operation to call.
+   * @return a {@link Call} bound to the specified method.
+   *
    */
-  // TODO(ejona86): perform start() as part of new Call creation?
-  public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method);
+  public <RequestT, ResponseT> Call<RequestT, ResponseT> newCall(
+      MethodDescriptor<RequestT, ResponseT> methodDescriptor);
 }

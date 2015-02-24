@@ -42,13 +42,10 @@ import java.util.logging.Logger;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
- * Executor ensuring that all Runnables submitted are executed in order,
- * using the provided Executor, and serially such that no two will ever
- * be running at the same time.
- *
- * @author JJ Furman
+ * Executor ensuring that all {@link Runnable} tasks submitted are executed in order
+ * using the provided {@link Executor}, and serially such that no two will ever be
+ * running at the same time.
  */
-
 // TODO(madongfly): figure out a way to not expose it or move it to transport package.
 public final class SerializingExecutor implements Executor {
   private static final Logger log =

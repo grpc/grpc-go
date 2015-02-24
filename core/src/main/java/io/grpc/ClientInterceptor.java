@@ -34,19 +34,30 @@ package io.grpc;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * Interface for intercepting outgoing RPCs before it reaches the channel.
+ * Interface for intercepting outgoing calls before they are dispatched by a {@link Channel}.
+ *
+ * <p>Implementers use this mechanism to add cross-cutting behavior to {@link Channel} and
+ * stub implementations. Common examples of such behavior include:
+ * <ul>
+ * <li>Adding credentials to header metadata</li>
+ * <li>Logging and monitoring call behavior</li>
+ * <li>Request and response rewriting</li>
+ * </ul>
  */
 @ThreadSafe
 public interface ClientInterceptor {
   /**
-   * Intercept a new call. General semantics of {@link Channel#newCall} apply. {@code next} may only
-   * be called once. Returned {@link Call} must not be null.
+   * Intercept {@link Call} creation by the {@code next} {@link Channel}.
+   * <p/>
+   * Many variations of interception are possible. Complex implementations may return a wrapper
+   * around the result of {@code next.newCall()}, whereas a simpler implementation may just modify
+   * the header metadata prior to returning the result of {@code next.newCall()}.
    *
-   * <p>If the implementation throws an exception, the RPC will not be started.
-   *
-   * @param method the method to be called
-   * @param next next processor in the interceptor chain
-   * @return the call object for the new RPC
+   * @param method the remote method to be called.
+   * @param next the channel which is being intercepted.
+   * @return the call object for the remote operation, never {@code null}.
    */
-  <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method, Channel next);
+  <RequestT, ResponseT> Call<RequestT, ResponseT> interceptCall(
+      MethodDescriptor<RequestT, ResponseT> method,
+      Channel next);
 }

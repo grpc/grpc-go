@@ -34,7 +34,10 @@ package io.grpc;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
-/** Mutable registry of services and their methods for dispatching incoming calls. */
+/**
+ * Mutable implementation of {@link HandlerRegistry}. Used by server implementations
+ * that need to bind and unbind services that are exposed to remote clients.
+ */
 @ThreadSafe
 public abstract class MutableHandlerRegistry extends HandlerRegistry {
   /**
@@ -43,7 +46,9 @@ public abstract class MutableHandlerRegistry extends HandlerRegistry {
   @Nullable
   public abstract ServerServiceDefinition addService(ServerServiceDefinition service);
 
-  /** Returns {@code false} if {@code service} was not registered. */
+  /**
+   * Returns {@code false} if {@code service} was not registered.
+   */
   @Nullable
   public abstract boolean removeService(ServerServiceDefinition service);
 }

@@ -45,15 +45,16 @@ import javax.annotation.Nullable;
 public abstract class DeferredInputStream<T> extends InputStream {
 
   /**
-   * Produce the entire contents of this stream to the specified target
+   * Produce the entire contents of this stream to the specified target.
    *
-   * @return number of bytes written
+   * @param target to write to.
+   * @return number of bytes written.
    */
   public abstract int flushTo(OutputStream target) throws IOException;
 
   /**
-   *  Returns the object that backs the stream. If any bytes have been read from the stream
-   *  then {@code null} is returned.
+   * Returns the object that backs the stream. If any bytes have been read from the stream
+   * then {@code null} is returned.
    */
   @Nullable
   public abstract T getDeferred();

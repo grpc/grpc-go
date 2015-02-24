@@ -85,7 +85,8 @@ public class ServerImpl implements Server {
    * Construct a server. {@link #setTransportServer(Service)} must be called before starting the
    * server.
    *
-   * @param executor
+   * @param executor to call methods on behalf of remote clients
+   * @param registry of methods to expose to remote clients.
    */
   public ServerImpl(Executor executor, HandlerRegistry registry) {
     this.executor = Preconditions.checkNotNull(executor);

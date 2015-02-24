@@ -35,9 +35,29 @@ package io.grpc;
  * The call type of a method.
  */
 public enum MethodType {
+  /**
+   * One request message followed by one response message.
+   */
   UNARY,
+
+  /**
+   * Zero or more request messages followed by one response message.
+   */
   CLIENT_STREAMING,
+
+  /**
+   * One request message followed by zero or more response messages.
+   */
   SERVER_STREAMING,
+
+  /**
+   * Zero or more request and response messages arbitrarily interleaved in time.
+   */
   DUPLEX_STREAMING,
+
+  /**
+   * Cardinality and temporal relationships are not known. Implementations should not make
+   * buffering assumptions and should largely treat the same as {@link #DUPLEX_STREAMING}.
+   */
   UNKNOWN
 }

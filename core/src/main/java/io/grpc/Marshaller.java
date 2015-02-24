@@ -34,18 +34,29 @@ package io.grpc;
 import java.io.InputStream;
 
 /**
- * An typed abstraction over message serialization.
+ * A typed abstraction over message parsing and serialization.
+ *
+ * <p>Stub implementations will define implementations of this interface for each of the request and
+ * response messages provided by a service.
+ *
+ * @param <T> type of serializable message
  */
 public interface Marshaller<T> {
 
   /**
-   * Given a message produce an {@link InputStream} for it.
+   * Given a message, produce an {@link InputStream} for it so that it can be written to the wire.
+   *
+   * @param value to serialize.
+   * @return serialized value as stream of bytes.
    */
-  // TODO(louiscryan): Switch to ByteSource equivalent when ready
   public InputStream stream(T value);
 
   /**
-   * Given an {@link InputStream} parse it into an instance of the declared type.
+   * Given an {@link InputStream} parse it into an instance of the declared type so that it can be
+   * passed to application code.
+   *
+   * @param stream of bytes for serialized value
+   * @return parsed value
    */
   public T parse(InputStream stream);
 }

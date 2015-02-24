@@ -33,10 +33,10 @@ package io.grpc;
 
 
 /**
- * Low-level method for communicating with a remote client during a single RPC. Unlike normal RPCs,
- * calls may stream any number of requests and responses, although a single request and single
- * response is most common. This API is generally intended for use generated handlers, but advanced
- * applications may have need for it.
+ * Encapsulates a single call received from a remote client. Calls may not simply be unary
+ * request-response even though this is the most common pattern. Calls may stream any number of
+ * requests and responses. This API is generally intended for use by generated handlers,
+ * but applications may use it directly if they need to.
  *
  * <p>Headers must be sent before any payloads, which must be sent before closing.
  *
@@ -45,6 +45,8 @@ package io.grpc;
  * naturally acknowledges its request.
  *
  * <p>Methods are guaranteed to be non-blocking. Implementations are not required to be thread-safe.
+ *
+ * @param <ResponseT> parsed type of response message.
  */
 public abstract class ServerCall<ResponseT> {
   /**
@@ -61,8 +63,10 @@ public abstract class ServerCall<ResponseT> {
   // a case then we either get to generate a half close or purposefully omit it.
   public abstract static class Listener<RequestT> {
     /**
-     * A request payload has been received. For streaming calls, there may be zero payload
+     * A request message has been received. For streaming calls, there may be zero or more request
      * messages.
+     *
+     * @param payload a received request message.
      */
     public abstract void onPayload(RequestT payload);
 
@@ -74,7 +78,7 @@ public abstract class ServerCall<ResponseT> {
     /**
      * The call was cancelled and the server is encouraged to abort processing to save resources,
      * since the client will not process any further messages. Cancellations can be caused by
-     * timeouts, explicit cancel by client, network errors, and similar.
+     * timeouts, explicit cancellation by the client, network errors, etc.
      *
      * <p>There will be no further callbacks for the call.
      */
@@ -91,7 +95,11 @@ public abstract class ServerCall<ResponseT> {
 
   /**
    * Requests up to the given number of messages from the call to be delivered to
-   * {@link Listener#onPayload(Object)}. No additional messages will be delivered.
+   * {@link Listener#onPayload(Object)}. Once {@code numMessages} have been delivered
+   * no further request messages will be delivered until more messages are requested by
+   * calling this method again.
+   *
+   * <p>Servers use this mechanism to provide back-pressure to the client for flow-control.
    *
    * @param numMessages the requested number of messages to be delivered to the listener.
    */
@@ -108,10 +116,10 @@ public abstract class ServerCall<ResponseT> {
   public abstract void sendHeaders(Metadata.Headers headers);
 
   /**
-   * Send a payload message. Payload messages are the primary form of communication associated with
-   * RPCs. Multiple payload messages may exist for streaming calls.
+   * Send a response message. Payload messages are the primary form of communication associated with
+   * RPCs. Multiple response messages may exist for streaming calls.
    *
-   * @param payload message
+   * @param payload response message.
    * @throws IllegalStateException if call is {@link #close}d
    */
   public abstract void sendPayload(ResponseT payload);

@@ -34,14 +34,25 @@ package io.grpc;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
-/** Registry of services and their methods for dispatching incoming calls. */
+/**
+ * Registry of services and their methods used by servers to dispatching incoming calls.
+ */
 @ThreadSafe
 public abstract class HandlerRegistry {
-  /** Lookup full method name, starting with '/'. Returns {@code null} if method not found. */
+
+  /**
+   * Lookup a {@link Method} by its fully-qualified name. All names are expected to be absolute
+   * paths that start with '/'.
+   *
+   * @param methodName to lookup {@link Method} for.
+   * @return the resolved method or {@code null} if no method for that name exists.
+   */
   @Nullable
   public abstract Method lookupMethod(String methodName);
 
-  /** A method definition and its parent's service definition. */
+  /**
+   * A method belonging to a service to be exposed to remote callers.
+   */
   public static final class Method {
     private final ServerServiceDefinition serviceDef;
     private final ServerMethodDefinition<?, ?> methodDef;

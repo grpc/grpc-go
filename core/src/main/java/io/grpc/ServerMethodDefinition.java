@@ -33,7 +33,10 @@ package io.grpc;
 
 import java.io.InputStream;
 
-/** Definition of a method supported by a service. */
+/**
+ * Definition of a method bound by a {@link io.grpc.HandlerRegistry} and exposed
+ * by a {@link Server}.
+ */
 public final class ServerMethodDefinition<RequestT, ResponseT> {
   private final String name;
   private final Marshaller<RequestT> requestMarshaller;
@@ -50,6 +53,15 @@ public final class ServerMethodDefinition<RequestT, ResponseT> {
     this.handler = handler;
   }
 
+  /**
+   * Create a new instance.
+   *
+   * @param name the simple name of a method.
+   * @param requestMarshaller marshaller for request messages.
+   * @param responseMarshaller marshaller for response messages.
+   * @param handler to dispatch calls to.
+   * @return a new instance.
+   */
   public static <RequestT, ResponseT> ServerMethodDefinition<RequestT, ResponseT> create(
       String name, Marshaller<RequestT> requestMarshaller,
       Marshaller<ResponseT> responseMarshaller, ServerCallHandler<RequestT, ResponseT> handler) {
@@ -62,12 +74,22 @@ public final class ServerMethodDefinition<RequestT, ResponseT> {
     return name;
   }
 
-  /** Deserialize an incoming request message. */
+  /**
+   * Parse an incoming request message.
+   *
+   * @param input the serialized message as a byte stream.
+   * @return a parsed instance of the message.
+   */
   public RequestT parseRequest(InputStream input) {
     return requestMarshaller.parse(input);
   }
 
-  /** Serialize an outgoing response message. */
+  /**
+   * Serialize an outgoing response message.
+   *
+   * @param response the response message to serialize.
+   * @return the serialized message as a byte stream.
+   */
   public InputStream streamResponse(ResponseT response) {
     return responseMarshaller.stream(response);
   }
@@ -77,7 +99,12 @@ public final class ServerMethodDefinition<RequestT, ResponseT> {
     return handler;
   }
 
-  /** Create a new method definition with a different call handler. */
+  /**
+   * Create a new method definition with a different call handler.
+   *
+   * @param handler to bind to a cloned instance of this.
+   * @return a cloned instance of this with the new handler bound.
+   */
   public ServerMethodDefinition<RequestT, ResponseT> withServerCallHandler(
       ServerCallHandler<RequestT, ResponseT> handler) {
     return new ServerMethodDefinition<RequestT, ResponseT>(

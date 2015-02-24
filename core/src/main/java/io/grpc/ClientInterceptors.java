@@ -39,7 +39,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Utility class for {@link ClientInterceptor}s
+ * Utility methods for working with {@link ClientInterceptor}s
  */
 public class ClientInterceptors {
 
@@ -47,16 +47,24 @@ public class ClientInterceptors {
   private ClientInterceptors() {}
 
   /**
-   * Create a new {@code Channel} that will call {@code interceptors} before starting an RPC on the
+   * Create a new {@link Channel} that will call {@code interceptors} before starting a call on the
    * given channel.
+   *
+   * @param channel the underlying channel to intercept.
+   * @param interceptors array of interceptors to bind to {@code channel}.
+   * @return a new channel instance with the interceptors applied.
    */
   public static Channel intercept(Channel channel, ClientInterceptor... interceptors) {
     return intercept(channel, Arrays.asList(interceptors));
   }
 
   /**
-   * Create a new {@code Channel} that will call {@code interceptors} before starting an RPC on the
+   * Create a new {@link Channel} that will call {@code interceptors} before starting a call on the
    * given channel.
+   *
+   * @param channel the underlying channel to intercept.
+   * @param interceptors a list of interceptors to bind to {@code channel}.
+   * @return a new channel instance with the interceptors applied.
    */
   public static Channel intercept(Channel channel, List<ClientInterceptor> interceptors) {
     Preconditions.checkNotNull(channel);
@@ -142,8 +150,8 @@ public class ClientInterceptors {
   }
 
   /**
-   * A {@link io.grpc.Call.Listener} which forwards all of its methods to another
-   * {@link io.grpc.Call.Listener}.
+   * A {@link Call.Listener} which forwards all of its methods to another
+   * {@link Call.Listener}.
    */
   public static class ForwardingListener<T> extends Call.Listener<T> {
 
