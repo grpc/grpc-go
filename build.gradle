@@ -16,6 +16,7 @@ subprojects {
 
     compileJava {
         options.compilerArgs << "-Xlint:unchecked"
+        options.encoding = "UTF-8"
     }
 
     ext {
