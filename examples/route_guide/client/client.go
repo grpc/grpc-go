@@ -54,7 +54,7 @@ var (
 	tls           = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
 	caFile        = flag.String("tls_ca_file", "testdata/ca.pem", "The file containning the CA root cert file")
 	serverAddr    = flag.String("server_addr", "127.0.0.1:10000", "The server address in the format of host:port")
-	tlsServerName = flag.String("tls_server_name", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
+	tlsServerName = flag.String("server_host_override", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
 )
 
 // printFeature gets the feature for the given point.
