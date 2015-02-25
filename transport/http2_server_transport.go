@@ -52,7 +52,7 @@ import (
 
 // ErrIllegalHeaderWrite indicates that setting header is illegal because of
 // the stream's state.
-var ErrIllegalHeaderWrite = errors.New("grpc/transport: the stream is done or WriteHeader was already called")
+var ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHeader was already called")
 
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
@@ -387,7 +387,7 @@ func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) e
 		}
 		if err != nil {
 			t.Close()
-			return ConnectionErrorf("grpc/transport: %v", err)
+			return ConnectionErrorf("transport: %v", err)
 		}
 	}
 	return nil
@@ -478,7 +478,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		}
 		if err := t.framer.WriteHeaders(p); err != nil {
 			t.Close()
-			return ConnectionErrorf("grpc/transport: %v", err)
+			return ConnectionErrorf("transport: %v", err)
 		}
 		t.writableChan <- 0
 	}
@@ -526,7 +526,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		}
 		if err := t.framer.WriteData(s.id, false, p); err != nil {
 			t.Close()
-			return ConnectionErrorf("grpc/transport: %v", err)
+			return ConnectionErrorf("transport: %v", err)
 		}
 		t.writableChan <- 0
 	}
