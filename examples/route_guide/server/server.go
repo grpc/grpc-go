@@ -46,7 +46,6 @@ import (
 	"log"
 	"math"
 	"net"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
@@ -223,8 +222,7 @@ func newServer() *routeGuideServer {
 
 func main() {
 	flag.Parse()
-	p := strconv.Itoa(*port)
-	lis, err := net.Listen("tcp", ":"+p)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
