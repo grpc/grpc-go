@@ -35,6 +35,7 @@ package transport
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log"
 	"math"
@@ -315,6 +316,10 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 // accessed any more.
 func (t *http2Client) Close() (err error) {
 	t.mu.Lock()
+	if t.state == closing {
+		t.mu.Unlock()
+		return errors.New("transport: Close() was already called")
+	}
 	t.state = closing
 	t.mu.Unlock()
 	close(t.shutdownChan)
