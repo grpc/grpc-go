@@ -111,8 +111,8 @@ public class Http2Negotiator {
   /**
    * Creates an TLS negotiation for HTTP/2 using ALPN/NPN.
    */
-  public static Negotiation tls(final ChannelHandler handler, final SSLEngine sslEngine) {
-    Preconditions.checkNotNull(handler, "handler");
+  public static Negotiation tls(final SSLEngine sslEngine, final ChannelHandler... handlers) {
+    Preconditions.checkArgument(handlers.length > 0, "No handlers were provided");
     Preconditions.checkNotNull(sslEngine, "sslEngine");
 
     final SettableFuture<Void> completeFuture = SettableFuture.create();
@@ -135,7 +135,7 @@ public class Http2Negotiator {
               }
             });
         ch.pipeline().addLast(sslHandler);
-        ch.pipeline().addLast(handler);
+        ch.pipeline().addLast(handlers);
       }
     };
 
