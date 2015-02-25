@@ -1,0 +1,7 @@
+description = 'gRPC: Nano'
+
+dependencies {
+    compile project(':grpc-core'),
+            libraries.protobuf_nano,
+            libraries.guava
+}
