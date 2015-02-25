@@ -88,8 +88,6 @@ public class RouteGuideServer {
         .addService(RouteGuideGrpc.bindService(new RouteGuideService(features)))
         .build().start();
     logger.info("Server started, listening on " + port);
-    // TODO(simonma): gRPC server should register JVM shutdown hook to shutdown itself, remove this
-    // after we support that.
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
