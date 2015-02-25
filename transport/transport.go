@@ -247,7 +247,7 @@ func (s *Stream) StatusDesc() string {
 
 // ErrIllegalTrailerSet indicates that the trailer has already been set or it
 // is too late to do so.
-var ErrIllegalTrailerSet = errors.New("grpc/transport: trailer has been set")
+var ErrIllegalTrailerSet = errors.New("transport: trailer has been set")
 
 // SetTrailer sets the trailer metadata which will be sent with the RPC status
 // by the server. This can only be called at most once. Server side only.
