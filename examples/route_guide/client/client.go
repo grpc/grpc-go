@@ -31,7 +31,7 @@
  *
  */
 
-// Package main implements a simple grpc client that demonstrates how to use grpc go libraries
+// Package main implements a simple gRPC client that demonstrates how to use gRPC-Go libraries
 // to perform unary, client streaming, server streaming and full duplex RPCs.
 //
 // It interacts with the route guide service whose definition can be found in proto/route_guide.proto.
@@ -127,13 +127,13 @@ func runRouteChat(client pb.RouteGuideClient) {
 	if err != nil {
 		log.Fatalf("%v.RouteChat(_) = _, %v", client, err)
 	}
-	waitc := make(chan int)
+	waitc := make(chan struct{})
 	go func() {
 		for {
 			in, err := stream.Recv()
 			if err == io.EOF {
 				// read done.
-				waitc <- 1
+				close(waitc)
 				return
 			}
 			if err != nil {

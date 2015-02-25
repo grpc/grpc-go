@@ -1,5 +1,5 @@
 # Description
-The route guide server and client demonstrates how to use grpc go libraries to
+The route guide server and client demonstrate how to use grpc go libraries to
 perform unary, client streaming, server streaming and full duplex RPCs.
 
 See the definition of the route guide service in proto/route_guide.proto.
