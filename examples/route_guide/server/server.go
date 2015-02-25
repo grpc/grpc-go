@@ -31,11 +31,16 @@
  *
  */
 
+// Package main implements a simple grpc server that demonstrates how to use grpc go libraries
+// to perform unary, client streaming, server streaming and full duplex RPCs.
+//
+// It implements the route guide service whose definition can be found in proto/route_guide.proto.
 package main
 
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -49,11 +54,13 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	pb "google.golang.org/grpc/examples/route_guide"
+	proto "github.com/golang/protobuf/proto"
+
+	pb "google.golang.org/grpc/examples/route_guide/proto"
 )
 
 var (
-	useTLS     = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
+	tls        = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
 	certFile   = flag.String("tls_cert_file", "testdata/server1.pem", "The TLS cert file")
 	keyFile    = flag.String("tls_key_file", "testdata/server1.key", "The TLS key file")
 	jsonDBFile = flag.String("route_guide_db", "testdata/route_guide_db.json", "A json file containing a list of features")
@@ -61,15 +68,15 @@ var (
 )
 
 type routeGuideServer struct {
-	savedFeatures []pb.Feature
-	routeNotes    map[pb.Point][]*pb.RouteNote
+	savedFeatures []*pb.Feature
+	routeNotes    map[string][]*pb.RouteNote
 }
 
 // GetFeature returns the feature at the given point.
 func (s *routeGuideServer) GetFeature(ctx context.Context, point *pb.Point) (*pb.Feature, error) {
 	for _, feature := range s.savedFeatures {
-		if *(feature.Location) == *point {
-			return &feature, nil
+		if proto.Equal(feature.Location, point) {
+			return feature, nil
 		}
 	}
 	// No feature was found, return an unnamed feature
@@ -78,16 +85,9 @@ func (s *routeGuideServer) GetFeature(ctx context.Context, point *pb.Point) (*pb
 
 // ListFeatures lists all features comtained within the given bounding Rectangle.
 func (s *routeGuideServer) ListFeatures(rect *pb.Rectangle, stream pb.RouteGuide_ListFeaturesServer) error {
-	left := math.Min(float64(rect.Lo.Longitude), float64(rect.Hi.Longitude))
-	right := math.Max(float64(rect.Lo.Longitude), float64(rect.Hi.Longitude))
-	top := math.Max(float64(rect.Lo.Latitude), float64(rect.Hi.Latitude))
-	bottom := math.Min(float64(rect.Lo.Latitude), float64(rect.Hi.Latitude))
 	for _, feature := range s.savedFeatures {
-		if float64(feature.Location.Longitude) >= left &&
-			float64(feature.Location.Longitude) <= right &&
-			float64(feature.Location.Latitude) >= bottom &&
-			float64(feature.Location.Latitude) <= top {
-			if err := stream.Send(&feature); err != nil {
+		if inRange(feature.Location, rect) {
+			if err := stream.Send(feature); err != nil {
 				return err
 			}
 		}
@@ -120,7 +120,7 @@ func (s *routeGuideServer) RecordRoute(stream pb.RouteGuide_RecordRouteServer) e
 		}
 		pointCount++
 		for _, feature := range s.savedFeatures {
-			if *(feature.Location) == *point {
+			if proto.Equal(feature.Location, point) {
 				featureCount++
 			}
 		}
@@ -142,14 +142,14 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 		if err != nil {
 			return err
 		}
-		point := *(in.Location)
-		if _, present := s.routeNotes[point]; !present {
-			s.routeNotes[point] = []*pb.RouteNote{in}
+		key := serialize(in.Location)
+		if _, present := s.routeNotes[key]; !present {
+			s.routeNotes[key] = []*pb.RouteNote{in}
 
 		} else {
-			s.routeNotes[point] = append(s.routeNotes[point], in)
+			s.routeNotes[key] = append(s.routeNotes[key], in)
 		}
-		for _, note := range s.routeNotes[point] {
+		for _, note := range s.routeNotes[key] {
 			if err := stream.Send(note); err != nil {
 				return err
 			}
@@ -161,10 +161,10 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 func (s *routeGuideServer) loadFeatures(filePath string) {
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		log.Fatal("Failed to load default features: %v\n", err)
+		log.Fatal("Failed to load default features: %v", err)
 	}
 	if err := json.Unmarshal(file, &(s.savedFeatures)); err != nil {
-		log.Fatal("Failed to load default features: %v\n", err)
+		log.Fatal("Failed to load default features: %v", err)
 	}
 }
 
@@ -172,17 +172,19 @@ func toRadians(num float64) float64 {
 	return num * math.Pi / float64(180)
 }
 
+// calcDistance calculates the distance between two points using the "haversine" formula.
+// This code was taken from http://www.movable-type.co.uk/scripts/latlong.html.
 func calcDistance(p1 *pb.Point, p2 *pb.Point) int32 {
-	const COORD_FACTOR float64 = 1e7
+	const CordFactor float64 = 1e7
 	const R float64 = float64(6371000) // metres
-	lat1 := float64(p1.Latitude) / COORD_FACTOR
-	lat2 := float64(p2.Latitude) / COORD_FACTOR
-	lon1 := float64(p1.Longitude) / COORD_FACTOR
-	lon2 := float64(p2.Longitude) / COORD_FACTOR
+	lat1 := float64(p1.Latitude) / CordFactor
+	lat2 := float64(p2.Latitude) / CordFactor
+	lng1 := float64(p1.Longitude) / CordFactor
+	lng2 := float64(p2.Longitude) / CordFactor
 	φ1 := toRadians(lat1)
 	φ2 := toRadians(lat2)
 	Δφ := toRadians(lat2 - lat1)
-	Δλ := toRadians(lon2 - lon1)
+	Δλ := toRadians(lng2 - lng1)
 
 	a := math.Sin(Δφ/2)*math.Sin(Δφ/2) +
 		math.Cos(φ1)*math.Cos(φ2)*
@@ -193,10 +195,29 @@ func calcDistance(p1 *pb.Point, p2 *pb.Point) int32 {
 	return int32(distance)
 }
 
+func inRange(point *pb.Point, rect *pb.Rectangle) bool {
+	left := math.Min(float64(rect.Lo.Longitude), float64(rect.Hi.Longitude))
+	right := math.Max(float64(rect.Lo.Longitude), float64(rect.Hi.Longitude))
+	top := math.Max(float64(rect.Lo.Latitude), float64(rect.Hi.Latitude))
+	bottom := math.Min(float64(rect.Lo.Latitude), float64(rect.Hi.Latitude))
+
+	if float64(point.Longitude) >= left &&
+		float64(point.Longitude) <= right &&
+		float64(point.Latitude) >= bottom &&
+		float64(point.Latitude) <= top {
+		return true
+	}
+	return false
+}
+
+func serialize(point *pb.Point) string {
+	return fmt.Sprintf("%d %d", point.Latitude, point.Longitude)
+}
+
 func newServer() *routeGuideServer {
 	s := new(routeGuideServer)
 	s.loadFeatures(*jsonDBFile)
-	s.routeNotes = make(map[pb.Point][]*pb.RouteNote, 0)
+	s.routeNotes = make(map[string][]*pb.RouteNote, 0)
 	return s
 }
 
@@ -209,7 +230,7 @@ func main() {
 	}
 	grpcServer := grpc.NewServer()
 	pb.RegisterRouteGuideServer(grpcServer, newServer())
-	if *useTLS {
+	if *tls {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
 			log.Fatalf("Failed to generate credentials %v", err)

@@ -31,6 +31,10 @@
  *
  */
 
+// Package main implements a simple grpc client that demonstrates how to use grpc go libraries
+// to perform unary, client streaming, server streaming and full duplex RPCs.
+//
+// It interacts with the route guide service whose definition can be found in proto/route_guide.proto.
 package main
 
 import (
@@ -38,64 +42,59 @@ import (
 	"io"
 	"log"
 	"math/rand"
-	"net"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	pb "google.golang.org/grpc/examples/route_guide"
+	pb "google.golang.org/grpc/examples/route_guide/proto"
 )
 
 var (
-	useTLS        = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
+	tls           = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
 	caFile        = flag.String("tls_ca_file", "testdata/ca.pem", "The file containning the CA root cert file")
-	serverHost    = flag.String("server_host", "127.0.0.1", "The server host name")
-	serverPort    = flag.Int("server_port", 10000, "The server port number")
+	serverAddr    = flag.String("server_addr", "127.0.0.1:10000", "The server address in the format of host:port")
 	tlsServerName = flag.String("tls_server_name", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
 )
 
-// doGetFeature gets the feature for the given point.
-func doGetFeature(client pb.RouteGuideClient, point *pb.Point) {
+// printFeature gets the feature for the given point.
+func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	log.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
-	reply, err := client.GetFeature(context.Background(), point)
+	feature, err := client.GetFeature(context.Background(), point)
 	if err != nil {
 		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
 		return
 	}
-	log.Println(reply)
+	log.Println(feature)
 }
 
-// doListFeatures lists all the features within the given bounding Rectangle.
-func doListFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
+// printFeatures lists all the features within the given bounding Rectangle.
+func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 	log.Printf("Looking for features within %v", rect)
 	stream, err := client.ListFeatures(context.Background(), rect)
 	if err != nil {
 		log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 	}
-	var rpcStatus error
 	for {
-		reply, err := stream.Recv()
-		if err != nil {
-			rpcStatus = err
+		feature, err := stream.Recv()
+		if err == io.EOF {
 			break
 		}
-		log.Println(reply)
-	}
-	if rpcStatus != io.EOF {
-		log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+		if err != nil {
+			log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+		}
+		log.Println(feature)
 	}
 }
 
-// doRecordRoute sends a sequence of points to server and expects to get a RouteSummary from server.
-func doRecordRoute(client pb.RouteGuideClient) {
+// runRecordRoute sends a sequence of points to server and expects to get a RouteSummary from server.
+func runRecordRoute(client pb.RouteGuideClient) {
 	// Create a random number of random points
-	rand.Seed(time.Now().UnixNano())
-	pointCount := rand.Int31n(100) + 2 // Tranverse at least two points
-	points := make([]*pb.Point, pointCount)
-	for i, _ := range points {
-		points[i] = randomPoint()
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	pointCount := int(r.Int31n(100)) + 2 // Traverse at least two points
+	var points []*pb.Point
+	for i := 0; i < pointCount; i++ {
+		points = append(points, randomPoint(r))
 	}
 	log.Printf("Traversing %d points.", len(points))
 	stream, err := client.RecordRoute(context.Background())
@@ -111,58 +110,57 @@ func doRecordRoute(client pb.RouteGuideClient) {
 	if err != nil {
 		log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
 	}
-	log.Printf("Route summary: %v\n", reply)
+	log.Printf("Route summary: %v", reply)
 }
 
-// doRouteChat receives a sequence of route notes, while sending notes for various locations.
-func doRouteChat(client pb.RouteGuideClient) {
+// runRouteChat receives a sequence of route notes, while sending notes for various locations.
+func runRouteChat(client pb.RouteGuideClient) {
 	notes := []*pb.RouteNote{
-		&pb.RouteNote{&pb.Point{0, 1}, "First message"},
-		&pb.RouteNote{&pb.Point{0, 2}, "Second message"},
-		&pb.RouteNote{&pb.Point{0, 3}, "Third message"},
-		&pb.RouteNote{&pb.Point{0, 1}, "Fourth message"},
-		&pb.RouteNote{&pb.Point{0, 2}, "Fifth message"},
-		&pb.RouteNote{&pb.Point{0, 3}, "Sixth message"},
+		{&pb.Point{0, 1}, "First message"},
+		{&pb.Point{0, 2}, "Second message"},
+		{&pb.Point{0, 3}, "Third message"},
+		{&pb.Point{0, 1}, "Fourth message"},
+		{&pb.Point{0, 2}, "Fifth message"},
+		{&pb.Point{0, 3}, "Sixth message"},
 	}
 	stream, err := client.RouteChat(context.Background())
 	if err != nil {
 		log.Fatalf("%v.RouteChat(_) = _, %v", client, err)
 	}
-	c := make(chan int)
+	waitc := make(chan int)
 	go func() {
 		for {
 			in, err := stream.Recv()
 			if err == io.EOF {
 				// read done.
-				c <- 1
+				waitc <- 1
 				return
 			}
 			if err != nil {
-				log.Fatalf("Failed to receive a note : %v\n", err)
+				log.Fatalf("Failed to receive a note : %v", err)
 			}
-			log.Printf("Got message %s at point(%d, %d)\n", in.Message, in.Location.Latitude, in.Location.Longitude)
+			log.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
 		}
 	}()
 	for _, note := range notes {
 		if err := stream.Send(note); err != nil {
-			log.Fatalf("Failed to send a note: %v\n", err)
+			log.Fatalf("Failed to send a note: %v", err)
 		}
 	}
 	stream.CloseSend()
-	<-c
+	<-waitc
 }
 
-func randomPoint() *pb.Point {
-	lat := (rand.Int31n(180) - 90) * 1e7
-	long := (rand.Int31n(360) - 180) * 1e7
+func randomPoint(r *rand.Rand) *pb.Point {
+	lat := (r.Int31n(180) - 90) * 1e7
+	long := (r.Int31n(360) - 180) * 1e7
 	return &pb.Point{lat, long}
 }
 
 func main() {
 	flag.Parse()
-	serverAddr := net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
 	var opts []grpc.DialOption
-	if *useTLS {
+	if *tls {
 		var sn string
 		if *tlsServerName != "" {
 			sn = *tlsServerName
@@ -179,7 +177,7 @@ func main() {
 		}
 		opts = append(opts, grpc.WithClientTLS(creds))
 	}
-	conn, err := grpc.Dial(serverAddr, opts...)
+	conn, err := grpc.Dial(*serverAddr, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
@@ -187,17 +185,17 @@ func main() {
 	client := pb.NewRouteGuideClient(conn)
 
 	// Looking for a valid feature
-	doGetFeature(client, &pb.Point{409146138, -746188906})
+	printFeature(client, &pb.Point{409146138, -746188906})
 
 	// Feature missing.
-	doGetFeature(client, &pb.Point{0, 0})
+	printFeature(client, &pb.Point{0, 0})
 
 	// Looking for features between 40, -75 and 42, -73.
-	doListFeatures(client, &pb.Rectangle{&pb.Point{400000000, -750000000}, &pb.Point{420000000, -730000000}})
+	printFeatures(client, &pb.Rectangle{&pb.Point{400000000, -750000000}, &pb.Point{420000000, -730000000}})
 
 	// RecordRoute
-	doRecordRoute(client)
+	runRecordRoute(client)
 
 	// RouteChat
-	doRouteChat(client)
+	runRouteChat(client)
 }

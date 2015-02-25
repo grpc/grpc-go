@@ -29,13 +29,16 @@
 
 syntax = "proto3";
 
-package route_guide;
+package proto;
 
 // Interface exported by the server.
 service RouteGuide {
   // A simple RPC.
   //
   // Obtains the feature at a given position.
+  //
+  // If no feature is found for the given point, a feature with an empty name
+  // should be returned.
   rpc GetFeature(Point) returns (Feature) {}
 
   // A server-to-client streaming RPC.
