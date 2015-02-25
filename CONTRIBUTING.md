@@ -1,6 +1,6 @@
 # How to contribute
 
-We definitely welcome patches and contribution to grpc! Here is some guideline
+We definitely welcome patches and contributions to grpc! Here are some guideline
 and information about how to do so.
 
 ## Getting started
