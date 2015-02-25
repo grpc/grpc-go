@@ -73,7 +73,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
         .status(Utils.STATUS_OK)
         .set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_GRPC);
     verify(channel).writeAndFlush(new SendResponseHeadersCommand(STREAM_ID, headers, false));
-    verify(channel).writeAndFlush(new SendGrpcFrameCommand(STREAM_ID, messageFrame(MESSAGE), false));
+    verify(channel).writeAndFlush(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false));
     verify(accepted).run();
   }
 

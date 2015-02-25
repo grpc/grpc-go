@@ -209,7 +209,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     createStream();
 
     // Send a frame and verify that it was written.
-    handler.write(ctx, new SendGrpcFrameCommand(stream.id(), content, true), promise);
+    handler.write(ctx, new SendGrpcFrameCommand(stream, content, true), promise);
     verify(promise, never()).setFailure(any(Throwable.class));
     verify(ctx).write(any(ByteBuf.class), eq(promise));
     verify(ctx).flush();
@@ -218,7 +218,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   @Test
   public void sendForUnknownStreamShouldFail() throws Exception {
     when(stream.id()).thenReturn(3);
-    handler.write(ctx, new SendGrpcFrameCommand(stream.id(), content, true), promise);
+    handler.write(ctx, new SendGrpcFrameCommand(stream, content, true), promise);
     verify(promise).setFailure(any(Throwable.class));
   }
 

@@ -119,6 +119,7 @@ public abstract class NettyStreamTestBase {
 
     input = new ByteArrayInputStream(MESSAGE.getBytes(UTF_8));
     stream = createStream();
+    stream.id(STREAM_ID);
   }
 
   @Test
