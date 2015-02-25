@@ -23,11 +23,11 @@ The server and client both take optional command line flags. For example, the
 client and server run without TLS by default. To enable TSL:
 
 ```sh
-go run server/server.go -tls=true
+$ go run server/server.go -tls=true
 ```
 
 and
 
 ```sh
-go run client/client.go -tls=true
+$ go run client/client.go -tls=true
 ```
