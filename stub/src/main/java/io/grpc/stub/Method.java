@@ -84,10 +84,16 @@ public class Method<RequestT, ResponseT> {
     return name;
   }
 
+  /**
+   * The marshaller used to serialize/deserialize the request.
+   */
   public Marshaller<RequestT> getRequestMarshaller() {
     return requestMarshaller;
   }
 
+  /**
+   * The marshaller used to serialize/deserialize the response.
+   */
   public Marshaller<ResponseT> getResponseMarshaller() {
     return responseMarshaller;
   }

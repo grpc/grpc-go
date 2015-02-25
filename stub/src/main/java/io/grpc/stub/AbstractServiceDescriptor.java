@@ -51,6 +51,8 @@ public abstract class AbstractServiceDescriptor<T extends AbstractServiceDescrip
 
   /**
    * Returns a new stub configuration for the provided method configurations.
+   *
+   * @param methodMap a map from fully qualified method names to {@code MethodDescriptor}s
    */
   protected abstract T build(Map<String, MethodDescriptor<?, ?>> methodMap);
 }

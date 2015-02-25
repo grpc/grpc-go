@@ -43,13 +43,13 @@ import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
 /**
- * Utility implementation of {link StreamObserver} used in testing. Records all the observed
+ * Utility implementation of {@link StreamObserver} used in testing. Records all the observed
  * values produced by the stream as well as any errors.
  */
 public class StreamRecorder<T> implements StreamObserver<T> {
 
   /**
-   * Create a new recorder.
+   * Creates a new recorder.
    */
   public static <T> StreamRecorder<T> create() {
     return new StreamRecorder<T>();
@@ -92,35 +92,35 @@ public class StreamRecorder<T> implements StreamObserver<T> {
   }
 
   /**
-   * Wait for the stream to terminate.
+   * Waits for the stream to terminate.
    */
   public void awaitCompletion() throws Exception {
     latch.await();
   }
 
   /**
-   * Wait a fixed timeout for the stream to terminate.
+   * Waits a fixed timeout for the stream to terminate.
    */
   public boolean awaitCompletion(int timeout, TimeUnit unit) throws Exception {
     return latch.await(timeout, unit);
   }
 
   /**
-   * Return the current set of received values.
+   * Returns the current set of received values.
    */
   public List<T> getValues() {
     return Collections.unmodifiableList(results);
   }
 
   /**
-   * Return the stream terminating error.
+   * Returns the stream terminating error.
    */
   @Nullable public Throwable getError() {
     return error;
   }
 
   /**
-   * Return a {@link ListenableFuture} for the first value received from the stream. Useful
+   * Returns a {@link ListenableFuture} for the first value received from the stream. Useful
    * for testing unary call patterns.
    */
   public ListenableFuture<T> firstValue() {

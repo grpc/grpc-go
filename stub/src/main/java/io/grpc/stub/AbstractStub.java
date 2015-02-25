@@ -44,14 +44,14 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Common base type for stub implementations. Allows for reconfiguration.
+ * Common base type for stub implementations.
+ *
+ * <p>This is the base class of the stub classes from the generated code. It allows for
+ * reconfiguration, e.g., attaching interceptors to the stub.
  *
  * @param <S> the concrete type of this stub.
  * @param <C> the service descriptor type
  */
-// TODO(louiscryan): Move into 3rd party when tidy
-// TODO(louiscryan): Excessive parameterization can be a pain, try to eliminate once the generated
-// code is more tangible.
 public abstract class AbstractStub<S extends AbstractStub<?, ?>,
     C extends AbstractServiceDescriptor<C>> {
   protected final Channel channel;
@@ -59,6 +59,9 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
 
   /**
    * Constructor for use by subclasses.
+   *
+   * @param channel the channel that this stub will use to do communications
+   * @param config defines the RPC methods of the stub
    */
   protected AbstractStub(Channel channel, C config) {
     this.channel = channel;
@@ -69,16 +72,25 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
     return config;
   }
 
+  /**
+   * Creates a builder for reconfiguring the stub.
+   */
   public StubConfigBuilder configureNewStub() {
     return new StubConfigBuilder();
   }
 
+  /**
+   * The underlying channel of the stub.
+   */
   public Channel getChannel() {
     return channel;
   }
 
   /**
-   * Returns a new stub configuration for the provided method configurations.
+   * Returns a new stub with the given channel for the provided method configurations.
+   *
+   * @param channel the channel that this stub will use to do communications
+   * @param config defines the RPC methods of the stub
    */
   protected abstract S build(Channel channel, C config);
 
@@ -100,7 +112,7 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
     }
 
     /**
-     * Set a timeout for all methods in the stub.
+     * Sets a timeout for all methods in the stub.
      */
     public StubConfigBuilder setTimeout(long timeout, TimeUnit unit) {
       for (Map.Entry<String, MethodDescriptor<?, ?>> entry : methodMap.entrySet()) {
@@ -118,7 +130,7 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
     }
 
     /**
-     * Adds a client interceptor to be attached to the channel.
+     * Adds a client interceptor to be attached to the channel of the reconfigured stub.
      */
     public StubConfigBuilder addInterceptor(ClientInterceptor interceptor) {
       interceptors.add(interceptor);
@@ -126,7 +138,7 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
     }
 
     /**
-     * Create a new stub configuration
+     * Create a new stub with the configurations made on this builder.
      */
     public S build() {
       return AbstractStub.this.build(ClientInterceptors.intercept(stubChannel, interceptors),

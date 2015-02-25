@@ -38,19 +38,28 @@ import io.grpc.ServerMethodDefinition;
 import io.grpc.Status;
 
 /**
- * Utility functions for adapting ServerCallHandlers to application service implementation.
+ * Utility functions for adapting {@link ServerCallHandler}s to application service implementation,
+ * meant to be used by the generated code.
  */
 public class ServerCalls {
 
   private ServerCalls() {
   }
 
+  /**
+   * Attaches the handler to a method and gets a {@code ServerMethodDefinition}.
+   */
   public static <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> createMethodDefinition(
       Method<ReqT, RespT> method, ServerCallHandler<ReqT, RespT> handler) {
     return ServerMethodDefinition.create(method.getName(), method.getRequestMarshaller(),
         method.getResponseMarshaller(), handler);
   }
 
+  /**
+   * Creates a {@code ServerCallHandler} for a unary request call method of the service.
+   *
+   * @param method an adaptor to the actual method on the service implementation.
+   */
   public static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncUnaryRequestCall(
       final UnaryRequestMethod<ReqT, RespT> method) {
     return new ServerCallHandler<ReqT, RespT>() {
@@ -97,6 +106,11 @@ public class ServerCalls {
     };
   }
 
+  /**
+   * Creates a {@code ServerCallHandler} for a streaming request call method of the service.
+   *
+   * @param method an adaptor to the actual method on the service implementation.
+   */
   public static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncStreamingRequestCall(
       final StreamingRequestMethod<ReqT, RespT> method) {
     return new ServerCallHandler<ReqT, RespT>() {

@@ -48,10 +48,11 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MetadataUtils {
 
   /**
-   * Attach a set of request headers to a stub.
+   * Attaches a set of request headers to a stub.
+   *
    * @param stub to bind the headers to.
    * @param extraHeaders the headers to be passed by each call on the returned stub.
-   * @return an implementation of the stub with extraHeaders bound to each call.
+   * @return an implementation of the stub with {@code extraHeaders} bound to each call.
    */
   @SuppressWarnings({"unchecked", "rawtypes"})
   public static <T extends AbstractStub> T attachHeaders(
@@ -62,7 +63,7 @@ public class MetadataUtils {
   }
 
   /**
-   * Return a client interceptor that attaches a set of headers to requests.
+   * Returns a client interceptor that attaches a set of headers to requests.
    *
    * @param extraHeaders the headers to be passed by each call that is processed by the returned
    *                     interceptor
@@ -84,11 +85,12 @@ public class MetadataUtils {
   }
 
   /**
-   * Capture the last received metadata for a stub. Useful for testing
+   * Captures the last received metadata for a stub. Useful for testing
+   *
    * @param stub to capture for
    * @param headersCapture to record the last received headers
    * @param trailersCapture to record the last received trailers
-   * @return an implementation of the stub with extraHeaders bound to each call.
+   * @return an implementation of the stub with {@code extraHeaders} bound to each call.
    */
   @SuppressWarnings({"unchecked", "rawtypes"})
   public static <T extends AbstractStub> T captureMetadata(
@@ -100,7 +102,7 @@ public class MetadataUtils {
   }
 
   /**
-   * Capture the last received metadata on a channel. Useful for testing
+   * Captures the last received metadata on a channel. Useful for testing.
    *
    * @param headersCapture to record the last received headers
    * @param trailersCapture to record the last received trailers

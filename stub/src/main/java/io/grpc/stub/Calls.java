@@ -60,7 +60,7 @@ import java.util.concurrent.TimeUnit;
 public class Calls {
 
   /**
-   * Creates a MethodDescriptor for a given method.
+   * Creates a {@link MethodDescriptor} for a given method.
    *
    * @param fullServiceName fully qualified service name
    * @param method carries all invariants of the method
@@ -74,7 +74,8 @@ public class Calls {
   }
 
   /**
-   * Execute a unary call and return a {@link ListenableFuture} to the response.
+   * Executes a unary call and returns a {@link ListenableFuture} to the response.
+   *
    * @return a future for the single response message.
    */
   public static <ReqT, RespT> ListenableFuture<RespT> unaryFutureCall(
@@ -119,7 +120,7 @@ public class Calls {
   }
 
   /**
-   * Execute a unary call and block on the response.
+   * Executes a unary call and blocks on the response.
    * @return the single response message.
    */
   public static <ReqT, RespT> RespT blockingUnaryCall(Call<ReqT, RespT> call, ReqT param) {
@@ -132,7 +133,7 @@ public class Calls {
   }
 
   /**
-   * Execute a unary call with a response {@link StreamObserver}.
+   * Executes a unary call with a response {@link StreamObserver}.
    */
   public static <ReqT, RespT> void asyncUnaryCall(
       Call<ReqT, RespT> call,
@@ -142,7 +143,7 @@ public class Calls {
   }
 
   /**
-   * Execute a server-streaming call returning a blocking {@link Iterator} over the
+   * Executes a server-streaming call returning a blocking {@link Iterator} over the
    * response stream.
    * @return an iterator over the response stream.
    */
@@ -155,7 +156,7 @@ public class Calls {
   }
 
   /**
-   * Execute a server-streaming call with a response {@link StreamObserver}.
+   * Executes a server-streaming call with a response {@link StreamObserver}.
    */
   public static <ReqT, RespT> void asyncServerStreamingCall(
       Call<ReqT, RespT> call,
@@ -181,7 +182,7 @@ public class Calls {
   }
 
   /**
-   * Execute a client-streaming call with a blocking {@link Iterator} of request messages.
+   * Executes a client-streaming call with a blocking {@link Iterator} of request messages.
    * @return the single response value.
    */
   public static <ReqT, RespT> RespT blockingClientStreamingCall(
@@ -207,7 +208,7 @@ public class Calls {
   }
 
   /**
-   * Execute a client-streaming call returning a {@link StreamObserver} for the request messages.
+   * Executes a client-streaming call returning a {@link StreamObserver} for the request messages.
    * @return request stream observer.
    */
   public static <ReqT, RespT> StreamObserver<ReqT> asyncClientStreamingCall(
@@ -217,7 +218,7 @@ public class Calls {
   }
 
   /**
-   * Execute a duplex-streaming call.
+   * Executes a duplex-streaming call.
    * @return request stream observer.
    */
   public static <ReqT, RespT> StreamObserver<ReqT> duplexStreamingCall(Call<ReqT, RespT> call,
@@ -327,8 +328,8 @@ public class Calls {
    * Convert events on a {@link io.grpc.Call.Listener} into a blocking
    * {@link Iterator}.
    *
-   * <p>The class is not thread-safe, but it does permit Call.Listener calls in a separate thread
-   * from Iterator calls.
+   * <p>The class is not thread-safe, but it does permit {@link Call.Listener} calls in a separate
+   * thread from {@code Iterator} calls.
    */
   // TODO(ejona86): determine how to allow Call.cancel() in case of application error.
   private static class BlockingResponseStream<T> implements Iterator<T> {
