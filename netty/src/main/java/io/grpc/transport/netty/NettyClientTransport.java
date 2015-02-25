@@ -85,11 +85,13 @@ class NettyClientTransport implements ClientTransport {
   private static final Logger log = Logger.getLogger(NettyClientTransport.class.getName());
 
   private final SocketAddress address;
-  private final EventLoopGroup eventGroup;
+  private final EventLoopGroup group;
   private final Http2Negotiator.Negotiation negotiation;
   private final NettyClientHandler handler;
   private final boolean ssl;
   private final AsciiString authority;
+  // We should not send on the channel until negotiation completes. This is a hard requirement
+  // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
   private Channel channel;
   private Listener listener;
   /**
@@ -108,10 +110,10 @@ class NettyClientTransport implements ClientTransport {
   private boolean terminated;
 
   NettyClientTransport(SocketAddress address, NegotiationType negotiationType,
-      EventLoopGroup eventGroup, SslContext sslContext) {
+      EventLoopGroup group, SslContext sslContext) {
     Preconditions.checkNotNull(negotiationType, "negotiationType");
     this.address = Preconditions.checkNotNull(address, "address");
-    this.eventGroup = Preconditions.checkNotNull(eventGroup, "eventGroup");
+    this.group = Preconditions.checkNotNull(group, "group");
 
     InetSocketAddress inetAddress = null;
     if (address instanceof InetSocketAddress) {
@@ -198,7 +200,7 @@ class NettyClientTransport implements ClientTransport {
   public void start(Listener transportListener) {
     listener = Preconditions.checkNotNull(transportListener, "listener");
     Bootstrap b = new Bootstrap();
-    b.group(eventGroup);
+    b.group(group);
     if (address instanceof LocalAddress) {
       b.channel(LocalChannel.class);
     } else {
@@ -209,6 +211,8 @@ class NettyClientTransport implements ClientTransport {
 
     // Start the connection operation to the server.
     final ChannelFuture connectFuture = b.connect(address);
+    channel = connectFuture.channel();
+
     connectFuture.addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
@@ -237,9 +241,6 @@ class NettyClientTransport implements ClientTransport {
       }
     });
 
-    // We should not send on the channel until negotiation completes. This is a hard requirement
-    // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
-    channel = connectFuture.channel();
     // Handle transport shutdown when the channel is closed.
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override
