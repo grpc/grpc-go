@@ -24,7 +24,7 @@ subprojects {
                 guava: 'com.google.guava:guava:18.0',
                 // used to collect benchmark results
                 hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.4',
-                hpack: 'com.twitter:hpack:0.9.1',
+                hpack: 'com.twitter:hpack:0.10.1',
                 javaee_api: 'javax:javaee-api:7.0',
                 jsonp: 'org.glassfish:javax.json:1.0.4',
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
