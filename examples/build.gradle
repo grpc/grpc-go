@@ -34,3 +34,15 @@ task routeGuideClient(type: JavaExec) {
     description = "Executes the route guide client."
     classpath = sourceSets.main.runtimeClasspath
 }
+
+task helloWorldServer(type: JavaExec) {
+    main = "io.grpc.examples.HelloWorldServer"
+    description = "Executes the hello world server."
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+task helloWorldClient(type: JavaExec) {
+    main = "io.grpc.examples.HelloWorldClient"
+    description = "Executes the hello world client."
+    classpath = sourceSets.main.runtimeClasspath
+}
