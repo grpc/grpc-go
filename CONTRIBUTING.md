@@ -14,9 +14,13 @@ In order to protect both you and ourselves, you will need to sign the
 When filing an issue, make sure to answer these five questions:
 
 What version of Go are you using (go version)?
+
 What operating system and processor architecture are you using?
+
 What did you do?
+
 What did you expect to see?
+
 What did you see instead?
 
 ### Contributing code
