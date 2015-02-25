@@ -83,7 +83,7 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   @Override
   protected void sendFrame(ByteBuffer frame, boolean endOfStream) {
     SendGrpcFrameCommand cmd =
-        new SendGrpcFrameCommand(this, Utils.toByteBuf(channel.alloc(), frame), endOfStream);
+        new SendGrpcFrameCommand(id(), Utils.toByteBuf(channel.alloc(), frame), endOfStream);
     channel.writeAndFlush(cmd);
   }
 
