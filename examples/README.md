@@ -21,3 +21,5 @@ $ ./gradlew :grpc-examples:routeGuideClient
 ```
 
 That's it!
+
+Please refer to [Getting Started Guide for Java] (https://github.com/grpc/grpc-common/blob/master/java/javatutorial.md) for more information.
