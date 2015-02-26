@@ -234,8 +234,9 @@ public class OkHttpClientTransport implements ClientTransport {
     if (normalClose) {
       // Send GOAWAY with lastGoodStreamId of 0, since we don't expect any server-initiated streams.
       // The GOAWAY is part of graceful shutdown.
-      frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
-
+      if (frameWriter != null) {
+        frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
+      }
       onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Transport stopped"));
     }
     stopIfNecessary();
@@ -321,11 +322,13 @@ public class OkHttpClientTransport implements ClientTransport {
     }
     if (shouldStop) {
       // Wait for the frame writer to close.
-      frameWriter.close();
-      try {
-        frameReader.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+      if (frameWriter != null) {
+        frameWriter.close();
+        try {
+          frameReader.close();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
       listener.transportTerminated();
     }
