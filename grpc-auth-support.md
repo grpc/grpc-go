@@ -5,7 +5,7 @@ As outlined <a href="https://github.com/grpc/grpc-common/blob/master/grpc-auth-s
 # Enabling TLS on a gRPC client
 
 ```Go
-conn, err := grpc.Dial(serverAddr, grpc.WithClientTLS(credentials.NewClientTLSFromCert(nil, ""))
+conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""))
 ```
 
 # Enableing TLS on a gRPC server

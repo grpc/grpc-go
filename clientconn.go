@@ -61,9 +61,9 @@ type dialOptions struct {
 // credentials.
 type DialOption func(*dialOptions)
 
-// WithClientTLS returns a DialOption which configures a TLS credentials
-// for connection.
-func WithClientTLS(creds credentials.TransportAuthenticator) DialOption {
+// WithTransportCredentials returns a DialOption which configures a
+// connection level security credentials (e.g., TLS/SSL).
+func WithTransportCredentials(creds credentials.TransportAuthenticator) DialOption {
 	return func(o *dialOptions) {
 		o.authOptions = append(o.authOptions, creds)
 	}
