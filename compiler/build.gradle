@@ -40,7 +40,7 @@ binaries.all {
 protobufCodeGenPlugins = ["java_plugin:$buildDir/binaries/java_pluginExecutable/java_plugin"]
 
 generateTestProto.dependsOn 'java_pluginExecutable'
-test.dependsOn('testGolden')
+test.dependsOn('testGolden','testNanoGolden')
 
 task testGolden(type: Exec, dependsOn: 'generateTestProto') {
   executable "diff"
@@ -48,7 +48,9 @@ task testGolden(type: Exec, dependsOn: 'generateTestProto') {
        "$projectDir/src/test/golden/TestService.java.txt"
 }
 
-// TODO(rocking): use src/test/run_nano_test.sh to verify nano codegen. Currently we have an issue
-// that gradle temporaryDir is not created when doing gradle clean build
+task testNanoGolden(type: Exec, dependsOn: 'java_pluginExecutable') {
+  environment 'TEST_TMP_DIR', temporaryDir
+  commandLine './src/test/run_nano_test.sh'
+}
 
 
