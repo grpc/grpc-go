@@ -12,11 +12,11 @@ $ cd lib/netty
 $ mvn install -pl codec-http2 -am -DskipTests=true
 ```
 
-The codegen plugin requires a recent protobuf build from master (what will
-become proto3):
+The codegen plugin requires protobuf 3.0.0-alpha-2:
 ```
 $ git clone https://github.com/google/protobuf.git
 $ cd protobuf
+$ git checkout v3.0.0-alpha-2
 $ ./autogen.sh
 $ ./configure
 $ make
