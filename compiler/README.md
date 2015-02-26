@@ -31,3 +31,8 @@ To compile a proto file and generate Java interfaces out of the service definiti
 $ protoc --plugin=protoc-gen-java_rpc=build/binaries/java_pluginExecutable/java_plugin \
   --java_rpc_out="$OUTPUT_FILE" --proto_path="$DIR_OF_PROTO_FILE" "$PROTO_FILE"
 ```
+To generate Java interfaces with protobuf nano:
+```
+$ protoc --plugin=protoc-gen-java_rpc=build/binaries/java_pluginExecutable/java_plugin \
+  --java_rpc_out=nano=true:"$OUTPUT_FILE" --proto_path="$DIR_OF_PROTO_FILE" "$PROTO_FILE"
+```
