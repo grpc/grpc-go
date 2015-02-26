@@ -73,7 +73,7 @@ type Credentials interface {
 type TransportAuthenticator interface {
 	// Dial connects to the given network address and does the authentication
 	// handshake specified by the corresponding authentication protocol.
-	Dial(add string) (net.Conn, error)
+	Dial(addr string) (net.Conn, error)
 	// NewListener creates a listener which accepts connections with requested
 	// authentication handshake.
 	NewListener(lis net.Listener) net.Listener
