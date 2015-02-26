@@ -35,6 +35,7 @@ package grpc
 
 import (
 	"errors"
+	"log"
 	"sync"
 	"time"
 
@@ -138,6 +139,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			closeTransport = false
 			time.Sleep(backoff(retries))
 			retries++
+			log.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
 			continue
 		}
 		cc.mu.Lock()

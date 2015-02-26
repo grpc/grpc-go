@@ -265,7 +265,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			err = t.framer.WriteContinuation(t.nextID, endHeaders, t.hBuf.Next(size))
 		}
 		if err != nil {
-			t.notifyError()
+			t.notifyError(err)
 			return nil, ConnectionErrorf("transport: %v", err)
 		}
 	}
@@ -395,7 +395,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 		// by http2Client.Close(). No explicit CloseStream() needs to be
 		// invoked.
 		if err := t.framer.WriteData(s.id, endStream, p); err != nil {
-			t.notifyError()
+			t.notifyError(err)
 			return ConnectionErrorf("transport: %v", err)
 		}
 		t.writableChan <- 0
@@ -477,7 +477,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	s.state = streamDone
 	s.statusCode, ok = http2RSTErrConvTab[http2.ErrCode(f.ErrCode)]
 	if !ok {
-		log.Println("No gRPC status found for http2 error ", f.ErrCode)
+		log.Println("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error ", f.ErrCode)
 	}
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
@@ -492,11 +492,11 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
-	log.Println("PingFrame handler to be implemented")
+	// TODO(zhaoq): PingFrame handler to be implemented"
 }
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
-	log.Println("GoAwayFrame handler to be implemented")
+	// TODO(zhaoq): GoAwayFrame handler to be implemented"
 }
 
 func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {
@@ -565,12 +565,12 @@ func (t *http2Client) reader() {
 	// Check the validity of server preface.
 	frame, err := t.framer.ReadFrame()
 	if err != nil {
-		t.notifyError()
+		t.notifyError(err)
 		return
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		t.notifyError()
+		t.notifyError(err)
 		return
 	}
 	t.handleSettings(sf)
@@ -581,7 +581,7 @@ func (t *http2Client) reader() {
 	for {
 		frame, err := t.framer.ReadFrame()
 		if err != nil {
-			t.notifyError()
+			t.notifyError(err)
 			return
 		}
 		switch frame := frame.(type) {
@@ -610,7 +610,7 @@ func (t *http2Client) reader() {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		default:
-			log.Printf("http2Client: unhandled frame type %v.", frame)
+			log.Printf("transport: http2Client.reader got unhandled frame type %v.", frame)
 		}
 	}
 }
@@ -632,7 +632,7 @@ func (t *http2Client) controller() {
 				case *resetStream:
 					t.framer.WriteRSTStream(i.streamID, i.code)
 				default:
-					log.Printf("http2Client.controller got unexpected item type %v\n", i)
+					log.Printf("transport: http2Client.controller got unexpected item type %v\n", i)
 				}
 				t.writableChan <- 0
 				continue
@@ -649,12 +649,13 @@ func (t *http2Client) Error() <-chan struct{} {
 	return t.errorChan
 }
 
-func (t *http2Client) notifyError() {
+func (t *http2Client) notifyError(err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	// make sure t.errorChan is closed only once.
 	if t.state == reachable {
 		t.state = unreachable
 		close(t.errorChan)
+		log.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
 	}
 }

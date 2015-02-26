@@ -132,7 +132,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	}()
 	endHeaders, err := hDec.decodeServerHTTP2Headers(s, frame)
 	if err != nil {
-		log.Print(err)
+		log.Printf("transport: http2Server.operateHeader found %v", err)
 		if se, ok := err.(StreamError); ok {
 			t.controlBuf.put(&resetStream{s.id, statusCodeConvTab[se.Code]})
 		}
@@ -194,12 +194,12 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 	// Check the validity of client preface.
 	preface := make([]byte, len(clientPreface))
 	if _, err := io.ReadFull(t.conn, preface); err != nil {
-		log.Printf("failed to receive the preface from client: %v", err)
+		log.Printf("transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
 		t.Close()
 		return
 	}
 	if !bytes.Equal(preface, clientPreface) {
-		log.Printf("received bogus greeting from client: %q", preface)
+		log.Printf("transport: http2Server.HandleStreams received bogus greeting from client: %q", preface)
 		t.Close()
 		return
 	}
@@ -211,7 +211,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		log.Printf("invalid preface type %T from client", frame)
+		log.Printf("transport: http2Server.HandleStreams saw invalid preface type %T from client", frame)
 		t.Close()
 		return
 	}
@@ -232,7 +232,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 			id := frame.Header().StreamID
 			if id%2 != 1 || id <= t.maxStreamID {
 				// illegal gRPC stream id.
-				log.Println("http2Server: received an illegal stream id: ", id)
+				log.Println("transport: http2Server.HandleStreams received an illegal stream id: ", id)
 				t.Close()
 				break
 			}
@@ -262,7 +262,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		default:
-			log.Printf("http2Server: unhandled frame type %v.", frame)
+			log.Printf("transport: http2Server.HanldeStreams found unhandled frame type %v.", frame)
 		}
 	}
 }
@@ -346,7 +346,7 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 }
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
-	log.Println("PingFrame handler to be implemented")
+	// TODO(zhaoq): PingFrame handler to be implemented
 }
 
 func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
@@ -430,7 +430,6 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 	}
 	s.mu.RUnlock()
 	if _, err := wait(s.ctx, t.shutdownChan, t.writableChan); err != nil {
-		// TODO(zhaoq): Print some errors using glog, e.g., glog.V(1).
 		return err
 	}
 	t.hBuf.Reset()
@@ -550,7 +549,7 @@ func (t *http2Server) controller() {
 				case *resetStream:
 					t.framer.WriteRSTStream(i.streamID, i.code)
 				default:
-					log.Printf("http2Server.controller got unexpected item type %v\n", i)
+					log.Printf("transport: http2Server.controller got unexpected item type %v\n", i)
 				}
 				t.writableChan <- 0
 				continue
