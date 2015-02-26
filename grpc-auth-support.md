@@ -11,13 +11,28 @@ conn, err := grpc.Dial(serverAddr, grpc.WithClientTLS(credentials.NewClientTLSFr
 # Enableing TLS on a gRPC server
 
 ```Go
-creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
+creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 if err != nil {
   log.Fatalf("Failed to generate credentials %v", err)
 }
 server.Serve(creds.NewListener(lis))
 ```
 
-# Using OAuth2
+# Authenticating with Google
 
+## Google Compute Engine (GCE)
+
+```Go
+conn, err := grpc.Dial(serverAddr, grpc.WithClientTLS(credentials.NewClientTLSFromCert(nil, ""), grpc.WithPerRPCCredentials(credentials.NewComputeEngine())))
+```
+
+## JWT
+
+```Go
+jwtCreds, err := credentials.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
+if err != nil {
+  log.Fatalf("Failed to create JWT credentials: %v", err)
+}
+conn, err := grpc.Dial(serverAddr, grpc.WithClientTLS(credentials.NewClientTLSFromCert(nil, ""), grpc.WithPerRPCCredentials(jwtCreds)))
+```
 
