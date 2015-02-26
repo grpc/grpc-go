@@ -8,7 +8,7 @@ As outlined <a href="https://github.com/grpc/grpc-common/blob/master/grpc-auth-s
 conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""))
 ```
 
-# Enableing TLS on a gRPC server
+# Enabling TLS on a gRPC server
 
 ```Go
 creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
