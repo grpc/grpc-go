@@ -220,7 +220,7 @@ func setUp(useTLS bool, maxStream uint32) (s *grpc.Server, tc testpb.TestService
 		if err != nil {
 			log.Fatalf("Failed to create credentials %v", err)
 		}
-		conn, err = grpc.Dial(addr, grpc.WithClientTLS(creds))
+		conn, err = grpc.Dial(addr, grpc.WithTransportCredentials(creds))
 	} else {
 		conn, err = grpc.Dial(addr)
 	}

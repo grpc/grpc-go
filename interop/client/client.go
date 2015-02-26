@@ -316,7 +316,7 @@ func main() {
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
 		}
-		opts = append(opts, grpc.WithClientTLS(creds))
+		opts = append(opts, grpc.WithTransportCredentials(creds))
 		if *testCase == "compute_engine_creds" {
 			opts = append(opts, grpc.WithPerRPCCredentials(credentials.NewComputeEngine()))
 		} else if *testCase == "service_account_creds" {
