@@ -30,8 +30,8 @@ subprojects {
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
                 oauth_client: 'com.google.oauth-client:google-oauth-client:1.18.0-rc',
                 okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
-                protobuf: 'com.google.protobuf:protobuf-java:3.0.0-pre',
-                protobuf_nano: 'com.google.protobuf.nano:protobuf-javanano:2.6.2-pre',
+                protobuf: 'com.google.protobuf:protobuf-java:3.0.0-alpha-2',
+                protobuf_nano: 'com.google.protobuf.nano:protobuf-javanano:3.0.0-alpha-2',
                 protobuf_plugin: 'ws.antonov.gradle.plugins:gradle-plugin-protobuf:0.9.1',
 
                 // TODO: Unreleased dependencies.
