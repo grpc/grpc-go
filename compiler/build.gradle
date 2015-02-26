@@ -49,6 +49,10 @@ task testGolden(type: Exec, dependsOn: 'generateTestProto') {
 }
 
 task testNanoGolden(type: Exec, dependsOn: 'java_pluginExecutable') {
+  doFirst {
+      temporaryDir.createNewFile();
+  }
+
   environment 'TEST_TMP_DIR', temporaryDir
   commandLine './src/test/run_nano_test.sh'
 }
