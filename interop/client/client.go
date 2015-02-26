@@ -302,7 +302,7 @@ func main() {
 	serverAddr := net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
 	var opts []grpc.DialOption
 	if *useTLS {
-		var sn string
+		sn := *serverHost
 		if *tlsServerName != "" {
 			sn = *tlsServerName
 		}
