@@ -105,7 +105,7 @@ public class MessageDeframer implements Closeable {
   private boolean deliveryStalled = true;
 
   /**
-   * Create a deframer. Compression will not be supported.
+   * Creates a deframer. Compression will not be supported.
    *
    * @param listener listener for deframer events.
    */
@@ -117,8 +117,8 @@ public class MessageDeframer implements Closeable {
    * Create a deframer.
    *
    * @param listener listener for deframer events.
-   * @param compression the compression used if a compressed frame is encountered, with NONE meaning
-   *        unsupported
+   * @param compression the compression used if a compressed frame is encountered, with {@code NONE}
+   *        meaning unsupported
    */
   public MessageDeframer(Listener listener, Compression compression) {
     this.listener = Preconditions.checkNotNull(listener, "sink");

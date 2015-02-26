@@ -41,9 +41,8 @@ import io.grpc.MethodDescriptor;
 public interface ClientTransport {
 
   /**
-   * Creates a new stream for sending messages to the remote end-point. If the service is already
-   * stopped, throws an {@link IllegalStateException}.
-   * TODO(nmittler): Consider also throwing for stopping.
+   * Creates a new stream for sending messages to the remote end-point.
+   *
    * <p>
    * This method returns immediately and does not wait for any validation of the request. If
    * creation fails for any reason, {@link ClientStreamListener#closed} will be called to provide
@@ -53,14 +52,16 @@ public interface ClientTransport {
    * @param method the descriptor of the remote method to be called for this stream.
    * @param headers to send at the beginning of the call
    * @param listener the listener for the newly created stream.
+   * @throws IllegalStateException if the service is already stopped.
    * @return the newly created stream.
    */
+  // TODO(nmittler): Consider also throwing for stopping.
   ClientStream newStream(MethodDescriptor<?, ?> method,
                          Metadata.Headers headers,
                          ClientStreamListener listener);
 
   /**
-   * Starts transport. Implementations must not call {@code listener} until after start returns.
+   * Starts transport. Implementations must not call {@code listener} until after {@code start()} returns.
    *
    * @param listener non-{@code null} listener of transport events
    */
@@ -68,10 +69,13 @@ public interface ClientTransport {
 
   /**
    * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
-   * fail (once transportShutdown() callback called).
+   * fail (once {@link Listener#transportShutdown()} callback called).
    */
   void shutdown();
 
+  /**
+   * Receives notifications for the transport life-cycle events.
+   */
   interface Listener {
     /**
      * The transport is shutting down. No new streams will be processed, but existing streams may

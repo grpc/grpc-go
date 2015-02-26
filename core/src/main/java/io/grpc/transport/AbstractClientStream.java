@@ -62,6 +62,11 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   private Runnable closeListenerTask;
 
 
+  /**
+   * Constructor used by subclasses.
+   *
+   * @param listener the listener to receive notifications
+   */
   protected AbstractClientStream(ClientStreamListener listener) {
     this.listener = Preconditions.checkNotNull(listener);
   }
@@ -113,7 +118,9 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   }
 
   /**
-   * Process the contents of a received data frame from the server.
+   * Processes the contents of a received data frame from the server.
+   *
+   * @param frame the received data frame. Its ownership is transferred to this method.
    */
   protected void inboundDataReceived(Buffer frame) {
     Preconditions.checkNotNull(frame, "frame");
@@ -144,7 +151,10 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   }
 
   /**
-   * Called by transport implementations when they receive trailers.
+   * Processes the trailers and status from the server.
+   *
+   * @param trailers the received trailers
+   * @param status the status extracted from the trailers
    */
   protected void inboundTrailersReceived(Metadata.Trailers trailers, Status status) {
     Preconditions.checkNotNull(trailers, "trailers");
@@ -187,6 +197,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    *        may already be queued up in the deframer. If {@code false}, the listener will be
    *        notified immediately after all currently completed messages in the deframer have been
    *        delivered to the application.
+   * @param trailers new instance of {@code Trailers}, either empty or those returned by the server
    */
   public void transportReportStatus(final Status newStatus, boolean stopDelivery,
       final Metadata.Trailers trailers) {

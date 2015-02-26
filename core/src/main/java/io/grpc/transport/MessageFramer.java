@@ -54,7 +54,7 @@ public class MessageFramer {
    */
   public interface Sink<T> {
     /**
-     * Deliver a frame via the transport.
+     * Delivers a frame via the transport.
      *
      * @param frame the contents of the frame to deliver
      * @param endOfStream whether the frame is the last one for the GRPC stream
@@ -76,10 +76,23 @@ public class MessageFramer {
   private final OutputStreamAdapter outputStreamAdapter = new OutputStreamAdapter();
   private final byte[] headerScratch = new byte[HEADER_LENGTH];
 
+  /**
+   * Creates a {@code MessageFramer} without compression.
+   *
+   * @param sink the sink used to deliver frames to the transport
+   * @param maxFrameSize the maximum frame size that this framer will deliver
+   */
   public MessageFramer(Sink<ByteBuffer> sink, int maxFrameSize) {
     this(sink, maxFrameSize, Compression.NONE);
   }
 
+  /**
+   * Creates a {@code MessageFramer}.
+   *
+   * @param sink the sink used to deliver frames to the transport
+   * @param maxFrameSize the maximum frame size that this framer will deliver
+   * @param compression the compression type
+   */
   public MessageFramer(Sink<ByteBuffer> sink, int maxFrameSize, Compression compression) {
     this.sink = Preconditions.checkNotNull(sink, "sink");
     this.bytebuf = ByteBuffer.allocate(maxFrameSize);
@@ -87,8 +100,11 @@ public class MessageFramer {
   }
 
   /**
-   * Write out a Payload message. {@code message} will be completely consumed.
-   * {@code message.available()} must return the number of remaining bytes to be read.
+   * Writes out a payload message.
+   *
+   * @param message contains the message to be written out. It will be completely consumed.
+   * @param messageLength the number of bytes in the message. It must match the actual number of
+   *        bytes in the {@code InputStream}.
    */
   public void writePayload(InputStream message, int messageLength) {
     try {
@@ -162,7 +178,7 @@ public class MessageFramer {
   }
 
   /**
-   * Flush any buffered data in the framer to the sink.
+   * Flushes any buffered data in the framer to the sink.
    */
   public void flush() {
     if (bytebuf.position() == 0) {

@@ -58,9 +58,9 @@ public final class TransportFrameUtil {
 
   // TODO(louiscryan): This needs proper namespacing support, this is currently just a hack
   /**
-   * Converts the path from the HTTP request to the full qualified method name.
+   * Converts the path from the HTTP request to the fully qualified method name.
    *
-   * @return null if the path is malformatted.
+   * @return the fully qualified method name. {@code null} if the path is malformatted.
    */
   @Nullable
   public static String getFullMethodNameFromPath(String path) {
@@ -106,6 +106,9 @@ public final class TransportFrameUtil {
   /**
    * Transform HTTP/2-compliant headers to the raw serialized format which can be deserialized by
    * metadata marshallers. It decodes the Base64-encoded binary headers.
+   *
+   * @param http2Headers the interleaved keys and values of HTTP/2-compliant headers
+   * @return the interleaved keys and values in the raw serialized format
    */
   public static byte[][] toRawSerializedHeaders(byte[][] http2Headers) {
     byte[][] result = new byte[http2Headers.length][];
@@ -125,7 +128,7 @@ public final class TransportFrameUtil {
   }
 
   /**
-   * Returns true if <b>subject</b> ends with <b>suffix</b>.
+   * Returns {@code true} if {@code subject} ends with {@code suffix}.
    */
   private static boolean endsWith(byte[] subject, byte[] suffix) {
     int start = subject.length - suffix.length;
@@ -141,8 +144,8 @@ public final class TransportFrameUtil {
   }
 
   /**
-   * Returns true if <b>subject</b> contains only bytes that are spec-compliant ASCII characters and
-   * space.
+   * Returns {@code true} if {@code subject} contains only bytes that are spec-compliant ASCII
+   * characters and space.
    */
   private static boolean isSpecCompliantAscii(byte[] subject) {
     for (byte b : subject) {

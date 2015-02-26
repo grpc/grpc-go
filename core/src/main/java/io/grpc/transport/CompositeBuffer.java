@@ -41,7 +41,7 @@ import java.util.Queue;
  * A {@link Buffer} that is composed of 0 or more {@link Buffer}s. This provides a facade that
  * allows multiple buffers to be treated as one.
  *
- * <p>When a buffer is added to a composite, it's life cycle is controlled by the composite. Once
+ * <p>When a buffer is added to a composite, its life cycle is controlled by the composite. Once
  * the composite has read past the end of a given buffer, that buffer is automatically closed and
  * removed from the composite.
  */
@@ -52,9 +52,9 @@ public class CompositeBuffer extends AbstractBuffer {
 
   /**
    * Adds a new {@link Buffer} at the end of the buffer list. After a buffer is added, it is
-   * expected that this {@link CompositeBuffer} has complete ownership. Any attempt to modify the
+   * expected that this {@code CompositeBuffer} has complete ownership. Any attempt to modify the
    * buffer (i.e. modifying the readable bytes) may result in corruption of the internal state of
-   * this {@link CompositeBuffer}.
+   * this {@code CompositeBuffer}.
    */
   public void addBuffer(Buffer buffer) {
     if (!(buffer instanceof CompositeBuffer)) {

@@ -66,6 +66,9 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
     id(id);
   }
 
+  /**
+   * Sets the listener to receive notifications.
+   */
   public final void setListener(ServerStreamListener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");
   }
@@ -120,6 +123,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    *
    * @param frame the inbound HTTP/2 DATA frame. If this buffer is not used immediately, it must
    *              be retained.
+   * @param endOfStream {@code true} if no more data will be received on the stream.
    */
   public void inboundDataReceived(Buffer frame, boolean endOfStream) {
     if (inboundPhase() == Phase.STATUS) {
@@ -151,7 +155,8 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
 
   /**
    * Sends response headers to the remote end points.
-   * @param headers to be sent to client.
+   *
+   * @param headers the headers to be sent to client.
    */
   protected abstract void internalSendHeaders(Metadata.Headers headers);
 
@@ -168,16 +173,16 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    * Sends trailers to the remote end point. This call implies end of stream.
    *
    * @param trailers metadata to be sent to end point
-   * @param headersSent true if response headers have already been sent.
+   * @param headersSent {@code true} if response headers have already been sent.
    */
   protected abstract void sendTrailers(Metadata.Trailers trailers, boolean headersSent);
 
   /**
-   * The Stream is considered completely closed and there is no further opportunity for error. It
-   * calls the listener's {@code closed()} if it was not already done by {@link #abortStream}. Note
-   * that it is expected that either {@code closed()} or {@code abortStream()} was previously
-   * called, since {@code closed()} is required for a normal stream closure and {@code
-   * abortStream()} for abnormal.
+   * Indicates the stream is considered completely closed and there is no further opportunity for
+   * error. It calls the listener's {@code closed()} if it was not already done by {@link
+   * #abortStream}. Note that it is expected that either {@code closed()} or {@code abortStream()}
+   * was previously called, since {@code closed()} is required for a normal stream closure and
+   * {@code abortStream()} for abnormal.
    */
   public void complete() {
     if (!gracefulClose) {
@@ -203,9 +208,9 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    * transport. The transport should use this method instead of {@code close(Status)} for internal
    * errors to prevent exposing unexpected states and exceptions to the application.
    *
-   * @param status the error status. Must not be Status.OK.
-   * @param notifyClient true if the stream is still writable and you want to notify the client
-   *                     about stream closure and send the status
+   * @param status the error status. Must not be {@link Status#OK}.
+   * @param notifyClient {@code true} if the stream is still writable and you want to notify the
+   *        client about stream closure and send the status
    */
   public final void abortStream(Status status, boolean notifyClient) {
     // TODO(louiscryan): Investigate whether we can remove the notification to the client

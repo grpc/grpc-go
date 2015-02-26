@@ -39,11 +39,19 @@ import java.nio.ByteBuffer;
 
 /**
  * Base class for a wrapper around another {@link Buffer}.
+ *
+ * <p>This class just passes every operation through to the underlying buffer. Subclasses may
+ * override methods to intercept concertain operations.
  */
 public abstract class ForwardingBuffer implements Buffer {
 
   private final Buffer buf;
 
+  /**
+   * Constructor.
+   *
+   * @param buf the underlying buffer
+   */
   public ForwardingBuffer(Buffer buf) {
     this.buf = Preconditions.checkNotNull(buf, "buf");
   }

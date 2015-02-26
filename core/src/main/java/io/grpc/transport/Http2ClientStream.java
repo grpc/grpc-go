@@ -74,6 +74,11 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
     super(listener);
   }
 
+  /**
+   * Called by subclasses whenever {@code Headers} are received from the transport.
+   *
+   * @param headers the received headers
+   */
   protected void transportHeadersReceived(Metadata.Headers headers) {
     Preconditions.checkNotNull(headers);
     if (transportError != null) {
@@ -101,6 +106,12 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
     }
   }
 
+  /**
+   * Called by subclasses whenever a data frame is received from the transport.
+   *
+   * @param frame the received data frame
+   * @param endOfStream {@code true} if there will be no more data received for this stream
+   */
   protected void transportDataReceived(Buffer frame, boolean endOfStream) {
     if (transportError == null && inboundPhase() == Phase.HEADERS) {
       // Must receive headers prior to receiving any payload as we use headers to check for
@@ -132,7 +143,9 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
   }
 
   /**
-   * Called by transports for the terminal headers block on a stream.
+   * Called by subclasses for the terminal trailer metadata on a stream.
+   *
+   * @param trailers the received terminal trailer metadata
    */
   protected void transportTrailersReceived(Metadata.Trailers trailers) {
     Preconditions.checkNotNull(trailers);

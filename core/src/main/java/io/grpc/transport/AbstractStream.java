@@ -99,8 +99,8 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   /**
-   * Returns the internal id for this stream. Note that Id can be {@code null} for client streams
-   * as the transport may defer creating the stream to the remote side until is has payload or
+   * Returns the internal ID for this stream. Note that ID can be {@code null} for client streams
+   * as the transport may defer creating the stream to the remote side until it has a payload or
    * metadata to send.
    */
   @Nullable
@@ -109,7 +109,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   /**
-   * Set the internal id for this stream
+   * Set the internal ID for this stream
    */
   public void id(IdT id) {
     Preconditions.checkState(id != null, "Can only set id once");
@@ -150,13 +150,12 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   /**
-   * Free any resources associated with this stream. Subclass implementations must call this
+   * Frees any resources associated with this stream. Subclass implementations must call this
    * version.
-   * <p>
-   * NOTE. Can be called by both the transport thread and the application thread. Transport
+   *
+   * <p> NOTE: Can be called by both the transport thread and the application thread. Transport
    * threads need to dispose when the remote side has terminated the stream. Application threads
    * will dispose when the application decides to close the stream as part of normal processing.
-   * </p>
    */
   public void dispose() {
     framer.dispose();
@@ -171,13 +170,21 @@ public abstract class AbstractStream<IdT> implements Stream {
    */
   protected abstract void internalSendFrame(ByteBuffer frame, boolean endOfStream);
 
-  /** A message was deframed. */
+  /**
+   * Handles a message that was just deframed.
+   *
+   * @param is the stream containing the message
+   */
   protected abstract void receiveMessage(InputStream is);
 
-  /** Deframer has no pending deliveries. */
+  /**
+   * Handles the event that the deframer has no pending deliveries.
+   */
   protected abstract void inboundDeliveryPaused();
 
-  /** Deframer reached end of stream. */
+  /**
+   * Handles the event that the deframer has reached end of stream.
+   */
   protected abstract void remoteEndClosed();
 
   /**
@@ -188,6 +195,8 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   /**
    * Called when a {@link #deframe(Buffer, boolean)} operation failed.
+   *
+   * @param cause the actual failure
    */
   protected abstract void deframeFailed(Throwable cause);
 
@@ -236,7 +245,8 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   /**
    * Transitions the inbound phase to the given phase and returns the previous phase.
-   * If the transition is disallowed, throws an {@link IllegalStateException}.
+   *
+   * @throws IllegalStateException if the transition is disallowed
    */
   final Phase inboundPhase(Phase nextPhase) {
     Phase tmp = inboundPhase;
@@ -250,7 +260,8 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   /**
    * Transitions the outbound phase to the given phase and returns the previous phase.
-   * If the transition is disallowed, throws an {@link IllegalStateException}.
+   *
+   * @throws IllegalStateException if the transition is disallowed
    */
   final Phase outboundPhase(Phase nextPhase) {
     Phase tmp = outboundPhase;
@@ -267,23 +278,23 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   /**
-   * Can the stream receive data from its remote peer.
+   * Returns {@code true} if the stream can receive data from its remote peer.
    */
   public boolean canReceive() {
     return inboundPhase() != Phase.STATUS;
   }
 
   /**
-   * Can the stream send data to its remote peer.
+   * Returns {@code true} if the stream can send data to its remote peer.
    */
   public boolean canSend() {
     return outboundPhase() != Phase.STATUS;
   }
 
   /**
-   * Is the stream fully closed. Note that this method is not thread-safe as inboundPhase and
-   * outboundPhase are mutated in different threads. Tests must account for thread coordination
-   * when calling.
+   * Whether the stream is fully closed. Note that this method is not thread-safe as {@code
+   * inboundPhase} and {@code outboundPhase} are mutated in different threads. Tests must account
+   * for thread coordination when calling.
    */
   @VisibleForTesting
   public boolean isClosed() {
