@@ -101,7 +101,7 @@ func New(m map[string]string) MD {
 // Pairs panics if len(kv) is odd.
 func Pairs(kv ...string) MD {
 	if len(kv)%2 == 1 {
-		panic(fmt.Sprintf("metadata: Paris got the odd number of input pairs for metadata: %d", len(kv)))
+		panic(fmt.Sprintf("metadata: Pairs got the odd number of input pairs for metadata: %d", len(kv)))
 	}
 	md := MD{}
 	var k string
