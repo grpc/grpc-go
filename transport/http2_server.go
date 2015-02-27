@@ -65,7 +65,6 @@ type http2Server struct {
 	// shutdownChan is closed when Close is called.
 	// Blocking operations should select on shutdownChan to avoid
 	// blocking forever after Close.
-	// TODO(zhaoq): Maybe have a channel context?
 	shutdownChan chan struct{}
 	framer       *http2.Framer
 	hBuf         *bytes.Buffer  // the buffer for HPACK encoding
