@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.examples;
+package io.grpc.examples.routeguide;
 
 import static java.lang.Math.atan2;
 import static java.lang.Math.cos;
@@ -41,11 +41,6 @@ import static java.lang.Math.toRadians;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import io.grpc.ServerImpl;
-import io.grpc.examples.RouteGuideOuterClass.Feature;
-import io.grpc.examples.RouteGuideOuterClass.Point;
-import io.grpc.examples.RouteGuideOuterClass.Rectangle;
-import io.grpc.examples.RouteGuideOuterClass.RouteNote;
-import io.grpc.examples.RouteGuideOuterClass.RouteSummary;
 import io.grpc.stub.StreamObserver;
 import io.grpc.transport.netty.NettyServerBuilder;
 

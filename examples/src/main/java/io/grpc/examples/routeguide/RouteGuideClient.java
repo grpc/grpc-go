@@ -29,18 +29,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.examples;
+package io.grpc.examples.routeguide;
 
 import com.google.common.util.concurrent.SettableFuture;
 
 import io.grpc.ChannelImpl;
-import io.grpc.examples.RouteGuideGrpc.RouteGuideBlockingStub;
-import io.grpc.examples.RouteGuideGrpc.RouteGuideStub;
-import io.grpc.examples.RouteGuideOuterClass.Feature;
-import io.grpc.examples.RouteGuideOuterClass.Point;
-import io.grpc.examples.RouteGuideOuterClass.Rectangle;
-import io.grpc.examples.RouteGuideOuterClass.RouteNote;
-import io.grpc.examples.RouteGuideOuterClass.RouteSummary;
+import io.grpc.examples.routeguide.RouteGuideGrpc.RouteGuideBlockingStub;
+import io.grpc.examples.routeguide.RouteGuideGrpc.RouteGuideStub;
 import io.grpc.stub.StreamObserver;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;

@@ -1,8 +1,6 @@
-package io.grpc.examples;
+package io.grpc.examples.helloworld;
 
 import io.grpc.ServerImpl;
-import io.grpc.examples.Helloworld.HelloReply;
-import io.grpc.examples.Helloworld.HelloRequest;
 import io.grpc.stub.StreamObserver;
 import io.grpc.transport.netty.NettyServerBuilder;
 
@@ -51,8 +49,8 @@ public class HelloWorldServer {
   private class GreeterImpl implements GreeterGrpc.Greeter {
 
     @Override
-    public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
-      HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
+    public void sayHello(HelloRequest req, StreamObserver<HelloResponse> responseObserver) {
+      HelloResponse reply = HelloResponse.newBuilder().setMessage("Hello " + req.getName()).build();
       responseObserver.onValue(reply);
       responseObserver.onCompleted();
     }
