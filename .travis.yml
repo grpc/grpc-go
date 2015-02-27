@@ -1,9 +1,6 @@
 language: go
 
 install:
-  - export GOPATH="$HOME/gopath"
-  - mkdir -p "$GOPATH/src/google.golang.org"
-  - mv "$TRAVIS_BUILD_DIR" "$GOPATH/src/google.golang.org/grpc"
   - go get -v -t -d google.golang.org/grpc/...
 
 script:
