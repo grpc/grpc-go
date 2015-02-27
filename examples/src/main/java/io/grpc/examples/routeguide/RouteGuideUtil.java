@@ -29,10 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.examples;
-
-import io.grpc.examples.RouteGuideOuterClass.Feature;
-import io.grpc.examples.RouteGuideOuterClass.Point;
+package io.grpc.examples.routeguide;
 
 import java.io.IOException;
 import java.io.InputStream;

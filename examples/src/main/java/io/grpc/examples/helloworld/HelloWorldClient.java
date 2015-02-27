@@ -1,8 +1,6 @@
-package io.grpc.examples;
+package io.grpc.examples.helloworld;
 
 import io.grpc.ChannelImpl;
-import io.grpc.examples.Helloworld.HelloReply;
-import io.grpc.examples.Helloworld.HelloRequest;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 
@@ -33,9 +31,9 @@ public class HelloWorldClient {
   public void greet(String name) {
     try {
       logger.info("Will try to greet " + name + " ...");
-      HelloRequest req = HelloRequest.newBuilder().setName(name).build();
-      HelloReply reply = blockingStub.sayHello(req);
-      logger.info("Greeting: " + reply.getMessage());
+      HelloRequest request = HelloRequest.newBuilder().setName(name).build();
+      HelloResponse response = blockingStub.sayHello(request);
+      logger.info("Greeting: " + response.getMessage());
     } catch (RuntimeException e) {
       logger.log(Level.WARNING, "RPC failed", e);
       return;
