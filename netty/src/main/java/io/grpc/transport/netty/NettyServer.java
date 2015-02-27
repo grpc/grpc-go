@@ -66,13 +66,15 @@ public class NettyServer extends AbstractService {
 
   NettyServer(ServerListener serverListener, SocketAddress address,
       Class<? extends ServerChannel> channelType, EventLoopGroup bossGroup,
-      EventLoopGroup workerGroup) {
-    this(serverListener, address, channelType, bossGroup, workerGroup, null);
+      EventLoopGroup workerGroup, int maxStreamsPerConnection) {
+    this(serverListener, address, channelType, bossGroup, workerGroup, null,
+        maxStreamsPerConnection);
   }
 
   NettyServer(final ServerListener serverListener, SocketAddress address,
       Class<? extends ServerChannel> channelType, EventLoopGroup bossGroup,
-      EventLoopGroup workerGroup, @Nullable final SslContext sslContext) {
+      EventLoopGroup workerGroup, @Nullable final SslContext sslContext,
+      final int maxStreamsPerConnection) {
     this.address = address;
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
     this.bossGroup = Preconditions.checkNotNull(bossGroup, "bossGroup");
@@ -80,7 +82,8 @@ public class NettyServer extends AbstractService {
     this.channelInitializer = new ChannelInitializer<Channel>() {
       @Override
       public void initChannel(Channel ch) throws Exception {
-        NettyServerTransport transport = new NettyServerTransport(ch, serverListener, sslContext);
+        NettyServerTransport transport
+            = new NettyServerTransport(ch, serverListener, sslContext, maxStreamsPerConnection);
         // TODO(ejona86): Ideally we wouldn't handle handler registration asyncly and then be forced
         // to block for completion on another thread. This should be resolved as part of removing
         // Service from server transport.

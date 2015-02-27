@@ -57,6 +57,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
   private EventLoopGroup userBossEventLoopGroup;
   private EventLoopGroup userWorkerEventLoopGroup;
   private SslContext sslContext;
+  private int maxConcurrentCallsPerConnection = Integer.MAX_VALUE;
 
   /**
    * Creates a server builder that will bind to the given port.
@@ -165,6 +166,16 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
     return this;
   }
 
+  /**
+   * The maximum number of concurrent calls permitted for each incoming connection. Defaults to no
+   * limit.
+   */
+  public NettyServerBuilder maxConcurrentCallsPerConnection(int maxCalls) {
+    Preconditions.checkArgument(maxCalls > 0, "max must be positive: %s", maxCalls);
+    this.maxConcurrentCallsPerConnection = maxCalls;
+    return this;
+  }
+
   @Override
   protected Service buildTransportServer(ServerListener serverListener) {
     final EventLoopGroup bossEventLoopGroup  = (userBossEventLoopGroup == null)
@@ -173,7 +184,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
         ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP)
         : userWorkerEventLoopGroup;
     NettyServer server = new NettyServer(serverListener, address, channelType, bossEventLoopGroup,
-        workerEventLoopGroup, sslContext);
+        workerEventLoopGroup, sslContext, maxConcurrentCallsPerConnection);
     if (userBossEventLoopGroup == null) {
       server.addListener(new ClosureHook() {
         @Override

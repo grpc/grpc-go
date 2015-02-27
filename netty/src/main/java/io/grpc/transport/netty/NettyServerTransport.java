@@ -65,12 +65,14 @@ class NettyServerTransport extends AbstractService {
   private final ServerListener serverListener;
   private final SslContext sslContext;
   private NettyServerHandler handler;
+  private int maxStreams;
 
   NettyServerTransport(Channel channel, ServerListener serverListener,
-      @Nullable SslContext sslContext) {
+      @Nullable SslContext sslContext, int maxStreams) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
     this.serverListener = Preconditions.checkNotNull(serverListener, "serverListener");
     this.sslContext = sslContext;
+    this.maxStreams = maxStreams;
   }
 
   @Override
@@ -133,6 +135,6 @@ class NettyServerTransport extends AbstractService {
     DefaultHttp2LocalFlowController inboundFlow =
         new DefaultHttp2LocalFlowController(connection, frameWriter);
     return new NettyServerHandler(transportListener, connection, frameReader, frameWriter,
-        inboundFlow);
+        inboundFlow, maxStreams);
   }
 }

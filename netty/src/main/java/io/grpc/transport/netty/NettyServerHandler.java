@@ -90,12 +90,14 @@ class NettyServerHandler extends Http2ConnectionHandler {
       Http2Connection connection,
       Http2FrameReader frameReader,
       Http2FrameWriter frameWriter,
-      Http2LocalFlowController inboundFlow) {
+      Http2LocalFlowController inboundFlow,
+      int maxStreams) {
     super(connection, frameReader, frameWriter, new LazyFrameListener());
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
     this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
     initListener();
     connection.local().allowPushTo(false);
+    connection.remote().maxActiveStreams(maxStreams);
   }
 
   @Nullable

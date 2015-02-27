@@ -44,6 +44,7 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -63,7 +64,10 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
+import io.netty.channel.DefaultChannelPromise;
 import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
@@ -261,6 +265,38 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     verify(ctx).close();
   }
 
+  @Test
+  public void shouldAdvertiseMaxConcurrentStreams() throws Exception {
+    final int maxConcurrentStreams = 314;
+    channel = mock(Channel.class);
+    Http2FrameWriter frameWriter = mock(Http2FrameWriter.class);
+    {
+      Http2Connection connection = new DefaultHttp2Connection(true);
+      DefaultHttp2LocalFlowController inboundFlow =
+          new DefaultHttp2LocalFlowController(connection, frameWriter);
+      handler = new NettyServerHandler( transportListener, connection,
+          new DefaultHttp2FrameReader(), frameWriter, inboundFlow, maxConcurrentStreams);
+    }
+
+    when(channel.isActive()).thenReturn(true);
+    mockContext();
+    mockFuture(true);
+
+    when(frameWriter.writeSettings(
+        any(ChannelHandlerContext.class), any(Http2Settings.class), any(ChannelPromise.class)))
+          .thenReturn(new DefaultChannelPromise(channel).setSuccess());
+    when(channel.alloc()).thenReturn(UnpooledByteBufAllocator.DEFAULT);
+
+    // Simulate activation of the handler to force writing of the initial settings
+    handler.handlerAdded(ctx);
+    ArgumentCaptor<Http2Settings> captor = ArgumentCaptor.forClass(Http2Settings.class);
+    verify(frameWriter).writeSettings(
+        any(ChannelHandlerContext.class), captor.capture(), any(ChannelPromise.class));
+
+    Http2Settings settings = captor.getValue();
+    assertEquals(maxConcurrentStreams, settings.maxConcurrentStreams().intValue());
+  }
+
   private void createStream() throws Exception {
     Http2Headers headers = new DefaultHttp2Headers()
         .method(HTTP_METHOD)
@@ -317,10 +353,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
     DefaultHttp2LocalFlowController inboundFlow =
         new DefaultHttp2LocalFlowController(connection, frameWriter);
-    return new NettyServerHandler(transportListener,
-        connection,
-        frameReader,
-        frameWriter,
-        inboundFlow);
+    return new NettyServerHandler(transportListener, connection, frameReader, frameWriter,
+        inboundFlow, Integer.MAX_VALUE);
   }
 }
