@@ -1,5 +1,7 @@
 #gRPC-Go
 
+[![Build Status](https://travis-ci.org/grpc/grpc-go.svg)](https://travis-ci.org/grpc/grpc-go)
+
 The Go implementation of [gRPC](https://github.com/grpc/grpc)
 
 Installation
