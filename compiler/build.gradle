@@ -1,6 +1,8 @@
 apply plugin: "cpp"
 apply plugin: "protobuf"
 
+import org.apache.tools.ant.taskdefs.condition.Os
+
 description = 'The protoc plugin for gRPC Java'
 
 buildscript {
@@ -34,17 +36,36 @@ binaries.all {
     if (System.env.LDFLAGS) {
       linker.args System.env.LDFLAGS
     }
+  } else if (toolChain in VisualCpp) {
+    cppCompiler.args "/EHsc", "/MD"
+    if (rootProject.hasProperty('protobuf.include')) {
+      cppCompiler.args "/I" + rootProject.properties['protobuf.include']
+    }
+    linker.args "libprotobuf.lib", "libprotoc.lib"
+    if (rootProject.hasProperty('protobuf.libs')) {
+      linker.args "/LIBPATH:" + rootProject.properties['protobuf.libs']
+    }
   }
 }
 
-protobufCodeGenPlugins = ["java_plugin:$buildDir/binaries/java_pluginExecutable/java_plugin"]
+protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
 
 generateTestProto.dependsOn 'java_pluginExecutable'
-test.dependsOn('testGolden','testNanoGolden')
+// Ignore test for the moment on Windows. It will be easier to run once the
+// gradle protobuf plugin can support nano.
+if (!Os.isFamily(Os.FAMILY_WINDOWS)) {
+  test.dependsOn('testGolden','testNanoGolden')
+}
 
 task testGolden(type: Exec, dependsOn: 'generateTestProto') {
-  executable "diff"
-  args "$buildDir/generated-sources/test/io/grpc/testing/integration/TestServiceGrpc.java",
+  if (!Os.isFamily(Os.FAMILY_WINDOWS)) {
+    executable "diff"
+  } else {
+    executable "fc"
+  }
+  // File isn't found on Windows if last slash is forward-slash
+  def slash = System.getProperty("file.separator")
+  args "$buildDir/generated-sources/test/io/grpc/testing/integration" + slash + "TestServiceGrpc.java",
        "$projectDir/src/test/golden/TestService.java.txt"
 }
 

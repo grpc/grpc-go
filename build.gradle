@@ -1,3 +1,5 @@
+import org.apache.tools.ant.taskdefs.condition.Os
+
 subprojects {
     apply plugin: "java"
     apply plugin: "maven"
@@ -51,6 +53,16 @@ subprojects {
         }
 
         alpnboot_package_name = 'org.mortbay.jetty.alpn:alpn-boot:' + alpnboot_version
+
+        def exeSuffix = Os.isFamily(Os.FAMILY_WINDOWS) ? ".exe" : ""
+        // The split is to workaround everything after the colon in C:\ being
+        // removed due to a bug in the protobuf plugin.
+        // https://github.com/aantono/gradle-plugin-protobuf/issues/23
+        def splitRootDir = rootDir
+        if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+          splitRootDir = splitRootDir.getPath().split(":", 2)[1]
+        }
+        javaPluginPath = "$splitRootDir/compiler/build/binaries/java_pluginExecutable/java_plugin$exeSuffix"
     }
 
     dependencies {

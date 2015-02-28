@@ -20,7 +20,7 @@ dependencies {
             libraries.jsonp
 }
 
-protobufCodeGenPlugins = ["java_plugin:$rootDir/compiler/build/binaries/java_pluginExecutable/java_plugin"]
+protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
 generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
 
 task routeGuideServer(type: JavaExec) {
