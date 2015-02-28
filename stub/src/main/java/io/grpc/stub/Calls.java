@@ -33,9 +33,9 @@ package io.grpc.stub;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
+import com.google.common.util.concurrent.AbstractFuture;
 import com.google.common.util.concurrent.ExecutionError;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 
 import io.grpc.Call;
@@ -45,12 +45,14 @@ import io.grpc.Status;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
+
+import javax.annotation.Nullable;
 
 /**
  * Utility functions for processing different call idioms. We have one-to-one correspondence
@@ -81,7 +83,7 @@ public class Calls {
   public static <ReqT, RespT> ListenableFuture<RespT> unaryFutureCall(
       Call<ReqT, RespT> call,
       ReqT param) {
-    SettableFuture<RespT> responseFuture = SettableFuture.create();
+    GrpcFuture<RespT> responseFuture = new GrpcFuture<RespT>(call);
     asyncServerStreamingCall(call, param, new UnaryStreamToFuture<RespT>(responseFuture));
     return responseFuture;
   }
@@ -188,7 +190,7 @@ public class Calls {
   public static <ReqT, RespT> RespT blockingClientStreamingCall(
       Call<ReqT, RespT> call,
       Iterator<ReqT> clientStream) {
-    SettableFuture<RespT> responseFuture = SettableFuture.create();
+    GrpcFuture<RespT> responseFuture = new GrpcFuture<RespT>(call);
     call.start(new UnaryStreamToFuture<RespT>(responseFuture), new Metadata.Headers());
     try {
       while (clientStream.hasNext()) {
@@ -285,13 +287,13 @@ public class Calls {
   }
 
   /**
-   * Complete a SettableFuture using {@link StreamObserver} events.
+   * Complete a GrpcFuture using {@link StreamObserver} events.
    */
   private static class UnaryStreamToFuture<RespT> extends Call.Listener<RespT> {
-    private final SettableFuture<RespT> responseFuture;
+    private final GrpcFuture<RespT> responseFuture;
     private RespT value;
 
-    public UnaryStreamToFuture(SettableFuture<RespT> responseFuture) {
+    public UnaryStreamToFuture(GrpcFuture<RespT> responseFuture) {
       this.responseFuture = responseFuture;
     }
 
@@ -321,6 +323,29 @@ public class Calls {
       } else {
         responseFuture.setException(status.asRuntimeException());
       }
+    }
+  }
+
+  private static class GrpcFuture<RespT> extends AbstractFuture<RespT> {
+    private final Call call;
+
+    GrpcFuture(Call call) {
+      this.call = call;
+    }
+
+    @Override
+    protected void interruptTask() {
+      call.cancel();
+    }
+
+    @Override
+    protected boolean set(@Nullable RespT resp) {
+      return super.set(resp);
+    }
+
+    @Override
+    protected boolean setException(Throwable throwable) {
+      return super.setException(throwable);
     }
   }
 
