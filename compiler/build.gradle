@@ -78,4 +78,7 @@ task testNanoGolden(type: Exec, dependsOn: 'java_pluginExecutable') {
   commandLine './src/test/run_nano_test.sh'
 }
 
-
+[
+    install.repositories.mavenInstaller,
+    uploadArchives.repositories.mavenDeployer,
+]*.addFilter('none') { artifact, file -> false }

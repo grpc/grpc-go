@@ -4,6 +4,7 @@ subprojects {
     apply plugin: "java"
     apply plugin: "maven"
     apply plugin: "idea"
+    apply plugin: "signing"
 
     group = "io.grpc"
     version = "0.1.0-SNAPSHOT"
@@ -42,7 +43,7 @@ subprojects {
 
                 // Test dependencies.
                 junit: 'junit:junit:4.11',
-                mockito: 'org.mockito:mockito-core:1.10.8'
+                mockito: 'org.mockito:mockito-core:1.10.19'
         ]
 
         // Determine the correct version of Jetty ALPN boot to use based
@@ -68,5 +69,65 @@ subprojects {
     dependencies {
         testCompile libraries.junit,
                     libraries.mockito
+    }
+
+    signing {
+        required false
+        sign configurations.archives
+    }
+
+    task javadocJar(type: Jar) {
+        classifier = 'javadoc'
+        from javadoc
+    }
+
+    task sourcesJar(type: Jar) {
+        classifier = 'sources'
+        from sourceSets.main.allSource
+    }
+
+    artifacts {
+        archives javadocJar, sourcesJar
+    }
+
+    uploadArchives.repositories.mavenDeployer {
+        beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+        repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+            if (rootProject.hasProperty("ossrhUsername")
+                    && rootProject.hasProperty("ossrhPassword")) {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+        }
+
+        snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+            if (rootProject.hasProperty("ossrhUsername")
+                    && rootProject.hasProperty("ossrhPassword")) {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+        }
+    }
+
+    [
+      install.repositories.mavenInstaller,
+      uploadArchives.repositories.mavenDeployer,
+    ]*.pom*.whenConfigured { pom ->
+        pom.project {
+            description project.description
+            url 'https://github.com/grpc/grpc-java'
+
+            scm {
+                connection 'scm:svn:https://github.com/grpc/grpc-java.git'
+                developerConnection 'scm:svn:git@github.com:grpc/grpc-java.git'
+                url 'https://github.com/grpc/grpc-java'
+            }
+
+            licenses {
+                license {
+                    name 'BSD 3-Clause'
+                    url 'http://opensource.org/licenses/BSD-3-Clause'
+                }
+            }
+        }
     }
 }
