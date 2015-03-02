@@ -84,9 +84,9 @@ func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
 
 // WithTimeout returns a DialOption which configures a timeout duration
 // for dialing or reconnecting.
-func WithTimeout(t time.Duration) DialOption {
+func WithTimeout(d time.Duration) DialOption {
 	return func(o *dialOptions) {
-		o.timeout = t
+		o.timeout = d
 	}
 }
 
