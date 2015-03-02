@@ -35,6 +35,7 @@ package transport
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log"
 	"math"
@@ -117,7 +118,7 @@ func newHTTP2Client(addr string, authOpts []credentials.Credentials) (_ ClientTr
 		conn, connErr = net.Dial("tcp", addr)
 	}
 	if connErr != nil {
-		return nil, ConnectionErrorf("grpc/transport: %v", connErr)
+		return nil, ConnectionErrorf("transport: %v", connErr)
 	}
 	defer func() {
 		if err != nil {
@@ -127,14 +128,14 @@ func newHTTP2Client(addr string, authOpts []credentials.Credentials) (_ ClientTr
 	// Send connection preface to server.
 	n, err := conn.Write(clientPreface)
 	if err != nil {
-		return nil, ConnectionErrorf("grpc/transport: %v", err)
+		return nil, ConnectionErrorf("transport: %v", err)
 	}
 	if n != len(clientPreface) {
-		return nil, ConnectionErrorf("grpc/transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
+		return nil, ConnectionErrorf("transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
 	}
 	framer := http2.NewFramer(conn, conn)
 	if err := framer.WriteSettings(); err != nil {
-		return nil, ConnectionErrorf("grpc/transport: %v", err)
+		return nil, ConnectionErrorf("transport: %v", err)
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
@@ -225,7 +226,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		default:
 		}
 		if err != nil {
-			return nil, StreamErrorf(codes.InvalidArgument, "grpc/transport: %v", err)
+			return nil, StreamErrorf(codes.InvalidArgument, "transport: %v", err)
 		}
 		for k, v := range m {
 			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
@@ -264,8 +265,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			err = t.framer.WriteContinuation(t.nextID, endHeaders, t.hBuf.Next(size))
 		}
 		if err != nil {
-			t.notifyError()
-			return nil, ConnectionErrorf("grpc/transport: %v", err)
+			t.notifyError(err)
+			return nil, ConnectionErrorf("transport: %v", err)
 		}
 	}
 	s := t.newStream(ctx, callHdr)
@@ -276,7 +277,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
-		return nil, StreamErrorf(codes.Unavailable, "grpc/transport: failed to create new stream because the limit has been reached.")
+		return nil, StreamErrorf(codes.Unavailable, "transport: failed to create new stream because the limit has been reached.")
 	}
 	t.activeStreams[s.id] = s
 	t.mu.Unlock()
@@ -315,6 +316,10 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 // accessed any more.
 func (t *http2Client) Close() (err error) {
 	t.mu.Lock()
+	if t.state == closing {
+		t.mu.Unlock()
+		return errors.New("transport: Close() was already called")
+	}
 	t.state = closing
 	t.mu.Unlock()
 	close(t.shutdownChan)
@@ -390,8 +395,8 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 		// by http2Client.Close(). No explicit CloseStream() needs to be
 		// invoked.
 		if err := t.framer.WriteData(s.id, endStream, p); err != nil {
-			t.notifyError()
-			return ConnectionErrorf("grpc/transport: %v", err)
+			t.notifyError(err)
+			return ConnectionErrorf("transport: %v", err)
 		}
 		t.writableChan <- 0
 		if r.Len() == 0 {
@@ -472,7 +477,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	s.state = streamDone
 	s.statusCode, ok = http2RSTErrConvTab[http2.ErrCode(f.ErrCode)]
 	if !ok {
-		log.Println("No gRPC status found for http2 error ", f.ErrCode)
+		log.Println("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error ", f.ErrCode)
 	}
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
@@ -487,11 +492,11 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
-	log.Println("PingFrame handler to be implemented")
+	// TODO(zhaoq): PingFrame handler to be implemented"
 }
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
-	log.Println("GoAwayFrame handler to be implemented")
+	// TODO(zhaoq): GoAwayFrame handler to be implemented"
 }
 
 func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {
@@ -560,12 +565,12 @@ func (t *http2Client) reader() {
 	// Check the validity of server preface.
 	frame, err := t.framer.ReadFrame()
 	if err != nil {
-		t.notifyError()
+		t.notifyError(err)
 		return
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		t.notifyError()
+		t.notifyError(err)
 		return
 	}
 	t.handleSettings(sf)
@@ -576,7 +581,7 @@ func (t *http2Client) reader() {
 	for {
 		frame, err := t.framer.ReadFrame()
 		if err != nil {
-			t.notifyError()
+			t.notifyError(err)
 			return
 		}
 		switch frame := frame.(type) {
@@ -605,7 +610,7 @@ func (t *http2Client) reader() {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		default:
-			log.Printf("http2Client: unhandled frame type %v.", frame)
+			log.Printf("transport: http2Client.reader got unhandled frame type %v.", frame)
 		}
 	}
 }
@@ -627,7 +632,7 @@ func (t *http2Client) controller() {
 				case *resetStream:
 					t.framer.WriteRSTStream(i.streamID, i.code)
 				default:
-					log.Printf("http2Client.controller got unexpected item type %v\n", i)
+					log.Printf("transport: http2Client.controller got unexpected item type %v\n", i)
 				}
 				t.writableChan <- 0
 				continue
@@ -644,12 +649,13 @@ func (t *http2Client) Error() <-chan struct{} {
 	return t.errorChan
 }
 
-func (t *http2Client) notifyError() {
+func (t *http2Client) notifyError(err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	// make sure t.errorChan is closed only once.
 	if t.state == reachable {
 		t.state = unreachable
 		close(t.errorChan)
+		log.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
 	}
 }

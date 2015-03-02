@@ -2,6 +2,8 @@
 The route guide server and client demonstrate how to use grpc go libraries to
 perform unary, client streaming, server streaming and full duplex RPCs.
 
+Please refer to [Getting Started Guide for Go] (https://github.com/grpc/grpc-common/blob/master/go/gotutorial.md) for more information.
+
 See the definition of the route guide service in proto/route_guide.proto.
 
 # Run the sample code
@@ -20,7 +22,7 @@ $ go run client/client.go
 
 # Optional command line flags
 The server and client both take optional command line flags. For example, the
-client and server run without TLS by default. To enable TSL:
+client and server run without TLS by default. To enable TLS:
 
 ```sh
 $ go run server/server.go -tls=true

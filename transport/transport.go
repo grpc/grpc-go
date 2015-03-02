@@ -186,7 +186,7 @@ type Stream struct {
 	// The key-value map of trailer metadata.
 	trailer metadata.MD
 
-	mu sync.RWMutex
+	mu sync.RWMutex // guard the following
 	// headerOK becomes true from the first header is about to send.
 	headerOk bool
 	state    streamState
@@ -247,7 +247,7 @@ func (s *Stream) StatusDesc() string {
 
 // ErrIllegalTrailerSet indicates that the trailer has already been set or it
 // is too late to do so.
-var ErrIllegalTrailerSet = errors.New("grpc/transport: trailer has been set")
+var ErrIllegalTrailerSet = errors.New("transport: trailer has been set")
 
 // SetTrailer sets the trailer metadata which will be sent with the RPC status
 // by the server. This can only be called at most once. Server side only.

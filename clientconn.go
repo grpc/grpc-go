@@ -35,6 +35,7 @@ package grpc
 
 import (
 	"errors"
+	"log"
 	"sync"
 	"time"
 
@@ -46,9 +47,9 @@ import (
 var (
 	// ErrUnspecTarget indicates that the target address is unspecified.
 	ErrUnspecTarget = errors.New("grpc: target is unspecified")
-	// ErrClosingChan indicates that the operation is illegal because the session
-	// is closing.
-	ErrClosingChan = errors.New("grpc: the channel is closing")
+	// ErrClientConnClosing indicates that the operation is illegal because
+	// the session is closing.
+	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
 )
 
 type dialOptions struct {
@@ -60,9 +61,9 @@ type dialOptions struct {
 // credentials.
 type DialOption func(*dialOptions)
 
-// WithClientTLS returns a DialOption which configures a TLS credentials
-// for connection.
-func WithClientTLS(creds credentials.TransportAuthenticator) DialOption {
+// WithTransportCredentials returns a DialOption which configures a
+// connection level security credentials (e.g., TLS/SSL).
+func WithTransportCredentials(creds credentials.TransportAuthenticator) DialOption {
 	return func(o *dialOptions) {
 		o.authOptions = append(o.authOptions, creds)
 	}
@@ -89,8 +90,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
-	err := cc.resetTransport(false)
-	if err != nil {
+	if err := cc.resetTransport(false); err != nil {
 		return nil, err
 	}
 	cc.shutdownChan = make(chan struct{})
@@ -127,7 +127,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		cc.transportSeq = 0
 		if cc.closing {
 			cc.mu.Unlock()
-			return ErrClosingChan
+			return ErrClientConnClosing
 		}
 		cc.mu.Unlock()
 		if closeTransport {
@@ -139,6 +139,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			closeTransport = false
 			time.Sleep(backoff(retries))
 			retries++
+			log.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
 			continue
 		}
 		cc.mu.Lock()
@@ -163,8 +164,7 @@ func (cc *ClientConn) transportMonitor() {
 		case <-cc.shutdownChan:
 			return
 		case <-cc.transport.Error():
-			err := cc.resetTransport(true)
-			if err != nil {
+			if err := cc.resetTransport(true); err != nil {
 				// The channel is closing.
 				return
 			}
@@ -182,7 +182,7 @@ func (cc *ClientConn) wait(ctx context.Context, ts int) (transport.ClientTranspo
 		switch {
 		case cc.closing:
 			cc.mu.Unlock()
-			return nil, 0, ErrClosingChan
+			return nil, 0, ErrClientConnClosing
 		case ts < cc.transportSeq:
 			// Worked on a dying transport. Try the new one immediately.
 			defer cc.mu.Unlock()

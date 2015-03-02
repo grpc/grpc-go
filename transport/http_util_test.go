@@ -75,9 +75,9 @@ func TestTimeoutDecode(t *testing.T) {
 		err error
 	}{
 		{"1234S", time.Second * 1234, nil},
-		{"1234x", 0, fmt.Errorf("grpc/transport: timeout unit is not recognized: %q", "1234x")},
-		{"1", 0, fmt.Errorf("grpc/transport: timeout string is too short: %q", "1")},
-		{"", 0, fmt.Errorf("grpc/transport: timeout string is too short: %q", "")},
+		{"1234x", 0, fmt.Errorf("transport: timeout unit is not recognized: %q", "1234x")},
+		{"1", 0, fmt.Errorf("transport: timeout string is too short: %q", "1")},
+		{"", 0, fmt.Errorf("transport: timeout string is too short: %q", "")},
 	} {
 		d, err := timeoutDecode(test.s)
 		if d != test.d || fmt.Sprint(err) != fmt.Sprint(test.err) {

@@ -175,7 +175,7 @@ func main() {
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
 		}
-		opts = append(opts, grpc.WithClientTLS(creds))
+		opts = append(opts, grpc.WithTransportCredentials(creds))
 	}
 	conn, err := grpc.Dial(*serverAddr, opts...)
 	if err != nil {
