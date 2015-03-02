@@ -31,7 +31,8 @@
 
 package io.grpc.auth;
 
-import com.google.api.client.auth.oauth2.Credential;
+import com.google.auth.Credentials;
+import com.google.common.base.Preconditions;
 
 import io.grpc.Call;
 import io.grpc.Channel;
@@ -39,40 +40,69 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors.ForwardingCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.Status;
 
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 
-import javax.inject.Provider;
+/**
+ * Client interceptor that authenticates all calls by binding header data provided by a credential.
+ * Typically this will populate the Authorization header but other headers may also be filled out.
+ *
+ * <p> Uses the new and simplified Google auth library:
+ * https://github.com/google/google-auth-library-java
+ */
+public class ClientAuthInterceptor implements ClientInterceptor {
 
-/** Client interceptor that authenticates all calls with OAuth2. */
-public class OAuth2ChannelInterceptor implements ClientInterceptor {
-  private static final Metadata.Key<String> AUTHORIZATION =
-      Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER);
+  private final Credentials credentials;
 
-  private final OAuth2AccessTokenProvider accessTokenProvider;
-  private final Provider<String> authorizationHeaderProvider
-      = new Provider<String>() {
-        @Override
-        public String get() {
-          return "Bearer " + accessTokenProvider.get();
-        }
-      };
+  private Metadata.Headers cached;
+  private Map<String, List<String>> lastMetadata;
 
-  public OAuth2ChannelInterceptor(Credential credential, Executor executor) {
-    this.accessTokenProvider = new OAuth2AccessTokenProvider(credential, executor);
+  public ClientAuthInterceptor(Credentials credentials, Executor executor) {
+    this.credentials = Preconditions.checkNotNull(credentials);
   }
 
   @Override
   public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-      Channel next) {
+                                                       Channel next) {
     // TODO(ejona86): If the call fails for Auth reasons, this does not properly propagate info that
     // would be in WWW-Authenticate, because it does not yet have access to the header.
     return new ForwardingCall<ReqT, RespT>(next.newCall(method)) {
       @Override
       public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
-        headers.put(AUTHORIZATION, authorizationHeaderProvider.get());
-        super.start(responseListener, headers);
+        try {
+          synchronized (this) {
+            // TODO(lryan): This is icky but the current auth library stores the same
+            // metadata map until the next refresh cycle. This will be fixed once
+            // https://github.com/google/google-auth-library-java/issues/3
+            // is resolved.
+            if (lastMetadata == null || lastMetadata != credentials.getRequestMetadata()) {
+              lastMetadata = credentials.getRequestMetadata();
+              cached = toHeaders(lastMetadata);
+            }
+          }
+          headers.merge(cached);
+          super.start(responseListener, headers);
+        } catch (IOException ioe) {
+          responseListener.onClose(Status.fromThrowable(ioe), new Metadata.Trailers());
+        }
       }
     };
+  }
+
+  private static final Metadata.Headers toHeaders(Map<String, List<String>> metadata) {
+    Metadata.Headers headers = new Metadata.Headers();
+    if (metadata != null) {
+      for (String key : metadata.keySet()) {
+        Metadata.Key<String> headerKey = Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER);
+        for (String value : metadata.get(key)) {
+          headers.put(headerKey, value);
+        }
+      }
+    }
+    return headers;
   }
 }
