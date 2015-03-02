@@ -194,12 +194,23 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 const tlsDir = "testdata/"
 
 func TestDialTimeout(t *testing.T) {
-	conn, err := grpc.Dial("localhost:0", grpc.WithTimeout(5*time.Microsecond))
+	lis, err := net.Listen("tcp", ":0")
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	_, port, err := net.SplitHostPort(lis.Addr().String())
+	if err != nil {
+		log.Fatalf("Failed to parse listener address: %v", err)
+	}
+	addr := "localhost:" + port
+	lis.Close() // Force lis to close before we connect.
+	conn, err := grpc.Dial(addr, grpc.WithTimeout(time.Millisecond))
 	if err == nil {
 		conn.Close()
 	}
-	if err != grpc.ErrTimeout {
-		t.Fatalf("Expected %v, got %v", grpc.ErrTimeout, err)
+	if err != grpc.ErrClientConnTimeout {
+		t.Fatalf("grpc.Dial(_, _) = %v, %v, want %v", conn, err, grpc.ErrClientConnTimeout)
 	}
 }
 

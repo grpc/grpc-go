@@ -36,7 +36,6 @@ package grpc
 import (
 	"errors"
 	"log"
-	"net"
 	"sync"
 	"time"
 
@@ -51,9 +50,9 @@ var (
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the session is closing.
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
-	// ErrTimeout indicates that the connection could not be established or
-	// re-established within the specified timeout.
-	ErrTimeout = errors.New("grpc: timed out trying to connect")
+	// ErrClientConnTimeout indicates that the connection could not be
+	//nestablished or re-established within the specified timeout.
+	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
 )
 
 type dialOptions struct {
@@ -82,7 +81,7 @@ func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
 	}
 }
 
-// WithTimeout returns a DialOption which configures a timeout duration
+// WithTimeout returns a DialOption that configures a timeout duration
 // for dialing or reconnecting.
 func WithTimeout(d time.Duration) DialOption {
 	return func(o *dialOptions) {
@@ -132,7 +131,7 @@ type ClientConn struct {
 
 func (cc *ClientConn) resetTransport(closeTransport bool) error {
 	var retries int
-	totime := time.Now().Add(cc.dopts.timeout)
+	start := time.Now()
 	for {
 		cc.mu.Lock()
 		t := cc.transport
@@ -151,16 +150,11 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		if err != nil {
 			// TODO(zhaoq): Record the error with glog.V.
 			closeTransport = false
-			if neterr, ok := err.(net.Error); ok {
-				if !neterr.Temporary() {
-					log.Printf("grpc: ClientConn.resetTransport permanently failed to create client transport: %v", err)
-				}
+			if d := cc.dopts.timeout; d > 0 && time.Since(start) > d {
+
+				return ErrClientConnTimeout
 			}
-			sdur := backoff(retries)
-			if cc.dopts.timeout > 0 && time.Now().Add(sdur).After(totime) {
-				return ErrTimeout
-			}
-			time.Sleep(sdur)
+			time.Sleep(backoff(retries))
 			retries++
 			log.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
 			continue
