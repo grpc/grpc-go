@@ -59,10 +59,10 @@ import (
 )
 
 var (
-	tls        = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
-	certFile   = flag.String("tls_cert_file", "testdata/server1.pem", "The TLS cert file")
-	keyFile    = flag.String("tls_key_file", "testdata/server1.key", "The TLS key file")
-	jsonDBFile = flag.String("route_guide_db", "testdata/route_guide_db.json", "A json file containing a list of features")
+	tls        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
+	certFile   = flag.String("cert_file", "testdata/server1.pem", "The TLS cert file")
+	keyFile    = flag.String("key_file", "testdata/server1.key", "The TLS key file")
+	jsonDBFile = flag.String("json_db_file", "testdata/route_guide_db.json", "A json file containing a list of features")
 	port       = flag.Int("port", 10000, "The server port")
 )
 
@@ -144,7 +144,6 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 		key := serialize(in.Location)
 		if _, present := s.routeNotes[key]; !present {
 			s.routeNotes[key] = []*pb.RouteNote{in}
-
 		} else {
 			s.routeNotes[key] = append(s.routeNotes[key], in)
 		}
@@ -162,7 +161,7 @@ func (s *routeGuideServer) loadFeatures(filePath string) {
 	if err != nil {
 		log.Fatal("Failed to load default features: %v", err)
 	}
-	if err := json.Unmarshal(file, &(s.savedFeatures)); err != nil {
+	if err := json.Unmarshal(file, &s.savedFeatures); err != nil {
 		log.Fatal("Failed to load default features: %v", err)
 	}
 }
@@ -216,7 +215,7 @@ func serialize(point *pb.Point) string {
 func newServer() *routeGuideServer {
 	s := new(routeGuideServer)
 	s.loadFeatures(*jsonDBFile)
-	s.routeNotes = make(map[string][]*pb.RouteNote, 0)
+	s.routeNotes = make(map[string][]*pb.RouteNote)
 	return s
 }
 
