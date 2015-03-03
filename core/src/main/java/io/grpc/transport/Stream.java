@@ -43,7 +43,7 @@ import javax.annotation.Nullable;
 public interface Stream {
   /**
    * Requests up to the given number of messages from the call to be delivered to
-   * {@link StreamListener#messageRead(java.io.InputStream, int)}. No additional messages will be
+   * {@link StreamListener#messageRead(java.io.InputStream)}. No additional messages will be
    * delivered.
    *
    * @param numMessages the requested number of messages to be delivered to the listener.

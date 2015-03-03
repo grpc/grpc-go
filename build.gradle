@@ -76,6 +76,15 @@ subprojects {
         sign configurations.archives
     }
 
+    // Disable JavaDoc doclint on Java 8. It's annoying.
+    if (JavaVersion.current().isJava8Compatible()) {
+      allprojects {
+        tasks.withType(Javadoc) {
+          options.addStringOption('Xdoclint:none', '-quiet')
+        }
+      }
+    }
+
     task javadocJar(type: Jar) {
         classifier = 'javadoc'
         from javadoc
