@@ -96,13 +96,12 @@ type http2Client struct {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(addr string, authOpts []credentials.Credentials) (_ ClientTransport, err error) {
+func newHTTP2Client(addr string, authOpts []credentials.Credentials, timeout time.Duration) (_ ClientTransport, err error) {
 	var (
 		connErr error
 		conn    net.Conn
 	)
 	scheme := "http"
-	// TODO(zhaoq): Use DialTimeout instead.
 	for _, c := range authOpts {
 		if ccreds, ok := c.(credentials.TransportAuthenticator); ok {
 			scheme = "https"
@@ -110,15 +109,15 @@ func newHTTP2Client(addr string, authOpts []credentials.Credentials) (_ ClientTr
 			// multiple ones provided. Revisit this if it is not appropriate. Probably
 			// place the ClientTransport construction into a separate function to make
 			// things clear.
-			conn, connErr = ccreds.Dial(addr)
+			conn, connErr = ccreds.DialTimeout(addr, timeout)
 			break
 		}
 	}
 	if scheme == "http" {
-		conn, connErr = net.Dial("tcp", addr)
+		conn, connErr = net.DialTimeout("tcp", addr, timeout)
 	}
 	if connErr != nil {
-		return nil, ConnectionErrorf("transport: %v", connErr)
+		return nil, ConnectionErrorf(connErr, "transport: %v", connErr)
 	}
 	defer func() {
 		if err != nil {
@@ -128,14 +127,14 @@ func newHTTP2Client(addr string, authOpts []credentials.Credentials) (_ ClientTr
 	// Send connection preface to server.
 	n, err := conn.Write(clientPreface)
 	if err != nil {
-		return nil, ConnectionErrorf("transport: %v", err)
+		return nil, ConnectionErrorf(err, "transport: %v", err)
 	}
 	if n != len(clientPreface) {
-		return nil, ConnectionErrorf("transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
+		return nil, ConnectionErrorf(nil, "transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
 	}
 	framer := http2.NewFramer(conn, conn)
 	if err := framer.WriteSettings(); err != nil {
-		return nil, ConnectionErrorf("transport: %v", err)
+		return nil, ConnectionErrorf(err, "transport: %v", err)
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
@@ -266,7 +265,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 		if err != nil {
 			t.notifyError(err)
-			return nil, ConnectionErrorf("transport: %v", err)
+			return nil, ConnectionErrorf(err, "transport: %v", err)
 		}
 	}
 	s := t.newStream(ctx, callHdr)
@@ -396,7 +395,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 		// invoked.
 		if err := t.framer.WriteData(s.id, endStream, p); err != nil {
 			t.notifyError(err)
-			return ConnectionErrorf("transport: %v", err)
+			return ConnectionErrorf(err, "transport: %v", err)
 		}
 		t.writableChan <- 0
 		if r.Len() == 0 {

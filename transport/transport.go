@@ -44,6 +44,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -313,7 +314,12 @@ func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32) (Serv
 // NewClientTransport establishes the transport with the required protocol
 // and returns it to the caller.
 func NewClientTransport(protocol, target string, authOpts []credentials.Credentials) (ClientTransport, error) {
-	return newHTTP2Client(target, authOpts)
+	return NewClientTransportTimeout(protocol, target, authOpts, 0)
+}
+
+// NewClientTransportTimeout acts like NewClientTransport but takes a timeout.
+func NewClientTransportTimeout(protocol, target string, authOpts []credentials.Credentials, timeout time.Duration) (ClientTransport, error) {
+	return newHTTP2Client(target, authOpts, timeout)
 }
 
 // Options provides additional hints and information for message
@@ -386,10 +392,12 @@ func StreamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
 	}
 }
 
-// ConnectionErrorf creates an ConnectionError with the specified error description.
-func ConnectionErrorf(format string, a ...interface{}) ConnectionError {
+// ConnectionErrorf creates an ConnectionError with the specified error description
+// and underlying error, if there was one.
+func ConnectionErrorf(err error, format string, a ...interface{}) ConnectionError {
 	return ConnectionError{
 		Desc: fmt.Sprintf(format, a...),
+		Err:  err,
 	}
 }
 
@@ -397,6 +405,7 @@ func ConnectionErrorf(format string, a ...interface{}) ConnectionError {
 // entire connection and the retry of all the active streams.
 type ConnectionError struct {
 	Desc string
+	Err  error
 }
 
 func (e ConnectionError) Error() string {

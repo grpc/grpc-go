@@ -36,6 +36,7 @@ package grpc
 import (
 	"errors"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -51,8 +52,12 @@ var (
 	// the session is closing.
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
 	// ErrClientConnTimeout indicates that the connection could not be
-	//nestablished or re-established within the specified timeout.
+	// established or re-established within the specified timeout.
 	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
+	// ErrClientConnPermanentFailure indicates that the connection could
+	// not be established due to some permanent failure at the network
+	// level.
+	ErrClientConnPermanentFailure = errors.New("grpc: permanent failure trying to connect")
 )
 
 type dialOptions struct {
@@ -131,7 +136,6 @@ type ClientConn struct {
 
 func (cc *ClientConn) resetTransport(closeTransport bool) error {
 	var retries int
-	start := time.Now()
 	for {
 		cc.mu.Lock()
 		t := cc.transport
@@ -146,13 +150,17 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		if closeTransport {
 			t.Close()
 		}
-		newTransport, err := transport.NewClientTransport(cc.dopts.protocol, cc.target, cc.dopts.authOptions)
+		newTransport, err := transport.NewClientTransportTimeout(cc.dopts.protocol, cc.target, cc.dopts.authOptions, cc.dopts.timeout)
 		if err != nil {
 			// TODO(zhaoq): Record the error with glog.V.
 			closeTransport = false
-			if d := cc.dopts.timeout; d > 0 && time.Since(start) > d {
-
-				return ErrClientConnTimeout
+			if netErr, ok := err.(transport.ConnectionError).Err.(net.Error); ok {
+				if !netErr.Temporary() {
+					return ErrClientConnPermanentFailure
+				}
+				if netErr.Timeout() {
+					return ErrClientConnTimeout
+				}
 			}
 			time.Sleep(backoff(retries))
 			retries++

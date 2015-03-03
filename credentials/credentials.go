@@ -43,6 +43,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -74,6 +75,9 @@ type TransportAuthenticator interface {
 	// Dial connects to the given network address and does the authentication
 	// handshake specified by the corresponding authentication protocol.
 	Dial(addr string) (net.Conn, error)
+	// DialTimeout acts like Dial but takes a timeout. The timeout applies to
+	// connection and handshake as a whole.
+	DialTimeout(addr string, timeout time.Duration) (net.Conn, error)
 	// NewListener creates a listener which accepts connections with requested
 	// authentication handshake.
 	NewListener(lis net.Listener) net.Listener
@@ -104,7 +108,11 @@ func (c *tlsCreds) GetRequestMetadata(ctx context.Context) (map[string]string, e
 }
 
 // Dial connects to addr and performs TLS handshake.
-func (c *tlsCreds) Dial(addr string) (_ net.Conn, err error) {
+func (c *tlsCreds) Dial(addr string) (net.Conn, error) {
+	return c.DialTimeout(addr, 0)
+}
+
+func (c *tlsCreds) DialTimeout(addr string, timeout time.Duration) (_ net.Conn, err error) {
 	name := c.serverName
 	if name == "" {
 		name, _, err = net.SplitHostPort(addr)
@@ -112,7 +120,8 @@ func (c *tlsCreds) Dial(addr string) (_ net.Conn, err error) {
 			return nil, fmt.Errorf("credentials: failed to parse server address %v", err)
 		}
 	}
-	return tls.Dial("tcp", addr, &tls.Config{
+	d := &net.Dialer{Timeout: timeout}
+	return tls.DialWithDialer(d, "tcp", addr, &tls.Config{
 		RootCAs:    c.rootCAs,
 		NextProtos: alpnProtoStr,
 		ServerName: name,
