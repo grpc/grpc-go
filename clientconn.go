@@ -54,10 +54,6 @@ var (
 	// ErrClientConnTimeout indicates that the connection could not be
 	// established or re-established within the specified timeout.
 	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
-	// ErrClientConnPermanentFailure indicates that the connection could
-	// not be established due to some permanent failure at the network
-	// level.
-	ErrClientConnPermanentFailure = errors.New("grpc: permanent failure trying to connect")
 )
 
 type dialOptions struct {
@@ -154,13 +150,8 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		if err != nil {
 			// TODO(zhaoq): Record the error with glog.V.
 			closeTransport = false
-			if netErr, ok := err.(transport.ConnectionError).Err.(net.Error); ok {
-				if !netErr.Temporary() {
-					return ErrClientConnPermanentFailure
-				}
-				if netErr.Timeout() {
-					return ErrClientConnTimeout
-				}
+			if netErr, ok := err.(transport.ConnectionError).Err.(net.Error); ok && netErr.Timeout() {
+				return ErrClientConnTimeout
 			}
 			time.Sleep(backoff(retries))
 			retries++
