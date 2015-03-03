@@ -31,10 +31,13 @@
 
 package io.grpc.transport.netty;
 
+import static io.netty.util.CharsetUtil.UTF_8;
+
 import com.google.common.base.Preconditions;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.transport.HttpUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -82,6 +85,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private final Deque<PendingStream> pendingStreams = new ArrayDeque<PendingStream>();
   private final Http2LocalFlowController inboundFlow;
   private Throwable connectionError;
+  private Status goAwayStatus;
   private ChannelHandlerContext ctx;
 
   public NettyClientHandler(Http2Connection connection,
@@ -185,6 +189,23 @@ class NettyClientHandler extends Http2ConnectionHandler {
     stream.transportReportStatus(Status.UNKNOWN, false, new Metadata.Trailers());
   }
 
+  private void onGoAwayRead(long errorCode, ByteBuf debugData) {
+    Status status = HttpUtil.Http2Error.statusForCode((int) errorCode);
+    if (debugData.isReadable()) {
+      // If a debug message was provided, use it.
+      String msg = debugData.toString(UTF_8);
+      status = status.withDescription(msg);
+    }
+    goAwayStatus(status);
+  }
+
+  @Override
+  public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
+    goAwayStatus(Status.UNAVAILABLE.withDescription("Network channel closed by the client"));
+
+    super.close(ctx, promise);
+  }
+
   /**
    * Handler for the Channel shutting down.
    */
@@ -192,7 +213,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   public void channelInactive(ChannelHandlerContext ctx) throws Exception {
     try {
       // Fail any streams that are awaiting creation.
-      Status goAwayStatus = goAwayStatus().withDescription("network channel closed");
+      goAwayStatus(goAwayStatus().augmentDescription("Network channel closed"));
       failPendingStreams(goAwayStatus);
 
       // Report status to the application layer for any open streams
@@ -210,6 +231,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
       Http2Exception http2Ex) {
     // Save the error.
     connectionError = cause;
+    goAwayStatus(Status.fromThrowable(connectionError));
 
     super.onConnectionError(ctx, cause, http2Ex);
   }
@@ -317,7 +339,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
    */
   private void createPendingStreams() {
     Http2Connection connection = connection();
-    Http2Connection.Endpoint local = connection.local();
+    Http2Connection.Endpoint<Http2LocalFlowController> local = connection.local();
     Status goAwayStatus = goAwayStatus();
     while (!pendingStreams.isEmpty()) {
       final int streamId = local.nextStreamId();
@@ -362,10 +384,14 @@ class NettyClientHandler extends Http2ConnectionHandler {
    * Returns the appropriate status used to represent the cause for GOAWAY.
    */
   private Status goAwayStatus() {
-    if (connectionError != null) {
-      return Status.fromThrowable(connectionError);
+    if (goAwayStatus != null) {
+      return goAwayStatus;
     }
     return Status.UNAVAILABLE;
+  }
+
+  private void goAwayStatus(Status status) {
+    goAwayStatus = goAwayStatus == null ? status : goAwayStatus;
   }
 
   /**
@@ -451,6 +477,12 @@ class NettyClientHandler extends Http2ConnectionHandler {
     public void onRstStreamRead(ChannelHandlerContext ctx, int streamId, long errorCode)
         throws Http2Exception {
       handler.onRstStreamRead(streamId);
+    }
+
+    @Override
+    public void onGoAwayRead(ChannelHandlerContext ctx, int lastStreamId, long errorCode,
+        ByteBuf debugData) throws Http2Exception {
+      handler.onGoAwayRead(errorCode, debugData);
     }
   }
 }

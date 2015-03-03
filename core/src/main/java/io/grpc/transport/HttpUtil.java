@@ -121,5 +121,88 @@ public final class HttpUtil {
     return Status.UNKNOWN;
   }
 
+  /**
+   * All error codes identified by the HTTP/2 spec.
+   */
+  public enum Http2Error {
+    NO_ERROR(0x0, Status.INTERNAL),
+    PROTOCOL_ERROR(0x1, Status.INTERNAL),
+    INTERNAL_ERROR(0x2, Status.INTERNAL),
+    FLOW_CONTROL_ERROR(0x3, Status.INTERNAL),
+    SETTINGS_TIMEOUT(0x4, Status.INTERNAL),
+    STREAM_CLOSED(0x5, Status.INTERNAL),
+    FRAME_SIZE_ERROR(0x6, Status.INTERNAL),
+    REFUSED_STREAM(0x7, Status.UNAVAILABLE),
+    CANCEL(0x8, Status.CANCELLED),
+    COMPRESSION_ERROR(0x9, Status.INTERNAL),
+    CONNECT_ERROR(0xA, Status.INTERNAL),
+    ENHANCE_YOUR_CALM(0xB, Status.RESOURCE_EXHAUSTED.withDescription("Bandwidth exhausted")),
+    INADEQUATE_SECURITY(0xC, Status.PERMISSION_DENIED.withDescription("Permission denied as "
+        + "protocol is not secure enough to call")),
+    HTTP_1_1_REQUIRED(0xD, Status.UNKNOWN);
+
+    // Populate a mapping of code to enum value for quick look-up.
+    private static final Http2Error[] codeMap;
+    static {
+      Http2Error[] errors = Http2Error.values();
+      int size = (int) errors[errors.length - 1].code() + 1;
+      codeMap = new Http2Error[size];
+      for (Http2Error error : errors) {
+        int index = (int) error.code();
+        codeMap[index] = error;
+      }
+    }
+
+    private final int code;
+    private final Status status;
+
+    private Http2Error(int code, Status status) {
+      this.code = code;
+      this.status = status.augmentDescription("HTTP/2 error code: " + this.name());
+    }
+
+    /**
+     * Gets the code for this error used on the wire.
+     */
+    public long code() {
+      return code;
+    }
+
+    /**
+     * Gets the {@link Status} associated with this HTTP/2 code.
+     */
+    public Status status() {
+      return status;
+    }
+
+    /**
+     * Looks up the HTTP/2 error code enum value for the specified code.
+     *
+     * @param code an HTTP/2 error code value.
+     * @return the HTTP/2 error code enum or {@code null} if not found.
+     */
+    public static Http2Error forCode(long code) {
+      if (code >= codeMap.length || code < 0) {
+        return null;
+      }
+      return codeMap[(int) code];
+    }
+
+    /**
+     * Looks up the {@link Status} from the given HTTP/2 error code.
+     *
+     * @param errorCode the HTTP/2 error code.
+     * @return a {@link Status} representing the given error.
+     */
+    public static Status statusForCode(int code) {
+      Http2Error error = forCode(code);
+      if (error == null) {
+        return Status.UNKNOWN.withDescription("Unrecognized HTTP/2 error: " + code);
+      }
+
+      return error.status();
+    }
+  }
+
   private HttpUtil() {}
 }
