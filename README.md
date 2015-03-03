@@ -45,6 +45,20 @@ Now to build grpc-java itself:
 $ ./gradlew install
 ```
 
+When building on Windows and VC++, you need to specify project properties for
+Gradle to find protobuf:
+```
+.\gradlew install -Pprotobuf.include=C:\path\to\protobuf-3.0.0-alpha-2\src ^
+    -Pprotobuf.libs=C:\path\to\protobuf-3.0.0-alpha-2\vsprojects\Release
+```
+
+Since specifying those properties every build is bothersome, you can instead
+create %HOMEDRIVE%%HOMEPATH%\.gradle\gradle.properties with contents like:
+```
+protobuf.include=C:\\path\\to\\protobuf-3.0.0-alpha-2\\src
+protobuf.libs=C:\\path\\to\\protobuf-3.0.0-alpha-2\\vsprojects\\Release
+```
+
 Navigating Around the Source
 ----------------------------
 
