@@ -44,6 +44,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -310,10 +311,17 @@ func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32) (Serv
 	return newHTTP2Server(conn, maxStreams)
 }
 
-// NewClientTransport establishes the transport with the required protocol
+// DialOptions covers all relevant options for dial a client connection.
+type DialOptions struct {
+	Protocol    string
+	AuthOptions []credentials.Credentials
+	Timeout     time.Duration
+}
+
+// NewClientTransport establishes the transport with the required DialOptions
 // and returns it to the caller.
-func NewClientTransport(protocol, target string, authOpts []credentials.Credentials) (ClientTransport, error) {
-	return newHTTP2Client(target, authOpts)
+func NewClientTransport(target string, opts DialOptions) (ClientTransport, error) {
+	return newHTTP2Client(target, opts)
 }
 
 // Options provides additional hints and information for message

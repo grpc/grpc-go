@@ -36,6 +36,7 @@ package grpc
 import (
 	"errors"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -50,30 +51,35 @@ var (
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the session is closing.
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
+	// ErrClientConnTimeout indicates that the connection could not be
+	// established within the specified timeout.
+	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
 )
 
-type dialOptions struct {
-	protocol    string
-	authOptions []credentials.Credentials
-}
-
-// DialOption configures how we set up the connection including auth
-// credentials.
-type DialOption func(*dialOptions)
+// DialOption configures how we set up the connection.
+type DialOption func(*transport.DialOptions)
 
 // WithTransportCredentials returns a DialOption which configures a
 // connection level security credentials (e.g., TLS/SSL).
 func WithTransportCredentials(creds credentials.TransportAuthenticator) DialOption {
-	return func(o *dialOptions) {
-		o.authOptions = append(o.authOptions, creds)
+	return func(o *transport.DialOptions) {
+		o.AuthOptions = append(o.AuthOptions, creds)
 	}
 }
 
 // WithPerRPCCredentials returns a DialOption which sets
 // credentials which will place auth state on each outbound RPC.
 func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
-	return func(o *dialOptions) {
-		o.authOptions = append(o.authOptions, creds)
+	return func(o *transport.DialOptions) {
+		o.AuthOptions = append(o.AuthOptions, creds)
+	}
+}
+
+// WithTimeout returns a DialOption which configures a timeout for dialing a
+// client connection.
+func WithTimeout(d time.Duration) DialOption {
+	return func(o *transport.DialOptions) {
+		o.Timeout = d
 	}
 }
 
@@ -102,7 +108,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // ClientConn represents a client connection to an RPC service.
 type ClientConn struct {
 	target       string
-	dopts        dialOptions
+	dopts        transport.DialOptions
 	shutdownChan chan struct{}
 
 	mu sync.Mutex
@@ -119,6 +125,7 @@ type ClientConn struct {
 
 func (cc *ClientConn) resetTransport(closeTransport bool) error {
 	var retries int
+	start := time.Now()
 	for {
 		cc.mu.Lock()
 		t := cc.transport
@@ -133,12 +140,22 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		if closeTransport {
 			t.Close()
 		}
-		newTransport, err := transport.NewClientTransport(cc.dopts.protocol, cc.target, cc.dopts.authOptions)
+		// Adjust timeout for the current try.
+		if cc.dopts.Timeout > 0 {
+			cc.dopts.Timeout -= time.Since(start)
+			if cc.dopts.Timeout <= 0 {
+				return ErrClientConnTimeout
+			}
+		}
+		newTransport, err := transport.NewClientTransport(cc.target, cc.dopts)
 		if err != nil {
-			// TODO(zhaoq): Record the error with glog.V.
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				return ErrClientConnTimeout
+			}
 			closeTransport = false
 			time.Sleep(backoff(retries))
 			retries++
+			// TODO(zhaoq): Record the error with glog.V.
 			log.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
 			continue
 		}

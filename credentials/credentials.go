@@ -71,9 +71,15 @@ type Credentials interface {
 // TransportAuthenticator defines the common interface all supported transport
 // authentication protocols (e.g., TLS, SSL) must implement.
 type TransportAuthenticator interface {
-	// Dial connects to the given network address and does the authentication
-	// handshake specified by the corresponding authentication protocol.
-	Dial(addr string) (net.Conn, error)
+	// Dial connects to the given network address using net.Dial and then
+	// does the authentication handshake specified by the corresponding
+	// authentication protocol.
+	Dial(network, addr string) (net.Conn, error)
+	// DialWithDialer connects to the given network address using
+	// dialer.Dialand does the authentication handshake specified by the
+	// corresponding authentication protocol. Any timeout or deadline
+	// given in the dialer apply to connection and handshake as a whole.
+	DialWithDialer(dialer *net.Dialer, network, addr string) (net.Conn, error)
 	// NewListener creates a listener which accepts connections with requested
 	// authentication handshake.
 	NewListener(lis net.Listener) net.Listener
@@ -103,8 +109,7 @@ func (c *tlsCreds) GetRequestMetadata(ctx context.Context) (map[string]string, e
 	return nil, nil
 }
 
-// Dial connects to addr and performs TLS handshake.
-func (c *tlsCreds) Dial(addr string) (_ net.Conn, err error) {
+func (c *tlsCreds) DialWithDialer(dialer *net.Dialer, network, addr string) (_ net.Conn, err error) {
 	name := c.serverName
 	if name == "" {
 		name, _, err = net.SplitHostPort(addr)
@@ -112,11 +117,16 @@ func (c *tlsCreds) Dial(addr string) (_ net.Conn, err error) {
 			return nil, fmt.Errorf("credentials: failed to parse server address %v", err)
 		}
 	}
-	return tls.Dial("tcp", addr, &tls.Config{
+	return tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{
 		RootCAs:    c.rootCAs,
 		NextProtos: alpnProtoStr,
 		ServerName: name,
 	})
+}
+
+// Dial connects to addr and performs TLS handshake.
+func (c *tlsCreds) Dial(network, addr string) (_ net.Conn, err error) {
+	return c.DialWithDialer(new(net.Dialer), network, addr)
 }
 
 // NewListener creates a net.Listener with a TLS configuration constructed

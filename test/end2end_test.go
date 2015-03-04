@@ -193,6 +193,16 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 
 const tlsDir = "testdata/"
 
+func TestDialTimeout(t *testing.T) {
+	conn, err := grpc.Dial("Non-Existent.Server:80", grpc.WithTimeout(time.Millisecond))
+	if err == nil {
+		conn.Close()
+	}
+	if err != grpc.ErrClientConnTimeout {
+		t.Fatalf("grpc.Dial(_, _) = %v, %v, want %v", conn, err, grpc.ErrClientConnTimeout)
+	}
+}
+
 func setUp(useTLS bool, maxStream uint32) (s *grpc.Server, tc testpb.TestServiceClient) {
 	lis, err := net.Listen("tcp", ":0")
 	if err != nil {
