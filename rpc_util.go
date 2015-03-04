@@ -148,7 +148,9 @@ func encode(msg proto.Message, pf payloadFormat) ([]byte, error) {
 		}
 		length = uint32(len(b))
 	}
-	if err := binary.Write(&buf, binary.BigEndian, length); err != nil {
+	var szHdr [4]byte
+	binary.BigEndian.PutUint32(szHdr[:], length)
+	if _, err := buf.Write(szHdr[:]); err != nil {
 		return nil, err
 	}
 	if _, err := buf.Write(b); err != nil {
