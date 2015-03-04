@@ -162,7 +162,7 @@ func (s *routeGuideServer) loadFeatures(filePath string) {
 		log.Fatalf("Failed to load default features: %v", err)
 	}
 	if err := json.Unmarshal(file, &s.savedFeatures); err != nil {
-		log.Fatal("Failed to load default features: %v", err)
+		log.Fatalf("Failed to load default features: %v", err)
 	}
 }
 
