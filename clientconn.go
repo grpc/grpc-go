@@ -142,6 +142,10 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		}
 		// Adjust timeout for the current try.
 		dopts := cc.dopts
+		if dopts.Timeout < 0 {
+			cc.Close()
+			return ErrClientConnTimeout
+		}
 		if dopts.Timeout > 0 {
 			dopts.Timeout -= time.Since(start)
 			if dopts.Timeout <= 0 {
