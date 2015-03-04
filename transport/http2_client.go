@@ -114,11 +114,7 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 		}
 	}
 	if scheme == "http" {
-		if opts.Timeout > 0 {
-			conn, connErr = net.DialTimeout("tcp", addr, opts.Timeout)
-		} else {
-			conn, connErr = net.Dial("tcp", addr)
-		}
+		conn, connErr = net.DialTimeout("tcp", addr, opts.Timeout)
 	}
 	if connErr != nil {
 		return nil, connErr
