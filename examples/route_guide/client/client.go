@@ -63,9 +63,8 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	feature, err := client.GetFeature(context.Background(), point)
 	if err != nil {
 		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
-	} else {
-		log.Println(feature)
 	}
+	log.Println(feature)
 }
 
 // printFeatures lists all the features within the given bounding Rectangle.
