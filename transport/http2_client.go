@@ -117,7 +117,7 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 		conn, connErr = net.DialTimeout("tcp", addr, opts.Timeout)
 	}
 	if connErr != nil {
-		return nil, connErr
+		return nil, ConnectionErrorf("transport: %v", connErr)
 	}
 	defer func() {
 		if err != nil {

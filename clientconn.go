@@ -155,10 +155,6 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		}
 		newTransport, err := transport.NewClientTransport(cc.target, &dopts)
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				cc.Close()
-				return ErrClientConnTimeout
-			}
 			sleepTime := backoff(retries)
 			// Fail early before falling into sleep.
 			if cc.dopts.Timeout > 0 && cc.dopts.Timeout < sleepTime + time.Since(start) {
