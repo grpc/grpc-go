@@ -109,8 +109,7 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 			// multiple ones provided. Revisit this if it is not appropriate. Probably
 			// place the ClientTransport construction into a separate function to make
 			// things clear.
-			dialer := &net.Dialer{Timeout: opts.Timeout}
-			conn, connErr = ccreds.DialWithDialer(dialer, "tcp", addr)
+			conn, connErr = ccreds.DialWithDialer(&net.Dialer{Timeout: opts.Timeout}, "tcp", addr)
 			break
 		}
 	}
