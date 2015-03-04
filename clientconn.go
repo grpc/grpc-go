@@ -75,8 +75,7 @@ func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
 	}
 }
 
-// WithTimeout returns a DialOption which configures a timeout for dialing a
-// client connection.
+// WithTimeout returns a DialOption that configures a timeout for dialing a client connection.
 func WithTimeout(d time.Duration) DialOption {
 	return func(o *transport.DialOptions) {
 		o.Timeout = d
@@ -150,7 +149,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 				return ErrClientConnTimeout
 			}
 		}
-		newTransport, err := transport.NewClientTransport(cc.target, dopts)
+		newTransport, err := transport.NewClientTransport(cc.target, &dopts)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				cc.Close()
@@ -194,7 +193,7 @@ func (cc *ClientConn) transportMonitor() {
 			if err := cc.resetTransport(true); err != nil {
 				// The channel is closing.
 				// TODO(zhaoq): Record the error with glog.V.
-				log.Printf("grpc: transport exits due to %v", err)
+				log.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
 				return
 			}
 			continue

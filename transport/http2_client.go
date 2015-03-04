@@ -96,7 +96,7 @@ type http2Client struct {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(addr string, opts DialOptions) (_ ClientTransport, err error) {
+func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err error) {
 	var (
 		connErr error
 		conn    net.Conn
