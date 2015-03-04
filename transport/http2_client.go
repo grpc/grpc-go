@@ -102,7 +102,6 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 		conn    net.Conn
 	)
 	scheme := "http"
-	// TODO(zhaoq): Use DialTimeout instead.
 	for _, c := range opts.AuthOptions {
 		if ccreds, ok := c.(credentials.TransportAuthenticator); ok {
 			scheme = "https"
@@ -110,12 +109,8 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 			// multiple ones provided. Revisit this if it is not appropriate. Probably
 			// place the ClientTransport construction into a separate function to make
 			// things clear.
-			if opts.Timeout > 0 {
-				dialer := &net.Dialer{Timeout: opts.Timeout}
-				conn, connErr = ccreds.DialWithDialer(dialer, "tcp", addr)
-			} else {
-				conn, connErr = ccreds.Dial("tcp", addr)
-			}
+			dialer := &net.Dialer{Timeout: opts.Timeout}
+			conn, connErr = ccreds.DialWithDialer(dialer, "tcp", addr)
 			break
 		}
 	}

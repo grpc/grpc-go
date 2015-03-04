@@ -76,7 +76,7 @@ type TransportAuthenticator interface {
 	// authentication protocol.
 	Dial(network, addr string) (net.Conn, error)
 	// DialWithDialer connects to the given network address using
-	// dialer.Dialand does the authentication handshake specified by the
+	// dialer.Dial does the authentication handshake specified by the
 	// corresponding authentication protocol. Any timeout or deadline
 	// given in the dialer apply to connection and handshake as a whole.
 	DialWithDialer(dialer *net.Dialer, network, addr string) (net.Conn, error)
