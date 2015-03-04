@@ -134,9 +134,7 @@ func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
 func encode(msg proto.Message, pf payloadFormat) ([]byte, error) {
 	var buf bytes.Buffer
 	// Write message fixed header.
-	if err := buf.WriteByte(uint8(pf)); err != nil {
-		return nil, err
-	}
+	buf.WriteByte(uint8(pf))
 	var b []byte
 	var length uint32
 	if msg != nil {
@@ -150,12 +148,8 @@ func encode(msg proto.Message, pf payloadFormat) ([]byte, error) {
 	}
 	var szHdr [4]byte
 	binary.BigEndian.PutUint32(szHdr[:], length)
-	if _, err := buf.Write(szHdr[:]); err != nil {
-		return nil, err
-	}
-	if _, err := buf.Write(b); err != nil {
-		return nil, err
-	}
+	buf.Write(szHdr[:])
+	buf.Write(b)
 	return buf.Bytes(), nil
 }
 
