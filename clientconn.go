@@ -244,6 +244,10 @@ func (cc *ClientConn) Close() error {
 		return ErrClientConnClosing
 	}
 	cc.closing = true
+	if cc.ready != nil {
+		close(cc.ready)
+		cc.ready = nil
+	}
 	if cc.transport != nil {
 		cc.transport.Close()
 	}
