@@ -36,7 +36,6 @@ package grpc
 import (
 	"errors"
 	"log"
-	"net"
 	"sync"
 	"time"
 
