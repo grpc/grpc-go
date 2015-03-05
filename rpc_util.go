@@ -189,7 +189,6 @@ func Code(err error) codes.Code {
 }
 
 // Errorf returns an error containing an error code and a description;
-// Code extracts the Code.
 // Errorf returns nil if c is OK.
 func Errorf(c codes.Code, format string, a ...interface{}) error {
 	if c == codes.OK {
