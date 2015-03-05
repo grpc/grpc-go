@@ -386,7 +386,7 @@ func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) e
 		}
 		if err != nil {
 			t.Close()
-			return ConnectionErrorf("transport: %v", err)
+			return ConnectionErrorf(err, "transport: %v", err)
 		}
 	}
 	return nil
@@ -476,7 +476,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		}
 		if err := t.framer.WriteHeaders(p); err != nil {
 			t.Close()
-			return ConnectionErrorf("transport: %v", err)
+			return ConnectionErrorf(err, "transport: %v", err)
 		}
 		t.writableChan <- 0
 	}
@@ -524,7 +524,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		}
 		if err := t.framer.WriteData(s.id, false, p); err != nil {
 			t.Close()
-			return ConnectionErrorf("transport: %v", err)
+			return ConnectionErrorf(err, "transport: %v", err)
 		}
 		t.writableChan <- 0
 	}

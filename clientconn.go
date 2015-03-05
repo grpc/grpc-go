@@ -36,6 +36,7 @@ package grpc
 import (
 	"errors"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -50,11 +51,15 @@ var (
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the session is closing.
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
+	// ErrClientConnTimeout indicates that the connection could not be
+	// established or re-established within the specified timeout.
+	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
 )
 
 type dialOptions struct {
 	protocol    string
 	authOptions []credentials.Credentials
+	timeout     time.Duration
 }
 
 // DialOption configures how we set up the connection including auth
@@ -74,6 +79,14 @@ func WithTransportCredentials(creds credentials.TransportAuthenticator) DialOpti
 func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
 	return func(o *dialOptions) {
 		o.authOptions = append(o.authOptions, creds)
+	}
+}
+
+// WithTimeout returns a DialOption that configures a timeout duration
+// for dialing or reconnecting.
+func WithTimeout(d time.Duration) DialOption {
+	return func(o *dialOptions) {
+		o.timeout = d
 	}
 }
 
@@ -133,10 +146,13 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		if closeTransport {
 			t.Close()
 		}
-		newTransport, err := transport.NewClientTransport(cc.dopts.protocol, cc.target, cc.dopts.authOptions)
+		newTransport, err := transport.NewClientTransportTimeout(cc.dopts.protocol, cc.target, cc.dopts.authOptions, cc.dopts.timeout)
 		if err != nil {
 			// TODO(zhaoq): Record the error with glog.V.
 			closeTransport = false
+			if netErr, ok := err.(transport.ConnectionError).Err.(net.Error); ok && netErr.Timeout() {
+				return ErrClientConnTimeout
+			}
 			time.Sleep(backoff(retries))
 			retries++
 			log.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
