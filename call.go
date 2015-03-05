@@ -137,15 +137,15 @@ func Invoke(ctx context.Context, method string, args, reply proto.Message, cc *C
 		)
 		// TODO(zhaoq): Need a formal spec of retry strategy for non-failfast rpcs.
 		if lastErr != nil && c.failFast {
-			return lastErr
+			return toRPCErr(lastErr)
 		}
 		t, ts, err = cc.wait(ctx, ts)
 		if err != nil {
 			if lastErr != nil {
 				// This was a retry; return the error from the last attempt.
-				return lastErr
+				return toRPCErr(lastErr)
 			}
-			return err
+			return Errorf(codes.Internal, "%v", err)
 		}
 		stream, err = sendRPC(ctx, callHdr, t, args, topts)
 		if err != nil {

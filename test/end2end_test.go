@@ -193,6 +193,68 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 
 const tlsDir = "testdata/"
 
+func TestDialTimeout(t *testing.T) {
+	conn, err := grpc.Dial("Non-Existent.Server:80", grpc.WithTimeout(time.Millisecond))
+	if err == nil {
+		conn.Close()
+	}
+	if err != grpc.ErrClientConnTimeout {
+		t.Fatalf("grpc.Dial(_, _) = %v, %v, want %v", conn, err, grpc.ErrClientConnTimeout)
+	}
+}
+
+func TestTLSDialTimeout(t *testing.T) {
+	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+	if err != nil {
+		t.Fatalf("Failed to create credentials %v", err)
+	}
+	conn, err := grpc.Dial("Non-Existent.Server:80", grpc.WithTransportCredentials(creds), grpc.WithTimeout(time.Millisecond))
+	if err == nil {
+		conn.Close()
+	}
+	if err != grpc.ErrClientConnTimeout {
+		t.Fatalf("grpc.Dial(_, _) = %v, %v, want %v", conn, err, grpc.ErrClientConnTimeout)
+	}
+}
+
+func TestReconnectTimeout(t *testing.T) {
+	lis, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	_, port, err := net.SplitHostPort(lis.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to parse listener address: %v", err)
+	}
+	addr := "localhost:" + port
+	conn, err := grpc.Dial(addr, grpc.WithTimeout(time.Second))
+	if err != nil {
+		t.Fatalf("Failed to dial to the server %q: %v", addr, err)
+	}
+	lis.Close()
+	tc := testpb.NewTestServiceClient(conn)
+	waitC := make(chan struct{})
+	go func() {
+		defer close(waitC)
+		argSize := 271828
+		respSize := 314159
+		req := &testpb.SimpleRequest{
+			ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+			ResponseSize: proto.Int32(int32(respSize)),
+			Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
+		}
+		_, err := tc.UnaryCall(context.Background(), req)
+		if err != grpc.Errorf(codes.Internal, "%v", grpc.ErrClientConnClosing) {
+			t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, %v", err, grpc.Errorf(codes.Internal, "%v", grpc.ErrClientConnClosing))
+		}
+	}()
+	// Block untill reconnect times out.
+	<-waitC
+	if err := conn.Close(); err != grpc.ErrClientConnClosing {
+		t.Fatalf("%v.Close() = %v, want %v", conn, err, grpc.ErrClientConnClosing)
+	}
+}
+
 func setUp(useTLS bool, maxStream uint32) (s *grpc.Server, tc testpb.TestServiceClient) {
 	lis, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -331,7 +393,7 @@ func TestRetry(t *testing.T) {
 }
 
 // TODO(zhaoq): Have a better test coverage of timeout and cancellation mechanism.
-func TestTimeout(t *testing.T) {
+func TestRPCTimeout(t *testing.T) {
 	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()
 	argSize := 2718
