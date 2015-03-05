@@ -227,8 +227,7 @@ func TestReconnectTimeout(t *testing.T) {
 		t.Fatalf("Failed to parse listener address: %v", err)
 	}
 	addr := "localhost:" + port
-	timeOut := time.Second
-	conn, err := grpc.Dial(addr, grpc.WithTimeout(timeOut))
+	conn, err := grpc.Dial(addr, grpc.WithTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("Failed to dial to the server %q: %v", addr, err)
 	}
