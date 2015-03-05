@@ -203,11 +203,7 @@ type serviceAccount struct {
 }
 
 func (s serviceAccount) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
-	c, ok := ctx.(oauth2.Context)
-	if !ok {
-		return nil, fmt.Errorf("credentials: the context %v is invalid", ctx)
-	}
-	token, err := s.config.TokenSource(c).Token()
+	token, err := s.config.TokenSource(ctx).Token()
 	if err != nil {
 		return nil, err
 	}
