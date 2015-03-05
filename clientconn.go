@@ -168,6 +168,12 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			continue
 		}
 		cc.mu.Lock()
+		if cc.closing {
+			// cc.Close() has been invoked.
+			cc.mu.Unlock()
+			newTransport.Close()
+			return ErrClientConnClosing
+		}
 		cc.transport = newTransport
 		cc.transportSeq = ts + 1
 		if cc.ready != nil {
