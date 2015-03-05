@@ -181,9 +181,12 @@ func setUp(t *testing.T, useTLS bool, port int, maxStreams uint32, suspend bool)
 		if err != nil {
 			t.Fatalf("Failed to create credentials %v", err)
 		}
-		ct, connErr = NewClientTransport("http2", addr, []credentials.Credentials{creds})
+		dopts := DialOptions{
+			AuthOptions: []credentials.Credentials{creds},
+		}
+		ct, connErr = NewClientTransport(addr, &dopts)
 	} else {
-		ct, connErr = NewClientTransport("http2", addr, nil)
+		ct, connErr = NewClientTransport(addr, &DialOptions{})
 	}
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)

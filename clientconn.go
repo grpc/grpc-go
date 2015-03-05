@@ -36,6 +36,7 @@ package grpc
 import (
 	"errors"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -50,30 +51,34 @@ var (
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the session is closing.
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
+	// ErrClientConnTimeout indicates that the connection could not be
+	// established or re-established within the specified timeout.
+	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
 )
 
-type dialOptions struct {
-	protocol    string
-	authOptions []credentials.Credentials
-}
-
-// DialOption configures how we set up the connection including auth
-// credentials.
-type DialOption func(*dialOptions)
+// DialOption configures how we set up the connection.
+type DialOption func(*transport.DialOptions)
 
 // WithTransportCredentials returns a DialOption which configures a
 // connection level security credentials (e.g., TLS/SSL).
 func WithTransportCredentials(creds credentials.TransportAuthenticator) DialOption {
-	return func(o *dialOptions) {
-		o.authOptions = append(o.authOptions, creds)
+	return func(o *transport.DialOptions) {
+		o.AuthOptions = append(o.AuthOptions, creds)
 	}
 }
 
 // WithPerRPCCredentials returns a DialOption which sets
 // credentials which will place auth state on each outbound RPC.
 func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
-	return func(o *dialOptions) {
-		o.authOptions = append(o.authOptions, creds)
+	return func(o *transport.DialOptions) {
+		o.AuthOptions = append(o.AuthOptions, creds)
+	}
+}
+
+// WithTimeout returns a DialOption that configures a timeout for dialing a client connection.
+func WithTimeout(d time.Duration) DialOption {
+	return func(o *transport.DialOptions) {
+		o.Timeout = d
 	}
 }
 
@@ -102,11 +107,12 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // ClientConn represents a client connection to an RPC service.
 type ClientConn struct {
 	target       string
-	dopts        dialOptions
+	dopts        transport.DialOptions
 	shutdownChan chan struct{}
 
 	mu sync.Mutex
-	// Is closed and becomes nil when a new transport is up.
+	// ready is closed and becomes nil when a new transport is up or failed
+	// due to timeout.
 	ready chan struct{}
 	// Indicates the ClientConn is under destruction.
 	closing bool
@@ -119,6 +125,7 @@ type ClientConn struct {
 
 func (cc *ClientConn) resetTransport(closeTransport bool) error {
 	var retries int
+	start := time.Now()
 	for {
 		cc.mu.Lock()
 		t := cc.transport
@@ -133,12 +140,31 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		if closeTransport {
 			t.Close()
 		}
-		newTransport, err := transport.NewClientTransport(cc.dopts.protocol, cc.target, cc.dopts.authOptions)
+		// Adjust timeout for the current try.
+		dopts := cc.dopts
+		if dopts.Timeout < 0 {
+			cc.Close()
+			return ErrClientConnTimeout
+		}
+		if dopts.Timeout > 0 {
+			dopts.Timeout -= time.Since(start)
+			if dopts.Timeout <= 0 {
+				cc.Close()
+				return ErrClientConnTimeout
+			}
+		}
+		newTransport, err := transport.NewClientTransport(cc.target, &dopts)
 		if err != nil {
-			// TODO(zhaoq): Record the error with glog.V.
+			sleepTime := backoff(retries)
+			// Fail early before falling into sleep.
+			if cc.dopts.Timeout > 0 && cc.dopts.Timeout < sleepTime + time.Since(start) {
+				cc.Close()
+				return ErrClientConnTimeout
+			}
 			closeTransport = false
-			time.Sleep(backoff(retries))
+			time.Sleep(sleepTime)
 			retries++
+			// TODO(zhaoq): Record the error with glog.V.
 			log.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
 			continue
 		}
@@ -166,6 +192,8 @@ func (cc *ClientConn) transportMonitor() {
 		case <-cc.transport.Error():
 			if err := cc.resetTransport(true); err != nil {
 				// The channel is closing.
+				// TODO(zhaoq): Record the error with glog.V.
+				log.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
 				return
 			}
 			continue
@@ -197,24 +225,34 @@ func (cc *ClientConn) wait(ctx context.Context, ts int) (transport.ClientTranspo
 			select {
 			case <-ctx.Done():
 				return nil, 0, transport.ContextErr(ctx.Err())
-			// Wait until the new transport is ready.
+			// Wait until the new transport is ready or failed.
 			case <-ready:
 			}
 		}
 	}
 }
 
-// Close starts to tear down the ClientConn.
+// Close starts to tear down the ClientConn. Returns ErrClientConnClosing if
+// it has been closed (mostly due to dial time-out).
 // TODO(zhaoq): Make this synchronous to avoid unbounded memory consumption in
 // some edge cases (e.g., the caller opens and closes many ClientConn's in a
 // tight loop.
-func (cc *ClientConn) Close() {
+func (cc *ClientConn) Close() error {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	if cc.closing {
-		return
+		return ErrClientConnClosing
 	}
 	cc.closing = true
-	cc.transport.Close()
-	close(cc.shutdownChan)
+	if cc.ready != nil {
+		close(cc.ready)
+		cc.ready = nil
+	}
+	if cc.transport != nil {
+		cc.transport.Close()
+	}
+	if cc.shutdownChan != nil {
+		close(cc.shutdownChan)
+	}
+	return nil
 }

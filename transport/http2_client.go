@@ -96,26 +96,25 @@ type http2Client struct {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(addr string, authOpts []credentials.Credentials) (_ ClientTransport, err error) {
+func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err error) {
 	var (
 		connErr error
 		conn    net.Conn
 	)
 	scheme := "http"
-	// TODO(zhaoq): Use DialTimeout instead.
-	for _, c := range authOpts {
+	for _, c := range opts.AuthOptions {
 		if ccreds, ok := c.(credentials.TransportAuthenticator); ok {
 			scheme = "https"
 			// TODO(zhaoq): Now the first TransportAuthenticator is used if there are
 			// multiple ones provided. Revisit this if it is not appropriate. Probably
 			// place the ClientTransport construction into a separate function to make
 			// things clear.
-			conn, connErr = ccreds.Dial(addr)
+			conn, connErr = ccreds.DialWithDialer(&net.Dialer{Timeout: opts.Timeout}, "tcp", addr)
 			break
 		}
 	}
 	if scheme == "http" {
-		conn, connErr = net.Dial("tcp", addr)
+		conn, connErr = net.DialTimeout("tcp", addr, opts.Timeout)
 	}
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)
@@ -155,7 +154,7 @@ func newHTTP2Client(addr string, authOpts []credentials.Credentials) (_ ClientTr
 		state:         reachable,
 		activeStreams: make(map[uint32]*Stream),
 		maxStreams:    math.MaxUint32,
-		authCreds:     authOpts,
+		authCreds:     opts.AuthOptions,
 	}
 	go t.controller()
 	t.writableChan <- 0
