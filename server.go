@@ -241,9 +241,18 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		switch pf {
 		case compressionNone:
+			statusCode := codes.OK
+			statusDesc := ""
 			reply, appErr := md.Handler(srv.server, stream.Context(), req)
 			if appErr != nil {
-				if err := t.WriteStatus(stream, convertCode(appErr), appErr.Error()); err != nil {
+				if err, ok := appErr.(rpcError); ok {
+					statusCode = err.code
+					statusDesc = err.desc
+				} else {
+					statusCode = convertCode(appErr)
+					statusDesc = appErr.Error()
+				}
+				if err := t.WriteStatus(stream, statusCode, statusDesc); err != nil {
 					log.Printf("grpc: Server.processUnaryRPC failed to write status: %v", err)
 				}
 				return
@@ -252,8 +261,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Last:  true,
 				Delay: false,
 			}
-			statusCode := codes.OK
-			statusDesc := ""
 			if err := s.sendProto(t, stream, reply, compressionNone, opts); err != nil {
 				if _, ok := err.(transport.ConnectionError); ok {
 					return
@@ -281,9 +288,14 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		s: stream,
 		p: &parser{s: stream},
 	}
-	if err := sd.Handler(srv.server, ss); err != nil {
-		ss.statusCode = convertCode(err)
-		ss.statusDesc = err.Error()
+	if appErr := sd.Handler(srv.server, ss); appErr != nil {
+		if err, ok := appErr.(rpcError); ok {
+			ss.statusCode = err.code
+			ss.statusDesc = err.desc
+		} else {
+			ss.statusCode = convertCode(appErr)
+			ss.statusDesc = appErr.Error()
+		}
 	}
 	if err := t.WriteStatus(ss.s, ss.statusCode, ss.statusDesc); err != nil {
 		log.Printf("grpc: Server.processStreamingRPC failed to write status: %v", err)

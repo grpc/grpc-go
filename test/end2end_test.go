@@ -63,6 +63,10 @@ type testServer struct {
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	if _, ok := metadata.FromContext(ctx); ok {
+		// For testing purpose, returns an error if there is attached metadata.
+		return nil, grpc.Errorf(codes.DataLoss, "got extra metadata")
+	}
 	return new(testpb.Empty), nil
 }
 
@@ -100,6 +104,11 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 }
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
+	if _, ok := metadata.FromContext(stream.Context()); ok {
+		log.Println("REACH HERE !!!")
+		// For testing purpose, returns an error if there is attached metadata.
+		return grpc.Errorf(codes.DataLoss, "got extra metadata")
+	}
 	cs := args.GetResponseParameters()
 	for _, c := range cs {
 		if us := c.GetIntervalUs(); us > 0 {
@@ -298,7 +307,16 @@ func TestEmptyUnary(t *testing.T) {
 	defer s.Stop()
 	reply, err := tc.EmptyCall(context.Background(), &testpb.Empty{})
 	if err != nil || !proto.Equal(&testpb.Empty{}, reply) {
-		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want %v, <nil>", reply, err, &testpb.Empty{})
+		t.Fatalf("TestService/EmptyCall(_, _) = %v, %v, want %v, <nil>", reply, err, &testpb.Empty{})
+	}
+}
+
+func TestFailedEmptyUnary(t *testing.T) {
+	s, tc := setUp(true, math.MaxUint32)
+	defer s.Stop()
+	ctx := metadata.NewContext(context.Background(), testMetadata)
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != grpc.Errorf(codes.DataLoss, "got extra metadata") {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, grpc.Errorf(codes.DataLoss, "got extra metadata"))
 	}
 }
 
@@ -577,6 +595,29 @@ func TestServerStreaming(t *testing.T) {
 	}
 	if respCnt != len(respSizes) {
 		t.Fatalf("Got %d reply, want %d", len(respSizes), respCnt)
+	}
+}
+
+func TestFailedServerStreaming(t *testing.T) {
+	s, tc := setUp(true, math.MaxUint32)
+	defer s.Stop()
+	respParam := make([]*testpb.ResponseParameters, len(respSizes))
+	for i, s := range respSizes {
+		respParam[i] = &testpb.ResponseParameters{
+			Size: proto.Int32(int32(s)),
+		}
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParam,
+	}
+	ctx := metadata.NewContext(context.Background(), testMetadata)
+	stream, err := tc.StreamingOutputCall(ctx, req)
+	if err != nil {
+		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if _, err := stream.Recv(); err != grpc.Errorf(codes.DataLoss, "got extra metadata") {
+		t.Fatalf("%v.Recv() = _, %v, want _, %v", stream, err, grpc.Errorf(codes.DataLoss, "got extra metadata"))
 	}
 }
 
