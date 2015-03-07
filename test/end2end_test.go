@@ -105,7 +105,6 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
 	if _, ok := metadata.FromContext(stream.Context()); ok {
-		log.Println("REACH HERE !!!")
 		// For testing purpose, returns an error if there is attached metadata.
 		return grpc.Errorf(codes.DataLoss, "got extra metadata")
 	}
