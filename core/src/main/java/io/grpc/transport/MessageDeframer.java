@@ -153,14 +153,23 @@ public class MessageDeframer implements Closeable {
    *         {@code endOfStream=true}.
    */
   public void deframe(Buffer data, boolean endOfStream) {
-    checkNotClosed();
     Preconditions.checkNotNull(data, "data");
-    Preconditions.checkState(!this.endOfStream, "Past end of stream");
-    unprocessed.addBuffer(data);
+    boolean needToCloseData = true;
+    try {
+      checkNotClosed();
+      Preconditions.checkState(!this.endOfStream, "Past end of stream");
 
-    // Indicate that all of the data for this stream has been received.
-    this.endOfStream = endOfStream;
-    deliver();
+      needToCloseData = false;
+      unprocessed.addBuffer(data);
+
+      // Indicate that all of the data for this stream has been received.
+      this.endOfStream = endOfStream;
+      deliver();
+    } finally {
+      if (needToCloseData) {
+        data.close();
+      }
+    }
   }
 
   /**
