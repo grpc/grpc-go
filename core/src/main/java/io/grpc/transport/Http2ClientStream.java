@@ -125,7 +125,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
           Buffers.readAsString(frame, errorCharset));
       frame.close();
       if (transportError.getDescription().length() > 1000 || endOfStream) {
-        inboundTransportError(transportError);
+        inboundTransportError(transportError, false);
         if (!endOfStream) {
           // We have enough error detail so lets cancel.
           sendCancel();
@@ -136,8 +136,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
       if (endOfStream) {
         // This is a protocol violation as we expect to receive trailers.
         transportError = Status.INTERNAL.withDescription("Recevied EOS on DATA frame");
-        frame.close();
-        inboundTransportError(transportError);
+        inboundTransportError(transportError, true);
       }
     }
   }
@@ -156,7 +155,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
       transportError = checkContentType(trailers);
     }
     if (transportError != null) {
-      inboundTransportError(transportError);
+      inboundTransportError(transportError, false);
     } else {
       Status status = statusFromTrailers(trailers);
       stripTransportDetails(trailers);

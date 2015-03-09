@@ -253,6 +253,25 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     verify(listener).closed(eq(Status.CANCELLED), eq(trailers));
   }
 
+  @Test
+  public void dataFrameWithEosShouldDeframeAndThenFail() {
+    stream().id(1);
+    stream().request(1);
+
+    // Receive headers first so that it's a valid GRPC response.
+    stream().transportHeadersReceived(grpcResponseHeaders(), false);
+
+    // Receive a DATA frame with EOS set.
+    stream().transportDataReceived(simpleGrpcFrame(), true);
+
+    // Verify that the message was delivered.
+    verify(listener).messageRead(any(InputStream.class));
+
+    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
+    verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
+    assertEquals(Status.Code.INTERNAL, captor.getValue().getCode());
+  }
+
   @Override
   protected AbstractStream<Integer> createStream() {
     AbstractStream<Integer> stream = new NettyClientStream(listener, channel, handler);
