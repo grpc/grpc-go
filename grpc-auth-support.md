@@ -23,7 +23,7 @@ server.Serve(creds.NewListener(lis))
 ## Google Compute Engine (GCE)
 
 ```Go
-conn, err := grpc.Dial(serverAddr, grpc.WithClientTLS(credentials.NewClientTLSFromCert(nil, ""), grpc.WithPerRPCCredentials(credentials.NewComputeEngine())))
+conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""), grpc.WithPerRPCCredentials(credentials.NewComputeEngine())))
 ```
 
 ## JWT
@@ -33,6 +33,6 @@ jwtCreds, err := credentials.NewServiceAccountFromFile(*serviceAccountKeyFile, *
 if err != nil {
   log.Fatalf("Failed to create JWT credentials: %v", err)
 }
-conn, err := grpc.Dial(serverAddr, grpc.WithClientTLS(credentials.NewClientTLSFromCert(nil, ""), grpc.WithPerRPCCredentials(jwtCreds)))
+conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""), grpc.WithPerRPCCredentials(jwtCreds)))
 ```
 
