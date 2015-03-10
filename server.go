@@ -43,14 +43,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
 )
 
-type methodHandler func(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error)
+type methodHandler func(srv interface{}, ctx context.Context, buf []byte) (Formatter, error)
 
 // MethodDesc represents an RPC service's method specification.
 type MethodDesc struct {
@@ -203,8 +202,8 @@ func (s *Server) Serve(lis net.Listener) error {
 	}
 }
 
-func (s *Server) sendProto(t transport.ServerTransport, stream *transport.Stream, msg proto.Message, pf payloadFormat, opts *transport.Options) error {
-	p, err := encode(msg, pf)
+func (s *Server) sendProto(t transport.ServerTransport, stream *transport.Stream, f Formatter, pf payloadFormat, opts *transport.Options) error {
+	p, err := encode(f, pf)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program

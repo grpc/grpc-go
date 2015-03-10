@@ -112,7 +112,8 @@ func TestEncode(t *testing.T) {
 	}{
 		{nil, compressionNone, []byte{0, 0, 0, 0, 0}, nil},
 	} {
-		b, err := encode(test.msg, test.pt)
+		pm := &protoMessage{test.msg}
+		b, err := encode(pm, test.pt)
 		if err != test.err || !bytes.Equal(b, test.b) {
 			t.Fatalf("encode(_, %d) = %v, %v\nwant %v, %v", test.pt, b, err, test.b, test.err)
 		}
@@ -175,7 +176,7 @@ func TestBackoff(t *testing.T) {
 // bmEncode benchmarks encoding a Protocol Buffer message containing mSize
 // bytes.
 func bmEncode(b *testing.B, mSize int) {
-	msg := &perfpb.Buffer{Body: make([]byte, mSize)}
+	msg := &protoMessage{&perfpb.Buffer{Body: make([]byte, mSize)}}
 	encoded, _ := encode(msg, compressionNone)
 	encodedSz := int64(len(encoded))
 	b.ReportAllocs()
