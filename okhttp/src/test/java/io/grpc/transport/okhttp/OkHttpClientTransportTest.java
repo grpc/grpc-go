@@ -179,6 +179,20 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
+  public void receivedHeadersForInvalidStreamShouldResetStream() throws Exception {
+    // Empty headers block without correct content type or status
+    frameHandler.headers(false, false, 3, 0, new ArrayList<Header>(),
+        HeadersMode.HTTP_20_HEADERS);
+    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.INVALID_STREAM));
+  }
+
+  @Test
+  public void receivedDataForInvalidStreamShouldResetStream() throws Exception {
+    frameHandler.data(false, 3, createMessageFrame(new String(new char[1000])), 1000);
+    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.INVALID_STREAM));
+  }
+
+  @Test
   public void invalidInboundHeadersCancelStream() throws Exception {
     MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method, new Metadata.Headers(), listener).request(1);
