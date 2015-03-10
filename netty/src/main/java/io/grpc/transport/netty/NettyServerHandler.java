@@ -294,10 +294,10 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
     // Write the GO_AWAY frame to the remote endpoint.
     int lastKnownStream = connection().remote().lastStreamCreated();
-    ChannelFuture future = writeGoAway(ctx, lastKnownStream, errorCode, data, promise);
+    writeGoAway(ctx, lastKnownStream, errorCode, data, promise);
 
     // When the write completes, close this channel.
-    future.addListener(new ChannelFutureListener() {
+    promise.addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
         ctx.close();

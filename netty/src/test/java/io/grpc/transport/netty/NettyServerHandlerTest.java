@@ -42,7 +42,7 @@ import static io.netty.handler.codec.http2.Http2Exception.connectionError;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -135,6 +135,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     // Reset the context to clear any interactions resulting from the HTTP/2
     // connection preface handshake.
     mockContext();
+    mockFuture(promise, true);
   }
 
   @Test
@@ -145,8 +146,12 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     // Send a frame and verify that it was written.
     handler.write(ctx, new SendGrpcFrameCommand(stream, content, false), promise);
     verify(promise, never()).setFailure(any(Throwable.class));
-    verify(ctx).write(any(ByteBuf.class), eq(promise));
-    assertEquals(0, content.refCnt());
+    ByteBuf bufWritten = captureWrite(ctx);
+    verify(ctx, atLeastOnce()).flush();
+    int startIndex = bufWritten.readerIndex() + Http2CodecUtil.FRAME_HEADER_LENGTH;
+    int length = bufWritten.writerIndex() - startIndex;
+    ByteBuf writtenContent = bufWritten.slice(startIndex, length);
+    assertEquals(content, writtenContent);
   }
 
   @Test

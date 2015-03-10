@@ -33,11 +33,13 @@ package io.grpc.transport.netty;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.Channel;
@@ -79,6 +81,9 @@ public abstract class NettyHandlerTestBase {
   protected ChannelPromise promise;
 
   @Mock
+  protected ChannelFuture succeededFuture;
+
+  @Mock
   protected Http2FrameListener frameListener;
 
   @Mock
@@ -118,6 +123,7 @@ public abstract class NettyHandlerTestBase {
   protected final ChannelHandlerContext newContext() {
     ChannelHandlerContext ctx = Mockito.mock(ChannelHandlerContext.class);
     when(ctx.alloc()).thenReturn(UnpooledByteBufAllocator.DEFAULT);
+    when(ctx.executor()).thenReturn(eventLoop);
     return ctx;
   }
 
@@ -127,8 +133,13 @@ public abstract class NettyHandlerTestBase {
 
   protected final ByteBuf captureWrite(ChannelHandlerContext ctx) {
     ArgumentCaptor<ByteBuf> captor = ArgumentCaptor.forClass(ByteBuf.class);
-    verify(ctx).write(captor.capture(), any(ChannelPromise.class));
-    return captor.getValue();
+    verify(ctx, atLeastOnce()).write(captor.capture(), any(ChannelPromise.class));
+    CompositeByteBuf composite = Unpooled.compositeBuffer();
+    for (ByteBuf buf : captor.getAllValues()) {
+      composite.addComponent(buf);
+      composite.writerIndex(composite.writerIndex() + buf.readableBytes());
+    }
+    return composite;
   }
 
   protected final void mockContext() {
@@ -141,7 +152,11 @@ public abstract class NettyHandlerTestBase {
     when(ctx.writeAndFlush(any())).thenReturn(future);
     when(ctx.writeAndFlush(any(), eq(promise))).thenReturn(future);
     when(ctx.newPromise()).thenReturn(promise);
+    when(ctx.newSucceededFuture()).thenReturn(succeededFuture);
+    when(ctx.executor()).thenReturn(eventLoop);
     when(channel.eventLoop()).thenReturn(eventLoop);
+
+    mockFuture(succeededFuture, true);
 
     doAnswer(new Answer<Void>() {
       @Override
@@ -154,6 +169,10 @@ public abstract class NettyHandlerTestBase {
   }
 
   protected final void mockFuture(boolean succeeded) {
+    mockFuture(future, succeeded);
+  }
+
+  protected final void mockFuture(final ChannelFuture future, boolean succeeded) {
     when(future.isDone()).thenReturn(true);
     when(future.isCancelled()).thenReturn(false);
     when(future.isSuccess()).thenReturn(succeeded);

@@ -128,6 +128,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     // Reset the context to clear any interactions resulting from the HTTP/2
     // connection preface handshake.
     mockContext();
+    mockFuture(promise, true);
   }
 
   @Test
@@ -211,8 +212,12 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     // Send a frame and verify that it was written.
     handler.write(ctx, new SendGrpcFrameCommand(stream, content, true), promise);
     verify(promise, never()).setFailure(any(Throwable.class));
-    verify(ctx).write(any(ByteBuf.class), eq(promise));
+    ByteBuf bufWritten = captureWrite(ctx);
     verify(ctx).flush();
+    int startIndex = bufWritten.readerIndex() + Http2CodecUtil.FRAME_HEADER_LENGTH;
+    int length = bufWritten.writerIndex() - startIndex;
+    ByteBuf writtenContent = bufWritten.slice(startIndex, length);
+    assertEquals(content, writtenContent);
   }
 
   @Test
