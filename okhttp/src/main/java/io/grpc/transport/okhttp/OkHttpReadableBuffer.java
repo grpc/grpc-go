@@ -29,45 +29,70 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport.netty;
+package io.grpc.transport.okhttp;
 
-import static io.netty.util.CharsetUtil.UTF_8;
+import io.grpc.transport.AbstractReadableBuffer;
+import io.grpc.transport.ReadableBuffer;
 
-import com.google.common.io.ByteStreams;
-
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.InputStream;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
 
 /**
- * Utility methods for supporting Netty tests.
+ * A {@link io.grpc.transport.ReadableBuffer} implementation that is backed by an {@link okio.Buffer}.
  */
-public class NettyTestUtil {
+class OkHttpReadableBuffer extends AbstractReadableBuffer {
+  private final okio.Buffer buffer;
 
-  static String toString(InputStream in) throws Exception {
-    byte[] bytes = new byte[in.available()];
-    ByteStreams.readFully(in, bytes);
-    return new String(bytes, UTF_8);
+  OkHttpReadableBuffer(okio.Buffer buffer) {
+    this.buffer = buffer;
   }
 
-  static ByteBuf messageFrame(String message) throws Exception {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(message.getBytes(UTF_8));
-    dos.close();
-
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
+  @Override
+  public int readableBytes() {
+    return (int) buffer.size();
   }
 
-  static ByteBuf compressionFrame(byte[] data) {
-    ByteBuf buf = Unpooled.buffer();
-    buf.writeByte(0);
-    buf.writeInt(data.length);
-    buf.writeBytes(data);
-    return buf;
+  @Override
+  public int readUnsignedByte() {
+    return buffer.readByte() & 0x000000FF;
+  }
+
+  @Override
+  public void skipBytes(int length) {
+    try {
+      buffer.skip(length);
+    } catch (EOFException e) {
+      throw new IndexOutOfBoundsException(e.getMessage());
+    }
+  }
+
+  @Override
+  public void readBytes(byte[] dest, int destOffset, int length) {
+    buffer.read(dest, destOffset, length);
+  }
+
+  @Override
+  public void readBytes(ByteBuffer dest) {
+    // We are not using it.
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void readBytes(OutputStream dest, int length) throws IOException {
+    buffer.writeTo(dest, length);
+  }
+
+  @Override
+  public ReadableBuffer readBytes(int length) {
+    okio.Buffer buf = new okio.Buffer();
+    buf.write(buffer, length);
+    return new OkHttpReadableBuffer(buf);
+  }
+
+  @Override
+  public void close() {
+    buffer.clear();
   }
 }

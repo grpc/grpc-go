@@ -31,60 +31,60 @@
 
 package io.grpc.transport;
 
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.when;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.stubbing.OngoingStubbing;
+
 /**
- * Abstract base class for {@link Buffer} implementations.
+ * Tests for {@link AbstractReadableBuffer}.
  */
-public abstract class AbstractBuffer implements Buffer {
+@RunWith(JUnit4.class)
+public class AbstractReadableBufferTest {
 
-  @Override
-  public final int readUnsignedMedium() {
-    checkReadable(3);
-    int b1 = readUnsignedByte();
-    int b2 = readUnsignedByte();
-    int b3 = readUnsignedByte();
-    return b1 << 16 | b2 << 8 | b3;
+  @Mock
+  private AbstractReadableBuffer buffer;
+
+  @Before
+  public void setup() {
+    MockitoAnnotations.initMocks(this);
   }
 
-
-  @Override
-  public final int readUnsignedShort() {
-    checkReadable(2);
-    int b1 = readUnsignedByte();
-    int b2 = readUnsignedByte();
-    return b1 << 8 | b2;
+  @Test
+  public void readUnsignedShortShouldSucceed() {
+    mockBytes(0xFF, 0xEE);
+    assertEquals(0xFFEE, buffer.readUnsignedShort());
   }
 
-  @Override
-  public final int readInt() {
-    checkReadable(4);
-    int b1 = readUnsignedByte();
-    int b2 = readUnsignedByte();
-    int b3 = readUnsignedByte();
-    int b4 = readUnsignedByte();
-    return (b1 << 24) | (b2 << 16) | (b3 << 8) | b4;
+  @Test
+  public void readUnsignedMediumShouldSucceed() {
+    mockBytes(0xFF, 0xEE, 0xDD);
+    assertEquals(0xFFEEDD, buffer.readUnsignedMedium());
   }
 
-  @Override
-  public boolean hasArray() {
-    return false;
+  @Test
+  public void readPositiveIntShouldSucceed() {
+    mockBytes(0x7F, 0xEE, 0xDD, 0xCC);
+    assertEquals(0x7FEEDDCC, buffer.readInt());
   }
 
-  @Override
-  public byte[] array() {
-    throw new UnsupportedOperationException();
+  @Test
+  public void readNegativeIntShouldSucceed() {
+    mockBytes(0xFF, 0xEE, 0xDD, 0xCC);
+    assertEquals(0xFFEEDDCC, buffer.readInt());
   }
 
-  @Override
-  public int arrayOffset() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void close() {}
-
-  protected final void checkReadable(int length) {
-    if (readableBytes() < length) {
-      throw new IndexOutOfBoundsException();
+  private void mockBytes(int... bytes) {
+    when(buffer.readableBytes()).thenReturn(bytes.length);
+    OngoingStubbing<Integer> stub = when(buffer.readUnsignedByte());
+    for (int b : bytes) {
+      stub = stub.thenReturn(b);
     }
   }
 }

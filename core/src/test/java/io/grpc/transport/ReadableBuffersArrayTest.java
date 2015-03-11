@@ -29,47 +29,36 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport.netty;
+package io.grpc.transport;
 
 import static com.google.common.base.Charsets.UTF_8;
+import static io.grpc.transport.ReadableBuffers.wrap;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
-import io.grpc.transport.Buffer;
-import io.grpc.transport.BufferTestBase;
-import io.netty.buffer.Unpooled;
-
-import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
- * Tests for {@link NettyBuffer}.
+ * Tests for the array-backed {@link ReadableBuffer} returned by {@link ReadableBuffers#wrap(byte[], int, int)};
  */
-@RunWith(JUnit4.class)
-public class NettyBufferTest extends BufferTestBase {
-  private NettyBuffer buffer;
-
-  @Before
-  public void setup() {
-    buffer = new NettyBuffer(Unpooled.copiedBuffer(msg, UTF_8));
-  }
+public class ReadableBuffersArrayTest extends ReadableBufferTestBase {
 
   @Test
-  public void closeShouldReleaseBuffer() {
-    buffer.close();
-    assertEquals(0, buffer.buffer().refCnt());
-  }
+  public void bufferShouldExposeArray() {
+    byte[] array = msg.getBytes(UTF_8);
+    ReadableBuffer buffer = wrap(array, 1, msg.length() - 1);
+    assertTrue(buffer.hasArray());
+    assertSame(array, buffer.array());
+    assertEquals(1, buffer.arrayOffset());
 
-  @Test
-  public void closeMultipleTimesShouldReleaseBufferOnce() {
-    buffer.close();
-    buffer.close();
-    assertEquals(0, buffer.buffer().refCnt());
+    // Now read a byte and verify that the offset changes.
+    buffer.readUnsignedByte();
+    assertEquals(2, buffer.arrayOffset());
   }
 
   @Override
-  protected Buffer buffer() {
-    return buffer;
+  protected ReadableBuffer buffer() {
+    return ReadableBuffers.wrap(msg.getBytes(UTF_8), 0, msg.length());
   }
 }

@@ -68,7 +68,7 @@ public class MessageDeframerTest {
   @Test
   public void simplePayload() {
     deframer.request(1);
-    deframer.deframe(buffer(new byte[]{0, 0, 0, 0, 2, 3, 14}), false);
+    deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false);
     verify(listener).messageRead(messages.capture());
     assertEquals(Bytes.asList(new byte[]{3, 14}), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
@@ -78,7 +78,7 @@ public class MessageDeframerTest {
   @Test
   public void smallCombinedPayloads() {
     deframer.request(2);
-    deframer.deframe(buffer(new byte[]{0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 2, 14, 15}), false);
+    deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 2, 14, 15}), false);
     verify(listener, times(2)).messageRead(messages.capture());
     List<InputStream> streams = messages.getAllValues();
     assertEquals(2, streams.size());
@@ -149,7 +149,7 @@ public class MessageDeframerTest {
   public void largerFrameSize() {
     deframer.request(1);
     deframer.deframe(
-        Buffers.wrap(Bytes.concat(new byte[] {0, 0, 0, 3, (byte) 232}, new byte[1000])), false);
+        ReadableBuffers.wrap(Bytes.concat(new byte[] {0, 0, 0, 3, (byte) 232}, new byte[1000])), false);
     verify(listener).messageRead(messages.capture());
     assertEquals(Bytes.asList(new byte[1000]), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
@@ -196,8 +196,8 @@ public class MessageDeframerTest {
     }
   }
 
-  private static Buffer buffer(byte[] bytes) {
-    return Buffers.wrap(bytes);
+  private static ReadableBuffer buffer(byte[] bytes) {
+    return ReadableBuffers.wrap(bytes);
   }
 
   private static byte[] compress(byte[] bytes) {

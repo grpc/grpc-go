@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -32,59 +32,35 @@
 package io.grpc.transport;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.when;
+import static org.junit.Assert.assertNotSame;
 
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.mockito.stubbing.OngoingStubbing;
 
 /**
- * Tests for {@link AbstractBuffer}.
+ * Abstract base class for tests of {@link WritableBufferAllocator} subclasses.
  */
 @RunWith(JUnit4.class)
-public class AbstractBufferTest {
+public abstract class WritableBufferAllocatorTestBase {
 
-  @Mock
-  private AbstractBuffer buffer;
+  protected abstract WritableBufferAllocator allocator();
 
-  @Before
-  public void setup() {
-    MockitoAnnotations.initMocks(this);
+  @Test
+  public void testBuffersAreDifferent() {
+    WritableBuffer buffer1 = allocator().allocate(100);
+    WritableBuffer buffer2 = allocator().allocate(100);
+
+    assertNotSame(buffer1, buffer2);
+
+    buffer1.release();
+    buffer2.release();
   }
 
   @Test
-  public void readUnsignedShortShouldSucceed() {
-    mockBytes(0xFF, 0xEE);
-    assertEquals(0xFFEE, buffer.readUnsignedShort());
-  }
-
-  @Test
-  public void readUnsignedMediumShouldSucceed() {
-    mockBytes(0xFF, 0xEE, 0xDD);
-    assertEquals(0xFFEEDD, buffer.readUnsignedMedium());
-  }
-
-  @Test
-  public void readPositiveIntShouldSucceed() {
-    mockBytes(0x7F, 0xEE, 0xDD, 0xCC);
-    assertEquals(0x7FEEDDCC, buffer.readInt());
-  }
-
-  @Test
-  public void readNegativeIntShouldSucceed() {
-    mockBytes(0xFF, 0xEE, 0xDD, 0xCC);
-    assertEquals(0xFFEEDDCC, buffer.readInt());
-  }
-
-  private void mockBytes(int... bytes) {
-    when(buffer.readableBytes()).thenReturn(bytes.length);
-    OngoingStubbing<Integer> stub = when(buffer.readUnsignedByte());
-    for (int b : bytes) {
-      stub = stub.thenReturn(b);
-    }
+  public void testCapacity() {
+    WritableBuffer buffer = allocator().allocate(4096);
+    assertEquals(0, buffer.readableBytes());
+    assertEquals(4096, buffer.writableBytes());
   }
 }

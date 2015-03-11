@@ -58,7 +58,9 @@ import io.grpc.transport.MessageFramer;
 import io.grpc.transport.ServerStream;
 import io.grpc.transport.ServerStreamListener;
 import io.grpc.transport.ServerTransportListener;
+import io.grpc.transport.WritableBuffer;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
@@ -86,7 +88,6 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 
 /** Unit tests for {@link NettyServerHandler}. */
 @RunWith(JUnit4.class)
@@ -278,12 +279,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
   private ByteBuf dataFrame(int streamId, boolean endStream) {
     final ByteBuf compressionFrame = Unpooled.buffer(CONTENT.length);
-    MessageFramer framer = new MessageFramer(new MessageFramer.Sink<ByteBuffer>() {
+    MessageFramer framer = new MessageFramer(new MessageFramer.Sink() {
       @Override
-      public void deliverFrame(ByteBuffer frame, boolean endOfStream) {
-        compressionFrame.writeBytes(frame);
+      public void deliverFrame(WritableBuffer frame, boolean endOfStream) {
+        ByteBuf bytebuf = ((NettyWritableBuffer)frame).bytebuf();
+        compressionFrame.writeBytes(bytebuf);
       }
-    }, 1000);
+    }, new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT), 1000);
     framer.writePayload(new ByteArrayInputStream(CONTENT), CONTENT.length);
     framer.flush();
     if (endStream) {

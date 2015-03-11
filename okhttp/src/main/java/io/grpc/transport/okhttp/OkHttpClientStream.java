@@ -40,8 +40,9 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.Http2ClientStream;
+import io.grpc.transport.WritableBuffer;
+import okio.Buffer;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 
 import javax.annotation.concurrent.GuardedBy;
@@ -58,9 +59,9 @@ class OkHttpClientStream extends Http2ClientStream {
    * Construct a new client stream.
    */
   static OkHttpClientStream newStream(ClientStreamListener listener,
-                                       AsyncFrameWriter frameWriter,
-                                       OkHttpClientTransport transport,
-                                       OutboundFlowController outboundFlow) {
+                                      AsyncFrameWriter frameWriter,
+                                      OkHttpClientTransport transport,
+                                      OutboundFlowController outboundFlow) {
     return new OkHttpClientStream(listener, frameWriter, transport, outboundFlow);
   }
 
@@ -75,10 +76,10 @@ class OkHttpClientStream extends Http2ClientStream {
   private Object outboundFlowState;
 
   private OkHttpClientStream(ClientStreamListener listener,
-                     AsyncFrameWriter frameWriter,
-                     OkHttpClientTransport transport,
-                     OutboundFlowController outboundFlow) {
-    super(listener);
+                             AsyncFrameWriter frameWriter,
+                             OkHttpClientTransport transport,
+                             OutboundFlowController outboundFlow) {
+    super(new OkHttpWritableBufferAllocator(), listener);
     this.frameWriter = frameWriter;
     this.transport = transport;
     this.outboundFlow = outboundFlow;
@@ -109,17 +110,14 @@ class OkHttpClientStream extends Http2ClientStream {
     synchronized (lock) {
       long length = frame.size();
       window -= length;
-      super.transportDataReceived(new OkHttpBuffer(frame), endOfStream);
+      super.transportDataReceived(new OkHttpReadableBuffer(frame), endOfStream);
     }
   }
 
   @Override
-  protected void sendFrame(ByteBuffer frame, boolean endOfStream) {
+  protected void sendFrame(WritableBuffer frame, boolean endOfStream) {
     Preconditions.checkState(id() != 0, "streamId should be set");
-    okio.Buffer buffer = new okio.Buffer();
-    // Read the data into a buffer.
-    // TODO(madongfly): swap to NIO buffers or zero-copy if/when okhttp/okio supports it
-    buffer.write(frame.array(), frame.arrayOffset(), frame.remaining());
+    Buffer buffer = ((OkHttpWritableBuffer) frame).buffer();
     // Write the data to the remote endpoint.
     // Per http2 SPEC, the max data length should be larger than 64K, while our frame size is
     // only 4K.

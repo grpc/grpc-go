@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,45 +29,24 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport.netty;
+package io.grpc.transport.okhttp;
 
-import static io.netty.util.CharsetUtil.UTF_8;
+import io.grpc.transport.WritableBufferAllocator;
+import io.grpc.transport.WritableBufferAllocatorTestBase;
 
-import com.google.common.io.ByteStreams;
-
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.InputStream;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
- * Utility methods for supporting Netty tests.
+ * Tests for {@link OkHttpWritableBufferAllocator}.
  */
-public class NettyTestUtil {
+@RunWith(JUnit4.class)
+public class OkHttpWritableBufferAllocatorTest extends WritableBufferAllocatorTestBase {
 
-  static String toString(InputStream in) throws Exception {
-    byte[] bytes = new byte[in.available()];
-    ByteStreams.readFully(in, bytes);
-    return new String(bytes, UTF_8);
-  }
+  private final OkHttpWritableBufferAllocator allocator = new OkHttpWritableBufferAllocator();
 
-  static ByteBuf messageFrame(String message) throws Exception {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(message.getBytes(UTF_8));
-    dos.close();
-
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
-  }
-
-  static ByteBuf compressionFrame(byte[] data) {
-    ByteBuf buf = Unpooled.buffer();
-    buf.writeByte(0);
-    buf.writeInt(data.length);
-    buf.writeBytes(data);
-    return buf;
+  @Override
+  protected WritableBufferAllocator allocator() {
+    return allocator;
   }
 }

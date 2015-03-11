@@ -43,15 +43,15 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
- * Abstract base class for tests of {@link Buffer} subclasses.
+ * Abstract base class for tests of {@link ReadableBuffer} subclasses.
  */
 @RunWith(JUnit4.class)
-public abstract class BufferTestBase {
+public abstract class ReadableBufferTestBase {
   protected final String msg = "hello";
 
   @Test
   public void bufferShouldReadAllBytes() {
-    Buffer buffer = buffer();
+    ReadableBuffer buffer = buffer();
     for (int ix = 0; ix < msg.length(); ++ix) {
       assertEquals(msg.length() - ix, buffer.readableBytes());
       assertEquals(msg.charAt(ix), buffer.readUnsignedByte());
@@ -61,7 +61,7 @@ public abstract class BufferTestBase {
 
   @Test
   public void readToArrayShouldSucceed() {
-    Buffer buffer = buffer();
+    ReadableBuffer buffer = buffer();
     byte[] array = new byte[msg.length()];
     buffer.readBytes(array, 0, array.length);
     Arrays.equals(msg.getBytes(UTF_8), array);
@@ -70,7 +70,7 @@ public abstract class BufferTestBase {
 
   @Test
   public void partialReadToArrayShouldSucceed() {
-    Buffer buffer = buffer();
+    ReadableBuffer buffer = buffer();
     byte[] array = new byte[msg.length()];
     buffer.readBytes(array, 1, 2);
     Arrays.equals(new byte[] {'h', 'e'}, Arrays.copyOfRange(array, 1, 3));
@@ -79,7 +79,7 @@ public abstract class BufferTestBase {
 
   @Test
   public void readToStreamShouldSucceed() throws Exception {
-    Buffer buffer = buffer();
+    ReadableBuffer buffer = buffer();
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
     buffer.readBytes(stream, msg.length());
     Arrays.equals(msg.getBytes(UTF_8), stream.toByteArray());
@@ -88,7 +88,7 @@ public abstract class BufferTestBase {
 
   @Test
   public void partialReadToStreamShouldSucceed() throws Exception {
-    Buffer buffer = buffer();
+    ReadableBuffer buffer = buffer();
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
     buffer.readBytes(stream, 2);
     Arrays.equals(new byte[]{'h', 'e'}, Arrays.copyOfRange(stream.toByteArray(), 0, 2));
@@ -97,7 +97,7 @@ public abstract class BufferTestBase {
 
   @Test
   public void readToByteBufferShouldSucceed() {
-    Buffer buffer = buffer();
+    ReadableBuffer buffer = buffer();
     ByteBuffer byteBuffer = ByteBuffer.allocate(msg.length());
     buffer.readBytes(byteBuffer);
     byteBuffer.flip();
@@ -109,7 +109,7 @@ public abstract class BufferTestBase {
 
   @Test
   public void partialReadToByteBufferShouldSucceed() {
-    Buffer buffer = buffer();
+    ReadableBuffer buffer = buffer();
     ByteBuffer byteBuffer = ByteBuffer.allocate(2);
     buffer.readBytes(byteBuffer);
     byteBuffer.flip();
@@ -119,5 +119,5 @@ public abstract class BufferTestBase {
     assertEquals(3, buffer.readableBytes());
   }
 
-  protected abstract Buffer buffer();
+  protected abstract ReadableBuffer buffer();
 }

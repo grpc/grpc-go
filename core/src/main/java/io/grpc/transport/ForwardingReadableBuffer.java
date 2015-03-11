@@ -29,99 +29,100 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport.netty;
+package io.grpc.transport;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
-
-import io.grpc.transport.AbstractBuffer;
-import io.netty.buffer.ByteBuf;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
- * A {@link Buffer} implementation that is backed by a Netty {@link ByteBuf}. This class does not
- * call {@link ByteBuf#retain}, so if that is needed it should be called prior to creating this
- * buffer.
+ * Base class for a wrapper around another {@link ReadableBuffer}.
+ *
+ * <p>This class just passes every operation through to the underlying buffer. Subclasses may
+ * override methods to intercept concertain operations.
  */
-class NettyBuffer extends AbstractBuffer {
-  private final ByteBuf buffer;
-  private boolean closed;
+public abstract class ForwardingReadableBuffer implements ReadableBuffer {
 
-  NettyBuffer(ByteBuf buffer) {
-    this.buffer = Preconditions.checkNotNull(buffer, "buffer");
-  }
+  private final ReadableBuffer buf;
 
-  ByteBuf buffer() {
-    return buffer;
+  /**
+   * Constructor.
+   *
+   * @param buf the underlying buffer
+   */
+  public ForwardingReadableBuffer(ReadableBuffer buf) {
+    this.buf = Preconditions.checkNotNull(buf, "buf");
   }
 
   @Override
   public int readableBytes() {
-    return buffer.readableBytes();
-  }
-
-  @Override
-  public void skipBytes(int length) {
-    buffer.skipBytes(length);
+    return buf.readableBytes();
   }
 
   @Override
   public int readUnsignedByte() {
-    return buffer.readUnsignedByte();
+    return buf.readUnsignedByte();
   }
 
   @Override
-  public void readBytes(byte[] dest, int index, int length) {
-    buffer.readBytes(dest, index, length);
+  public int readUnsignedMedium() {
+    return buf.readUnsignedMedium();
+  }
+
+  @Override
+  public int readUnsignedShort() {
+    return buf.readUnsignedShort();
+  }
+
+  @Override
+  public int readInt() {
+    return buf.readInt();
+  }
+
+  @Override
+  public void skipBytes(int length) {
+    buf.skipBytes(length);
+  }
+
+  @Override
+  public void readBytes(byte[] dest, int destOffset, int length) {
+    buf.readBytes(dest, destOffset, length);
   }
 
   @Override
   public void readBytes(ByteBuffer dest) {
-    buffer.readBytes(dest);
+    buf.readBytes(dest);
   }
 
   @Override
-  public void readBytes(OutputStream dest, int length) {
-    try {
-      buffer.readBytes(dest, length);
-    } catch (IOException e) {
-      throw Throwables.propagate(e);
-    }
+  public void readBytes(OutputStream dest, int length) throws IOException {
+    buf.readBytes(dest, length);
   }
 
   @Override
-  public NettyBuffer readBytes(int length) {
-    // The ByteBuf returned by readSlice() stores a reference to buffer but does not call retain().
-    return new NettyBuffer(buffer.readSlice(length).retain());
+  public ReadableBuffer readBytes(int length) {
+    return buf.readBytes(length);
   }
 
   @Override
   public boolean hasArray() {
-    return buffer.hasArray();
+    return buf.hasArray();
   }
 
   @Override
   public byte[] array() {
-    return buffer.array();
+    return buf.array();
   }
 
   @Override
   public int arrayOffset() {
-    return buffer.arrayOffset() + buffer.readerIndex();
+    return buf.arrayOffset();
   }
 
-  /**
-   * If the first call to close, calls {@link ByteBuf#release} to release the internal Netty buffer.
-   */
   @Override
   public void close() {
-    // Don't allow slices to close. Also, only allow close to be called once.
-    if (!closed) {
-      closed = true;
-      buffer.release();
-    }
+    buf.close();
   }
 }

@@ -46,7 +46,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.Status.Code;
-import io.grpc.transport.ClientStream;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
 

@@ -31,43 +31,45 @@
 
 package io.grpc.transport.netty;
 
-import static io.netty.util.CharsetUtil.UTF_8;
+import static com.google.common.base.Charsets.UTF_8;
+import static org.junit.Assert.assertEquals;
 
-import com.google.common.io.ByteStreams;
-
-import io.netty.buffer.ByteBuf;
+import io.grpc.transport.ReadableBuffer;
+import io.grpc.transport.ReadableBufferTestBase;
 import io.netty.buffer.Unpooled;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.InputStream;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
- * Utility methods for supporting Netty tests.
+ * Tests for {@link NettyReadableBuffer}.
  */
-public class NettyTestUtil {
+@RunWith(JUnit4.class)
+public class NettyReadableBufferTest extends ReadableBufferTestBase {
+  private NettyReadableBuffer buffer;
 
-  static String toString(InputStream in) throws Exception {
-    byte[] bytes = new byte[in.available()];
-    ByteStreams.readFully(in, bytes);
-    return new String(bytes, UTF_8);
+  @Before
+  public void setup() {
+    buffer = new NettyReadableBuffer(Unpooled.copiedBuffer(msg, UTF_8));
   }
 
-  static ByteBuf messageFrame(String message) throws Exception {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(message.getBytes(UTF_8));
-    dos.close();
-
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
+  @Test
+  public void closeShouldReleaseBuffer() {
+    buffer.close();
+    assertEquals(0, buffer.buffer().refCnt());
   }
 
-  static ByteBuf compressionFrame(byte[] data) {
-    ByteBuf buf = Unpooled.buffer();
-    buf.writeByte(0);
-    buf.writeInt(data.length);
-    buf.writeBytes(data);
-    return buf;
+  @Test
+  public void closeMultipleTimesShouldReleaseBufferOnce() {
+    buffer.close();
+    buffer.close();
+    assertEquals(0, buffer.buffer().refCnt());
+  }
+
+  @Override
+  protected ReadableBuffer buffer() {
+    return buffer;
   }
 }

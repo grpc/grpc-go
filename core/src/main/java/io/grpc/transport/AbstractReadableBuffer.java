@@ -29,45 +29,62 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport.netty;
-
-import static io.netty.util.CharsetUtil.UTF_8;
-
-import com.google.common.io.ByteStreams;
-
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.InputStream;
+package io.grpc.transport;
 
 /**
- * Utility methods for supporting Netty tests.
+ * Abstract base class for {@link ReadableBuffer} implementations.
  */
-public class NettyTestUtil {
+public abstract class AbstractReadableBuffer implements ReadableBuffer {
 
-  static String toString(InputStream in) throws Exception {
-    byte[] bytes = new byte[in.available()];
-    ByteStreams.readFully(in, bytes);
-    return new String(bytes, UTF_8);
+  @Override
+  public final int readUnsignedMedium() {
+    checkReadable(3);
+    int b1 = readUnsignedByte();
+    int b2 = readUnsignedByte();
+    int b3 = readUnsignedByte();
+    return b1 << 16 | b2 << 8 | b3;
   }
 
-  static ByteBuf messageFrame(String message) throws Exception {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(message.getBytes(UTF_8));
-    dos.close();
 
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
+  @Override
+  public final int readUnsignedShort() {
+    checkReadable(2);
+    int b1 = readUnsignedByte();
+    int b2 = readUnsignedByte();
+    return b1 << 8 | b2;
   }
 
-  static ByteBuf compressionFrame(byte[] data) {
-    ByteBuf buf = Unpooled.buffer();
-    buf.writeByte(0);
-    buf.writeInt(data.length);
-    buf.writeBytes(data);
-    return buf;
+  @Override
+  public final int readInt() {
+    checkReadable(4);
+    int b1 = readUnsignedByte();
+    int b2 = readUnsignedByte();
+    int b3 = readUnsignedByte();
+    int b4 = readUnsignedByte();
+    return (b1 << 24) | (b2 << 16) | (b3 << 8) | b4;
+  }
+
+  @Override
+  public boolean hasArray() {
+    return false;
+  }
+
+  @Override
+  public byte[] array() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public int arrayOffset() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void close() {}
+
+  protected final void checkReadable(int length) {
+    if (readableBytes() < length) {
+      throw new IndexOutOfBoundsException();
+    }
   }
 }

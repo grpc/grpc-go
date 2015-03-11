@@ -36,7 +36,6 @@ import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 
 import javax.annotation.Nullable;
 
@@ -65,7 +64,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    */
   private Phase outboundPhase = Phase.HEADERS;
 
-  AbstractStream() {
+  AbstractStream(WritableBufferAllocator bufferAllocator) {
     MessageDeframer.Listener inboundMessageHandler = new MessageDeframer.Listener() {
       @Override
       public void bytesRead(int numBytes) {
@@ -87,14 +86,14 @@ public abstract class AbstractStream<IdT> implements Stream {
         remoteEndClosed();
       }
     };
-    MessageFramer.Sink<ByteBuffer> outboundFrameHandler = new MessageFramer.Sink<ByteBuffer>() {
+    MessageFramer.Sink outboundFrameHandler = new MessageFramer.Sink() {
       @Override
-      public void deliverFrame(ByteBuffer frame, boolean endOfStream) {
+      public void deliverFrame(WritableBuffer frame, boolean endOfStream) {
         internalSendFrame(frame, endOfStream);
       }
     };
 
-    framer = new MessageFramer(outboundFrameHandler, 4096);
+    framer = new MessageFramer(outboundFrameHandler, bufferAllocator, 4096);
     this.deframer = new MessageDeframer(inboundMessageHandler);
   }
 
@@ -168,7 +167,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    * @param endOfStream if {@code true} indicates that no more data will be sent on the stream by
    *        this endpoint.
    */
-  protected abstract void internalSendFrame(ByteBuffer frame, boolean endOfStream);
+  protected abstract void internalSendFrame(WritableBuffer frame, boolean endOfStream);
 
   /**
    * Handles a message that was just deframed.
@@ -194,7 +193,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   protected abstract void returnProcessedBytes(int processedBytes);
 
   /**
-   * Called when a {@link #deframe(Buffer, boolean)} operation failed.
+   * Called when a {@link #deframe(ReadableBuffer, boolean)} operation failed.
    *
    * @param cause the actual failure
    */
@@ -212,7 +211,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    * Called to parse a received frame and attempt delivery of any completed
    * messages. Must be called from the transport thread.
    */
-  protected final void deframe(Buffer frame, boolean endOfStream) {
+  protected final void deframe(ReadableBuffer frame, boolean endOfStream) {
     try {
       deframer.deframe(frame, endOfStream);
     } catch (Throwable t) {

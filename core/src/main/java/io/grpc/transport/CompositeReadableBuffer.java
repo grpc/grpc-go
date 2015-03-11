@@ -38,34 +38,34 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 
 /**
- * A {@link Buffer} that is composed of 0 or more {@link Buffer}s. This provides a facade that
+ * A {@link ReadableBuffer} that is composed of 0 or more {@link ReadableBuffer}s. This provides a facade that
  * allows multiple buffers to be treated as one.
  *
  * <p>When a buffer is added to a composite, its life cycle is controlled by the composite. Once
  * the composite has read past the end of a given buffer, that buffer is automatically closed and
  * removed from the composite.
  */
-public class CompositeBuffer extends AbstractBuffer {
+public class CompositeReadableBuffer extends AbstractReadableBuffer {
 
   private int readableBytes;
-  private final Queue<Buffer> buffers = new ArrayDeque<Buffer>();
+  private final Queue<ReadableBuffer> buffers = new ArrayDeque<ReadableBuffer>();
 
   /**
-   * Adds a new {@link Buffer} at the end of the buffer list. After a buffer is added, it is
+   * Adds a new {@link ReadableBuffer} at the end of the buffer list. After a buffer is added, it is
    * expected that this {@code CompositeBuffer} has complete ownership. Any attempt to modify the
    * buffer (i.e. modifying the readable bytes) may result in corruption of the internal state of
    * this {@code CompositeBuffer}.
    */
-  public void addBuffer(Buffer buffer) {
-    if (!(buffer instanceof CompositeBuffer)) {
+  public void addBuffer(ReadableBuffer buffer) {
+    if (!(buffer instanceof CompositeReadableBuffer)) {
       buffers.add(buffer);
       readableBytes += buffer.readableBytes();
       return;
     }
 
-    CompositeBuffer compositeBuffer = (CompositeBuffer) buffer;
+    CompositeReadableBuffer compositeBuffer = (CompositeReadableBuffer) buffer;
     while (!compositeBuffer.buffers.isEmpty()) {
-      Buffer subBuffer = compositeBuffer.buffers.remove();
+      ReadableBuffer subBuffer = compositeBuffer.buffers.remove();
       buffers.add(subBuffer);
     }
     readableBytes += compositeBuffer.readableBytes;
@@ -82,7 +82,7 @@ public class CompositeBuffer extends AbstractBuffer {
   public int readUnsignedByte() {
     ReadOperation op = new ReadOperation() {
       @Override
-      int readInternal(Buffer buffer, int length) {
+      int readInternal(ReadableBuffer buffer, int length) {
         return buffer.readUnsignedByte();
       }
     };
@@ -94,7 +94,7 @@ public class CompositeBuffer extends AbstractBuffer {
   public void skipBytes(int length) {
     execute(new ReadOperation() {
       @Override
-      public int readInternal(Buffer buffer, int length) {
+      public int readInternal(ReadableBuffer buffer, int length) {
         buffer.skipBytes(length);
         return 0;
       }
@@ -106,7 +106,7 @@ public class CompositeBuffer extends AbstractBuffer {
     execute(new ReadOperation() {
       int currentOffset = destOffset;
       @Override
-      public int readInternal(Buffer buffer, int length) {
+      public int readInternal(ReadableBuffer buffer, int length) {
         buffer.readBytes(dest, currentOffset, length);
         currentOffset += length;
         return 0;
@@ -118,7 +118,7 @@ public class CompositeBuffer extends AbstractBuffer {
   public void readBytes(final ByteBuffer dest) {
     execute(new ReadOperation() {
       @Override
-      public int readInternal(Buffer buffer, int length) {
+      public int readInternal(ReadableBuffer buffer, int length) {
         // Change the limit so that only lengthToCopy bytes are available.
         int prevLimit = dest.limit();
         dest.limit(dest.position() + length);
@@ -135,7 +135,7 @@ public class CompositeBuffer extends AbstractBuffer {
   public void readBytes(final OutputStream dest, int length) throws IOException {
     ReadOperation op = new ReadOperation() {
       @Override
-      public int readInternal(Buffer buffer, int length) throws IOException {
+      public int readInternal(ReadableBuffer buffer, int length) throws IOException {
         buffer.readBytes(dest, length);
         return 0;
       }
@@ -149,13 +149,13 @@ public class CompositeBuffer extends AbstractBuffer {
   }
 
   @Override
-  public CompositeBuffer readBytes(int length) {
+  public CompositeReadableBuffer readBytes(int length) {
     checkReadable(length);
     readableBytes -= length;
 
-    CompositeBuffer newBuffer = new CompositeBuffer();
+    CompositeReadableBuffer newBuffer = new CompositeReadableBuffer();
     while (length > 0) {
-      Buffer buffer = buffers.peek();
+      ReadableBuffer buffer = buffers.peek();
       if (buffer.readableBytes() > length) {
         newBuffer.addBuffer(buffer.readBytes(length));
         length = 0;
@@ -175,14 +175,14 @@ public class CompositeBuffer extends AbstractBuffer {
   }
 
   /**
-   * Executes the given {@link ReadOperation} against the {@link Buffer}s required to satisfy the
+   * Executes the given {@link ReadOperation} against the {@link ReadableBuffer}s required to satisfy the
    * requested {@code length}.
    */
   private void execute(ReadOperation op, int length) {
     checkReadable(length);
 
     for (; length > 0 && !buffers.isEmpty(); advanceBufferIfNecessary()) {
-      Buffer buffer = buffers.peek();
+      ReadableBuffer buffer = buffers.peek();
       int lengthToCopy = Math.min(length, buffer.readableBytes());
 
       // Perform the read operation for this buffer.
@@ -205,28 +205,28 @@ public class CompositeBuffer extends AbstractBuffer {
    * If the current buffer is exhausted, removes and closes it.
    */
   private void advanceBufferIfNecessary() {
-    Buffer buffer = buffers.peek();
+    ReadableBuffer buffer = buffers.peek();
     if (buffer.readableBytes() == 0) {
       buffers.remove().close();
     }
   }
 
   /**
-   * A simple read operation to perform on a single {@link Buffer}. All state management for the
-   * buffers is done by {@link CompositeBuffer#execute(ReadOperation, int)}.
+   * A simple read operation to perform on a single {@link ReadableBuffer}. All state management for the
+   * buffers is done by {@link CompositeReadableBuffer#execute(ReadOperation, int)}.
    */
   private abstract class ReadOperation {
     /**
-     * Only used by {@link CompositeBuffer#readUnsignedByte()}.
+     * Only used by {@link CompositeReadableBuffer#readUnsignedByte()}.
      */
     int value;
 
     /**
-     * Only used by {@link CompositeBuffer#readBytes(OutputStream, int)};
+     * Only used by {@link CompositeReadableBuffer#readBytes(OutputStream, int)};
      */
     IOException ex;
 
-    final void read(Buffer buffer, int length) {
+    final void read(ReadableBuffer buffer, int length) {
       try {
         value = readInternal(buffer, length);
       } catch (IOException e) {
@@ -238,6 +238,6 @@ public class CompositeBuffer extends AbstractBuffer {
       return ex != null;
     }
 
-    abstract int readInternal(Buffer buffer, int length) throws IOException;
+    abstract int readInternal(ReadableBuffer buffer, int length) throws IOException;
   }
 }

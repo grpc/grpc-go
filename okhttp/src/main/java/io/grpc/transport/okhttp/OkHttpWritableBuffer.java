@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,36 +29,44 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport;
+package io.grpc.transport.okhttp;
 
-import static com.google.common.base.Charsets.UTF_8;
-import static io.grpc.transport.Buffers.wrap;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import io.grpc.transport.WritableBuffer;
+import okio.Buffer;
 
-import org.junit.Test;
+class OkHttpWritableBuffer implements WritableBuffer {
 
-/**
- * Tests for the array-backed {@link Buffer} returned by {@link Buffers#wrap(byte[], int, int)};
- */
-public class BuffersArrayTest extends BufferTestBase {
+  private final Buffer buffer;
+  private int writableBytes;
+  private int readableBytes;
 
-  @Test
-  public void bufferShouldExposeArray() {
-    byte[] array = msg.getBytes(UTF_8);
-    Buffer buffer = wrap(array, 1, msg.length() - 1);
-    assertTrue(buffer.hasArray());
-    assertSame(array, buffer.array());
-    assertEquals(1, buffer.arrayOffset());
-
-    // Now read a byte and verify that the offset changes.
-    buffer.readUnsignedByte();
-    assertEquals(2, buffer.arrayOffset());
+  OkHttpWritableBuffer(Buffer buffer, int capacity) {
+    this.buffer = buffer;
+    writableBytes = capacity;
   }
 
   @Override
-  protected Buffer buffer() {
-    return Buffers.wrap(msg.getBytes(UTF_8), 0, msg.length());
+  public void write(byte[] src, int srcIndex, int length) {
+    buffer.write(src, srcIndex, length);
+    writableBytes -= length;
+    readableBytes += length;
+  }
+
+  @Override
+  public int writableBytes() {
+    return writableBytes;
+  }
+
+  @Override
+  public int readableBytes() {
+    return readableBytes;
+  }
+
+  @Override
+  public void release() {
+  }
+
+  Buffer buffer() {
+    return buffer;
   }
 }

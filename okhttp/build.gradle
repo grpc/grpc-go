@@ -6,6 +6,9 @@ description = "gRPC: OkHttp"
 dependencies {
     compile project(':grpc-core'),
             libraries.okhttp
+
+    // Tests depend on base class defined by core module.
+    testCompile project(':grpc-core').sourceSets.test.output
 }
 
 // Configure the animal sniffer plugin

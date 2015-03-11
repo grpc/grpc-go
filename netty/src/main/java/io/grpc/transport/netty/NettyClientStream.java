@@ -35,11 +35,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.Http2ClientStream;
+import io.grpc.transport.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http2.Http2Headers;
-
-import java.nio.ByteBuffer;
 
 /**
  * Client stream for a Netty transport.
@@ -50,7 +49,7 @@ class NettyClientStream extends Http2ClientStream {
   private final NettyClientHandler handler;
 
   NettyClientStream(ClientStreamListener listener, Channel channel, NettyClientHandler handler) {
-    super(listener);
+    super(new NettyWritableBufferAllocator(channel.alloc()), listener);
     this.channel = checkNotNull(channel, "channel");
     this.handler = checkNotNull(handler, "handler");
   }
@@ -74,7 +73,7 @@ class NettyClientStream extends Http2ClientStream {
   }
 
   void transportDataReceived(ByteBuf frame, boolean endOfStream) {
-    transportDataReceived(new NettyBuffer(frame.retain()), endOfStream);
+    transportDataReceived(new NettyReadableBuffer(frame.retain()), endOfStream);
   }
 
   @Override
@@ -84,11 +83,9 @@ class NettyClientStream extends Http2ClientStream {
   }
 
   @Override
-  protected void sendFrame(ByteBuffer frame, boolean endOfStream) {
-    SendGrpcFrameCommand cmd =
-            new SendGrpcFrameCommand(this, Utils.toByteBuf(channel.alloc(), frame), endOfStream);
-
-    channel.writeAndFlush(cmd);
+  protected void sendFrame(WritableBuffer frame, boolean endOfStream) {
+    ByteBuf bytebuf = ((NettyWritableBuffer) frame).bytebuf();
+    channel.writeAndFlush(new SendGrpcFrameCommand(this, bytebuf, endOfStream));
   }
 
   @Override

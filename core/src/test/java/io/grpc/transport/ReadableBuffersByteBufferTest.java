@@ -29,45 +29,19 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport.netty;
+package io.grpc.transport;
 
-import static io.netty.util.CharsetUtil.UTF_8;
+import static com.google.common.base.Charsets.UTF_8;
 
-import com.google.common.io.ByteStreams;
-
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.InputStream;
+import java.nio.ByteBuffer;
 
 /**
- * Utility methods for supporting Netty tests.
+ * Tests for the array-backed {@link ReadableBuffer} returned by {@link ReadableBuffers#wrap(ByteBuffer)}.
  */
-public class NettyTestUtil {
+public class ReadableBuffersByteBufferTest extends ReadableBufferTestBase {
 
-  static String toString(InputStream in) throws Exception {
-    byte[] bytes = new byte[in.available()];
-    ByteStreams.readFully(in, bytes);
-    return new String(bytes, UTF_8);
-  }
-
-  static ByteBuf messageFrame(String message) throws Exception {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(message.getBytes(UTF_8));
-    dos.close();
-
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
-  }
-
-  static ByteBuf compressionFrame(byte[] data) {
-    ByteBuf buf = Unpooled.buffer();
-    buf.writeByte(0);
-    buf.writeInt(data.length);
-    buf.writeBytes(data);
-    return buf;
+  @Override
+  protected ReadableBuffer buffer() {
+    return ReadableBuffers.wrap(ByteBuffer.wrap(msg.getBytes(UTF_8)));
   }
 }

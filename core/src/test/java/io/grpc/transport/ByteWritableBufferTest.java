@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,45 +29,28 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport.netty;
+package io.grpc.transport;
 
-import static io.netty.util.CharsetUtil.UTF_8;
+import org.junit.Before;
 
-import com.google.common.io.ByteStreams;
+import java.util.Arrays;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
+public class ByteWritableBufferTest extends WritableBufferTestBase {
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.InputStream;
+  private MessageFramerTest.ByteWritableBuffer buffer;
 
-/**
- * Utility methods for supporting Netty tests.
- */
-public class NettyTestUtil {
-
-  static String toString(InputStream in) throws Exception {
-    byte[] bytes = new byte[in.available()];
-    ByteStreams.readFully(in, bytes);
-    return new String(bytes, UTF_8);
+  @Before
+  public void setup() {
+    buffer = new MessageFramerTest.ByteWritableBuffer(100);
   }
 
-  static ByteBuf messageFrame(String message) throws Exception {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(message.getBytes(UTF_8));
-    dos.close();
-
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
+  @Override
+  protected WritableBuffer buffer() {
+    return buffer;
   }
 
-  static ByteBuf compressionFrame(byte[] data) {
-    ByteBuf buf = Unpooled.buffer();
-    buf.writeByte(0);
-    buf.writeInt(data.length);
-    buf.writeBytes(data);
-    return buf;
+  @Override
+  protected byte[] writtenBytes() {
+    return Arrays.copyOfRange(buffer.data, 0, buffer.readableBytes());
   }
 }

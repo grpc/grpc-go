@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,19 +29,45 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport;
+package io.grpc.transport.netty;
 
-import static com.google.common.base.Charsets.UTF_8;
+import io.grpc.transport.WritableBuffer;
+import io.grpc.transport.WritableBufferTestBase;
+import io.netty.buffer.Unpooled;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
- * Tests for the array-backed {@link Buffer} returned by {@link Buffers#wrap(ByteBuffer)}.
+ * Tests for {@link NettyWritableBuffer}.
  */
-public class BuffersByteBufferTest extends BufferTestBase {
+@RunWith(JUnit4.class)
+public class NettyWritableBufferTest extends WritableBufferTestBase {
+
+  private NettyWritableBuffer buffer;
+
+  @Before
+  public void setup() {
+    buffer = new NettyWritableBuffer(Unpooled.buffer(100));
+  }
+
+  @After
+  public void teardown() {
+    buffer.release();
+  }
 
   @Override
-  protected Buffer buffer() {
-    return Buffers.wrap(ByteBuffer.wrap(msg.getBytes(UTF_8)));
+  protected WritableBuffer buffer() {
+    return buffer;
+  }
+
+  @Override
+  protected byte[] writtenBytes() {
+    byte b[] = buffer.bytebuf().array();
+    int fromIdx = buffer.bytebuf().arrayOffset();
+    return Arrays.copyOfRange(b, fromIdx, buffer.readableBytes());
   }
 }

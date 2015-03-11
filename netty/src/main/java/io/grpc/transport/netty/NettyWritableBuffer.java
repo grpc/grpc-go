@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,43 +31,41 @@
 
 package io.grpc.transport.netty;
 
-import static io.netty.util.CharsetUtil.UTF_8;
-
-import com.google.common.io.ByteStreams;
-
+import io.grpc.transport.WritableBuffer;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.InputStream;
 
 /**
- * Utility methods for supporting Netty tests.
+ * The {@link WritableBuffer} used by the Netty transport.
  */
-public class NettyTestUtil {
+class NettyWritableBuffer implements WritableBuffer {
 
-  static String toString(InputStream in) throws Exception {
-    byte[] bytes = new byte[in.available()];
-    ByteStreams.readFully(in, bytes);
-    return new String(bytes, UTF_8);
+  private final ByteBuf bytebuf;
+
+  NettyWritableBuffer(ByteBuf bytebuf) {
+    this.bytebuf = bytebuf;
   }
 
-  static ByteBuf messageFrame(String message) throws Exception {
-    ByteArrayOutputStream os = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(os);
-    dos.write(message.getBytes(UTF_8));
-    dos.close();
-
-    // Write the compression header followed by the context frame.
-    return compressionFrame(os.toByteArray());
+  @Override
+  public void write(byte[] src, int srcIndex, int length) {
+    bytebuf.writeBytes(src, srcIndex, length);
   }
 
-  static ByteBuf compressionFrame(byte[] data) {
-    ByteBuf buf = Unpooled.buffer();
-    buf.writeByte(0);
-    buf.writeInt(data.length);
-    buf.writeBytes(data);
-    return buf;
+  @Override
+  public int writableBytes() {
+    return bytebuf.writableBytes();
+  }
+
+  @Override
+  public int readableBytes() {
+    return bytebuf.readableBytes();
+  }
+
+  @Override
+  public void release() {
+    bytebuf.release();
+  }
+
+  ByteBuf bytebuf() {
+    return bytebuf;
   }
 }

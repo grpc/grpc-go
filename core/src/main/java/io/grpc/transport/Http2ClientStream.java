@@ -70,8 +70,9 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
   private Charset errorCharset = Charsets.UTF_8;
   private boolean contentTypeChecked;
 
-  protected Http2ClientStream(ClientStreamListener listener) {
-    super(listener);
+  protected Http2ClientStream(WritableBufferAllocator bufferAllocator,
+                              ClientStreamListener listener) {
+    super(bufferAllocator, listener);
   }
 
   /**
@@ -112,7 +113,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
    * @param frame the received data frame
    * @param endOfStream {@code true} if there will be no more data received for this stream
    */
-  protected void transportDataReceived(Buffer frame, boolean endOfStream) {
+  protected void transportDataReceived(ReadableBuffer frame, boolean endOfStream) {
     if (transportError == null && inboundPhase() == Phase.HEADERS) {
       // Must receive headers prior to receiving any payload as we use headers to check for
       // protocol correctness.
@@ -122,7 +123,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
       // We've already detected a transport error and now we're just accumulating more detail
       // for it.
       transportError = transportError.augmentDescription("DATA-----------------------------\n" +
-          Buffers.readAsString(frame, errorCharset));
+          ReadableBuffers.readAsString(frame, errorCharset));
       frame.close();
       if (transportError.getDescription().length() > 1000 || endOfStream) {
         inboundTransportError(transportError);

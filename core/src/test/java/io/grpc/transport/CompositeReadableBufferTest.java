@@ -47,17 +47,17 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
- * Tests for {@link CompositeBuffer}.
+ * Tests for {@link CompositeReadableBuffer}.
  */
 @RunWith(JUnit4.class)
-public class CompositeBufferTest {
+public class CompositeReadableBufferTest {
   private static final String EXPECTED_VALUE = "hello world";
 
-  private CompositeBuffer composite;
+  private CompositeReadableBuffer composite;
 
   @Before
   public void setup() {
-    composite = new CompositeBuffer();
+    composite = new CompositeReadableBuffer();
     splitAndAdd(EXPECTED_VALUE);
   }
 
@@ -68,10 +68,10 @@ public class CompositeBufferTest {
 
   @Test
   public void singleBufferShouldSucceed() {
-    composite = new CompositeBuffer();
-    composite.addBuffer(Buffers.wrap(EXPECTED_VALUE.getBytes(UTF_8)));
+    composite = new CompositeReadableBuffer();
+    composite.addBuffer(ReadableBuffers.wrap(EXPECTED_VALUE.getBytes(UTF_8)));
     assertEquals(EXPECTED_VALUE.length(), composite.readableBytes());
-    assertEquals(EXPECTED_VALUE, Buffers.readAsStringUtf8(composite));
+    assertEquals(EXPECTED_VALUE, ReadableBuffers.readAsStringUtf8(composite));
     assertEquals(0, composite.readableBytes());
   }
 
@@ -161,9 +161,9 @@ public class CompositeBufferTest {
 
   @Test
   public void closeShouldCloseBuffers() {
-    composite = new CompositeBuffer();
-    Buffer mock1 = mock(Buffer.class);
-    Buffer mock2 = mock(Buffer.class);
+    composite = new CompositeReadableBuffer();
+    ReadableBuffer mock1 = mock(ReadableBuffer.class);
+    ReadableBuffer mock2 = mock(ReadableBuffer.class);
     composite.addBuffer(mock1);
     composite.addBuffer(mock2);
 
@@ -177,7 +177,7 @@ public class CompositeBufferTest {
     for (int startIndex = 0, endIndex = 0; startIndex < value.length(); startIndex = endIndex) {
       endIndex = Math.min(value.length(), startIndex + partLength);
       String part = value.substring(startIndex, endIndex);
-      composite.addBuffer(Buffers.wrap(part.getBytes(UTF_8)));
+      composite.addBuffer(ReadableBuffers.wrap(part.getBytes(UTF_8)));
     }
 
     assertEquals(value.length(), composite.readableBytes());

@@ -42,49 +42,49 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
 /**
- * Utility methods for creating {@link Buffer} instances.
+ * Utility methods for creating {@link ReadableBuffer} instances.
  */
-public final class Buffers {
-  private static final Buffer EMPTY_BUFFER = new ByteArrayWrapper(new byte[0]);
+public final class ReadableBuffers {
+  private static final ReadableBuffer EMPTY_BUFFER = new ByteArrayWrapper(new byte[0]);
 
   /**
-   * Returns an empty {@link Buffer} instance.
+   * Returns an empty {@link ReadableBuffer} instance.
    */
-  public static Buffer empty() {
+  public static ReadableBuffer empty() {
     return EMPTY_BUFFER;
   }
 
   /**
    * Shortcut for {@code wrap(bytes, 0, bytes.length}.
    */
-  public static Buffer wrap(byte[] bytes) {
+  public static ReadableBuffer wrap(byte[] bytes) {
     return new ByteArrayWrapper(bytes, 0, bytes.length);
   }
 
   /**
-   * Creates a new {@link Buffer} that is backed by the given byte array.
+   * Creates a new {@link ReadableBuffer} that is backed by the given byte array.
    *
    * @param bytes the byte array being wrapped.
    * @param offset the starting offset for the buffer within the byte array.
    * @param length the length of the buffer from the {@code offset} index.
    */
-  public static Buffer wrap(byte[] bytes, int offset, int length) {
+  public static ReadableBuffer wrap(byte[] bytes, int offset, int length) {
     return new ByteArrayWrapper(bytes, offset, length);
   }
 
   /**
-   * Creates a new {@link Buffer} that is backed by the given {@link ByteBuffer}. Calls to read from
+   * Creates a new {@link ReadableBuffer} that is backed by the given {@link ByteBuffer}. Calls to read from
    * the buffer will increment the position of the {@link ByteBuffer}.
    */
-  public static Buffer wrap(ByteBuffer bytes) {
-    return new ByteBufferWrapper(bytes);
+  public static ReadableBuffer wrap(ByteBuffer bytes) {
+    return new ByteReadableBufferWrapper(bytes);
   }
 
   /**
-   * Reads an entire {@link Buffer} to a new array. After calling this method, the buffer will
+   * Reads an entire {@link ReadableBuffer} to a new array. After calling this method, the buffer will
    * contain no readable bytes.
    */
-  public static byte[] readArray(Buffer buffer) {
+  public static byte[] readArray(ReadableBuffer buffer) {
     Preconditions.checkNotNull(buffer, "buffer");
     int length = buffer.readableBytes();
     byte[] bytes = new byte[length];
@@ -93,18 +93,18 @@ public final class Buffers {
   }
 
   /**
-   * Reads the entire {@link Buffer} to a new {@link String} with the given charset.
+   * Reads the entire {@link ReadableBuffer} to a new {@link String} with the given charset.
    */
-  public static String readAsString(Buffer buffer, Charset charset) {
+  public static String readAsString(ReadableBuffer buffer, Charset charset) {
     Preconditions.checkNotNull(charset, "charset");
     byte[] bytes = readArray(buffer);
     return new String(bytes, charset);
   }
 
   /**
-   * Reads the entire {@link Buffer} to a new {@link String} using UTF-8 decoding.
+   * Reads the entire {@link ReadableBuffer} to a new {@link String} using UTF-8 decoding.
    */
-  public static String readAsStringUtf8(Buffer buffer) {
+  public static String readAsStringUtf8(ReadableBuffer buffer) {
     return readAsString(buffer, UTF_8);
   }
 
@@ -116,18 +116,18 @@ public final class Buffers {
    * @param buffer the buffer backing the new {@link InputStream}.
    * @param owner if {@code true}, the returned stream will close the buffer when closed.
    */
-  public static InputStream openStream(Buffer buffer, boolean owner) {
+  public static InputStream openStream(ReadableBuffer buffer, boolean owner) {
     return new BufferInputStream(owner ? buffer : ignoreClose(buffer));
   }
 
   /**
-   * Decorates the given {@link Buffer} to ignore calls to {@link Buffer#close}.
+   * Decorates the given {@link ReadableBuffer} to ignore calls to {@link ReadableBuffer#close}.
    *
    * @param buffer the buffer to be decorated.
-   * @return a wrapper around {@code buffer} that ignores calls to {@link Buffer#close}.
+   * @return a wrapper around {@code buffer} that ignores calls to {@link ReadableBuffer#close}.
    */
-  public static Buffer ignoreClose(Buffer buffer) {
-    return new ForwardingBuffer(buffer) {
+  public static ReadableBuffer ignoreClose(ReadableBuffer buffer) {
+    return new ForwardingReadableBuffer(buffer) {
       @Override
       public void close() {
         // Ignore.
@@ -136,9 +136,9 @@ public final class Buffers {
   }
 
   /**
-   * A {@link Buffer} that is backed by a byte array.
+   * A {@link ReadableBuffer} that is backed by a byte array.
    */
-  private static class ByteArrayWrapper extends AbstractBuffer {
+  private static class ByteArrayWrapper extends AbstractReadableBuffer {
     int offset;
     final int end;
     final byte[] bytes;
@@ -221,12 +221,12 @@ public final class Buffers {
   }
 
   /**
-   * A {@link Buffer} that is backed by a {@link ByteBuffer}.
+   * A {@link ReadableBuffer} that is backed by a {@link ByteBuffer}.
    */
-  private static class ByteBufferWrapper extends AbstractBuffer {
+  private static class ByteReadableBufferWrapper extends AbstractReadableBuffer {
     final ByteBuffer bytes;
 
-    ByteBufferWrapper(ByteBuffer bytes) {
+    ByteReadableBufferWrapper(ByteBuffer bytes) {
       this.bytes = Preconditions.checkNotNull(bytes, "bytes");
     }
 
@@ -283,12 +283,12 @@ public final class Buffers {
     }
 
     @Override
-    public ByteBufferWrapper readBytes(int length) {
+    public ByteReadableBufferWrapper readBytes(int length) {
       checkReadable(length);
       ByteBuffer buffer = bytes.duplicate();
       bytes.position(bytes.position() + length);
       buffer.limit(bytes.position() + length);
-      return new ByteBufferWrapper(buffer);
+      return new ByteReadableBufferWrapper(buffer);
     }
 
     @Override
@@ -308,12 +308,12 @@ public final class Buffers {
   }
 
   /**
-   * An {@link InputStream} that is backed by a {@link Buffer}.
+   * An {@link InputStream} that is backed by a {@link ReadableBuffer}.
    */
   private static class BufferInputStream extends InputStream {
-    final Buffer buffer;
+    final ReadableBuffer buffer;
 
-    public BufferInputStream(Buffer buffer) {
+    public BufferInputStream(ReadableBuffer buffer) {
       this.buffer = Preconditions.checkNotNull(buffer, "buffer");
     }
 
@@ -344,5 +344,5 @@ public final class Buffers {
     }
   }
 
-  private Buffers() {}
+  private ReadableBuffers() {}
 }

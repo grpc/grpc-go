@@ -36,8 +36,9 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static io.grpc.transport.MessageFramer.Compression;
 
-import com.google.common.primitives.Bytes;
+import com.google.common.base.Preconditions;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -49,8 +50,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
-import java.nio.ByteBuffer;
-import java.util.List;
+import java.util.Arrays;
 
 /**
  * Tests for {@link MessageFramer}
@@ -60,19 +60,18 @@ public class MessageFramerTest {
   private static final int TRANSPORT_FRAME_SIZE = 12;
 
   @Mock
-  private MessageFramer.Sink<List<Byte>> sink;
-  private MessageFramer.Sink<ByteBuffer> copyingSink;
+  private MessageFramer.Sink sink;
   private MessageFramer framer;
 
   @Captor
-  private ArgumentCaptor<List<Byte>> frameCaptor;
+  private ArgumentCaptor<ByteWritableBuffer> frameCaptor;
+  private WritableBufferAllocator allocator = new BytesWritableBufferAllocator();
 
   @Before
   public void setup() {
     MockitoAnnotations.initMocks(this);
 
-    copyingSink = new ByteArrayConverterSink(sink);
-    framer = new MessageFramer(copyingSink, TRANSPORT_FRAME_SIZE);
+    framer = new MessageFramer(sink, allocator, TRANSPORT_FRAME_SIZE);
   }
 
   @Test
@@ -80,7 +79,7 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {3, 14});
     verifyNoMoreInteractions(sink);
     framer.flush();
-    verify(sink).deliverFrame(Bytes.asList(new byte[] {0, 0, 0, 0, 2, 3, 14}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false);
     verifyNoMoreInteractions(sink);
   }
 
@@ -91,8 +90,7 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {14});
     verifyNoMoreInteractions(sink);
     framer.flush();
-    verify(sink).deliverFrame(
-        Bytes.asList(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false);
     verifyNoMoreInteractions(sink);
   }
 
@@ -101,26 +99,25 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {3, 14, 1, 5, 9, 2, 6});
     verifyNoMoreInteractions(sink);
     framer.close();
-    verify(sink).deliverFrame(Bytes.asList(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true);
     verifyNoMoreInteractions(sink);
   }
 
   @Test
   public void closeWithoutBufferedFrameGivesEmptySink() {
     framer.close();
-    verify(sink).deliverFrame(Bytes.asList(), true);
+    verify(sink).deliverFrame(new ByteWritableBuffer(0), true);
     verifyNoMoreInteractions(sink);
   }
 
   @Test
   public void payloadSplitBetweenSinks() {
     writePayload(framer, new byte[] {3, 14, 1, 5, 9, 2, 6, 5});
-    verify(sink).deliverFrame(
-        Bytes.asList(new byte[] {0, 0, 0, 0, 8, 3, 14, 1, 5, 9, 2, 6}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 8, 3, 14, 1, 5, 9, 2, 6}), false);
     verifyNoMoreInteractions(sink);
 
     framer.flush();
-    verify(sink).deliverFrame(Bytes.asList(new byte[] {5}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {5}), false);
     verifyNoMoreInteractions(sink);
   }
 
@@ -129,11 +126,11 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {3, 14, 1});
     writePayload(framer, new byte[] {3});
     verify(sink).deliverFrame(
-        Bytes.asList(new byte[] {0, 0, 0, 0, 3, 3, 14, 1, 0, 0, 0, 0}), false);
+            toWriteBuffer(new byte[] {0, 0, 0, 0, 3, 3, 14, 1, 0, 0, 0, 0}), false);
     verifyNoMoreInteractions(sink);
 
     framer.flush();
-    verify(sink).deliverFrame(Bytes.asList(new byte[] {1, 3}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {1, 3}), false);
     verifyNoMoreInteractions(sink);
   }
 
@@ -141,7 +138,7 @@ public class MessageFramerTest {
   public void emptyPayloadYieldsFrame() throws Exception {
     writePayload(framer, new byte[0]);
     framer.flush();
-    verify(sink).deliverFrame(Bytes.asList(new byte[] {0, 0, 0, 0, 0}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false);
   }
 
   @Test
@@ -149,60 +146,118 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {3, 14});
     framer.flush();
     framer.flush();
-    verify(sink).deliverFrame(Bytes.asList(new byte[] {0, 0, 0, 0, 2, 3, 14}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false);
     verifyNoMoreInteractions(sink);
   }
 
   @Test
   public void largerFrameSize() throws Exception {
     final int transportFrameSize = 10000;
-    MessageFramer framer = new MessageFramer(copyingSink, transportFrameSize);
+    MessageFramer framer = new MessageFramer(sink, allocator, transportFrameSize);
     writePayload(framer, new byte[1000]);
     framer.flush();
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false));
-    List<Byte> buffer = frameCaptor.getValue();
+    ByteWritableBuffer buffer = frameCaptor.getValue();
     assertEquals(1005, buffer.size());
-    assertEquals(Bytes.asList(new byte[] {0, 0, 0, 3, (byte) 232}), buffer.subList(0, 5));
+
+    byte data[] = new byte[1005];
+    data[3] = 3;
+    data[4] = (byte) 232;
+
+    assertEquals(toWriteBuffer(data, transportFrameSize), buffer);
     verifyNoMoreInteractions(sink);
   }
 
   @Test
   public void compressed() throws Exception {
     final int transportFrameSize = 100;
-    MessageFramer framer = new MessageFramer(copyingSink, transportFrameSize,
-        MessageFramer.Compression.GZIP);
+    MessageFramer framer =
+            new MessageFramer(sink, allocator, transportFrameSize, Compression.GZIP);
     writePayload(framer, new byte[1000]);
     framer.flush();
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false));
-    List<Byte> buffer = frameCaptor.getValue();
+    ByteWritableBuffer buffer = frameCaptor.getValue();
     // It should have compressed very well.
     assertTrue(buffer.size() < 100);
     // We purposefully don't check the last byte of length, since that depends on how exactly it
     // compressed.
-    assertEquals(Bytes.asList(new byte[] {1, 0, 0, 0}), buffer.subList(0, 4));
-    verifyNoMoreInteractions(sink);
+    assertEquals(1, buffer.data[0]);
+    assertEquals(0, buffer.data[1]);
+    assertEquals(0, buffer.data[2]);
+    assertEquals(0, buffer.data[3]);
+  }
+
+  private static WritableBuffer toWriteBuffer(byte[] data) {
+    return toWriteBuffer(data, TRANSPORT_FRAME_SIZE);
+  }
+
+  private static WritableBuffer toWriteBuffer(byte[] data, int maxFrameSize) {
+    ByteWritableBuffer buffer = new ByteWritableBuffer(maxFrameSize);
+    buffer.write(data, 0, data.length);
+    return buffer;
   }
 
   private static void writePayload(MessageFramer framer, byte[] bytes) {
     framer.writePayload(new ByteArrayInputStream(bytes), bytes.length);
   }
 
-  /**
-   * Since ByteBuffers are reused, this sink copies their value at the time of the call. Converting
-   * to List<Byte> is convenience.
-   */
-  private static class ByteArrayConverterSink implements MessageFramer.Sink<ByteBuffer> {
-    private final MessageFramer.Sink<List<Byte>> delegate;
+  static class ByteWritableBuffer implements WritableBuffer {
+    byte[] data;
+    private int writeIdx;
 
-    public ByteArrayConverterSink(MessageFramer.Sink<List<Byte>> delegate) {
-      this.delegate = delegate;
+    ByteWritableBuffer(int maxFrameSize) {
+      data = new byte[maxFrameSize];
     }
 
     @Override
-    public void deliverFrame(ByteBuffer frame, boolean endOfStream) {
-      byte[] frameBytes = new byte[frame.remaining()];
-      frame.get(frameBytes);
-      delegate.deliverFrame(Bytes.asList(frameBytes), endOfStream);
+    public void write(byte[] bytes, int srcIndex, int length) {
+      System.arraycopy(bytes, srcIndex, data, writeIdx, length);
+      writeIdx += length;
+    }
+
+    @Override
+    public int writableBytes() {
+      return data.length - writeIdx;
+    }
+
+    @Override
+    public int readableBytes() {
+      return writeIdx;
+    }
+
+    @Override
+    public void release() {
+      data = null;
+    }
+
+    int size() {
+      return writeIdx;
+    }
+
+    @Override
+    public boolean equals(Object buffer) {
+      if (!(buffer instanceof ByteWritableBuffer)) {
+        return false;
+      }
+
+      ByteWritableBuffer other = (ByteWritableBuffer) buffer;
+
+      return writableBytes() == other.writableBytes() &&
+             readableBytes() == other.readableBytes() &&
+             Arrays.equals(data, other.data);
+    }
+
+    @Override
+    public int hashCode() {
+      return Arrays.hashCode(data) + writableBytes() + readableBytes();
+    }
+  }
+
+  static class BytesWritableBufferAllocator implements WritableBufferAllocator {
+
+    @Override
+    public WritableBuffer allocate(int maxCapacity) {
+      return new ByteWritableBuffer(maxCapacity);
     }
   }
 }

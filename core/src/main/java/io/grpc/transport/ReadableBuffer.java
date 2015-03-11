@@ -44,7 +44,7 @@ import java.nio.ByteBuffer;
  * done in {@link ByteBuffer}. It is not expected that callers will attempt to modify the backing
  * array.
  */
-public interface Buffer extends Closeable {
+public interface ReadableBuffer extends Closeable {
 
   /**
    * Gets the current number of readable bytes remaining in this buffer.
@@ -131,7 +131,7 @@ public interface Buffer extends Closeable {
    * @param length the number of bytes to contain in returned Buffer.
    * @throws IndexOutOfBoundsException if required bytes are not readable
    */
-  Buffer readBytes(int length);
+  ReadableBuffer readBytes(int length);
 
   /**
    * Indicates whether or not this buffer exposes a backing array.

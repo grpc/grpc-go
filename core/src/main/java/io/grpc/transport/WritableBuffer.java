@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,70 +29,40 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport.okhttp;
-
-import io.grpc.transport.AbstractBuffer;
-import io.grpc.transport.Buffer;
-
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.ByteBuffer;
+package io.grpc.transport;
 
 /**
- * A {@link Buffer} implementation that is backed by an {@link okio.Buffer}.
+ * An interface for a byte buffer that can only be written to.
+ * {@link WritableBuffer}s are a generic way to transfer bytes to
+ * the concrete network transports, like Netty and OkHttp.
  */
-class OkHttpBuffer extends AbstractBuffer {
-  private final okio.Buffer buffer;
+public interface WritableBuffer {
 
-  OkHttpBuffer(okio.Buffer buffer) {
-    this.buffer = buffer;
-  }
+  /**
+   * Appends {@code length} bytes to the buffer from the source
+   * array starting at {@code srcIndex}.
+   *
+   * @throws IndexOutOfBoundsException
+   *         if the specified {@code srcIndex} is less than {@code 0},
+   *         if {@code srcIndex + length} is greater than
+   *            {@code src.length}, or
+   *         if {@code length} is greater than {@link #writableBytes()}
+   */
+  void write(byte[] src, int srcIndex, int length);
 
-  @Override
-  public int readableBytes() {
-    return (int) buffer.size();
-  }
+  /**
+   * Returns the number of bytes one can write to the buffer.
+   */
+  int writableBytes();
 
-  @Override
-  public int readUnsignedByte() {
-    return buffer.readByte() & 0x000000FF;
-  }
+  /**
+   * Returns the number of bytes one can read from the buffer.
+   */
+  int readableBytes();
 
-  @Override
-  public void skipBytes(int length) {
-    try {
-      buffer.skip(length);
-    } catch (EOFException e) {
-      throw new IndexOutOfBoundsException(e.getMessage());
-    }
-  }
-
-  @Override
-  public void readBytes(byte[] dest, int destOffset, int length) {
-    buffer.read(dest, destOffset, length);
-  }
-
-  @Override
-  public void readBytes(ByteBuffer dest) {
-    // We are not using it.
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void readBytes(OutputStream dest, int length) throws IOException {
-    buffer.writeTo(dest, length);
-  }
-
-  @Override
-  public Buffer readBytes(int length) {
-    okio.Buffer buf = new okio.Buffer();
-    buf.write(buffer, length);
-    return new OkHttpBuffer(buf);
-  }
-
-  @Override
-  public void close() {
-    buffer.clear();
-  }
+  /**
+   * Releases the buffer, indicating to the {@link WritableBufferAllocator} that
+   * this buffer is no longer used and its resources can be reused.
+   */
+  void release();
 }

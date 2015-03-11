@@ -99,8 +99,8 @@ public class MessageDeframer implements Closeable {
   private int requiredLength = HEADER_LENGTH;
   private boolean compressedFlag;
   private boolean endOfStream;
-  private CompositeBuffer nextFrame;
-  private CompositeBuffer unprocessed = new CompositeBuffer();
+  private CompositeReadableBuffer nextFrame;
+  private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
   private long pendingDeliveries;
   private boolean deliveryStalled = true;
 
@@ -149,10 +149,10 @@ public class MessageDeframer implements Closeable {
    * @param endOfStream if {@code true}, indicates that {@code data} is the end of the stream from
    *        the remote endpoint.
    * @throws IllegalStateException if {@link #close()} has been called previously or if
-   *         {@link #deframe(Buffer, boolean)} has previously been called with
+   *         {@link #deframe(ReadableBuffer, boolean)} has previously been called with
    *         {@code endOfStream=true}.
    */
-  public void deframe(Buffer data, boolean endOfStream) {
+  public void deframe(ReadableBuffer data, boolean endOfStream) {
     Preconditions.checkNotNull(data, "data");
     boolean needToCloseData = true;
     try {
@@ -275,7 +275,7 @@ public class MessageDeframer implements Closeable {
     int totalBytesRead = 0;
     try {
       if (nextFrame == null) {
-        nextFrame = new CompositeBuffer();
+        nextFrame = new CompositeReadableBuffer();
       }
 
       // Read until the buffer contains all the required bytes.
@@ -331,7 +331,7 @@ public class MessageDeframer implements Closeable {
   }
 
   private InputStream getUncompressedBody() {
-    return Buffers.openStream(nextFrame, true);
+    return ReadableBuffers.openStream(nextFrame, true);
   }
 
   private InputStream getCompressedBody() {
@@ -345,7 +345,7 @@ public class MessageDeframer implements Closeable {
     }
 
     try {
-      return new GZIPInputStream(Buffers.openStream(nextFrame, true));
+      return new GZIPInputStream(ReadableBuffers.openStream(nextFrame, true));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

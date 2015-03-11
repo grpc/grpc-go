@@ -33,9 +33,6 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.Service.Listener;
-import com.google.common.util.concurrent.Service.State;
 
 import io.grpc.transport.ClientStream;
 import io.grpc.transport.ClientStreamListener;
@@ -48,7 +45,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.concurrent.GuardedBy;
