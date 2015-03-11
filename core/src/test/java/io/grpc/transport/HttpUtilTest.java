@@ -43,20 +43,19 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class HttpUtilTest {
   @Test
-  public void http2ErrorRoundTrip() {
+  public void http2ErrorForCode() {
     // Try edge cases manually, to make the test obviously correct for important cases.
-    assertSame(Http2Error.NO_ERROR, Http2Error.forCode(Http2Error.NO_ERROR.code()));
-    assertSame(Http2Error.HTTP_1_1_REQUIRED,
-        Http2Error.forCode(Http2Error.HTTP_1_1_REQUIRED.code()));
-    for (Http2Error error : Http2Error.values()) {
-      assertSame(error, Http2Error.forCode(error.code()));
-    }
+    assertNull(Http2Error.forCode(-1));
+    assertSame(Http2Error.NO_ERROR, Http2Error.forCode(0));
+    assertSame(Http2Error.HTTP_1_1_REQUIRED, Http2Error.forCode(0xD));
+    assertNull(Http2Error.forCode(0xD + 1));
   }
 
   @Test
-  public void http2ErrorNoCode() {
-    assertNull(Http2Error.forCode(-1));
-    assertNull(Http2Error.forCode(0xD + 1));
+  public void http2ErrorRoundTrip() {
+    for (Http2Error error : Http2Error.values()) {
+      assertSame(error, Http2Error.forCode(error.code()));
+    }
   }
 
   @Test
