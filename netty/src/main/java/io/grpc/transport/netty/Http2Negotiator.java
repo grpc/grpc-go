@@ -37,8 +37,8 @@ import com.google.common.util.concurrent.SettableFuture;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpClientCodec;
@@ -229,7 +229,7 @@ public class Http2Negotiator {
   /**
    * Report protocol upgrade completion using a promise.
    */
-  private static class UpgradeCompletionHandler extends ChannelHandlerAdapter {
+  private static class UpgradeCompletionHandler extends ChannelInboundHandlerAdapter {
     private final SettableFuture<Void> upgradeFuture = SettableFuture.create();
 
     public ListenableFuture<Void> getUpgradeFuture() {

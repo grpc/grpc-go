@@ -125,7 +125,6 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * Processes the contents of a received data frame from the server.
    *
    * @param frame the received data frame. Its ownership is transferred to this method.
-   * @param 
    */
   protected void inboundDataReceived(Buffer frame) {
     Preconditions.checkNotNull(frame, "frame");

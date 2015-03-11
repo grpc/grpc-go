@@ -191,7 +191,7 @@ public final class HttpUtil {
     /**
      * Looks up the {@link Status} from the given HTTP/2 error code.
      *
-     * @param errorCode the HTTP/2 error code.
+     * @param code the HTTP/2 error code.
      * @return a {@link Status} representing the given error.
      */
     public static Status statusForCode(int code) {

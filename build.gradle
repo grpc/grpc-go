@@ -39,7 +39,7 @@ subprojects {
 
                 // TODO: Unreleased dependencies.
                 // These must already be installed in the local maven repository.
-                netty: 'io.netty:netty-codec-http2:5.0.0.Alpha3-SNAPSHOT',
+                netty: 'io.netty:netty-codec-http2:4.1.0.Beta5-SNAPSHOT',
 
                 // Test dependencies.
                 junit: 'junit:junit:4.11',
