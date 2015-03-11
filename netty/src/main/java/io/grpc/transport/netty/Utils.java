@@ -65,14 +65,11 @@ class Utils {
   public static final AsciiString TE_HEADER = new AsciiString(HttpUtil.TE.name());
   public static final AsciiString TE_TRAILERS = new AsciiString(HttpUtil.TE_TRAILERS);
 
-  public static final Resource<EventLoopGroup> DEFAULT_CHANNEL_EVENT_LOOP_GROUP =
-      new DefaultEventLoopGroupResource("grpc-default-channel-ELG");
-
   public static final Resource<EventLoopGroup> DEFAULT_BOSS_EVENT_LOOP_GROUP =
-      new DefaultEventLoopGroupResource("grpc-default-boss-ELG");
+      new DefaultEventLoopGroupResource(1, "grpc-default-boss-ELG");
 
   public static final Resource<EventLoopGroup> DEFAULT_WORKER_EVENT_LOOP_GROUP =
-      new DefaultEventLoopGroupResource("grpc-default-worker-ELG");
+      new DefaultEventLoopGroupResource(0, "grpc-default-worker-ELG");
 
   /**
    * Copies the content of the given {@link ByteBuffer} to a new {@link ByteBuf} instance.
@@ -167,14 +164,16 @@ class Utils {
 
   private static class DefaultEventLoopGroupResource implements Resource<EventLoopGroup> {
     private final String name;
+    private final int nEventLoops;
 
-    DefaultEventLoopGroupResource(String name) {
+    DefaultEventLoopGroupResource(int nEventLoops, String name) {
       this.name = name;
+      this.nEventLoops = nEventLoops;
     }
 
     @Override
     public EventLoopGroup create() {
-      return new NioEventLoopGroup(0, new ThreadFactoryBuilder().setNameFormat(name + "-%d")
+      return new NioEventLoopGroup(nEventLoops, new ThreadFactoryBuilder().setNameFormat(name + "-%d")
           .build());
     }
 
