@@ -189,15 +189,22 @@ public final class HttpUtil {
     }
 
     /**
-     * Looks up the {@link Status} from the given HTTP/2 error code.
+     * Looks up the {@link Status} from the given HTTP/2 error code. This is preferred over {@code
+     * forCode(code).status()}, to more easily conform to HTTP/2:
+     *
+     * <blockquote><code>Unknown or unsupported error codes MUST NOT trigger any special behavior.
+     * These MAY be treated by an implementation as being equivalent to INTERNAL_ERROR.</code>
      *
      * @param code the HTTP/2 error code.
      * @return a {@link Status} representing the given error.
      */
-    public static Status statusForCode(int code) {
+    public static Status statusForCode(long code) {
       Http2Error error = forCode(code);
       if (error == null) {
-        return Status.UNKNOWN.withDescription("Unrecognized HTTP/2 error: " + code);
+        // This "forgets" the message of INTERNAL_ERROR while keeping the same status code.
+        Status.Code statusCode = INTERNAL_ERROR.status().getCode();
+        return Status.fromCodeValue(statusCode.value())
+            .withDescription("Unrecognized HTTP/2 error code: " + code);
       }
 
       return error.status();
