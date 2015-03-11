@@ -65,8 +65,10 @@ public class HttpUtilTest {
   }
 
   @Test
-  public void http2ErrorNoCodeStatus() {
+  public void http2ErrorStatusForCode() {
     assertSame(Status.Code.INTERNAL, Http2Error.statusForCode(-1).getCode());
+    assertSame(Http2Error.NO_ERROR.status(), Http2Error.statusForCode(0));
+    assertSame(Http2Error.HTTP_1_1_REQUIRED.status(), Http2Error.statusForCode(0xD));
     assertSame(Status.Code.INTERNAL, Http2Error.statusForCode(0xD + 1).getCode());
   }
 }
