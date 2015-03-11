@@ -4,7 +4,7 @@ grpc-java
 How to Build
 ------------
 
-grpc-java requires Netty 5, which is still in flux. The version we need can be
+grpc-java requires Netty 4.1, which is still in flux. The version we need can be
 found in the lib/netty submodule, which requires Maven 3.2 or higher to build:
 ```
 $ git submodule update --init
