@@ -202,7 +202,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	}
 }
 
-func (s *Server) sendProto(t transport.ServerTransport, stream *transport.Stream, f Formatter, pf payloadFormat, opts *transport.Options) error {
+func (s *Server) send(t transport.ServerTransport, stream *transport.Stream, f Formatter, pf payloadFormat, opts *transport.Options) error {
 	p, err := encode(f, pf)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
@@ -260,7 +260,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Last:  true,
 				Delay: false,
 			}
-			if err := s.sendProto(t, stream, reply, compressionNone, opts); err != nil {
+			if err := s.send(t, stream, reply, compressionNone, opts); err != nil {
 				if _, ok := err.(transport.ConnectionError); ok {
 					return
 				}

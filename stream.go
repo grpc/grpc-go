@@ -60,17 +60,17 @@ type StreamDesc struct {
 type Stream interface {
 	// Context returns the context for this stream.
 	Context() context.Context
-	// SendProto blocks until it sends m, the stream is done or the stream
+	// SendMessage blocks until it sends m, the stream is done or the stream
 	// breaks.
 	// On error, it aborts the stream and returns an RPC status on client
 	// side. On server side, it simply returns the error to the caller.
-	// SendProto is called by generated code.
-	SendProto(f Formatter) error
-	// RecvProto blocks until it receives a proto message or the stream is
+	// SendMessage is called by generated code.
+	SendMessage(f Formatter) error
+	// RecvMessage blocks until it receives a proto message or the stream is
 	// done. On client side, it returns io.EOF when the stream is done. On
 	// any other error, it aborts the streama nd returns an RPC status. On
 	// server side, it simply returns the error to the caller.
-	RecvProto(f Formatter) error
+	RecvMessage(f Formatter) error
 }
 
 // ClientStream defines the interface a client stream has to satify.
@@ -145,7 +145,7 @@ func (cs *clientStream) Trailer() metadata.MD {
 	return cs.s.Trailer()
 }
 
-func (cs *clientStream) SendProto(m Formatter) (err error) {
+func (cs *clientStream) SendMessage(m Formatter) (err error) {
 	defer func() {
 		if err == nil || err == io.EOF {
 			return
@@ -162,7 +162,7 @@ func (cs *clientStream) SendProto(m Formatter) (err error) {
 	return cs.t.Write(cs.s, out, &transport.Options{Last: false})
 }
 
-func (cs *clientStream) RecvProto(m Formatter) (err error) {
+func (cs *clientStream) RecvMessage(m Formatter) (err error) {
 	err = recvMsg(cs.p, m)
 	if err == nil {
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
@@ -210,8 +210,8 @@ func (cs *clientStream) CloseSend() (err error) {
 // ServerStream defines the interface a server stream has to satisfy.
 type ServerStream interface {
 	// SendHeader sends the header metadata. It should not be called
-	// after SendProto. It fails if called multiple times or if
-	// called after SendProto.
+	// after Send. It fails if called multiple times or if
+	// called after Send.
 	SendHeader(metadata.MD) error
 	// SetTrailer sets the trailer metadata which will be sent with the
 	// RPC status.
@@ -244,7 +244,7 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	return
 }
 
-func (ss *serverStream) SendProto(m Formatter) error {
+func (ss *serverStream) SendMessage(m Formatter) error {
 	out, err := encode(m, compressionNone)
 	if err != nil {
 		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
@@ -253,6 +253,6 @@ func (ss *serverStream) SendProto(m Formatter) error {
 	return ss.t.Write(ss.s, out, &transport.Options{Last: false})
 }
 
-func (ss *serverStream) RecvProto(m Formatter) error {
+func (ss *serverStream) RecvMessage(m Formatter) error {
 	return recvMsg(ss.p, m)
 }
