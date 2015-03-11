@@ -202,8 +202,8 @@ func (s *Server) Serve(lis net.Listener) error {
 	}
 }
 
-func (s *Server) send(t transport.ServerTransport, stream *transport.Stream, f Marshaler, pf payloadFormat, opts *transport.Options) error {
-	p, err := encode(f, pf)
+func (s *Server) send(t transport.ServerTransport, stream *transport.Stream, m Marshaler, pf payloadFormat, opts *transport.Options) error {
+	p, err := encode(m, pf)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program

@@ -146,14 +146,14 @@ func encode(msg Marshaler, pf payloadFormat) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func recvMsg(p *parser, f Marshaler) error {
+func recvMsg(p *parser, m Marshaler) error {
 	pf, d, err := p.recvMsg()
 	if err != nil {
 		return err
 	}
 	switch pf {
 	case compressionNone:
-		if err := f.unmarshal(d); err != nil {
+		if err := m.unmarshal(d); err != nil {
 			return Errorf(codes.Internal, "grpc: %v", err)
 		}
 	default:

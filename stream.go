@@ -65,12 +65,12 @@ type Stream interface {
 	// On error, it aborts the stream and returns an RPC status on client
 	// side. On server side, it simply returns the error to the caller.
 	// SendMessage is called by generated code.
-	SendMessage(f Marshaler) error
+	SendMessage(m Marshaler) error
 	// RecvMessage blocks until it receives a proto message or the stream is
 	// done. On client side, it returns io.EOF when the stream is done. On
 	// any other error, it aborts the streama nd returns an RPC status. On
 	// server side, it simply returns the error to the caller.
-	RecvMessage(f Marshaler) error
+	RecvMessage(m Marshaler) error
 }
 
 // ClientStream defines the interface a client stream has to satify.
