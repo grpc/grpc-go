@@ -22,6 +22,8 @@ subprojects {
         options.encoding = "UTF-8"
     }
 
+    javadoc.options.encoding = "UTF-8"
+
     ext {
         libraries = [
                 guava: 'com.google.guava:guava:18.0',
