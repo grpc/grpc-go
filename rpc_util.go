@@ -42,7 +42,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -131,36 +130,30 @@ func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
 
 // encode serializes msg and prepends the message header. If msg is nil, it
 // generates the message header of 0 message length.
-func encode(msg proto.Message, pf payloadFormat) ([]byte, error) {
+func encode(msg Marshaler, pf payloadFormat) ([]byte, error) {
 	var buf bytes.Buffer
 	// Write message fixed header.
 	buf.WriteByte(uint8(pf))
-	var b []byte
-	var length uint32
-	if msg != nil {
-		var err error
-		// TODO(zhaoq): optimize to reduce memory alloc and copying.
-		b, err = proto.Marshal(msg)
-		if err != nil {
-			return nil, err
-		}
-		length = uint32(len(b))
+	// TODO(zhaoq): optimize to reduce memory alloc and copying.
+	b, err := msg.marshal()
+	if err != nil {
+		return nil, err
 	}
 	var szHdr [4]byte
-	binary.BigEndian.PutUint32(szHdr[:], length)
+	binary.BigEndian.PutUint32(szHdr[:], uint32(len(b)))
 	buf.Write(szHdr[:])
 	buf.Write(b)
 	return buf.Bytes(), nil
 }
 
-func recvProto(p *parser, m proto.Message) error {
+func recvMsg(p *parser, m Marshaler) error {
 	pf, d, err := p.recvMsg()
 	if err != nil {
 		return err
 	}
 	switch pf {
 	case compressionNone:
-		if err := proto.Unmarshal(d, m); err != nil {
+		if err := m.unmarshal(d); err != nil {
 			return Errorf(codes.Internal, "grpc: %v", err)
 		}
 	default:

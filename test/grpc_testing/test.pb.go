@@ -366,7 +366,7 @@ func NewTestServiceClient(cc *grpc.ClientConn) TestServiceClient {
 
 func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := grpc.Invoke(ctx, "/grpc.testing.TestService/EmptyCall", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/grpc.testing.TestService/EmptyCall", grpc.NewProtoMessageMarshaler(in), grpc.NewProtoMessageMarshaler(out), c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +375,7 @@ func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...gr
 
 func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
-	err := grpc.Invoke(ctx, "/grpc.testing.TestService/UnaryCall", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/grpc.testing.TestService/UnaryCall", grpc.NewProtoMessageMarshaler(in), grpc.NewProtoMessageMarshaler(out), c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +388,7 @@ func (c *testServiceClient) StreamingOutputCall(ctx context.Context, in *Streami
 		return nil, err
 	}
 	x := &testServiceStreamingOutputCallClient{stream}
-	if err := x.ClientStream.SendProto(in); err != nil {
+	if err := x.ClientStream.SendMessage(grpc.NewProtoMessageMarshaler(in)); err != nil {
 		return nil, err
 	}
 	if err := x.ClientStream.CloseSend(); err != nil {
@@ -408,7 +408,7 @@ type testServiceStreamingOutputCallClient struct {
 
 func (x *testServiceStreamingOutputCallClient) Recv() (*StreamingOutputCallResponse, error) {
 	m := new(StreamingOutputCallResponse)
-	if err := x.ClientStream.RecvProto(m); err != nil {
+	if err := x.ClientStream.RecvMessage(grpc.NewProtoMessageMarshaler(m)); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -434,7 +434,7 @@ type testServiceStreamingInputCallClient struct {
 }
 
 func (x *testServiceStreamingInputCallClient) Send(m *StreamingInputCallRequest) error {
-	return x.ClientStream.SendProto(m)
+	return x.ClientStream.SendMessage(grpc.NewProtoMessageMarshaler(m))
 }
 
 func (x *testServiceStreamingInputCallClient) CloseAndRecv() (*StreamingInputCallResponse, error) {
@@ -442,7 +442,7 @@ func (x *testServiceStreamingInputCallClient) CloseAndRecv() (*StreamingInputCal
 		return nil, err
 	}
 	m := new(StreamingInputCallResponse)
-	if err := x.ClientStream.RecvProto(m); err != nil {
+	if err := x.ClientStream.RecvMessage(grpc.NewProtoMessageMarshaler(m)); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -468,12 +468,12 @@ type testServiceFullDuplexCallClient struct {
 }
 
 func (x *testServiceFullDuplexCallClient) Send(m *StreamingOutputCallRequest) error {
-	return x.ClientStream.SendProto(m)
+	return x.ClientStream.SendMessage(grpc.NewProtoMessageMarshaler(m))
 }
 
 func (x *testServiceFullDuplexCallClient) Recv() (*StreamingOutputCallResponse, error) {
 	m := new(StreamingOutputCallResponse)
-	if err := x.ClientStream.RecvProto(m); err != nil {
+	if err := x.ClientStream.RecvMessage(grpc.NewProtoMessageMarshaler(m)); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -499,12 +499,12 @@ type testServiceHalfDuplexCallClient struct {
 }
 
 func (x *testServiceHalfDuplexCallClient) Send(m *StreamingOutputCallRequest) error {
-	return x.ClientStream.SendProto(m)
+	return x.ClientStream.SendMessage(grpc.NewProtoMessageMarshaler(m))
 }
 
 func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, error) {
 	m := new(StreamingOutputCallResponse)
-	if err := x.ClientStream.RecvProto(m); err != nil {
+	if err := x.ClientStream.RecvMessage(grpc.NewProtoMessageMarshaler(m)); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -539,7 +539,7 @@ func RegisterTestServiceServer(s *grpc.Server, srv TestServiceServer) {
 	s.RegisterService(&_TestService_serviceDesc, srv)
 }
 
-func _TestService_EmptyCall_Handler(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error) {
+func _TestService_EmptyCall_Handler(srv interface{}, ctx context.Context, buf []byte) (grpc.Marshaler, error) {
 	in := new(Empty)
 	if err := proto.Unmarshal(buf, in); err != nil {
 		return nil, err
@@ -548,10 +548,10 @@ func _TestService_EmptyCall_Handler(srv interface{}, ctx context.Context, buf []
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	return grpc.NewProtoMessageMarshaler(out), nil
 }
 
-func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error) {
+func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, buf []byte) (grpc.Marshaler, error) {
 	in := new(SimpleRequest)
 	if err := proto.Unmarshal(buf, in); err != nil {
 		return nil, err
@@ -560,12 +560,12 @@ func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, buf []
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	return grpc.NewProtoMessageMarshaler(out), nil
 }
 
 func _TestService_StreamingOutputCall_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(StreamingOutputCallRequest)
-	if err := stream.RecvProto(m); err != nil {
+	if err := stream.RecvMessage(grpc.NewProtoMessageMarshaler(m)); err != nil {
 		return err
 	}
 	return srv.(TestServiceServer).StreamingOutputCall(m, &testServiceStreamingOutputCallServer{stream})
@@ -581,7 +581,7 @@ type testServiceStreamingOutputCallServer struct {
 }
 
 func (x *testServiceStreamingOutputCallServer) Send(m *StreamingOutputCallResponse) error {
-	return x.ServerStream.SendProto(m)
+	return x.ServerStream.SendMessage(grpc.NewProtoMessageMarshaler(m))
 }
 
 func _TestService_StreamingInputCall_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -599,12 +599,12 @@ type testServiceStreamingInputCallServer struct {
 }
 
 func (x *testServiceStreamingInputCallServer) SendAndClose(m *StreamingInputCallResponse) error {
-	return x.ServerStream.SendProto(m)
+	return x.ServerStream.SendMessage(grpc.NewProtoMessageMarshaler(m))
 }
 
 func (x *testServiceStreamingInputCallServer) Recv() (*StreamingInputCallRequest, error) {
 	m := new(StreamingInputCallRequest)
-	if err := x.ServerStream.RecvProto(m); err != nil {
+	if err := x.ServerStream.RecvMessage(grpc.NewProtoMessageMarshaler(m)); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -625,12 +625,12 @@ type testServiceFullDuplexCallServer struct {
 }
 
 func (x *testServiceFullDuplexCallServer) Send(m *StreamingOutputCallResponse) error {
-	return x.ServerStream.SendProto(m)
+	return x.ServerStream.SendMessage(grpc.NewProtoMessageMarshaler(m))
 }
 
 func (x *testServiceFullDuplexCallServer) Recv() (*StreamingOutputCallRequest, error) {
 	m := new(StreamingOutputCallRequest)
-	if err := x.ServerStream.RecvProto(m); err != nil {
+	if err := x.ServerStream.RecvMessage(grpc.NewProtoMessageMarshaler(m)); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -651,12 +651,12 @@ type testServiceHalfDuplexCallServer struct {
 }
 
 func (x *testServiceHalfDuplexCallServer) Send(m *StreamingOutputCallResponse) error {
-	return x.ServerStream.SendProto(m)
+	return x.ServerStream.SendMessage(grpc.NewProtoMessageMarshaler(m))
 }
 
 func (x *testServiceHalfDuplexCallServer) Recv() (*StreamingOutputCallRequest, error) {
 	m := new(StreamingOutputCallRequest)
-	if err := x.ServerStream.RecvProto(m); err != nil {
+	if err := x.ServerStream.RecvMessage(grpc.NewProtoMessageMarshaler(m)); err != nil {
 		return nil, err
 	}
 	return m, nil
