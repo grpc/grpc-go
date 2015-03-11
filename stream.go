@@ -65,12 +65,12 @@ type Stream interface {
 	// On error, it aborts the stream and returns an RPC status on client
 	// side. On server side, it simply returns the error to the caller.
 	// SendMessage is called by generated code.
-	SendMessage(f Formatter) error
+	SendMessage(f Marshaler) error
 	// RecvMessage blocks until it receives a proto message or the stream is
 	// done. On client side, it returns io.EOF when the stream is done. On
 	// any other error, it aborts the streama nd returns an RPC status. On
 	// server side, it simply returns the error to the caller.
-	RecvMessage(f Formatter) error
+	RecvMessage(f Marshaler) error
 }
 
 // ClientStream defines the interface a client stream has to satify.
@@ -145,7 +145,7 @@ func (cs *clientStream) Trailer() metadata.MD {
 	return cs.s.Trailer()
 }
 
-func (cs *clientStream) SendMessage(m Formatter) (err error) {
+func (cs *clientStream) SendMessage(m Marshaler) (err error) {
 	defer func() {
 		if err == nil || err == io.EOF {
 			return
@@ -162,7 +162,7 @@ func (cs *clientStream) SendMessage(m Formatter) (err error) {
 	return cs.t.Write(cs.s, out, &transport.Options{Last: false})
 }
 
-func (cs *clientStream) RecvMessage(m Formatter) (err error) {
+func (cs *clientStream) RecvMessage(m Marshaler) (err error) {
 	err = recvMsg(cs.p, m)
 	if err == nil {
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
@@ -244,7 +244,7 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	return
 }
 
-func (ss *serverStream) SendMessage(m Formatter) error {
+func (ss *serverStream) SendMessage(m Marshaler) error {
 	out, err := encode(m, compressionNone)
 	if err != nil {
 		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
@@ -253,6 +253,6 @@ func (ss *serverStream) SendMessage(m Formatter) error {
 	return ss.t.Write(ss.s, out, &transport.Options{Last: false})
 }
 
-func (ss *serverStream) RecvMessage(m Formatter) error {
+func (ss *serverStream) RecvMessage(m Marshaler) error {
 	return recvMsg(ss.p, m)
 }

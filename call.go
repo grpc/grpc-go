@@ -47,7 +47,7 @@ import (
 // On error, it returns the error and indicates whether the call should be retried.
 //
 // TODO(zhaoq): Check whether the received message sequence is valid.
-func recv(t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply Formatter) error {
+func recv(t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply Marshaler) error {
 	// Try to acquire header metadata from the server if there is any.
 	var err error
 	c.headerMD, err = stream.Header()
@@ -68,7 +68,7 @@ func recv(t transport.ClientTransport, c *callInfo, stream *transport.Stream, re
 }
 
 // sendRPC writes out various information of an RPC such as Context and Message.
-func sendRPC(ctx context.Context, callHdr *transport.CallHdr, t transport.ClientTransport, args Formatter, opts *transport.Options) (_ *transport.Stream, err error) {
+func sendRPC(ctx context.Context, callHdr *transport.CallHdr, t transport.ClientTransport, args Marshaler, opts *transport.Options) (_ *transport.Stream, err error) {
 	stream, err := t.NewStream(ctx, callHdr)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ type callInfo struct {
 
 // Invoke is called by the generated code. It sends the RPC request on the
 // wire and returns after response is received.
-func Invoke(ctx context.Context, method string, args, reply Formatter, cc *ClientConn, opts ...CallOption) error {
+func Invoke(ctx context.Context, method string, args, reply Marshaler, cc *ClientConn, opts ...CallOption) error {
 
 	var c callInfo
 	for _, o := range opts {

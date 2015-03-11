@@ -49,7 +49,7 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
-type methodHandler func(srv interface{}, ctx context.Context, buf []byte) (Formatter, error)
+type methodHandler func(srv interface{}, ctx context.Context, buf []byte) (Marshaler, error)
 
 // MethodDesc represents an RPC service's method specification.
 type MethodDesc struct {
@@ -202,7 +202,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	}
 }
 
-func (s *Server) send(t transport.ServerTransport, stream *transport.Stream, f Formatter, pf payloadFormat, opts *transport.Options) error {
+func (s *Server) send(t transport.ServerTransport, stream *transport.Stream, f Marshaler, pf payloadFormat, opts *transport.Options) error {
 	p, err := encode(f, pf)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory

@@ -37,9 +37,9 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-// Formatter is an abstraction over message marshaling and unmarshaling in order
+// Marshaler is an abstraction over message marshaling and unmarshaling in order
 // to support various message formats.
-type Formatter interface {
+type Marshaler interface {
 	marshal() ([]byte, error)
 	unmarshal(buf []byte) error
 }
@@ -59,7 +59,7 @@ func (m *protoMessage) unmarshal(buf []byte) error {
 	return proto.Unmarshal(buf, m.Message)
 }
 
-// NewProtoMessageFormatter creates a formatter for protobuf message marshaling and unmarshaling.
-func NewProtoMessageFormatter(m proto.Message) Formatter {
+// NewProtoMessageMarshaler creates a formatter for protobuf message marshaling and unmarshaling.
+func NewProtoMessageMarshaler(m proto.Message) Marshaler {
 	return &protoMessage{m}
 }

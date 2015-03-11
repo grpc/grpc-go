@@ -130,7 +130,7 @@ func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
 
 // encode serializes msg and prepends the message header. If msg is nil, it
 // generates the message header of 0 message length.
-func encode(msg Formatter, pf payloadFormat) ([]byte, error) {
+func encode(msg Marshaler, pf payloadFormat) ([]byte, error) {
 	var buf bytes.Buffer
 	// Write message fixed header.
 	buf.WriteByte(uint8(pf))
@@ -146,7 +146,7 @@ func encode(msg Formatter, pf payloadFormat) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func recvMsg(p *parser, f Formatter) error {
+func recvMsg(p *parser, f Marshaler) error {
 	pf, d, err := p.recvMsg()
 	if err != nil {
 		return err
