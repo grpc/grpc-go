@@ -46,3 +46,16 @@ task helloWorldClient(type: JavaExec) {
     description = "Executes the hello world client."
     classpath = sourceSets.main.runtimeClasspath
 }
+
+// Allow intellij projects to refer to generated-sources
+idea {
+    module {
+        // The whole build dir is excluded by default, but we need build/generated-sources,
+        // which contains the generated proto classes.
+        excludeDirs = [file('.gradle')]
+        if (buildDir.exists()) {
+            excludeDirs += files(buildDir.listFiles())
+            excludeDirs -= file("$buildDir/generated-sources")
+        }
+    }
+}
