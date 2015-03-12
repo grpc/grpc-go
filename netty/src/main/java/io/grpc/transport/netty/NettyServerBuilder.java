@@ -31,6 +31,7 @@
 
 package io.grpc.transport.netty;
 
+import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.Service;
 
@@ -39,6 +40,8 @@ import io.grpc.HandlerRegistry;
 import io.grpc.SharedResourceHolder;
 import io.grpc.transport.ServerListener;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.ServerChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import io.grpc.ServerImpl;
 
@@ -51,7 +54,7 @@ import java.net.SocketAddress;
 public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerBuilder> {
 
   private final SocketAddress address;
-
+  private Class<? extends ServerChannel> channelType = NioServerSocketChannel.class;
   private EventLoopGroup userBossEventLoopGroup;
   private EventLoopGroup userWorkerEventLoopGroup;
   private SslContext sslContext;
@@ -99,6 +102,14 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
 
   private NettyServerBuilder(SocketAddress address) {
     this.address = address;
+  }
+
+  /**
+   * Specify the channel type to use, by default we use {@link NioServerSocketChannel}.
+   */
+  public NettyServerBuilder channelType(Class<? extends ServerChannel> channelType) {
+    this.channelType = Preconditions.checkNotNull(channelType);
+    return this;
   }
 
   /**
@@ -162,7 +173,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
     final EventLoopGroup workerEventLoopGroup = (userWorkerEventLoopGroup == null)
         ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP)
         : userWorkerEventLoopGroup;
-    NettyServer server = new NettyServer(serverListener, address, bossEventLoopGroup,
+    NettyServer server = new NettyServer(serverListener, address, channelType, bossEventLoopGroup,
         workerEventLoopGroup, sslContext);
     if (userBossEventLoopGroup == null) {
       server.addListener(new ClosureHook() {

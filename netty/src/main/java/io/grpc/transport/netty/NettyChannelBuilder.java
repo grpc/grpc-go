@@ -31,10 +31,14 @@
 
 package io.grpc.transport.netty;
 
+import com.google.common.base.Preconditions;
+
 import io.grpc.AbstractChannelBuilder;
 import io.grpc.SharedResourceHolder;
 import io.grpc.transport.ClientTransportFactory;
+import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
@@ -48,6 +52,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   private final SocketAddress serverAddress;
 
   private NegotiationType negotiationType = NegotiationType.TLS;
+  private Class<? extends Channel> channelType = NioSocketChannel.class;
   private EventLoopGroup userEventLoopGroup;
   private SslContext sslContext;
 
@@ -67,6 +72,14 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
 
   private NettyChannelBuilder(SocketAddress serverAddress) {
     this.serverAddress = serverAddress;
+  }
+
+  /**
+   * Specify the channel type to use, by default we use {@link NioSocketChannel}.
+   */
+  public NettyChannelBuilder channelType(Class<? extends Channel> channelType) {
+    this.channelType = Preconditions.checkNotNull(channelType);
+    return this;
   }
 
   /**
@@ -104,7 +117,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     final EventLoopGroup group = (userEventLoopGroup == null)
         ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP) : userEventLoopGroup;
     ClientTransportFactory transportFactory = new NettyClientTransportFactory(
-        serverAddress, negotiationType, group, sslContext);
+        serverAddress, channelType, negotiationType, group, sslContext);
     Runnable terminationRunnable = null;
     if (userEventLoopGroup == null) {
       terminationRunnable = new Runnable() {

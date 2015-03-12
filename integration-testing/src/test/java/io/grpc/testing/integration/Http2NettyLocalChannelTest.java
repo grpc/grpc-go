@@ -28,40 +28,43 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+package io.grpc.testing.integration;
 
-package io.grpc.transport.netty;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 
-import com.google.common.base.Preconditions;
-
-import io.grpc.transport.ClientTransportFactory;
-import io.netty.channel.Channel;
-import io.netty.channel.EventLoopGroup;
-import io.netty.handler.ssl.SslContext;
-
-import java.net.SocketAddress;
+import io.grpc.ChannelImpl;
+import io.grpc.transport.netty.NegotiationType;
+import io.grpc.transport.netty.NettyChannelBuilder;
+import io.grpc.transport.netty.NettyServerBuilder;
+import io.netty.channel.local.LocalAddress;
+import io.netty.channel.local.LocalChannel;
+import io.netty.channel.local.LocalServerChannel;
 
 /**
- * Factory that manufactures instances of {@link NettyClientTransport}.
+ * Run transport tests over the Netty in-process channel.
  */
-class NettyClientTransportFactory implements ClientTransportFactory {
+public class Http2NettyLocalChannelTest extends AbstractTransportTest {
 
-  private final SocketAddress address;
-  private final NegotiationType negotiationType;
-  private final Class<? extends Channel> channelType;
-  private final EventLoopGroup group;
-  private final SslContext sslContext;
+  @BeforeClass
+  public static void startServer() {
+    startStaticServer(
+        NettyServerBuilder
+            .forAddress(new LocalAddress("in-process-1"))
+            .channelType(LocalServerChannel.class));
+  }
 
-  public NettyClientTransportFactory(SocketAddress address, Class<? extends Channel> channelType,
-      NegotiationType negotiationType, EventLoopGroup group, SslContext sslContext) {
-    this.address = Preconditions.checkNotNull(address, "address");
-    this.group = Preconditions.checkNotNull(group, "group");
-    this.negotiationType = Preconditions.checkNotNull(negotiationType, "negotiationType");
-    this.channelType = Preconditions.checkNotNull(channelType, "channelType");
-    this.sslContext = sslContext;
+  @AfterClass
+  public static void stopServer() {
+    stopStaticServer();
   }
 
   @Override
-  public NettyClientTransport newClientTransport() {
-    return new NettyClientTransport(address, channelType, negotiationType, group, sslContext);
+  protected ChannelImpl createChannel() {
+    return NettyChannelBuilder
+        .forAddress(new LocalAddress("in-process-1"))
+        .negotiationType(NegotiationType.PLAINTEXT)
+        .channelType(LocalChannel.class)
+        .build();
   }
 }

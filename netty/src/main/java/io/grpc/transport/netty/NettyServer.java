@@ -44,8 +44,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.local.LocalAddress;
-import io.netty.channel.local.LocalServerChannel;
+import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
 
@@ -59,22 +58,25 @@ import javax.annotation.Nullable;
  */
 public class NettyServer extends AbstractService {
   private final SocketAddress address;
+  private final Class<? extends ServerChannel> channelType;
   private final ChannelInitializer<Channel> channelInitializer;
   private final EventLoopGroup bossGroup;
   private final EventLoopGroup workerGroup;
   private Channel channel;
 
-  public NettyServer(ServerListener serverListener, SocketAddress address, EventLoopGroup bossGroup,
+  public NettyServer(ServerListener serverListener, SocketAddress address,
+      Class<? extends ServerChannel> channelType, EventLoopGroup bossGroup,
       EventLoopGroup workerGroup) {
-    this(serverListener, address, bossGroup, workerGroup, null);
+    this(serverListener, address, channelType, bossGroup, workerGroup, null);
   }
 
   public NettyServer(final ServerListener serverListener, SocketAddress address,
-                     EventLoopGroup bossGroup,
+      Class<? extends ServerChannel> channelType, EventLoopGroup bossGroup,
       EventLoopGroup workerGroup, @Nullable final SslContext sslContext) {
-    Preconditions.checkNotNull(bossGroup, "bossGroup");
-    Preconditions.checkNotNull(workerGroup, "workerGroup");
     this.address = address;
+    this.channelType = Preconditions.checkNotNull(channelType, "channelType");
+    this.bossGroup = Preconditions.checkNotNull(bossGroup, "bossGroup");
+    this.workerGroup = Preconditions.checkNotNull(workerGroup, "workerGroup");
     this.channelInitializer = new ChannelInitializer<Channel>() {
       @Override
       public void initChannel(Channel ch) throws Exception {
@@ -83,18 +85,14 @@ public class NettyServer extends AbstractService {
         // TODO(nmittler): Should we wait for transport shutdown before shutting down server?
       }
     };
-    this.bossGroup = bossGroup;
-    this.workerGroup = workerGroup;
   }
 
   @Override
   protected void doStart() {
     ServerBootstrap b = new ServerBootstrap();
     b.group(bossGroup, workerGroup);
-    if (address instanceof LocalAddress) {
-      b.channel(LocalServerChannel.class);
-    } else {
-      b.channel(NioServerSocketChannel.class);
+    b.channel(channelType);
+    if (NioServerSocketChannel.class.isAssignableFrom(channelType)) {
       b.option(SO_BACKLOG, 128);
       b.childOption(SO_KEEPALIVE, true);
     }

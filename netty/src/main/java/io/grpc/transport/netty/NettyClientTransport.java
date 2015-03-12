@@ -47,8 +47,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.local.LocalAddress;
-import io.netty.channel.local.LocalChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
@@ -85,6 +83,7 @@ class NettyClientTransport implements ClientTransport {
   private static final Logger log = Logger.getLogger(NettyClientTransport.class.getName());
 
   private final SocketAddress address;
+  private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
   private final Http2Negotiator.Negotiation negotiation;
   private final NettyClientHandler handler;
@@ -109,22 +108,23 @@ class NettyClientTransport implements ClientTransport {
   @GuardedBy("this")
   private boolean terminated;
 
-  NettyClientTransport(SocketAddress address, NegotiationType negotiationType,
-      EventLoopGroup group, SslContext sslContext) {
+  NettyClientTransport(SocketAddress address, Class<? extends Channel> channelType,
+      NegotiationType negotiationType, EventLoopGroup group, SslContext sslContext) {
     Preconditions.checkNotNull(negotiationType, "negotiationType");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
+    this.channelType = Preconditions.checkNotNull(channelType, "channelType");
 
     InetSocketAddress inetAddress = null;
     if (address instanceof InetSocketAddress) {
       inetAddress = (InetSocketAddress) address;
       authority = new AsciiString(inetAddress.getHostString() + ":" + inetAddress.getPort());
-    } else if (address instanceof LocalAddress) {
-      authority = new AsciiString(address.toString());
-      Preconditions.checkArgument(negotiationType != NegotiationType.TLS,
-          "TLS not supported for in-process transport");
     } else {
-      throw new IllegalStateException("Unknown socket address type " + address.toString());
+      Preconditions.checkState(negotiationType != NegotiationType.TLS,
+          "TLS not supported for non-internet socket types");
+      // Specialized address types are allowed to support custom Channel types so just assume their
+      // toString() values are valid :authority values
+      authority = new AsciiString(address.toString());
     }
 
     DefaultHttp2StreamRemovalPolicy streamRemovalPolicy = new DefaultHttp2StreamRemovalPolicy();
@@ -201,10 +201,8 @@ class NettyClientTransport implements ClientTransport {
     listener = Preconditions.checkNotNull(transportListener, "listener");
     Bootstrap b = new Bootstrap();
     b.group(group);
-    if (address instanceof LocalAddress) {
-      b.channel(LocalChannel.class);
-    } else {
-      b.channel(NioSocketChannel.class);
+    b.channel(channelType);
+    if (NioSocketChannel.class.isAssignableFrom(channelType)) {
       b.option(SO_KEEPALIVE, true);
     }
     b.handler(negotiation.initializer());
