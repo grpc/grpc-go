@@ -194,7 +194,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     if (debugData.isReadable()) {
       // If a debug message was provided, use it.
       String msg = debugData.toString(UTF_8);
-      status = status.withDescription(msg);
+      status = status.augmentDescription(msg);
     }
     goAwayStatus(status);
   }
