@@ -48,16 +48,16 @@ public class ClientAuthInterceptorTests {
   Credentials credentials;
 
   @Mock
-  MethodDescriptor descriptor;
+  MethodDescriptor<String, Integer> descriptor;
 
   @Mock
-  Call.Listener listener;
+  Call.Listener<Integer> listener;
 
   @Mock
   Channel channel;
 
   @Mock
-  Call call;
+  Call<String, Integer> call;
 
   ClientAuthInterceptor interceptor;
 
@@ -117,7 +117,7 @@ public class ClientAuthInterceptorTests {
       }
     };
     interceptor = new ClientAuthInterceptor(oAuth2Credentials, Executors.newSingleThreadExecutor());
-    Call interceptedCall = interceptor.interceptCall(descriptor, channel);
+    Call<String, Integer> interceptedCall = interceptor.interceptCall(descriptor, channel);
     Metadata.Headers headers = new Metadata.Headers();
     interceptedCall.start(listener, headers);
     verify(call).start(listener, headers);

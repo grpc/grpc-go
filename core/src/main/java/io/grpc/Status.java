@@ -430,6 +430,8 @@ public final class Status {
     }
   }
 
+  // We support Guava 14
+  @SuppressWarnings("deprecation")
   @Override
   public String toString() {
     return Objects.toStringHelper(this)

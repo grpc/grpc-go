@@ -289,6 +289,8 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    */
   protected abstract void sendCancel();
 
+  // We support Guava 14
+  @SuppressWarnings("deprecation")
   @Override
   protected Objects.ToStringHelper toStringHelper() {
     Objects.ToStringHelper toStringHelper = super.toStringHelper();

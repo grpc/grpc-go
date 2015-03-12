@@ -17,9 +17,9 @@ subprojects {
         mavenLocal()
     }
 
-    compileJava {
-        options.compilerArgs << "-Xlint:unchecked"
-        options.encoding = "UTF-8"
+    [compileJava, compileTestJava].each() {
+        it.options.compilerArgs += ["-Xlint:unchecked", "-Xlint:deprecation", "-Xlint:-options"]
+        it.options.encoding = "UTF-8"
     }
 
     javadoc.options.encoding = "UTF-8"

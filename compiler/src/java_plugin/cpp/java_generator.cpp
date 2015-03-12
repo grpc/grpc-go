@@ -167,7 +167,8 @@ static void PrintServiceDescriptor(
   // The reconfiguring constructor
   p->Print(
       *vars,
-      "\nprivate $service_name$ServiceDescriptor(\n"
+      "\n@SuppressWarnings(\"unchecked\")\n"
+      "private $service_name$ServiceDescriptor(\n"
       "    $Map$<$String$, $MethodDescriptor$<?, ?>> methodMap) {\n");
   p->Indent();
   for (int i = 0; i < service->method_count(); ++i) {

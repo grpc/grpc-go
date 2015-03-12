@@ -175,6 +175,7 @@ public class ClientInterceptorsTest {
       }
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
+    @SuppressWarnings("unchecked")
     Call.Listener<Integer> listener = mock(Call.Listener.class);
     Call<String, Integer> interceptedCall = intercepted.newCall(method);
     // start() on the intercepted call will eventually reach the call created by the real channel
@@ -209,11 +210,12 @@ public class ClientInterceptorsTest {
       }
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
+    @SuppressWarnings("unchecked")
     Call.Listener<Integer> listener = mock(Call.Listener.class);
     Call<String, Integer> interceptedCall = intercepted.newCall(method);
     interceptedCall.start(listener, new Metadata.Headers());
     // Capture the underlying call listener that will receive headers from the transport.
-    ArgumentCaptor<Call.Listener> captor = ArgumentCaptor.forClass(Call.Listener.class);
+    ArgumentCaptor<Call.Listener<Integer>> captor = ArgumentCaptor.forClass(null);
     verify(call).start(captor.capture(), Mockito.<Metadata.Headers>any());
     Metadata.Headers inboundHeaders = new Metadata.Headers();
     // Simulate that a headers arrives on the underlying call listener.

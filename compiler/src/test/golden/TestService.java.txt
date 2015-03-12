@@ -90,6 +90,7 @@ public class TestServiceGrpc {
           "grpc.testing.TestService", METHOD_HALF_DUPLEX_CALL);
     }
 
+    @SuppressWarnings("unchecked")
     private TestServiceServiceDescriptor(
         java.util.Map<java.lang.String, io.grpc.MethodDescriptor<?, ?>> methodMap) {
       unaryCall = (io.grpc.MethodDescriptor<io.grpc.testing.integration.Test.SimpleRequest,

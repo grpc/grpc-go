@@ -100,6 +100,7 @@ public class TestServiceGrpc {
           "grpc.testing.TestService", METHOD_HALF_DUPLEX_CALL);
     }
 
+    @SuppressWarnings("unchecked")
     private TestServiceServiceDescriptor(
         java.util.Map<java.lang.String, io.grpc.MethodDescriptor<?, ?>> methodMap) {
       emptyCall = (io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,

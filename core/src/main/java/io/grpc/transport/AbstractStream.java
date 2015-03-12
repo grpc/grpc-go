@@ -306,6 +306,8 @@ public abstract class AbstractStream<IdT> implements Stream {
     return toStringHelper().toString();
   }
 
+  // We support Guava 14
+  @SuppressWarnings("deprecation")
   protected Objects.ToStringHelper toStringHelper() {
     return Objects.toStringHelper(this)
         .add("id", id())
