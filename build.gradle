@@ -67,7 +67,7 @@ subprojects {
           splitRootDir = splitRootDir.getPath().split(":", 2)[1]
         }
         protocPluginBaseName = 'protoc-gen-grpc-java'
-        javaPluginPath = "$splitRootDir/compiler/build/binaries/java_pluginExecutable/$protocPluginBaseName$exeSuffix"
+        javaPluginPath = "$splitRootDir/compiler/build/binaries/java_pluginExecutable/local_arch/$protocPluginBaseName$exeSuffix"
     }
 
     dependencies {
@@ -124,8 +124,13 @@ subprojects {
 
     uploadArchives.repositories.mavenDeployer {
         beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-
-        repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+        String stagingUrl
+        if (System.getProperty('repositoryId')) {
+          stagingUrl = 'https://oss.sonatype.org/service/local/staging/deployByRepositoryId/' + System.getProperty('repositoryId')
+        } else {
+          stagingUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+        }
+        repository(url: stagingUrl) {
             if (rootProject.hasProperty("ossrhUsername")
                     && rootProject.hasProperty("ossrhPassword")) {
                 authentication(userName: ossrhUsername, password: ossrhPassword)

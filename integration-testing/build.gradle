@@ -2,6 +2,7 @@ apply plugin: 'protobuf'
 apply plugin:'application'
 
 description = "gRPC: Integration Testing"
+startScripts.enabled = false
 
 // Add dependency on the protobuf plugin
 buildscript {
@@ -54,7 +55,7 @@ task execute(dependsOn: classes, type:JavaExec) {
 }
 
 protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
-generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
+generateProto.dependsOn ':grpc-compiler:local_archJava_pluginExecutable'
 
 // Allow intellij projects to refer to generated-sources
 idea {

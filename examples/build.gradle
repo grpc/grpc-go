@@ -3,6 +3,8 @@ apply plugin: 'protobuf'
 
 description = "grpc Examples"
 
+startScripts.enabled = false
+
 buildscript {
     repositories {
         mavenCentral()
@@ -21,7 +23,7 @@ dependencies {
 }
 
 protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
-generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
+generateProto.dependsOn ':grpc-compiler:local_archJava_pluginExecutable'
 
 task routeGuideServer(type: JavaExec) {
     main = "io.grpc.examples.routeguide.RouteGuideServer"
