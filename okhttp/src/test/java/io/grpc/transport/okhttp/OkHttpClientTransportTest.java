@@ -76,6 +76,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.IOException;
+import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -103,6 +104,7 @@ public class OkHttpClientTransportTest {
   private ClientTransport.Listener listener;
   private OkHttpClientTransport clientTransport;
   private MockFrameReader frameReader;
+  private MockSocket socket;
   private Map<Integer, OkHttpClientStream> streams;
   private ClientFrameHandler frameHandler;
   private ExecutorService executor;
@@ -113,8 +115,10 @@ public class OkHttpClientTransportTest {
     MockitoAnnotations.initMocks(this);
     streams = new HashMap<Integer, OkHttpClientStream>();
     frameReader = new MockFrameReader();
+    socket = new MockSocket(frameReader);
     executor = Executors.newCachedThreadPool();
-    clientTransport = new OkHttpClientTransport(executor, frameReader, frameWriter, 3);
+    clientTransport = new OkHttpClientTransport(
+	executor, frameReader, frameWriter, 3, socket);
     clientTransport.start(listener);
     frameHandler = clientTransport.getHandler();
     streams = clientTransport.getStreams();
@@ -126,8 +130,8 @@ public class OkHttpClientTransportTest {
   @After
   public void tearDown() {
     clientTransport.shutdown();
-    assertTrue(frameReader.closed);
     verify(frameWriter).close();
+    frameReader.assertClosed();
     executor.shutdown();
   }
 
@@ -358,7 +362,7 @@ public class OkHttpClientTransportTest {
     assertEquals(0, streams.size());
     assertEquals(Status.CANCELLED.getCode(), listener1.status.getCode());
     assertEquals(Status.CANCELLED.getCode(), listener2.status.getCode());
-    verify(listener).transportTerminated();
+    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
@@ -416,15 +420,16 @@ public class OkHttpClientTransportTest {
     assertEquals(receivedMessage, listener1.messages.get(0));
 
     // The transport should be stopped after all active streams finished.
-    verify(listener).transportTerminated();
+    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
   public void streamIdExhausted() throws Exception {
     int startId = Integer.MAX_VALUE - 2;
     AsyncFrameWriter writer =  mock(AsyncFrameWriter.class);
-    OkHttpClientTransport transport =
-        new OkHttpClientTransport(executor, frameReader, writer, startId);
+    MockFrameReader frameReader = new MockFrameReader();
+    OkHttpClientTransport transport = new OkHttpClientTransport(
+        executor, frameReader, writer, startId, new MockSocket(frameReader));
     transport.start(listener);
     streams = transport.getStreams();
 
@@ -442,7 +447,7 @@ public class OkHttpClientTransportTest {
     listener1.waitUntilStreamClosed();
     verify(writer).rstStream(eq(startId), eq(ErrorCode.CANCEL));
     verify(listener).transportShutdown();
-    verify(listener).transportTerminated();
+    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   private static Buffer createMessageFrame(String message) {
@@ -471,12 +476,23 @@ public class OkHttpClientTransportTest {
   }
 
   private static class MockFrameReader implements FrameReader {
-    boolean closed;
+    CountDownLatch closed = new CountDownLatch(1);
     boolean throwExceptionForNextFrame;
+    boolean nextFrameResult = true;
 
     @Override
     public void close() throws IOException {
-      closed = true;
+      closed.countDown();
+    }
+
+    void assertClosed() {
+      try {
+        if (!closed.await(TIME_OUT_MS, TimeUnit.MILLISECONDS)) {
+          fail("Failed waiting frame reader to be closed.");
+        }
+      } catch (InterruptedException e) {
+	  fail("Interrupted while waiting for frame reader to be closed.");
+      }
     }
 
     @Override
@@ -494,11 +510,16 @@ public class OkHttpClientTransportTest {
       if (throwExceptionForNextFrame) {
         throw new IOException(NETWORK_ISSUE_MESSAGE);
       }
-      return true;
+      return nextFrameResult;
     }
 
     synchronized void throwIoExceptionForNextFrame() {
       throwExceptionForNextFrame = true;
+      notifyAll();
+    }
+
+    synchronized void finishNextFrame(boolean result) {
+      nextFrameResult = result;
       notifyAll();
     }
 
@@ -562,6 +583,19 @@ public class OkHttpClientTransportTest {
           throw new RuntimeException(e);
         }
       }
+    }
+  }
+
+  private static class MockSocket extends Socket {
+    MockFrameReader frameReader;
+
+    MockSocket(MockFrameReader frameReader) {
+      this.frameReader = frameReader;
+    }
+
+    @Override
+    public void close() {
+      frameReader.finishNextFrame(false);
     }
   }
 }

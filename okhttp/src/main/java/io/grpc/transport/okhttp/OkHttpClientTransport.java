@@ -137,6 +137,7 @@ public class OkHttpClientTransport implements ClientTransport {
   @GuardedBy("lock")
   private boolean stopped;
   private SSLSocketFactory sslSocketFactory;
+  private Socket socket;
 
   OkHttpClientTransport(InetSocketAddress address, String authorityHost, Executor executor,
                         SSLSocketFactory sslSocketFactory) {
@@ -155,13 +156,14 @@ public class OkHttpClientTransport implements ClientTransport {
    */
   @VisibleForTesting
   OkHttpClientTransport(Executor executor, FrameReader frameReader, AsyncFrameWriter frameWriter,
-      int nextStreamId) {
+      int nextStreamId, Socket socket) {
     address = null;
     authorityHost = null;
     defaultAuthority = "notarealauthority:80";
     this.executor = Preconditions.checkNotNull(executor);
     this.frameReader = Preconditions.checkNotNull(frameReader);
     this.frameWriter = Preconditions.checkNotNull(frameWriter);
+    this.socket = Preconditions.checkNotNull(socket);
     this.outboundFlow = new OutboundFlowController(this, frameWriter);
     this.nextStreamId = nextStreamId;
   }
@@ -201,7 +203,7 @@ public class OkHttpClientTransport implements ClientTransport {
       BufferedSource source;
       BufferedSink sink;
       try {
-        Socket socket = new Socket(address.getAddress(), address.getPort());
+        socket = new Socket(address.getAddress(), address.getPort());
         if (sslSocketFactory != null) {
           // We assume the sslSocketFactory will verify the server hostname.
           socket = sslSocketFactory.createSocket(socket, authorityHost, address.getPort(), true);
@@ -323,13 +325,14 @@ public class OkHttpClientTransport implements ClientTransport {
       // Wait for the frame writer to close.
       if (frameWriter != null) {
         frameWriter.close();
+        // Close the socket to break out the reader thread, which will close the
+        // frameReader and notify the listener.
         try {
-          frameReader.close();
+          socket.close();
         } catch (IOException e) {
-          throw new RuntimeException(e);
+          log.log(Level.WARNING, "Failed closing socekt", e);
         }
       }
-      listener.transportTerminated();
     }
   }
 
@@ -359,6 +362,11 @@ public class OkHttpClientTransport implements ClientTransport {
       } catch (IOException ioe) {
         abort(ioe);
       } finally {
+        try {
+          frameReader.close();
+        } catch (IOException ignored) {
+        }
+        listener.transportTerminated();
         // Restore the original thread name.
         Thread.currentThread().setName(threadName);
       }
