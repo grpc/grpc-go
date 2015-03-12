@@ -88,12 +88,8 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * responsible for properly closing streams when protocol errors occur.
    *
    * @param errorStatus the error to report
-   * @param stopDelivery if {@code true}, interrupts any further delivery of inbound messages that
-   *        may already be queued up in the deframer. If {@code false}, the listener will be
-   *        notified immediately after all currently completed messages in the deframer have been
-   *        delivered to the application.
    */
-  protected void inboundTransportError(Status errorStatus, boolean stopDelivery) {
+  protected void inboundTransportError(Status errorStatus) {
     if (inboundPhase() == Phase.STATUS) {
       log.log(Level.INFO, "Received transport error on closed stream {0} {1}",
           new Object[]{id(), errorStatus});
@@ -101,7 +97,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     }
     // For transport errors we immediately report status to the application layer
     // and do not wait for additional payloads.
-    transportReportStatus(errorStatus, stopDelivery, new Metadata.Trailers());
+    transportReportStatus(errorStatus, false, new Metadata.Trailers());
   }
 
   /**
@@ -136,7 +132,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
       if (inboundPhase() == Phase.HEADERS) {
         // Have not received headers yet so error
         inboundTransportError(Status.INTERNAL
-            .withDescription("headers not received before payload"), false);
+            .withDescription("headers not received before payload"));
         return;
       }
       inboundPhase(Phase.MESSAGE);

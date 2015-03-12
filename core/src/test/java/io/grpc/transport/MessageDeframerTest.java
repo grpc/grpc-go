@@ -116,6 +116,7 @@ public class MessageDeframerTest {
     verify(listener).messageRead(messages.capture());
     assertEquals(Bytes.asList(new byte[] {3, 14, 1, 5, 9, 2, 6}), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
+    verify(listener).deliveryStalled();
     verifyNoMoreInteractions(listener);
   }
 
@@ -130,6 +131,7 @@ public class MessageDeframerTest {
     verify(listener).messageRead(messages.capture());
     assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
+    verify(listener).deliveryStalled();
     verifyNoMoreInteractions(listener);
   }
 

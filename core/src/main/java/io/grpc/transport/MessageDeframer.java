@@ -218,7 +218,7 @@ public class MessageDeframer implements Closeable {
   private void deliver() {
     // Process the uncompressed bytes.
     boolean stalled = false;
-    while (pendingDeliveries > 0 && !(stalled = !readRequiredBytes())) {
+    while (pendingDeliveries > 0 && readRequiredBytes()) {
       switch (state) {
         case HEADER:
           processHeader();
@@ -235,6 +235,10 @@ public class MessageDeframer implements Closeable {
           throw new AssertionError("Invalid state: " + state);
       }
     }
+    // We are stalled when there are no more bytes to process. This allows delivering errors as soon
+    // as the buffered input has been consumed, independent of whether the application has requested
+    // another message.
+    stalled = !isDataAvailable();
 
     if (endOfStream) {
       if (!isDataAvailable()) {
