@@ -50,6 +50,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
+import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
@@ -68,7 +69,6 @@ import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -182,22 +182,12 @@ class NettyClientTransport implements ClientTransport {
     // Create the stream.
     NettyClientStream stream = new NettyClientStream(listener, channel, handler);
 
-    try {
-      // Convert the headers into Netty HTTP/2 headers.
-      AsciiString defaultPath = new AsciiString("/" + method.getName());
-      Http2Headers http2Headers = Utils.convertClientHeaders(headers, ssl, defaultPath, authority);
+    // Convert the headers into Netty HTTP/2 headers.
+    AsciiString defaultPath = new AsciiString("/" + method.getName());
+    Http2Headers http2Headers = Utils.convertClientHeaders(headers, ssl, defaultPath, authority);
 
-      // Write the request and await creation of the stream.
-      channel.writeAndFlush(new CreateStreamCommand(http2Headers, stream)).get();
-    } catch (InterruptedException e) {
-      // Restore the interrupt.
-      Thread.currentThread().interrupt();
-      stream.cancel();
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      stream.cancel();
-      throw new RuntimeException(e.getCause() != null ? e.getCause() : e);
-    }
+    // Write the command requesting the creation of the stream.
+    channel.writeAndFlush(new CreateStreamCommand(http2Headers, stream));
 
     return stream;
   }
@@ -344,7 +334,10 @@ class NettyClientTransport implements ClientTransport {
       // Set the initial window size for new streams.
       inboundFlow.initialWindowSize(streamWindowSize);
 
-      return new NettyClientHandler(connection, frameReader, frameWriter, inboundFlow,
+      DefaultHttp2ConnectionEncoder encoder
+          = new DefaultHttp2ConnectionEncoder(connection, frameWriter);
+
+      return new NettyClientHandler(encoder, connection, frameReader, inboundFlow,
           connectionWindowSize);
     } catch (Http2Exception e) {
       throw new RuntimeException(e);

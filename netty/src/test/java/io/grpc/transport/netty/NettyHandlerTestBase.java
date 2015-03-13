@@ -145,6 +145,7 @@ public abstract class NettyHandlerTestBase {
   protected final void mockContext() {
     Mockito.reset(ctx);
     Mockito.reset(promise);
+
     when(ctx.alloc()).thenReturn(UnpooledByteBufAllocator.DEFAULT);
     when(ctx.channel()).thenReturn(channel);
     when(ctx.write(any())).thenReturn(future);

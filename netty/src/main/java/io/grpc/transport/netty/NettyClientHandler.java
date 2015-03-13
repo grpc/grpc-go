@@ -43,21 +43,17 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2Connection;
-import io.netty.handler.codec.http2.Http2ConnectionAdapter;
+import io.netty.handler.codec.http2.Http2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameAdapter;
 import io.netty.handler.codec.http2.Http2FrameReader;
-import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Stream;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Iterator;
 
 import javax.annotation.Nullable;
 
@@ -67,33 +63,17 @@ import javax.annotation.Nullable;
  */
 class NettyClientHandler extends Http2ConnectionHandler {
 
-  /**
-   * A pending stream creation.
-   */
-  private final class PendingStream {
-    private final Http2Headers headers;
-    private final NettyClientStream stream;
-    private final ChannelPromise promise;
-
-    public PendingStream(CreateStreamCommand command, ChannelPromise promise) {
-      headers = command.headers();
-      stream = command.stream();
-      this.promise = promise;
-    }
-  }
-
-  private final Deque<PendingStream> pendingStreams = new ArrayDeque<PendingStream>();
   private final Http2LocalFlowController inboundFlow;
   private int connectionWindowSize;
   private Throwable connectionError;
   private Status goAwayStatus;
   private ChannelHandlerContext ctx;
 
-  public NettyClientHandler(Http2Connection connection,
-      Http2FrameReader frameReader,
-      Http2FrameWriter frameWriter,
-      Http2LocalFlowController inboundFlow, int connectionWindowSize) {
-    super(connection, frameReader, frameWriter, new LazyFrameListener());
+  public NettyClientHandler(Http2ConnectionEncoder encoder, Http2Connection connection,
+                            Http2FrameReader frameReader, Http2LocalFlowController inboundFlow,
+                            int connectionWindowSize) {
+    super(new DefaultHttp2ConnectionDecoder(connection, encoder, frameReader,
+        new LazyFrameListener()), new BufferingHttp2ConnectionEncoder(encoder));
     Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
     this.connectionWindowSize =
         connectionWindowSize == inboundFlow.initialWindowSize() ? -1 : connectionWindowSize;
@@ -104,15 +84,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
     // Disallow stream creation by the server.
     connection.remote().maxActiveStreams(0);
     connection.local().allowPushTo(false);
-
-    // Observe the HTTP/2 connection for events.
-    connection.addListener(new Http2ConnectionAdapter() {
-      @Override
-      public void onStreamClosed(Http2Stream stream) {
-        // Whenever a stream has been closed, try to create a pending stream to fill its place.
-        createPendingStreams();
-      }
-    });
   }
 
   @Nullable
@@ -203,20 +174,14 @@ class NettyClientHandler extends Http2ConnectionHandler {
   }
 
   private void onGoAwayRead(long errorCode, ByteBuf debugData) {
-    Status status = HttpUtil.Http2Error.statusForCode((int) errorCode);
-    if (debugData.isReadable()) {
-      // If a debug message was provided, use it.
-      String msg = debugData.toString(UTF_8);
-      status = status.augmentDescription(msg);
-    }
-    goAwayStatus(status);
+    goAwayStatus(statusFromGoAway(errorCode, debugData));
     goingAway();
   }
 
   @Override
   public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
     goAwayStatus(Status.UNAVAILABLE.withDescription("Network channel closed by the client"));
-
+    
     super.close(ctx, promise);
   }
 
@@ -226,10 +191,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   @Override
   public void channelInactive(ChannelHandlerContext ctx) throws Exception {
     try {
-      // Fail any streams that are awaiting creation.
       goAwayStatus(goAwayStatus().augmentDescription("Network channel closed"));
-      failPendingStreams(goAwayStatus);
-
       // Report status to the application layer for any open streams
       for (Http2Stream stream : http2Streams()) {
         clientStream(stream).transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
@@ -268,12 +230,37 @@ class NettyClientHandler extends Http2ConnectionHandler {
    * Attempts to create a new stream from the given command. If there are too many active streams,
    * the creation request is queued.
    */
-  private void createStream(CreateStreamCommand command, ChannelPromise promise) {
-    // Add the creation request to the queue.
-    pendingStreams.addLast(new PendingStream(command, promise));
-
-    // Process the pending streams queue.
-    createPendingStreams();
+  private void createStream(CreateStreamCommand command, final ChannelPromise promise) {
+    final Http2Connection.Endpoint<Http2LocalFlowController> local = connection().local();
+    final int streamId = local.nextStreamId();
+    final NettyClientStream stream = command.stream();
+    final Http2Headers headers = command.headers();
+    // TODO: Send GO_AWAY if streamId overflows
+    stream.id(streamId);
+    encoder().writeHeaders(ctx, streamId, headers, 0, false, promise)
+            .addListener(new ChannelFutureListener() {
+              @Override
+              public void operationComplete(ChannelFuture future) throws Exception {
+                if (future.isSuccess()) {
+                  // Attach the client stream to the HTTP/2 stream object as user data.
+                  Http2Stream http2Stream = connection().stream(streamId);
+                  // The http2Stream will be null in case a stream buffered in the encoder
+                  // was canceled via RST_STREAM.
+                  if (http2Stream != null) {
+                    http2Stream.setProperty(NettyClientStream.class, stream);
+                  }
+                } else {
+                  if (future.cause() instanceof GoAwayClosedStreamException) {
+                    GoAwayClosedStreamException e = (GoAwayClosedStreamException) future.cause();
+                    goAwayStatus(statusFromGoAway(e.errorCode(), e.debugData()));
+                    stream.transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
+                  } else {
+                    stream.transportReportStatus(Status.fromThrowable(future.cause()), true,
+                        new Metadata.Trailers());
+                  }
+                }
+              }
+            });
   }
 
   /**
@@ -283,28 +270,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
       ChannelPromise promise) throws Http2Exception {
     NettyClientStream stream = cmd.stream();
     stream.transportReportStatus(Status.CANCELLED, true, new Metadata.Trailers());
-
-    // No need to set the stream status for a cancellation. It should already have been
-    // set prior to sending the command.
-
-    // If the stream hasn't been created yet, remove it from the pending queue.
-    if (stream.id() == null) {
-      removePendingStream(stream);
-      promise.setSuccess();
-      return;
-    }
-
-    // Send a RST_STREAM frame to terminate this stream. If the stream doesn't exist, assume it is
-    // already closed.
-    Http2Stream http2Stream = connection().stream(stream.id());
-    if (http2Stream != null && http2Stream.state() != Http2Stream.State.CLOSED) {
-      // Note: RST_STREAM frames are automatically flushed.
-      encoder().writeRstStream(ctx, stream.id(), Http2Error.CANCEL.code(), promise);
-    } else {
-      // This does allow for a race in the case of two consecutive cancels where the RST_STREAM
-      // from the first hasn't completed when we setSuccess here for the second. But we don't care.
-      promise.setSuccess();
-    }
+    encoder().writeRstStream(ctx, stream.id(), Http2Error.CANCEL.code(), promise);
   }
 
   /**
@@ -321,10 +287,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
    * Handler for a GOAWAY being either sent or received.
    */
   private void goingAway() {
-    // Fail any streams that are awaiting creation.
     Status goAwayStatus = goAwayStatus();
-    failPendingStreams(goAwayStatus);
-
     if (connection().goAwayReceived()) {
       // Received a GOAWAY from the remote endpoint. Fail any streams that were created after the
       // last known stream.
@@ -335,61 +298,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
           stream.close();
         }
       }
-    }
-  }
-
-  /**
-   * Processes the pending stream creation requests. This considers several conditions:
-   *
-   * <ol>
-   * <li>The HTTP/2 connection has exhausted its stream IDs. In this case all pending streams are
-   * immediately failed.
-   * <li>The HTTP/2 connection is going away. In this case all pending streams are immediately
-   * failed.
-   * <li>The HTTP/2 connection's MAX_CONCURRENT_STREAMS limit has been reached. In this case,
-   * processing of pending streams stops until an active stream has been closed.
-   * </ol>
-   */
-  private void createPendingStreams() {
-    Http2Connection connection = connection();
-    Http2Connection.Endpoint<Http2LocalFlowController> local = connection.local();
-    Status goAwayStatus = goAwayStatus();
-    while (!pendingStreams.isEmpty()) {
-      final int streamId = local.nextStreamId();
-      if (streamId <= 0) {
-        // The HTTP/2 connection has exhausted its stream IDs. Permanently fail all stream creation
-        // attempts for this transport.
-        // TODO(nmittler): send GO_AWAY?
-        failPendingStreams(goAwayStatus);
-        return;
-      }
-
-      if (connection.goAwaySent() || connection.goAwayReceived()) {
-        failPendingStreams(goAwayStatus);
-        return;
-      }
-
-      if (!local.canCreateStream()) {
-        // We're bumping up against the MAX_CONCURRENT_STEAMS threshold for this endpoint. Need to
-        // wait until the endpoint is accepting new streams.
-        return;
-      }
-
-      // Finish creation of the stream by writing a headers frame.
-      final PendingStream pendingStream = pendingStreams.remove();
-      encoder().writeHeaders(ctx, streamId, pendingStream.headers, 0, false, ctx.newPromise())
-          .addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture future) throws Exception {
-              if (future.isSuccess()) {
-                streamCreated(pendingStream.stream, streamId, pendingStream.promise);
-              } else {
-                // Fail the creation request.
-                pendingStream.promise.setFailure(future.cause());
-              }
-            }
-          });
-      ctx.flush();
     }
   }
 
@@ -407,18 +315,14 @@ class NettyClientHandler extends Http2ConnectionHandler {
     goAwayStatus = goAwayStatus == null ? status : goAwayStatus;
   }
 
-  /**
-   * Handles the successful creation of a new stream.
-   */
-  private void streamCreated(NettyClientStream stream, int streamId, ChannelPromise promise)
-      throws Http2Exception {
-    // Attach the client stream to the HTTP/2 stream object as user data.
-    Http2Stream http2Stream = connection().requireStream(streamId);
-    http2Stream.setProperty(NettyClientStream.class, stream);
-
-    // Notify the stream that it has been created.
-    stream.id(streamId);
-    promise.setSuccess();
+  private Status statusFromGoAway(long errorCode, ByteBuf debugData) {
+    Status status = HttpUtil.Http2Error.statusForCode((int) errorCode);
+    if (debugData.isReadable()) {
+      // If a debug message was provided, use it.
+      String msg = debugData.toString(UTF_8);
+      status = status.augmentDescription(msg);
+    }
+    return status;
   }
 
   /**
@@ -426,31 +330,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
    */
   private NettyClientStream clientStream(Http2Stream stream) {
     return stream.getProperty(NettyClientStream.class);
-  }
-
-  /**
-   * Fails all pending streams with the given status and clears the queue.
-   */
-  private void failPendingStreams(Status status) {
-    while (!pendingStreams.isEmpty()) {
-      PendingStream pending = pendingStreams.remove();
-      pending.promise.setFailure(status.asException());
-    }
-  }
-
-  /**
-   * Removes the given stream from the pending queue
-   *
-   * @param stream the stream to be removed.
-   */
-  private void removePendingStream(NettyClientStream stream) {
-    for (Iterator<PendingStream> iter = pendingStreams.iterator(); iter.hasNext();) {
-      PendingStream pending = iter.next();
-      if (pending.stream == stream) {
-        iter.remove();
-        return;
-      }
-    }
   }
 
   /**

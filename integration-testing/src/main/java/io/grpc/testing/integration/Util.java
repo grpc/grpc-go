@@ -97,7 +97,7 @@ public class Util {
       Assert.assertEquals(expected, actual);
     } else {
       if (!expected.equals(actual)) {
-        // This assertEquals should always fail.
+        // This assertEquals should always complete.
         Assert.assertEquals(expected.toString(), actual.toString());
         // But if it doesn't, then this should.
         Assert.assertEquals(expected, actual);

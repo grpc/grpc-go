@@ -196,7 +196,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     stream().transportHeadersReceived(headers, false);
     verify(listener, never()).closed(any(Status.class), any(Metadata.Trailers.class));
 
-    // We are now waiting for 100 bytes of error context on the stream, cancel has not yet been sent
+    // We are now waiting for 100 bytes of error context on the stream, cancel has not yet been
+    // sent
     verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
     stream().transportDataReceived(Unpooled.buffer(100).writeZero(100), false);
     verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
