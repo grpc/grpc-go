@@ -34,14 +34,14 @@
 package grpc
 
 import (
+	"io"
+	"net"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
-	"io"
-	"log"
-	"net"
 )
 
 // recv receives and parses an RPC response.
@@ -167,7 +167,6 @@ func Invoke(ctx context.Context, method string, args, reply proto.Message, cc *C
 		}
 		t.CloseStream(stream, lastErr)
 		if lastErr != nil {
-			log.Println("exit 5: ", lastErr)
 			return toRPCErr(lastErr)
 		}
 		return Errorf(stream.StatusCode(), stream.StatusDesc())
