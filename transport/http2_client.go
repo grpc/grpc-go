@@ -209,16 +209,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			return nil, ContextErr(context.DeadlineExceeded)
 		}
 	}
-	// HPACK encodes various headers.
-	t.hBuf.Reset()
-	t.hEnc.WriteField(hpack.HeaderField{Name: ":method", Value: "POST"})
-	t.hEnc.WriteField(hpack.HeaderField{Name: ":scheme", Value: t.scheme})
-	t.hEnc.WriteField(hpack.HeaderField{Name: ":path", Value: callHdr.Method})
-	t.hEnc.WriteField(hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
-	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
-	t.hEnc.WriteField(hpack.HeaderField{Name: "te", Value: "trailers"})
+	var authData map[string]string
 	for _, c := range t.authCreds {
-		m, err := c.GetRequestMetadata(ctx)
+		authData, err = c.GetRequestMetadata(ctx)
 		select {
 		case <-ctx.Done():
 			return nil, ContextErr(ctx.Err())
@@ -227,12 +220,22 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		if err != nil {
 			return nil, StreamErrorf(codes.InvalidArgument, "transport: %v", err)
 		}
-		for k, v := range m {
-			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
-		}
 	}
+	// HPACK encodes various headers. Note that once WriteField(...) is
+	// called, the corresponding headers/continuation frame has to be sent
+	// because hpack.Encoder is stateful.
+	t.hBuf.Reset()
+	t.hEnc.WriteField(hpack.HeaderField{Name: ":method", Value: "POST"})
+	t.hEnc.WriteField(hpack.HeaderField{Name: ":scheme", Value: t.scheme})
+	t.hEnc.WriteField(hpack.HeaderField{Name: ":path", Value: callHdr.Method})
+	t.hEnc.WriteField(hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
+	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+	t.hEnc.WriteField(hpack.HeaderField{Name: "te", Value: "trailers"})
 	if timeout > 0 {
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: timeoutEncode(timeout)})
+	}
+	for k, v := range authData {
+		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
 	}
 	if md, ok := metadata.FromContext(ctx); ok {
 		for k, v := range md {

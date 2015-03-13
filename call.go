@@ -127,8 +127,10 @@ func Invoke(ctx context.Context, method string, args, reply proto.Message, cc *C
 		Last:  true,
 		Delay: false,
 	}
-	ts := 0
-	var lastErr error // record the error that happened
+	var (
+		ts      int   // track the transport sequence number
+		lastErr error // record the error that happened
+	)
 	for {
 		var (
 			err    error

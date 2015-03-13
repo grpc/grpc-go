@@ -205,6 +205,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 
 	frame, err := t.framer.ReadFrame()
 	if err != nil {
+		log.Printf("transport: http2Server.HandleStreams failed to read frame: %v", err)
 		t.Close()
 		return
 	}
