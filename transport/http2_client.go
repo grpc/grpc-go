@@ -166,11 +166,10 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 	return t, nil
 }
 
-func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
-	t.mu.Lock()
+func (t *http2Client) newStream(ctx context.Context, streamID uint32, callHdr *CallHdr) *Stream {
 	// TODO(zhaoq): Handle uint32 overflow.
 	s := &Stream{
-		id:            t.nextID,
+		id:            streamID,
 		method:        callHdr.Method,
 		buf:           newRecvBuffer(),
 		sendQuotaPool: newQuotaPool(initialWindowSize),
@@ -185,22 +184,12 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		ctx:  s.ctx,
 		recv: s.buf,
 	}
-	t.nextID += 2
-	t.mu.Unlock()
 	return s
 }
 
 // NewStream creates a stream and register it into the transport as "active"
 // streams.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Stream, err error) {
-	if _, err := wait(ctx, t.shutdownChan, t.writableChan); err != nil {
-		return nil, err
-	}
-	defer func() {
-		if _, ok := err.(ConnectionError); !ok {
-			t.writableChan <- 0
-		}
-	}()
 	// Record the timeout value on the context.
 	var timeout time.Duration
 	if dl, ok := ctx.Deadline(); ok {
@@ -220,6 +209,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		if err != nil {
 			return nil, StreamErrorf(codes.InvalidArgument, "transport: %v", err)
 		}
+	}
+	if _, err := wait(ctx, t.shutdownChan, t.writableChan); err != nil {
+		return nil, err
 	}
 	// HPACK encodes various headers. Note that once WriteField(...) is
 	// called, the corresponding headers/continuation frame has to be sent
@@ -244,6 +236,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	first := true
 	endHeaders := false
+	streamID := t.nextID
+	t.nextID += 2
 	// Sends the headers in a single batch even when they span multiple frames.
 	for !endHeaders {
 		size := t.hBuf.Len()
@@ -255,7 +249,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		if first {
 			// Sends a HeadersFrame to server to start a new stream.
 			p := http2.HeadersFrameParam{
-				StreamID:      t.nextID,
+				StreamID:      streamID,
 				BlockFragment: t.hBuf.Next(size),
 				EndStream:     false,
 				EndHeaders:    endHeaders,
@@ -271,7 +265,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			return nil, ConnectionErrorf("transport: %v", err)
 		}
 	}
-	s := t.newStream(ctx, callHdr)
+	t.writableChan <- 0
+	s := t.newStream(ctx, streamID, callHdr)
 	t.mu.Lock()
 	if t.state != reachable {
 		t.mu.Unlock()
