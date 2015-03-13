@@ -156,7 +156,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		if err != nil {
 			sleepTime := backoff(retries)
 			// Fail early before falling into sleep.
-			if cc.dopts.Timeout > 0 && cc.dopts.Timeout < sleepTime + time.Since(start) {
+			if cc.dopts.Timeout > 0 && cc.dopts.Timeout < sleepTime+time.Since(start) {
 				cc.Close()
 				return ErrClientConnTimeout
 			}

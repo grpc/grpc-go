@@ -200,7 +200,7 @@ func Errorf(c codes.Code, format string, a ...interface{}) error {
 	}
 }
 
-// toRPCErr converts a transport error into a rpcError if possible.
+// toRPCErr converts an error into a rpcError.
 func toRPCErr(err error) error {
 	switch e := err.(type) {
 	case transport.StreamError:
@@ -214,7 +214,7 @@ func toRPCErr(err error) error {
 			desc: e.Desc,
 		}
 	}
-	return Errorf(codes.Unknown, "grpc: failed to convert %v to rpcErr", err)
+	return Errorf(codes.Unknown, "%v", err)
 }
 
 // convertCode converts a standard Go error into its canonical code. Note that

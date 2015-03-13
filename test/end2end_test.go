@@ -239,6 +239,7 @@ func TestReconnectTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial to the server %q: %v", addr, err)
 	}
+	// Close unaccepted connection (i.e., conn).
 	lis.Close()
 	tc := testpb.NewTestServiceClient(conn)
 	waitC := make(chan struct{})
@@ -251,9 +252,8 @@ func TestReconnectTimeout(t *testing.T) {
 			ResponseSize: proto.Int32(int32(respSize)),
 			Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 		}
-		_, err := tc.UnaryCall(context.Background(), req)
-		if err != grpc.Errorf(codes.Internal, "%v", grpc.ErrClientConnClosing) {
-			t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, %v", err, grpc.Errorf(codes.Internal, "%v", grpc.ErrClientConnClosing))
+		if _, err := tc.UnaryCall(context.Background(), req); err == nil {
+			t.Fatalf("TestService/UnaryCall(_, _) = _, <nil>, want _, non-nil")
 		}
 	}()
 	// Block untill reconnect times out.
