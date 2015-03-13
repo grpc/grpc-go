@@ -184,9 +184,9 @@ class Utils {
           Runtime.getRuntime().availableProcessors() * 2 : nEventLoops;
       final ExecutorService executor = Executors.newFixedThreadPool(parallelism, threadFactory);
       NioEventLoopGroup nioEventLoopGroup = new NioEventLoopGroup(parallelism, executor);
-      nioEventLoopGroup.terminationFuture().addListener(new GenericFutureListener<Future<?>>() {
+      nioEventLoopGroup.terminationFuture().addListener(new GenericFutureListener<Future<Object>>() {
         @Override
-        public void operationComplete(Future<?> future) throws Exception {
+        public void operationComplete(Future<Object> future) throws Exception {
           executor.shutdown();
         }
       });
