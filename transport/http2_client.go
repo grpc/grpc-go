@@ -211,7 +211,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	var authData map[string]string
 	for _, c := range t.authCreds {
-		var err error
 		authData, err = c.GetRequestMetadata(ctx)
 		select {
 		case <-ctx.Done():
