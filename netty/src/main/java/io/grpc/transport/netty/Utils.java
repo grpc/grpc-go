@@ -45,9 +45,14 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 /**
  * Common utility methods.
@@ -173,8 +178,19 @@ class Utils {
 
     @Override
     public EventLoopGroup create() {
-      return new NioEventLoopGroup(nEventLoops, new ThreadFactoryBuilder().setNameFormat(name + "-%d")
-          .build());
+      // Use the executor based constructor so we can work with both Netty4 & Netty5.
+      ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat(name + "-%d").build();
+      int parallelism = nEventLoops == 0 ?
+          Runtime.getRuntime().availableProcessors() * 2 : nEventLoops;
+      final ExecutorService executor = Executors.newFixedThreadPool(parallelism, threadFactory);
+      NioEventLoopGroup nioEventLoopGroup = new NioEventLoopGroup(parallelism, executor);
+      nioEventLoopGroup.terminationFuture().addListener(new GenericFutureListener<Future<?>>() {
+        @Override
+        public void operationComplete(Future<?> future) throws Exception {
+          executor.shutdown();
+        }
+      });
+      return nioEventLoopGroup;
     }
 
     @Override
