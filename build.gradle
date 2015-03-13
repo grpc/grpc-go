@@ -124,6 +124,7 @@ subprojects {
       uploadArchives.repositories.mavenDeployer,
     ]*.pom*.whenConfigured { pom ->
         pom.project {
+            name "$project.group:$project.name"
             description project.description
             url 'https://github.com/grpc/grpc-java'
 
@@ -137,6 +138,18 @@ subprojects {
                 license {
                     name 'BSD 3-Clause'
                     url 'http://opensource.org/licenses/BSD-3-Clause'
+                }
+            }
+
+            developers {
+                developer {
+                    id "grpc.io"
+                    name "gRPC Contributors"
+                    email "grpc-io@googlegroups.com"
+                    url "http://grpc.io/"
+                    // https://issues.gradle.org/browse/GRADLE-2719
+                    organization = "Google, Inc."
+                    organizationUrl "https://www.google.com"
                 }
             }
         }
