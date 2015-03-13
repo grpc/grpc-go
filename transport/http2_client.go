@@ -82,7 +82,7 @@ type http2Client struct {
 	// The scheme used: https if TLS is on, http otherwise.
 	scheme string
 
-	authCreds []credentials.Credentials
+	authCreds []credentials.Retriever
 
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
@@ -218,7 +218,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "te", Value: "trailers"})
 	for _, c := range t.authCreds {
-		m, err := c.GetRequestMetadata(ctx)
+		m, err := c.Retrieve(ctx)
 		select {
 		case <-ctx.Done():
 			return nil, ContextErr(ctx.Err())

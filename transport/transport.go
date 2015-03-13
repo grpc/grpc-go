@@ -314,7 +314,7 @@ func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32) (Serv
 // DialOptions covers all relevant options for dialing a server.
 type DialOptions struct {
 	Protocol    string
-	AuthOptions []credentials.Credentials
+	AuthOptions []credentials.Retriever
 	Timeout     time.Duration
 }
 

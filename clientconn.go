@@ -68,7 +68,7 @@ func WithTransportCredentials(creds credentials.TransportAuthenticator) DialOpti
 
 // WithPerRPCCredentials returns a DialOption which sets
 // credentials which will place auth state on each outbound RPC.
-func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
+func WithPerRPCCredentials(creds credentials.Retriever) DialOption {
 	return func(o *transport.DialOptions) {
 		o.AuthOptions = append(o.AuthOptions, creds)
 	}
@@ -156,7 +156,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		if err != nil {
 			sleepTime := backoff(retries)
 			// Fail early before falling into sleep.
-			if cc.dopts.Timeout > 0 && cc.dopts.Timeout < sleepTime + time.Since(start) {
+			if cc.dopts.Timeout > 0 && cc.dopts.Timeout < sleepTime+time.Since(start) {
 				cc.Close()
 				return ErrClientConnTimeout
 			}

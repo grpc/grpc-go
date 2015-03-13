@@ -55,17 +55,17 @@ var (
 	alpnProtoStr = []string{"h2-14", "h2-15", "h2-16"}
 )
 
-// Credentials defines the common interface all supported credentials must
-// implement.
-type Credentials interface {
-	// GetRequestMetadata gets the current request metadata, refreshing
+// Retriever is an interface that represents types that can
+// retrieve authentication credentials as metadata.
+type Retriever interface {
+	// Metadata gets the current request metadata, refreshing
 	// tokens if required. This should be called by the transport layer on
 	// each request, and the data should be populated in headers or other
 	// context. When supported by the underlying implementation, ctx can
 	// be used for timeout and cancellation.
 	// TODO(zhaoq): Define the set of the qualified keys instead of leaving
 	// it as an arbitrary string.
-	GetRequestMetadata(ctx context.Context) (map[string]string, error)
+	Retrieve(ctx context.Context) (map[string]string, error)
 }
 
 // TransportAuthenticator defines the common interface all supported transport
@@ -83,7 +83,7 @@ type TransportAuthenticator interface {
 	// NewListener creates a listener which accepts connections with requested
 	// authentication handshake.
 	NewListener(lis net.Listener) net.Listener
-	Credentials
+	Retriever
 }
 
 // tlsCreds is the credentials required for authenticating a connection.
@@ -103,9 +103,9 @@ type tlsCreds struct {
 	certificates []tls.Certificate
 }
 
-// GetRequestMetadata returns nil, nil since TLS credentials does not have
-// metadata.
-func (c *tlsCreds) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+// Retrieve returns nil, nil since TLS credentials
+// does not have metadata.
+func (c *tlsCreds) Retrieve(ctx context.Context) (map[string]string, error) {
 	return nil, nil
 }
 
@@ -188,7 +188,7 @@ type computeEngine struct {
 	ts oauth2.TokenSource
 }
 
-func (c computeEngine) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+func (c computeEngine) Retrieve(ctx context.Context) (map[string]string, error) {
 	token, err := c.ts.Token()
 	if err != nil {
 		return nil, err
@@ -201,7 +201,7 @@ func (c computeEngine) GetRequestMetadata(ctx context.Context) (map[string]strin
 // NewComputeEngine constructs the credentials that fetches access tokens from
 // Google Compute Engine (GCE)'s metadata server. It is only valid to use this
 // if your program is running on a GCE instance.
-func NewComputeEngine() Credentials {
+func NewComputeEngine() Retriever {
 	return computeEngine{
 		ts: google.ComputeTokenSource(""),
 	}
@@ -212,7 +212,7 @@ type serviceAccount struct {
 	config *jwt.Config
 }
 
-func (s serviceAccount) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+func (s serviceAccount) Retrieve(ctx context.Context) (map[string]string, error) {
 	token, err := s.config.TokenSource(ctx).Token()
 	if err != nil {
 		return nil, err
@@ -224,7 +224,7 @@ func (s serviceAccount) GetRequestMetadata(ctx context.Context) (map[string]stri
 
 // NewServiceAccountFromKey constructs the credentials using the JSON key slice
 // from a Google Developers service account.
-func NewServiceAccountFromKey(jsonKey []byte, scope ...string) (Credentials, error) {
+func NewServiceAccountFromKey(jsonKey []byte, scope ...string) (Retriever, error) {
 	config, err := google.JWTConfigFromJSON(jsonKey, scope...)
 	if err != nil {
 		return nil, err
@@ -234,7 +234,7 @@ func NewServiceAccountFromKey(jsonKey []byte, scope ...string) (Credentials, err
 
 // NewServiceAccountFromFile constructs the credentials using the JSON key file
 // of a Google Developers service account.
-func NewServiceAccountFromFile(keyFile string, scope ...string) (Credentials, error) {
+func NewServiceAccountFromFile(keyFile string, scope ...string) (Retriever, error) {
 	jsonKey, err := ioutil.ReadFile(keyFile)
 	if err != nil {
 		return nil, fmt.Errorf("credentials: failed to read the service account key file: %v", err)
