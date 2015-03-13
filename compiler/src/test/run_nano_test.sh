@@ -5,7 +5,7 @@ if [ -z "$TEST_TMP_DIR" ]; then
   exit 1;
 fi
 
-cd $(dirname $0)
+cd "$(dirname "$0")"
 
 INPUT_FILE="proto/test.proto"
 OUTPUT_FILE="$TEST_TMP_DIR/TestServiceGrpc.src.jar"
