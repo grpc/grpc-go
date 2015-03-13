@@ -182,7 +182,7 @@ func setUp(t *testing.T, useTLS bool, port int, maxStreams uint32, suspend bool)
 			t.Fatalf("Failed to create credentials %v", err)
 		}
 		dopts := DialOptions{
-			AuthOptions: []credentials.Credentials{creds},
+			AuthOptions: []credentials.Retriever{creds},
 		}
 		ct, connErr = NewClientTransport(addr, &dopts)
 	} else {
