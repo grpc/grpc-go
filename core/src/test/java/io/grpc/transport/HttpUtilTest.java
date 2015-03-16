@@ -29,6 +29,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+package io.grpc.transport;
+
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
