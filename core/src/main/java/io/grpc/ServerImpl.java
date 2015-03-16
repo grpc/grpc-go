@@ -348,6 +348,9 @@ public class ServerImpl implements Server {
 
     @Override
     public void closed(Status status) {}
+
+    @Override
+    public void onReady(int numMessages) {}
   }
 
   /**
@@ -423,6 +426,16 @@ public class ServerImpl implements Server {
         @Override
         public void run() {
           getListener().closed(status);
+        }
+      });
+    }
+
+    @Override
+    public void onReady(final int numMessages) {
+      callExecutor.execute(new Runnable() {
+        @Override
+        public void run() {
+          getListener().onReady(numMessages);
         }
       });
     }
@@ -519,6 +532,14 @@ public class ServerImpl implements Server {
           cancelled = true;
           listener.onCancel();
         }
+      }
+
+      @Override
+      public void onReady(int numMessages) {
+        if (cancelled) {
+          return;
+        }
+        listener.onReady(numMessages);
       }
     }
   }

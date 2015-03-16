@@ -373,6 +373,16 @@ public final class ChannelImpl implements Channel {
           }
         });
       }
+
+      @Override
+      public void onReady(final int numMessages) {
+        callExecutor.execute(new Runnable() {
+          @Override
+          public void run() {
+            observer.onReady(numMessages);
+          }
+        });
+      }
     }
   }
 }

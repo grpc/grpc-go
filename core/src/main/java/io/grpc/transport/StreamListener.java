@@ -49,4 +49,17 @@ public interface StreamListener {
    * @param message the bytes of the message.
    */
   void messageRead(InputStream message);
+
+  /**
+   * This indicates that the transport is now capable of sending the given number of messages
+   * without requiring excessive buffering internally. This event is
+   * just a suggestion and the application is free to ignore it, however doing so may
+   * result in excessive buffering within the transport.
+   *
+   * <p>NOTE: this method is not yet implemented!
+   *
+   * @param numMessages the number of messages that can be sent without requiring excessive
+   *        buffering.
+   */
+  void onReady(int numMessages);
 }

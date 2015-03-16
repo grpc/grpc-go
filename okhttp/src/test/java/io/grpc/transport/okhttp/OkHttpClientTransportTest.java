@@ -538,6 +538,10 @@ public class OkHttpClientTransportTest {
       closed.countDown();
     }
 
+    @Override
+    public void onReady(int numMessages) {
+    }
+
     void waitUntilStreamClosed() throws InterruptedException {
       if (!closed.await(TIME_OUT_MS, TimeUnit.MILLISECONDS)) {
         fail("Failed waiting stream to be closed.");
