@@ -175,5 +175,10 @@ public class ClientInterceptors {
     public void onClose(Status status, Metadata.Trailers trailers) {
       delegate.onClose(status, trailers);
     }
+
+    @Override
+    public void onReady(int numMessages) {
+      delegate.onReady(numMessages);
+    }
   }
 }

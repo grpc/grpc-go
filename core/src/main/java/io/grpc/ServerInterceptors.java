@@ -210,5 +210,10 @@ public class ServerInterceptors {
     public void onComplete() {
       delegate.onComplete();
     }
+
+    @Override
+    public void onReady(int numMessages) {
+      delegate.onReady(numMessages);
+    }
   }
 }
