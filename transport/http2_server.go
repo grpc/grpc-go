@@ -523,6 +523,10 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		// transport.
 		if _, err := wait(s.ctx, t.shutdownChan, t.writableChan); err != nil {
 			if t.framer.adjustNumWriters(-1) == 0 {
+				// This writer is the last one in this batch and has the
+				// responsibility to flush the buffered frames. It queues
+				// a flush request to controlBuf instead of flushing directly
+				// in order to avoid the race with other writing or flushing.
 				t.controlBuf.put(&flushIO{})
 			}
 			return err
