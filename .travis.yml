@@ -1,0 +1,27 @@
+sudo: false
+
+language: java
+
+env:
+  global:
+    - CXXFLAGS="--std=c++0x"
+
+install:
+  - buildscripts/make_dependencies.sh # build protoc into /tmp/grpc-deps
+
+before_script:
+  - export PATH=/tmp/grpc-deps/bin:$PATH
+  - export LD_LIBRARY_PATH=/tmp/grpc-deps/lib:$LD_LIBRARY_PATH
+
+jdk:
+  - oraclejdk8
+
+os:
+  - linux
+
+branches:
+  only:
+    - master
+
+notifications:
+  email: false
