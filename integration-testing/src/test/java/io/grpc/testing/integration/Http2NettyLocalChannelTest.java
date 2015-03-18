@@ -41,10 +41,13 @@ import io.netty.channel.local.LocalServerChannel;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Run transport tests over the Netty in-process channel.
  */
+@RunWith(JUnit4.class)
 public class Http2NettyLocalChannelTest extends AbstractTransportTest {
 
   /** Start server. */
