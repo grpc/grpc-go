@@ -66,7 +66,7 @@ type http2Server struct {
 	// Blocking operations should select on shutdownChan to avoid
 	// blocking forever after Close.
 	shutdownChan chan struct{}
-	framer       *http2.Framer
+	framer       *framer
 	hBuf         *bytes.Buffer  // the buffer for HPACK encoding
 	hEnc         *hpack.Encoder // HPACK encoder
 
@@ -88,15 +88,15 @@ type http2Server struct {
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
 // returned if something goes wrong.
 func newHTTP2Server(conn net.Conn, maxStreams uint32) (_ ServerTransport, err error) {
-	framer := http2.NewFramer(conn, conn)
+	framer := newFramer(conn)
 	// Send initial settings as connection preface to client.
 	// TODO(zhaoq): Have a better way to signal "no limit" because 0 is
 	// permitted in the HTTP2 spec.
 	if maxStreams == 0 {
-		err = framer.WriteSettings()
+		err = framer.writeSettings(true)
 		maxStreams = math.MaxUint32
 	} else {
-		err = framer.WriteSettings(http2.Setting{http2.SettingMaxConcurrentStreams, maxStreams})
+		err = framer.writeSettings(true, http2.Setting{http2.SettingMaxConcurrentStreams, maxStreams})
 	}
 	if err != nil {
 		return
@@ -203,7 +203,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		return
 	}
 
-	frame, err := t.framer.ReadFrame()
+	frame, err := t.framer.readFrame()
 	if err != nil {
 		log.Printf("transport: http2Server.HandleStreams failed to read frame: %v", err)
 		t.Close()
@@ -222,7 +222,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	for {
-		frame, err := t.framer.ReadFrame()
+		frame, err := t.framer.readFrame()
 		if err != nil {
 			t.Close()
 			return
@@ -380,10 +380,10 @@ func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) e
 				EndStream:     endStream,
 				EndHeaders:    endHeaders,
 			}
-			err = t.framer.WriteHeaders(p)
+			err = t.framer.writeHeaders(endHeaders, p)
 			first = false
 		} else {
-			err = t.framer.WriteContinuation(s.id, endHeaders, b.Next(size))
+			err = t.framer.writeContinuation(endHeaders, s.id, endHeaders, b.Next(size))
 		}
 		if err != nil {
 			t.Close()
@@ -475,7 +475,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 			BlockFragment: t.hBuf.Bytes(),
 			EndHeaders:    true,
 		}
-		if err := t.framer.WriteHeaders(p); err != nil {
+		if err := t.framer.writeHeaders(false, p); err != nil {
 			t.Close()
 			return ConnectionErrorf("transport: %v", err)
 		}
@@ -518,14 +518,29 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 			// Overbooked transport quota. Return it back.
 			t.sendQuotaPool.add(tq - ps)
 		}
+		t.framer.adjustNumWriters(1)
 		// Got some quota. Try to acquire writing privilege on the
 		// transport.
 		if _, err := wait(s.ctx, t.shutdownChan, t.writableChan); err != nil {
+			if t.framer.adjustNumWriters(-1) == 0 {
+				// This writer is the last one in this batch and has the
+				// responsibility to flush the buffered frames. It queues
+				// a flush request to controlBuf instead of flushing directly
+				// in order to avoid the race with other writing or flushing.
+				t.controlBuf.put(&flushIO{})
+			}
 			return err
 		}
-		if err := t.framer.WriteData(s.id, false, p); err != nil {
+		var forceFlush bool
+		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 && !opts.Last {
+			forceFlush = true
+		}
+		if err := t.framer.writeData(forceFlush, s.id, false, p); err != nil {
 			t.Close()
 			return ConnectionErrorf("transport: %v", err)
+		}
+		if t.framer.adjustNumWriters(-1) == 0 {
+			t.framer.flushWrite()
 		}
 		t.writableChan <- 0
 	}
@@ -543,11 +558,13 @@ func (t *http2Server) controller() {
 			case <-t.writableChan:
 				switch i := i.(type) {
 				case *windowUpdate:
-					t.framer.WriteWindowUpdate(i.streamID, i.increment)
+					t.framer.writeWindowUpdate(true, i.streamID, i.increment)
 				case *settings:
-					t.framer.WriteSettings(http2.Setting{i.id, i.val})
+					t.framer.writeSettings(true, http2.Setting{i.id, i.val})
 				case *resetStream:
-					t.framer.WriteRSTStream(i.streamID, i.code)
+					t.framer.writeRSTStream(true, i.streamID, i.code)
+				case *flushIO:
+					t.framer.flushWrite()
 				default:
 					log.Printf("transport: http2Server.controller got unexpected item type %v\n", i)
 				}

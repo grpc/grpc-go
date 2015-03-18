@@ -78,6 +78,13 @@ func (resetStream) isItem() bool {
 	return true
 }
 
+type flushIO struct {
+}
+
+func (flushIO) isItem() bool {
+	return true
+}
+
 // quotaPool is a pool which accumulates the quota and sends it to acquire()
 // when it is available.
 type quotaPool struct {
