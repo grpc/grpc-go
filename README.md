@@ -22,10 +22,6 @@ $ ./configure
 $ make
 $ make check
 $ sudo make install
-$ cd java
-$ mvn install
-$ cd ../javanano
-$ mvn install
 ```
 
 If you are comfortable with C++ compilation and autotools, you can specify a
