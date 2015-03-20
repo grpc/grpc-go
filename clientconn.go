@@ -214,7 +214,6 @@ func (cc *ClientConn) transportMonitor() {
 				<-nextRetry
 				retries += 1
 			}
-			nextRetry = time.After(backoff(retries))
 
 			if err := cc.resetTransport(true); err != nil {
 				// The channel is closing.
@@ -222,7 +221,8 @@ func (cc *ClientConn) transportMonitor() {
 				log.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
 				return
 			}
-			continue
+
+			nextRetry = time.After(backoff(retries))
 		}
 	}
 }
