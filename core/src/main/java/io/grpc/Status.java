@@ -397,6 +397,17 @@ public final class Status {
     return new OperationException(this);
   }
 
+  // We support Guava 14
+  @SuppressWarnings("deprecation")
+  @Override
+  public String toString() {
+    return Objects.toStringHelper(this)
+        .add("code", code.name())
+        .add("description", description)
+        .add("cause", cause)
+        .toString();
+  }
+
   /**
    * Exception thrown by implementations while managing an operation.
    */
@@ -429,17 +440,6 @@ public final class Status {
     public Status getStatus() {
       return status;
     }
-  }
-
-  // We support Guava 14
-  @SuppressWarnings("deprecation")
-  @Override
-  public String toString() {
-    return Objects.toStringHelper(this)
-        .add("code", code.name())
-        .add("description", description)
-        .add("cause", cause)
-        .toString();
   }
 
   private static class StatusCodeMarshaller implements Metadata.AsciiMarshaller<Status> {
