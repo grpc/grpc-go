@@ -230,7 +230,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
 	ct := "application/grpc"
 	if callHdr.Codec != nil {
-		ct = ct + "+" + callHdr.Codec.String()
+		ct += "+" + callHdr.Codec.String()
 	}
 	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: ct})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "te", Value: "trailers"})
