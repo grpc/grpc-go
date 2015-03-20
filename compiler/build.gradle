@@ -25,6 +25,7 @@ dependencies {
 
 binaries.all {
   if (toolChain in Gcc || toolChain in Clang) {
+    // Support Gcc 4.6 by using c++0x instead of c++11
     cppCompiler.args "--std=c++0x"
     if (System.env.CXXFLAGS) {
       cppCompiler.args System.env.CXXFLAGS

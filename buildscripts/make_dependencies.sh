@@ -3,39 +3,35 @@
 # Build protoc & netty
 set -ev
 
-# If we need GCC 4.8 for C++11 support which is not available by default with travis
-# and we don't want to use sudo on travis to install it as we couldn't use dockerized travis so...
-#pushd .
-#cd /tmp
-#mkdir gcc
-#cd gcc
-#apt-get download -qq gcc-4.8 g++-4.8 cpp-4.8 libgcc-4.8-dev libstdc++-4.8-dev g++-4.8-multilib gcc-4.8-multilib
-#find . -name '*.deb' -exec dpkg --extract {} . \;
-#export CXX="/tmp/gcc/usr/bin/g++-4.8"
-#export CC="/tmp/gcc/usr/bin/gcc-4.8"
-#popd
-
-export CXXFLAGS="--std=c++0x"
 # Make protoc
-pushd .
-cd /tmp
-wget -O - https://github.com/google/protobuf/archive/v3.0.0-alpha-2.tar.gz | tar xz
-cd protobuf-3.0.0-alpha-2
-./autogen.sh
-# install here so we don't need sudo
-./configure --prefix=/tmp/grpc-deps
-make -j2
-# make check -j2
-make install
-cd java
-mvn install
-cd ../javanano
-mvn install
-popd
+# Can't check for presence of directory as cache auto-creates it.
+if [ -f /tmp/proto3-a2/bin/protoc ]; then
+  echo "Not building protobuf. Already built"
+else
+  wget -O - https://github.com/google/protobuf/archive/v3.0.0-alpha-2.tar.gz | tar xz -C /tmp
+  pushd /tmp/protobuf-3.0.0-alpha-2
+  ./autogen.sh
+  # install here so we don't need sudo
+  ./configure --prefix=/tmp/proto3-a2
+  make -j2
+  make install
+  popd
+fi
 
 # Make and install netty
-git submodule update --init
-pushd .
-cd lib/netty
-mvn install -pl codec-http2 -am -DskipTests=true
+pushd lib/netty
+BUILD_NETTY=1
+NETTY_REV_FILE="$HOME/.m2/netty-ver"
+REV="$(git rev-parse HEAD)"
+if [ -f "$NETTY_REV_FILE" ]; then
+  REV_LAST="$(cat "$NETTY_REV_FILE")"
+  if [ z"$REV" = z"$REV_LAST" ]; then
+    BUILD_NETTY=0
+    echo "Not building Netty; already at $REV"
+  fi
+fi
+if [ $BUILD_NETTY = 1 ]; then
+  mvn install -pl codec-http2 -am -DskipTests=true
+  echo "$REV" > "$NETTY_REV_FILE"
+fi
 popd

@@ -4,14 +4,13 @@ language: java
 
 env:
   global:
-    - CXXFLAGS="--std=c++0x"
+    - LDFLAGS=-L/tmp/proto3-a2/lib
+    - CXXFLAGS=-I/tmp/proto3-a2/include
+    - LD_LIBRARY_PATH=/tmp/proto3-a2/lib
+    - PATH=/tmp/proto3-a2/bin:$PATH
 
-install:
-  - buildscripts/make_dependencies.sh # build protoc into /tmp/grpc-deps
-
-before_script:
-  - export PATH=/tmp/grpc-deps/bin:$PATH
-  - export LD_LIBRARY_PATH=/tmp/grpc-deps/lib:$LD_LIBRARY_PATH
+before_install:
+  - buildscripts/make_dependencies.sh # build protoc into /tmp/proto3-a2
 
 jdk:
   - oraclejdk8
@@ -25,3 +24,8 @@ branches:
 
 notifications:
   email: false
+
+cache:
+  directories:
+    - /tmp/proto3-a2
+    - $HOME/.m2
