@@ -55,7 +55,7 @@ func recvResponse(t transport.ClientTransport, c *callInfo, stream *transport.St
 	}
 	p := &parser{s: stream}
 	for {
-		if err = recv(p, c.codec, reply); err != nil {
+		if err = recv(p, stream.Codec(), reply); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -67,7 +67,7 @@ func recvResponse(t transport.ClientTransport, c *callInfo, stream *transport.St
 }
 
 // sendRequest writes out various information of an RPC such as Context and Message.
-func sendRequest(ctx context.Context, c *callInfo, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
+func sendRequest(ctx context.Context, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
 	stream, err := t.NewStream(ctx, callHdr)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func sendRequest(ctx context.Context, c *callInfo, callHdr *transport.CallHdr, t
 		}
 	}()
 	// TODO(zhaoq): Support compression.
-	outBuf, err := encode(c.codec, args, compressionNone)
+	outBuf, err := encode(stream.Codec(), args, compressionNone)
 	if err != nil {
 		return nil, transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
@@ -113,6 +113,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	callHdr := &transport.CallHdr{
 		Host:   host,
 		Method: method,
+		Codec:  c.codec,
 	}
 	topts := &transport.Options{
 		Last:  true,
@@ -140,7 +141,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			return Errorf(codes.Internal, "%v", err)
 		}
-		stream, err = sendRequest(ctx, &c, callHdr, t, args, topts)
+		stream, err = sendRequest(ctx, callHdr, t, args, topts)
 		if err != nil {
 			if _, ok := err.(transport.ConnectionError); ok {
 				lastErr = err

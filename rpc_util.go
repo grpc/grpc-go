@@ -42,44 +42,16 @@ import (
 	"os"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codec"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
 )
 
-// Codec defines the interface gRPC uses to encode and decode messages.
-type Codec interface {
-	// Marshal returns the encoded of v.
-	Marshal(v interface{}) ([]byte, error)
-	// Unmarshal parses the encoded data and stores the result in the value pointed to by v.
-	Unmarshal(data []byte, v interface{}) error
-}
-
-// protoCodec is a Codec implemetation with protobuf. It is the default codec for gRPC.
-type protoCodec struct{}
-
-func (protoCodec) Marshal(v interface{}) ([]byte, error) {
-	return proto.Marshal(v.(proto.Message))
-}
-
-func (protoCodec) Unmarshal(data []byte, v interface{}) error {
-	return proto.Unmarshal(data, v.(proto.Message))
-}
-
-// codec chooses a Codec implementation from the input content type string ct.
-func codec(ct string) Codec {
-	switch ct {
-	// Add cases here to support non-protobuf formats.
-	default:
-		return &protoCodec{}
-	}
-}
-
 // callInfo contains all related configuration and information about an RPC.
 type callInfo struct {
-	codec     Codec
+	codec     codec.Codec
 	failFast  bool
 	headerMD  metadata.MD
 	trailerMD metadata.MD
@@ -107,7 +79,7 @@ type afterCall func(c *callInfo)
 func (o afterCall) before(c *callInfo) error { return nil }
 func (o afterCall) after(c *callInfo)        { o(c) }
 
-func CallCodec(codec Codec) CallOption {
+func CallCodec(codec codec.Codec) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.codec = codec
 		return nil
@@ -174,10 +146,7 @@ func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
 
 // encode serializes msg and prepends the message header. If msg is nil, it
 // generates the message header of 0 message length.
-func encode(c Codec, msg interface{}, pf payloadFormat) ([]byte, error) {
-	if c == nil {
-		c = &protoCodec{}
-	}
+func encode(c codec.Codec, msg interface{}, pf payloadFormat) ([]byte, error) {
 	var buf bytes.Buffer
 	// Write message fixed header.
 	buf.WriteByte(uint8(pf))
@@ -199,16 +168,13 @@ func encode(c Codec, msg interface{}, pf payloadFormat) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func recv(p *parser, c Codec, m interface{}) error {
+func recv(p *parser, c codec.Codec, m interface{}) error {
 	pf, d, err := p.recvMsg()
 	if err != nil {
 		return err
 	}
 	switch pf {
 	case compressionNone:
-		if c == nil {
-			c = &protoCodec{}
-		}
 		if err := c.Unmarshal(d, m); err != nil {
 			return Errorf(codes.Internal, "grpc: %v", err)
 		}

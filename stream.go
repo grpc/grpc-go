@@ -119,7 +119,6 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	return &clientStream{
 		t:     t,
-		codec: c.codec,
 		s:     s,
 		p:     &parser{s: s},
 		desc:  desc,
@@ -129,7 +128,6 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 // clientStream implements a client side Stream.
 type clientStream struct {
 	t     transport.ClientTransport
-	codec Codec
 	s     *transport.Stream
 	p     *parser
 	desc  *StreamDesc
@@ -163,7 +161,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 		err = toRPCErr(err)
 	}()
-	out, err := encode(cs.codec, m, compressionNone)
+	out, err := encode(cs.s.Codec(), m, compressionNone)
 	if err != nil {
 		return transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
@@ -171,13 +169,13 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
-	err = recv(cs.p, cs.codec, m)
+	err = recv(cs.p, cs.s.Codec(), m)
 	if err == nil {
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
 		}
 		// Special handling for client streaming rpc.
-		err = recv(cs.p, cs.codec, m)
+		err = recv(cs.p, cs.s.Codec(), m)
 		cs.t.CloseStream(cs.s, err)
 		if err == nil {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
@@ -231,7 +229,6 @@ type ServerStream interface {
 type serverStream struct {
 	t          transport.ServerTransport
 	s          *transport.Stream
-	codec      Codec
 	p          *parser
 	statusCode codes.Code
 	statusDesc string
@@ -254,7 +251,7 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 }
 
 func (ss *serverStream) SendMsg(m interface{}) error {
-	out, err := encode(ss.codec, m, compressionNone)
+	out, err := encode(ss.s.Codec(), m, compressionNone)
 	if err != nil {
 		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 		return err
@@ -263,5 +260,5 @@ func (ss *serverStream) SendMsg(m interface{}) error {
 }
 
 func (ss *serverStream) RecvMsg(m interface{}) error {
-	return recv(ss.p, ss.codec, m)
+	return recv(ss.p, ss.s.Codec(), m)
 }

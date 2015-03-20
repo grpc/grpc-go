@@ -45,6 +45,7 @@ import (
 
 	"github.com/bradfitz/http2"
 	"github.com/bradfitz/http2/hpack"
+	"google.golang.org/grpc/codec"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 )
@@ -96,7 +97,7 @@ type decodeState struct {
 	timeoutSet bool
 	timeout    time.Duration
 	method     string
-	ct         string // The content type
+	codec      codec.Codec // The codec specified by the received content type.
 	// key-value metadata map from the peer.
 	mdata map[string]string
 }
@@ -160,8 +161,8 @@ func newHPACKDecoder() *hpackDecoder {
 			}
 		case ":path":
 			d.state.method = f.Value
-		case ":content-type":
-			d.state.ct = f.Value
+		case "content-type":
+			d.state.codec = codec.GetCodec(f.Value)
 		default:
 			if !isReservedHeader(f.Name) {
 				if d.state.mdata == nil {

@@ -203,7 +203,7 @@ func (s *Server) Serve(lis net.Listener) error {
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, pf payloadFormat, opts *transport.Options) error {
-	p, err := encode(codec(stream.ContentType()), msg, pf)
+	p, err := encode(stream.Codec(), msg, pf)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program
@@ -286,7 +286,6 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		t:     t,
 		s:     stream,
 		p:     &parser{s: stream},
-		codec: codec(stream.ContentType()),
 	}
 	if appErr := sd.Handler(srv.server, ss); appErr != nil {
 		if err, ok := appErr.(rpcError); ok {
