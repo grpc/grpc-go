@@ -303,6 +303,14 @@ public final class Status {
     return INTERNAL.withCause(t);
   }
 
+  private static String formatThrowableMessage(Status status) {
+    if (status.description == null) {
+      return status.code.toString();
+    } else {
+      return status.code + ": " + status.description;
+    }
+  }
+
   private final Code code;
   private final String description;
   private final Throwable cause;
@@ -416,7 +424,7 @@ public final class Status {
     private final Status status;
 
     public OperationException(Status status) {
-      super(status.getCode() + ": " + status.getDescription(), status.getCause());
+      super(formatThrowableMessage(status), status.getCause());
       this.status = status;
     }
 
@@ -433,7 +441,7 @@ public final class Status {
     private final Status status;
 
     public OperationRuntimeException(Status status) {
-      super(status.getCode() + ": " + status.getDescription(), status.getCause());
+      super(formatThrowableMessage(status), status.getCause());
       this.status = status;
     }
 
