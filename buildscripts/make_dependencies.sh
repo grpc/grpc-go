@@ -21,7 +21,7 @@ fi
 # Make and install netty
 pushd lib/netty
 BUILD_NETTY=1
-NETTY_REV_FILE="$HOME/.m2/netty-ver"
+NETTY_REV_FILE="$HOME/.m2/repository/io/netty/netty-ver"
 REV="$(git rev-parse HEAD)"
 if [ -f "$NETTY_REV_FILE" ]; then
   REV_LAST="$(cat "$NETTY_REV_FILE")"
