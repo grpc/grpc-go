@@ -43,14 +43,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
 )
 
-type methodHandler func(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error)
+type methodHandler func(srv interface{}, ctx context.Context, buf []byte) (interface{}, error)
 
 // MethodDesc represents an RPC service's method specification.
 type MethodDesc struct {
@@ -203,8 +202,8 @@ func (s *Server) Serve(lis net.Listener) error {
 	}
 }
 
-func (s *Server) sendProto(t transport.ServerTransport, stream *transport.Stream, msg proto.Message, pf payloadFormat, opts *transport.Options) error {
-	p, err := encode(msg, pf)
+func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, pf payloadFormat, opts *transport.Options) error {
+	p, err := encode(codec(stream.ContentType()), msg, pf)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program
@@ -261,7 +260,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Last:  true,
 				Delay: false,
 			}
-			if err := s.sendProto(t, stream, reply, compressionNone, opts); err != nil {
+			if err := s.sendResponse(t, stream, reply, compressionNone, opts); err != nil {
 				if _, ok := err.(transport.ConnectionError); ok {
 					return
 				}
@@ -284,9 +283,10 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc) {
 	ss := &serverStream{
-		t: t,
-		s: stream,
-		p: &parser{s: stream},
+		t:     t,
+		s:     stream,
+		p:     &parser{s: stream},
+		codec: codec(stream.ContentType()),
 	}
 	if appErr := sd.Handler(srv.server, ss); appErr != nil {
 		if err, ok := appErr.(rpcError); ok {

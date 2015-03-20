@@ -170,8 +170,10 @@ type Stream struct {
 	cancel context.CancelFunc
 	// method records the associated RPC method of the stream.
 	method string
-	buf    *recvBuffer
-	dec    io.Reader
+	// ct records the content type of the received message.
+	ct  string
+	buf *recvBuffer
+	dec io.Reader
 
 	// Inbound quota for flow control
 	recvQuota int
@@ -234,6 +236,11 @@ func (s *Stream) Context() context.Context {
 // Method returns the method for the stream.
 func (s *Stream) Method() string {
 	return s.method
+}
+
+// ContentType return the content type of the received message.
+func (s *Stream) ContentType() string {
+	return s.ct
 }
 
 // StatusCode returns statusCode received from the server.

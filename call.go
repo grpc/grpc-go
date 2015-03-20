@@ -37,18 +37,16 @@ import (
 	"io"
 	"net"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
 )
 
-// recv receives and parses an RPC response.
+// recvResponse receives and parses an RPC response.
 // On error, it returns the error and indicates whether the call should be retried.
 //
 // TODO(zhaoq): Check whether the received message sequence is valid.
-func recv(t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply proto.Message) error {
+func recvResponse(t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) error {
 	// Try to acquire header metadata from the server if there is any.
 	var err error
 	c.headerMD, err = stream.Header()
@@ -57,7 +55,7 @@ func recv(t transport.ClientTransport, c *callInfo, stream *transport.Stream, re
 	}
 	p := &parser{s: stream}
 	for {
-		if err = recvProto(p, reply); err != nil {
+		if err = recv(p, c.codec, reply); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -68,8 +66,8 @@ func recv(t transport.ClientTransport, c *callInfo, stream *transport.Stream, re
 	return nil
 }
 
-// sendRPC writes out various information of an RPC such as Context and Message.
-func sendRPC(ctx context.Context, callHdr *transport.CallHdr, t transport.ClientTransport, args proto.Message, opts *transport.Options) (_ *transport.Stream, err error) {
+// sendRequest writes out various information of an RPC such as Context and Message.
+func sendRequest(ctx context.Context, c *callInfo, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
 	stream, err := t.NewStream(ctx, callHdr)
 	if err != nil {
 		return nil, err
@@ -82,7 +80,7 @@ func sendRPC(ctx context.Context, callHdr *transport.CallHdr, t transport.Client
 		}
 	}()
 	// TODO(zhaoq): Support compression.
-	outBuf, err := encode(args, compressionNone)
+	outBuf, err := encode(c.codec, args, compressionNone)
 	if err != nil {
 		return nil, transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
@@ -94,16 +92,9 @@ func sendRPC(ctx context.Context, callHdr *transport.CallHdr, t transport.Client
 	return stream, nil
 }
 
-// callInfo contains all related configuration and information about an RPC.
-type callInfo struct {
-	failFast  bool
-	headerMD  metadata.MD
-	trailerMD metadata.MD
-}
-
 // Invoke is called by the generated code. It sends the RPC request on the
 // wire and returns after response is received.
-func Invoke(ctx context.Context, method string, args, reply proto.Message, cc *ClientConn, opts ...CallOption) error {
+func Invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) error {
 	var c callInfo
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
@@ -149,7 +140,7 @@ func Invoke(ctx context.Context, method string, args, reply proto.Message, cc *C
 			}
 			return Errorf(codes.Internal, "%v", err)
 		}
-		stream, err = sendRPC(ctx, callHdr, t, args, topts)
+		stream, err = sendRequest(ctx, &c, callHdr, t, args, topts)
 		if err != nil {
 			if _, ok := err.(transport.ConnectionError); ok {
 				lastErr = err
@@ -161,7 +152,7 @@ func Invoke(ctx context.Context, method string, args, reply proto.Message, cc *C
 			return toRPCErr(err)
 		}
 		// Receive the response
-		lastErr = recv(t, &c, stream, reply)
+		lastErr = recvResponse(t, &c, stream, reply)
 		if _, ok := lastErr.(transport.ConnectionError); ok {
 			continue
 		}

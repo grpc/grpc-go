@@ -55,7 +55,7 @@ const (
 	// http://http2.github.io/http2-spec/#SettingValues
 	http2InitHeaderTableSize = 4096
 	// http2IOBufSize specifies the buffer size for sending frames.
-	http2IOBufSize           = 32 * 1024
+	http2IOBufSize = 32 * 1024
 )
 
 var (
@@ -96,6 +96,7 @@ type decodeState struct {
 	timeoutSet bool
 	timeout    time.Duration
 	method     string
+	ct         string // The content type
 	// key-value metadata map from the peer.
 	mdata map[string]string
 }
@@ -159,6 +160,8 @@ func newHPACKDecoder() *hpackDecoder {
 			}
 		case ":path":
 			d.state.method = f.Value
+		case ":content-type":
+			d.state.ct = f.Value
 		default:
 			if !isReservedHeader(f.Name) {
 				if d.state.mdata == nil {

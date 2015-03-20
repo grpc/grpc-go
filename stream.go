@@ -38,7 +38,6 @@ import (
 	"io"
 	"net"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -61,17 +60,17 @@ type StreamDesc struct {
 type Stream interface {
 	// Context returns the context for this stream.
 	Context() context.Context
-	// SendProto blocks until it sends m, the stream is done or the stream
+	// SendMsg blocks until it sends m, the stream is done or the stream
 	// breaks.
 	// On error, it aborts the stream and returns an RPC status on client
 	// side. On server side, it simply returns the error to the caller.
-	// SendProto is called by generated code.
-	SendProto(m proto.Message) error
-	// RecvProto blocks until it receives a proto message or the stream is
+	// SendMsg is called by generated code.
+	SendMsg(m interface{}) error
+	// RecvMsg blocks until it receives a proto message or the stream is
 	// done. On client side, it returns io.EOF when the stream is done. On
 	// any other error, it aborts the streama nd returns an RPC status. On
 	// server side, it simply returns the error to the caller.
-	RecvProto(m proto.Message) error
+	RecvMsg(m interface{}) error
 }
 
 // ClientStream defines the interface a client stream has to satify.
@@ -95,7 +94,13 @@ type ClientStream interface {
 // NewClientStream creates a new Stream for the client side. This is called
 // by generated code.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
-	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
+	// TODO(zhaoq): Add afterCall support.
+	var c callInfo
+	for _, o := range opts {
+		if err := o.before(&c); err != nil {
+			return nil, toRPCErr(err)
+		}
+	}
 	host, _, err := net.SplitHostPort(cc.target)
 	if err != nil {
 		return nil, toRPCErr(err)
@@ -113,19 +118,21 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		return nil, toRPCErr(err)
 	}
 	return &clientStream{
-		t:    t,
-		s:    s,
-		p:    &parser{s: s},
-		desc: desc,
+		t:     t,
+		codec: c.codec,
+		s:     s,
+		p:     &parser{s: s},
+		desc:  desc,
 	}, nil
 }
 
 // clientStream implements a client side Stream.
 type clientStream struct {
-	t    transport.ClientTransport
-	s    *transport.Stream
-	p    *parser
-	desc *StreamDesc
+	t     transport.ClientTransport
+	codec Codec
+	s     *transport.Stream
+	p     *parser
+	desc  *StreamDesc
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -146,7 +153,7 @@ func (cs *clientStream) Trailer() metadata.MD {
 	return cs.s.Trailer()
 }
 
-func (cs *clientStream) SendProto(m proto.Message) (err error) {
+func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	defer func() {
 		if err == nil || err == io.EOF {
 			return
@@ -156,21 +163,21 @@ func (cs *clientStream) SendProto(m proto.Message) (err error) {
 		}
 		err = toRPCErr(err)
 	}()
-	out, err := encode(m, compressionNone)
+	out, err := encode(cs.codec, m, compressionNone)
 	if err != nil {
 		return transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
 	return cs.t.Write(cs.s, out, &transport.Options{Last: false})
 }
 
-func (cs *clientStream) RecvProto(m proto.Message) (err error) {
-	err = recvProto(cs.p, m)
+func (cs *clientStream) RecvMsg(m interface{}) (err error) {
+	err = recv(cs.p, cs.codec, m)
 	if err == nil {
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
 		}
 		// Special handling for client streaming rpc.
-		err = recvProto(cs.p, m)
+		err = recv(cs.p, cs.codec, m)
 		cs.t.CloseStream(cs.s, err)
 		if err == nil {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
@@ -224,6 +231,7 @@ type ServerStream interface {
 type serverStream struct {
 	t          transport.ServerTransport
 	s          *transport.Stream
+	codec      Codec
 	p          *parser
 	statusCode codes.Code
 	statusDesc string
@@ -245,8 +253,8 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	return
 }
 
-func (ss *serverStream) SendProto(m proto.Message) error {
-	out, err := encode(m, compressionNone)
+func (ss *serverStream) SendMsg(m interface{}) error {
+	out, err := encode(ss.codec, m, compressionNone)
 	if err != nil {
 		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 		return err
@@ -254,6 +262,6 @@ func (ss *serverStream) SendProto(m proto.Message) error {
 	return ss.t.Write(ss.s, out, &transport.Options{Last: false})
 }
 
-func (ss *serverStream) RecvProto(m proto.Message) error {
-	return recvProto(ss.p, m)
+func (ss *serverStream) RecvMsg(m interface{}) error {
+	return recv(ss.p, ss.codec, m)
 }
