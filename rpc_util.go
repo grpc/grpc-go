@@ -49,6 +49,7 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
+// Codec defines the interface gRPC uses to encode and decode messages.
 type Codec interface {
 	// Marshal returns the encoded of v.
 	Marshal(v interface{}) ([]byte, error)
@@ -56,6 +57,7 @@ type Codec interface {
 	Unmarshal(data []byte, v interface{}) error
 }
 
+// protoCodec is a Codec implemetation with protobuf. It is the default codec for gRPC.
 type protoCodec struct{}
 
 func (protoCodec) Marshal(v interface{}) ([]byte, error) {
@@ -69,7 +71,7 @@ func (protoCodec) Unmarshal(data []byte, v interface{}) error {
 // codec chooses a Codec implementation from the input content type string ct.
 func codec(ct string) Codec {
 	switch ct {
-	// Add cases here if you want to support non-protobuf formats.
+	// Add cases here to support non-protobuf formats.
 	default:
 		return &protoCodec{}
 	}
