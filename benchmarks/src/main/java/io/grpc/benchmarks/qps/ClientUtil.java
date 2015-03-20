@@ -39,6 +39,7 @@ import com.google.protobuf.ByteString;
 import grpc.testing.Qpstest;
 import grpc.testing.Qpstest.SimpleRequest;
 import io.grpc.Channel;
+import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
@@ -91,7 +92,7 @@ final class ClientUtil {
       // Force the hostname to match the cert the server uses.
       address = InetAddress.getByAddress("foo.test.google.fr", address.getAddress());
       File cert = loadCert("ca.pem");
-      context = SslContext.newClientContext(cert);
+      context = GrpcSslContexts.forClient().trustManager(cert).build();
     }
     return NettyChannelBuilder
         .forAddress(new InetSocketAddress(address, config.port))

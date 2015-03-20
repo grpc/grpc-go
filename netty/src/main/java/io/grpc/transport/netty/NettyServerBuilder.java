@@ -161,7 +161,8 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
   }
 
   /**
-   * Sets the TLS context to use for encryption. Providing a context enables encryption.
+   * Sets the TLS context to use for encryption. Providing a context enables encryption. It must
+   * have been configured with {@link GrpcSslContexts}, but options could have been overridden.
    */
   public NettyServerBuilder sslContext(SslContext sslContext) {
     this.sslContext = sslContext;

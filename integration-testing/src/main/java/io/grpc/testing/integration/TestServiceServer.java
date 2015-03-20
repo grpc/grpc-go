@@ -36,6 +36,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.ServerImpl;
 import io.grpc.ServerInterceptors;
 import io.grpc.testing.TestUtils;
+import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
 import io.netty.handler.ssl.SslContext;
 
@@ -133,8 +134,8 @@ public class TestServiceServer {
     executor = Executors.newSingleThreadScheduledExecutor();
     SslContext sslContext = null;
     if (useTls) {
-      sslContext = SslContext.newServerContext(Util.loadCert("server1.pem"),
-                                               Util.loadCert("server1.key"));
+      sslContext = GrpcSslContexts.forServer(
+              Util.loadCert("server1.pem"), Util.loadCert("server1.key")).build();
     }
     server = NettyServerBuilder.forPort(port)
         .sslContext(sslContext)

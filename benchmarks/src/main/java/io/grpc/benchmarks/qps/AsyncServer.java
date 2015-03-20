@@ -45,6 +45,7 @@ import grpc.testing.TestServiceGrpc;
 import io.grpc.ServerImpl;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
 import io.netty.handler.ssl.SslContext;
 
@@ -82,7 +83,7 @@ public class AsyncServer {
 
       File cert = loadCert("server1.pem");
       File key = loadCert("server1.key");
-      sslContext = SslContext.newServerContext(cert, key);
+      sslContext = GrpcSslContexts.forServer(cert, key).build();
     }
 
     if (port == 0) {

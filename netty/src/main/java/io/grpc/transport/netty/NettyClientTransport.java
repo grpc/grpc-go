@@ -142,7 +142,7 @@ class NettyClientTransport implements ClientTransport {
       case TLS:
         if (sslContext == null) {
           try {
-            sslContext = SslContext.newClientContext();
+            sslContext = GrpcSslContexts.forClient().build();
           } catch (SSLException ex) {
             throw new RuntimeException(ex);
           }

@@ -32,6 +32,7 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ChannelImpl;
+import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
@@ -224,7 +225,7 @@ public class TestServiceClient {
         SslContext sslContext = null;
         if (useTestCa) {
           try {
-            sslContext = SslContext.newClientContext(Util.loadCert("ca.pem"));
+            sslContext = GrpcSslContexts.forClient().trustManager(Util.loadCert("ca.pem")).build();
           } catch (Exception ex) {
             throw new RuntimeException(ex);
           }

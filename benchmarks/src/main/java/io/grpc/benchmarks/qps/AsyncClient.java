@@ -65,6 +65,7 @@ import io.grpc.Channel;
 import io.grpc.ChannelImpl;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
@@ -184,7 +185,7 @@ public class AsyncClient {
       // Force the hostname to match the cert the server uses.
       address = InetAddress.getByAddress("foo.test.google.fr", address.getAddress());
       File cert = loadCert("ca.pem");
-      context = SslContext.newClientContext(cert);
+      context = GrpcSslContexts.forClient().trustManager(cert).build();
     }
     return NettyChannelBuilder
              .forAddress(new InetSocketAddress(address, config.port))

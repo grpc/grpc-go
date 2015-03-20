@@ -111,7 +111,10 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     return this;
   }
 
-  /** SSL/TLS context to use instead of the system default. */
+  /**
+   * SSL/TLS context to use instead of the system default. It must have been configured with {@link
+   * GrpcSslContexts}, but options could have been overridden.
+   */
   public NettyChannelBuilder sslContext(SslContext sslContext) {
     this.sslContext = sslContext;
     return this;
