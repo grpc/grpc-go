@@ -172,8 +172,8 @@ type Stream struct {
 	// method records the associated RPC method of the stream.
 	method string
 	codec  codec.Codec
-	buf *recvBuffer
-	dec io.Reader
+	buf    *recvBuffer
+	dec    io.Reader
 
 	// Inbound quota for flow control
 	recvQuota int
@@ -343,9 +343,9 @@ type Options struct {
 
 // CallHdr carries the information of a particular RPC.
 type CallHdr struct {
-	Host   string // peer host
-	Method string // the operation to perform on the specified host
-	Codec  codec.Codec  // the codec for this RPC.
+	Host   string      // peer host
+	Method string      // the operation to perform on the specified host
+	Codec  codec.Codec // the codec for this RPC.
 }
 
 // ClientTransport is the common interface for all gRPC client side transport

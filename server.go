@@ -283,9 +283,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc) {
 	ss := &serverStream{
-		t:     t,
-		s:     stream,
-		p:     &parser{s: stream},
+		t: t,
+		s: stream,
+		p: &parser{s: stream},
 	}
 	if appErr := sd.Handler(srv.server, ss); appErr != nil {
 		if err, ok := appErr.(rpcError); ok {

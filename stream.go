@@ -118,19 +118,19 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		return nil, toRPCErr(err)
 	}
 	return &clientStream{
-		t:     t,
-		s:     s,
-		p:     &parser{s: s},
-		desc:  desc,
+		t:    t,
+		s:    s,
+		p:    &parser{s: s},
+		desc: desc,
 	}, nil
 }
 
 // clientStream implements a client side Stream.
 type clientStream struct {
-	t     transport.ClientTransport
-	s     *transport.Stream
-	p     *parser
-	desc  *StreamDesc
+	t    transport.ClientTransport
+	s    *transport.Stream
+	p    *parser
+	desc *StreamDesc
 }
 
 func (cs *clientStream) Context() context.Context {
