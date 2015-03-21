@@ -24,7 +24,7 @@
 <module name = "Checker">
     <property name="charset" value="UTF-8"/>
     
-    <property name="severity" value="warning"/>
+    <property name="severity" value="error"/>
     
     <!-- Checks for whitespace                               -->
     <!-- See http://checkstyle.sf.net/config_whitespace.html -->

@@ -48,6 +48,7 @@ public class HelloWorldClient {
   private final ChannelImpl channel;
   private final GreeterGrpc.GreeterBlockingStub blockingStub;
 
+  /** Construct client connecting to HelloWorld server at {@code host:port}. */
   public HelloWorldClient(String host, int port) {
     channel =
         NettyChannelBuilder.forAddress(host, port).negotiationType(NegotiationType.PLAINTEXT)
@@ -59,6 +60,7 @@ public class HelloWorldClient {
     channel.shutdown().awaitTerminated(5, TimeUnit.SECONDS);
   }
 
+  /** Say hello to server. */
   public void greet(String name) {
     try {
       logger.info("Will try to greet " + name + " ...");
@@ -71,6 +73,10 @@ public class HelloWorldClient {
     }
   }
 
+  /**
+   * Greet server. If provided, the first element of {@code args} is the name to use in the
+   * greeting.
+   */
   public static void main(String[] args) throws Exception {
     HelloWorldClient client = new HelloWorldClient("localhost", 50051);
     try {

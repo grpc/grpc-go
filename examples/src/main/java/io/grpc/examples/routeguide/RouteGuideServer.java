@@ -69,6 +69,7 @@ public class RouteGuideServer {
     this(port, RouteGuideUtil.getDefaultFeaturesFile());
   }
 
+  /** Create a RouteGuide server listening on {@code port} using {@code featureFile} database. */
   public RouteGuideServer(int port, URL featureFile) {
     try {
       this.port = port;
@@ -78,6 +79,7 @@ public class RouteGuideServer {
     }
   }
 
+  /** Start serving requests. */
   public void start() {
     grpcServer = NettyServerBuilder.forPort(port)
         .addService(RouteGuideGrpc.bindService(new RouteGuideService(features)))
@@ -94,6 +96,7 @@ public class RouteGuideServer {
     });
   }
 
+  /** Stop serving requests and shutdown resources. */
   public void stop() {
     if (grpcServer != null) {
       grpcServer.shutdown();
@@ -128,7 +131,7 @@ public class RouteGuideServer {
      */
     @Override
     public void getFeature(Point request, StreamObserver<Feature> responseObserver) {
-      responseObserver.onValue(getFeature(request));
+      responseObserver.onValue(checkFeature(request));
       responseObserver.onCompleted();
     }
 
@@ -178,7 +181,7 @@ public class RouteGuideServer {
         @Override
         public void onValue(Point point) {
           pointCount++;
-          if (RouteGuideUtil.exists(getFeature(point))) {
+          if (RouteGuideUtil.exists(checkFeature(point))) {
             featureCount++;
           }
           // For each point after the first, add the incremental distance from the previous point to
@@ -255,7 +258,7 @@ public class RouteGuideServer {
      * @param location the location to check.
      * @return The feature object at the point. Note that an empty name indicates no feature.
      */
-    private Feature getFeature(Point location) {
+    private Feature checkFeature(Point location) {
       for (Feature feature : features) {
         if (feature.getLocation().getLatitude() == location.getLatitude()
             && feature.getLocation().getLongitude() == location.getLongitude()) {

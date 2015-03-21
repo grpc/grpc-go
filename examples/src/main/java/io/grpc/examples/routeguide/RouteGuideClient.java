@@ -57,6 +57,7 @@ public class RouteGuideClient {
   private final RouteGuideBlockingStub blockingStub;
   private final RouteGuideStub asyncStub;
 
+  /** Construct client for accessing RoutGuide server at {@code host:port}. */
   public RouteGuideClient(String host, int port) {
     channel = NettyChannelBuilder.forAddress(host, port)
         .negotiationType(NegotiationType.PLAINTEXT)
@@ -70,7 +71,7 @@ public class RouteGuideClient {
   }
 
   /**
-   * This example shows how to make a blocking unary call.
+   * Blocking unary call example.  Calls getFeature and prints the response.
    */
   public void getFeature(int lat, int lon) {
     try {
@@ -95,7 +96,8 @@ public class RouteGuideClient {
   }
 
   /**
-   * This example shows how to make a blocking unary call.
+   * Blocking server-streaming example. Calls listFeatures with a rectangle of interest. Prints each
+   * response feature as it arrives.
    */
   public void listFeatures(int lowLat, int lowLon, int hiLat, int hiLon) {
     try {
@@ -120,6 +122,11 @@ public class RouteGuideClient {
     }
   }
 
+  /**
+   * Async client-streaming example. Sends {@code numPoints} randomly chosen points from {@code
+   * features} with a variable delay in between. Prints the statistics when they are sent from the
+   * server.
+   */
   public void recordRoute(List<Feature> features, int numPoints) throws Exception {
     info("*** RecordRoute");
     final SettableFuture<Void> finishFuture = SettableFuture.create();
@@ -172,7 +179,8 @@ public class RouteGuideClient {
   }
 
   /**
-   * This example shows how to make a bi-directional streaming call, which can only be asynchronous.
+   * Bi-directional example, which can only be asynchronous. Send some chat messages, and print any
+   * chat messages that are sent from the server.
    */
   public void routeChat() throws Exception {
     info("*** RoutChat");
@@ -217,6 +225,7 @@ public class RouteGuideClient {
     }
   }
 
+  /** Issues several different requests and then exits. */
   public static void main(String[] args) throws Exception {
     RouteGuideClient client = new RouteGuideClient("localhost", 8980);
     try {
