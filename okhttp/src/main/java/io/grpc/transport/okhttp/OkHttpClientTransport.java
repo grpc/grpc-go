@@ -364,7 +364,8 @@ public class OkHttpClientTransport implements ClientTransport {
       } finally {
         try {
           frameReader.close();
-        } catch (IOException ignored) {
+        } catch (IOException ex) {
+          log.log(Level.INFO, "Exception closing frame reader", ex);
         }
         listener.transportTerminated();
         // Restore the original thread name.
