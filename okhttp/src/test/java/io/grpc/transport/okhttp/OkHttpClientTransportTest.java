@@ -118,7 +118,7 @@ public class OkHttpClientTransportTest {
     socket = new MockSocket(frameReader);
     executor = Executors.newCachedThreadPool();
     clientTransport = new OkHttpClientTransport(
-	executor, frameReader, frameWriter, 3, socket);
+        executor, frameReader, frameWriter, 3, socket);
     clientTransport.start(listener);
     frameHandler = clientTransport.getHandler();
     streams = clientTransport.getStreams();
@@ -478,7 +478,7 @@ public class OkHttpClientTransportTest {
   private static class MockFrameReader implements FrameReader {
     CountDownLatch closed = new CountDownLatch(1);
     boolean throwExceptionForNextFrame;
-    boolean nextFrameResult = true;
+    boolean returnFalseInNextFrame;
 
     @Override
     public void close() throws IOException {
@@ -491,26 +491,27 @@ public class OkHttpClientTransportTest {
           fail("Failed waiting frame reader to be closed.");
         }
       } catch (InterruptedException e) {
-	  fail("Interrupted while waiting for frame reader to be closed.");
+        fail("Interrupted while waiting for frame reader to be closed.");
       }
     }
 
     @Override
-    public boolean nextFrame(Handler handler) throws IOException {
+    public synchronized boolean nextFrame(Handler handler) throws IOException {
       if (throwExceptionForNextFrame) {
         throw new IOException(NETWORK_ISSUE_MESSAGE);
       }
-      synchronized (this) {
-        try {
-          wait();
-        } catch (InterruptedException e) {
-          throw new IOException(e);
-        }
+      if (returnFalseInNextFrame) {
+        return false;
+      }
+      try {
+        wait();
+      } catch (InterruptedException e) {
+        throw new IOException(e);
       }
       if (throwExceptionForNextFrame) {
         throw new IOException(NETWORK_ISSUE_MESSAGE);
       }
-      return nextFrameResult;
+      return !returnFalseInNextFrame;
     }
 
     synchronized void throwIoExceptionForNextFrame() {
@@ -518,8 +519,8 @@ public class OkHttpClientTransportTest {
       notifyAll();
     }
 
-    synchronized void finishNextFrame(boolean result) {
-      nextFrameResult = result;
+    synchronized void nextFrameAtEndOfStream() {
+      returnFalseInNextFrame = true;
       notifyAll();
     }
 
@@ -595,7 +596,7 @@ public class OkHttpClientTransportTest {
 
     @Override
     public void close() {
-      frameReader.finishNextFrame(false);
+      frameReader.nextFrameAtEndOfStream();
     }
   }
 }
