@@ -118,9 +118,10 @@ func (c *tlsCreds) DialWithDialer(dialer *net.Dialer, network, addr string) (_ n
 		}
 	}
 	return tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{
-		RootCAs:    c.rootCAs,
-		NextProtos: alpnProtoStr,
-		ServerName: name,
+		RootCAs:      c.rootCAs,
+		NextProtos:   alpnProtoStr,
+		ServerName:   name,
+		Certificates: c.certificates,
 	})
 }
 
@@ -140,10 +141,7 @@ func (c *tlsCreds) NewListener(lis net.Listener) net.Listener {
 
 // NewClientTLSFromCert constructs a TLS from the input certificate for client.
 func NewClientTLSFromCert(cp *x509.CertPool, serverName string) TransportAuthenticator {
-	return &tlsCreds{
-		serverName: serverName,
-		rootCAs:    cp,
-	}
+	return NewClientTLS(cp, serverName, nil)
 }
 
 // NewClientTLSFromFile constructs a TLS from the input certificate file for client.
@@ -160,6 +158,15 @@ func NewClientTLSFromFile(certFile, serverName string) (TransportAuthenticator, 
 		serverName: serverName,
 		rootCAs:    cp,
 	}, nil
+}
+
+// NewClientTLS constructs a TLS with control over serverName, server CAs and a client cert.
+func NewClientTLS(cp *x509.CertPool, serverName string, certificates []tls.Certificate) TransportAuthenticator {
+	return &tlsCreds{
+		serverName:   serverName,
+		rootCAs:      cp,
+		certificates: certificates,
+	}
 }
 
 // NewServerTLSFromCert constructs a TLS from the input certificate for server.
