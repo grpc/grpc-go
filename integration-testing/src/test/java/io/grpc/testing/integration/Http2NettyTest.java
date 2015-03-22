@@ -35,11 +35,16 @@ import io.grpc.ChannelImpl;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.netty.NettyServerBuilder;
+import io.netty.handler.ssl.SslContext;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 
 /**
  * Integration tests for GRPC over HTTP2 using the Netty framework.
@@ -48,9 +53,16 @@ import org.junit.runners.JUnit4;
 public class Http2NettyTest extends AbstractTransportTest {
   private static int serverPort = Util.pickUnusedPort();
 
+  /** Starts the server with HTTPS. */
   @BeforeClass
   public static void startServer() {
-    startStaticServer(NettyServerBuilder.forPort(serverPort));
+    try {
+      startStaticServer(NettyServerBuilder.forPort(serverPort)
+          .sslContext(SslContext.newServerContext(
+              Util.loadCert("server1.pem"), Util.loadCert("server1.key"))));
+    } catch (IOException ex) {
+      throw new RuntimeException(ex);
+    }
   }
 
   @AfterClass
@@ -60,7 +72,15 @@ public class Http2NettyTest extends AbstractTransportTest {
 
   @Override
   protected ChannelImpl createChannel() {
-    return NettyChannelBuilder.forAddress("127.0.0.1", serverPort)
-        .negotiationType(NegotiationType.PLAINTEXT).build();
+    try {
+      InetAddress address
+          = InetAddress.getByAddress("foo.test.google.fr", new byte[] {127, 0, 0, 1});
+      return NettyChannelBuilder
+          .forAddress(new InetSocketAddress(address, serverPort))
+          .sslContext(SslContext.newClientContext(Util.loadCert("ca.pem")))
+          .build();
+    } catch (Exception ex) {
+      throw new RuntimeException(ex);
+    }
   }
 }

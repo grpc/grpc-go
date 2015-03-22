@@ -29,6 +29,10 @@ dependencies {
     alpnboot alpnboot_package_name
 }
 
+test {
+    jvmArgs "-Xbootclasspath/p:" + configurations.alpnboot.asPath
+}
+
 // Allow execution of test client and server.
 task execute(dependsOn: classes, type:JavaExec) {
     main = project.hasProperty('mainClass') ? project.mainClass : ''
