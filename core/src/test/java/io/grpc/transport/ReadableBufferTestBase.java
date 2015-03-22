@@ -32,6 +32,7 @@
 package io.grpc.transport;
 
 import static com.google.common.base.Charsets.UTF_8;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
@@ -47,7 +48,8 @@ import java.util.Arrays;
  */
 @RunWith(JUnit4.class)
 public abstract class ReadableBufferTestBase {
-  protected final String msg = "hello";
+  // Use a long string to ensure that any chunking/splitting works correctly.
+  protected static final String msg = repeatUntilLength("hello", 8 * 1024);
 
   @Test
   public void bufferShouldReadAllBytes() {
@@ -64,7 +66,7 @@ public abstract class ReadableBufferTestBase {
     ReadableBuffer buffer = buffer();
     byte[] array = new byte[msg.length()];
     buffer.readBytes(array, 0, array.length);
-    Arrays.equals(msg.getBytes(UTF_8), array);
+    assertArrayEquals(msg.getBytes(UTF_8), array);
     assertEquals(0, buffer.readableBytes());
   }
 
@@ -73,8 +75,8 @@ public abstract class ReadableBufferTestBase {
     ReadableBuffer buffer = buffer();
     byte[] array = new byte[msg.length()];
     buffer.readBytes(array, 1, 2);
-    Arrays.equals(new byte[] {'h', 'e'}, Arrays.copyOfRange(array, 1, 3));
-    assertEquals(3, buffer.readableBytes());
+    assertArrayEquals(new byte[] {'h', 'e'}, Arrays.copyOfRange(array, 1, 3));
+    assertEquals(msg.length() - 2, buffer.readableBytes());
   }
 
   @Test
@@ -82,7 +84,7 @@ public abstract class ReadableBufferTestBase {
     ReadableBuffer buffer = buffer();
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
     buffer.readBytes(stream, msg.length());
-    Arrays.equals(msg.getBytes(UTF_8), stream.toByteArray());
+    assertArrayEquals(msg.getBytes(UTF_8), stream.toByteArray());
     assertEquals(0, buffer.readableBytes());
   }
 
@@ -91,8 +93,8 @@ public abstract class ReadableBufferTestBase {
     ReadableBuffer buffer = buffer();
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
     buffer.readBytes(stream, 2);
-    Arrays.equals(new byte[]{'h', 'e'}, Arrays.copyOfRange(stream.toByteArray(), 0, 2));
-    assertEquals(3, buffer.readableBytes());
+    assertArrayEquals(new byte[]{'h', 'e'}, Arrays.copyOfRange(stream.toByteArray(), 0, 2));
+    assertEquals(msg.length() - 2, buffer.readableBytes());
   }
 
   @Test
@@ -103,7 +105,7 @@ public abstract class ReadableBufferTestBase {
     byteBuffer.flip();
     byte[] array = new byte[msg.length()];
     byteBuffer.get(array);
-    Arrays.equals(msg.getBytes(UTF_8), array);
+    assertArrayEquals(msg.getBytes(UTF_8), array);
     assertEquals(0, buffer.readableBytes());
   }
 
@@ -115,9 +117,18 @@ public abstract class ReadableBufferTestBase {
     byteBuffer.flip();
     byte[] array = new byte[2];
     byteBuffer.get(array);
-    Arrays.equals(new byte[]{'h', 'e'}, array);
-    assertEquals(3, buffer.readableBytes());
+    assertArrayEquals(new byte[]{'h', 'e'}, array);
+    assertEquals(msg.length() - 2, buffer.readableBytes());
   }
 
   protected abstract ReadableBuffer buffer();
+
+  private static String repeatUntilLength(String toRepeat, int length) {
+    StringBuffer buf = new StringBuffer();
+    while (buf.length() < length) {
+      buf.append(toRepeat);
+    }
+    buf.setLength(length);
+    return buf.toString();
+  }
 }

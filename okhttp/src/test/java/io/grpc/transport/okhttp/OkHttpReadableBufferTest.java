@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,75 +31,42 @@
 
 package io.grpc.transport.okhttp;
 
-import io.grpc.transport.AbstractReadableBuffer;
 import io.grpc.transport.ReadableBuffer;
-
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.ByteBuffer;
+import io.grpc.transport.ReadableBufferTestBase;
+import okio.Buffer;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
- * A {@link ReadableBuffer} implementation that is backed by an {@link okio.Buffer}.
+ * Tests for {@link OkHttpReadableBuffer}.
  */
-class OkHttpReadableBuffer extends AbstractReadableBuffer {
-  private final okio.Buffer buffer;
+@RunWith(JUnit4.class)
+public class OkHttpReadableBufferTest extends ReadableBufferTestBase {
 
-  OkHttpReadableBuffer(okio.Buffer buffer) {
-    this.buffer = buffer;
+  private OkHttpReadableBuffer buffer;
+
+  @Before
+  public void setup() {
+    buffer = new OkHttpReadableBuffer(new Buffer().writeUtf8(msg));
   }
 
   @Override
-  public int readableBytes() {
-    return (int) buffer.size();
+  @Test
+  public void readToByteBufferShouldSucceed() {
+    // Not supported.
   }
 
   @Override
-  public int readUnsignedByte() {
-    return buffer.readByte() & 0x000000FF;
+  @Test
+  public void partialReadToByteBufferShouldSucceed() {
+    // Not supported.
   }
 
   @Override
-  public void skipBytes(int length) {
-    try {
-      buffer.skip(length);
-    } catch (EOFException e) {
-      throw new IndexOutOfBoundsException(e.getMessage());
-    }
-  }
-
-  @Override
-  public void readBytes(byte[] dest, int destOffset, int length) {
-    while (length > 0) {
-      int bytesRead = buffer.read(dest, destOffset, length);
-      if (bytesRead == -1) {
-        throw new IndexOutOfBoundsException("EOF trying to read " + length + " bytes");
-      }
-      length -= bytesRead;
-      destOffset += bytesRead;
-    }
-  }
-
-  @Override
-  public void readBytes(ByteBuffer dest) {
-    // We are not using it.
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void readBytes(OutputStream dest, int length) throws IOException {
-    buffer.writeTo(dest, length);
-  }
-
-  @Override
-  public ReadableBuffer readBytes(int length) {
-    okio.Buffer buf = new okio.Buffer();
-    buf.write(buffer, length);
-    return new OkHttpReadableBuffer(buf);
-  }
-
-  @Override
-  public void close() {
-    buffer.clear();
+  protected ReadableBuffer buffer() {
+    return buffer;
   }
 }
+
