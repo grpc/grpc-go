@@ -55,6 +55,7 @@ import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
 import io.netty.handler.codec.http2.DefaultHttp2StreamRemovalPolicy;
 import io.netty.handler.codec.http2.Http2Connection;
+import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
@@ -89,6 +90,8 @@ class NettyClientTransport implements ClientTransport {
   private final NettyClientHandler handler;
   private final boolean ssl;
   private final AsciiString authority;
+  private final int connectionWindowSize;
+  private final int streamWindowSize;
   // We should not send on the channel until negotiation completes. This is a hard requirement
   // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
   private Channel channel;
@@ -109,11 +112,14 @@ class NettyClientTransport implements ClientTransport {
   private boolean terminated;
 
   NettyClientTransport(SocketAddress address, Class<? extends Channel> channelType,
-      NegotiationType negotiationType, EventLoopGroup group, SslContext sslContext) {
+      NegotiationType negotiationType, EventLoopGroup group, SslContext sslContext,
+      int connectionWindowSize, int streamWindowSize) {
     Preconditions.checkNotNull(negotiationType, "negotiationType");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
+    this.connectionWindowSize = connectionWindowSize;
+    this.streamWindowSize = streamWindowSize;
 
     InetSocketAddress inetAddress = null;
     if (address instanceof InetSocketAddress) {
@@ -322,18 +328,26 @@ class NettyClientTransport implements ClientTransport {
     }
   }
 
-  private static NettyClientHandler newHandler(Http2StreamRemovalPolicy streamRemovalPolicy) {
-    Http2Connection connection =
-        new DefaultHttp2Connection(false, streamRemovalPolicy);
-    Http2FrameReader frameReader = new DefaultHttp2FrameReader();
-    Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
+  private NettyClientHandler newHandler(Http2StreamRemovalPolicy streamRemovalPolicy) {
+    try {
+      Http2Connection connection = new DefaultHttp2Connection(false, streamRemovalPolicy);
+      Http2FrameReader frameReader = new DefaultHttp2FrameReader();
+      Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
 
-    Http2FrameLogger frameLogger = new Http2FrameLogger(InternalLogLevel.DEBUG);
-    frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
-    frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
+      Http2FrameLogger frameLogger = new Http2FrameLogger(InternalLogLevel.DEBUG);
+      frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
+      frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
 
-    DefaultHttp2LocalFlowController inboundFlow =
-        new DefaultHttp2LocalFlowController(connection, frameWriter);
-    return new NettyClientHandler(connection, frameReader, frameWriter, inboundFlow);
+      DefaultHttp2LocalFlowController inboundFlow =
+          new DefaultHttp2LocalFlowController(connection, frameWriter);
+
+      // Set the initial window size for new streams.
+      inboundFlow.initialWindowSize(streamWindowSize);
+
+      return new NettyClientHandler(connection, frameReader, frameWriter, inboundFlow,
+          connectionWindowSize);
+    } catch (Http2Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 }

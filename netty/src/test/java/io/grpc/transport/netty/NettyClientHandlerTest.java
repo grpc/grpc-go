@@ -39,6 +39,7 @@ import static io.grpc.transport.netty.Utils.HTTPS;
 import static io.grpc.transport.netty.Utils.STATUS_OK;
 import static io.grpc.transport.netty.Utils.TE_HEADER;
 import static io.grpc.transport.netty.Utils.TE_TRAILERS;
+import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -66,6 +67,7 @@ import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
+import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
@@ -103,7 +105,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
     frameWriter = new DefaultHttp2FrameWriter();
     frameReader = new DefaultHttp2FrameReader();
-    handler = newHandler();
+    handler = newHandler(DEFAULT_WINDOW_SIZE, DEFAULT_WINDOW_SIZE);
     content = Unpooled.copiedBuffer("hello world", UTF_8);
 
     when(channel.isActive()).thenReturn(true);
@@ -318,6 +320,15 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
   }
 
+  @Test
+  public void connectionWindowShouldBeOverridden() throws Exception {
+    int connectionWindow = 1048576; // 1MiB
+    handler = newHandler(connectionWindow, DEFAULT_WINDOW_SIZE);
+    handler.handlerAdded(ctx);
+    assertEquals(connectionWindow,
+        handler.decoder().flowController().windowSize(handler.connection().connectionStream()));
+  }
+
   private void setMaxConcurrentStreams(int max) throws Exception {
     ByteBuf serializedSettings = serializeSettings(new Http2Settings().maxConcurrentStreams(max));
     handler.channelRead(ctx, serializedSettings);
@@ -342,16 +353,16 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     mockContext();
   }
 
-  private static NettyClientHandler newHandler() {
+  private static NettyClientHandler newHandler(int connectionWindowSize, int streamWindowSize)
+      throws Http2Exception {
     Http2Connection connection = new DefaultHttp2Connection(false);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
     DefaultHttp2LocalFlowController inboundFlow =
         new DefaultHttp2LocalFlowController(connection, frameWriter);
-    return new NettyClientHandler(connection,
-        frameReader,
-        frameWriter,
-        inboundFlow);
+    inboundFlow.initialWindowSize(streamWindowSize);
+    return new NettyClientHandler(connection, frameReader, frameWriter, inboundFlow,
+        connectionWindowSize);
   }
 
   private AsciiString as(String string) {

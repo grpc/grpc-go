@@ -35,10 +35,12 @@ import com.google.common.base.Preconditions;
 
 import io.grpc.AbstractChannelBuilder;
 import io.grpc.SharedResourceHolder;
+import io.grpc.transport.ClientTransport;
 import io.grpc.transport.ClientTransportFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
@@ -50,11 +52,12 @@ import java.net.SocketAddress;
 public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChannelBuilder> {
 
   private final SocketAddress serverAddress;
-
   private NegotiationType negotiationType = NegotiationType.TLS;
   private Class<? extends Channel> channelType = NioSocketChannel.class;
   private EventLoopGroup userEventLoopGroup;
   private SslContext sslContext;
+  private int connectionWindowSize = Http2CodecUtil.DEFAULT_WINDOW_SIZE;
+  private int streamWindowSize = Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 
   /**
    * Creates a new builder with the given server address.
@@ -112,12 +115,44 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     return this;
   }
 
+  /**
+   * Sets the HTTP/2 connection window used for the transport. If not called, uses the default
+   * initial window size from the HTTP/2 specification, as provided by Netty (
+   * {@link Http2CodecUtil#DEFAULT_WINDOW_SIZE}).
+   */
+  public NettyChannelBuilder connectionWindowSize(int connectionWindowSize) {
+    Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
+    this.connectionWindowSize = connectionWindowSize;
+    return this;
+  }
+
+  /**
+   * Sets the initial size HTTP/2 stream windows used for the transport. If not called, uses the
+   * default initial window size from the HTTP/2 specification, as provided by Netty (
+   * {@link Http2CodecUtil#DEFAULT_WINDOW_SIZE}).
+   */
+  public NettyChannelBuilder streamWindowSize(int streamWindowSize) {
+    Preconditions.checkArgument(streamWindowSize > 0, "streamWindowSize must be positive");
+    this.streamWindowSize = streamWindowSize;
+    return this;
+  }
+
   @Override
   protected ChannelEssentials buildEssentials() {
     final EventLoopGroup group = (userEventLoopGroup == null)
         ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP) : userEventLoopGroup;
-    ClientTransportFactory transportFactory = new NettyClientTransportFactory(
-        serverAddress, channelType, negotiationType, group, sslContext);
+    final NegotiationType negotiationType = this.negotiationType;
+    final Class<? extends Channel> channelType = this.channelType;
+    final SslContext sslContext = this.sslContext;
+    final int connectionWindowSize = this.connectionWindowSize;
+    final int streamWindowSize = this.streamWindowSize;
+    ClientTransportFactory transportFactory = new ClientTransportFactory() {
+      @Override
+      public ClientTransport newClientTransport() {
+        return new NettyClientTransport(serverAddress, channelType, negotiationType, group,
+            sslContext, connectionWindowSize, streamWindowSize);
+      }
+    };
     Runnable terminationRunnable = null;
     if (userEventLoopGroup == null) {
       terminationRunnable = new Runnable() {
