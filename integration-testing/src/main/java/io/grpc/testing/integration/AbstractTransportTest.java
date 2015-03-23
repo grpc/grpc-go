@@ -477,6 +477,39 @@ public abstract class AbstractTransportTest {
     }
   }
 
+  @Test(timeout = 30000)
+  public void veryLargeRequest() throws Exception {
+    final SimpleRequest request = SimpleRequest.newBuilder()
+        .setPayload(Payload.newBuilder()
+            .setType(PayloadType.COMPRESSABLE)
+            .setBody(ByteString.copyFrom(new byte[unaryPayloadLength()])))
+        .setResponseSize(10)
+        .setResponseType(PayloadType.COMPRESSABLE)
+        .build();
+    final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
+        .setPayload(Payload.newBuilder()
+            .setType(PayloadType.COMPRESSABLE)
+            .setBody(ByteString.copyFrom(new byte[10])))
+        .build();
+
+    assertEquals(goldenResponse, blockingStub.unaryCall(request));
+  }
+
+  @Test(timeout = 30000)
+  public void veryLargeResponse() throws Exception {
+    final SimpleRequest request = SimpleRequest.newBuilder()
+        .setResponseSize(unaryPayloadLength())
+        .setResponseType(PayloadType.COMPRESSABLE)
+        .build();
+    final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
+        .setPayload(Payload.newBuilder()
+            .setType(PayloadType.COMPRESSABLE)
+            .setBody(ByteString.copyFrom(new byte[unaryPayloadLength()])))
+        .build();
+
+    assertEquals(goldenResponse, blockingStub.unaryCall(request));
+  }
+
   @Test(timeout = 10000)
   public void exchangeContextUnaryCall() throws Exception {
     TestServiceGrpc.TestServiceBlockingStub stub =
@@ -494,7 +527,7 @@ public abstract class AbstractTransportTest {
     AtomicReference<Metadata.Headers> headersCapture = new AtomicReference<Metadata.Headers>();
     stub = MetadataUtils.captureMetadata(stub, headersCapture, trailersCapture);
 
-    Assert.assertNotNull(stub.unaryCall(unaryRequest()));
+    Assert.assertNotNull(stub.emptyCall(Empty.getDefaultInstance()));
 
     // Assert that our side channel object is echoed back in both headers and trailers
     Assert.assertEquals(contextValue, headersCapture.get().get(METADATA_KEY));
@@ -548,16 +581,6 @@ public abstract class AbstractTransportTest {
   protected int unaryPayloadLength() {
     // 10MiB.
     return 10485760;
-  }
-
-  protected SimpleRequest unaryRequest() {
-    SimpleRequest.Builder unaryBuilder = SimpleRequest.newBuilder();
-    unaryBuilder.getPayloadBuilder().setType(PayloadType.COMPRESSABLE);
-    byte[] data = new byte[unaryPayloadLength()];
-    new Random().nextBytes(data);
-    unaryBuilder.getPayloadBuilder().setBody(ByteString.copyFrom(data));
-    unaryBuilder.setResponseSize(10).setResponseType(PayloadType.COMPRESSABLE);
-    return unaryBuilder.build();
   }
 
   protected static void assertSuccess(StreamRecorder<?> recorder) {
