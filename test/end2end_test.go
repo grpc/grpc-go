@@ -301,6 +301,17 @@ func setUp(useTLS bool, maxStream uint32) (s *grpc.Server, tc testpb.TestService
 	return
 }
 
+func TestTimeoutOnDeadServer(t *testing.T) {
+	s, tc := setUp(false, math.MaxUint32)
+	s.Stop()
+	// Set a minimal deadline to make sure the context times out in the 1st
+	// invoke of ClientConn.wait.
+	ctx, _ := context.WithTimeout(context.Background(), time.Nanosecond)
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(%v, _) = _, error %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
+	}
+}
+
 func TestEmptyUnary(t *testing.T) {
 	s, tc := setUp(true, math.MaxUint32)
 	defer s.Stop()

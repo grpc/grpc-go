@@ -147,7 +147,7 @@ func Invoke(ctx context.Context, method string, args, reply proto.Message, cc *C
 				// This was a retry; return the error from the last attempt.
 				return toRPCErr(lastErr)
 			}
-			return Errorf(codes.Internal, "%v", err)
+			return toRPCErr(err)
 		}
 		stream, err = sendRPC(ctx, callHdr, t, args, topts)
 		if err != nil {
