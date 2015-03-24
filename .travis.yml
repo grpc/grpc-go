@@ -13,7 +13,6 @@ before_install:
   - buildscripts/make_dependencies.sh # build protoc into /tmp/proto3-a2
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
-  - echo "org.gradle.parallel=true" >> $HOME/.gradle/gradle.properties
 
 jdk:
   - oraclejdk8
