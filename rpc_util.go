@@ -42,12 +42,20 @@ import (
 	"os"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codec"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
 )
+
+// callInfo contains all related configuration and information about an RPC.
+type callInfo struct {
+	codec     codec.Codec
+	failFast  bool
+	headerMD  metadata.MD
+	trailerMD metadata.MD
+}
 
 // CallOption configures a Call before it starts or extracts information from
 // a Call after it completes.
@@ -70,6 +78,13 @@ type afterCall func(c *callInfo)
 
 func (o afterCall) before(c *callInfo) error { return nil }
 func (o afterCall) after(c *callInfo)        { o(c) }
+
+func CallCodec(codec codec.Codec) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.codec = codec
+		return nil
+	})
+}
 
 // Header returns a CallOptions that retrieves the header metadata
 // for a unary RPC.
@@ -131,7 +146,7 @@ func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
 
 // encode serializes msg and prepends the message header. If msg is nil, it
 // generates the message header of 0 message length.
-func encode(msg proto.Message, pf payloadFormat) ([]byte, error) {
+func encode(c codec.Codec, msg interface{}, pf payloadFormat) ([]byte, error) {
 	var buf bytes.Buffer
 	// Write message fixed header.
 	buf.WriteByte(uint8(pf))
@@ -140,7 +155,7 @@ func encode(msg proto.Message, pf payloadFormat) ([]byte, error) {
 	if msg != nil {
 		var err error
 		// TODO(zhaoq): optimize to reduce memory alloc and copying.
-		b, err = proto.Marshal(msg)
+		b, err = c.Marshal(msg)
 		if err != nil {
 			return nil, err
 		}
@@ -153,14 +168,14 @@ func encode(msg proto.Message, pf payloadFormat) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func recvProto(p *parser, m proto.Message) error {
+func recv(p *parser, c codec.Codec, m interface{}) error {
 	pf, d, err := p.recvMsg()
 	if err != nil {
 		return err
 	}
 	switch pf {
 	case compressionNone:
-		if err := proto.Unmarshal(d, m); err != nil {
+		if err := c.Unmarshal(d, m); err != nil {
 			return Errorf(codes.Internal, "grpc: %v", err)
 		}
 	default:

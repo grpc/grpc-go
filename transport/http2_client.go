@@ -46,6 +46,7 @@ import (
 	"github.com/bradfitz/http2"
 	"github.com/bradfitz/http2/hpack"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codec"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -167,10 +168,16 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 }
 
 func (t *http2Client) newStream(ctx context.Context, streamID uint32, callHdr *CallHdr) *Stream {
-	// TODO(zhaoq): Handle uint32 overflow.
+	c := callHdr.Codec
+	if c == nil {
+		// Set proto codec as the default one.
+		c = codec.NewProtoCodec()
+	}
+	// TODO(zhaoq): Handle uint32 overflow for Stream.id.
 	s := &Stream{
 		id:            streamID,
 		method:        callHdr.Method,
+		codec:         c,
 		buf:           newRecvBuffer(),
 		sendQuotaPool: newQuotaPool(initialWindowSize),
 		headerChan:    make(chan struct{}),
@@ -221,7 +228,11 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":scheme", Value: t.scheme})
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":path", Value: callHdr.Method})
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
-	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+	ct := "application/grpc"
+	if callHdr.Codec != nil {
+		ct += "+" + callHdr.Codec.String()
+	}
+	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: ct})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "te", Value: "trailers"})
 	if timeout > 0 {
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: timeoutEncode(timeout)})

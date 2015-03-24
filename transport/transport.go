@@ -47,6 +47,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codec"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -170,6 +171,7 @@ type Stream struct {
 	cancel context.CancelFunc
 	// method records the associated RPC method of the stream.
 	method string
+	codec  codec.Codec
 	buf    *recvBuffer
 	dec    io.Reader
 
@@ -234,6 +236,11 @@ func (s *Stream) Context() context.Context {
 // Method returns the method for the stream.
 func (s *Stream) Method() string {
 	return s.method
+}
+
+// Codec return the codec for this stream.
+func (s *Stream) Codec() codec.Codec {
+	return s.codec
 }
 
 // StatusCode returns statusCode received from the server.
@@ -336,8 +343,9 @@ type Options struct {
 
 // CallHdr carries the information of a particular RPC.
 type CallHdr struct {
-	Host   string // peer host
-	Method string // the operation to perform on the specified host
+	Host   string      // peer host
+	Method string      // the operation to perform on the specified host
+	Codec  codec.Codec // the codec for this RPC.
 }
 
 // ClientTransport is the common interface for all gRPC client side transport

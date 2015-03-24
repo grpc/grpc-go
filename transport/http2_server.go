@@ -178,6 +178,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 		recv: s.buf,
 	}
 	s.method = hDec.state.method
+	s.codec = hDec.state.codec
 
 	wg.Add(1)
 	go func() {
