@@ -50,14 +50,16 @@ import java.net.SocketAddress;
  * A builder to help simplify construction of channels using the Netty transport.
  */
 public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChannelBuilder> {
+  public static final int DEFAULT_CONNECTION_WINDOW_SIZE = 1048576; // 1MiB
+  public static final int DEFAULT_STREAM_WINDOW_SIZE = Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 
   private final SocketAddress serverAddress;
   private NegotiationType negotiationType = NegotiationType.TLS;
   private Class<? extends Channel> channelType = NioSocketChannel.class;
   private EventLoopGroup userEventLoopGroup;
   private SslContext sslContext;
-  private int connectionWindowSize = Http2CodecUtil.DEFAULT_WINDOW_SIZE;
-  private int streamWindowSize = Http2CodecUtil.DEFAULT_WINDOW_SIZE;
+  private int connectionWindowSize = DEFAULT_CONNECTION_WINDOW_SIZE;
+  private int streamWindowSize = DEFAULT_STREAM_WINDOW_SIZE;
 
   /**
    * Creates a new builder with the given server address.
@@ -118,7 +120,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   /**
    * Sets the HTTP/2 connection window used for the transport. If not called, uses the default
    * initial window size from the HTTP/2 specification, as provided by Netty (
-   * {@link Http2CodecUtil#DEFAULT_WINDOW_SIZE}).
+   * {@link #DEFAULT_CONNECTION_WINDOW_SIZE}).
    */
   public NettyChannelBuilder connectionWindowSize(int connectionWindowSize) {
     Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
@@ -129,7 +131,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   /**
    * Sets the initial size HTTP/2 stream windows used for the transport. If not called, uses the
    * default initial window size from the HTTP/2 specification, as provided by Netty (
-   * {@link Http2CodecUtil#DEFAULT_WINDOW_SIZE}).
+   * {@link #DEFAULT_STREAM_WINDOW_SIZE}).
    */
   public NettyChannelBuilder streamWindowSize(int streamWindowSize) {
     Preconditions.checkArgument(streamWindowSize > 0, "streamWindowSize must be positive");
