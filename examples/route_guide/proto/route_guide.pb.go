@@ -17,8 +17,7 @@ It has these top-level messages:
 */
 package proto
 
-import proto "github.com/golang/protobuf/proto"
-import math "math"
+import proto1 "github.com/golang/protobuf/proto"
 
 import (
 	context "golang.org/x/net/context"
