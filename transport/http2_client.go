@@ -149,7 +149,7 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 		hBuf:          &buf,
 		hEnc:          hpack.NewEncoder(&buf),
 		controlBuf:    newRecvBuffer(),
-		sendQuotaPool: newQuotaPool(initialWindowSize),
+		sendQuotaPool: newQuotaPool(initialConnWindowSize),
 		scheme:        scheme,
 		state:         reachable,
 		activeStreams: make(map[uint32]*Stream),
@@ -457,11 +457,11 @@ func (t *http2Client) getStream(f http2.Frame) (*Stream, bool) {
 
 // addRecvQuota adjusts the inbound quota for the stream and the transport.
 // Window updates will deliver to the controller for sending when
-// the cumulative quota exceeds windowUpdateThreshold.
+// the cumulative quota exceeds the corresponding threshold.
 func (t *http2Client) addRecvQuota(s *Stream, n int) {
 	t.mu.Lock()
 	t.recvQuota += n
-	if t.recvQuota >= windowUpdateThreshold {
+	if t.recvQuota >= connWindowUpdateThreshold {
 		t.controlBuf.put(&windowUpdate{0, uint32(t.recvQuota)})
 		t.recvQuota = 0
 	}
