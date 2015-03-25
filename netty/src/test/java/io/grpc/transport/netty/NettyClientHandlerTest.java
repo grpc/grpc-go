@@ -289,12 +289,15 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
         promise);
 
     // Read a GOAWAY that indicates our stream was never processed by the server.
-    handler.channelRead(ctx, goAwayFrame(0));
+    handler.channelRead(ctx,
+        goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     InOrder inOrder = inOrder(stream);
     inOrder.verify(stream, calls(1)).transportReportStatus(captor.capture(), eq(false),
         notNull(Metadata.Trailers.class));
-    assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
+    assertEquals(Status.CANCELLED.getCode(), captor.getValue().getCode());
+    assertEquals("HTTP/2 error code: CANCEL\nthis is a test",
+        captor.getValue().getDescription());
   }
 
   @Test

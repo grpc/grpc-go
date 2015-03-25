@@ -112,11 +112,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
         // Whenever a stream has been closed, try to create a pending stream to fill its place.
         createPendingStreams();
       }
-
-      @Override
-      public void goingAway() {
-        NettyClientHandler.this.goingAway();
-      }
     });
   }
 
@@ -215,6 +210,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
       status = status.augmentDescription(msg);
     }
     goAwayStatus(status);
+    goingAway();
   }
 
   @Override
@@ -404,7 +400,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     if (goAwayStatus != null) {
       return goAwayStatus;
     }
-    return Status.UNAVAILABLE;
+    return Status.UNAVAILABLE.withDescription("Connection going away, but for unknown reason");
   }
 
   private void goAwayStatus(Status status) {
