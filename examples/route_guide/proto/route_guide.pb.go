@@ -17,7 +17,8 @@ It has these top-level messages:
 */
 package proto
 
-import proto1 "github.com/golang/protobuf/proto"
+import proto "github.com/golang/protobuf/proto"
+import math "math"
 
 import (
 	context "golang.org/x/net/context"
@@ -186,7 +187,7 @@ func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts
 		return nil, err
 	}
 	x := &routeGuideListFeaturesClient{stream}
-	if err := x.ClientStream.SendProto(in); err != nil {
+	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
 	if err := x.ClientStream.CloseSend(); err != nil {
@@ -206,7 +207,7 @@ type routeGuideListFeaturesClient struct {
 
 func (x *routeGuideListFeaturesClient) Recv() (*Feature, error) {
 	m := new(Feature)
-	if err := x.ClientStream.RecvProto(m); err != nil {
+	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -232,7 +233,7 @@ type routeGuideRecordRouteClient struct {
 }
 
 func (x *routeGuideRecordRouteClient) Send(m *Point) error {
-	return x.ClientStream.SendProto(m)
+	return x.ClientStream.SendMsg(m)
 }
 
 func (x *routeGuideRecordRouteClient) CloseAndRecv() (*RouteSummary, error) {
@@ -240,7 +241,7 @@ func (x *routeGuideRecordRouteClient) CloseAndRecv() (*RouteSummary, error) {
 		return nil, err
 	}
 	m := new(RouteSummary)
-	if err := x.ClientStream.RecvProto(m); err != nil {
+	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -266,12 +267,12 @@ type routeGuideRouteChatClient struct {
 }
 
 func (x *routeGuideRouteChatClient) Send(m *RouteNote) error {
-	return x.ClientStream.SendProto(m)
+	return x.ClientStream.SendMsg(m)
 }
 
 func (x *routeGuideRouteChatClient) Recv() (*RouteNote, error) {
 	m := new(RouteNote)
-	if err := x.ClientStream.RecvProto(m); err != nil {
+	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -310,7 +311,7 @@ func RegisterRouteGuideServer(s *grpc.Server, srv RouteGuideServer) {
 	s.RegisterService(&_RouteGuide_serviceDesc, srv)
 }
 
-func _RouteGuide_GetFeature_Handler(srv interface{}, ctx context.Context, buf []byte) (proto1.Message, error) {
+func _RouteGuide_GetFeature_Handler(srv interface{}, ctx context.Context, buf []byte) (interface{}, error) {
 	in := new(Point)
 	if err := proto1.Unmarshal(buf, in); err != nil {
 		return nil, err
@@ -324,7 +325,7 @@ func _RouteGuide_GetFeature_Handler(srv interface{}, ctx context.Context, buf []
 
 func _RouteGuide_ListFeatures_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(Rectangle)
-	if err := stream.RecvProto(m); err != nil {
+	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
 	return srv.(RouteGuideServer).ListFeatures(m, &routeGuideListFeaturesServer{stream})
@@ -340,7 +341,7 @@ type routeGuideListFeaturesServer struct {
 }
 
 func (x *routeGuideListFeaturesServer) Send(m *Feature) error {
-	return x.ServerStream.SendProto(m)
+	return x.ServerStream.SendMsg(m)
 }
 
 func _RouteGuide_RecordRoute_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -358,12 +359,12 @@ type routeGuideRecordRouteServer struct {
 }
 
 func (x *routeGuideRecordRouteServer) SendAndClose(m *RouteSummary) error {
-	return x.ServerStream.SendProto(m)
+	return x.ServerStream.SendMsg(m)
 }
 
 func (x *routeGuideRecordRouteServer) Recv() (*Point, error) {
 	m := new(Point)
-	if err := x.ServerStream.RecvProto(m); err != nil {
+	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -384,12 +385,12 @@ type routeGuideRouteChatServer struct {
 }
 
 func (x *routeGuideRouteChatServer) Send(m *RouteNote) error {
-	return x.ServerStream.SendProto(m)
+	return x.ServerStream.SendMsg(m)
 }
 
 func (x *routeGuideRouteChatServer) Recv() (*RouteNote, error) {
 	m := new(RouteNote)
-	if err := x.ServerStream.RecvProto(m); err != nil {
+	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
