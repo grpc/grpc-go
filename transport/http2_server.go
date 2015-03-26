@@ -609,6 +609,7 @@ func (t *http2Server) closeStream(s *Stream) {
 	t.mu.Unlock()
 	s.mu.Lock()
 	if s.state == streamDone {
+		s.mu.Unlock()
 		return
 	}
 	s.state = streamDone
