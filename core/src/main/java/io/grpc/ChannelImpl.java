@@ -265,6 +265,7 @@ public final class ChannelImpl implements Channel {
 
     @Override
     public void request(int numMessages) {
+      Preconditions.checkState(stream != null, "Not started");
       stream.request(numMessages);
     }
 
