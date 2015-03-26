@@ -81,7 +81,10 @@ public class NettyServer extends AbstractService {
       @Override
       public void initChannel(Channel ch) throws Exception {
         NettyServerTransport transport = new NettyServerTransport(ch, serverListener, sslContext);
-        transport.startAsync();
+        // TODO(ejona86): Ideally we wouldn't handle handler registration asyncly and then be forced
+        // to block for completion on another thread. This should be resolved as part of removing
+        // Service from server transport.
+        transport.startAsync().awaitRunning();
         // TODO(nmittler): Should we wait for transport shutdown before shutting down server?
       }
     };
