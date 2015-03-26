@@ -37,12 +37,10 @@ import com.google.common.base.Preconditions;
 import io.grpc.Call;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptor;
-import io.grpc.ClientInterceptors.ForwardingCall;
+import io.grpc.ClientInterceptors.CheckedForwardingCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.Status;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -70,27 +68,24 @@ public class ClientAuthInterceptor implements ClientInterceptor {
                                                        Channel next) {
     // TODO(ejona86): If the call fails for Auth reasons, this does not properly propagate info that
     // would be in WWW-Authenticate, because it does not yet have access to the header.
-    return new ForwardingCall<ReqT, RespT>(next.newCall(method)) {
+    return new CheckedForwardingCall<ReqT, RespT>(next.newCall(method)) {
       @Override
-      public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
-        try {
-          Metadata.Headers cachedSaved;
-          synchronized (ClientAuthInterceptor.this) {
-            // TODO(lryan): This is icky but the current auth library stores the same
-            // metadata map until the next refresh cycle. This will be fixed once
-            // https://github.com/google/google-auth-library-java/issues/3
-            // is resolved.
-            if (lastMetadata == null || lastMetadata != credentials.getRequestMetadata()) {
-              lastMetadata = credentials.getRequestMetadata();
-              cached = toHeaders(lastMetadata);
-            }
-            cachedSaved = cached;
+      protected void checkedStart(Listener<RespT> responseListener, Metadata.Headers headers)
+          throws Exception {
+        Metadata.Headers cachedSaved;
+        synchronized (ClientAuthInterceptor.this) {
+          // TODO(lryan): This is icky but the current auth library stores the same
+          // metadata map until the next refresh cycle. This will be fixed once
+          // https://github.com/google/google-auth-library-java/issues/3
+          // is resolved.
+          if (lastMetadata == null || lastMetadata != credentials.getRequestMetadata()) {
+            lastMetadata = credentials.getRequestMetadata();
+            cached = toHeaders(lastMetadata);
           }
-          headers.merge(cachedSaved);
-          super.start(responseListener, headers);
-        } catch (IOException ioe) {
-          responseListener.onClose(Status.fromThrowable(ioe), new Metadata.Trailers());
+          cachedSaved = cached;
         }
+        headers.merge(cachedSaved);
+        delegate().start(responseListener, headers);
       }
     };
   }

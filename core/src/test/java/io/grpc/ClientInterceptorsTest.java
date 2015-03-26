@@ -32,8 +32,13 @@
 package io.grpc;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -41,8 +46,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import io.grpc.ClientInterceptors.ForwardingCall;
-import io.grpc.ClientInterceptors.ForwardingListener;
+import io.grpc.ClientInterceptors.CheckedForwardingCall;
+import io.grpc.ForwardingCall.SimpleForwardingCall;
+import io.grpc.ForwardingCallListener.SimpleForwardingCallListener;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -52,6 +58,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,9 +78,24 @@ public class ClientInterceptorsTest {
   @Mock
   private MethodDescriptor<String, Integer> method;
 
+  /**
+   * Sets up mocks.
+   */
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
     when(channel.newCall(Mockito.<MethodDescriptor<String, Integer>>any())).thenReturn(call);
+
+    // Emulate the precondition checks in ChannelImpl.CallImpl
+    Answer<Void> checkStartCalled = new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        verify(call).start(Mockito.<Call.Listener<Integer>>any(), Mockito.<Metadata.Headers>any());
+        return null;
+      }
+    };
+    doAnswer(checkStartCalled).when(call).request(anyInt());
+    doAnswer(checkStartCalled).when(call).halfClose();
+    doAnswer(checkStartCalled).when(call).sendPayload(Mockito.<String>any());
   }
 
   @Test(expected = NullPointerException.class)
@@ -165,7 +188,7 @@ public class ClientInterceptorsTest {
       public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
           Channel next) {
         Call<ReqT, RespT> call = next.newCall(method);
-        return new ForwardingCall<ReqT, RespT>(call) {
+        return new SimpleForwardingCall<ReqT, RespT>(call) {
           @Override
           public void start(Call.Listener<RespT> responseListener, Metadata.Headers headers) {
             headers.put(credKey, "abcd");
@@ -195,10 +218,10 @@ public class ClientInterceptorsTest {
       public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
           Channel next) {
         Call<ReqT, RespT> call = next.newCall(method);
-        return new ForwardingCall<ReqT, RespT>(call) {
+        return new SimpleForwardingCall<ReqT, RespT>(call) {
           @Override
           public void start(Call.Listener<RespT> responseListener, Metadata.Headers headers) {
-            super.start(new ForwardingListener<RespT>(responseListener) {
+            super.start(new SimpleForwardingCallListener<RespT>(responseListener) {
               @Override
               public void onHeaders(Metadata.Headers headers) {
                 examinedHeaders.add(headers);
@@ -221,6 +244,67 @@ public class ClientInterceptorsTest {
     // Simulate that a headers arrives on the underlying call listener.
     captor.getValue().onHeaders(inboundHeaders);
     assertEquals(Arrays.asList(inboundHeaders), examinedHeaders);
+  }
+
+  @Test
+  public void normalCall() {
+    ClientInterceptor interceptor = new ClientInterceptor() {
+      @Override
+      public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+          Channel next) {
+        Call<ReqT, RespT> call = next.newCall(method);
+        return new SimpleForwardingCall<ReqT, RespT>(call) { };
+      }
+    };
+    Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
+    Call<String, Integer> interceptedCall = intercepted.newCall(method);
+    assertNotSame(call, interceptedCall);
+    @SuppressWarnings("unchecked")
+    Call.Listener<Integer> listener = mock(Call.Listener.class);
+    Metadata.Headers headers = new Metadata.Headers();
+    interceptedCall.start(listener, headers);
+    verify(call).start(same(listener), same(headers));
+    interceptedCall.sendPayload("request");
+    verify(call).sendPayload(eq("request"));
+    interceptedCall.halfClose();
+    verify(call).halfClose();
+    interceptedCall.request(1);
+    verify(call).request(1);
+  }
+
+  @Test
+  public void exceptionInStart() {
+    final Exception error = new Exception("emulated error");
+    ClientInterceptor interceptor = new ClientInterceptor() {
+      @Override
+      public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+          Channel next) {
+        Call<ReqT, RespT> call = next.newCall(method);
+        return new CheckedForwardingCall<ReqT, RespT>(call) {
+          @Override
+          protected void checkedStart(Call.Listener<RespT> responseListener,
+              Metadata.Headers headers) throws Exception {
+            if (this instanceof Object) {
+              throw error;
+            }
+            delegate().start(responseListener, headers);  // will not be called
+          }
+        };
+      }
+    };
+    Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
+    @SuppressWarnings("unchecked")
+    Call.Listener<Integer> listener = mock(Call.Listener.class);
+    Call<String, Integer> interceptedCall = intercepted.newCall(method);
+    assertNotSame(call, interceptedCall);
+    interceptedCall.start(listener, new Metadata.Headers());
+    interceptedCall.sendPayload("request");
+    interceptedCall.halfClose();
+    interceptedCall.request(1);
+    verifyNoMoreInteractions(call);
+    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
+    verify(listener).onClose(captor.capture(), any(Metadata.Trailers.class));
+    assertSame(error, captor.getValue().getCause());
   }
 
   private static class NoopInterceptor implements ClientInterceptor {

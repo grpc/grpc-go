@@ -34,6 +34,9 @@ package io.grpc;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
+import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
+import io.grpc.ForwardingServerCallListener.SimpleForwardingServerCallListener;
+
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -145,75 +148,25 @@ public class ServerInterceptors {
 
   /**
    * Utility base class for decorating {@link ServerCall} instances.
+   *
+   * @deprecated Use {@link SimpleForwardingServerCall}
    */
-  public static class ForwardingServerCall<RespT> extends ServerCall<RespT> {
-
-    private final ServerCall<RespT> delegate;
-
+  @Deprecated
+  public static class ForwardingServerCall<RespT> extends SimpleForwardingServerCall<RespT> {
     public ForwardingServerCall(ServerCall<RespT> delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override
-    public void request(int numMessages) {
-      delegate.request(numMessages);
-    }
-
-    @Override
-    public void sendHeaders(Metadata.Headers headers) {
-      delegate.sendHeaders(headers);
-    }
-
-    @Override
-    public void sendPayload(RespT payload) {
-      delegate.sendPayload(payload);
-    }
-
-    @Override
-    public void close(Status status, Metadata.Trailers trailers) {
-      delegate.close(status, trailers);
-    }
-
-    @Override
-    public boolean isCancelled() {
-      return delegate.isCancelled();
+      super(delegate);
     }
   }
 
   /**
    * Utility base class for decorating {@link ServerCall.Listener} instances.
+   *
+   * @deprecated Use {@link SimpleForwardingServerCallListener}
    */
-  public static class ForwardingListener<RespT> extends ServerCall.Listener<RespT> {
-
-    private final ServerCall.Listener<RespT> delegate;
-
-    public ForwardingListener(ServerCall.Listener<RespT> delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override
-    public void onPayload(RespT payload) {
-      delegate.onPayload(payload);
-    }
-
-    @Override
-    public void onHalfClose() {
-      delegate.onHalfClose();
-    }
-
-    @Override
-    public void onCancel() {
-      delegate.onCancel();
-    }
-
-    @Override
-    public void onComplete() {
-      delegate.onComplete();
-    }
-
-    @Override
-    public void onReady(int numMessages) {
-      delegate.onReady(numMessages);
+  @Deprecated
+  public static class ForwardingListener<ReqT> extends SimpleForwardingServerCallListener<ReqT> {
+    public ForwardingListener(ServerCall.Listener<ReqT> delegate) {
+      super(delegate);
     }
   }
 }

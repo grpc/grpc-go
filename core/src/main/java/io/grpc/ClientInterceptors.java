@@ -34,6 +34,9 @@ package io.grpc;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
+import io.grpc.ForwardingCall.SimpleForwardingCall;
+import io.grpc.ForwardingCallListener.SimpleForwardingCallListener;
+
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -114,71 +117,95 @@ public class ClientInterceptors {
 
   /**
    * A {@link Call} which forwards all of it's methods to another {@link Call}.
+   *
+   * @deprecated Use {@link SimpleForwardingCall}.
    */
-  public static class ForwardingCall<ReqT, RespT> extends Call<ReqT, RespT> {
-
-    private final Call<ReqT, RespT> delegate;
-
+  @Deprecated
+  public static class ForwardingCall<ReqT, RespT> extends SimpleForwardingCall<ReqT, RespT> {
     public ForwardingCall(Call<ReqT, RespT> delegate) {
+      super(delegate);
+    }
+  }
+
+  private static final Call<Object, Object> NOOP_CALL = new Call<Object, Object>() {
+    @Override
+    public void start(Listener<Object> responseListener, Metadata.Headers headers) { }
+
+    @Override
+    public void request(int numMessages) { }
+
+    @Override
+    public void cancel() { }
+
+    @Override
+    public void halfClose() { }
+
+    @Override
+    public void sendPayload(Object payload) { }
+  };
+
+  /**
+   * A {@link io.grpc.ForwardingCall} that delivers exceptions from its start logic to the call
+   * listener.
+   *
+   * <p>{@link io.grpc.ForwardingCall#start()} should not throw any exception other than those
+   * caused by misuse, e.g., {@link IllegalStateException}.  {@code CheckedForwardingCall} provides
+   * {@code checkedStart()} in which throwing exceptions is allowed.
+   */
+  public abstract static class CheckedForwardingCall<ReqT, RespT>
+      extends io.grpc.ForwardingCall<ReqT, RespT> {
+
+    private Call<ReqT, RespT> delegate;
+
+    /**
+     * Subclasses implement the start logic here that would normally belong to {@code start()}.
+     *
+     * <p>Implementation should call {@code this.delegate().start()} in the normal path. Exceptions
+     * may safely be thrown prior to calling {@code this.delegate().start()}. Such exceptions will
+     * be handled by {@code CheckedForwardingCall} and be delivered to {@code responseListener}.
+     * Exceptions <em>must not</em> be thrown after calling {@code this.delegate().start()}, as this
+     * can result in {@link Call.Listener#onClose} being called multiple times.
+     */
+    protected abstract void checkedStart(Listener<RespT> responseListener, Metadata.Headers headers)
+        throws Exception;
+
+    protected CheckedForwardingCall(Call<ReqT, RespT> delegate) {
       this.delegate = delegate;
     }
 
     @Override
-    public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
-      this.delegate.start(responseListener, headers);
+    protected final Call<ReqT, RespT> delegate() {
+      return delegate;
     }
 
     @Override
-    public void request(int numMessages) {
-      this.delegate.request(numMessages);
-    }
-
-    @Override
-    public void cancel() {
-      this.delegate.cancel();
-    }
-
-    @Override
-    public void halfClose() {
-      this.delegate.halfClose();
-    }
-
-    @Override
-    public void sendPayload(ReqT payload) {
-      this.delegate.sendPayload(payload);
+    @SuppressWarnings("unchecked")
+    public final void start(Listener<RespT> responseListener, Metadata.Headers headers) {
+      try {
+        checkedStart(responseListener, headers);
+      } catch (Exception e) {
+        // Because start() doesn't throw, the caller may still try to call other methods on this
+        // call object. Passing these invocations to the original delegate will cause
+        // IllegalStateException because delegate().start() was not called. We switch the delegate
+        // to a NO-OP one to prevent the IllegalStateException. The user will finally get notified
+        // about the error through the listener.
+        delegate = (Call<ReqT, RespT>) NOOP_CALL;
+        responseListener.onClose(Status.fromThrowable(e), new Metadata.Trailers());
+      }
     }
   }
 
   /**
    * A {@link Call.Listener} which forwards all of its methods to another
    * {@link Call.Listener}.
+   *
+   * @deprecated Use {@link SimpleFowardingCallListener}.
    */
-  public static class ForwardingListener<T> extends Call.Listener<T> {
-
-    private final Call.Listener<T> delegate;
+  @Deprecated
+  public static class ForwardingListener<T> extends SimpleForwardingCallListener<T> {
 
     public ForwardingListener(Call.Listener<T> delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override
-    public void onHeaders(Metadata.Headers headers) {
-      delegate.onHeaders(headers);
-    }
-
-    @Override
-    public void onPayload(T payload) {
-      delegate.onPayload(payload);
-    }
-
-    @Override
-    public void onClose(Status status, Metadata.Trailers trailers) {
-      delegate.onClose(status, trailers);
-    }
-
-    @Override
-    public void onReady(int numMessages) {
-      delegate.onReady(numMessages);
+      super(delegate);
     }
   }
 }
