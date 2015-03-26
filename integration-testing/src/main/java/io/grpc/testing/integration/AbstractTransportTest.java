@@ -34,13 +34,12 @@ package io.grpc.testing.integration;
 import static io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE;
 import static io.grpc.testing.integration.Util.assertEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import com.google.common.util.concurrent.SettableFuture;
-import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 
@@ -76,11 +75,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -409,72 +407,60 @@ public abstract class AbstractTransportTest {
   }
 
   @Test(timeout = 10000)
-  public void streamingOutputShouldBeFlowControlled() throws Exception {
-    // Create the call object.
+  public void serverStreamingShouldBeFlowControlled() throws Exception {
+    final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
+        .setResponseType(COMPRESSABLE)
+        .addResponseParameters(ResponseParameters.newBuilder().setSize(100000))
+        .addResponseParameters(ResponseParameters.newBuilder().setSize(100001))
+        .build();
+    final List<StreamingOutputCallResponse> goldenResponses = Arrays.asList(
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[100000]))).build(),
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[100001]))).build());
+
+    long start = System.nanoTime();
+
+    final ArrayBlockingQueue<Object> queue = new ArrayBlockingQueue<Object>(10);
     Call<StreamingOutputCallRequest, StreamingOutputCallResponse> call =
         channel.newCall(TestServiceGrpc.CONFIG.streamingOutputCall);
-
-    // Build the request.
-    List<Integer> responseSizes = Arrays.asList(50, 100, 150, 200);
-    StreamingOutputCallRequest.Builder streamingOutputBuilder =
-        StreamingOutputCallRequest.newBuilder();
-    streamingOutputBuilder.setResponseType(COMPRESSABLE);
-    for (Integer size : responseSizes) {
-      streamingOutputBuilder.addResponseParametersBuilder().setSize(size).setIntervalUs(0);
-    }
-    StreamingOutputCallRequest request = streamingOutputBuilder.build();
-
-    // Start the call and prepare capture of results.
-    final List<StreamingOutputCallResponse> results =
-        Collections.synchronizedList(new ArrayList<StreamingOutputCallResponse>());
-    final SettableFuture<Void> completionFuture = SettableFuture.create();
-    final AtomicInteger count = new AtomicInteger();
     call.start(new Call.Listener<StreamingOutputCallResponse>() {
-
       @Override
-      public void onHeaders(Metadata.Headers headers) {
-      }
+      public void onHeaders(Metadata.Headers headers) {}
 
       @Override
       public void onPayload(final StreamingOutputCallResponse payload) {
-        results.add(payload);
-        count.incrementAndGet();
+        queue.add(payload);
       }
 
       @Override
       public void onClose(Status status, Metadata.Trailers trailers) {
-        if (status.isOk()) {
-          completionFuture.set(null);
-        } else {
-          completionFuture.setException(status.asException());
-        }
+        queue.add(status);
       }
     }, new Metadata.Headers());
-
-    // Send the request.
     call.sendPayload(request);
     call.halfClose();
 
-    // Slowly set completion on all of the futures.
-    int expectedResults = responseSizes.size();
-    while (count.get() < expectedResults) {
-      // Allow one more inbound message to be delivered to the application.
-      call.request(1);
+    // Time how long it takes to get the first response.
+    call.request(1);
+    assertEquals(goldenResponses.get(0), queue.poll(1, TimeUnit.SECONDS));
+    long firstCallDuration = System.nanoTime() - start;
 
-      // Sleep a bit.
-      Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
-    }
+    // Without giving additional flow control, make sure that we don't get another response. We wait
+    // until we are comfortable the next message isn't coming. We may have very low nanoTime
+    // resolution (like on Windows) or be using a testing, in-process transport where message
+    // handling is instantaneous. In both cases, firstCallDuration may be 0, so round up sleep time
+    // to at least 1ms.
+    assertNull(queue.poll(Math.max(firstCallDuration * 4, 1 * 1000 * 1000), TimeUnit.NANOSECONDS));
 
-    // Wait for successful completion of the response.
-    completionFuture.get();
-
-    assertEquals(responseSizes.size(), results.size());
-    for (int ix = 0; ix < results.size(); ++ix) {
-      StreamingOutputCallResponse response = results.get(ix);
-      assertEquals(COMPRESSABLE, response.getPayload().getType());
-      int length = response.getPayload().getBody().size();
-      assertEquals("comparison failed at index " + ix, responseSizes.get(ix).intValue(), length);
-    }
+    // Make sure that everything still completes.
+    call.request(1);
+    assertEquals(goldenResponses.get(1), queue.poll(1, TimeUnit.SECONDS));
+    assertEquals(Status.OK, queue.poll(1, TimeUnit.SECONDS));
   }
 
   @Test(timeout = 30000)
