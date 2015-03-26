@@ -42,12 +42,12 @@ import (
 // TODO(zhaoq): Make the following configurable.
 const (
 	// The initial window size for flow control.
-	initialWindowSize = 65535  // for an RPC
-	initialConnWindowSize = 1024 * 1024  // for a connection
+	initialWindowSize     = 65535 // for an RPC
+	initialConnWindowSize = 65535 // for a connection
 	// Window update is only sent when the inbound quota reaches
 	// this threshold. Used to reduce the flow control traffic.
-	windowUpdateThreshold = 16384  // for an RPC
-	connWindowUpdateThreshold = 1024 * 256  // for a connection
+	windowUpdateThreshold     = 16384 // for an RPC
+	connWindowUpdateThreshold = 16384 // for a connection
 )
 
 // The following defines various control items which could flow through
