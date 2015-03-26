@@ -74,7 +74,8 @@ public class ClientAuthInterceptor implements ClientInterceptor {
       @Override
       public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
         try {
-          synchronized (this) {
+          Metadata.Headers cachedSaved;
+          synchronized (ClientAuthInterceptor.this) {
             // TODO(lryan): This is icky but the current auth library stores the same
             // metadata map until the next refresh cycle. This will be fixed once
             // https://github.com/google/google-auth-library-java/issues/3
@@ -83,8 +84,9 @@ public class ClientAuthInterceptor implements ClientInterceptor {
               lastMetadata = credentials.getRequestMetadata();
               cached = toHeaders(lastMetadata);
             }
+            cachedSaved = cached;
           }
-          headers.merge(cached);
+          headers.merge(cachedSaved);
           super.start(responseListener, headers);
         } catch (IOException ioe) {
           responseListener.onClose(Status.fromThrowable(ioe), new Metadata.Trailers());
