@@ -33,6 +33,8 @@ package io.grpc.transport.okhttp;
 
 import com.google.common.base.Preconditions;
 
+import com.squareup.okhttp.ConnectionSpec;
+
 import io.grpc.transport.ClientTransport;
 import io.grpc.transport.ClientTransportFactory;
 
@@ -49,18 +51,21 @@ class OkHttpClientTransportFactory implements ClientTransportFactory {
   private final ExecutorService executor;
   private final String authorityHost;
   private final SSLSocketFactory sslSocketFactory;
+  private final ConnectionSpec connectionSpec;
 
   public OkHttpClientTransportFactory(InetSocketAddress address, String authorityHost,
-                                      ExecutorService executor, SSLSocketFactory factory) {
+      ExecutorService executor, SSLSocketFactory factory, ConnectionSpec connectionSpec) {
     this.address = Preconditions.checkNotNull(address, "address");
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.authorityHost = Preconditions.checkNotNull(authorityHost, "authorityHost");
     this.sslSocketFactory = factory;
+    this.connectionSpec = connectionSpec;
   }
 
   @Override
   public ClientTransport newClientTransport() {
-    return new OkHttpClientTransport(address, authorityHost, executor, sslSocketFactory);
+    return new OkHttpClientTransport(
+        address, authorityHost, executor, sslSocketFactory, connectionSpec);
   }
 
 }

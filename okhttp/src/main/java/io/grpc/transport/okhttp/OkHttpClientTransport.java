@@ -35,6 +35,10 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.SettableFuture;
 
+import com.squareup.okhttp.CipherSuite;
+import com.squareup.okhttp.ConnectionSpec;
+import com.squareup.okhttp.OkHttpTlsUpgrader;
+import com.squareup.okhttp.TlsVersion;
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
 import com.squareup.okhttp.internal.spdy.Header;
@@ -80,6 +84,22 @@ import javax.net.ssl.SSLSocketFactory;
  * A okhttp-based {@link ClientTransport} implementation.
  */
 public class OkHttpClientTransport implements ClientTransport {
+  public static final ConnectionSpec DEFAULT_CONNECTION_SPEC =
+      new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
+      .cipherSuites(
+          // The following items should be sync with Netty's Http2SecurityUtil.CIPHERS.
+          CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+          CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+          CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+          CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+          CipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
+          CipherSuite.TLS_DHE_DSS_WITH_AES_128_GCM_SHA256,
+          CipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+          CipherSuite.TLS_DHE_DSS_WITH_AES_256_GCM_SHA384)
+      .tlsVersions(TlsVersion.TLS_1_2)
+      .supportsTlsExtensions(true)
+      .build();
+
   /** The default initial window size in HTTP/2 is 64 KiB for the stream and connection. */
   @VisibleForTesting
   static final int DEFAULT_INITIAL_WINDOW_SIZE = 64 * 1024;
@@ -146,9 +166,10 @@ public class OkHttpClientTransport implements ClientTransport {
   private int maxConcurrentStreams = Integer.MAX_VALUE;
   @GuardedBy("lock")
   private LinkedList<PendingStream> pendingStreams = new LinkedList<PendingStream>();
+  private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
 
   OkHttpClientTransport(InetSocketAddress address, String authorityHost, Executor executor,
-                        SSLSocketFactory sslSocketFactory) {
+      @Nullable SSLSocketFactory sslSocketFactory, @Nullable ConnectionSpec connectionSpec) {
     this.address = Preconditions.checkNotNull(address);
     this.authorityHost = authorityHost;
     defaultAuthority = authorityHost + ":" + address.getPort();
@@ -157,6 +178,9 @@ public class OkHttpClientTransport implements ClientTransport {
     // use it. We start clients at 3 to avoid conflicting with HTTP negotiation.
     nextStreamId = 3;
     this.sslSocketFactory = sslSocketFactory;
+    if (connectionSpec != null) {
+      this.connectionSpec = connectionSpec;
+    }
   }
 
   /**
@@ -266,8 +290,8 @@ public class OkHttpClientTransport implements ClientTransport {
       try {
         socket = new Socket(address.getAddress(), address.getPort());
         if (sslSocketFactory != null) {
-          // We assume the sslSocketFactory will verify the server hostname.
-          socket = sslSocketFactory.createSocket(socket, authorityHost, address.getPort(), true);
+          socket = OkHttpTlsUpgrader.upgrade(
+              sslSocketFactory, socket, authorityHost, address.getPort(), connectionSpec);
         }
         socket.setTcpNoDelay(true);
         source = Okio.buffer(Okio.source(socket));

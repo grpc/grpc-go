@@ -34,6 +34,8 @@ package io.grpc.transport.okhttp;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import com.squareup.okhttp.ConnectionSpec;
+
 import io.grpc.AbstractChannelBuilder;
 import io.grpc.SharedResourceHolder;
 import io.grpc.SharedResourceHolder.Resource;
@@ -47,8 +49,8 @@ import javax.net.ssl.SSLSocketFactory;
 
 /** Convenience class for building channels with the OkHttp transport. */
 public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpChannelBuilder> {
-  private static final Resource<ExecutorService> DEFAULT_TRANSPORT_THREAD_POOL
-      = new Resource<ExecutorService>() {
+  private static final Resource<ExecutorService> DEFAULT_TRANSPORT_THREAD_POOL =
+      new Resource<ExecutorService>() {
         @Override
         public ExecutorService create() {
           return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
@@ -71,6 +73,7 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
   private ExecutorService transportExecutor;
   private String host;
   private SSLSocketFactory sslSocketFactory;
+  private ConnectionSpec connectionSpec;
 
   private OkHttpChannelBuilder(InetSocketAddress serverAddress, String host) {
     this.serverAddress = Preconditions.checkNotNull(serverAddress, "serverAddress");
@@ -94,15 +97,27 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
    *
    * <p>Should only used by tests.
    */
-  public void overrideHostForAuthority(String host) {
+  public OkHttpChannelBuilder overrideHostForAuthority(String host) {
     this.host = host;
+    return this;
   }
 
   /**
-   * Provides a SSLSocketFactory to establish a secure connection. By default TLS is not enabled.
+   * Provides a SSLSocketFactory to establish a secure connection.
    */
   public OkHttpChannelBuilder sslSocketFactory(SSLSocketFactory factory) {
     this.sslSocketFactory = factory;
+    return this;
+  }
+
+  /**
+   * For secure connection, provides a ConnectionSpec to specify Cipher suite and
+   * TLS versions.
+   *
+   * <p>By default OkHttpClientTransport.DEFAULT_CONNECTION_SPEC will be used.
+   */
+  public OkHttpChannelBuilder setConnectionSpec(ConnectionSpec connectionSpec) {
+    this.connectionSpec = connectionSpec;
     return this;
   }
 
@@ -110,8 +125,8 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
   protected ChannelEssentials buildEssentials() {
     final ExecutorService executor = (transportExecutor == null)
         ? SharedResourceHolder.get(DEFAULT_TRANSPORT_THREAD_POOL) : transportExecutor;
-    ClientTransportFactory transportFactory
-        = new OkHttpClientTransportFactory(serverAddress, host, executor, sslSocketFactory);
+    ClientTransportFactory transportFactory = new OkHttpClientTransportFactory(
+        serverAddress, host, executor, sslSocketFactory, connectionSpec);
     Runnable terminationRunnable = null;
     // We shut down the executor only if we created it.
     if (transportExecutor == null) {
