@@ -141,9 +141,9 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
-  protected final void internalSendFrame(WritableBuffer frame, boolean endOfStream) {
+  protected final void internalSendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
     if (frame.readableBytes() > 0) {
-      sendFrame(frame, false);
+      sendFrame(frame, false, endOfStream ? false : flush);
     }
     if (endOfStream) {
       sendTrailers(stashedTrailers, headersSent);
@@ -165,8 +165,9 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    * @param frame a buffer containing the chunk of data to be sent.
    * @param endOfStream if {@code true} indicates that no more data will be sent on the stream by
    *        this endpoint.
+   * @param flush {@code true} if more data may not be arriving soon
    */
-  protected abstract void sendFrame(WritableBuffer frame, boolean endOfStream);
+  protected abstract void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush);
 
   /**
    * Sends trailers to the remote end point. This call implies end of stream.

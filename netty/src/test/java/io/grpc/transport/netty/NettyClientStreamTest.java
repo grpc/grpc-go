@@ -108,7 +108,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     stream().id(STREAM_ID);
     stream.writeMessage(input, input.available(), accepted);
     stream.flush();
-    verify(channel).writeAndFlush(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false));
+    verify(channel).write(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false));
+    verify(channel).flush();
     verify(accepted).run();
   }
 

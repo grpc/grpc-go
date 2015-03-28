@@ -101,7 +101,7 @@ class OutboundFlowController {
     }
   }
 
-  synchronized void data(boolean outFinished, int streamId, Buffer source) {
+  synchronized void data(boolean outFinished, int streamId, Buffer source, boolean flush) {
     Preconditions.checkNotNull(source, "source");
     if (streamId <= 0) {
       throw new IllegalArgumentException("streamId must be > 0");
@@ -115,7 +115,9 @@ class OutboundFlowController {
     if (!framesAlreadyQueued && window >= frame.size()) {
       // Window size is large enough to send entire data frame
       frame.write();
-      flush();
+      if (flush) {
+        flush();
+      }
       return;
     }
 
@@ -124,12 +126,17 @@ class OutboundFlowController {
 
     if (framesAlreadyQueued || window <= 0) {
       // Stream already has frames pending or is stalled, don't send anything now.
+      if (flush) {
+        flush();
+      }
       return;
     }
 
     // Create and send a partial frame up to the window size.
     frame.split(window).write();
-    flush();
+    if (flush) {
+      flush();
+    }
   }
 
   private void flush() {

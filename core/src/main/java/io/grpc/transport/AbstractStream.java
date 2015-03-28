@@ -87,8 +87,8 @@ public abstract class AbstractStream<IdT> implements Stream {
     };
     MessageFramer.Sink outboundFrameHandler = new MessageFramer.Sink() {
       @Override
-      public void deliverFrame(WritableBuffer frame, boolean endOfStream) {
-        internalSendFrame(frame, endOfStream);
+      public void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+        internalSendFrame(frame, endOfStream, flush);
       }
     };
 
@@ -155,8 +155,10 @@ public abstract class AbstractStream<IdT> implements Stream {
    * @param frame a buffer containing the chunk of data to be sent.
    * @param endOfStream if {@code true} indicates that no more data will be sent on the stream by
    *        this endpoint.
+   * @param flush {@code true} if more data may not be arriving soon
    */
-  protected abstract void internalSendFrame(WritableBuffer frame, boolean endOfStream);
+  protected abstract void internalSendFrame(WritableBuffer frame, boolean endOfStream,
+      boolean flush);
 
   /**
    * Handles a message that was just deframed.

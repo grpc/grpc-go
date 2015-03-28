@@ -115,9 +115,12 @@ class NettyClientStream extends Http2ClientStream {
   }
 
   @Override
-  protected void sendFrame(WritableBuffer frame, boolean endOfStream) {
+  protected void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
     ByteBuf bytebuf = ((NettyWritableBuffer) frame).bytebuf();
-    channel.writeAndFlush(new SendGrpcFrameCommand(this, bytebuf, endOfStream));
+    channel.write(new SendGrpcFrameCommand(this, bytebuf, endOfStream));
+    if (flush) {
+      channel.flush();
+    }
   }
 
   @Override

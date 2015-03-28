@@ -183,8 +183,8 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
-  protected final void internalSendFrame(WritableBuffer frame, boolean endOfStream) {
-    sendFrame(frame, endOfStream);
+  protected final void internalSendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+    sendFrame(frame, endOfStream, flush);
   }
 
   /**
@@ -193,8 +193,9 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * @param frame a buffer containing the chunk of data to be sent.
    * @param endOfStream if {@code true} indicates that no more data will be sent on the stream by
    *        this endpoint.
+   * @param flush {@code true} if more data may not be arriving soon
    */
-  protected abstract void sendFrame(WritableBuffer frame, boolean endOfStream);
+  protected abstract void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush);
 
   /**
    * Report stream closure with status to the application layer if not already reported. This method

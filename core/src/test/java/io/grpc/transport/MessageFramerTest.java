@@ -78,7 +78,7 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {3, 14});
     verifyNoMoreInteractions(sink);
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true);
     verifyNoMoreInteractions(sink);
   }
 
@@ -90,7 +90,7 @@ public class MessageFramerTest {
     verifyNoMoreInteractions(sink);
     framer.flush();
     verify(sink).deliverFrame(
-        toWriteBuffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false);
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false, true);
     verifyNoMoreInteractions(sink);
   }
 
@@ -100,14 +100,14 @@ public class MessageFramerTest {
     verifyNoMoreInteractions(sink);
     framer.close();
     verify(sink).deliverFrame(
-        toWriteBuffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true);
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true, true);
     verifyNoMoreInteractions(sink);
   }
 
   @Test
   public void closeWithoutBufferedFrameGivesEmptySink() {
     framer.close();
-    verify(sink).deliverFrame(new ByteWritableBuffer(0), true);
+    verify(sink).deliverFrame(new ByteWritableBuffer(0), true, true);
     verifyNoMoreInteractions(sink);
   }
 
@@ -115,11 +115,11 @@ public class MessageFramerTest {
   public void payloadSplitBetweenSinks() {
     writePayload(framer, new byte[] {3, 14, 1, 5, 9, 2, 6, 5});
     verify(sink).deliverFrame(
-        toWriteBuffer(new byte[] {0, 0, 0, 0, 8, 3, 14, 1, 5, 9, 2, 6}), false);
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 8, 3, 14, 1, 5, 9, 2, 6}), false, false);
     verifyNoMoreInteractions(sink);
 
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {5}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {5}), false, true);
     verifyNoMoreInteractions(sink);
   }
 
@@ -128,11 +128,11 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {3, 14, 1});
     writePayload(framer, new byte[] {3});
     verify(sink).deliverFrame(
-            toWriteBuffer(new byte[] {0, 0, 0, 0, 3, 3, 14, 1, 0, 0, 0, 0}), false);
+            toWriteBuffer(new byte[] {0, 0, 0, 0, 3, 3, 14, 1, 0, 0, 0, 0}), false, false);
     verifyNoMoreInteractions(sink);
 
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {1, 3}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {1, 3}), false, true);
     verifyNoMoreInteractions(sink);
   }
 
@@ -140,7 +140,7 @@ public class MessageFramerTest {
   public void emptyPayloadYieldsFrame() throws Exception {
     writePayload(framer, new byte[0]);
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true);
   }
 
   @Test
@@ -148,7 +148,7 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {3, 14});
     framer.flush();
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true);
     verifyNoMoreInteractions(sink);
   }
 
@@ -158,7 +158,7 @@ public class MessageFramerTest {
     MessageFramer framer = new MessageFramer(sink, allocator, transportFrameSize);
     writePayload(framer, new byte[1000]);
     framer.flush();
-    verify(sink).deliverFrame(frameCaptor.capture(), eq(false));
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
     ByteWritableBuffer buffer = frameCaptor.getValue();
     assertEquals(1005, buffer.size());
 
@@ -177,7 +177,7 @@ public class MessageFramerTest {
             new MessageFramer(sink, allocator, transportFrameSize, Compression.GZIP);
     writePayload(framer, new byte[1000]);
     framer.flush();
-    verify(sink).deliverFrame(frameCaptor.capture(), eq(false));
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
     ByteWritableBuffer buffer = frameCaptor.getValue();
     // It should have compressed very well.
     assertTrue(buffer.size() < 100);

@@ -61,8 +61,9 @@ public class MessageFramer {
      *
      * @param frame the contents of the frame to deliver
      * @param endOfStream whether the frame is the last one for the GRPC stream
+     * @param flush {@code true} if more data may not be arriving soon
      */
-    void deliverFrame(WritableBuffer frame, boolean endOfStream);
+    void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush);
   }
 
   private static final int HEADER_LENGTH = 5;
@@ -178,7 +179,7 @@ public class MessageFramer {
   private void writeRaw(byte[] b, int off, int len) {
     while (len > 0) {
       if (buffer != null && buffer.writableBytes() == 0) {
-        commitToSink(false);
+        commitToSink(false, false);
       }
       if (buffer == null) {
         buffer = bufferAllocator.allocate(maxFrameSize);
@@ -195,7 +196,7 @@ public class MessageFramer {
    */
   public void flush() {
     if (buffer != null && buffer.readableBytes() > 0) {
-      commitToSink(false);
+      commitToSink(false, true);
     }
   }
 
@@ -213,7 +214,7 @@ public class MessageFramer {
    */
   public void close() {
     if (!isClosed()) {
-      commitToSink(true);
+      commitToSink(true, true);
       closed = true;
     }
   }
@@ -230,11 +231,11 @@ public class MessageFramer {
     }
   }
 
-  private void commitToSink(boolean endOfStream) {
+  private void commitToSink(boolean endOfStream, boolean flush) {
     if (buffer == null) {
       buffer = bufferAllocator.allocate(0);
     }
-    sink.deliverFrame(buffer, endOfStream);
+    sink.deliverFrame(buffer, endOfStream, flush);
     buffer = null;
   }
 
