@@ -208,6 +208,7 @@ public class OkHttpClientTransport implements ClientTransport {
           // We assume the sslSocketFactory will verify the server hostname.
           socket = sslSocketFactory.createSocket(socket, authorityHost, address.getPort(), true);
         }
+        socket.setTcpNoDelay(true);
         source = Okio.buffer(Okio.source(socket));
         sink = Okio.buffer(Okio.sink(socket));
       } catch (IOException e) {
