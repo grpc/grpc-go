@@ -39,15 +39,12 @@ import (
 	"github.com/bradfitz/http2"
 )
 
-// TODO(zhaoq): Make the following configurable.
 const (
+	// The default value of flow control window size in HTTP2 spec.
+	defaultWindowSize = 65535
 	// The initial window size for flow control.
-	initialWindowSize     = 65535 // for an RPC
-	initialConnWindowSize = 65535 // for a connection
-	// Window update is only sent when the inbound quota reaches
-	// this threshold. Used to reduce the flow control traffic.
-	windowUpdateThreshold     = 16384 // for an RPC
-	connWindowUpdateThreshold = 16384 // for a connection
+	initialWindowSize     = defaultWindowSize      // for an RPC
+	initialConnWindowSize = defaultWindowSize * 16 // for a connection
 )
 
 // The following defines various control items which could flow through
@@ -125,6 +122,27 @@ func (qb *quotaPool) cancel() {
 	select {
 	case n := <-qb.c:
 		qb.quota += n
+	default:
+	}
+}
+
+// reset cancels the pending quota sent on acquired, incremented by v and sends
+// it back on acquire.
+func (qb *quotaPool) reset(v int) {
+	qb.mu.Lock()
+	defer qb.mu.Unlock()
+	select {
+	case n := <-qb.c:
+		qb.quota += n
+	default:
+	}
+	qb.quota += v
+	if qb.quota <= 0 {
+		return
+	}
+	select {
+	case qb.c <- qb.quota:
+		qb.quota = 0
 	default:
 	}
 }
