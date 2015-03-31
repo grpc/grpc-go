@@ -52,6 +52,9 @@ task execute(dependsOn: classes, type:JavaExec) {
     } 
 }
 
+protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
+generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
+
 // Allow intellij projects to refer to generated-sources
 idea {
     module {
