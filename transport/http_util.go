@@ -55,7 +55,7 @@ const (
 	// http://http2.github.io/http2-spec/#SettingValues
 	http2InitHeaderTableSize = 4096
 	// http2IOBufSize specifies the buffer size for sending frames.
-	http2IOBufSize           = 32 * 1024
+	http2IOBufSize = 32 * 1024
 )
 
 var (

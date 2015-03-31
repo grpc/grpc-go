@@ -94,7 +94,7 @@ type http2Client struct {
 	// The accumulated inbound quota pending for updating the peer.
 	updateQuota uint32
 	// the per-stream outbound flow control window size set by the peer.
-	streamSendQuota  uint32
+	streamSendQuota uint32
 }
 
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
@@ -155,21 +155,21 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 		target: addr,
 		conn:   conn,
 		// The client initiated stream id is odd starting from 1.
-		nextID:        1,
-		writableChan:  make(chan int, 1),
-		shutdownChan:  make(chan struct{}),
-		errorChan:     make(chan struct{}),
-		framer:        framer,
-		hBuf:          &buf,
-		hEnc:          hpack.NewEncoder(&buf),
-		controlBuf:    newRecvBuffer(),
-		recvQuota:     initialConnWindowSize,
-		sendQuotaPool: newQuotaPool(defaultWindowSize),
-		scheme:        scheme,
-		state:         reachable,
-		activeStreams: make(map[uint32]*Stream),
-		maxStreams:    math.MaxUint32,
-		authCreds:     opts.AuthOptions,
+		nextID:          1,
+		writableChan:    make(chan int, 1),
+		shutdownChan:    make(chan struct{}),
+		errorChan:       make(chan struct{}),
+		framer:          framer,
+		hBuf:            &buf,
+		hEnc:            hpack.NewEncoder(&buf),
+		controlBuf:      newRecvBuffer(),
+		recvQuota:       initialConnWindowSize,
+		sendQuotaPool:   newQuotaPool(defaultWindowSize),
+		scheme:          scheme,
+		state:           reachable,
+		activeStreams:   make(map[uint32]*Stream),
+		maxStreams:      math.MaxUint32,
+		authCreds:       opts.AuthOptions,
 		streamSendQuota: defaultWindowSize,
 	}
 	go t.controller()

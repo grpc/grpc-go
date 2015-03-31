@@ -86,7 +86,7 @@ type http2Server struct {
 	// The accumulated inbound quota pending for updating the peer.
 	updateQuota uint32
 	// the per-stream outbound flow control window size set by the peer.
-	streamSendQuota  uint32
+	streamSendQuota uint32
 }
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
@@ -118,18 +118,18 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32) (_ ServerTransport, err er
 	}
 	var buf bytes.Buffer
 	t := &http2Server{
-		conn:          conn,
-		framer:        framer,
-		hBuf:          &buf,
-		hEnc:          hpack.NewEncoder(&buf),
-		maxStreams:    maxStreams,
-		controlBuf:    newRecvBuffer(),
-		recvQuota:     initialConnWindowSize,
-		sendQuotaPool: newQuotaPool(defaultWindowSize),
-		state:         reachable,
-		writableChan:  make(chan int, 1),
-		shutdownChan:  make(chan struct{}),
-		activeStreams: make(map[uint32]*Stream),
+		conn:            conn,
+		framer:          framer,
+		hBuf:            &buf,
+		hEnc:            hpack.NewEncoder(&buf),
+		maxStreams:      maxStreams,
+		controlBuf:      newRecvBuffer(),
+		recvQuota:       initialConnWindowSize,
+		sendQuotaPool:   newQuotaPool(defaultWindowSize),
+		state:           reachable,
+		writableChan:    make(chan int, 1),
+		shutdownChan:    make(chan struct{}),
+		activeStreams:   make(map[uint32]*Stream),
 		streamSendQuota: defaultWindowSize,
 	}
 	go t.controller()
@@ -257,10 +257,10 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 			t.maxStreamID = id
 			buf := newRecvBuffer()
 			curStream = &Stream{
-				id:            frame.Header().StreamID,
-				st:            t,
-				buf:           buf,
-				recvQuota:     initialWindowSize,
+				id:        frame.Header().StreamID,
+				st:        t,
+				buf:       buf,
+				recvQuota: initialWindowSize,
 			}
 			endStream := frame.Header().Flags.Has(http2.FlagHeadersEndStream)
 			curStream = t.operateHeaders(hDec, curStream, frame, endStream, handle, &wg)
