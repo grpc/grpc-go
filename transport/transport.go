@@ -175,7 +175,7 @@ type Stream struct {
 
 	// The inbound quota being set
 	recvQuota uint32
-	// The accumulated inbound quota pending for updating the peer.
+	// The accumulated inbound quota pending for window update.
 	updateQuota uint32
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.

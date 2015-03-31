@@ -91,7 +91,7 @@ type http2Client struct {
 	activeStreams map[uint32]*Stream
 	// The max number of concurrent streams
 	maxStreams uint32
-	// The accumulated inbound quota pending for updating the peer.
+	// The accumulated inbound quota pending for window update.
 	updateQuota uint32
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
