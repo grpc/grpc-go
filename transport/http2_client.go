@@ -219,6 +219,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
+		t.writableChan <- 0
 		return nil, StreamErrorf(codes.Unavailable, "transport: failed to create new stream because the limit has been reached.")
 	}
 	s := t.newStream(ctx, callHdr)
