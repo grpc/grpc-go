@@ -51,8 +51,8 @@ import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.codec.http2.Http2StreamRemovalPolicy;
+import io.netty.handler.logging.LogLevel;
 import io.netty.handler.ssl.SslContext;
-import io.netty.util.internal.logging.InternalLogLevel;
 
 import javax.annotation.Nullable;
 
@@ -60,7 +60,7 @@ import javax.annotation.Nullable;
  * The Netty-based server transport.
  */
 class NettyServerTransport extends AbstractService {
-  private static final Http2FrameLogger frameLogger = new Http2FrameLogger(InternalLogLevel.DEBUG); 
+  private static final Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG); 
   private final Channel channel;
   private final ServerListener serverListener;
   private final SslContext sslContext;

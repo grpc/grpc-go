@@ -63,8 +63,8 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.codec.http2.Http2StreamRemovalPolicy;
+import io.netty.handler.logging.LogLevel;
 import io.netty.handler.ssl.SslContext;
-import io.netty.util.internal.logging.InternalLogLevel;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -334,7 +334,7 @@ class NettyClientTransport implements ClientTransport {
       Http2FrameReader frameReader = new DefaultHttp2FrameReader();
       Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
 
-      Http2FrameLogger frameLogger = new Http2FrameLogger(InternalLogLevel.DEBUG);
+      Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG);
       frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
       frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
 

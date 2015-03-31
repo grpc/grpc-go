@@ -102,13 +102,13 @@ class NettyClientHandler extends Http2ConnectionHandler {
     initListener();
 
     // Disallow stream creation by the server.
-    connection.remote().maxStreams(0);
+    connection.remote().maxActiveStreams(0);
     connection.local().allowPushTo(false);
 
     // Observe the HTTP/2 connection for events.
     connection.addListener(new Http2ConnectionAdapter() {
       @Override
-      public void streamInactive(Http2Stream stream) {
+      public void onStreamClosed(Http2Stream stream) {
         // Whenever a stream has been closed, try to create a pending stream to fill its place.
         createPendingStreams();
       }
@@ -364,12 +364,12 @@ class NettyClientHandler extends Http2ConnectionHandler {
         return;
       }
 
-      if (connection.isGoAway()) {
+      if (connection.goAwaySent() || connection.goAwayReceived()) {
         failPendingStreams(goAwayStatus);
         return;
       }
 
-      if (!local.acceptingNewStreams()) {
+      if (!local.canCreateStream()) {
         // We're bumping up against the MAX_CONCURRENT_STEAMS threshold for this endpoint. Need to
         // wait until the endpoint is accepting new streams.
         return;

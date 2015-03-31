@@ -177,7 +177,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
   @Test
   public void cancelBeforeStreamAssignedShouldSucceed() throws Exception {
-    handler.connection().local().maxStreams(0);
+    handler.connection().local().maxActiveStreams(0);
     handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream), promise);
     mockContext();
     verify(stream, never()).id(any(Integer.class));
