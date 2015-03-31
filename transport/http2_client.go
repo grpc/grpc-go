@@ -198,14 +198,11 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			return nil, ContextErr(context.DeadlineExceeded)
 		}
 	}
-	var authData map[string]string
+	authData := make(map[string]string)
 	for _, c := range t.authCreds {
 		data, err := c.GetRequestMetadata(ctx)
 		if err != nil {
 			return nil, StreamErrorf(codes.InvalidArgument, "transport: %v", err)
-		}
-		if authData == nil && data != nil {
-			authData = make(map[string]string)
 		}
 		for k, v := range data {
 			authData[k] = v
