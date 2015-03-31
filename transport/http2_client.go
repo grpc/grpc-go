@@ -198,18 +198,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			return nil, ContextErr(context.DeadlineExceeded)
 		}
 	}
-	var authData map[string]string
-	for _, c := range t.authCreds {
-		authData, err = c.GetRequestMetadata(ctx)
-		select {
-		case <-ctx.Done():
-			return nil, ContextErr(ctx.Err())
-		default:
-		}
-		if err != nil {
-			return nil, StreamErrorf(codes.InvalidArgument, "transport: %v", err)
-		}
-	}
 	if _, err := wait(ctx, t.shutdownChan, t.writableChan); err != nil {
 		return nil, err
 	}
@@ -226,8 +214,13 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if timeout > 0 {
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: timeoutEncode(timeout)})
 	}
-	for k, v := range authData {
-		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
+	for _, c := range t.authCreds {
+		if authData, err := c.GetRequestMetadata(ctx); err != nil {
+			return nil, StreamErrorf(codes.InvalidArgument, "transport: %v", err)
+		}
+		for k, v := range authData {
+			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
+		}
 	}
 	var (
 		hasMD      bool
