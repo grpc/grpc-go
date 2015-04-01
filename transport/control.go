@@ -60,7 +60,7 @@ func (windowUpdate) isItem() bool {
 }
 
 type settings struct {
-	ack bool
+	ack     bool
 	setting []http2.Setting
 }
 

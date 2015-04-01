@@ -85,11 +85,18 @@ type Server struct {
 }
 
 type options struct {
+	codec                Codec
 	maxConcurrentStreams uint32
 }
 
 // A ServerOption sets options.
 type ServerOption func(*options)
+
+func CustomCodec(codec Codec) ServerOption {
+	return func(o *options) {
+		o.codec = codec
+	}
+}
 
 // MaxConcurrentStreams returns an Option that will apply a limit on the number
 // of concurrent streams to each ServerTransport.
@@ -105,6 +112,10 @@ func NewServer(opt ...ServerOption) *Server {
 	var opts options
 	for _, o := range opt {
 		o(&opts)
+	}
+	if opts.codec == nil {
+		// Set the default codec.
+		opts.codec = protoCodec{}
 	}
 	return &Server{
 		lis:   make(map[net.Listener]bool),
@@ -203,7 +214,7 @@ func (s *Server) Serve(lis net.Listener) error {
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, pf payloadFormat, opts *transport.Options) error {
-	p, err := encode(protoCodec{}, msg, pf)
+	p, err := encode(s.opts.codec, msg, pf)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program
@@ -283,9 +294,10 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc) {
 	ss := &serverStream{
-		t: t,
-		s: stream,
-		p: &parser{s: stream},
+		t:     t,
+		s:     stream,
+		p:     &parser{s: stream},
+		codec: s.opts.codec,
 	}
 	if appErr := sd.Handler(srv.server, ss); appErr != nil {
 		if err, ok := appErr.(rpcError); ok {
