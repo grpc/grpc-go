@@ -137,11 +137,12 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 		return nil, ConnectionErrorf("transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
 	}
 	framer := newFramer(conn)
-	var setting http2.Setting
 	if initialWindowSize != defaultWindowSize {
-		setting = http2.Setting{http2.SettingInitialWindowSize, uint32(initialWindowSize)}
+		err = framer.writeSettings(true, http2.Setting{http2.SettingInitialWindowSize, uint32(initialWindowSize)})
+	} else {
+		err = framer.writeSettings(true)
 	}
-	if err := framer.writeSettings(true, setting); err != nil {
+	if err != nil {
 		return nil, ConnectionErrorf("transport: %v", err)
 	}
 	// Adjust the connection flow control window if needed.
