@@ -66,9 +66,9 @@ type dialOptions struct {
 type DialOption func(*dialOptions)
 
 // WithCodec returns a DialOption which sets a codec for message marshaling and unmarshaling.
-func WithCodec(codec Codec) DialOption {
+func WithCodec(c Codec) DialOption {
 	return func(o *dialOptions) {
-		o.codec = codec
+		o.codec = c
 	}
 }
 
@@ -110,7 +110,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	}
 	if cc.dopts.codec == nil {
 		// Set the default codec.
-		cc.dopts.codec = &protoCodec{}
+		cc.dopts.codec = protoCodec{}
 	}
 	if err := cc.resetTransport(false); err != nil {
 		return nil, err
