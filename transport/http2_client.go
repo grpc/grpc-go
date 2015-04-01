@@ -524,6 +524,9 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 }
 
 func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
+	if f.IsAck() {
+		return
+	}
 	f.ForeachSetting(func(s http2.Setting) error {
 		if v, ok := f.Value(s.ID); ok {
 			t.mu.Lock()
@@ -541,6 +544,7 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 		}
 		return nil
 	})
+	t.controlBuf.put(&settings{ack: true})
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
@@ -680,7 +684,11 @@ func (t *http2Client) controller() {
 				case *windowUpdate:
 					t.framer.writeWindowUpdate(true, i.streamID, i.increment)
 				case *settings:
-					t.framer.writeSettings(true, http2.Setting{i.id, i.val})
+					if i.ack {
+						t.framer.writeSettingsAck(true)
+					} else {
+						t.framer.writeSettings(true, i.setting...)
+					}
 				case *resetStream:
 					t.framer.writeRSTStream(true, i.streamID, i.code)
 				case *flushIO:

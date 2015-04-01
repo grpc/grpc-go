@@ -60,8 +60,8 @@ func (windowUpdate) isItem() bool {
 }
 
 type settings struct {
-	id  http2.SettingID
-	val uint32
+	ack bool
+	setting []http2.Setting
 }
 
 func (settings) isItem() bool {
