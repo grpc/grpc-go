@@ -55,29 +55,43 @@ var (
 	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
 )
 
+// dialOptions configure a Dial call. dialOptions are set by the DialOption
+// values passed to Dial.
+type dialOptions struct {
+	codec Codec
+	copts transport.ConnectOptions
+}
+
 // DialOption configures how we set up the connection.
-type DialOption func(*transport.DialOptions)
+type DialOption func(*dialOptions)
+
+// WithCodec returns a DialOption which sets a codec for message marshaling and unmarshaling.
+func WithCodec(codec Codec) DialOption {
+	return func(o *dialOptions) {
+		o.codec = codec
+	}
+}
 
 // WithTransportCredentials returns a DialOption which configures a
 // connection level security credentials (e.g., TLS/SSL).
 func WithTransportCredentials(creds credentials.TransportAuthenticator) DialOption {
-	return func(o *transport.DialOptions) {
-		o.AuthOptions = append(o.AuthOptions, creds)
+	return func(o *dialOptions) {
+		o.copts.AuthOptions = append(o.copts.AuthOptions, creds)
 	}
 }
 
 // WithPerRPCCredentials returns a DialOption which sets
 // credentials which will place auth state on each outbound RPC.
 func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
-	return func(o *transport.DialOptions) {
-		o.AuthOptions = append(o.AuthOptions, creds)
+	return func(o *dialOptions) {
+		o.copts.AuthOptions = append(o.copts.AuthOptions, creds)
 	}
 }
 
 // WithTimeout returns a DialOption that configures a timeout for dialing a client connection.
 func WithTimeout(d time.Duration) DialOption {
-	return func(o *transport.DialOptions) {
-		o.Timeout = d
+	return func(o *dialOptions) {
+		o.copts.Timeout = d
 	}
 }
 
@@ -94,6 +108,10 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
+	if cc.dopts.codec == nil {
+		// Set the default codec.
+		cc.dopts.codec = &protoCodec{}
+	}
 	if err := cc.resetTransport(false); err != nil {
 		return nil, err
 	}
@@ -106,7 +124,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // ClientConn represents a client connection to an RPC service.
 type ClientConn struct {
 	target       string
-	dopts        transport.DialOptions
+	dopts        dialOptions
 	shutdownChan chan struct{}
 
 	mu sync.Mutex
@@ -140,23 +158,23 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			t.Close()
 		}
 		// Adjust timeout for the current try.
-		dopts := cc.dopts
-		if dopts.Timeout < 0 {
+		copts := cc.dopts.copts
+		if copts.Timeout < 0 {
 			cc.Close()
 			return ErrClientConnTimeout
 		}
-		if dopts.Timeout > 0 {
-			dopts.Timeout -= time.Since(start)
-			if dopts.Timeout <= 0 {
+		if copts.Timeout > 0 {
+			copts.Timeout -= time.Since(start)
+			if copts.Timeout <= 0 {
 				cc.Close()
 				return ErrClientConnTimeout
 			}
 		}
-		newTransport, err := transport.NewClientTransport(cc.target, &dopts)
+		newTransport, err := transport.NewClientTransport(cc.target, &copts)
 		if err != nil {
 			sleepTime := backoff(retries)
 			// Fail early before falling into sleep.
-			if cc.dopts.Timeout > 0 && cc.dopts.Timeout < sleepTime+time.Since(start) {
+			if cc.dopts.copts.Timeout > 0 && cc.dopts.copts.Timeout < sleepTime+time.Since(start) {
 				cc.Close()
 				return ErrClientConnTimeout
 			}

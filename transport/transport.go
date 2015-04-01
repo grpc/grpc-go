@@ -313,16 +313,16 @@ func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32) (Serv
 	return newHTTP2Server(conn, maxStreams)
 }
 
-// DialOptions covers all relevant options for dialing a server.
-type DialOptions struct {
+// ConnectOptions covers all relevant options for dialing a server.
+type ConnectOptions struct {
 	Protocol    string
 	AuthOptions []credentials.Credentials
 	Timeout     time.Duration
 }
 
-// NewClientTransport establishes the transport with the required DialOptions
+// NewClientTransport establishes the transport with the required ConnectOptions
 // and returns it to the caller.
-func NewClientTransport(target string, opts *DialOptions) (ClientTransport, error) {
+func NewClientTransport(target string, opts *ConnectOptions) (ClientTransport, error) {
 	return newHTTP2Client(target, opts)
 }
 

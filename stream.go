@@ -66,7 +66,7 @@ type Stream interface {
 	// side. On server side, it simply returns the error to the caller.
 	// SendMsg is called by generated code.
 	SendMsg(m interface{}) error
-	// RecvMsg blocks until it receives a proto message or the stream is
+	// RecvMsg blocks until it receives a message or the stream is
 	// done. On client side, it returns io.EOF when the stream is done. On
 	// any other error, it aborts the streama nd returns an RPC status. On
 	// server side, it simply returns the error to the caller.
@@ -116,6 +116,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		s:    s,
 		p:    &parser{s: s},
 		desc: desc,
+		codec: cc.dopts.codec,
 	}, nil
 }
 
@@ -125,6 +126,7 @@ type clientStream struct {
 	s    *transport.Stream
 	p    *parser
 	desc *StreamDesc
+	codec Codec
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -155,7 +157,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 		err = toRPCErr(err)
 	}()
-	out, err := encode(protoCodec{}, m, compressionNone)
+	out, err := encode(cs.codec, m, compressionNone)
 	if err != nil {
 		return transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
@@ -163,13 +165,13 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
-	err = recv(cs.p, protoCodec{}, m)
+	err = recv(cs.p, cs.codec, m)
 	if err == nil {
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
 		}
 		// Special handling for client streaming rpc.
-		err = recv(cs.p, protoCodec{}, m)
+		err = recv(cs.p, cs.codec, m)
 		cs.t.CloseStream(cs.s, err)
 		if err == nil {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
@@ -224,6 +226,7 @@ type serverStream struct {
 	t          transport.ServerTransport
 	s          *transport.Stream
 	p          *parser
+	codec      Codec
 	statusCode codes.Code
 	statusDesc string
 }
@@ -245,7 +248,7 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 }
 
 func (ss *serverStream) SendMsg(m interface{}) error {
-	out, err := encode(protoCodec{}, m, compressionNone)
+	out, err := encode(ss.codec, m, compressionNone)
 	if err != nil {
 		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 		return err
@@ -254,5 +257,5 @@ func (ss *serverStream) SendMsg(m interface{}) error {
 }
 
 func (ss *serverStream) RecvMsg(m interface{}) error {
-	return recv(ss.p, protoCodec{}, m)
+	return recv(ss.p, ss.codec, m)
 }
