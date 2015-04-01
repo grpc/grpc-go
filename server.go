@@ -85,7 +85,7 @@ type Server struct {
 }
 
 type options struct {
-	codec Codec
+	codec                Codec
 	maxConcurrentStreams uint32
 }
 
@@ -294,9 +294,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc) {
 	ss := &serverStream{
-		t: t,
-		s: stream,
-		p: &parser{s: stream},
+		t:     t,
+		s:     stream,
+		p:     &parser{s: stream},
 		codec: s.opts.codec,
 	}
 	if appErr := sd.Handler(srv.server, ss); appErr != nil {
