@@ -76,6 +76,8 @@ type http2Client struct {
 	// controlBuf delivers all the control related tasks (e.g., window
 	// updates, reset streams, and various settings) to the controller.
 	controlBuf *recvBuffer
+	// The inbound quota being set
+	recvQuota uint32
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
 
@@ -89,8 +91,10 @@ type http2Client struct {
 	activeStreams map[uint32]*Stream
 	// The max number of concurrent streams
 	maxStreams uint32
-	// Inbound quota for flow control
-	recvQuota int
+	// The accumulated inbound quota pending for window update.
+	updateQuota uint32
+	// the per-stream outbound flow control window size set by the peer.
+	streamSendQuota uint32
 }
 
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
@@ -133,28 +137,40 @@ func newHTTP2Client(addr string, opts *DialOptions) (_ ClientTransport, err erro
 		return nil, ConnectionErrorf("transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
 	}
 	framer := newFramer(conn)
-	if err := framer.writeSettings(true); err != nil {
+	var setting http2.Setting
+	if initialWindowSize != defaultWindowSize {
+		setting = http2.Setting{http2.SettingInitialWindowSize, uint32(initialWindowSize)}
+	}
+	if err := framer.writeSettings(true, setting); err != nil {
 		return nil, ConnectionErrorf("transport: %v", err)
+	}
+	// Adjust the connection flow control window if needed.
+	if delta := uint32(initialConnWindowSize - defaultWindowSize); delta > 0 {
+		if err := framer.writeWindowUpdate(true, 0, delta); err != nil {
+			return nil, ConnectionErrorf("transport: %v", err)
+		}
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
 		target: addr,
 		conn:   conn,
 		// The client initiated stream id is odd starting from 1.
-		nextID:        1,
-		writableChan:  make(chan int, 1),
-		shutdownChan:  make(chan struct{}),
-		errorChan:     make(chan struct{}),
-		framer:        framer,
-		hBuf:          &buf,
-		hEnc:          hpack.NewEncoder(&buf),
-		controlBuf:    newRecvBuffer(),
-		sendQuotaPool: newQuotaPool(initialConnWindowSize),
-		scheme:        scheme,
-		state:         reachable,
-		activeStreams: make(map[uint32]*Stream),
-		maxStreams:    math.MaxUint32,
-		authCreds:     opts.AuthOptions,
+		nextID:          1,
+		writableChan:    make(chan int, 1),
+		shutdownChan:    make(chan struct{}),
+		errorChan:       make(chan struct{}),
+		framer:          framer,
+		hBuf:            &buf,
+		hEnc:            hpack.NewEncoder(&buf),
+		controlBuf:      newRecvBuffer(),
+		recvQuota:       initialConnWindowSize,
+		sendQuotaPool:   newQuotaPool(defaultWindowSize),
+		scheme:          scheme,
+		state:           reachable,
+		activeStreams:   make(map[uint32]*Stream),
+		maxStreams:      math.MaxUint32,
+		authCreds:       opts.AuthOptions,
+		streamSendQuota: defaultWindowSize,
 	}
 	go t.controller()
 	t.writableChan <- 0
@@ -172,12 +188,13 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		id:            t.nextID,
 		method:        callHdr.Method,
 		buf:           newRecvBuffer(),
-		sendQuotaPool: newQuotaPool(initialWindowSize),
+		recvQuota:     initialWindowSize,
+		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
 		headerChan:    make(chan struct{}),
 	}
 	t.nextID += 2
 	s.windowHandler = func(n int) {
-		t.addRecvQuota(s, n)
+		t.updateWindow(s, uint32(n))
 	}
 	// Make a stream be able to cancel the pending operations by itself.
 	s.ctx, s.cancel = context.WithCancel(ctx)
@@ -453,22 +470,22 @@ func (t *http2Client) getStream(f http2.Frame) (*Stream, bool) {
 	return nil, false
 }
 
-// addRecvQuota adjusts the inbound quota for the stream and the transport.
+// updateWindow adjusts the inbound quota for the stream and the transport.
 // Window updates will deliver to the controller for sending when
 // the cumulative quota exceeds the corresponding threshold.
-func (t *http2Client) addRecvQuota(s *Stream, n int) {
+func (t *http2Client) updateWindow(s *Stream, n uint32) {
 	t.mu.Lock()
-	t.recvQuota += n
-	if t.recvQuota >= connWindowUpdateThreshold {
-		t.controlBuf.put(&windowUpdate{0, uint32(t.recvQuota)})
-		t.recvQuota = 0
+	t.updateQuota += n
+	if t.updateQuota >= t.recvQuota/4 {
+		t.controlBuf.put(&windowUpdate{0, t.updateQuota})
+		t.updateQuota = 0
 	}
 	t.mu.Unlock()
 
-	s.recvQuota += n
-	if s.recvQuota >= windowUpdateThreshold {
-		t.controlBuf.put(&windowUpdate{s.id, uint32(s.recvQuota)})
-		s.recvQuota = 0
+	s.updateQuota += n
+	if s.updateQuota >= s.recvQuota/4 {
+		t.controlBuf.put(&windowUpdate{s.id, s.updateQuota})
+		s.updateQuota = 0
 	}
 }
 
@@ -506,11 +523,23 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 }
 
 func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
-	if v, ok := f.Value(http2.SettingMaxConcurrentStreams); ok {
-		t.mu.Lock()
-		t.maxStreams = v
-		t.mu.Unlock()
-	}
+	f.ForeachSetting(func(s http2.Setting) error {
+		if v, ok := f.Value(s.ID); ok {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+			switch s.ID {
+			case http2.SettingMaxConcurrentStreams:
+				t.maxStreams = v
+			case http2.SettingInitialWindowSize:
+				for _, s := range t.activeStreams {
+					// Adjust the sending quota for each s.
+					s.sendQuotaPool.reset(int(v - t.streamSendQuota))
+				}
+				t.streamSendQuota = v
+			}
+		}
+		return nil
+	})
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {

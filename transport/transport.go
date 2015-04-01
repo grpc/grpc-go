@@ -173,8 +173,10 @@ type Stream struct {
 	buf    *recvBuffer
 	dec    io.Reader
 
-	// Inbound quota for flow control
-	recvQuota int
+	// The inbound quota being set
+	recvQuota uint32
+	// The accumulated inbound quota pending for window update.
+	updateQuota uint32
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.
 	windowHandler func(int)
