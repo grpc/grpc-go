@@ -29,7 +29,7 @@
 
 syntax = "proto3";
 
-package grpc.example.routeguide;
+package routeguide;
 
 option java_multiple_files = true;
 option java_package = "io.grpc.examples.routeguide";
