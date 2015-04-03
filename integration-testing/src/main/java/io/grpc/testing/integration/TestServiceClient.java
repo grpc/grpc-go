@@ -37,12 +37,9 @@ import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
 import io.netty.handler.ssl.SslContext;
 
-import java.io.File;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-
-import javax.net.ssl.SSLException;
 
 /**
  * Application that starts a client for the {@link TestServiceGrpc.TestService} and runs through a

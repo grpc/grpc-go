@@ -38,8 +38,6 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import com.google.common.base.Preconditions;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;

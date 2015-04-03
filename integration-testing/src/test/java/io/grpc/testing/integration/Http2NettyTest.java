@@ -32,7 +32,6 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ChannelImpl;
-import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.netty.NettyServerBuilder;
 import io.netty.handler.ssl.SslContext;

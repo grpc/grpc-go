@@ -37,7 +37,6 @@ import com.google.common.util.concurrent.Service;
 
 import io.grpc.AbstractServerBuilder;
 import io.grpc.HandlerRegistry;
-import io.grpc.ServerImpl;
 import io.grpc.SharedResourceHolder;
 import io.grpc.transport.ServerListener;
 import io.netty.channel.EventLoopGroup;

@@ -38,7 +38,6 @@ import static io.grpc.testing.integration.Util.loadCert;
 import static java.lang.Math.max;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.MoreExecutors;
 
 import grpc.testing.Qpstest.PayloadType;
 import grpc.testing.TestServiceGrpc;
@@ -58,7 +57,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;

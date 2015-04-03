@@ -45,9 +45,7 @@ import static grpc.testing.Qpstest.StreamingOutputCallRequest;
 import static grpc.testing.Qpstest.StreamingOutputCallResponse;
 import static io.grpc.testing.integration.Util.loadCert;
 import static io.grpc.testing.integration.Util.pickUnusedPort;
-import static java.lang.Math.max;
 
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
 import grpc.testing.Qpstest;
@@ -56,8 +54,6 @@ import io.grpc.ServerImpl;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import io.grpc.transport.netty.NettyServerBuilder;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 
 import java.io.File;
