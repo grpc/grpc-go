@@ -120,13 +120,13 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
    * <p>The server won't take ownership of the given EventLoopGroup. It's caller's responsibility
    * to shut it down when it's desired.
    *
-   * <p>Grpc uses non-daemon {@link Thread}s by default and thus a {@link ServerImpl} will
+   * <p>Grpc uses non-daemon {@link Thread}s by default and thus a {@link io.grpc.ServerImpl} will
    * continue to run even after the main thread has terminated. However, users have to be cautious
    * when providing their own {@link EventLoopGroup}s.
    * For example, Netty's {@link EventLoopGroup}s use daemon threads by default
    * and thus an application with only daemon threads running besides the main thread will exit as
    * soon as the main thread completes.
-   * A simple solution to this problem is to call {@link ServerImpl#awaitTerminated()} to
+   * A simple solution to this problem is to call {@link io.grpc.ServerImpl#awaitTerminated()} to
    * keep the main thread alive until the server has terminated.
    */
   public NettyServerBuilder bossEventLoopGroup(EventLoopGroup group) {
@@ -143,13 +143,13 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
    * <p>The server won't take ownership of the given EventLoopGroup. It's caller's responsibility
    * to shut it down when it's desired.
    *
-   * <p>Grpc uses non-daemon {@link Thread}s by default and thus a {@link ServerImpl} will
+   * <p>Grpc uses non-daemon {@link Thread}s by default and thus a {@link io.grpc.ServerImpl} will
    * continue to run even after the main thread has terminated. However, users have to be cautious
    * when providing their own {@link EventLoopGroup}s.
    * For example, Netty's {@link EventLoopGroup}s use daemon threads by default
    * and thus an application with only daemon threads running besides the main thread will exit as
    * soon as the main thread completes.
-   * A simple solution to this problem is to call {@link ServerImpl#awaitTerminated()} to
+   * A simple solution to this problem is to call {@link io.grpc.ServerImpl#awaitTerminated()} to
    * keep the main thread alive until the server has terminated.
    */
   public NettyServerBuilder workerEventLoopGroup(EventLoopGroup group) {
