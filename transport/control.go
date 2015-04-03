@@ -153,18 +153,28 @@ func (qb *quotaPool) acquire() <-chan int {
 	return qb.c
 }
 
+// inFlow deals with inbound flow control
 type inFlow struct {
+	// The inbound flow control limit for pending data.
 	limit uint32
-	conn  *inFlow
+	// conn points to the shared connection-level inFlow that is shared
+	// by all streams on that conn. It is nil for the inFlow on the conn
+	// directly.
+	conn *inFlow
 
-	mu          sync.Mutex
+	mu sync.Mutex
+	// pendingData is the overall data which have been received but not been
+	// fully consumed (either pending for application to read or pending for
+	// window update).
 	pendingData uint32
-	// The amount of data user has consumed but grpc has not sent window update
-	// for them. Used to reduce window update frequency. It is always part of
-	// pendingData.
+	// The amount of data the application has consumed but grpc has not sent
+	// window update for them. Used to reduce window update frequency. It is
+	// always part of pendingData.
 	pendingUpdate uint32
 }
 
+// onData is invoked when some data frame is received. It increments not only its
+// own pendingData but also that of the associated connection-level flow.
 func (f *inFlow) onData(n uint32) error {
 	if n == 0 {
 		return nil
@@ -183,6 +193,7 @@ func (f *inFlow) onData(n uint32) error {
 	return nil
 }
 
+// onRead is invoked when the application reads the data.
 func (f *inFlow) onRead(n uint32) uint32 {
 	if n == 0 {
 		return 0
@@ -199,6 +210,8 @@ func (f *inFlow) onRead(n uint32) uint32 {
 	return 0
 }
 
+// restoreConn is invoked when a stream is terminated. It removes its stake in
+// the connection-level flow and resets its own state.
 func (f *inFlow) restoreConn() uint32 {
 	if f.conn == nil {
 		return 0
