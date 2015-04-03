@@ -49,10 +49,10 @@ import javax.annotation.concurrent.Immutable;
  * information: {@code Status.NOT_FOUND.withDescription("Could not find 'important_file.txt'");}
  *
  * <p>For clients, every remote call will return a status on completion. In the case of errors this
- * status may be propagated to blocking stubs as a {@link java.lang.RuntimeException} or to
- * a listener as an explicit parameter.
+ * status may be propagated to blocking stubs as a {@link RuntimeException} or to a listener as an
+ * explicit parameter.
  *
- * <p>Similarly servers can report a status by throwing {@link OperationRuntimeException}
+ * <p>Similarly servers can report a status by throwing {@link StatusRuntimeException}
  * or by passing the status to a callback.
  *
  * <p>Utility functions are provided to convert a status to an exception and to extract them
@@ -424,16 +424,16 @@ public final class Status {
    * Convert this {@link Status} to a {@link RuntimeException}. Use {@code #fromThrowable}
    * to recover this {@link Status} instance when the returned exception is in the causal chain.
    */
-  public RuntimeException asRuntimeException() {
-    return new OperationRuntimeException(this);
+  public StatusRuntimeException asRuntimeException() {
+    return new StatusRuntimeException(this);
   }
 
   /**
    * Convert this {@link Status} to an {@link Exception}. Use {@code #fromThrowable}
    * to recover this {@link Status} instance when the returned exception is in the causal chain.
    */
-  public Exception asException() {
-    return new OperationException(this);
+  public StatusException asException() {
+    return new StatusException(this);
   }
 
   /** A string representation of the status useful for debugging. */
@@ -450,7 +450,10 @@ public final class Status {
 
   /**
    * Exception thrown by implementations while managing an operation.
+   *
+   * @deprecated Use {@link StatusException} instead
    */
+  @Deprecated
   public static class OperationException extends Exception {
     private static final long serialVersionUID = -660954903976144640L;
     private final Status status;
@@ -467,7 +470,10 @@ public final class Status {
 
   /**
    * Runtime exception thrown by implementations while managing an operation.
+   *
+   * @deprecated Use {@link StatusRuntimeException} instead
    */
+  @Deprecated
   public static class OperationRuntimeException extends RuntimeException {
     private static final long serialVersionUID = 1950934672280720624L;
     private final Status status;
