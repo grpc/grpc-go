@@ -115,7 +115,7 @@ func (h *testStreamHandler) handleStreamMisbehave(s *Stream) {
 	if s.Method() == "foo.MaxFrame" {
 		size = http2MaxFrameLen
 	}
-	// Drain the client flow control window.
+	// Drain the client side stream flow control window.
 	var err error
 	var sent int
 	for sent <= initialWindowSize {
@@ -123,7 +123,7 @@ func (h *testStreamHandler) handleStreamMisbehave(s *Stream) {
 		if err = conn.framer.writeData(true, s.id, false, make([]byte, size)); err != nil {
 		}
 		conn.writableChan <- 0
-		sent += 1
+		sent += size
 	}
 }
 
