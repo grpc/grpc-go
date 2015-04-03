@@ -44,7 +44,9 @@ import javax.annotation.concurrent.Immutable;
 
 /**
  * Defines the status of an operation by providing a standard {@link Code} in conjunction with an
- * optional descriptive message.
+ * optional descriptive message. Instances of {@code Status} are created by starting with the
+ * template for the appropriate {@link Status.Code} and supplementing it with additional
+ * information: {@code Status.NOT_FOUND.withDescription("Could not find 'important_file.txt'");}
  *
  * <p>For clients, every remote call will return a status on completion. In the case of errors this
  * status may be propagated to blocking stubs as a {@link java.lang.RuntimeException} or to
@@ -245,24 +247,53 @@ public final class Status {
   }
 
   // A pseudo-enum of Status instances mapped 1:1 with values in Code. This simplifies construction
-  // patterns for derived implementations of Status.
+  // patterns for derived instances of Status.
+  /** The operation completed successfully. */
   public static final Status OK = Code.OK.status();
+  /** The operation was cancelled (typically by the caller). */
   public static final Status CANCELLED = Code.CANCELLED.status();
+  /** Unknown error. See {@link Code#UNKNOWN}. */
   public static final Status UNKNOWN = Code.UNKNOWN.status();
+  /** Client specified an invalid argument. See {@link Code#INVALID_ARGUMENT}. */
   public static final Status INVALID_ARGUMENT = Code.INVALID_ARGUMENT.status();
+  /** Deadline expired before operation could complete. See {@link Code#DEADLINE_EXCEEDED}. */
   public static final Status DEADLINE_EXCEEDED = Code.DEADLINE_EXCEEDED.status();
+  /** Some requested entity (e.g., file or directory) was not found. */
   public static final Status NOT_FOUND = Code.NOT_FOUND.status();
+  /** Some entity that we attempted to create (e.g., file or directory) already exists. */
   public static final Status ALREADY_EXISTS = Code.ALREADY_EXISTS.status();
+  /**
+   * The caller does not have permission to execute the specified operation. See {@link
+   * Code#PERMISSION_DENIED}.
+   */
   public static final Status PERMISSION_DENIED = Code.PERMISSION_DENIED.status();
+  /** The request does not have valid authentication credentials for the operation. */
   public static final Status UNAUTHENTICATED = Code.UNAUTHENTICATED.status();
+  /**
+   * Some resource has been exhausted, perhaps a per-user quota, or perhaps the entire file system
+   * is out of space.
+   */
   public static final Status RESOURCE_EXHAUSTED = Code.RESOURCE_EXHAUSTED.status();
+  /**
+   * Operation was rejected because the system is not in a state required for the operation's
+   * execution. See {@link Code#FAILED_PRECONDITION}.
+   */
   public static final Status FAILED_PRECONDITION =
       Code.FAILED_PRECONDITION.status();
+  /**
+   * The operation was aborted, typically due to a concurrency issue like sequencer check failures,
+   * transaction aborts, etc. See {@link Code#ABORTED}.
+   */
   public static final Status ABORTED = Code.ABORTED.status();
+  /** Operation was attempted past the valid range. See {@link Code#OUT_OF_RANGE}. */
   public static final Status OUT_OF_RANGE = Code.OUT_OF_RANGE.status();
+  /** Operation is not implemented or not supported/enabled in this service. */
   public static final Status UNIMPLEMENTED = Code.UNIMPLEMENTED.status();
+  /** Internal errors. See {@link Code#INTERNAL}. */
   public static final Status INTERNAL = Code.INTERNAL.status();
+  /** The service is currently unavailable. See {@link Code#UNAVAILABLE}. */
   public static final Status UNAVAILABLE = Code.UNAVAILABLE.status();
+  /** Unrecoverable data loss or corruption. */
   public static final Status DATA_LOSS = Code.DATA_LOSS.status();
 
   /**
@@ -383,7 +414,7 @@ public final class Status {
   }
 
   /**
-   * Is this status OK, i.e. not an error.
+   * Is this status OK, i.e., not an error.
    */
   public boolean isOk() {
     return Code.OK == code;
@@ -405,6 +436,7 @@ public final class Status {
     return new OperationException(this);
   }
 
+  /** A string representation of the status useful for debugging. */
   // We support Guava 14
   @SuppressWarnings("deprecation")
   @Override
