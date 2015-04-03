@@ -505,7 +505,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			return
 		}
 		s.state = streamDone
-		s.statusCode = codes.ResourceExhausted
+		s.statusCode = codes.Internal
 		s.statusDesc = err.Error()
 		s.mu.Unlock()
 		s.write(recvMsg{err: io.EOF})

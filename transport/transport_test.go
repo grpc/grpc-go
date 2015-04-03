@@ -453,21 +453,22 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 		t.Fatalf("Failed to write data: ", err)
 	}
 	cc.writableChan <- 0
+	sent += http2MaxFrameLen
 	// Wait until the server creates the corresponding stream.
+	var ss *Stream
 	for {
 		time.Sleep(time.Millisecond)
 		sc.mu.Lock()
 		if len(sc.activeStreams) > 0 {
+			ss = sc.activeStreams[s.id]
 			sc.mu.Unlock()
 			break
 		}
 		sc.mu.Unlock()
 	}
-	ss := sc.activeStreams[s.id]
 	if ss.fc.pendingData != http2MaxFrameLen || ss.fc.pendingUpdate != 0 || sc.fc.pendingData != http2MaxFrameLen || sc.fc.pendingUpdate != 0 {
 		t.Fatalf("Server mistakenly updates inbound flow control params: got %d, %d, %d, %d; want %d, %d, %d, %d", ss.fc.pendingData, ss.fc.pendingUpdate, sc.fc.pendingData, sc.fc.pendingUpdate, http2MaxFrameLen, 0, http2MaxFrameLen, 0)
 	}
-	sent += http2MaxFrameLen
 	// Keep sending until the server inbound window is drained for that stream.
 	for sent <= initialWindowSize {
 		<-cc.writableChan
@@ -536,8 +537,8 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	if s.fc.pendingData != initialWindowSize || s.fc.pendingUpdate != 0 || conn.fc.pendingData != initialWindowSize || conn.fc.pendingUpdate != 0 {
 		t.Fatalf("Client mistakenly updates inbound flow control params: got %d, %d, %d, %d; want %d, %d, %d, %d", s.fc.pendingData, s.fc.pendingUpdate, conn.fc.pendingData, conn.fc.pendingUpdate, initialWindowSize, 0, initialWindowSize, 0)
 	}
-	if err != io.EOF || s.statusCode != codes.ResourceExhausted {
-		t.Fatalf("Got err %v and the status code %d, want <EOF> and the code %d", err, s.statusCode, codes.ResourceExhausted)
+	if err != io.EOF || s.statusCode != codes.Internal {
+		t.Fatalf("Got err %v and the status code %d, want <EOF> and the code %d", err, s.statusCode, codes.Internal)
 	}
 	conn.CloseStream(s, err)
 	if s.fc.pendingData != 0 || s.fc.pendingUpdate != 0 || conn.fc.pendingData != 0 || conn.fc.pendingUpdate != 0 {
