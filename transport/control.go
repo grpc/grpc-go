@@ -34,6 +34,7 @@
 package transport
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/bradfitz/http2"
@@ -150,4 +151,68 @@ func (qb *quotaPool) reset(v int) {
 // acquire returns the channel on which available quota amounts are sent.
 func (qb *quotaPool) acquire() <-chan int {
 	return qb.c
+}
+
+type inFlow struct {
+	limit uint32
+	conn  *inFlow
+
+	mu          sync.Mutex
+	pendingData uint32
+	// The amount of data user has consumed but grpc has not sent window update
+	// for them. Used to reduce window update frequency. It is always part of
+	// pendingData.
+	pendingUpdate uint32
+}
+
+func (f *inFlow) onData(n uint32) error {
+	if n == 0 {
+		return nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.pendingData+n > f.limit {
+		return fmt.Errorf("recieved %d-bytes data exceeding the limit %d bytes", f.pendingData+n, f.limit)
+	}
+	if f.conn != nil {
+		if err := f.conn.onData(n); err != nil {
+			return ConnectionErrorf("%v", err)
+		}
+	}
+	f.pendingData += n
+	return nil
+}
+
+func (f *inFlow) onRead(n uint32) uint32 {
+	if n == 0 {
+		return 0
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pendingUpdate += n
+	if f.pendingUpdate >= f.limit/4 {
+		ret := f.pendingUpdate
+		f.pendingData -= ret
+		f.pendingUpdate = 0
+		return ret
+	}
+	return 0
+}
+
+func (f *inFlow) restoreConn() uint32 {
+	if f.conn == nil {
+		return 0
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ret := f.pendingData
+	f.conn.mu.Lock()
+	f.conn.pendingData -= ret
+	if f.conn.pendingUpdate > f.conn.pendingData {
+		f.conn.pendingUpdate = f.conn.pendingData
+	}
+	f.conn.mu.Unlock()
+	f.pendingData = 0
+	f.pendingUpdate = 0
+	return ret
 }

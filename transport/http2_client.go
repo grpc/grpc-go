@@ -76,8 +76,7 @@ type http2Client struct {
 	// controlBuf delivers all the control related tasks (e.g., window
 	// updates, reset streams, and various settings) to the controller.
 	controlBuf *recvBuffer
-	// The inbound quota being set
-	recvQuota uint32
+	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
 
@@ -91,8 +90,6 @@ type http2Client struct {
 	activeStreams map[uint32]*Stream
 	// The max number of concurrent streams
 	maxStreams uint32
-	// The accumulated inbound quota pending for window update.
-	updateQuota uint32
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
 }
@@ -164,7 +161,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 		hBuf:            &buf,
 		hEnc:            hpack.NewEncoder(&buf),
 		controlBuf:      newRecvBuffer(),
-		recvQuota:       initialConnWindowSize,
+		fc:              &inFlow{limit: initialConnWindowSize},
 		sendQuotaPool:   newQuotaPool(defaultWindowSize),
 		scheme:          scheme,
 		state:           reachable,
@@ -184,12 +181,16 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 }
 
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
+	fc := &inFlow{
+		limit: initialWindowSize,
+		conn:  t.fc,
+	}
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
 	s := &Stream{
 		id:            t.nextID,
 		method:        callHdr.Method,
 		buf:           newRecvBuffer(),
-		recvQuota:     initialWindowSize,
+		fc:            fc,
 		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
 		headerChan:    make(chan struct{}),
 	}
@@ -311,6 +312,9 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	delete(t.activeStreams, s.id)
 	t.mu.Unlock()
 	s.mu.Lock()
+	if q := s.fc.restoreConn(); q > 0 {
+		t.controlBuf.put(&windowUpdate{0, q})
+	}
 	if s.state == streamDone {
 		s.mu.Unlock()
 		return
@@ -475,18 +479,11 @@ func (t *http2Client) getStream(f http2.Frame) (*Stream, bool) {
 // Window updates will deliver to the controller for sending when
 // the cumulative quota exceeds the corresponding threshold.
 func (t *http2Client) updateWindow(s *Stream, n uint32) {
-	t.mu.Lock()
-	t.updateQuota += n
-	if t.updateQuota >= t.recvQuota/4 {
-		t.controlBuf.put(&windowUpdate{0, t.updateQuota})
-		t.updateQuota = 0
+	if q := t.fc.onRead(n); q > 0 {
+		t.controlBuf.put(&windowUpdate{0, q})
 	}
-	t.mu.Unlock()
-
-	s.updateQuota += n
-	if s.updateQuota >= s.recvQuota/4 {
-		t.controlBuf.put(&windowUpdate{s.id, s.updateQuota})
-		s.updateQuota = 0
+	if q := s.fc.onRead(n); q > 0 {
+		t.controlBuf.put(&windowUpdate{s.id, q})
 	}
 }
 
@@ -496,10 +493,29 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	if !ok {
 		return
 	}
+	size := len(f.Data())
+	if err := s.fc.onData(uint32(size)); err != nil {
+		if _, ok := err.(ConnectionError); ok {
+			t.notifyError(err)
+			return
+		}
+		s.mu.Lock()
+		if s.state == streamDone {
+			s.mu.Unlock()
+			return
+		}
+		s.state = streamDone
+		s.statusCode = codes.ResourceExhausted
+		s.statusDesc = err.Error()
+		s.mu.Unlock()
+		s.write(recvMsg{err: io.EOF})
+		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeFlowControl})
+		return
+	}
 	// TODO(bradfitz, zhaoq): A copy is required here because there is no
 	// guarantee f.Data() is consumed before the arrival of next frame.
 	// Can this copy be eliminated?
-	data := make([]byte, len(f.Data()))
+	data := make([]byte, size)
 	copy(data, f.Data())
 	s.write(recvMsg{data: data})
 }

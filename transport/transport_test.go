@@ -45,6 +45,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bradfitz/http2"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -70,6 +71,14 @@ var (
 type testStreamHandler struct {
 	t ServerTransport
 }
+
+type hType int
+
+const (
+	normal hType = iota
+	suspended
+	misbehaved
+)
 
 func (h *testStreamHandler) handleStream(s *Stream) {
 	req := expectedRequest
@@ -97,8 +106,29 @@ func (h *testStreamHandler) handleStreamSuspension(s *Stream) {
 	<-s.ctx.Done()
 }
 
+func (h *testStreamHandler) handleStreamMisbehave(s *Stream) {
+	conn, ok := s.ServerTransport().(*http2Server)
+	if !ok {
+		log.Fatalf("Failed to convert %v to *http2Server")
+	}
+	size := 1
+	if s.Method() == "foo.MaxFrame" {
+		size = http2MaxFrameLen
+	}
+	// Drain the client flow control window.
+	var err error
+	var sent int
+	for sent <= initialWindowSize {
+		<-conn.writableChan
+		if err = conn.framer.writeData(true, s.id, false, make([]byte, size)); err != nil {
+		}
+		conn.writableChan <- 0
+		sent += 1
+	}
+}
+
 // start starts server. Other goroutines should block on s.readyChan for futher operations.
-func (s *server) start(useTLS bool, port int, maxStreams uint32, suspend bool) {
+func (s *server) start(useTLS bool, port int, maxStreams uint32, ht hType) {
 	var err error
 	if port == 0 {
 		s.lis, err = net.Listen("tcp", ":0")
@@ -142,9 +172,12 @@ func (s *server) start(useTLS bool, port int, maxStreams uint32, suspend bool) {
 		s.conns[t] = true
 		s.mu.Unlock()
 		h := &testStreamHandler{t}
-		if suspend {
+		switch ht {
+		case suspended:
 			go t.HandleStreams(h.handleStreamSuspension)
-		} else {
+		case misbehaved:
+			go t.HandleStreams(h.handleStreamMisbehave)
+		default:
 			go t.HandleStreams(h.handleStream)
 		}
 	}
@@ -168,9 +201,9 @@ func (s *server) stop() {
 	s.mu.Unlock()
 }
 
-func setUp(t *testing.T, useTLS bool, port int, maxStreams uint32, suspend bool) (*server, ClientTransport) {
+func setUp(t *testing.T, useTLS bool, port int, maxStreams uint32, ht hType) (*server, ClientTransport) {
 	server := &server{readyChan: make(chan bool)}
-	go server.start(useTLS, port, maxStreams, suspend)
+	go server.start(useTLS, port, maxStreams, ht)
 	server.wait(t, 2*time.Second)
 	addr := "localhost:" + server.port
 	var (
@@ -196,7 +229,7 @@ func setUp(t *testing.T, useTLS bool, port int, maxStreams uint32, suspend bool)
 }
 
 func TestClientSendAndReceive(t *testing.T) {
-	server, ct := setUp(t, true, 0, math.MaxUint32, false)
+	server, ct := setUp(t, true, 0, math.MaxUint32, normal)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Small",
@@ -236,7 +269,7 @@ func TestClientSendAndReceive(t *testing.T) {
 }
 
 func TestClientErrorNotify(t *testing.T) {
-	server, ct := setUp(t, true, 0, math.MaxUint32, false)
+	server, ct := setUp(t, true, 0, math.MaxUint32, normal)
 	go server.stop()
 	// ct.reader should detect the error and activate ct.Error().
 	<-ct.Error()
@@ -270,7 +303,7 @@ func performOneRPC(ct ClientTransport) {
 }
 
 func TestClientMix(t *testing.T) {
-	s, ct := setUp(t, true, 0, math.MaxUint32, false)
+	s, ct := setUp(t, true, 0, math.MaxUint32, normal)
 	go func(s *server) {
 		time.Sleep(5 * time.Second)
 		s.stop()
@@ -286,7 +319,7 @@ func TestClientMix(t *testing.T) {
 }
 
 func TestExceedMaxStreamsLimit(t *testing.T) {
-	server, ct := setUp(t, true, 0, 1, false)
+	server, ct := setUp(t, true, 0, 1, normal)
 	defer func() {
 		ct.Close()
 		server.stop()
@@ -334,7 +367,7 @@ func TestExceedMaxStreamsLimit(t *testing.T) {
 }
 
 func TestLargeMessage(t *testing.T) {
-	server, ct := setUp(t, true, 0, math.MaxUint32, false)
+	server, ct := setUp(t, true, 0, math.MaxUint32, normal)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Large",
@@ -368,7 +401,7 @@ func TestLargeMessage(t *testing.T) {
 }
 
 func TestLargeMessageSuspension(t *testing.T) {
-	server, ct := setUp(t, true, 0, math.MaxUint32, true)
+	server, ct := setUp(t, true, 0, math.MaxUint32, suspended)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Large",
@@ -385,6 +418,148 @@ func TestLargeMessageSuspension(t *testing.T) {
 	if err == nil || err != expectedErr {
 		t.Fatalf("Write got %v, want %v", err, expectedErr)
 	}
+	ct.Close()
+	server.stop()
+}
+
+func TestServerWithMisbehavedClient(t *testing.T) {
+	server, ct := setUp(t, true, 0, math.MaxUint32, suspended)
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo",
+	}
+	var sc *http2Server
+	for k, _ := range server.conns {
+		var ok bool
+		sc, ok = k.(*http2Server)
+		if !ok {
+			t.Fatalf("Failed to convert %v to *http2Server", k)
+		}
+	}
+	cc, ok := ct.(*http2Client)
+	if !ok {
+		t.Fatalf("Failed to convert %v to *http2Client", ct)
+	}
+	// Test server behavior for violation of stream flow control window size restriction.
+	s, err := ct.NewStream(context.Background(), callHdr)
+	if err != nil {
+		t.Fatalf("Failed to open stream: %v", err)
+	}
+	var sent int
+	// Drain the stream flow control window
+	<-cc.writableChan
+	if err = cc.framer.writeData(true, s.id, false, make([]byte, http2MaxFrameLen)); err != nil {
+		t.Fatalf("Failed to write data: ", err)
+	}
+	cc.writableChan <- 0
+	// Wait until the server creates the corresponding stream.
+	for {
+		time.Sleep(time.Millisecond)
+		sc.mu.Lock()
+		if len(sc.activeStreams) > 0 {
+			sc.mu.Unlock()
+			break
+		}
+		sc.mu.Unlock()
+	}
+	ss := sc.activeStreams[s.id]
+	if ss.fc.pendingData != http2MaxFrameLen || ss.fc.pendingUpdate != 0 || sc.fc.pendingData != http2MaxFrameLen || sc.fc.pendingUpdate != 0 {
+		t.Fatalf("Server mistakenly updates inbound flow control params: got %d, %d, %d, %d; want %d, %d, %d, %d", ss.fc.pendingData, ss.fc.pendingUpdate, sc.fc.pendingData, sc.fc.pendingUpdate, http2MaxFrameLen, 0, http2MaxFrameLen, 0)
+	}
+	sent += http2MaxFrameLen
+	// Keep sending until the server inbound window is drained for that stream.
+	for sent <= initialWindowSize {
+		<-cc.writableChan
+		if err = cc.framer.writeData(true, s.id, false, make([]byte, http2MaxFrameLen)); err != nil {
+			t.Fatalf("Failed to write data: ", err)
+		}
+		cc.writableChan <- 0
+		sent += http2MaxFrameLen
+	}
+	// Server sent a resetStream for s already.
+	code := http2RSTErrConvTab[http2.ErrCodeFlowControl]
+	if _, err := io.ReadFull(s, make([]byte, 1)); err != io.EOF || s.statusCode != code {
+		t.Fatalf("%v got err %v with statusCode %d, want err <EOF> with statusCode %d", s, err, s.statusCode, code)
+	}
+
+	if ss.fc.pendingData != 0 || ss.fc.pendingUpdate != 0 || sc.fc.pendingData != 0 || sc.fc.pendingUpdate != 0 {
+		t.Fatalf("Server mistakenly resets inbound flow control params: got %d, %d, %d, %d; want 0, 0, 0, 0", ss.fc.pendingData, ss.fc.pendingUpdate, sc.fc.pendingData, sc.fc.pendingUpdate)
+	}
+	ct.CloseStream(s, nil)
+	// Test server behavior for violation of connection flow control window size restriction.
+	//
+	// Keep creating new streams until the connection window is drained on the server and
+	// the server tears down the connection.
+	for {
+		s, err := ct.NewStream(context.Background(), callHdr)
+		if err != nil {
+			t.Fatalf("Failed to open stream: %v", err)
+		}
+		<-cc.writableChan
+		// Write will fail when connection flow control window runs out.
+		if err := cc.framer.writeData(true, s.id, true, make([]byte, http2MaxFrameLen)); err != nil {
+			// The server tears down the connection.
+			break
+		}
+		cc.writableChan <- 0
+	}
+	ct.Close()
+	server.stop()
+}
+
+func TestClientWithMisbehavedServer(t *testing.T) {
+	server, ct := setUp(t, true, 0, math.MaxUint32, misbehaved)
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo",
+	}
+	conn, ok := ct.(*http2Client)
+	if !ok {
+		t.Fatalf("Failed to convert %v to *http2Client", ct)
+	}
+	// Test the logic for the violation of stream flow control window size restriction.
+	s, err := ct.NewStream(context.Background(), callHdr)
+	if err != nil {
+		t.Fatalf("Failed to open stream: %v", err)
+	}
+	if err := ct.Write(s, expectedRequest, &Options{Last: true, Delay: false}); err != nil {
+		t.Fatalf("Failed to write: %v", err)
+	}
+	// Read without window update.
+	for {
+		p := make([]byte, http2MaxFrameLen)
+		if _, err = s.dec.Read(p); err != nil {
+			break
+		}
+	}
+	if s.fc.pendingData != initialWindowSize || s.fc.pendingUpdate != 0 || conn.fc.pendingData != initialWindowSize || conn.fc.pendingUpdate != 0 {
+		t.Fatalf("Client mistakenly updates inbound flow control params: got %d, %d, %d, %d; want %d, %d, %d, %d", s.fc.pendingData, s.fc.pendingUpdate, conn.fc.pendingData, conn.fc.pendingUpdate, initialWindowSize, 0, initialWindowSize, 0)
+	}
+	if err != io.EOF || s.statusCode != codes.ResourceExhausted {
+		t.Fatalf("Got err %v and the status code %d, want <EOF> and the code %d", err, s.statusCode, codes.ResourceExhausted)
+	}
+	conn.CloseStream(s, err)
+	if s.fc.pendingData != 0 || s.fc.pendingUpdate != 0 || conn.fc.pendingData != 0 || conn.fc.pendingUpdate != 0 {
+		t.Fatalf("Client mistakenly resets inbound flow control params: got %d, %d, %d, %d; want 0, 0, 0, 0", s.fc.pendingData, s.fc.pendingUpdate, conn.fc.pendingData, conn.fc.pendingUpdate)
+	}
+	// Test the logic for the violation of the connection flow control window size restriction.
+	//
+	// Generate enough streams to drain the connection window.
+	callHdr = &CallHdr{
+		Host:   "localhost",
+		Method: "foo.MaxFrame",
+	}
+	for i := 0; i < int(initialConnWindowSize/initialWindowSize+10); i++ {
+		s, err := ct.NewStream(context.Background(), callHdr)
+		if err != nil {
+			t.Fatalf("Failed to open stream: %v", err)
+		}
+		if err := ct.Write(s, expectedRequest, &Options{Last: true, Delay: false}); err != nil {
+			break
+		}
+	}
+	// http2Client.errChan is closed due to connection flow control window size violation.
+	<-conn.Error()
 	ct.Close()
 	server.stop()
 }
