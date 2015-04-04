@@ -430,12 +430,23 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 		Method: "foo",
 	}
 	var sc *http2Server
-	for k, _ := range server.conns {
-		var ok bool
-		sc, ok = k.(*http2Server)
-		if !ok {
-			t.Fatalf("Failed to convert %v to *http2Server", k)
+	// Wait until the server transport is setup.
+	for {
+		server.mu.Lock()
+		if len(server.conns) == 0 {
+			server.mu.Unlock()
+			time.Sleep(time.Millisecond)
+			continue
 		}
+		for k, _ := range server.conns {
+			var ok bool
+			sc, ok = k.(*http2Server)
+			if !ok {
+				t.Fatalf("Failed to convert %v to *http2Server", k)
+			}
+		}
+		server.mu.Unlock()
+		break
 	}
 	cc, ok := ct.(*http2Client)
 	if !ok {
@@ -454,17 +465,23 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	}
 	cc.writableChan <- 0
 	sent += http2MaxFrameLen
-	// Wait until the server creates the corresponding stream.
+	// Wait until the server creates the corresponding stream and receive some data.
 	var ss *Stream
 	for {
 		time.Sleep(time.Millisecond)
 		sc.mu.Lock()
-		if len(sc.activeStreams) > 0 {
-			ss = sc.activeStreams[s.id]
+		if len(sc.activeStreams) == 0 {
 			sc.mu.Unlock()
+			continue
+		}
+		ss = sc.activeStreams[s.id]
+		sc.mu.Unlock()
+		ss.fc.mu.Lock()
+		if ss.fc.pendingData > 0 {
+			ss.fc.mu.Unlock()
 			break
 		}
-		sc.mu.Unlock()
+		ss.fc.mu.Unlock()
 	}
 	if ss.fc.pendingData != http2MaxFrameLen || ss.fc.pendingUpdate != 0 || sc.fc.pendingData != http2MaxFrameLen || sc.fc.pendingUpdate != 0 {
 		t.Fatalf("Server mistakenly updates inbound flow control params: got %d, %d, %d, %d; want %d, %d, %d, %d", ss.fc.pendingData, ss.fc.pendingUpdate, sc.fc.pendingData, sc.fc.pendingUpdate, http2MaxFrameLen, 0, http2MaxFrameLen, 0)
