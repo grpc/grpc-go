@@ -173,7 +173,7 @@ type Stream struct {
 	buf    *recvBuffer
 	dec    io.Reader
 
-	// The inbound quota being set
+	fc        *inFlow
 	recvQuota uint32
 	// The accumulated inbound quota pending for window update.
 	updateQuota uint32
@@ -197,8 +197,9 @@ type Stream struct {
 	// multiple times.
 	headerDone bool
 	// the status received from the server.
-	statusCode codes.Code
-	statusDesc string
+	statusCode  codes.Code
+	statusDesc  string
+	pendingData uint32
 }
 
 // Header acquires the key-value pairs of header metadata once it

@@ -34,6 +34,7 @@
 package transport
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/bradfitz/http2"
@@ -150,4 +151,81 @@ func (qb *quotaPool) reset(v int) {
 // acquire returns the channel on which available quota amounts are sent.
 func (qb *quotaPool) acquire() <-chan int {
 	return qb.c
+}
+
+// inFlow deals with inbound flow control
+type inFlow struct {
+	// The inbound flow control limit for pending data.
+	limit uint32
+	// conn points to the shared connection-level inFlow that is shared
+	// by all streams on that conn. It is nil for the inFlow on the conn
+	// directly.
+	conn *inFlow
+
+	mu sync.Mutex
+	// pendingData is the overall data which have been received but not been
+	// fully consumed (either pending for application to read or pending for
+	// window update).
+	pendingData uint32
+	// The amount of data the application has consumed but grpc has not sent
+	// window update for them. Used to reduce window update frequency. It is
+	// always part of pendingData.
+	pendingUpdate uint32
+}
+
+// onData is invoked when some data frame is received. It increments not only its
+// own pendingData but also that of the associated connection-level flow.
+func (f *inFlow) onData(n uint32) error {
+	if n == 0 {
+		return nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.pendingData+n > f.limit {
+		return fmt.Errorf("recieved %d-bytes data exceeding the limit %d bytes", f.pendingData+n, f.limit)
+	}
+	if f.conn != nil {
+		if err := f.conn.onData(n); err != nil {
+			return ConnectionErrorf("%v", err)
+		}
+	}
+	f.pendingData += n
+	return nil
+}
+
+// onRead is invoked when the application reads the data.
+func (f *inFlow) onRead(n uint32) uint32 {
+	if n == 0 {
+		return 0
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pendingUpdate += n
+	if f.pendingUpdate >= f.limit/4 {
+		ret := f.pendingUpdate
+		f.pendingData -= ret
+		f.pendingUpdate = 0
+		return ret
+	}
+	return 0
+}
+
+// restoreConn is invoked when a stream is terminated. It removes its stake in
+// the connection-level flow and resets its own state.
+func (f *inFlow) restoreConn() uint32 {
+	if f.conn == nil {
+		return 0
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ret := f.pendingData
+	f.conn.mu.Lock()
+	f.conn.pendingData -= ret
+	if f.conn.pendingUpdate > f.conn.pendingData {
+		f.conn.pendingUpdate = f.conn.pendingData
+	}
+	f.conn.mu.Unlock()
+	f.pendingData = 0
+	f.pendingUpdate = 0
+	return ret
 }
