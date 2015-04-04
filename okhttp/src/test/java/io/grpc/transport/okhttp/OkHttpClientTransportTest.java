@@ -33,6 +33,7 @@ package io.grpc.transport.okhttp;
 
 import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -52,6 +53,8 @@ import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
 import com.squareup.okhttp.internal.spdy.Header;
 import com.squareup.okhttp.internal.spdy.HeadersMode;
+import com.squareup.okhttp.internal.spdy.OkHttpSettingsUtil;
+import com.squareup.okhttp.internal.spdy.Settings;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -387,13 +390,7 @@ public class OkHttpClientTransportTest {
     assertEquals(Status.UNAVAILABLE.getCode(), listener2.status.getCode());
 
     // New stream should be failed.
-    MockStreamListener listener3 = new MockStreamListener();
-    try {
-      clientTransport.newStream(method,new Metadata.Headers(), listener3);
-      fail("new stream should no be accepted by a go-away transport.");
-    } catch (IllegalStateException ex) {
-      // expected.
-    }
+    assertNewStreamFail(clientTransport);
 
     // But stream 1 should be able to send.
     final String sentMessage = "Should I also go away?";
@@ -436,18 +433,173 @@ public class OkHttpClientTransportTest {
     MockStreamListener listener1 = new MockStreamListener();
     transport.newStream(method,new Metadata.Headers(), listener1);
 
-    try {
-      transport.newStream(method, new Metadata.Headers(), new MockStreamListener());
-      fail("new stream should not be accepted by a go-away transport.");
-    } catch (IllegalStateException ex) {
-      // expected.
-    }
+    assertNewStreamFail(transport);
 
     streams.get(startId).cancel();
     listener1.waitUntilStreamClosed();
     verify(writer).rstStream(eq(startId), eq(ErrorCode.CANCEL));
     verify(listener).transportShutdown();
     verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
+  }
+
+  @Test
+  public void pendingStreamSucceed() throws Exception {
+    setMaxConcurrentStreams(1);
+    final MockStreamListener listener1 = new MockStreamListener();
+    final MockStreamListener listener2 = new MockStreamListener();
+    OkHttpClientStream stream1
+        = clientTransport.newStream(method, new Metadata.Headers(), listener1);
+
+    final CountDownLatch newStreamReturn = new CountDownLatch(1);
+    // The second stream should be pending, and the newStream call get blocked.
+    new Thread(new Runnable() {
+      @Override
+      public void run() {
+        clientTransport.newStream(method, new Metadata.Headers(), listener2);
+        newStreamReturn.countDown();
+      }
+    }).start();
+    waitForStreamPending(1);
+    assertEquals(1, streams.size());
+    assertEquals(3, (int) stream1.id());
+
+    // Finish the first stream
+    stream1.cancel();
+    assertTrue("newStream() call is still blocking",
+        newStreamReturn.await(TIME_OUT_MS, TimeUnit.MILLISECONDS));
+    assertEquals(1, streams.size());
+    assertEquals(0, clientTransport.getPendingStreamSize());
+    OkHttpClientStream stream2 = streams.get(5);
+    assertNotNull(stream2);
+    stream2.cancel();
+  }
+
+  @Test
+  public void pendingStreamFailedByGoAway() throws Exception {
+    setMaxConcurrentStreams(0);
+    final MockStreamListener listener = new MockStreamListener();
+    final CountDownLatch newStreamReturn = new CountDownLatch(1);
+    // The second stream should be pending, and the newStream call get blocked.
+    new Thread(new Runnable() {
+      @Override
+      public void run() {
+        clientTransport.newStream(method, new Metadata.Headers(), listener);
+        newStreamReturn.countDown();
+      }
+    }).start();
+    waitForStreamPending(1);
+
+    frameHandler.goAway(0, ErrorCode.CANCEL, null);
+
+    assertTrue("newStream() call is still blocking",
+        newStreamReturn.await(TIME_OUT_MS, TimeUnit.MILLISECONDS));
+    listener.waitUntilStreamClosed();
+    assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
+    assertEquals(0, clientTransport.getPendingStreamSize());
+  }
+
+  @Test
+  public void pendingStreamFailedByShutdown() throws Exception {
+    setMaxConcurrentStreams(0);
+    final MockStreamListener listener = new MockStreamListener();
+    final CountDownLatch newStreamReturn = new CountDownLatch(1);
+    // The second stream should be pending, and the newStream call get blocked.
+    new Thread(new Runnable() {
+      @Override
+      public void run() {
+        clientTransport.newStream(method, new Metadata.Headers(), listener);
+        newStreamReturn.countDown();
+      }
+    }).start();
+    waitForStreamPending(1);
+
+    clientTransport.shutdown();
+
+    assertTrue("newStream() call is still blocking",
+        newStreamReturn.await(TIME_OUT_MS, TimeUnit.MILLISECONDS));
+    listener.waitUntilStreamClosed();
+    assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
+    assertEquals(0, clientTransport.getPendingStreamSize());
+  }
+
+  @Test
+  public void pendingStreamFailedByIdExhausted() throws Exception {
+    int startId = Integer.MAX_VALUE - 4;
+    clientTransport = new OkHttpClientTransport(
+        executor, frameReader, frameWriter, startId, new MockSocket(frameReader));
+    clientTransport.start(listener);
+    frameHandler = clientTransport.getHandler();
+    streams = clientTransport.getStreams();
+    setMaxConcurrentStreams(1);
+
+    final MockStreamListener listener1 = new MockStreamListener();
+    final MockStreamListener listener2 = new MockStreamListener();
+    final MockStreamListener listener3 = new MockStreamListener();
+
+    OkHttpClientStream stream1 =
+        clientTransport.newStream(method, new Metadata.Headers(), listener1);
+
+    final CountDownLatch newStreamReturn2 = new CountDownLatch(1);
+    final CountDownLatch newStreamReturn3 = new CountDownLatch(1);
+    // The second and third stream should be pending.
+    new Thread(new Runnable() {
+      @Override
+      public void run() {
+        clientTransport.newStream(method, new Metadata.Headers(), listener2);
+        newStreamReturn2.countDown();
+      }
+    }).start();
+    new Thread(new Runnable() {
+      @Override
+      public void run() {
+        clientTransport.newStream(method, new Metadata.Headers(), listener3);
+        newStreamReturn3.countDown();
+      }
+    }).start();
+
+    waitForStreamPending(2);
+    assertEquals(1, streams.size());
+    assertEquals(startId, (int) stream1.id());
+
+    // Now finish stream1, stream2 should be started and exhaust the id,
+    // so stream3 should be failed.
+    stream1.cancel();
+    assertTrue("newStream() call for stream2 is still blocking",
+        newStreamReturn2.await(TIME_OUT_MS, TimeUnit.MILLISECONDS));
+    assertTrue("newStream() call for stream3 is still blocking",
+        newStreamReturn3.await(TIME_OUT_MS, TimeUnit.MILLISECONDS));
+    listener1.waitUntilStreamClosed();
+    listener3.waitUntilStreamClosed();
+    assertEquals(Status.INTERNAL.getCode(), listener3.status.getCode());
+    assertEquals(0, clientTransport.getPendingStreamSize());
+    assertEquals(1, streams.size());
+    OkHttpClientStream stream2 = streams.get(startId + 2); 
+    assertNotNull(stream2);
+    stream2.cancel();
+  }
+
+  private void waitForStreamPending(int expected) throws Exception {
+    int duration = TIME_OUT_MS / 10;
+    for (int i = 0; i < 10; i++) {
+      if (clientTransport.getPendingStreamSize() == expected) {
+        return;
+      }
+      Thread.sleep(duration);
+    }
+    assertEquals(expected, clientTransport.getPendingStreamSize());
+  }
+
+  private void assertNewStreamFail(OkHttpClientTransport transport) throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    transport.newStream(method, new Metadata.Headers(), listener);
+    listener.waitUntilStreamClosed();
+    assertFalse(listener.status.isOk());
+  }
+
+  private void setMaxConcurrentStreams(int num) {
+    Settings settings = new Settings();
+    OkHttpSettingsUtil.set(settings, OkHttpSettingsUtil.MAX_CONCURRENT_STREAMS, num);
+    frameHandler.settings(false, settings);
   }
 
   private static Buffer createMessageFrame(String message) {

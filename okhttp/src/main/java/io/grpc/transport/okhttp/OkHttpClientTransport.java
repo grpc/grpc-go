@@ -33,12 +33,14 @@ package io.grpc.transport.okhttp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.SettableFuture;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
 import com.squareup.okhttp.internal.spdy.Header;
 import com.squareup.okhttp.internal.spdy.HeadersMode;
 import com.squareup.okhttp.internal.spdy.Http20Draft16;
+import com.squareup.okhttp.internal.spdy.OkHttpSettingsUtil;
 import com.squareup.okhttp.internal.spdy.Settings;
 import com.squareup.okhttp.internal.spdy.Variant;
 
@@ -62,8 +64,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -138,6 +142,10 @@ public class OkHttpClientTransport implements ClientTransport {
   private boolean stopped;
   private SSLSocketFactory sslSocketFactory;
   private Socket socket;
+  @GuardedBy("lock")
+  private int maxConcurrentStreams = Integer.MAX_VALUE;
+  @GuardedBy("lock")
+  private LinkedList<PendingStream> pendingStreams = new LinkedList<PendingStream>();
 
   OkHttpClientTransport(InetSocketAddress address, String authorityHost, Executor executor,
                         SSLSocketFactory sslSocketFactory) {
@@ -183,16 +191,69 @@ public class OkHttpClientTransport implements ClientTransport {
     List<Header> requestHeaders =
         Headers.createRequestHeaders(headers, defaultPath, defaultAuthority);
 
+    SettableFuture<Void> pendingFuture = null;
     synchronized (lock) {
       if (goAway) {
-        throw new IllegalStateException("Transport not running", goAwayStatus.asRuntimeException());
+        clientStream.transportReportStatus(goAwayStatus, true, new Metadata.Trailers());
+      } else if (streams.size() >= maxConcurrentStreams) {
+        pendingFuture = SettableFuture.create();
+        pendingStreams.add(new PendingStream(clientStream, pendingFuture, requestHeaders));
+      } else {
+        startStream(clientStream, requestHeaders);
       }
-      
-      assignStreamId(clientStream);
-      frameWriter.synStream(false, false, clientStream.id(), 0, requestHeaders);
+    }
+
+    if (pendingFuture != null) {
+      try {
+        pendingFuture.get();
+      } catch (InterruptedException e) {
+        // Restore the interrupt.
+        Thread.currentThread().interrupt();
+        clientStream.cancel();
+        throw new RuntimeException(e);
+      } catch (ExecutionException e) {
+        clientStream.cancel();
+        throw new RuntimeException(e.getCause() != null ? e.getCause() : e);
+      }
     }
 
     return clientStream;
+  }
+
+  @GuardedBy("lock")
+  private void startStream(OkHttpClientStream stream, List<Header> requestHeaders) {
+    Preconditions.checkState(stream.id() == null, "StreamId already assigned");
+    stream.id(nextStreamId);
+    streams.put(stream.id(), stream);
+    frameWriter.synStream(false, false, stream.id(), 0, requestHeaders);
+    if (nextStreamId >= Integer.MAX_VALUE - 2) {
+      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream ids exhausted"));
+    } else {
+      nextStreamId += 2;
+    }
+  }
+
+  private void startPendingStreams() {
+    synchronized (lock) {
+      while (!pendingStreams.isEmpty() && streams.size() < maxConcurrentStreams) {
+        PendingStream pendingStream = pendingStreams.poll();
+        startStream(pendingStream.clientStream, pendingStream.requestHeaders);
+        pendingStream.createdFuture.set(null);
+      }
+    }
+  }
+
+  private void failPendingStreams(Status status) {
+    LinkedList<PendingStream> streams;
+    synchronized (lock) {
+      streams = pendingStreams;
+      pendingStreams = new LinkedList<PendingStream>();
+    }
+    for (PendingStream stream : streams) {
+      stream.clientStream.transportReportStatus(
+          status, true, new Metadata.Trailers());
+      stream.createdFuture.set(null);
+    }
   }
 
   @Override
@@ -253,6 +314,13 @@ public class OkHttpClientTransport implements ClientTransport {
     return streams;
   }
 
+  @VisibleForTesting
+  int getPendingStreamSize() {
+    synchronized (lock) {
+      return pendingStreams.size();
+    }
+  }
+
   /**
    * Finish all active streams due to a failure, then close the transport.
    */
@@ -286,6 +354,7 @@ public class OkHttpClientTransport implements ClientTransport {
     for (OkHttpClientStream stream : goAwayStreams) {
       stream.transportReportStatus(status, false, new Metadata.Trailers());
     }
+    failPendingStreams(status);
     stopIfNecessary();
   }
 
@@ -302,6 +371,7 @@ public class OkHttpClientTransport implements ClientTransport {
         boolean isCancelled = status.getCode() == Code.CANCELLED;
         stream.transportReportStatus(status, isCancelled, new Metadata.Trailers());
       }
+      startPendingStreams();
       return true;
     }
     return false;
@@ -430,7 +500,13 @@ public class OkHttpClientTransport implements ClientTransport {
 
     @Override
     public void settings(boolean clearPrevious, Settings settings) {
-      // not impl
+      if (OkHttpSettingsUtil.isSet(settings, OkHttpSettingsUtil.MAX_CONCURRENT_STREAMS)) {
+        int receivedMaxConcurrentStreams = OkHttpSettingsUtil.get(
+            settings, OkHttpSettingsUtil.MAX_CONCURRENT_STREAMS);
+        synchronized (lock) {
+          maxConcurrentStreams = receivedMaxConcurrentStreams;
+        }
+      }
       try {
         frameWriter.ackSettings(settings);
       } catch (IOException e) {
@@ -480,15 +556,16 @@ public class OkHttpClientTransport implements ClientTransport {
     }
   }
 
-  @GuardedBy("lock")
-  private void assignStreamId(OkHttpClientStream stream) {
-    Preconditions.checkState(stream.id() == null, "StreamId already assigned");
-    stream.id(nextStreamId);
-    streams.put(stream.id(), stream);
-    if (nextStreamId >= Integer.MAX_VALUE - 2) {
-      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream ids exhausted"));
-    } else {
-      nextStreamId += 2;
+  private static class PendingStream {
+    final OkHttpClientStream clientStream;
+    final SettableFuture<Void> createdFuture;
+    final List<Header> requestHeaders;
+
+    PendingStream(OkHttpClientStream clientStream,
+        SettableFuture<Void> createdFuture, List<Header> requestHeaders) {
+      this.clientStream = clientStream;
+      this.createdFuture = createdFuture;
+      this.requestHeaders = requestHeaders;
     }
   }
 }
