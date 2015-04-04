@@ -433,19 +433,20 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	// Wait until the server transport is setup.
 	for {
 		server.mu.Lock()
-		if len(server.conns) > 0 {
-			for k, _ := range server.conns {
-				var ok bool
-				sc, ok = k.(*http2Server)
-				if !ok {
-					t.Fatalf("Failed to convert %v to *http2Server", k)
-				}
-			}
+		if len(server.conns) == 0 {
 			server.mu.Unlock()
-			break
+			time.Sleep(time.Millisecond)
+			continue
+		}
+		for k, _ := range server.conns {
+			var ok bool
+			sc, ok = k.(*http2Server)
+			if !ok {
+				t.Fatalf("Failed to convert %v to *http2Server", k)
+			}
 		}
 		server.mu.Unlock()
-		time.Sleep(time.Millisecond)
+		break
 	}
 	cc, ok := ct.(*http2Client)
 	if !ok {
