@@ -136,9 +136,9 @@ public final class SerializingExecutor implements Executor {
       boolean stillRunning = true;
       try {
         while (true) {
-          Preconditions.checkState(isThreadScheduled);
           Runnable nextToRun;
           synchronized (internalLock) {
+            Preconditions.checkState(isThreadScheduled);
             nextToRun = waitQueue.poll();
             if (nextToRun == null) {
               isThreadScheduled = false;
