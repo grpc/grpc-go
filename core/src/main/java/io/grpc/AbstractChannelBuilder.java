@@ -37,8 +37,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.grpc.SharedResourceHolder.Resource;
 import io.grpc.transport.ClientTransportFactory;
 
-import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.annotation.Nullable;
 

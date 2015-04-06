@@ -165,6 +165,7 @@
             <property name="specialImportsRegExp" value="com.google"/>
             <property name="sortImportsInGroupAlphabetically" value="true"/>
             <property name="customImportOrderRules" value="STATIC###SPECIAL_IMPORTS###THIRD_PARTY_PACKAGE###STANDARD_JAVA_PACKAGE"/>
+            <property name="separateLineBetweenGroups" value="true"/>
         </module>
         <module name="MethodParamPad"/>
         <module name="OperatorWrap">

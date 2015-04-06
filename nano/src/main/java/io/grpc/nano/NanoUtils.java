@@ -38,8 +38,8 @@ import com.google.protobuf.nano.MessageNano;
 import io.grpc.Marshaller;
 import io.grpc.Status;
 
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 /**
  * Utility methods for using nano proto with grpc.

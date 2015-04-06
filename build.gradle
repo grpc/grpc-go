@@ -90,7 +90,7 @@ subprojects {
 
     checkstyle {
         configFile = file("$rootDir/checkstyle.xml")
-        toolVersion = "6.2"
+        toolVersion = "6.5"
         ignoreFailures = true
         if (rootProject.hasProperty("checkstyle.ignoreFailures")) {
             ignoreFailures = rootProject.properties["checkstyle.ignoreFailures"].toBoolean()
