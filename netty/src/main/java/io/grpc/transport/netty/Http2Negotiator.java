@@ -206,7 +206,7 @@ public class Http2Negotiator {
     final ChannelInitializer<Channel> initializer = new ChannelInitializer<Channel>() {
       @Override
       public void initChannel(Channel ch) throws Exception {
-        ch.pipeline().addLast(handler);
+        ch.pipeline().addLast(handlers);
       }
     };
     return new Negotiation() {
