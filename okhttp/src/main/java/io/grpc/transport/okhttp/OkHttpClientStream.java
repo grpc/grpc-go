@@ -38,6 +38,7 @@ import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.Header;
 
 import io.grpc.Metadata;
+import io.grpc.MethodType;
 import io.grpc.Status;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.Http2ClientStream;
@@ -58,14 +59,17 @@ class OkHttpClientStream extends Http2ClientStream {
   private static int WINDOW_UPDATE_THRESHOLD =
       OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2;
 
+  private final MethodType type;
+
   /**
    * Construct a new client stream.
    */
   static OkHttpClientStream newStream(ClientStreamListener listener,
                                       AsyncFrameWriter frameWriter,
                                       OkHttpClientTransport transport,
-                                      OutboundFlowController outboundFlow) {
-    return new OkHttpClientStream(listener, frameWriter, transport, outboundFlow);
+                                      OutboundFlowController outboundFlow,
+                                      MethodType type) {
+    return new OkHttpClientStream(listener, frameWriter, transport, outboundFlow, type);
   }
 
   @GuardedBy("lock")
@@ -82,11 +86,20 @@ class OkHttpClientStream extends Http2ClientStream {
   private OkHttpClientStream(ClientStreamListener listener,
                              AsyncFrameWriter frameWriter,
                              OkHttpClientTransport transport,
-                             OutboundFlowController outboundFlow) {
+                             OutboundFlowController outboundFlow,
+                             MethodType type) {
     super(new OkHttpWritableBufferAllocator(), listener);
     this.frameWriter = frameWriter;
     this.transport = transport;
     this.outboundFlow = outboundFlow;
+    this.type = type;
+  }
+
+  /**
+   * Returns the type of this stream.
+   */
+  public MethodType getType() {
+    return type;
   }
 
   @Override

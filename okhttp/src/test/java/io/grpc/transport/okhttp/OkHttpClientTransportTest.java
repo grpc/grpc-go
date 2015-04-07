@@ -44,6 +44,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +59,7 @@ import com.squareup.okhttp.internal.spdy.Settings;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodType;
 import io.grpc.Status;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
@@ -71,6 +73,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -126,6 +129,7 @@ public class OkHttpClientTransportTest {
     frameHandler = clientTransport.getHandler();
     streams = clientTransport.getStreams();
     when(method.getName()).thenReturn("fakemethod");
+    when(method.getType()).thenReturn(MethodType.UNARY);
     when(frameWriter.maxDataLength()).thenReturn(Integer.MAX_VALUE);
   }
 
@@ -219,7 +223,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void readStatus() throws Exception {
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener);
+    clientTransport.newStream(method, new Metadata.Headers(), listener);
     assertTrue(streams.containsKey(3));
     frameHandler.headers(true, true, 3, 0, grpcResponseTrailers(), HeadersMode.HTTP_20_HEADERS);
     listener.waitUntilStreamClosed();
@@ -229,7 +233,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void receiveReset() throws Exception {
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener);
+    clientTransport.newStream(method, new Metadata.Headers(), listener);
     assertTrue(streams.containsKey(3));
     frameHandler.rstStream(3, ErrorCode.PROTOCOL_ERROR);
     listener.waitUntilStreamClosed();
@@ -239,7 +243,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void cancelStream() throws Exception {
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener);
+    clientTransport.newStream(method, new Metadata.Headers(), listener);
     OkHttpClientStream stream = streams.get(3);
     assertNotNull(stream);
     stream.cancel();
@@ -253,7 +257,7 @@ public class OkHttpClientTransportTest {
   public void writeMessage() throws Exception {
     final String message = "Hello Server";
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener);
+    clientTransport.newStream(method, new Metadata.Headers(), listener);
     OkHttpClientStream stream = streams.get(3);
     InputStream input = new ByteArrayInputStream(message.getBytes(UTF_8));
     assertEquals(12, input.available());
@@ -431,7 +435,7 @@ public class OkHttpClientTransportTest {
     streams = transport.getStreams();
 
     MockStreamListener listener1 = new MockStreamListener();
-    transport.newStream(method,new Metadata.Headers(), listener1);
+    transport.newStream(method, new Metadata.Headers(), listener1);
 
     assertNewStreamFail(transport);
 
@@ -581,7 +585,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void receivingWindowExceeded() throws Exception {
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener).request(1);
+    clientTransport.newStream(method, new Metadata.Headers(), listener).request(1);
 
     frameHandler.headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
 
@@ -596,6 +600,43 @@ public class OkHttpClientTransportTest {
     assertEquals("Received data size exceeded our receiving window size",
         listener.status.getDescription());
     verify(frameWriter).rstStream(eq(3), eq(ErrorCode.FLOW_CONTROL_ERROR));
+  }
+
+  @Test
+  public void unaryHeadersShouldNotBeFlushed() throws Exception {
+    // By default the method is a Unary call
+    shouldHeadersBeFlushed(false);
+  }
+
+  @Test
+  public void serverStreamingHeadersShouldNotBeFlushed() throws Exception {
+    when(method.getType()).thenReturn(MethodType.SERVER_STREAMING);
+    shouldHeadersBeFlushed(false);
+  }
+
+  @Test
+  public void clientStreamingHeadersShouldBeFlushed() throws Exception {
+    when(method.getType()).thenReturn(MethodType.CLIENT_STREAMING);
+    shouldHeadersBeFlushed(true);
+  }
+
+  @Test
+  public void duplexStreamingHeadersShouldNotBeFlushed() throws Exception {
+    when(method.getType()).thenReturn(MethodType.DUPLEX_STREAMING);
+    shouldHeadersBeFlushed(true);
+  }
+
+  private void shouldHeadersBeFlushed(boolean shouldBeFlushed) throws Exception {
+    OkHttpClientStream stream = clientTransport.newStream(
+        method, new Metadata.Headers(), new MockStreamListener());
+    verify(frameWriter).synStream(
+        eq(false), eq(false), eq(3), eq(0), Matchers.anyListOf(Header.class));
+    if (shouldBeFlushed) {
+      verify(frameWriter).flush();
+    } else {
+      verify(frameWriter, times(0)).flush();
+    }
+    stream.cancel();
   }
 
   private void waitForStreamPending(int expected) throws Exception {

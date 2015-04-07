@@ -50,6 +50,7 @@ import com.squareup.okhttp.internal.spdy.Variant;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodType;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.transport.ClientStreamListener;
@@ -209,7 +210,7 @@ public class OkHttpClientTransport implements ClientTransport {
     Preconditions.checkNotNull(listener, "listener");
 
     OkHttpClientStream clientStream =
-        OkHttpClientStream.newStream(listener, frameWriter, this, outboundFlow);
+        OkHttpClientStream.newStream(listener, frameWriter, this, outboundFlow, method.getType());
 
     String defaultPath = "/" + method.getName();
     List<Header> requestHeaders =
@@ -250,6 +251,11 @@ public class OkHttpClientTransport implements ClientTransport {
     stream.id(nextStreamId);
     streams.put(stream.id(), stream);
     frameWriter.synStream(false, false, stream.id(), 0, requestHeaders);
+    // For unary and server streaming, there will be a data frame soon, no need to flush the header.
+    if (stream.getType() != MethodType.UNARY
+        && stream.getType() != MethodType.SERVER_STREAMING) {
+      frameWriter.flush();
+    }
     if (nextStreamId >= Integer.MAX_VALUE - 2) {
       onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream ids exhausted"));
     } else {
