@@ -287,19 +287,21 @@ public class Http2Negotiator {
       try {
         Class<?> negoClass;
         try {
-          negoClass = Class.forName(protocolNegoClassName);
+          negoClass = Class.forName(protocolNegoClassName, true, null);
         } catch (ClassNotFoundException ignored) {
           // Not on the classpath.
           log.warning("Jetty extension " + protocolNegoClassName + " not found");
           continue;
         }
-        Class<?> providerClass = Class.forName(protocolNegoClassName + "$Provider");
-        Class<?> clientProviderClass = Class.forName(protocolNegoClassName + "$ClientProvider");
-        Class<?> serverProviderClass = Class.forName(protocolNegoClassName + "$ServerProvider");
+        Class<?> providerClass = Class.forName(protocolNegoClassName + "$Provider", true, null);
+        Class<?> clientProviderClass
+            = Class.forName(protocolNegoClassName + "$ClientProvider", true, null);
+        Class<?> serverProviderClass
+            = Class.forName(protocolNegoClassName + "$ServerProvider", true, null);
         Method putMethod = negoClass.getMethod("put", SSLEngine.class, providerClass);
         final Method removeMethod = negoClass.getMethod("remove", SSLEngine.class);
         putMethod.invoke(null, engine, Proxy.newProxyInstance(
-            Http2Negotiator.class.getClassLoader(),
+            null,
             new Class[] {server ? serverProviderClass : clientProviderClass},
             new InvocationHandler() {
               @Override
