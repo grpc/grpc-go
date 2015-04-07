@@ -573,9 +573,29 @@ public class OkHttpClientTransportTest {
     assertEquals(Status.INTERNAL.getCode(), listener3.status.getCode());
     assertEquals(0, clientTransport.getPendingStreamSize());
     assertEquals(1, streams.size());
-    OkHttpClientStream stream2 = streams.get(startId + 2); 
+    OkHttpClientStream stream2 = streams.get(startId + 2);
     assertNotNull(stream2);
     stream2.cancel();
+  }
+
+  @Test
+  public void receivingWindowExceeded() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    clientTransport.newStream(method,new Metadata.Headers(), listener).request(1);
+
+    frameHandler.headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
+
+    int messageLength = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE + 1;
+    byte[] fakeMessage = new byte[messageLength];
+    Buffer buffer = createMessageFrame(fakeMessage);
+    int messageFrameLength = (int) buffer.size();
+    frameHandler.data(false, 3, buffer, messageFrameLength);
+
+    listener.waitUntilStreamClosed();
+    assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
+    assertEquals("Received data size exceeded our receiving window size",
+        listener.status.getDescription());
+    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.FLOW_CONTROL_ERROR));
   }
 
   private void waitForStreamPending(int expected) throws Exception {

@@ -103,13 +103,22 @@ class OkHttpClientStream extends Http2ClientStream {
   }
 
   /**
-   * We synchronized on "lock" for delivering frames and updating window size, so that
-   * the future listeners (executed by synchronizedExecutor) will not be executed in the same time.
+   * We synchronized on "lock" for delivering frames and updating window size, because
+   * the {@link #request(int)} call can be called in other thread for delivering frames.
    */
   public void transportDataReceived(okio.Buffer frame, boolean endOfStream) {
     synchronized (lock) {
       long length = frame.size();
       window -= length;
+      if (window < 0) {
+        frameWriter.rstStream(id(), ErrorCode.FLOW_CONTROL_ERROR);
+        Status status = Status.INTERNAL.withDescription(
+            "Received data size exceeded our receiving window size");
+        if (transport.finishStream(id(), status)) {
+          transport.stopIfNecessary();
+        }
+        return;
+      }
       super.transportDataReceived(new OkHttpReadableBuffer(frame), endOfStream);
     }
   }
