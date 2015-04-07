@@ -137,11 +137,11 @@ class NettyClientTransport implements ClientTransport {
     handler = newHandler(streamRemovalPolicy);
     switch (negotiationType) {
       case PLAINTEXT:
-        negotiation = Http2Negotiator.plaintext(handler);
+        negotiation = Http2Negotiator.plaintext(streamRemovalPolicy, handler);
         ssl = false;
         break;
       case PLAINTEXT_UPGRADE:
-        negotiation = Http2Negotiator.plaintextUpgrade(handler);
+        negotiation = Http2Negotiator.plaintextUpgrade(streamRemovalPolicy, handler);
         ssl = false;
         break;
       case TLS:
