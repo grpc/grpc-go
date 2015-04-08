@@ -68,10 +68,12 @@ import javax.net.ssl.SSLEngine;
  * endpoint.
  */
 public class Http2Negotiator {
+  // TODO(madongfly): Remove "h2-15" and "h2-16" at a right time.
   private static final List<String> SUPPORTED_PROTOCOLS = Collections.unmodifiableList(
       Arrays.asList(
           Http2OrHttpChooser.SelectedProtocol.HTTP_2.protocolName(),
-          "h2-15"));
+          "h2-15",
+          "h2-16"));
 
   // Prefer ALPN to NPN so try it first.
   private static final String[] JETTY_TLS_NEGOTIATION_IMPL =
