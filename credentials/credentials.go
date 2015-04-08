@@ -181,15 +181,13 @@ func NewServerTLSFromFile(certFile, keyFile string) (TransportAuthenticator, err
 	}, nil
 }
 
-// computeEngine represents credentials for the built-in service account for
-// the currently running Google Compute Engine (GCE) instance. It uses the
-// metadata server to get access tokens.
-type computeEngine struct {
-	ts oauth2.TokenSource
+// TokenSource supplies credentials from an oauth2.TokenSource.
+type TokenSource struct {
+	oauth2.TokenSource
 }
 
-func (c computeEngine) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
-	token, err := c.ts.Token()
+func (ts TokenSource) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+	token, err := ts.Token()
 	if err != nil {
 		return nil, err
 	}
@@ -201,10 +199,9 @@ func (c computeEngine) GetRequestMetadata(ctx context.Context) (map[string]strin
 // NewComputeEngine constructs the credentials that fetches access tokens from
 // Google Compute Engine (GCE)'s metadata server. It is only valid to use this
 // if your program is running on a GCE instance.
+// TODO(dsymonds): Deprecate and remove this.
 func NewComputeEngine() Credentials {
-	return computeEngine{
-		ts: google.ComputeTokenSource(""),
-	}
+	return TokenSource{google.ComputeTokenSource("")}
 }
 
 // serviceAccount represents credentials via JWT signing key.
