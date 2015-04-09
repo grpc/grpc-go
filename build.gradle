@@ -66,7 +66,8 @@ subprojects {
         if (Os.isFamily(Os.FAMILY_WINDOWS)) {
           splitRootDir = splitRootDir.getPath().split(":", 2)[1]
         }
-        javaPluginPath = "$splitRootDir/compiler/build/binaries/java_pluginExecutable/java_plugin$exeSuffix"
+        protocPluginBaseName = 'protoc-gen-grpc-java'
+        javaPluginPath = "$splitRootDir/compiler/build/binaries/java_pluginExecutable/$protocPluginBaseName$exeSuffix"
     }
 
     dependencies {

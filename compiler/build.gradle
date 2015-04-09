@@ -15,7 +15,9 @@ buildscript {
 }
 
 executables {
-  java_plugin {}
+  java_plugin {
+    baseName "$protocPluginBaseName"
+  }
 }
 
 dependencies {
