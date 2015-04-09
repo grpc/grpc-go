@@ -68,6 +68,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private Throwable connectionError;
   private Status goAwayStatus;
   private ChannelHandlerContext ctx;
+  private int nextStreamId;
 
   public NettyClientHandler(Http2ConnectionEncoder encoder, Http2Connection connection,
                             Http2FrameReader frameReader, Http2LocalFlowController inboundFlow,
@@ -84,6 +85,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     // Disallow stream creation by the server.
     connection.remote().maxActiveStreams(0);
     connection.local().allowPushTo(false);
+    nextStreamId = connection.local().nextStreamId();
   }
 
   @Nullable
@@ -232,7 +234,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
    */
   private void createStream(CreateStreamCommand command, final ChannelPromise promise) {
     final Http2Connection.Endpoint<Http2LocalFlowController> local = connection().local();
-    final int streamId = local.nextStreamId();
+    final int streamId = getAndIncrementNextStreamId();
     final NettyClientStream stream = command.stream();
     final Http2Headers headers = command.headers();
     // TODO: Send GO_AWAY if streamId overflows
@@ -337,6 +339,12 @@ class NettyClientHandler extends Http2ConnectionHandler {
    */
   private Http2Stream[] http2Streams() {
     return connection().activeStreams().toArray(new Http2Stream[0]);
+  }
+
+  private int getAndIncrementNextStreamId() {
+    int id = nextStreamId;
+    nextStreamId += 2;
+    return id;
   }
 
   /**

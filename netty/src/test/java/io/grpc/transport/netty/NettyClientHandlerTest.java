@@ -359,6 +359,17 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
         handler.decoder().flowController().windowSize(handler.connection().connectionStream()));
   }
 
+  @Test
+  public void createIncrementsIdsForActualAndBufferdStreams() throws Exception {
+    receiveMaxConcurrentStreams(2);
+    handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream), promise);
+    verify(stream).id(eq(3));
+    handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream), promise);
+    verify(stream).id(eq(5));
+    handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream), promise);
+    verify(stream).id(eq(7));
+  }
+
   private void receiveMaxConcurrentStreams(int max) throws Exception {
     ByteBuf serializedSettings = serializeSettings(new Http2Settings().maxConcurrentStreams(max));
     handler.channelRead(ctx, serializedSettings);
