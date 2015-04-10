@@ -31,11 +31,11 @@
 
 package io.grpc.examples.header;
 
+import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
-import io.grpc.ServerInterceptors;
 import io.grpc.Status;
 
 import java.util.logging.Logger;
@@ -58,7 +58,7 @@ public class HeaderServerInterceptor implements ServerInterceptor {
       final Metadata.Headers requestHeaders,
       ServerCallHandler<ReqT, RespT> next) {
     logger.info("header received from client:" + requestHeaders.toString());
-    return next.startCall(method, new ServerInterceptors.ForwardingServerCall<RespT>(call) {
+    return next.startCall(method, new SimpleForwardingServerCall<RespT>(call) {
       boolean sentHeaders = false;
 
       @Override

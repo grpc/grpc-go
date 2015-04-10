@@ -148,9 +148,9 @@ public class ClientInterceptors {
    * A {@link io.grpc.ForwardingCall} that delivers exceptions from its start logic to the call
    * listener.
    *
-   * <p>{@link io.grpc.ForwardingCall#start()} should not throw any exception other than those
-   * caused by misuse, e.g., {@link IllegalStateException}.  {@code CheckedForwardingCall} provides
-   * {@code checkedStart()} in which throwing exceptions is allowed.
+   * <p>{@link Call#start(Call.Listener, Metadata.Headers)} should not throw any exception other
+   * than those caused by misuse, e.g., {@link IllegalStateException}.  {@code
+   * CheckedForwardingCall} provides {@code checkedStart()} in which throwing exceptions is allowed.
    */
   public abstract static class CheckedForwardingCall<ReqT, RespT>
       extends io.grpc.ForwardingCall<ReqT, RespT> {
@@ -199,7 +199,7 @@ public class ClientInterceptors {
    * A {@link Call.Listener} which forwards all of its methods to another
    * {@link Call.Listener}.
    *
-   * @deprecated Use {@link SimpleFowardingCallListener}.
+   * @deprecated Use {@link SimpleForwardingCallListener}.
    */
   @Deprecated
   public static class ForwardingListener<T> extends SimpleForwardingCallListener<T> {
