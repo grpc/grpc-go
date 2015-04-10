@@ -1,0 +1,7 @@
+description = 'gRPC: Protobuf'
+
+dependencies {
+    compile project(':grpc-core'),
+            libraries.protobuf,
+            libraries.guava
+}

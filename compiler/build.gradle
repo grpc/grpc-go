@@ -21,8 +21,8 @@ executables {
 }
 
 dependencies {
-  compile project(':grpc-stub'),
-          libraries.protobuf
+  testCompile project(':grpc-protobuf'),
+              project(':grpc-stub')
 }
 
 binaries.all {

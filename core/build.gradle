@@ -5,8 +5,7 @@ plugins {
 description = 'gRPC: Core'
 
 dependencies {
-    compile libraries.protobuf,
-            libraries.guava,
+    compile libraries.guava,
             libraries.jsr305
 }
 

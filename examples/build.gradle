@@ -15,7 +15,7 @@ buildscript {
 dependencies {
     compile project(':grpc-core'),
             project(':grpc-netty'),
-            project(':grpc-okhttp'),
+            project(':grpc-protobuf'),
             project(':grpc-stub'),
             libraries.jsonp
 }
