@@ -34,7 +34,7 @@ package io.grpc.testing.integration;
 import com.google.protobuf.MessageLite;
 
 import io.grpc.Metadata;
-import io.grpc.proto.ProtoUtils;
+import io.grpc.protobuf.ProtoUtils;
 
 import org.junit.Assert;
 

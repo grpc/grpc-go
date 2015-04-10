@@ -95,7 +95,7 @@ static void PrintMethodFields(
           "    $Method$.create(\n"
           "        $MethodType$.$method_type$, \"$method_name$\",\n"
           "        $NanoUtils$.<$input_type$>marshaller(\n"
-          "            new io.grpc.nano.Parser<$input_type$>() {\n"
+          "            new io.grpc.protobuf.nano.Parser<$input_type$>() {\n"
           "                @Override\n"
           "                public $input_type$ parse("
           "$CodedInputByteBufferNano$ input) throws IOException {\n"
@@ -103,7 +103,7 @@ static void PrintMethodFields(
           "                }\n"
           "        }),\n"
           "        $NanoUtils$.<$output_type$>marshaller(\n"
-          "            new io.grpc.nano.Parser<$output_type$>() {\n"
+          "            new io.grpc.protobuf.nano.Parser<$output_type$>() {\n"
           "                @Override\n"
           "                public $output_type$ parse("
           "$CodedInputByteBufferNano$ input) throws IOException {\n"
@@ -662,8 +662,8 @@ void GenerateService(const ServiceDescriptor* service,
       "io.grpc.stub.AbstractServiceDescriptor";
   vars["ImmutableList"] = "com.google.common.collect.ImmutableList";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
-  vars["ProtoUtils"] = "io.grpc.proto.ProtoUtils";
-  vars["NanoUtils"] = "io.grpc.nano.NanoUtils";
+  vars["ProtoUtils"] = "io.grpc.protobuf.ProtoUtils";
+  vars["NanoUtils"] = "io.grpc.protobuf.nano.NanoUtils";
   vars["StreamObserver"] = "io.grpc.stub.StreamObserver";
   vars["Iterator"] = "java.util.Iterator";
   vars["Map"] = "java.util.Map";

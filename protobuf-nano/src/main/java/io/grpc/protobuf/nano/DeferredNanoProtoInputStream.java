@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.nano;
+package io.grpc.protobuf.nano;
 
 import com.google.common.io.ByteStreams;
 import com.google.protobuf.nano.CodedOutputByteBufferNano;

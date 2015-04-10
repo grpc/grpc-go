@@ -1,4 +1,4 @@
-description = 'gRPC: Nano'
+description = 'gRPC: Protobuf Nano'
 
 dependencies {
     compile project(':grpc-core'),

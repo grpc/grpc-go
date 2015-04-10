@@ -50,7 +50,7 @@ import io.grpc.Metadata;
 import io.grpc.ServerImpl;
 import io.grpc.ServerInterceptors;
 import io.grpc.Status;
-import io.grpc.proto.ProtoUtils;
+import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 import io.grpc.stub.StreamRecorder;
