@@ -233,7 +233,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
    * the creation request is queued.
    */
   private void createStream(CreateStreamCommand command, final ChannelPromise promise) {
-    final Http2Connection.Endpoint<Http2LocalFlowController> local = connection().local();
     final int streamId = getAndIncrementNextStreamId();
     final NettyClientStream stream = command.stream();
     final Http2Headers headers = command.headers();
