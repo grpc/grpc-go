@@ -281,7 +281,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		default:
-			log.Printf("transport: http2Server.HanldeStreams found unhandled frame type %v.", frame)
+			log.Printf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
 		}
 	}
 }
