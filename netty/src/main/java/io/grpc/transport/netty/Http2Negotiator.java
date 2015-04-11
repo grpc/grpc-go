@@ -68,10 +68,11 @@ import javax.net.ssl.SSLEngine;
  * endpoint.
  */
 public class Http2Negotiator {
-  // TODO(madongfly): Remove "h2-15" and "h2-16" at a right time.
+  // TODO(madongfly): Remove "h2-xx" at a right time.
   private static final List<String> SUPPORTED_PROTOCOLS = Collections.unmodifiableList(
       Arrays.asList(
           Http2OrHttpChooser.SelectedProtocol.HTTP_2.protocolName(),
+          "h2-14",
           "h2-15",
           "h2-16"));
 

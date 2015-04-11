@@ -42,6 +42,7 @@ import java.net.ProxySelector;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -51,6 +52,10 @@ import javax.net.ssl.SSLSocketFactory;
  * to do TLS upgrading.
  */
 public final class OkHttpTlsUpgrader {
+
+  // TODO(madongfly): We should only support "h2" at a right time.
+  private static final List<String> SUPPORTED_HTTP2_PROTOCOLS = Collections.unmodifiableList(
+      Arrays.asList("h2", "h2-14", "h2-15", "h2-16"));
 
   // A dummy address used to bypass null check.
   private static final InetSocketAddress DUMMY_INET_SOCKET_ADDRESS =
@@ -69,20 +74,26 @@ public final class OkHttpTlsUpgrader {
     spec.apply(sslSocket, getOkHttpRoute(host, port, spec));
 
     Platform platform = Platform.get();
-    try {
-      // Force handshake.
-      sslSocket.startHandshake();
+    // It's possible that the user provided SSLSocketFactory has already done the handshake
+    // when creates the SSLSocket.
+    String negotiatedProtocol = platform.getSelectedProtocol(sslSocket);
+    if (negotiatedProtocol == null) {
 
-      String negotiatedProtocol = platform.getSelectedProtocol(sslSocket);
-      if (negotiatedProtocol == null) {
-        throw new RuntimeException("protocol negotiation failed");
+      try {
+        // Force handshake.
+        sslSocket.startHandshake();
+
+        negotiatedProtocol = platform.getSelectedProtocol(sslSocket);
+        if (negotiatedProtocol == null) {
+          throw new RuntimeException("protocol negotiation failed");
+        }
+      } finally {
+        platform.afterHandshake(sslSocket);
       }
-      Preconditions.checkState(Protocol.HTTP_2.equals(Protocol.get(negotiatedProtocol)),
-          "negotiated protocol is %s instead of %s.",
-          negotiatedProtocol, Protocol.HTTP_2.toString());
-    } finally {
-      platform.afterHandshake(sslSocket);
     }
+
+    Preconditions.checkState(SUPPORTED_HTTP2_PROTOCOLS.contains(negotiatedProtocol),
+        "negotiated protocol %s is unsupported", negotiatedProtocol);
 
     return sslSocket;
   }
