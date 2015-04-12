@@ -305,11 +305,11 @@ func (t *http2Server) getStream(f http2.Frame) (*Stream, bool) {
 // Window updates will deliver to the controller for sending when
 // the cumulative quota exceeds the corresponding threshold.
 func (t *http2Server) updateWindow(s *Stream, n uint32) {
-	if q := t.fc.onRead(n); q > 0 {
-		t.controlBuf.put(&windowUpdate{0, q})
-	}
 	if q := s.fc.onRead(n); q > 0 {
 		t.controlBuf.put(&windowUpdate{s.id, q})
+	}
+	if q := t.fc.onRead(n); q > 0 {
+		t.controlBuf.put(&windowUpdate{0, q})
 	}
 }
 

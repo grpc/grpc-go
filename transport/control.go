@@ -164,12 +164,10 @@ type inFlow struct {
 
 	mu sync.Mutex
 	// pendingData is the overall data which have been received but not been
-	// fully consumed (either pending for application to read or pending for
-	// window update).
+	// consumed by applications.
 	pendingData uint32
 	// The amount of data the application has consumed but grpc has not sent
-	// window update for them. Used to reduce window update frequency. It is
-	// always part of pendingData.
+	// window update for them. Used to reduce window update frequency.
 	pendingUpdate uint32
 }
 
@@ -181,8 +179,8 @@ func (f *inFlow) onData(n uint32) error {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.pendingData+n > f.limit {
-		return fmt.Errorf("recieved %d-bytes data exceeding the limit %d bytes", f.pendingData+n, f.limit)
+	if f.pendingData+f.pendingUpdate+n > f.limit {
+		return fmt.Errorf("recieved %d-bytes data exceeding the limit %d bytes", f.pendingData+f.pendingUpdate+n, f.limit)
 	}
 	if f.conn != nil {
 		if err := f.conn.onData(n); err != nil {
@@ -196,14 +194,18 @@ func (f *inFlow) onData(n uint32) error {
 // onRead is invoked when the application reads the data.
 func (f *inFlow) onRead(n uint32) uint32 {
 	if n == 0 {
-		return 0
+		return 0 
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.pendingData == 0 {
+		// pendingData has been adjusted by restoreConn.
+		return 0
+	}
+	f.pendingData -= n
 	f.pendingUpdate += n
 	if f.pendingUpdate >= f.limit/4 {
 		ret := f.pendingUpdate
-		f.pendingData -= ret
 		f.pendingUpdate = 0
 		return ret
 	}
@@ -218,14 +220,8 @@ func (f *inFlow) restoreConn() uint32 {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	ret := f.pendingData
-	f.conn.mu.Lock()
-	f.conn.pendingData -= ret
-	if f.conn.pendingUpdate > f.conn.pendingData {
-		f.conn.pendingUpdate = f.conn.pendingData
-	}
-	f.conn.mu.Unlock()
+	n := f.pendingData
 	f.pendingData = 0
 	f.pendingUpdate = 0
-	return ret
+	return f.conn.onRead(n)
 }
