@@ -191,17 +191,13 @@ func (f *inFlow) onData(n uint32) error {
 	return nil
 }
 
-// onRead is invoked when the application reads the data.
-func (f *inFlow) onRead(n uint32) uint32 {
-	if n == 0 {
-		return 0
-	}
+// connOnRead updates the connection level states when the application consumes data.
+func (f *inFlow) connOnRead(n uint32) uint32 {
+        if n == 0 || f.conn != nil {
+                return 0
+        }
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.pendingData == 0 {
-		// pendingData has been adjusted by restoreConn.
-		return 0
-	}
+	f.mu.Unlock()
 	f.pendingData -= n
 	f.pendingUpdate += n
 	if f.pendingUpdate >= f.limit/4 {
@@ -210,6 +206,28 @@ func (f *inFlow) onRead(n uint32) uint32 {
 		return ret
 	}
 	return 0
+}
+
+// onRead is invoked when the application reads the data. It returns the window updates
+// for both stream and connection level.
+func (f *inFlow) onRead(n uint32) (swu, cwu uint32) {
+	if n == 0 {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.pendingData == 0 {
+		// pendingData has been adjusted by restoreConn.
+		return
+	}
+	f.pendingData -= n
+	f.pendingUpdate += n
+	if f.pendingUpdate >= f.limit/4 {
+		swu = f.pendingUpdate
+		f.pendingUpdate = 0
+	}
+	cwu = f.conn.connOnRead(n)
+	return
 }
 
 // restoreConn is invoked when a stream is terminated. It removes its stake in
@@ -223,5 +241,5 @@ func (f *inFlow) restoreConn() uint32 {
 	n := f.pendingData
 	f.pendingData = 0
 	f.pendingUpdate = 0
-	return f.conn.onRead(n)
+	return f.conn.connOnRead(n)
 }
