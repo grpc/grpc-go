@@ -197,9 +197,8 @@ type Stream struct {
 	// multiple times.
 	headerDone bool
 	// the status received from the server.
-	statusCode  codes.Code
-	statusDesc  string
-	pendingData uint32
+	statusCode codes.Code
+	statusDesc string
 }
 
 // Header acquires the key-value pairs of header metadata once it
