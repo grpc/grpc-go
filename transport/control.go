@@ -193,11 +193,11 @@ func (f *inFlow) onData(n uint32) error {
 
 // connOnRead updates the connection level states when the application consumes data.
 func (f *inFlow) connOnRead(n uint32) uint32 {
-        if n == 0 || f.conn != nil {
-                return 0
-        }
+	if n == 0 || f.conn != nil {
+		return 0
+	}
 	f.mu.Lock()
-	f.mu.Unlock()
+	defer f.mu.Unlock()
 	f.pendingData -= n
 	f.pendingUpdate += n
 	if f.pendingUpdate >= f.limit/4 {
