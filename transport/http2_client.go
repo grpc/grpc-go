@@ -312,6 +312,9 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	delete(t.activeStreams, s.id)
 	t.mu.Unlock()
 	s.mu.Lock()
+	if q := s.fc.restoreConn(); q > 0 {
+		t.controlBuf.put(&windowUpdate{0, q})
+	}
 	if s.state == streamDone {
 		s.mu.Unlock()
 		return
