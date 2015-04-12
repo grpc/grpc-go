@@ -194,7 +194,7 @@ func (f *inFlow) onData(n uint32) error {
 // onRead is invoked when the application reads the data.
 func (f *inFlow) onRead(n uint32) uint32 {
 	if n == 0 {
-		return 0 
+		return 0
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
