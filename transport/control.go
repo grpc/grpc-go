@@ -209,23 +209,3 @@ func (f *inFlow) onRead(n uint32) uint32 {
 	}
 	return 0
 }
-
-// restoreConn is invoked when a stream is terminated. It removes its stake in
-// the connection-level flow and resets its own state.
-func (f *inFlow) restoreConn() uint32 {
-	if f.conn == nil {
-		return 0
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	ret := f.pendingData
-	f.conn.mu.Lock()
-	f.conn.pendingData -= ret
-	if f.conn.pendingUpdate > f.conn.pendingData {
-		f.conn.pendingUpdate = f.conn.pendingData
-	}
-	f.conn.mu.Unlock()
-	f.pendingData = 0
-	f.pendingUpdate = 0
-	return ret
-}
