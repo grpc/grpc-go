@@ -4,11 +4,13 @@ description = "gRPC: All"
 configurations.compile.transitive = false
 
 dependencies {
-    compile project(':grpc-core'),
-            project(':grpc-stub'),
-            project(':grpc-auth'),
+    compile project(':grpc-auth'),
+            project(':grpc-core'),
             project(':grpc-netty'),
-            project(':grpc-okhttp')
+            project(':grpc-okhttp'),
+            project(':grpc-protobuf'),
+            project(':grpc-protobuf-nano'),
+            project(':grpc-stub')
 }
 
 // Create a fat jar containing only the direct dependencies
