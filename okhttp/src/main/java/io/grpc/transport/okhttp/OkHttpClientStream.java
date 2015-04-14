@@ -146,9 +146,7 @@ class OkHttpClientStream extends Http2ClientStream {
         frameWriter.rstStream(id(), ErrorCode.FLOW_CONTROL_ERROR);
         Status status = Status.INTERNAL.withDescription(
             "Received data size exceeded our receiving window size");
-        if (transport.finishStream(id(), status)) {
-          transport.stopIfNecessary();
-        }
+        transport.finishStream(id(), status, null);
         return;
       }
       super.transportDataReceived(new OkHttpReadableBuffer(frame), endOfStream);
@@ -187,18 +185,13 @@ class OkHttpClientStream extends Http2ClientStream {
 
   @Override
   protected void sendCancel() {
-    if (transport.finishStream(id(), Status.CANCELLED)) {
-      frameWriter.rstStream(id(), ErrorCode.CANCEL);
-      transport.stopIfNecessary();
-    }
+    transport.finishStream(id(), Status.CANCELLED, ErrorCode.CANCEL);
   }
 
   @Override
   public void remoteEndClosed() {
     super.remoteEndClosed();
-    if (transport.finishStream(id(), null)) {
-      transport.stopIfNecessary();
-    }
+    transport.finishStream(id(), null, null);
   }
 
   void setOutboundFlowState(Object outboundFlowState) {

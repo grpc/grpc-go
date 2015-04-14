@@ -137,6 +137,7 @@ public class OkHttpClientTransportTest {
   @After
   public void tearDown() {
     clientTransport.shutdown();
+    assertEquals(0, streams.size());
     verify(frameWriter).close();
     frameReader.assertClosed();
     executor.shutdown();
@@ -637,6 +638,56 @@ public class OkHttpClientTransportTest {
       verify(frameWriter, times(0)).flush();
     }
     stream.cancel();
+  }
+
+  @Test
+  public void receiveDataWithoutHeader() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    clientTransport.newStream(method,new Metadata.Headers(), listener).request(1);
+    Buffer buffer = createMessageFrame(new byte[1]);
+    frameHandler.data(false, 3, buffer, (int) buffer.size());
+
+    // Trigger the failure by a trailer.
+    frameHandler.headers(
+        true, true, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
+
+    listener.waitUntilStreamClosed();
+    assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
+    assertTrue(listener.status.getDescription().startsWith("no headers received prior to data"));
+    assertEquals(0, listener.messages.size());
+  }
+
+  @Test
+  public void receiveDataWithoutHeaderAndTrailer() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    clientTransport.newStream(method,new Metadata.Headers(), listener).request(1);
+    Buffer buffer = createMessageFrame(new byte[1]);
+    frameHandler.data(false, 3, buffer, (int) buffer.size());
+
+    // Trigger the failure by a data frame.
+    buffer = createMessageFrame(new byte[1]);
+    frameHandler.data(true, 3, buffer, (int) buffer.size());
+
+    listener.waitUntilStreamClosed();
+    assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
+    assertTrue(listener.status.getDescription().startsWith("no headers received prior to data"));
+    assertEquals(0, listener.messages.size());
+  }
+
+  @Test
+  public void receiveLongEnoughDataWithoutHeaderAndTrailer() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    clientTransport.newStream(method,new Metadata.Headers(), listener).request(1);
+    Buffer buffer = createMessageFrame(new byte[1000]);
+    frameHandler.data(false, 3, buffer, (int) buffer.size());
+
+    // Once we receive enough detail, we cancel the stream. so we should have sent cancel.
+    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
+
+    listener.waitUntilStreamClosed();
+    assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
+    assertTrue(listener.status.getDescription().startsWith("no headers received prior to data"));
+    assertEquals(0, listener.messages.size());
   }
 
   private void waitForStreamPending(int expected) throws Exception {

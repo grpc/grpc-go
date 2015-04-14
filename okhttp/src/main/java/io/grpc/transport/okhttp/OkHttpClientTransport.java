@@ -263,14 +263,20 @@ public class OkHttpClientTransport implements ClientTransport {
     }
   }
 
-  private void startPendingStreams() {
+  /**
+   * Starts pending streams, returns true if at least one pending stream is started.
+   */
+  private boolean startPendingStreams() {
+    boolean hasStreamStarted = false;
     synchronized (lock) {
       while (!pendingStreams.isEmpty() && streams.size() < maxConcurrentStreams) {
         PendingStream pendingStream = pendingStreams.poll();
         startStream(pendingStream.clientStream, pendingStream.requestHeaders);
         pendingStream.createdFuture.set(null);
+        hasStreamStarted = true;
       }
     }
+    return hasStreamStarted;
   }
 
   private void failPendingStreams(Status status) {
@@ -389,22 +395,33 @@ public class OkHttpClientTransport implements ClientTransport {
   }
 
   /**
-   * Called when a stream is closed.
+   * Called when a stream is closed, we do things like:
+   * <ul>
+   * <li>Removing the stream from the map.
+   * <li>Optionally reporting the status.
+   * <li>Starting pending streams if we can.
+   * <li>Stopping the transport if this is the last live stream under a go-away status.
+   * </ul>
    *
-   * <p> Return false if the stream has already finished.
+   * @param streamId the Id of the stream.
+   * @param status the final status of this stream, null means no need to report.
+   * @Param errorCode reset the stream with this ErrorCode if not null.
    */
-  boolean finishStream(int streamId, @Nullable Status status) {
+  void finishStream(int streamId, @Nullable Status status, @Nullable ErrorCode errorCode) {
     OkHttpClientStream stream;
     stream = streams.remove(streamId);
     if (stream != null) {
+      if (errorCode != null) {
+        frameWriter.rstStream(streamId, ErrorCode.CANCEL);
+      }
       if (status != null) {
         boolean isCancelled = status.getCode() == Code.CANCELLED;
         stream.transportReportStatus(status, isCancelled, new Metadata.Trailers());
       }
-      startPendingStreams();
-      return true;
+      if (!startPendingStreams()) {
+        stopIfNecessary();
+      }
     }
-    return false;
   }
 
   /**
@@ -523,9 +540,7 @@ public class OkHttpClientTransport implements ClientTransport {
 
     @Override
     public void rstStream(int streamId, ErrorCode errorCode) {
-      if (finishStream(streamId, toGrpcStatus(errorCode))) {
-        stopIfNecessary();
-      }
+      finishStream(streamId, toGrpcStatus(errorCode), null);
     }
 
     @Override

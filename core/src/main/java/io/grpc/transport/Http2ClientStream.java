@@ -127,10 +127,8 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
       frame.close();
       if (transportError.getDescription().length() > 1000 || endOfStream) {
         inboundTransportError(transportError);
-        if (!endOfStream) {
-          // We have enough error detail so lets cancel.
-          sendCancel();
-        }
+        // We have enough error detail so lets cancel.
+        sendCancel();
       }
     } else {
       inboundDataReceived(frame);
@@ -157,6 +155,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
     }
     if (transportError != null) {
       inboundTransportError(transportError);
+      sendCancel();
     } else {
       Status status = statusFromTrailers(trailers);
       stripTransportDetails(trailers);
