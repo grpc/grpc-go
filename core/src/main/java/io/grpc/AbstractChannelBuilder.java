@@ -127,7 +127,7 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
      * Constructor.
      *
      * @param transportFactory the created channel uses this factory to create transports
-     * @param terminationRunnable will be called at the channel's life-cycle events
+     * @param terminationRunnable will be called at the channel termination
      */
     public ChannelEssentials(ClientTransportFactory transportFactory,
         @Nullable Runnable terminationRunnable) {

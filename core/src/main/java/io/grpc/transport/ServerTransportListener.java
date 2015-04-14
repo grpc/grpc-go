@@ -34,7 +34,8 @@ package io.grpc.transport;
 import io.grpc.Metadata;
 
 /**
- * A observer of a server-side transport for stream creation events.
+ * A observer of a server-side transport for stream creation events. Notifications must occur from
+ * the transport thread.
  */
 public interface ServerTransportListener {
 
@@ -48,4 +49,9 @@ public interface ServerTransportListener {
    */
   ServerStreamListener streamCreated(ServerStream stream, String method,
       Metadata.Headers headers);
+
+  /**
+   * The transport completed shutting down. All resources have been released.
+   */
+  void transportTerminated();
 }

@@ -35,8 +35,8 @@ import static io.netty.channel.ChannelOption.SO_BACKLOG;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.AbstractService;
 
+import io.grpc.transport.Server;
 import io.grpc.transport.ServerListener;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -48,53 +48,47 @@ import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
 
+import java.io.IOException;
 import java.net.SocketAddress;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 
 /**
- * Implementation of the {@link com.google.common.util.concurrent.Service} interface for a
- * Netty-based server.
+ * Netty-based server implementation.
  */
-public class NettyServer extends AbstractService {
+public class NettyServer implements Server {
+  private static final Logger log = Logger.getLogger(Server.class.getName());
+
   private final SocketAddress address;
   private final Class<? extends ServerChannel> channelType;
-  private final ChannelInitializer<Channel> channelInitializer;
   private final EventLoopGroup bossGroup;
   private final EventLoopGroup workerGroup;
+  private final SslContext sslContext;
+  private final int maxStreamsPerConnection;
+  private ServerListener listener;
   private Channel channel;
 
-  NettyServer(ServerListener serverListener, SocketAddress address,
-      Class<? extends ServerChannel> channelType, EventLoopGroup bossGroup,
-      EventLoopGroup workerGroup, int maxStreamsPerConnection) {
-    this(serverListener, address, channelType, bossGroup, workerGroup, null,
-        maxStreamsPerConnection);
+  NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
+      EventLoopGroup bossGroup, EventLoopGroup workerGroup, int maxStreamsPerConnection) {
+    this(address, channelType, bossGroup, workerGroup, null, maxStreamsPerConnection);
   }
 
-  NettyServer(final ServerListener serverListener, SocketAddress address,
-      Class<? extends ServerChannel> channelType, EventLoopGroup bossGroup,
-      EventLoopGroup workerGroup, @Nullable final SslContext sslContext,
-      final int maxStreamsPerConnection) {
+  NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
+      EventLoopGroup bossGroup, EventLoopGroup workerGroup, @Nullable SslContext sslContext,
+      int maxStreamsPerConnection) {
     this.address = address;
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
     this.bossGroup = Preconditions.checkNotNull(bossGroup, "bossGroup");
     this.workerGroup = Preconditions.checkNotNull(workerGroup, "workerGroup");
-    this.channelInitializer = new ChannelInitializer<Channel>() {
-      @Override
-      public void initChannel(Channel ch) throws Exception {
-        NettyServerTransport transport
-            = new NettyServerTransport(ch, serverListener, sslContext, maxStreamsPerConnection);
-        // TODO(ejona86): Ideally we wouldn't handle handler registration asyncly and then be forced
-        // to block for completion on another thread. This should be resolved as part of removing
-        // Service from server transport.
-        transport.startAsync().awaitRunning();
-        // TODO(nmittler): Should we wait for transport shutdown before shutting down server?
-      }
-    };
+    this.sslContext = sslContext;
+    this.maxStreamsPerConnection = maxStreamsPerConnection;
   }
 
   @Override
-  protected void doStart() {
+  public void start(ServerListener serverListener) throws IOException {
+    listener = serverListener;
     ServerBootstrap b = new ServerBootstrap();
     b.group(bossGroup, workerGroup);
     b.channel(channelType);
@@ -102,36 +96,42 @@ public class NettyServer extends AbstractService {
       b.option(SO_BACKLOG, 128);
       b.childOption(SO_KEEPALIVE, true);
     }
-    b.childHandler(channelInitializer);
-
-    // Bind and start to accept incoming connections.
-    b.bind(address).addListener(new ChannelFutureListener() {
+    b.childHandler(new ChannelInitializer<Channel>() {
       @Override
-      public void operationComplete(ChannelFuture future) throws Exception {
-        if (future.isSuccess()) {
-          channel = future.channel();
-          notifyStarted();
-        } else {
-          notifyFailed(future.cause());
-        }
+      public void initChannel(Channel ch) throws Exception {
+        NettyServerTransport transport
+            = new NettyServerTransport(ch, sslContext, maxStreamsPerConnection);
+        transport.start(listener.transportCreated(transport));
       }
     });
+
+    // Bind and start to accept incoming connections.
+    ChannelFuture future = b.bind(address);
+    try {
+      future.await();
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("Interrupted waiting for bind");
+    }
+    if (!future.isSuccess()) {
+      throw new IOException("Failed to bind", future.cause());
+    }
+    channel = future.channel();
   }
 
   @Override
-  protected void doStop() {
-    // Wait for the channel to close.
-    if (channel != null && channel.isOpen()) {
-      channel.close().addListener(new ChannelFutureListener() {
-        @Override
-        public void operationComplete(ChannelFuture future) throws Exception {
-          if (future.isSuccess()) {
-            notifyStopped();
-          } else {
-            notifyFailed(future.cause());
-          }
-        }
-      });
+  public void shutdown() {
+    if (channel == null || channel.isOpen()) {
+      return;
     }
+    channel.close().addListener(new ChannelFutureListener() {
+      @Override
+      public void operationComplete(ChannelFuture future) throws Exception {
+        if (!future.isSuccess()) {
+          log.log(Level.WARNING, "Error shutting down server", future.cause());
+        }
+        listener.serverShutdown();
+      }
+    });
   }
 }

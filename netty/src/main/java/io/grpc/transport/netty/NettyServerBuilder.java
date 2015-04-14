@@ -32,13 +32,10 @@
 package io.grpc.transport.netty;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.Service;
 
 import io.grpc.AbstractServerBuilder;
 import io.grpc.HandlerRegistry;
 import io.grpc.SharedResourceHolder;
-import io.grpc.transport.ServerListener;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -177,44 +174,25 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
   }
 
   @Override
-  protected Service buildTransportServer(ServerListener serverListener) {
+  protected ServerEssentials buildEssentials() {
     final EventLoopGroup bossEventLoopGroup  = (userBossEventLoopGroup == null)
         ? SharedResourceHolder.get(Utils.DEFAULT_BOSS_EVENT_LOOP_GROUP) : userBossEventLoopGroup;
     final EventLoopGroup workerEventLoopGroup = (userWorkerEventLoopGroup == null)
         ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP)
         : userWorkerEventLoopGroup;
-    NettyServer server = new NettyServer(serverListener, address, channelType, bossEventLoopGroup,
+    NettyServer server = new NettyServer(address, channelType, bossEventLoopGroup,
         workerEventLoopGroup, sslContext, maxConcurrentCallsPerConnection);
-    if (userBossEventLoopGroup == null) {
-      server.addListener(new ClosureHook() {
-        @Override
-        protected void onClosed() {
+    Runnable terminationRunnable = new Runnable() {
+      @Override
+      public void run() {
+        if (userBossEventLoopGroup == null) {
           SharedResourceHolder.release(Utils.DEFAULT_BOSS_EVENT_LOOP_GROUP, bossEventLoopGroup);
         }
-      }, MoreExecutors.directExecutor());
-    }
-    if (userWorkerEventLoopGroup == null) {
-      server.addListener(new ClosureHook() {
-        @Override
-        protected void onClosed() {
+        if (userWorkerEventLoopGroup == null) {
           SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, workerEventLoopGroup);
         }
-      }, MoreExecutors.directExecutor());
-    }
-    return server;
-  }
-
-  private abstract static class ClosureHook extends Service.Listener {
-    protected abstract void onClosed();
-
-    @Override
-    public void terminated(Service.State from) {
-      onClosed();
-    }
-
-    @Override
-    public void failed(Service.State from, Throwable failure) {
-      onClosed();
-    }
+      }
+    };
+    return new ServerEssentials(server, terminationRunnable);
   }
 }

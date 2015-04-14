@@ -34,9 +34,6 @@ package io.grpc;
 import static io.grpc.AbstractChannelBuilder.DEFAULT_EXECUTOR;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.Service;
-
-import io.grpc.transport.ServerListener;
 
 import java.util.concurrent.ExecutorService;
 
@@ -114,18 +111,39 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
       releaseExecutor = true;
     }
 
-    ServerImpl server = new ServerImpl(executor, registry);
-    server.setTransportServer(buildTransportServer(server.serverListener()));
+    final ServerEssentials essentials = buildEssentials();
+    ServerImpl server = new ServerImpl(executor, registry, essentials.server);
     server.setTerminationRunnable(new Runnable() {
       @Override
       public void run() {
         if (releaseExecutor) {
           SharedResourceHolder.release(DEFAULT_EXECUTOR, executor);
         }
+        if (essentials.terminationRunnable != null) {
+          essentials.terminationRunnable.run();
+        }
       }
     });
     return server;
   }
 
-  protected abstract Service buildTransportServer(ServerListener serverListener);
+  protected abstract ServerEssentials buildEssentials();
+
+  protected static class ServerEssentials {
+    final io.grpc.transport.Server server;
+    @Nullable
+    final Runnable terminationRunnable;
+
+    /**
+     * Constructor.
+     *
+     * @param server the created server uses this server to accept transports
+     * @param terminationRunnable will be called at the server termination
+     */
+    public ServerEssentials(io.grpc.transport.Server server,
+        @Nullable Runnable terminationRunnable) {
+      this.server = Preconditions.checkNotNull(server, "server");
+      this.terminationRunnable = terminationRunnable;
+    }
+  }
 }

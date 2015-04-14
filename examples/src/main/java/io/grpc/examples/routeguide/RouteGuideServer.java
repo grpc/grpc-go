@@ -80,7 +80,7 @@ public class RouteGuideServer {
   }
 
   /** Start serving requests. */
-  public void start() {
+  public void start() throws IOException {
     grpcServer = NettyServerBuilder.forPort(port)
         .addService(RouteGuideGrpc.bindService(new RouteGuideService(features)))
         .build().start();

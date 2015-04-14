@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,24 +31,12 @@
 
 package io.grpc.transport;
 
-/**
- * A listener to a server for transport creation events. Notifications must occur from the transport
- * thread.
- */
-public interface ServerListener {
-
+/** An inbound connection. */
+public interface ServerTransport {
   /**
-   * Called upon the establishment of a new client connection.
-   *
-   * @param transport the new transport to be observed.
-   * @return a listener for stream creation events on the transport.
+   * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
+   * eventually begin failing. New streams "eventually" begin failing because shutdown may need to
+   * be processed on a separate thread.
    */
-  ServerTransportListener transportCreated(ServerTransport transport);
-
-  /**
-   * The server is shutting down. No new transports will be processed, but existing streams may
-   * continue. Shutdown is only caused by a call to {@link Server#shutdown()}. All resources have
-   * been released.
-   */
-  void serverShutdown();
+  void shutdown();
 }

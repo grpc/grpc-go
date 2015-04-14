@@ -33,12 +33,11 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.Service;
 
 import io.grpc.transport.ServerListener;
 import io.grpc.transport.ServerStream;
 import io.grpc.transport.ServerStreamListener;
+import io.grpc.transport.ServerTransport;
 import io.grpc.transport.ServerTransportListener;
 
 import java.io.IOException;
@@ -55,9 +54,7 @@ import java.util.concurrent.TimeUnit;
  * <pre><code>public class TcpTransportServerFactory {
  *   public static Server newServer(Executor executor, HandlerRegistry registry,
  *       String configuration) {
- *     ServerImpl server = new ServerImpl(executor, registry);
- *     return server.setTransportServer(
- *         new TcpTransportServer(server.serverListener(), configuration));
+ *     return new ServerImpl(executor, registry, new TcpTransportServer(configuration));
  *   }
  * }</code></pre>
  *
@@ -67,8 +64,6 @@ import java.util.concurrent.TimeUnit;
 public class ServerImpl implements Server {
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
 
-  private final ServerListener serverListener = new ServerListenerImpl();
-  private final ServerTransportListener serverTransportListener = new ServerTransportListenerImpl();
   /** Executor for application processing. */
   private final Executor executor;
   private final HandlerRegistry registry;
@@ -77,46 +72,21 @@ public class ServerImpl implements Server {
   private boolean terminated;
   private Runnable terminationRunnable;
   /** Service encapsulating something similar to an accept() socket. */
-  private Service transportServer;
+  private final io.grpc.transport.Server transportServer;
   /** {@code transportServer} and services encapsulating something similar to a TCP connection. */
-  private final Collection<Service> transports = new HashSet<Service>();
+  private final Collection<ServerTransport> transports = new HashSet<ServerTransport>();
 
   /**
-   * Construct a server. {@link #setTransportServer(Service)} must be called before starting the
-   * server.
+   * Construct a server.
    *
    * @param executor to call methods on behalf of remote clients
    * @param registry of methods to expose to remote clients.
    */
-  public ServerImpl(Executor executor, HandlerRegistry registry) {
-    this.executor = Preconditions.checkNotNull(executor);
-    this.registry = Preconditions.checkNotNull(registry);
-  }
-
-  /**
-   * Set the transport server for the server. {@code transportServer} should be in state NEW and not
-   * shared with any other {@code Server}s; it will be started and managed by the newly-created
-   * server instance. Must be called before starting server.
-   *
-   * @return this object
-   */
-  public synchronized ServerImpl setTransportServer(Service transportServer) {
-    if (shutdown) {
-      throw new IllegalStateException("Already shutdown");
-    }
-    Preconditions.checkState(this.transportServer == null, "transportServer already set");
-    this.transportServer = Preconditions.checkNotNull(transportServer);
-    Preconditions.checkArgument(
-        transportServer.state() == Service.State.NEW, "transport server not in NEW state");
-    transportServer.addListener(new TransportServiceListener(transportServer),
-        MoreExecutors.directExecutor());
-    transports.add(transportServer);
-    return this;
-  }
-
-  /** Listener to be called by transport factories to notify of new transport instances. */
-  public ServerListener serverListener() {
-    return serverListener;
+  public ServerImpl(Executor executor, HandlerRegistry registry,
+      io.grpc.transport.Server transportServer) {
+    this.executor = Preconditions.checkNotNull(executor, "executor");
+    this.registry = Preconditions.checkNotNull(registry, "registry");
+    this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");
   }
 
   /** Hack to allow executors to auto-shutdown. Not for general use. */
@@ -130,22 +100,15 @@ public class ServerImpl implements Server {
    *
    * @return {@code this} object
    * @throws IllegalStateException if already started
+   * @throws IOException if unable to bind
    */
-  public synchronized ServerImpl start() {
+  public synchronized ServerImpl start() throws IOException {
     if (started) {
       throw new IllegalStateException("Already started");
     }
+    // Start and wait for any port to actually be bound.
+    transportServer.start(new ServerListenerImpl());
     started = true;
-    try {
-      // Start and wait for any port to actually be bound.
-      transportServer.startAsync().awaitRunning();
-    } catch (IllegalStateException ex) {
-      Throwable t = transportServer.failureCause();
-      if (t != null) {
-        throw Throwables.propagate(t);
-      }
-      throw ex;
-    }
     return this;
   }
 
@@ -153,12 +116,11 @@ public class ServerImpl implements Server {
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are rejected.
    */
   public synchronized ServerImpl shutdown() {
-    shutdown = true;
-    // transports collection can be modified during stopAsync(), even if we hold the lock, due to
-    // reentrancy.
-    for (Service transport : transports.toArray(new Service[transports.size()])) {
-      transport.stopAsync();
+    if (shutdown) {
+      return this;
     }
+    transportServer.shutdown();
+    shutdown = true;
     return this;
   }
 
@@ -226,10 +188,15 @@ public class ServerImpl implements Server {
    *
    * @param transport service to remove
    */
-  private synchronized void transportClosed(Service transport) {
+  private synchronized void transportClosed(ServerTransport transport) {
     if (!transports.remove(transport)) {
       throw new AssertionError("Transport already removed");
     }
+    checkForTermination();
+  }
+
+  /** Notify of complete shutdown if necessary. */
+  private synchronized void checkForTermination() {
     if (shutdown && transports.isEmpty()) {
       terminated = true;
       notifyAll();
@@ -241,50 +208,39 @@ public class ServerImpl implements Server {
 
   private class ServerListenerImpl implements ServerListener {
     @Override
-    public ServerTransportListener transportCreated(Service transport) {
-      Service.State transportState = transport.state();
-      Preconditions.checkArgument(
-          transportState == Service.State.STARTING || transportState == Service.State.RUNNING,
-          "Created transport should be starting or running");
-      synchronized (this) {
-        if (shutdown) {
-          transport.stopAsync();
-          return serverTransportListener;
-        }
+    public ServerTransportListener transportCreated(ServerTransport transport) {
+      synchronized (ServerImpl.this) {
         transports.add(transport);
       }
-      // transports collection can be modified during this call, even if we hold the lock, due to
-      // reentrancy.
-      transport.addListener(new TransportServiceListener(transport),
-          MoreExecutors.directExecutor());
-      // We assume that transport.state() won't change by another thread before the listener was
-      // registered.
-      Preconditions.checkState(
-          transport.state() == transportState, "transport changed state unexpectedly!");
-      return serverTransportListener;
-    }
-  }
-
-  /** Listens for lifecycle changes to a "TCP connection." */
-  private class TransportServiceListener extends Service.Listener {
-    private final Service transport;
-
-    public TransportServiceListener(Service transport) {
-      this.transport = transport;
+      return new ServerTransportListenerImpl(transport);
     }
 
     @Override
-    public void failed(Service.State from, Throwable failure) {
-      transportClosed(transport);
-    }
-
-    @Override
-    public void terminated(Service.State from) {
-      transportClosed(transport);
+    public void serverShutdown() {
+      synchronized (ServerImpl.this) {
+        // transports collection can be modified during shutdown(), even if we hold the lock, due
+        // to reentrancy.
+        for (ServerTransport transport
+            : transports.toArray(new ServerTransport[transports.size()])) {
+          transport.shutdown();
+        }
+        checkForTermination();
+      }
     }
   }
 
   private class ServerTransportListenerImpl implements ServerTransportListener {
+    private final ServerTransport transport;
+
+    public ServerTransportListenerImpl(ServerTransport transport) {
+      this.transport = transport;
+    }
+
+    @Override
+    public void transportTerminated() {
+      transportClosed(transport);
+    }
+
     @Override
     public ServerStreamListener streamCreated(final ServerStream stream, final String methodName,
         final Metadata.Headers headers) {

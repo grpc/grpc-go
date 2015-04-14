@@ -32,9 +32,8 @@
 package io.grpc.transport.netty;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.AbstractService;
 
-import io.grpc.transport.ServerListener;
+import io.grpc.transport.ServerTransport;
 import io.grpc.transport.ServerTransportListener;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -51,50 +50,48 @@ import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.ssl.SslContext;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 /**
  * The Netty-based server transport.
  */
-class NettyServerTransport extends AbstractService {
-  private static final Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG); 
-  private final Channel channel;
-  private final ServerListener serverListener;
-  private final SslContext sslContext;
-  private NettyServerHandler handler;
-  private int maxStreams;
+class NettyServerTransport implements ServerTransport {
+  private static final Logger log = Logger.getLogger(NettyServerTransport.class.getName());
 
-  NettyServerTransport(Channel channel, ServerListener serverListener,
-      @Nullable SslContext sslContext, int maxStreams) {
+  private final Channel channel;
+  private final SslContext sslContext;
+  private final int maxStreams;
+  private ServerTransportListener listener;
+  private boolean terminated;
+
+  NettyServerTransport(Channel channel, @Nullable SslContext sslContext, int maxStreams) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
-    this.serverListener = Preconditions.checkNotNull(serverListener, "serverListener");
     this.sslContext = sslContext;
     this.maxStreams = maxStreams;
   }
 
-  @Override
-  protected void doStart() {
-    Preconditions.checkState(handler == null, "Handler already registered");
-
-    // Notify the listener that this transport is being constructed.
-    ServerTransportListener transportListener = serverListener.transportCreated(this);
+  public void start(ServerTransportListener listener) {
+    Preconditions.checkState(this.listener == null, "Handler already registered");
+    this.listener = listener;
 
     // Create the Netty handler for the pipeline.
-    handler = createHandler(transportListener);
+    final NettyServerHandler handler = createHandler(listener);
 
     // Notify when the channel closes.
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
         if (!future.isSuccess()) {
-          // Close failed.
-          notifyFailed(future.cause());
+          notifyTerminated(future.cause());
         } else if (handler.connectionError() != null) {
           // The handler encountered a connection error.
-          notifyFailed(handler.connectionError());
+          notifyTerminated(handler.connectionError());
         } else {
           // Normal termination of the connection.
-          notifyStopped();
+          notifyTerminated(null);
         }
       }
     });
@@ -103,16 +100,22 @@ class NettyServerTransport extends AbstractService {
       channel.pipeline().addLast(Http2Negotiator.serverTls(sslContext.newEngine(channel.alloc())));
     }
     channel.pipeline().addLast(handler);
-
-    notifyStarted();
   }
 
   @Override
-  protected void doStop() {
-    // No explicit call to notifyStopped() here, since this is automatically done when the
-    // channel closes.
+  public void shutdown() {
     if (channel.isOpen()) {
       channel.close();
+    }
+  }
+
+  private void notifyTerminated(Throwable t) {
+    if (t != null) {
+      log.log(Level.SEVERE, "Transport failed", t);
+    }
+    if (!terminated) {
+      terminated = true;
+      listener.transportTerminated();
     }
   }
 
@@ -121,6 +124,7 @@ class NettyServerTransport extends AbstractService {
    */
   private NettyServerHandler createHandler(ServerTransportListener transportListener) {
     Http2Connection connection = new DefaultHttp2Connection(true);
+    Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG);
     Http2FrameReader frameReader =
         new Http2InboundFrameLogger(new DefaultHttp2FrameReader(), frameLogger);
     Http2FrameWriter frameWriter =

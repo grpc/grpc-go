@@ -37,6 +37,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isNull;
 import static org.mockito.Matchers.notNull;
@@ -47,11 +48,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.common.io.ByteStreams;
-import com.google.common.util.concurrent.AbstractService;
-import com.google.common.util.concurrent.Service;
 
+import io.grpc.transport.ServerListener;
 import io.grpc.transport.ServerStream;
 import io.grpc.transport.ServerStreamListener;
+import io.grpc.transport.ServerTransport;
 import io.grpc.transport.ServerTransportListener;
 
 import org.junit.After;
@@ -71,7 +72,6 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Unit tests for {@link ServerImpl}. */
@@ -82,9 +82,8 @@ public class ServerImplTest {
 
   private ExecutorService executor = Executors.newSingleThreadExecutor();
   private MutableHandlerRegistry registry = new MutableHandlerRegistryImpl();
-  private Service transportServer = new NoopService();
-  private ServerImpl server = new ServerImpl(executor, registry)
-      .setTransportServer(transportServer);
+  private SimpleServer transportServer = new SimpleServer();
+  private ServerImpl server = new ServerImpl(executor, registry, transportServer);
 
   @Mock
   private ServerStream stream;
@@ -94,7 +93,7 @@ public class ServerImplTest {
 
   /** Set up for test. */
   @Before
-  public void startUp() {
+  public void startUp() throws IOException {
     MockitoAnnotations.initMocks(this);
 
     server.start();
@@ -107,90 +106,60 @@ public class ServerImplTest {
   }
 
   @Test
-  public void startStopImmediate() throws InterruptedException {
-    Service transportServer = new NoopService();
-    ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer);
-    assertEquals(Service.State.NEW, transportServer.state());
+  public void startStopImmediate() throws IOException {
+    transportServer = new SimpleServer() {
+      @Override
+      public void shutdown() {}
+    };
+    ServerImpl server = new ServerImpl(executor, registry, transportServer);
     server.start();
-    assertEquals(Service.State.RUNNING, transportServer.state());
     server.shutdown();
-    assertTrue(server.awaitTerminated(100, TimeUnit.MILLISECONDS));
-    assertEquals(Service.State.TERMINATED, transportServer.state());
+    assertTrue(server.isShutdown());
+    assertFalse(server.isTerminated());
+    transportServer.listener.serverShutdown();
+    assertTrue(server.isTerminated());
+  }
+
+  @Test
+  public void startStopImmediateWithChildTransport() throws IOException {
+    ServerImpl server = new ServerImpl(executor, registry, transportServer);
+    server.start();
+    class DelayedShutdownServerTransport extends SimpleServerTransport {
+      boolean shutdown;
+
+      @Override
+      public void shutdown() {
+        shutdown = true;
+      }
+    }
+
+    DelayedShutdownServerTransport serverTransport = new DelayedShutdownServerTransport();
+    transportServer.registerNewServerTransport(serverTransport);
+    server.shutdown();
+    assertTrue(server.isShutdown());
+    assertFalse(server.isTerminated());
+    assertTrue(serverTransport.shutdown);
+    serverTransport.listener.transportTerminated();
+    assertTrue(server.isTerminated());
   }
 
   @Test
   public void transportServerFailsStartup() {
-    final Exception ex = new RuntimeException();
-    class FailingStartupService extends NoopService {
+    final IOException ex = new IOException();
+    class FailingStartupServer extends SimpleServer {
       @Override
-      public void doStart() {
-        notifyFailed(ex);
+      public void start(ServerListener listener) throws IOException {
+        throw ex;
       }
     }
 
-    FailingStartupService transportServer = new FailingStartupService();
-    ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer);
+    ServerImpl server = new ServerImpl(executor, registry, new FailingStartupServer());
     try {
       server.start();
-    } catch (Exception e) {
+      fail("expected exception");
+    } catch (IOException e) {
       assertSame(ex, e);
     }
-  }
-
-  @Test
-  public void transportServerFirstToShutdown() {
-    class ManualStoppedService extends NoopService {
-      public void doNotifyStopped() {
-        notifyStopped();
-      }
-
-      @Override
-      public void doStop() {} // Don't notify.
-    }
-
-    NoopService transportServer = new NoopService();
-    ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer)
-        .start();
-    ManualStoppedService transport = new ManualStoppedService();
-    transport.startAsync();
-    server.serverListener().transportCreated(transport);
-    server.shutdown();
-    assertEquals(Service.State.STOPPING, transport.state());
-    assertEquals(Service.State.TERMINATED, transportServer.state());
-    assertTrue(server.isShutdown());
-    assertFalse(server.isTerminated());
-
-    transport.doNotifyStopped();
-    assertEquals(Service.State.TERMINATED, transport.state());
-    assertTrue(server.isTerminated());
-  }
-
-  @Test
-  public void transportServerLastToShutdown() {
-    class ManualStoppedService extends NoopService {
-      public void doNotifyStopped() {
-        notifyStopped();
-      }
-
-      @Override
-      public void doStop() {} // Don't notify.
-    }
-
-    ManualStoppedService transportServer = new ManualStoppedService();
-    ServerImpl server = new ServerImpl(executor, registry).setTransportServer(transportServer)
-        .start();
-    Service transport = new NoopService();
-    transport.startAsync();
-    server.serverListener().transportCreated(transport);
-    server.shutdown();
-    assertEquals(Service.State.TERMINATED, transport.state());
-    assertEquals(Service.State.STOPPING, transportServer.state());
-    assertTrue(server.isShutdown());
-    assertFalse(server.isTerminated());
-
-    transportServer.doNotifyStopped();
-    assertEquals(Service.State.TERMINATED, transportServer.state());
-    assertTrue(server.isTerminated());
   }
 
   @Test
@@ -213,7 +182,8 @@ public class ServerImplTest {
               return callListener;
             }
           }).build());
-    ServerTransportListener transportListener = newTransport(server);
+    ServerTransportListener transportListener
+        = transportServer.registerNewServerTransport(new SimpleServerTransport());
 
     Metadata.Headers headers = new Metadata.Headers();
     headers.put(metadataKey, 0);
@@ -271,7 +241,8 @@ public class ServerImplTest {
               throw status.asRuntimeException();
             }
           }).build());
-    ServerTransportListener transportListener = newTransport(server);
+    ServerTransportListener transportListener
+        = transportServer.registerNewServerTransport(new SimpleServerTransport());
 
     ServerStreamListener streamListener
         = transportListener.streamCreated(stream, "/Waiter/serve", new Metadata.Headers());
@@ -282,12 +253,6 @@ public class ServerImplTest {
     executeBarrier(executor).await();
     verify(stream).close(same(status), notNull(Metadata.Trailers.class));
     verifyNoMoreInteractions(stream);
-  }
-
-  private static ServerTransportListener newTransport(ServerImpl server) {
-    Service transport = new NoopService();
-    transport.startAsync();
-    return server.serverListener().transportCreated(transport);
   }
 
   /**
@@ -311,15 +276,30 @@ public class ServerImplTest {
     return barrier;
   }
 
-  private static class NoopService extends AbstractService {
+  private static class SimpleServer implements io.grpc.transport.Server {
+    ServerListener listener;
+
     @Override
-    protected void doStart() {
-      notifyStarted();
+    public void start(ServerListener listener) throws IOException {
+      this.listener = listener;
     }
 
     @Override
-    protected void doStop() {
-      notifyStopped();
+    public void shutdown() {
+      listener.serverShutdown();
+    }
+
+    public ServerTransportListener registerNewServerTransport(SimpleServerTransport transport) {
+      return transport.listener = listener.transportCreated(transport);
+    }
+  }
+
+  private static class SimpleServerTransport implements ServerTransport {
+    ServerTransportListener listener;
+
+    @Override
+    public void shutdown() {
+      listener.transportTerminated();
     }
   }
 

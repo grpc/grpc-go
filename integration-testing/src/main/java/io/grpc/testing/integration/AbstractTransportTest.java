@@ -71,6 +71,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -93,11 +94,14 @@ public abstract class AbstractTransportTest {
   protected static void startStaticServer(AbstractServerBuilder<?> builder) {
     testServiceExecutor = Executors.newScheduledThreadPool(2);
 
-    server = builder
-        .addService(ServerInterceptors.intercept(
-            TestServiceGrpc.bindService(new TestServiceImpl(testServiceExecutor)),
-            TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
-        .build().start();
+    builder.addService(ServerInterceptors.intercept(
+        TestServiceGrpc.bindService(new TestServiceImpl(testServiceExecutor)),
+        TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)));
+    try {
+      server = builder.build().start();
+    } catch (IOException ex) {
+      throw new RuntimeException(ex);
+    }
   }
 
   protected static void stopStaticServer() {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,24 +31,26 @@
 
 package io.grpc.transport;
 
+import java.io.IOException;
+
 /**
- * A listener to a server for transport creation events. Notifications must occur from the transport
- * thread.
+ * A server accepts new incomming connections. This is would commonly encapsulate a bound socket
+ * that {@code accept(}}s new connections.
  */
-public interface ServerListener {
-
+public interface Server {
   /**
-   * Called upon the establishment of a new client connection.
+   * Starts transport. Implementations must not call {@code listener} until after {@code start()}
+   * returns. The method only returns after it has done the equivalent of bind()ing, so it will be
+   * able to service any connections created after returning.
    *
-   * @param transport the new transport to be observed.
-   * @return a listener for stream creation events on the transport.
+   * @param listener non-{@code null} listener of server events
+   * @throws IOException if unable to bind
    */
-  ServerTransportListener transportCreated(ServerTransport transport);
+  void start(ServerListener listener) throws IOException;
 
   /**
-   * The server is shutting down. No new transports will be processed, but existing streams may
-   * continue. Shutdown is only caused by a call to {@link Server#shutdown()}. All resources have
-   * been released.
+   * Initiates an orderly shutdown of the server. Existing transports continue, but new transports
+   * will not be created (once {@link ServerListener#serverShutdown()} callback called).
    */
-  void serverShutdown();
+  void shutdown();
 }
