@@ -88,6 +88,7 @@ public abstract class AbstractTransportTest {
       ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
   private static ScheduledExecutorService testServiceExecutor;
   private static ServerImpl server;
+  private static int OPERATION_TIMEOUT = 5000;
 
   protected static void startStaticServer(AbstractServerBuilder<?> builder) {
     testServiceExecutor = Executors.newScheduledThreadPool(2);
@@ -280,11 +281,11 @@ public abstract class AbstractTransportTest {
         = asyncStub.fullDuplexCall(responseObserver);
     for (int i = 0; i < requests.size(); i++) {
       requestObserver.onValue(requests.get(i));
-      verify(responseObserver, timeout(1000)).onValue(goldenResponses.get(i));
+      verify(responseObserver, timeout(OPERATION_TIMEOUT)).onValue(goldenResponses.get(i));
       verifyNoMoreInteractions(responseObserver);
     }
     requestObserver.onCompleted();
-    verify(responseObserver, timeout(1000)).onCompleted();
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onCompleted();
     verifyNoMoreInteractions(responseObserver);
   }
 
@@ -295,7 +296,7 @@ public abstract class AbstractTransportTest {
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onCompleted();
-    verify(responseObserver, timeout(1000)).onCompleted();
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onCompleted();
     verifyNoMoreInteractions(responseObserver);
   }
 
@@ -329,12 +330,12 @@ public abstract class AbstractTransportTest {
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onValue(request);
-    verify(responseObserver, timeout(1000)).onValue(goldenResponse);
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onValue(goldenResponse);
     verifyNoMoreInteractions(responseObserver);
 
     requestObserver.onError(new RuntimeException());
     ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
-    verify(responseObserver, timeout(1000)).onError(captor.capture());
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onError(captor.capture());
     assertEquals(Status.CANCELLED, Status.fromThrowable(captor.getValue()));
     verifyNoMoreInteractions(responseObserver);
   }
@@ -445,7 +446,7 @@ public abstract class AbstractTransportTest {
 
     // Time how long it takes to get the first response.
     call.request(1);
-    assertEquals(goldenResponses.get(0), queue.poll(1, TimeUnit.SECONDS));
+    assertEquals(goldenResponses.get(0), queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
     long firstCallDuration = System.nanoTime() - start;
 
     // Without giving additional flow control, make sure that we don't get another response. We wait
@@ -457,8 +458,8 @@ public abstract class AbstractTransportTest {
 
     // Make sure that everything still completes.
     call.request(1);
-    assertEquals(goldenResponses.get(1), queue.poll(1, TimeUnit.SECONDS));
-    assertEquals(Status.OK, queue.poll(1, TimeUnit.SECONDS));
+    assertEquals(goldenResponses.get(1), queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
+    assertEquals(Status.OK, queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
   }
 
   @Test(timeout = 30000)
