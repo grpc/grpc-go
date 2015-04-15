@@ -145,7 +145,7 @@ func NewClientTLSFromFile(certFile, serverName string) (TransportAuthenticator, 
 
 // NewServerTLSFromCert constructs a TLS from the input certificate for server.
 func NewServerTLSFromCert(cert *tls.Certificate) TransportAuthenticator {
-	return NewTLS(&tls.Config{ Certificates: []tls.Certificate{*cert} })
+	return NewTLS(&tls.Config{Certificates: []tls.Certificate{*cert}})
 }
 
 // NewServerTLSFromFile constructs a TLS from the input certificate file and key
@@ -155,7 +155,7 @@ func NewServerTLSFromFile(certFile, keyFile string) (TransportAuthenticator, err
 	if err != nil {
 		return nil, err
 	}
-	return NewTLS(&tls.Config{ Certificates: []tls.Certificate{cert} }), nil
+	return NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}}), nil
 }
 
 // TokenSource supplies credentials from an oauth2.TokenSource.
