@@ -45,6 +45,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2Connection;
+import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2Error;
@@ -52,8 +53,8 @@ import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameAdapter;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Stream;
+import io.netty.handler.codec.http2.Http2StreamVisitor;
 
 import javax.annotation.Nullable;
 
@@ -63,7 +64,6 @@ import javax.annotation.Nullable;
  */
 class NettyClientHandler extends Http2ConnectionHandler {
 
-  private final Http2LocalFlowController inboundFlow;
   private int connectionWindowSize;
   private Throwable connectionError;
   private Status goAwayStatus;
@@ -71,14 +71,18 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private int nextStreamId;
 
   public NettyClientHandler(Http2ConnectionEncoder encoder, Http2Connection connection,
-                            Http2FrameReader frameReader, Http2LocalFlowController inboundFlow,
-                            int connectionWindowSize) {
+                            Http2FrameReader frameReader,
+                            int connectionWindowSize, int streamWindowSize) {
     super(new DefaultHttp2ConnectionDecoder(connection, encoder, frameReader,
         new LazyFrameListener()), new BufferingHttp2ConnectionEncoder(encoder));
     Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
     this.connectionWindowSize =
-        connectionWindowSize == inboundFlow.initialWindowSize() ? -1 : connectionWindowSize;
-    this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
+        connectionWindowSize == streamWindowSize ? -1 : connectionWindowSize;
+    try {
+      decoder().flowController().initialWindowSize(streamWindowSize);
+    } catch (Http2Exception e) {
+      throw new RuntimeException(e);
+    }
 
     initListener();
 
@@ -86,6 +90,19 @@ class NettyClientHandler extends Http2ConnectionHandler {
     connection.remote().maxActiveStreams(0);
     connection.local().allowPushTo(false);
     nextStreamId = connection.local().nextStreamId();
+    connection.addListener(new Http2ConnectionAdapter() {
+      @Override
+      public void onGoAwaySent(int lastStreamId, long errorCode, ByteBuf debugData) {
+        goAwayStatus(statusFromGoAway(errorCode, debugData));
+        goingAway();
+      }
+
+      @Override
+      public void onGoAwayReceived(int lastStreamId, long errorCode, ByteBuf debugData) {
+        goAwayStatus(statusFromGoAway(errorCode, debugData));
+        goingAway();
+      }
+    });
   }
 
   @Nullable
@@ -136,10 +153,9 @@ class NettyClientHandler extends Http2ConnectionHandler {
   /**
    * Returns the given processed bytes back to inbound flow control.
    */
-  void returnProcessedBytes(int streamId, int bytes) {
+  void returnProcessedBytes(Http2Stream stream, int bytes) {
     try {
-      Http2Stream http2Stream = connection().requireStream(streamId);
-      inboundFlow.consumeBytes(ctx, http2Stream, bytes);
+      decoder().flowController().consumeBytes(ctx, stream, bytes);
     } catch (Http2Exception e) {
       throw new RuntimeException(e);
     }
@@ -175,15 +191,9 @@ class NettyClientHandler extends Http2ConnectionHandler {
     stream.transportReportStatus(Status.UNKNOWN, false, new Metadata.Trailers());
   }
 
-  private void onGoAwayRead(long errorCode, ByteBuf debugData) {
-    goAwayStatus(statusFromGoAway(errorCode, debugData));
-    goingAway();
-  }
-
   @Override
   public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
     goAwayStatus(Status.UNAVAILABLE.withDescription("Network channel closed by the client"));
-    
     super.close(ctx, promise);
   }
 
@@ -195,9 +205,13 @@ class NettyClientHandler extends Http2ConnectionHandler {
     try {
       goAwayStatus(goAwayStatus().augmentDescription("Network channel closed"));
       // Report status to the application layer for any open streams
-      for (Http2Stream stream : http2Streams()) {
-        clientStream(stream).transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
-      }
+      connection().forEachActiveStream(new Http2StreamVisitor() {
+        @Override
+        public boolean visit(Http2Stream stream) throws Http2Exception {
+          clientStream(stream).transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
+          return true;
+        }
+      });
     } finally {
       // Close any open streams
       super.channelInactive(ctx);
@@ -245,6 +259,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
                 if (future.isSuccess()) {
                   // Attach the client stream to the HTTP/2 stream object as user data.
                   Http2Stream http2Stream = connection().stream(streamId);
+                  stream.setHttp2Stream(http2Stream);
                   // The http2Stream will be null in case a stream buffered in the encoder
                   // was canceled via RST_STREAM.
                   if (http2Stream != null) {
@@ -285,20 +300,26 @@ class NettyClientHandler extends Http2ConnectionHandler {
   }
 
   /**
-   * Handler for a GOAWAY being either sent or received.
+   * Handler for a GOAWAY being either sent or received. Fails any streams created after the
+   * last known stream.
    */
   private void goingAway() {
-    Status goAwayStatus = goAwayStatus();
-    if (connection().goAwayReceived()) {
-      // Received a GOAWAY from the remote endpoint. Fail any streams that were created after the
-      // last known stream.
-      int lastKnownStream = connection().local().lastKnownStream();
-      for (Http2Stream stream : http2Streams()) {
-        if (lastKnownStream < stream.id()) {
-          clientStream(stream).transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
-          stream.close();
+    final Status goAwayStatus = goAwayStatus();
+    final int lastKnownStream = connection().local().lastKnownStream();
+    try {
+      connection().forEachActiveStream(new Http2StreamVisitor() {
+        @Override
+        public boolean visit(Http2Stream stream) throws Http2Exception {
+          if (stream.id() > lastKnownStream) {
+            clientStream(stream)
+                .transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
+            stream.close();
+          }
+          return true;
         }
-      }
+      });
+    } catch (Http2Exception e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -331,13 +352,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
    */
   private NettyClientStream clientStream(Http2Stream stream) {
     return stream.getProperty(NettyClientStream.class);
-  }
-
-  /**
-   * Gets a copy of the streams currently in the connection.
-   */
-  private Http2Stream[] http2Streams() {
-    return connection().activeStreams().toArray(new Http2Stream[0]);
   }
 
   private int getAndIncrementNextStreamId() {
@@ -389,12 +403,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
     public void onRstStreamRead(ChannelHandlerContext ctx, int streamId, long errorCode)
         throws Http2Exception {
       handler.onRstStreamRead(streamId);
-    }
-
-    @Override
-    public void onGoAwayRead(ChannelHandlerContext ctx, int lastStreamId, long errorCode,
-        ByteBuf debugData) throws Http2Exception {
-      handler.onGoAwayRead(errorCode, debugData);
     }
   }
 }

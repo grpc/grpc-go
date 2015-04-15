@@ -48,24 +48,20 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
-import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
-import io.netty.handler.codec.http2.DefaultHttp2StreamRemovalPolicy;
 import io.netty.handler.codec.http2.Http2Connection;
-import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
-import io.netty.handler.codec.http2.Http2StreamRemovalPolicy;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.ssl.SslContext;
+import io.netty.util.AsciiString;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -133,15 +129,14 @@ class NettyClientTransport implements ClientTransport {
       authority = new AsciiString(address.toString());
     }
 
-    DefaultHttp2StreamRemovalPolicy streamRemovalPolicy = new DefaultHttp2StreamRemovalPolicy();
-    handler = newHandler(streamRemovalPolicy);
+    handler = newHandler();
     switch (negotiationType) {
       case PLAINTEXT:
-        negotiation = Http2Negotiator.plaintext(streamRemovalPolicy, handler);
+        negotiation = Http2Negotiator.plaintext(handler);
         ssl = false;
         break;
       case PLAINTEXT_UPGRADE:
-        negotiation = Http2Negotiator.plaintextUpgrade(streamRemovalPolicy, handler);
+        negotiation = Http2Negotiator.plaintextUpgrade(handler);
         ssl = false;
         break;
       case TLS:
@@ -158,7 +153,7 @@ class NettyClientTransport implements ClientTransport {
         SSLParameters sslParams = new SSLParameters();
         sslParams.setEndpointIdentificationAlgorithm("HTTPS");
         sslEngine.setSSLParameters(sslParams);
-        negotiation = Http2Negotiator.tls(sslEngine, streamRemovalPolicy, handler);
+        negotiation = Http2Negotiator.tls(sslEngine, handler);
         ssl = true;
         break;
       default:
@@ -318,29 +313,19 @@ class NettyClientTransport implements ClientTransport {
     }
   }
 
-  private NettyClientHandler newHandler(Http2StreamRemovalPolicy streamRemovalPolicy) {
-    try {
-      Http2Connection connection = new DefaultHttp2Connection(false, streamRemovalPolicy);
-      Http2FrameReader frameReader = new DefaultHttp2FrameReader();
-      Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
+  private NettyClientHandler newHandler() {
+    Http2Connection connection = new DefaultHttp2Connection(false);
+    Http2FrameReader frameReader = new DefaultHttp2FrameReader();
+    Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
 
-      Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG);
-      frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
-      frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
+    Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG);
+    frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
+    frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
 
-      DefaultHttp2LocalFlowController inboundFlow =
-          new DefaultHttp2LocalFlowController(connection, frameWriter);
+    DefaultHttp2ConnectionEncoder encoder =
+        new DefaultHttp2ConnectionEncoder(connection, frameWriter);
 
-      // Set the initial window size for new streams.
-      inboundFlow.initialWindowSize(streamWindowSize);
-
-      DefaultHttp2ConnectionEncoder encoder
-          = new DefaultHttp2ConnectionEncoder(connection, frameWriter);
-
-      return new NettyClientHandler(encoder, connection, frameReader, inboundFlow,
-          connectionWindowSize);
-    } catch (Http2Exception e) {
-      throw new RuntimeException(e);
-    }
+    return new NettyClientHandler(encoder, connection, frameReader, connectionWindowSize,
+        streamWindowSize);
   }
 }

@@ -61,9 +61,8 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   /** Saved trailers from close() that need to be sent once the framer has sent all messages. */
   private Metadata.Trailers stashedTrailers;
 
-  protected AbstractServerStream(WritableBufferAllocator bufferAllocator, IdT id) {
+  protected AbstractServerStream(WritableBufferAllocator bufferAllocator) {
     super(bufferAllocator);
-    id(id);
   }
 
   /**

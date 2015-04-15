@@ -32,6 +32,7 @@
 package io.grpc.transport.netty;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.Http2ClientStream;
@@ -39,6 +40,9 @@ import io.grpc.transport.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2Stream;
+
+import javax.annotation.Nullable;
 
 /**
  * Client stream for a Netty transport.
@@ -47,6 +51,8 @@ class NettyClientStream extends Http2ClientStream {
 
   private final Channel channel;
   private final NettyClientHandler handler;
+  private Http2Stream http2Stream;
+  private Integer id;
 
   NettyClientStream(ClientStreamListener listener, Channel channel, NettyClientHandler handler) {
     super(new NettyWritableBufferAllocator(channel.alloc()), listener);
@@ -62,6 +68,32 @@ class NettyClientStream extends Http2ClientStream {
         requestMessagesFromDeframer(numMessages);
       }
     });
+  }
+
+  @Override
+  public Integer id() {
+    return id;
+  }
+
+  public void id(int id) {
+    this.id = id;
+  }
+
+  /**
+   * Sets the underlying Netty {@link Http2Stream} for this stream.
+   */
+  public void setHttp2Stream(Http2Stream http2Stream) {
+    checkNotNull(http2Stream, "http2Stream");
+    checkState(this.http2Stream == null, "Can only set http2Stream once");
+    this.http2Stream = http2Stream;
+  }
+
+  /**
+   * Gets the underlying Netty {@link Http2Stream} for this stream.
+   */
+  @Nullable
+  public Http2Stream http2Stream() {
+    return http2Stream;
   }
 
   void transportHeadersReceived(Http2Headers headers, boolean endOfStream) {
@@ -90,6 +122,6 @@ class NettyClientStream extends Http2ClientStream {
 
   @Override
   protected void returnProcessedBytes(int processedBytes) {
-    handler.returnProcessedBytes(id(), processedBytes);
+    handler.returnProcessedBytes(http2Stream, processedBytes);
   }
 }

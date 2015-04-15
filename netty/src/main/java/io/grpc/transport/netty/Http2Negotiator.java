@@ -163,8 +163,7 @@ public class Http2Negotiator {
   /**
    * Create a plaintext upgrade negotiation for HTTP/1.1 to HTTP/2.
    */
-  public static Negotiation plaintextUpgrade(final ChannelHandler streamRemovalPolicy,
-                                             Http2ConnectionHandler handler) {
+  public static Negotiation plaintextUpgrade(Http2ConnectionHandler handler) {
     // Register the plaintext upgrader
     Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(handler);
     HttpClientCodec httpClientCodec = new HttpClientCodec();
@@ -174,7 +173,6 @@ public class Http2Negotiator {
     final ChannelInitializer<Channel> initializer = new ChannelInitializer<Channel>() {
       @Override
       public void initChannel(Channel ch) throws Exception {
-        ch.pipeline().addLast(streamRemovalPolicy);
         ch.pipeline().addLast(upgrader);
         ch.pipeline().addLast(completionHandler);
       }

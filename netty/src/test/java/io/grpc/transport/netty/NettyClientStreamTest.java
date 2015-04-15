@@ -51,9 +51,9 @@ import io.grpc.transport.AbstractStream;
 import io.grpc.transport.ClientStreamListener;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.util.AsciiString;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -192,7 +192,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     Http2Headers headers = grpcResponseHeaders();
     headers.remove(CONTENT_TYPE_HEADER);
     // Remove once b/16290036 is fixed.
-    headers.status(AsciiString.of("500"));
+    headers.status(new AsciiString("500"));
     stream().transportHeadersReceived(headers, false);
     verify(listener, never()).closed(any(Status.class), any(Metadata.Trailers.class));
 
@@ -275,9 +275,10 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Override
   protected AbstractStream<Integer> createStream() {
-    AbstractStream<Integer> stream = new NettyClientStream(listener, channel, handler);
+    NettyClientStream stream = new NettyClientStream(listener, channel, handler);
     assertTrue(stream.canSend());
     assertTrue(stream.canReceive());
+    stream.id(STREAM_ID);
     return stream;
   }
 

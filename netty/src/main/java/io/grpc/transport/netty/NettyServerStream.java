@@ -39,6 +39,7 @@ import io.grpc.transport.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2Stream;
 
 /**
  * Server stream for a Netty HTTP2 transport.
@@ -47,11 +48,18 @@ class NettyServerStream extends AbstractServerStream<Integer> {
 
   private final Channel channel;
   private final NettyServerHandler handler;
+  private final Http2Stream http2Stream;
 
-  NettyServerStream(Channel channel, int id, NettyServerHandler handler) {
-    super(new NettyWritableBufferAllocator(channel.alloc()), id);
+  NettyServerStream(Channel channel, Http2Stream http2Stream, NettyServerHandler handler) {
+    super(new NettyWritableBufferAllocator(channel.alloc()));
     this.channel = checkNotNull(channel, "channel");
+    this.http2Stream = checkNotNull(http2Stream, "http2Stream");
     this.handler = checkNotNull(handler, "handler");
+  }
+
+  @Override
+  public Integer id() {
+    return http2Stream.id();
   }
 
   void inboundDataReceived(ByteBuf frame, boolean endOfStream) {
@@ -93,6 +101,6 @@ class NettyServerStream extends AbstractServerStream<Integer> {
 
   @Override
   protected void returnProcessedBytes(int processedBytes) {
-    handler.returnProcessedBytes(id(), processedBytes);
+    handler.returnProcessedBytes(http2Stream, processedBytes);
   }
 }

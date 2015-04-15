@@ -68,12 +68,10 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.DefaultChannelPromise;
-import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
@@ -81,6 +79,7 @@ import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
+import io.netty.util.AsciiString;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -270,13 +269,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     final int maxConcurrentStreams = 314;
     channel = mock(Channel.class);
     Http2FrameWriter frameWriter = mock(Http2FrameWriter.class);
-    {
-      Http2Connection connection = new DefaultHttp2Connection(true);
-      DefaultHttp2LocalFlowController inboundFlow =
-          new DefaultHttp2LocalFlowController(connection, frameWriter);
-      handler = new NettyServerHandler( transportListener, connection,
-          new DefaultHttp2FrameReader(), frameWriter, inboundFlow, maxConcurrentStreams);
-    }
+    Http2Connection connection = new DefaultHttp2Connection(true);
+    handler =
+        new NettyServerHandler(transportListener, connection, new DefaultHttp2FrameReader(),
+            frameWriter, maxConcurrentStreams);
 
     when(channel.isActive()).thenReturn(true);
     mockContext();
@@ -351,9 +347,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     Http2Connection connection = new DefaultHttp2Connection(true);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
-    DefaultHttp2LocalFlowController inboundFlow =
-        new DefaultHttp2LocalFlowController(connection, frameWriter);
     return new NettyServerHandler(transportListener, connection, frameReader, frameWriter,
-        inboundFlow, Integer.MAX_VALUE);
+        Integer.MAX_VALUE);
   }
 }

@@ -57,7 +57,6 @@ import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.DefaultHttp2StreamRemovalPolicy;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
@@ -112,18 +111,11 @@ public class BufferingHttp2ConnectionEncoderTest {
     when(configuration.frameSizePolicy()).thenReturn(frameSizePolicy);
     when(frameSizePolicy.maxFrameSize()).thenReturn(DEFAULT_MAX_FRAME_SIZE);
     when(writer.writeRstStream(eq(ctx), anyInt(), anyLong(), eq(promise))).thenAnswer(
-        new Answer<ChannelFuture>() {
-          @Override
-          public ChannelFuture answer(InvocationOnMock invocation) throws Throwable {
-            ChannelPromise future =
-                new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE);
-            future.setSuccess();
-            return future;
-          }
-        }
-    );
+        successAnswer());
+    when(writer.writeGoAway(eq(ctx), anyInt(), anyLong(), any(ByteBuf.class), eq(promise)))
+        .thenAnswer(successAnswer());
 
-    connection = new DefaultHttp2Connection(false, new DefaultHttp2StreamRemovalPolicy());
+    connection = new DefaultHttp2Connection(false);
 
     DefaultHttp2ConnectionEncoder defaultEncoder =
         new DefaultHttp2ConnectionEncoder(connection, writer);
@@ -316,6 +308,18 @@ public class BufferingHttp2ConnectionEncoderTest {
     verify(writer, mode).writeHeaders(eq(ctx), eq(streamId), any(Http2Headers.class), eq(0),
                                       eq(DEFAULT_PRIORITY_WEIGHT), eq(false), eq(0),
                                       eq(false), eq(promise));
+  }
+
+  private Answer<ChannelFuture> successAnswer() {
+    return new Answer<ChannelFuture>() {
+      @Override
+      public ChannelFuture answer(InvocationOnMock invocation) throws Throwable {
+        ChannelPromise future =
+            new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE);
+        future.setSuccess();
+        return future;
+      }
+    };
   }
 
   private static ByteBuf data() {

@@ -40,6 +40,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.when;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -47,10 +48,12 @@ import io.grpc.transport.AbstractStream;
 import io.grpc.transport.ServerStreamListener;
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
-import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2Stream;
+import io.netty.util.AsciiString;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -63,7 +66,16 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   protected ServerStreamListener serverListener;
   @Mock
   private NettyServerHandler handler;
+  @Mock
+  private Http2Stream http2Stream;
   private Metadata.Trailers trailers = new Metadata.Trailers();
+
+  @Override
+  @Before
+  public void setUp() {
+    super.setUp();
+    when(http2Stream.id()).thenReturn(STREAM_ID);
+  }
 
   @Test
   public void writeMessageShouldSendResponse() throws Exception {
@@ -195,7 +207,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Override
   protected AbstractStream<Integer> createStream() {
-    NettyServerStream stream = new NettyServerStream(channel, STREAM_ID, handler);
+    NettyServerStream stream = new NettyServerStream(channel, http2Stream, handler);
     stream.setListener(serverListener);
     assertTrue(stream.canReceive());
     assertTrue(stream.canSend());

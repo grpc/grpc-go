@@ -31,7 +31,8 @@
 
 package io.grpc.transport.okhttp;
 
-import com.google.common.base.Preconditions;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.Header;
@@ -41,10 +42,12 @@ import io.grpc.Status;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.Http2ClientStream;
 import io.grpc.transport.WritableBuffer;
+
 import okio.Buffer;
 
 import java.util.List;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -74,6 +77,7 @@ class OkHttpClientStream extends Http2ClientStream {
   private final OkHttpClientTransport transport;
   private final Object lock = new Object();
   private Object outboundFlowState;
+  private volatile Integer id;
 
   private OkHttpClientStream(ClientStreamListener listener,
                              AsyncFrameWriter frameWriter,
@@ -90,6 +94,21 @@ class OkHttpClientStream extends Http2ClientStream {
     synchronized (lock) {
       requestMessagesFromDeframer(numMessages);
     }
+  }
+
+  @Override
+  @Nullable
+  public Integer id() {
+    return id;
+  }
+
+  /**
+   * Set the internal ID for this stream.
+   */
+  public void id(Integer id) {
+    checkNotNull(id, "id");
+    checkState(this.id == null, "Can only set id once");
+    this.id = id;
   }
 
   public void transportHeadersReceived(List<Header> headers, boolean endOfStream) {
@@ -125,12 +144,12 @@ class OkHttpClientStream extends Http2ClientStream {
 
   @Override
   protected void sendFrame(WritableBuffer frame, boolean endOfStream) {
-    Preconditions.checkState(id() != 0, "streamId should be set");
+    checkState(id() != 0, "streamId should be set");
     Buffer buffer = ((OkHttpWritableBuffer) frame).buffer();
     // Write the data to the remote endpoint.
     // Per http2 SPEC, the max data length should be larger than 64K, while our frame size is
     // only 4K.
-    Preconditions.checkState(buffer.size() < frameWriter.maxDataLength());
+    checkState(buffer.size() < frameWriter.maxDataLength());
     outboundFlow.data(endOfStream, id(), buffer);
   }
 

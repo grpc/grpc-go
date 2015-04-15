@@ -42,15 +42,12 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
-import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
-import io.netty.handler.codec.http2.DefaultHttp2StreamRemovalPolicy;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
-import io.netty.handler.codec.http2.Http2StreamRemovalPolicy;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.ssl.SslContext;
 
@@ -83,8 +80,7 @@ class NettyServerTransport extends AbstractService {
     ServerTransportListener transportListener = serverListener.transportCreated(this);
 
     // Create the Netty handler for the pipeline.
-    DefaultHttp2StreamRemovalPolicy streamRemovalPolicy = new DefaultHttp2StreamRemovalPolicy();
-    handler = createHandler(transportListener, streamRemovalPolicy);
+    handler = createHandler(transportListener);
 
     // Notify when the channel closes.
     channel.closeFuture().addListener(new ChannelFutureListener() {
@@ -106,7 +102,6 @@ class NettyServerTransport extends AbstractService {
     if (sslContext != null) {
       channel.pipeline().addLast(Http2Negotiator.serverTls(sslContext.newEngine(channel.alloc())));
     }
-    channel.pipeline().addLast(streamRemovalPolicy);
     channel.pipeline().addLast(handler);
 
     notifyStarted();
@@ -124,17 +119,14 @@ class NettyServerTransport extends AbstractService {
   /**
    * Creates the Netty handler to be used in the channel pipeline.
    */
-  private NettyServerHandler createHandler(ServerTransportListener transportListener,
-      Http2StreamRemovalPolicy streamRemovalPolicy) {
-    Http2Connection connection = new DefaultHttp2Connection(true, streamRemovalPolicy);
+  private NettyServerHandler createHandler(ServerTransportListener transportListener) {
+    Http2Connection connection = new DefaultHttp2Connection(true);
     Http2FrameReader frameReader =
         new Http2InboundFrameLogger(new DefaultHttp2FrameReader(), frameLogger);
     Http2FrameWriter frameWriter =
         new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
 
-    DefaultHttp2LocalFlowController inboundFlow =
-        new DefaultHttp2LocalFlowController(connection, frameWriter);
     return new NettyServerHandler(transportListener, connection, frameReader, frameWriter,
-        inboundFlow, maxStreams);
+        maxStreams);
   }
 }

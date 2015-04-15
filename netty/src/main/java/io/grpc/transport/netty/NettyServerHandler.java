@@ -51,7 +51,6 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2Error;
@@ -61,8 +60,9 @@ import io.netty.handler.codec.http2.Http2FrameAdapter;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Stream;
+import io.netty.handler.codec.http2.Http2StreamVisitor;
+import io.netty.util.ByteString;
 import io.netty.util.ReferenceCountUtil;
 
 import java.util.logging.Level;
@@ -81,7 +81,6 @@ class NettyServerHandler extends Http2ConnectionHandler {
   private static final Status GOAWAY_STATUS = Status.UNAVAILABLE;
 
   private final ServerTransportListener transportListener;
-  private final Http2LocalFlowController inboundFlow;
   private Throwable connectionError;
   private ChannelHandlerContext ctx;
   private boolean teWarningLogged;
@@ -90,11 +89,9 @@ class NettyServerHandler extends Http2ConnectionHandler {
       Http2Connection connection,
       Http2FrameReader frameReader,
       Http2FrameWriter frameWriter,
-      Http2LocalFlowController inboundFlow,
       int maxStreams) {
     super(connection, frameReader, frameWriter, new LazyFrameListener());
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
-    this.inboundFlow = Preconditions.checkNotNull(inboundFlow, "inboundFlow");
     initListener();
     connection.local().allowPushTo(false);
     connection.remote().maxActiveStreams(maxStreams);
@@ -137,10 +134,10 @@ class NettyServerHandler extends Http2ConnectionHandler {
     }
 
     try {
-      NettyServerStream stream = new NettyServerStream(ctx.channel(), streamId, this);
       // The Http2Stream object was put by AbstractHttp2ConnectionHandler before calling this
       // method.
       Http2Stream http2Stream = connection().requireStream(streamId);
+      NettyServerStream stream = new NettyServerStream(ctx.channel(), http2Stream, this);
       http2Stream.setProperty(NettyServerStream.class, stream);
       String method = determineMethod(streamId, headers);
       ServerStreamListener listener =
@@ -212,9 +209,13 @@ class NettyServerHandler extends Http2ConnectionHandler {
   public void channelInactive(ChannelHandlerContext ctx) throws Exception {
     super.channelInactive(ctx);
     // Any streams that are still active must be closed
-    for (Http2Stream stream : connection().activeStreams()) {
-      serverStream(stream).abortStream(GOAWAY_STATUS, false);
-    }
+    connection().forEachActiveStream(new Http2StreamVisitor() {
+      @Override
+      public boolean visit(Http2Stream stream) throws Http2Exception {
+        serverStream(stream).abortStream(GOAWAY_STATUS, false);
+        return true;
+      }
+    });
   }
 
   /**
@@ -239,10 +240,9 @@ class NettyServerHandler extends Http2ConnectionHandler {
   /**
    * Returns the given processed bytes back to inbound flow control.
    */
-  void returnProcessedBytes(int streamId, int bytes) {
+  void returnProcessedBytes(Http2Stream http2Stream, int bytes) {
     try {
-      Http2Stream http2Stream = connection().requireStream(streamId);
-      inboundFlow.consumeBytes(ctx, http2Stream, bytes);
+      decoder().flowController().consumeBytes(ctx, http2Stream, bytes);
     } catch (Http2Exception e) {
       throw new RuntimeException(e);
     }
@@ -296,7 +296,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
     // Write the GO_AWAY frame to the remote endpoint.
     int lastKnownStream = connection().remote().lastStreamCreated();
-    writeGoAway(ctx, lastKnownStream, errorCode, data, promise);
+    goAway(ctx, lastKnownStream, errorCode, data, promise);
 
     // When the write completes, close this channel.
     promise.addListener(new ChannelFutureListener() {
@@ -322,7 +322,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   }
 
   private static void checkHeader(int streamId, Http2Headers headers,
-      AsciiString header, AsciiString expectedValue) throws Http2Exception {
+      ByteString header, ByteString expectedValue) throws Http2Exception {
     if (!expectedValue.equals(headers.get(header))) {
       throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
           "Header '%s'='%s', while '%s' is expected", header, headers.get(header), expectedValue);

@@ -50,6 +50,7 @@ import static org.mockito.Mockito.calls;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -61,13 +62,11 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.DefaultChannelPromise;
-import io.netty.handler.codec.AsciiString;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
@@ -76,8 +75,9 @@ import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
-
+import io.netty.util.AsciiString;
 import io.netty.util.concurrent.ImmediateEventExecutor;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -319,11 +319,13 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   }
 
   @Test
-  public void cancelStreamShouldFailBufferedStream() throws Exception {
+  public void cancelStreamShouldCreateAndThenFailBufferedStream() throws Exception {
     receiveMaxConcurrentStreams(0);
     handler.write(ctx, new CreateStreamCommand(grpcHeaders, stream), promise);
+    verify(stream).id(3);
+    when(stream.id()).thenReturn(3);
     handler.write(ctx, new CancelStreamCommand(stream), promise);
-    verify(promise).setFailure(any(Throwable.class));
+    verify(promise, times(2)).setSuccess();
     verify(stream).transportReportStatus(eq(Status.CANCELLED), eq(true),
         any(Metadata.Trailers.class));
   }
@@ -398,13 +400,10 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     Http2Connection connection = new DefaultHttp2Connection(false);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
-    DefaultHttp2LocalFlowController inboundFlow =
-        new DefaultHttp2LocalFlowController(connection, frameWriter);
-    inboundFlow.initialWindowSize(streamWindowSize);
     DefaultHttp2ConnectionEncoder encoder =
         new DefaultHttp2ConnectionEncoder(connection, frameWriter);
-    return new NettyClientHandler(encoder, connection, frameReader, inboundFlow,
-        connectionWindowSize);
+    return new NettyClientHandler(encoder, connection, frameReader, connectionWindowSize,
+        streamWindowSize);
   }
 
   private AsciiString as(String string) {

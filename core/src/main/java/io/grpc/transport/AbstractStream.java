@@ -50,7 +50,6 @@ public abstract class AbstractStream<IdT> implements Stream {
     HEADERS, MESSAGE, STATUS
   }
 
-  private volatile IdT id;
   private final MessageFramer framer;
   private final MessageDeframer deframer;
 
@@ -103,17 +102,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    * metadata to send.
    */
   @Nullable
-  public IdT id() {
-    return id;
-  }
-
-  /**
-   * Set the internal ID for this stream.
-   */
-  public void id(IdT id) {
-    Preconditions.checkState(id != null, "Can only set id once");
-    this.id = id;
-  }
+  public abstract IdT id();
 
   @Override
   public void writeMessage(InputStream message, int length, @Nullable Runnable accepted) {
