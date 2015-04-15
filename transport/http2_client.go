@@ -593,7 +593,11 @@ func (t *http2Client) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 			hDec.state = decodeState{}
 		}
 	}()
-	endHeaders, err := hDec.decodeClientHTTP2Headers(s, frame)
+	endHeaders, err := hDec.decodeClientHTTP2Headers(frame)
+	if s == nil {
+		// s has been closed.
+		return nil
+	}
 	if err != nil {
 		s.write(recvMsg{err: err})
 		// Something wrong. Stops reading even when there is remaining.
@@ -659,16 +663,13 @@ func (t *http2Client) reader() {
 		}
 		switch frame := frame.(type) {
 		case *http2.HeadersFrame:
-			var ok bool
-			if curStream, ok = t.getStream(frame); !ok {
-				continue
-			}
+			// operateHeaders has to be invoked regardless the value of curStream
+			// because the HPACK decoder needs to be updated using the received
+			// headers.
+			curStream, _ = t.getStream(frame)
 			endStream := frame.Header().Flags.Has(http2.FlagHeadersEndStream)
 			curStream = t.operateHeaders(hDec, curStream, frame, endStream)
 		case *http2.ContinuationFrame:
-			if curStream == nil {
-				continue
-			}
 			curStream = t.operateHeaders(hDec, curStream, frame, false)
 		case *http2.DataFrame:
 			t.handleData(frame)

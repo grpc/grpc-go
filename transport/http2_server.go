@@ -143,7 +143,11 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 			hDec.state = decodeState{}
 		}
 	}()
-	endHeaders, err := hDec.decodeServerHTTP2Headers(s, frame)
+	endHeaders, err := hDec.decodeServerHTTP2Headers(frame)
+	if s == nil {
+		// s has been closed.
+		return nil
+	}
 	if err != nil {
 		log.Printf("transport: http2Server.operateHeader found %v", err)
 		if se, ok := err.(StreamError); ok {
@@ -266,9 +270,6 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 			endStream := frame.Header().Flags.Has(http2.FlagHeadersEndStream)
 			curStream = t.operateHeaders(hDec, curStream, frame, endStream, handle, &wg)
 		case *http2.ContinuationFrame:
-			if curStream == nil {
-				continue
-			}
 			curStream = t.operateHeaders(hDec, curStream, frame, false, handle, &wg)
 		case *http2.DataFrame:
 			t.handleData(frame)
@@ -483,6 +484,7 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
 	}
 	if err := t.writeHeaders(s, t.hBuf, true); err != nil {
+		t.Close()
 		return err
 	}
 	t.closeStream(s)

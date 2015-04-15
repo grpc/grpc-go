@@ -176,7 +176,7 @@ func newHPACKDecoder() *hpackDecoder {
 	return d
 }
 
-func (d *hpackDecoder) decodeClientHTTP2Headers(s *Stream, frame headerFrame) (endHeaders bool, err error) {
+func (d *hpackDecoder) decodeClientHTTP2Headers(frame headerFrame) (endHeaders bool, err error) {
 	d.err = nil
 	_, err = d.h.Write(frame.HeaderBlockFragment())
 	if err != nil {
@@ -196,7 +196,7 @@ func (d *hpackDecoder) decodeClientHTTP2Headers(s *Stream, frame headerFrame) (e
 	return
 }
 
-func (d *hpackDecoder) decodeServerHTTP2Headers(s *Stream, frame headerFrame) (endHeaders bool, err error) {
+func (d *hpackDecoder) decodeServerHTTP2Headers(frame headerFrame) (endHeaders bool, err error) {
 	d.err = nil
 	_, err = d.h.Write(frame.HeaderBlockFragment())
 	if err != nil {
