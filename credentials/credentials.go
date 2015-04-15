@@ -113,12 +113,12 @@ func (c *tlsCreds) Dial(network, addr string) (_ net.Conn, err error) {
 	return c.DialWithDialer(new(net.Dialer), network, addr)
 }
 
-// NewListener creates a net.Listener with a TLS configuration constructed
-// from the information in tlsCreds.
+// NewListener creates a net.Listener using the information in tlsCreds.
 func (c *tlsCreds) NewListener(lis net.Listener) net.Listener {
 	return tls.NewListener(lis, &c.config)
 }
 
+// NewTLS uses c to construct a TransportAuthenticator based on TLS.
 func NewTLS(c *tls.Config) TransportAuthenticator {
 	tc := &tlsCreds{*c}
 	tc.config.NextProtos = alpnProtoStr
