@@ -208,6 +208,9 @@ func (e rpcError) Error() string {
 // Code returns the error code for err if it was produced by the rpc system.
 // Otherwise, it returns codes.Unknown.
 func Code(err error) codes.Code {
+	if err == nil {
+		return codes.OK
+	}
 	if e, ok := err.(rpcError); ok {
 		return e.code
 	}
