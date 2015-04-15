@@ -479,13 +479,13 @@ func (t *http2Client) getStream(f http2.Frame) (*Stream, bool) {
 // Window updates will deliver to the controller for sending when
 // the cumulative quota exceeds the corresponding threshold.
 func (t *http2Client) updateWindow(s *Stream, n uint32) {
-        swu, cwu := s.fc.onRead(n) 
-        if swu > 0 {
-                t.controlBuf.put(&windowUpdate{s.id, swu})
-        }
-        if cwu > 0 {
-                t.controlBuf.put(&windowUpdate{0, cwu})
-        }
+	swu, cwu := s.fc.onRead(n)
+	if swu > 0 {
+		t.controlBuf.put(&windowUpdate{s.id, swu})
+	}
+	if cwu > 0 {
+		t.controlBuf.put(&windowUpdate{0, cwu})
+	}
 }
 
 func (t *http2Client) handleData(f *http2.DataFrame) {
