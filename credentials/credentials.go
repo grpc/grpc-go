@@ -86,6 +86,7 @@ type TransportAuthenticator interface {
 	Credentials
 }
 
+// tlsCreds is the credentials required for authenticating a connection using TLS.
 type tlsCreds struct {
 	// TLS configuration
 	config tls.Config
