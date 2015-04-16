@@ -215,3 +215,13 @@ func NewServiceAccountFromFile(keyFile string, scope ...string) (Credentials, er
 	}
 	return NewServiceAccountFromKey(jsonKey, scope...)
 }
+
+// NewApplicationDefault returns "Application Default Credentials". For more
+// detail, see https://developers.google.com/accounts/docs/application-default-credentials.
+func NewApplicationDefault(ctx context.Context, scope ...string) (Credentials, error) {
+	t, err := google.DefaultTokenSource(ctx, scope...)
+	if err != nil {
+		return nil, err
+	}
+	return TokenSource{t}, nil
+}
