@@ -121,7 +121,7 @@ public class NettyServer implements Server {
 
   @Override
   public void shutdown() {
-    if (channel == null || channel.isOpen()) {
+    if (channel == null || !channel.isOpen()) {
       return;
     }
     channel.close().addListener(new ChannelFutureListener() {
