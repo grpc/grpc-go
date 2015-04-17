@@ -109,7 +109,7 @@ func (h *testStreamHandler) handleStreamSuspension(s *Stream) {
 func (h *testStreamHandler) handleStreamMisbehave(s *Stream) {
 	conn, ok := s.ServerTransport().(*http2Server)
 	if !ok {
-		log.Fatalf("Failed to convert %v to *http2Server")
+		log.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
 	}
 	size := 1
 	if s.Method() == "foo.MaxFrame" {
@@ -462,7 +462,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	// Drain the stream flow control window
 	<-cc.writableChan
 	if err = cc.framer.writeData(true, s.id, false, make([]byte, http2MaxFrameLen)); err != nil {
-		t.Fatalf("Failed to write data: ", err)
+		t.Fatalf("Failed to write data: %v", err)
 	}
 	cc.writableChan <- 0
 	sent += http2MaxFrameLen
@@ -491,7 +491,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	for sent <= initialWindowSize {
 		<-cc.writableChan
 		if err = cc.framer.writeData(true, s.id, false, make([]byte, 1)); err != nil {
-			t.Fatalf("Failed to write data: ", err)
+			t.Fatalf("Failed to write data: %v", err)
 		}
 		cc.writableChan <- 0
 		sent += 1
