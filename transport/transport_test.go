@@ -217,11 +217,12 @@ func setUp(t *testing.T, useTLS bool, port int, maxStreams uint32, ht hType) (*s
 			t.Fatalf("Failed to create credentials %v", err)
 		}
 		dopts := ConnectOptions{
+			Network:     "tcp",
 			AuthOptions: []credentials.Credentials{creds},
 		}
 		ct, connErr = NewClientTransport(addr, &dopts)
 	} else {
-		ct, connErr = NewClientTransport(addr, &ConnectOptions{})
+		ct, connErr = NewClientTransport(addr, &ConnectOptions{Nework: "tcp"})
 	}
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
