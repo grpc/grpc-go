@@ -222,7 +222,7 @@ func setUp(t *testing.T, useTLS bool, port int, maxStreams uint32, ht hType) (*s
 		}
 		ct, connErr = NewClientTransport(addr, &dopts)
 	} else {
-		ct, connErr = NewClientTransport(addr, &ConnectOptions{Nework: "tcp"})
+		ct, connErr = NewClientTransport(addr, &ConnectOptions{Network: "tcp"})
 	}
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
