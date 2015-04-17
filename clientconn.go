@@ -36,6 +36,7 @@ package grpc
 import (
 	"errors"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -95,6 +96,14 @@ func WithTimeout(d time.Duration) DialOption {
 	}
 }
 
+// WithNework returns a DialOptions that specifies the network on which
+// the connection will be established.
+func WithNetwork(network string) DialOption {
+	return func(o *dialOptions) {
+		o.copts.Network = network
+	}
+}
+
 // Dial creates a client connection the given target.
 // TODO(zhaoq): Have an option to make Dial return immediately without waiting
 // for connection to complete.
@@ -107,6 +116,24 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	}
 	for _, opt := range opts {
 		opt(&cc.dopts)
+	}
+	// Validate the network type
+	switch cc.dopts.copts.Network {
+	case "":
+		cc.dopts.copts.Network = "tcp"  // Set the default
+	case "tcp", "tcp4", "tcp6", "unix":
+	default:
+		return nil, net.UnknownNetworkError(cc.dopts.copts.Network)
+	}
+	cc.authority = target
+	// Format target for tcp.
+	if cc.dopts.copts.Network != "unix" {
+		// format target for tcp.
+		var err error
+		cc.authority, _, err = net.SplitHostPort(target)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if cc.dopts.codec == nil {
 		// Set the default codec.
@@ -124,6 +151,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // ClientConn represents a client connection to an RPC service.
 type ClientConn struct {
 	target       string
+	authority    string
 	dopts        dialOptions
 	shutdownChan chan struct{}
 

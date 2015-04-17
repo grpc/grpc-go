@@ -371,8 +371,8 @@ func (s *Server) TestingCloseConns() {
 	s.mu.Lock()
 	for c := range s.conns {
 		c.Close()
-		delete(s.conns, c)
 	}
+	s.conns = make(map[transport.ServerTransport]bool)
 	s.mu.Unlock()
 }
 
