@@ -267,8 +267,8 @@ func TestReconnectTimeout(t *testing.T) {
 }
 
 type env struct {
-	network string  // The type of network such as tcp, unix, etc.
-	security string  // The security protocol such as TLS, SSH, etc.
+	network  string // The type of network such as tcp, unix, etc.
+	security string // The security protocol such as TLS, SSH, etc.
 }
 
 func listTestEnv() []env {
