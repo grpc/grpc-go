@@ -1,10 +1,19 @@
-import org.apache.tools.ant.taskdefs.condition.Os
+buildscript {
+  repositories {
+    mavenCentral()
+    mavenLocal()
+  }
+  dependencies {
+    classpath 'com.google.gradle:osdetector-gradle-plugin:1.2.1'
+  }
+}
 
 subprojects {
     apply plugin: "checkstyle"
     apply plugin: "java"
     apply plugin: "maven"
     apply plugin: "idea"
+    apply plugin: "osdetector"
     apply plugin: "signing"
 
     group = "io.grpc"
@@ -58,12 +67,12 @@ subprojects {
 
         alpnboot_package_name = 'org.mortbay.jetty.alpn:alpn-boot:' + alpnboot_version
 
-        def exeSuffix = Os.isFamily(Os.FAMILY_WINDOWS) ? ".exe" : ""
+        def exeSuffix = osdetector.os == 'windows' ? ".exe" : ""
         // The split is to workaround everything after the colon in C:\ being
         // removed due to a bug in the protobuf plugin.
         // https://github.com/aantono/gradle-plugin-protobuf/issues/23
         def splitRootDir = rootDir
-        if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+        if (osdetector.os == 'windows') {
           splitRootDir = splitRootDir.getPath().split(":", 2)[1]
         }
         protocPluginBaseName = 'protoc-gen-grpc-java'

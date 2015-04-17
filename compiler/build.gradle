@@ -1,8 +1,5 @@
 apply plugin: "cpp"
-apply plugin: "osdetector"
 apply plugin: "protobuf"
-
-import org.apache.tools.ant.taskdefs.condition.Os
 
 description = 'The protoc plugin for gRPC Java'
 
@@ -12,8 +9,7 @@ buildscript {
         mavenLocal()
     }
     dependencies {
-        classpath libraries.protobuf_plugin,
-                  'com.google.gradle:osdetector-gradle-plugin:1.2.1'
+        classpath libraries.protobuf_plugin
     }
 }
 
@@ -201,12 +197,12 @@ protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
 generateTestProto.dependsOn 'local_archJava_pluginExecutable'
 // Ignore test for the moment on Windows. It will be easier to run once the
 // gradle protobuf plugin can support nano.
-if (!Os.isFamily(Os.FAMILY_WINDOWS)) {
+if (osdetector.os != 'windows') {
   test.dependsOn('testGolden','testNanoGolden')
 }
 
 task testGolden(type: Exec, dependsOn: 'generateTestProto') {
-  if (!Os.isFamily(Os.FAMILY_WINDOWS)) {
+  if (osdetector.os != 'windows') {
     executable "diff"
   } else {
     executable "fc"
