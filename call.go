@@ -35,7 +35,6 @@ package grpc
 
 import (
 	"io"
-	"net"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -114,12 +113,8 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			o.after(&c)
 		}
 	}()
-	host, _, err := net.SplitHostPort(cc.target)
-	if err != nil {
-		return toRPCErr(err)
-	}
 	callHdr := &transport.CallHdr{
-		Host:   host,
+		Host:   cc.authority,
 		Method: method,
 	}
 	topts := &transport.Options{

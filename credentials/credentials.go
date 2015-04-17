@@ -105,7 +105,7 @@ func (c *tlsCreds) DialWithDialer(dialer *net.Dialer, network, addr string) (_ n
 			return nil, fmt.Errorf("credentials: failed to parse server address %v", err)
 		}
 	}
-	return tls.DialWithDialer(dialer, "tcp", addr, &c.config)
+	return tls.DialWithDialer(dialer, network, addr, &c.config)
 }
 
 // Dial connects to addr and performs TLS handshake.

@@ -315,7 +315,9 @@ func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32) (Serv
 
 // ConnectOptions covers all relevant options for dialing a server.
 type ConnectOptions struct {
-	Protocol    string
+	// Network indicates the type of network where the connection is established.
+	// Known networks are "tcp", "tcp4", "tcp6", "unix"
+	Network     string
 	AuthOptions []credentials.Credentials
 	Timeout     time.Duration
 }
