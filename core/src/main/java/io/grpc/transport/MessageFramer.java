@@ -80,31 +80,29 @@ public class MessageFramer {
   private final OutputStreamAdapter outputStreamAdapter = new OutputStreamAdapter();
   private final byte[] headerScratch = new byte[HEADER_LENGTH];
   private final WritableBufferAllocator bufferAllocator;
-  private final int maxFrameSize;
   private boolean closed;
 
   /**
    * Creates a {@code MessageFramer} without compression.
    *
    * @param sink the sink used to deliver frames to the transport
-   * @param maxFrameSize the maximum frame size that this framer will deliver
+   * @param bufferAllocator allocates buffers that the transport can commit to the wire.
    */
-  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator, int maxFrameSize) {
-    this(sink, bufferAllocator, maxFrameSize, Compression.NONE);
+  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator) {
+    this(sink, bufferAllocator, Compression.NONE);
   }
 
   /**
    * Creates a {@code MessageFramer}.
    *
    * @param sink the sink used to deliver frames to the transport
-   * @param maxFrameSize the maximum frame size that this framer will deliver
+   * @param bufferAllocator allocates buffers that the transport can commit to the wire.
    * @param compression the compression type
    */
-  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator, int maxFrameSize,
-      Compression compression) {
+  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator,
+                       Compression compression) {
     this.sink = Preconditions.checkNotNull(sink, "sink");
     this.bufferAllocator = bufferAllocator;
-    this.maxFrameSize = maxFrameSize;
     this.compression = Preconditions.checkNotNull(compression, "compression");
   }
 
@@ -155,6 +153,11 @@ public class MessageFramer {
     ByteBuffer header = ByteBuffer.wrap(headerScratch);
     header.put(compressed ? COMPRESSED : UNCOMPRESSED);
     header.putInt(messageLength);
+    // Allocate the initial buffer chunk based on frame header + payload length.
+    // Note that the allocator may allocate a buffer larger or smaller than this length
+    if (buffer == null) {
+      buffer = bufferAllocator.allocate(header.position() + messageLength);
+    }
     writeRaw(headerScratch, 0, header.position());
     long written = writeToOutputStream(message, outputStreamAdapter);
     if (messageLength != written) {
@@ -182,7 +185,8 @@ public class MessageFramer {
         commitToSink(false, false);
       }
       if (buffer == null) {
-        buffer = bufferAllocator.allocate(maxFrameSize);
+        // Request a buffer allocation using the message length as a hint.
+        buffer = bufferAllocator.allocate(len);
       }
       int toWrite = min(len, buffer.writableBytes());
       buffer.write(b, off, toWrite);

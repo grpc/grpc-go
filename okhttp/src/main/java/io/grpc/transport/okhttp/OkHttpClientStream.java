@@ -146,10 +146,8 @@ class OkHttpClientStream extends Http2ClientStream {
   protected void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
     checkState(id() != 0, "streamId should be set");
     Buffer buffer = ((OkHttpWritableBuffer) frame).buffer();
-    // Write the data to the remote endpoint.
-    // Per http2 SPEC, the max data length should be larger than 64K, while our frame size is
-    // only 4K.
-    checkState(buffer.size() < frameWriter.maxDataLength());
+    // If buffer > frameWriter.maxDataLength() the flow-controller will ensure that it is
+    // properly chunked.
     outboundFlow.data(endOfStream, id(), buffer, flush);
   }
 

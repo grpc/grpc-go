@@ -31,7 +31,6 @@
 
 package io.grpc.transport;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 
 import org.junit.Test;
@@ -55,12 +54,5 @@ public abstract class WritableBufferAllocatorTestBase {
 
     buffer1.release();
     buffer2.release();
-  }
-
-  @Test
-  public void testCapacity() {
-    WritableBuffer buffer = allocator().allocate(4096);
-    assertEquals(0, buffer.readableBytes());
-    assertEquals(4096, buffer.writableBytes());
   }
 }

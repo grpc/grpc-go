@@ -318,7 +318,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
         ByteBuf bytebuf = ((NettyWritableBuffer)frame).bytebuf();
         compressionFrame.writeBytes(bytebuf);
       }
-    }, new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT), 1000);
+    }, new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT));
     framer.writePayload(new ByteArrayInputStream(CONTENT), CONTENT.length);
     framer.flush();
     if (endStream) {

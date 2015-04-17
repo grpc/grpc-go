@@ -35,9 +35,23 @@ import io.grpc.transport.WritableBufferAllocator;
 import io.netty.buffer.ByteBufAllocator;
 
 /**
- * The default allocator for {@link NettyWritableBuffer}s used by the Netty transport.
+ * The default allocator for {@link NettyWritableBuffer}s used by the Netty transport. We set a
+ * minimum bound to avoid unnecessary re-allocation for small follow-on writes and to facilitate
+ * Netty's caching of buffer objects for small writes. We set an upper-bound to avoid allocations
+ * outside of the arena-pool which are orders of magnitude slower. The Netty transport can receive
+ * buffers of arbitrary size and will chunk them based on flow-control so there is no transport
+ * requirement for an upper bound.
+ *
+ * <p>Note: It is assumed that most applications will be using Netty's direct buffer pools for
+ * maximum performance.
  */
 class NettyWritableBufferAllocator implements WritableBufferAllocator {
+
+  // Use 4k as our minimum buffer size.
+  private static final int MIN_BUFFER = 4096;
+
+  // Set the maximum buffer size to 1MB
+  private static final int MAX_BUFFER = 1024 * 1024;
 
   private final ByteBufAllocator allocator;
 
@@ -46,7 +60,8 @@ class NettyWritableBufferAllocator implements WritableBufferAllocator {
   }
 
   @Override
-  public NettyWritableBuffer allocate(int capacity) {
-    return new NettyWritableBuffer(allocator.buffer(capacity, capacity));
+  public NettyWritableBuffer allocate(int capacityHint) {
+    capacityHint = Math.min(MAX_BUFFER, Math.max(MIN_BUFFER, capacityHint));
+    return new NettyWritableBuffer(allocator.buffer(capacityHint, capacityHint));
   }
 }

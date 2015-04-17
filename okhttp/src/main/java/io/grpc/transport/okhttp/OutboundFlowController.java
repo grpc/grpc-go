@@ -33,7 +33,6 @@ package io.grpc.transport.okhttp;
 
 import static io.grpc.transport.okhttp.Utils.CONNECTION_STREAM_ID;
 import static io.grpc.transport.okhttp.Utils.DEFAULT_WINDOW_SIZE;
-import static io.grpc.transport.okhttp.Utils.MAX_FRAME_SIZE;
 import static java.lang.Math.ceil;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
@@ -383,7 +382,7 @@ class OutboundFlowController {
         // the writer once to send the empty frame.
         do {
           int bytesToWrite = size();
-          int frameBytes = min(bytesToWrite, MAX_FRAME_SIZE);
+          int frameBytes = min(bytesToWrite, frameWriter.maxDataLength());
           if (frameBytes == bytesToWrite) {
             // All the bytes fit into a single HTTP/2 frame, just send it all.
             connectionState.incrementStreamWindow(-bytesToWrite);

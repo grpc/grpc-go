@@ -32,13 +32,14 @@
 package io.grpc.transport;
 
 /**
- * The preferred way of creating a {@link WritableBuffer}.
+ * An allocator of buffers provided by the transport implementation to {@link MessageFramer} so
+ * it can send chunks of data to the transport in a form that the transport can directly serialize.
  */
 public interface WritableBufferAllocator {
 
   /**
-   * Allocate a new {@link WritableBuffer} that can hold
-   * {@code capacity} bytes.
+   * Request a new {@link WritableBuffer} with the given {@code capacityHint}. The allocator is
+   * free to return a buffer with a greater or lesser capacity.
    */
-  WritableBuffer allocate(int capacity);
+  WritableBuffer allocate(int capacityHint);
 }

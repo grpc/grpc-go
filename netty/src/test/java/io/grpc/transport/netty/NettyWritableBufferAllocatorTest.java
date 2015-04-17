@@ -31,9 +31,14 @@
 
 package io.grpc.transport.netty;
 
+import static org.junit.Assert.assertEquals;
+
+import io.grpc.transport.WritableBuffer;
 import io.grpc.transport.WritableBufferAllocator;
 import io.grpc.transport.WritableBufferAllocatorTestBase;
 import io.netty.buffer.ByteBufAllocator;
+
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -49,5 +54,27 @@ public class NettyWritableBufferAllocatorTest extends WritableBufferAllocatorTes
   @Override
   protected WritableBufferAllocator allocator() {
     return allocator;
+  }
+
+  @Test
+  public void testCapacityHasMinimum() {
+    WritableBuffer buffer = allocator().allocate(100);
+    assertEquals(0, buffer.readableBytes());
+    assertEquals(4096, buffer.writableBytes());
+  }
+
+  @Test
+  public void testCapacityIsExactAboveMinimum() {
+    WritableBuffer buffer = allocator().allocate(9000);
+    assertEquals(0, buffer.readableBytes());
+    assertEquals(9000, buffer.writableBytes());
+  }
+
+  @Test
+  public void testCapacityIsCappedAtMaximum() {
+    // Current max is 1MB
+    WritableBuffer buffer = allocator().allocate(1024 * 1025);
+    assertEquals(0, buffer.readableBytes());
+    assertEquals(1024 * 1024, buffer.writableBytes());
   }
 }

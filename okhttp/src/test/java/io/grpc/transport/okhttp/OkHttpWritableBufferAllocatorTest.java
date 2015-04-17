@@ -31,9 +31,13 @@
 
 package io.grpc.transport.okhttp;
 
+import static org.junit.Assert.assertEquals;
+
+import io.grpc.transport.WritableBuffer;
 import io.grpc.transport.WritableBufferAllocator;
 import io.grpc.transport.WritableBufferAllocatorTestBase;
 
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -48,5 +52,26 @@ public class OkHttpWritableBufferAllocatorTest extends WritableBufferAllocatorTe
   @Override
   protected WritableBufferAllocator allocator() {
     return allocator;
+  }
+
+  @Test
+  public void testCapacity() {
+    WritableBuffer buffer = allocator().allocate(4096);
+    assertEquals(0, buffer.readableBytes());
+    assertEquals(4096, buffer.writableBytes());
+  }
+
+  @Test
+  public void testInitialCapacityHasMaximum() {
+    WritableBuffer buffer = allocator().allocate(1024 * 1025);
+    assertEquals(0, buffer.readableBytes());
+    assertEquals(1024 * 1024, buffer.writableBytes());
+  }
+
+  @Test
+  public void testIsExactBelowMaxCapacity() {
+    WritableBuffer buffer = allocator().allocate(4097);
+    assertEquals(0, buffer.readableBytes());
+    assertEquals(4097, buffer.writableBytes());
   }
 }

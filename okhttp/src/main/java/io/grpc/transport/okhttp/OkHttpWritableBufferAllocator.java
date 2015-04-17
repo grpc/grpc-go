@@ -35,11 +35,31 @@ import io.grpc.transport.WritableBufferAllocator;
 import okio.Buffer;
 
 /**
- * The default allocator for {@link OkHttpWritableBuffer}s used by the OkHttp transport.
+ * The default allocator for {@link OkHttpWritableBuffer}s used by the OkHttp transport. OkHttp
+ * cannot receive buffers larger than the max DATA frame size - 1 so we must set an upper bound on
+ * the allocated buffer size here.
  */
 class OkHttpWritableBufferAllocator implements WritableBufferAllocator {
+
+  // Use 4k as our minimum buffer size.
+  private static final int MIN_BUFFER = 4096;
+
+  // Set the maximum buffer size to 1MB
+  private static final int MAX_BUFFER = 1024 * 1024;
+
+  /**
+   * Construct a new instance.
+   */
+  OkHttpWritableBufferAllocator() {
+  }
+
+  /**
+   * For OkHttp we will often return a buffer smaller than the requested capacity as this is the
+   * mechanism for chunking a large GRPC message over many DATA frames.
+   */
   @Override
-  public OkHttpWritableBuffer allocate(int capacity) {
-    return new OkHttpWritableBuffer(new Buffer(), capacity);
+  public OkHttpWritableBuffer allocate(int capacityHint) {
+    capacityHint = Math.min(MAX_BUFFER, Math.max(MIN_BUFFER, capacityHint));
+    return new OkHttpWritableBuffer(new Buffer(), capacityHint);
   }
 }

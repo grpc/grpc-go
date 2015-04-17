@@ -55,22 +55,20 @@ import java.util.Arrays;
  */
 @RunWith(JUnit4.class)
 public class MessageFramerTest {
-  private static final int TRANSPORT_FRAME_SIZE = 12;
-
   @Mock
   private MessageFramer.Sink sink;
   private MessageFramer framer;
 
   @Captor
   private ArgumentCaptor<ByteWritableBuffer> frameCaptor;
-  private WritableBufferAllocator allocator = new BytesWritableBufferAllocator();
+  private BytesWritableBufferAllocator allocator =
+      new BytesWritableBufferAllocator(0, 12);
 
   /** Set up for test. */
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-
-    framer = new MessageFramer(sink, allocator, TRANSPORT_FRAME_SIZE);
+    framer = new MessageFramer(sink, allocator);
   }
 
   @Test
@@ -84,6 +82,8 @@ public class MessageFramerTest {
 
   @Test
   public void smallPayloadsShouldBeCombined() {
+    allocator = new BytesWritableBufferAllocator(12, 12);
+    framer = new MessageFramer(sink, allocator);
     writePayload(framer, new byte[] {3});
     verifyNoMoreInteractions(sink);
     writePayload(framer, new byte[] {14});
@@ -125,6 +125,8 @@ public class MessageFramerTest {
 
   @Test
   public void frameHeaderSplitBetweenSinks() {
+    allocator = new BytesWritableBufferAllocator(12, 12);
+    framer = new MessageFramer(sink, allocator);
     writePayload(framer, new byte[] {3, 14, 1});
     writePayload(framer, new byte[] {3});
     verify(sink).deliverFrame(
@@ -132,7 +134,7 @@ public class MessageFramerTest {
     verifyNoMoreInteractions(sink);
 
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {1, 3}), false, true);
+    verify(sink).deliverFrame(toWriteBufferWithMinSize(new byte[] {1, 3}, 12), false, true);
     verifyNoMoreInteractions(sink);
   }
 
@@ -154,8 +156,8 @@ public class MessageFramerTest {
 
   @Test
   public void largerFrameSize() throws Exception {
-    final int transportFrameSize = 10000;
-    MessageFramer framer = new MessageFramer(sink, allocator, transportFrameSize);
+    allocator = new BytesWritableBufferAllocator(0, 10000);
+    framer = new MessageFramer(sink, allocator);
     writePayload(framer, new byte[1000]);
     framer.flush();
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
@@ -166,15 +168,14 @@ public class MessageFramerTest {
     data[3] = 3;
     data[4] = (byte) 232;
 
-    assertEquals(toWriteBuffer(data, transportFrameSize), buffer);
+    assertEquals(toWriteBuffer(data), buffer);
     verifyNoMoreInteractions(sink);
   }
 
   @Test
   public void compressed() throws Exception {
-    final int transportFrameSize = 100;
-    MessageFramer framer =
-            new MessageFramer(sink, allocator, transportFrameSize, Compression.GZIP);
+    allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
+    framer = new MessageFramer(sink, allocator, Compression.GZIP);
     writePayload(framer, new byte[1000]);
     framer.flush();
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
@@ -190,11 +191,11 @@ public class MessageFramerTest {
   }
 
   private static WritableBuffer toWriteBuffer(byte[] data) {
-    return toWriteBuffer(data, TRANSPORT_FRAME_SIZE);
+    return toWriteBufferWithMinSize(data, 0);
   }
 
-  private static WritableBuffer toWriteBuffer(byte[] data, int maxFrameSize) {
-    ByteWritableBuffer buffer = new ByteWritableBuffer(maxFrameSize);
+  private static WritableBuffer toWriteBufferWithMinSize(byte[] data, int minFrameSize) {
+    ByteWritableBuffer buffer = new ByteWritableBuffer(Math.max(data.length, minFrameSize));
     buffer.write(data, 0, data.length);
     return buffer;
   }
@@ -257,9 +258,17 @@ public class MessageFramerTest {
 
   static class BytesWritableBufferAllocator implements WritableBufferAllocator {
 
+    public int minSize;
+    public int maxSize;
+
+    BytesWritableBufferAllocator(int minSize, int maxSize) {
+      this.minSize = minSize;
+      this.maxSize = maxSize;
+    }
+
     @Override
-    public WritableBuffer allocate(int maxCapacity) {
-      return new ByteWritableBuffer(maxCapacity);
+    public WritableBuffer allocate(int capacityHint) {
+      return new ByteWritableBuffer(Math.min(maxSize, Math.max(capacityHint, minSize)));
     }
   }
 }
