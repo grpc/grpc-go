@@ -332,7 +332,6 @@ func tearDown(s *grpc.Server, cc *grpc.ClientConn) {
 
 func TestTimeoutOnDeadServer(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testTimeoutOnDeadServer(t, e)
 	}
 }
@@ -353,7 +352,6 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 
 func TestEmptyUnary(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testEmptyUnary(t, e)
 	}
 }
@@ -370,7 +368,6 @@ func testEmptyUnary(t *testing.T, e env) {
 
 func TestFailedEmptyUnary(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testFailedEmptyUnary(t, e)
 	}
 }
@@ -387,7 +384,6 @@ func testFailedEmptyUnary(t *testing.T, e env) {
 
 func TestLargeUnary(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testLargeUnary(t, e)
 	}
 }
@@ -416,7 +412,6 @@ func testLargeUnary(t *testing.T, e env) {
 
 func TestMetadataUnaryRPC(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testMetadataUnaryRPC(t, e)
 	}
 }
@@ -468,7 +463,6 @@ func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup
 
 func TestRetry(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testRetry(t, e)
 	}
 }
@@ -501,7 +495,6 @@ func testRetry(t *testing.T, e env) {
 
 func TestRPCTimeout(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testRPCTimeout(t, e)
 	}
 }
@@ -532,7 +525,6 @@ func testRPCTimeout(t *testing.T, e env) {
 
 func TestCancel(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testCancel(t, e)
 	}
 }
@@ -565,7 +557,6 @@ var (
 
 func TestPingPong(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testPingPong(t, e)
 	}
 }
@@ -617,7 +608,6 @@ func testPingPong(t *testing.T, e env) {
 
 func TestMetadataStreamingRPC(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testMetadataStreamingRPC(t, e)
 	}
 }
@@ -675,7 +665,6 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 
 func TestServerStreaming(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testServerStreaming(t, e)
 	}
 }
@@ -728,7 +717,6 @@ func testServerStreaming(t *testing.T, e env) {
 
 func TestFailedServerStreaming(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testFailedServerStreaming(t, e)
 	}
 }
@@ -759,7 +747,6 @@ func testFailedServerStreaming(t *testing.T, e env) {
 
 func TestClientStreaming(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testClientStreaming(t, e)
 	}
 }
@@ -794,7 +781,6 @@ func testClientStreaming(t *testing.T, e env) {
 
 func TestExceedMaxStreamsLimit(t *testing.T) {
 	for _, e := range listTestEnv() {
-		log.Println("Testing in the env: ", e)
 		testExceedMaxStreamsLimit(t, e)
 	}
 }
