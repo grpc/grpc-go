@@ -45,6 +45,18 @@ def addEnvArgs = { env, argList ->
   }
 }
 
+// Adds corresponding "-l" option to the argList if libName is not found in
+// LDFLAGS. This is only used for Mac because when building for uploadArchives
+// artifacts, we add the ".a" files directly to LDFLAGS and without "-l" in
+// order to get statically linked, otherwise we add the libraries through "-l"
+// so that they can be searched for in default search paths.
+def addLibraryIfNotLinked = { libName, argList ->
+  def ldflags = System.env.LDFLAGS
+  if (ldflags == null || !ldflags.contains('lib' + libName + '.a')) {
+    argList.add('-l' + libName)
+  }
+}
+
 model {
   toolChains {
     gcc(Gcc) {
@@ -112,6 +124,8 @@ binaries.all {
     addEnvArgs("CPPFLAGS", cppCompiler.args)
     if (osdetector.os == "osx") {
       cppCompiler.args "-mmacosx-version-min=10.7", "-stdlib=libc++"
+      addLibraryIfNotLinked('protoc', linker.args)
+      addLibraryIfNotLinked('protobuf', linker.args)
     } else if (osdetector.os == "windows") {
       linker.args "-static", "-lprotoc", "-lprotobuf", "-static-libgcc", "-static-libstdc++", "-s"
     } else {
@@ -169,7 +183,6 @@ artifacts {
 }
 
 [
-  install.repositories.mavenInstaller,
   uploadArchives.repositories.mavenDeployer,
 ]*.beforeDeployment {
   for (arch in (targetArchs - 'local_arch')) {
