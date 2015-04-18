@@ -229,7 +229,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(streamListener).closed(captor.capture());
     assertEquals(e, captor.getValue().asException().getCause());
-    assertEquals(Code.INTERNAL, captor.getValue().getCode());
+    assertEquals(Code.UNKNOWN, captor.getValue().getCode());
   }
 
   @Test

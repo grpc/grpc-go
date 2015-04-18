@@ -331,7 +331,7 @@ public final class Status {
       }
     }
     // Couldn't find a cause with a Status
-    return INTERNAL.withCause(t);
+    return UNKNOWN.withCause(t);
   }
 
   private static String formatThrowableMessage(Status status) {

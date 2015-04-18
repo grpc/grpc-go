@@ -350,7 +350,7 @@ public class OkHttpClientTransport implements ClientTransport {
    */
   void abort(Throwable failureCause) {
     log.log(Level.SEVERE, "Transport failed", failureCause);
-    onGoAway(0, Status.fromThrowable(failureCause));
+    onGoAway(0, Status.INTERNAL.withCause(failureCause));
   }
 
   private void onGoAway(int lastKnownStreamId, Status status) {

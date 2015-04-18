@@ -118,9 +118,9 @@ public class ClientAuthInterceptorTests {
     Iterable<String> authorization = headers.getAll(AUTHORIZATION);
     Assert.assertArrayEquals(new String[]{"token1", "token2"},
         Iterables.toArray(authorization, String.class));
-    Iterable<String> extraAuthrization = headers.getAll(EXTRA_AUTHORIZATION);
+    Iterable<String> extraAuthorization = headers.getAll(EXTRA_AUTHORIZATION);
     Assert.assertArrayEquals(new String[]{"token3", "token4"},
-        Iterables.toArray(extraAuthrization, String.class));
+        Iterables.toArray(extraAuthorization, String.class));
   }
 
   @Test
@@ -134,7 +134,7 @@ public class ClientAuthInterceptorTests {
     Mockito.verify(listener).onClose(statusCaptor.capture(), isA(Metadata.Trailers.class));
     Assert.assertNull(headers.getAll(AUTHORIZATION));
     Mockito.verify(call, never()).start(listener, headers);
-    Assert.assertEquals(Status.Code.INTERNAL, statusCaptor.getValue().getCode());
+    Assert.assertEquals(Status.Code.UNKNOWN, statusCaptor.getValue().getCode());
     Assert.assertNotNull(statusCaptor.getValue().getCause());
   }
 
