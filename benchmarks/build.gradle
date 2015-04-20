@@ -55,7 +55,10 @@ applicationDistribution.into("bin") {
 }
 
 protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
-generateProto.dependsOn ':grpc-compiler:local_archJava_pluginExecutable'
+
+project.afterEvaluate {
+  generateProto.dependsOn ':grpc-compiler:local_archJava_pluginExecutable'
+}
 
 // Allow intellij projects to refer to generated-sources
 idea {

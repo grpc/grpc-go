@@ -194,7 +194,10 @@ artifacts {
 
 protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
 
-generateTestProto.dependsOn 'local_archJava_pluginExecutable'
+project.afterEvaluate {
+  generateTestProto.dependsOn 'local_archJava_pluginExecutable'
+}
+
 // Ignore test for the moment on Windows. It will be easier to run once the
 // gradle protobuf plugin can support nano.
 if (osdetector.os != 'windows') {
