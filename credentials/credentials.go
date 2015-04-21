@@ -43,6 +43,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -71,15 +73,10 @@ type Credentials interface {
 // TransportAuthenticator defines the common interface all supported transport
 // authentication protocols (e.g., TLS, SSL) must implement.
 type TransportAuthenticator interface {
-	// Dial connects to the given network address using net.Dial and then
+	// Dial connects to the given network address using dialer and then
 	// does the authentication handshake specified by the corresponding
 	// authentication protocol.
-	Dial(network, addr string) (net.Conn, error)
-	// DialWithDialer connects to the given network address using
-	// dialer.Dial does the authentication handshake specified by the
-	// corresponding authentication protocol. Any timeout or deadline
-	// given in the dialer apply to connection and handshake as a whole.
-	DialWithDialer(dialer *net.Dialer, network, addr string) (net.Conn, error)
+	Dial(dialer func(string, time.Duration) (net.Conn, error), addr string, timeout time.Duration) (net.Conn, error)
 	// NewListener creates a listener which accepts connections with requested
 	// authentication handshake.
 	NewListener(lis net.Listener) net.Listener
@@ -98,19 +95,46 @@ func (c *tlsCreds) GetRequestMetadata(ctx context.Context) (map[string]string, e
 	return nil, nil
 }
 
-func (c *tlsCreds) DialWithDialer(dialer *net.Dialer, network, addr string) (_ net.Conn, err error) {
-	if c.config.ServerName == "" {
-		c.config.ServerName, _, err = net.SplitHostPort(addr)
-		if err != nil {
-			return nil, fmt.Errorf("credentials: failed to parse server address %v", err)
-		}
-	}
-	return tls.DialWithDialer(dialer, network, addr, &c.config)
-}
+type timeoutError struct{}
 
-// Dial connects to addr and performs TLS handshake.
-func (c *tlsCreds) Dial(network, addr string) (_ net.Conn, err error) {
-	return c.DialWithDialer(new(net.Dialer), network, addr)
+func (timeoutError) Error() string   { return "credentials: Dial timed out" }
+func (timeoutError) Timeout() bool   { return true }
+func (timeoutError) Temporary() bool { return true }
+
+func (c *tlsCreds) Dial(dialer func(addr string, timeout time.Duration) (net.Conn, error), addr string, timeout time.Duration) (net.Conn, error) {
+	// borrow some code from tls.DialWithDialer
+	var errChannel chan error
+	if timeout != 0 {
+		errChannel = make(chan error, 2)
+		time.AfterFunc(timeout, func() {
+			errChannel <- timeoutError{}
+		})
+	}
+	rawConn, err := dialer(addr, timeout)
+	if err != nil {
+		return nil, err
+	}
+	if c.config.ServerName == "" {
+		colonPos := strings.LastIndex(addr, ":")
+		if colonPos == -1 {
+			colonPos = len(addr)
+		}
+		c.config.ServerName = addr[:colonPos]
+	}
+	conn := tls.Client(rawConn, &c.config)
+	if timeout == 0 {
+		err = conn.Handshake()
+	} else {
+		go func() {
+			errChannel <- conn.Handshake()
+		}()
+		err = <-errChannel
+	}
+	if err != nil {
+		rawConn.Close()
+		return nil, err
+	}
+	return conn, nil
 }
 
 // NewListener creates a net.Listener using the information in tlsCreds.

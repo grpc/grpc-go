@@ -266,16 +266,21 @@ func TestReconnectTimeout(t *testing.T) {
 	}
 }
 
+func unixDialer(addr string, timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout("unix", addr, timeout)
+}
+
 type env struct {
 	network  string // The type of network such as tcp, unix, etc.
+	dialer   func(addr string, timeout time.Duration) (net.Conn, error)
 	security string // The security protocol such as TLS, SSH, etc.
 }
 
 func listTestEnv() []env {
 	if runtime.GOOS == "windows" {
-		return []env{env{"tcp", ""}, env{"tcp", "tls"}}
+		return []env{env{"tcp", nil, ""}, env{"tcp", nil, "tls"}}
 	}
-	return []env{env{"tcp", ""}, env{"tcp", "tls"}, env{"unix", ""}, env{"unix", "tls"}}
+	return []env{env{"tcp", nil, ""}, env{"tcp", nil, "tls"}, env{"unix", unixDialer, ""}, env{"unix", unixDialer, "tls"}}
 }
 
 func setUp(maxStream uint32, e env) (s *grpc.Server, cc *grpc.ClientConn) {
@@ -315,9 +320,9 @@ func setUp(maxStream uint32, e env) (s *grpc.Server, cc *grpc.ClientConn) {
 		if err != nil {
 			log.Fatalf("Failed to create credentials %v", err)
 		}
-		cc, err = grpc.Dial(addr, grpc.WithTransportCredentials(creds), grpc.WithNetwork(e.network))
+		cc, err = grpc.Dial(addr, grpc.WithTransportCredentials(creds), grpc.WithDialer(e.dialer))
 	} else {
-		cc, err = grpc.Dial(addr, grpc.WithNetwork(e.network))
+		cc, err = grpc.Dial(addr, grpc.WithDialer(e.dialer))
 	}
 	if err != nil {
 		log.Fatalf("Dial(%q) = %v", addr, err)
