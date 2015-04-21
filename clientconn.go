@@ -97,8 +97,7 @@ func WithTimeout(d time.Duration) DialOption {
 	}
 }
 
-// WithDialer returns a DialOption that defines a function which takes an
-// address and turns it into a net.Conn.
+// WithDialer returns a DialOption that specifies a function to use for dialing network addresses.
 func WithDialer(f func(addr string, timeout time.Duration) (net.Conn, error)) DialOption {
 	return func(o *dialOptions) {
 		o.copts.Dialer = f
