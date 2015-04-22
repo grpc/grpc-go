@@ -74,7 +74,7 @@ type Credentials interface {
 // authentication protocols (e.g., TLS, SSL) must implement.
 type TransportAuthenticator interface {
 	// Handshake does the authentication handshake specified by the corresponding
-	// authentication protocol on the given rawConn.
+	// authentication protocol on rawConn.
 	Handshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, error)
 	// NewListener creates a listener which accepts connections with requested
 	// authentication handshake.
