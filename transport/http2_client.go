@@ -98,11 +98,19 @@ type http2Client struct {
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
 func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err error) {
-	var (
-		connErr error
-		conn    net.Conn
-	)
+	if opts.Dialer == nil {
+		// Set the default Dialer.
+		opts.Dialer = func(addr string, timeout time.Duration) (net.Conn, error) {
+			return net.DialTimeout("tcp", addr, timeout)
+		}
+	}
 	scheme := "http"
+	startT := time.Now()
+	timeout := opts.Timeout
+	conn, connErr := opts.Dialer(addr, timeout)
+	if connErr != nil {
+		return nil, ConnectionErrorf("transport: %v", connErr)
+	}
 	for _, c := range opts.AuthOptions {
 		if ccreds, ok := c.(credentials.TransportAuthenticator); ok {
 			scheme = "https"
@@ -110,12 +118,12 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 			// multiple ones provided. Revisit this if it is not appropriate. Probably
 			// place the ClientTransport construction into a separate function to make
 			// things clear.
-			conn, connErr = ccreds.DialWithDialer(&net.Dialer{Timeout: opts.Timeout}, opts.Network, addr)
+			if timeout > 0 {
+				timeout -= time.Since(startT)
+			}
+			conn, connErr = ccreds.Handshake(addr, conn, timeout)
 			break
 		}
-	}
-	if scheme == "http" {
-		conn, connErr = net.DialTimeout(opts.Network, addr, opts.Timeout)
 	}
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)

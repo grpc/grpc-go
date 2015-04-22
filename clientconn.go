@@ -37,6 +37,7 @@ import (
 	"errors"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -96,11 +97,10 @@ func WithTimeout(d time.Duration) DialOption {
 	}
 }
 
-// WithNetwork returns a DialOption that specifies the network on which
-// the connection will be established.
-func WithNetwork(network string) DialOption {
+// WithDialer returns a DialOption that specifies a function to use for dialing network addresses.
+func WithDialer(f func(addr string, timeout time.Duration) (net.Conn, error)) DialOption {
 	return func(o *dialOptions) {
-		o.copts.Network = network
+		o.copts.Dialer = f
 	}
 }
 
@@ -117,24 +117,11 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
-	// Validate the network type
-	switch cc.dopts.copts.Network {
-	case "":
-		cc.dopts.copts.Network = "tcp"  // Set the default
-	case "tcp", "tcp4", "tcp6", "unix":
-	default:
-		return nil, net.UnknownNetworkError(cc.dopts.copts.Network)
+	colonPos := strings.LastIndex(target, ":")
+	if colonPos == -1 {
+		colonPos = len(target)
 	}
-	cc.authority = target
-	// Format target for tcp.
-	if cc.dopts.copts.Network != "unix" {
-		// format target for tcp.
-		var err error
-		cc.authority, _, err = net.SplitHostPort(target)
-		if err != nil {
-			return nil, err
-		}
-	}
+	cc.authority = target[:colonPos]
 	if cc.dopts.codec == nil {
 		// Set the default codec.
 		cc.dopts.codec = protoCodec{}
