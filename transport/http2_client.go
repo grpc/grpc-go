@@ -119,7 +119,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 			// place the ClientTransport construction into a separate function to make
 			// things clear.
 			if timeout > 0 {
-				timeout = opts.Timeout - time.Since(startT)
+				timeout -= time.Since(startT)
 			}
 			conn, connErr = ccreds.Handshake(addr, conn, timeout)
 			break
