@@ -357,8 +357,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     int connectionWindow = 1048576; // 1MiB
     handler = newHandler(connectionWindow, DEFAULT_WINDOW_SIZE);
     handler.handlerAdded(ctx);
-    assertEquals(connectionWindow,
-        handler.decoder().flowController().windowSize(handler.connection().connectionStream()));
+    assertEquals(connectionWindow, handler.connection().connectionStream().localFlowState()
+        .windowSize());
   }
 
   @Test

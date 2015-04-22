@@ -167,7 +167,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
 
   private void onHeadersRead(int streamId, Http2Headers headers, boolean endStream)
       throws Http2Exception {
-    NettyClientStream stream = clientStream(connection().requireStream(streamId));
+    NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
     stream.transportHeadersReceived(headers, endStream);
   }
 
@@ -175,8 +175,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
    * Handler for an inbound HTTP/2 DATA frame.
    */
   private void onDataRead(int streamId, ByteBuf data, boolean endOfStream) throws Http2Exception {
-    Http2Stream http2Stream = connection().requireStream(streamId);
-    NettyClientStream stream = clientStream(http2Stream);
+    NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
     stream.transportDataReceived(data, endOfStream);
   }
 
@@ -186,8 +185,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private void onRstStreamRead(int streamId)
       throws Http2Exception {
     // TODO(nmittler): do something with errorCode?
-    Http2Stream http2Stream = connection().requireStream(streamId);
-    NettyClientStream stream = clientStream(http2Stream);
+    NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
     stream.transportReportStatus(Status.UNKNOWN, false, new Metadata.Trailers());
   }
 
@@ -360,15 +358,24 @@ class NettyClientHandler extends Http2ConnectionHandler {
     return id;
   }
 
+  private Http2Stream requireHttp2Stream(int streamId) {
+    Http2Stream stream = connection().stream(streamId);
+    if (stream == null) {
+      // This should never happen.
+      throw new AssertionError("Stream does not exist: " + streamId);
+    }
+    return stream;
+  }
+
   /**
    * Initializes the connection window if we haven't already.
    */
   private void initConnectionWindow() throws Http2Exception {
     if (connectionWindowSize > 0 && ctx.channel().isActive()) {
-      Http2Stream stream = connection().connectionStream();
-      int currentSize = decoder().flowController().windowSize(stream);
+      Http2Stream connectionStream = connection().connectionStream();
+      int currentSize = connectionStream.localFlowState().windowSize();
       int delta = connectionWindowSize - currentSize;
-      decoder().flowController().incrementWindowSize(ctx, stream, delta);
+      decoder().flowController().incrementWindowSize(ctx, connectionStream, delta);
       connectionWindowSize = -1;
     }
   }

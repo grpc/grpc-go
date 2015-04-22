@@ -136,7 +136,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
     try {
       // The Http2Stream object was put by AbstractHttp2ConnectionHandler before calling this
       // method.
-      Http2Stream http2Stream = connection().requireStream(streamId);
+      Http2Stream http2Stream = requireHttp2Stream(streamId);
       NettyServerStream stream = new NettyServerStream(ctx.channel(), http2Stream, this);
       http2Stream.setProperty(NettyServerStream.class, stream);
       String method = determineMethod(streamId, headers);
@@ -153,10 +153,8 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
   private void onDataRead(int streamId, ByteBuf data, boolean endOfStream) throws Http2Exception {
     try {
-      NettyServerStream stream = serverStream(connection().requireStream(streamId));
+      NettyServerStream stream = serverStream(requireHttp2Stream(streamId));
       stream.inboundDataReceived(data, endOfStream);
-    } catch (Http2Exception e) {
-      throw e;
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onDataRead()", e);
       throw newStreamException(streamId, e);
@@ -165,10 +163,8 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
   private void onRstStreamRead(int streamId) throws Http2Exception {
     try {
-      NettyServerStream stream = serverStream(connection().requireStream(streamId));
+      NettyServerStream stream = serverStream(requireHttp2Stream(streamId));
       stream.abortStream(Status.CANCELLED, false);
-    } catch (Http2Exception e) {
-      throw e;
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onRstStreamRead()", e);
       throw newStreamException(streamId, e);
@@ -249,7 +245,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   }
 
   private void closeStreamWhenDone(ChannelPromise promise, int streamId) throws Http2Exception {
-    final NettyServerStream stream = serverStream(connection().requireStream(streamId));
+    final NettyServerStream stream = serverStream(requireHttp2Stream(streamId));
     promise.addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) {
@@ -305,6 +301,15 @@ class NettyServerHandler extends Http2ConnectionHandler {
         ctx.close();
       }
     });
+  }
+
+  private Http2Stream requireHttp2Stream(int streamId) {
+    Http2Stream stream = connection().stream(streamId);
+    if (stream == null) {
+      // This should never happen.
+      throw new AssertionError("Stream does not exist: " + streamId);
+    }
+    return stream;
   }
 
   private String determineMethod(int streamId, Http2Headers headers) throws Http2Exception {
