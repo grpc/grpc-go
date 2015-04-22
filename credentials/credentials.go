@@ -73,10 +73,9 @@ type Credentials interface {
 // TransportAuthenticator defines the common interface all supported transport
 // authentication protocols (e.g., TLS, SSL) must implement.
 type TransportAuthenticator interface {
-	// Dial connects to the given network address using dialer and then
-	// does the authentication handshake specified by the corresponding
-	// authentication protocol.
-	Dial(dialer func(string, time.Duration) (net.Conn, error), addr string, timeout time.Duration) (net.Conn, error)
+	// Handshake does the authentication handshake specified by the corresponding
+	// authentication protocol on the given rawConn.
+	Handshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, error)
 	// NewListener creates a listener which accepts connections with requested
 	// authentication handshake.
 	NewListener(lis net.Listener) net.Listener
@@ -101,7 +100,7 @@ func (timeoutError) Error() string   { return "credentials: Dial timed out" }
 func (timeoutError) Timeout() bool   { return true }
 func (timeoutError) Temporary() bool { return true }
 
-func (c *tlsCreds) Dial(dialer func(addr string, timeout time.Duration) (net.Conn, error), addr string, timeout time.Duration) (net.Conn, error) {
+func (c *tlsCreds) Handshake(addr string, rawConn net.Conn, timeout time.Duration) (_ net.Conn, err error) {
 	// borrow some code from tls.DialWithDialer
 	var errChannel chan error
 	if timeout != 0 {
@@ -109,10 +108,6 @@ func (c *tlsCreds) Dial(dialer func(addr string, timeout time.Duration) (net.Con
 		time.AfterFunc(timeout, func() {
 			errChannel <- timeoutError{}
 		})
-	}
-	rawConn, err := dialer(addr, timeout)
-	if err != nil {
-		return nil, err
 	}
 	if c.config.ServerName == "" {
 		colonPos := strings.LastIndex(addr, ":")

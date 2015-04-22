@@ -104,11 +104,13 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 			return net.DialTimeout("tcp", addr, timeout)
 		}
 	}
-	var (
-		connErr error
-		conn    net.Conn
-	)
 	scheme := "http"
+	startT := time.Now()
+	timeout := opts.Timeout
+	conn, connErr := opts.Dialer(addr, timeout)
+	if connErr != nil {
+		return nil, ConnectionErrorf("transport: %v", connErr)
+	}
 	for _, c := range opts.AuthOptions {
 		if ccreds, ok := c.(credentials.TransportAuthenticator); ok {
 			scheme = "https"
@@ -116,12 +118,12 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 			// multiple ones provided. Revisit this if it is not appropriate. Probably
 			// place the ClientTransport construction into a separate function to make
 			// things clear.
-			conn, connErr = ccreds.Dial(opts.Dialer, addr, opts.Timeout)
+			if timeout > 0 {
+				timeout = opts.Timeout - time.Since(startT)
+			}
+			conn, connErr = ccreds.Handshake(addr, conn, timeout)
 			break
 		}
-	}
-	if scheme == "http" {
-		conn, connErr = opts.Dialer(addr, opts.Timeout)
 	}
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)
