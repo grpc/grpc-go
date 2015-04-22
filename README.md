@@ -59,7 +59,7 @@ Navigating Around the Source
 ----------------------------
 
 Heres a quick readers guide to the code to help folks get started. At a high level there are three distinct layers
-to the library: stub, channel & transport. 
+to the library: stub, channel & transport.
 
 ### Stub
 
