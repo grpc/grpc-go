@@ -283,9 +283,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					statusDesc = err.Error()
 				}
 			}
-			if err := t.WriteStatus(stream, statusCode, statusDesc); err != nil {
-				log.Printf("grpc: Server.processUnaryRPC failed to write status: %v", err)
-			}
+			t.WriteStatus(stream, statusCode, statusDesc)
 		default:
 			panic(fmt.Sprintf("payload format to be supported: %d", pf))
 		}
@@ -308,9 +306,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			ss.statusDesc = appErr.Error()
 		}
 	}
-	if err := t.WriteStatus(ss.s, ss.statusCode, ss.statusDesc); err != nil {
-		log.Printf("grpc: Server.processStreamingRPC failed to write status: %v", err)
-	}
+	t.WriteStatus(ss.s, ss.statusCode, ss.statusDesc)
 }
 
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream) {
