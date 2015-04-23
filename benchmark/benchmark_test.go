@@ -1,13 +1,17 @@
 package benchmark
 
 import (
+	"os"
 	"sync"
 	"testing"
+	"time"
 
+	"google.golang.org/grpc/benchmark/stats"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceClient)) {
+	s := stats.AddStats(b, 38)
 	b.StopTimer()
 	target, stopper := StartServer()
 	defer stopper()
@@ -23,8 +27,6 @@ func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceCli
 	var wg sync.WaitGroup
 	wg.Add(maxConcurrentCalls)
 
-	b.StartTimer()
-
 	// Distribute the b.N calls over maxConcurrentCalls workers.
 	for i := 0; i < maxConcurrentCalls; i++ {
 		go func() {
@@ -35,11 +37,15 @@ func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceCli
 		}()
 	}
 	for i := 0; i < b.N; i++ {
+		b.StartTimer()
+		start := time.Now()
 		ch <- i
+		elapsed := time.Since(start)
+		b.StopTimer()
+		s.Add(elapsed)
 	}
 	close(ch)
 	wg.Wait()
-	b.StopTimer()
 	conn.Close()
 }
 
@@ -61,4 +67,8 @@ func BenchmarkClientSmallc64(b *testing.B) {
 
 func BenchmarkClientSmallc512(b *testing.B) {
 	run(b, 512, smallCaller)
+}
+
+func TestMain(m *testing.M) {
+	os.Exit(stats.RunTestMain(m))
 }
