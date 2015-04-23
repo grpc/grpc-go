@@ -33,7 +33,7 @@ dependencies {
 }
 
 task qps_client(type: CreateStartScripts) {
-    mainClassName = "io.grpc.benchmarks.qps.QpsClient"
+    mainClassName = "io.grpc.benchmarks.qps.QpsAsyncClient"
     applicationName = "qps_client"
     defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
     outputDir = new File(project.buildDir, 'tmp')
@@ -41,7 +41,7 @@ task qps_client(type: CreateStartScripts) {
 }
 
 task qps_server(type: CreateStartScripts) {
-    mainClassName = "io.grpc.benchmarks.qps.QpsServer"
+    mainClassName = "io.grpc.benchmarks.qps.QpsAsyncServer"
     applicationName = "qps_server"
     defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
     outputDir = new File(project.buildDir, 'tmp')

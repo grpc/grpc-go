@@ -31,24 +31,16 @@
 
 package io.grpc.benchmarks.qps;
 
-import static grpc.testing.Qpstest.Latencies;
 import static grpc.testing.Qpstest.Payload;
 import static grpc.testing.Qpstest.PayloadType;
-import static grpc.testing.Qpstest.ServerStats;
 import static grpc.testing.Qpstest.SimpleRequest;
 import static grpc.testing.Qpstest.SimpleResponse;
-import static grpc.testing.Qpstest.StartArgs;
-import static grpc.testing.Qpstest.StatsRequest;
-import static grpc.testing.Qpstest.StreamingInputCallRequest;
-import static grpc.testing.Qpstest.StreamingInputCallResponse;
-import static grpc.testing.Qpstest.StreamingOutputCallRequest;
-import static grpc.testing.Qpstest.StreamingOutputCallResponse;
 import static io.grpc.testing.integration.Util.loadCert;
 import static io.grpc.testing.integration.Util.pickUnusedPort;
 
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
-import grpc.testing.Qpstest;
 import grpc.testing.TestServiceGrpc;
 import io.grpc.ServerImpl;
 import io.grpc.Status;
@@ -59,13 +51,22 @@ import io.netty.handler.ssl.SslContext;
 import java.io.File;
 import java.util.concurrent.TimeUnit;
 
-public class QpsServer {
+/**
+ * QPS server using the non-blocking API.
+ */
+public class QpsAsyncServer {
 
-  private boolean enableTls;
-  private int port = 0;
+  private boolean tls;
+  private int port;
+  private int connectionWindow = NettyServerBuilder.DEFAULT_CONNECTION_WINDOW_SIZE;
+  private int streamWindow = NettyServerBuilder.DEFAULT_STREAM_WINDOW_SIZE;
+  private boolean directExecutor;
 
+  /**
+   * checkstyle complains if there is no javadoc comment here.
+   */
   public static void main(String... args) throws Exception {
-    new QpsServer().run(args);
+    new QpsAsyncServer().run(args);
   }
 
   /** Equivalent of "main", but non-static. */
@@ -75,7 +76,7 @@ public class QpsServer {
     }
 
     SslContext sslContext = null;
-    if (enableTls) {
+    if (tls) {
       System.out.println("Using fake CA for TLS certificate.\n"
                          + "Run the Java client with --enable_tls --use_testca");
 
@@ -92,6 +93,9 @@ public class QpsServer {
             .forPort(port)
             .addService(TestServiceGrpc.bindService(new TestServiceImpl()))
             .sslContext(sslContext)
+            .executor(directExecutor ? MoreExecutors.newDirectExecutorService() : null)
+            .connectionWindowSize(connectionWindow)
+            .streamWindowSize(streamWindow)
             .build();
     server.start();
 
@@ -132,8 +136,14 @@ public class QpsServer {
           return false;
         } else if ("port".equals(key)) {
           port = Integer.parseInt(value);
-        } else if ("enable_tls".equals(key)) {
-          enableTls = true;
+        } else if ("tls".equals(key)) {
+          tls = true;
+        } else if ("directexecutor".equals(key)) {
+          directExecutor = true;
+        } else if ("connection_window".equals(key)) {
+          connectionWindow = Integer.parseInt(value);
+        } else if ("stream_window".equals(key)) {
+          streamWindow = Integer.parseInt(value);
         } else {
           System.err.println("Unrecognized argument '" + key + "'.");
         }
@@ -148,45 +158,62 @@ public class QpsServer {
   }
 
   private void printUsage() {
-    QpsServer s = new QpsServer();
+    QpsAsyncServer s = new QpsAsyncServer();
     System.out.println(
             "Usage: [ARGS...]"
             + "\n"
-            + "\n  --port             Port of the server. By default a random port is chosen."
-            + "\n  --enable_tls       Enable TLS. Default disabled."
+            + "\n  --port=INT                  Port of the server. Required. No default."
+            + "\n  --tls                       Enable TLS. Default disabled."
+            + "\n  --directexecutor            Use a direct executor i.e. execute all RPC"
+            + "\n                              calls directly in Netty's event loop"
+            + "\n                              overhead of a thread pool."
+            + "\n  --connection_window=BYTES   The HTTP/2 connection flow control window."
+            + "\n                              Default " + connectionWindow + " byte."
+            + "\n  --stream_window=BYTES       The HTTP/2 per-stream flow control window."
+            + "\n                              Default " + streamWindow + " byte."
     );
   }
 
   private static class TestServiceImpl implements TestServiceGrpc.TestService {
 
     @Override
-    public void startTest(StartArgs request, StreamObserver<Latencies> responseObserver) {
-      throw Status.UNIMPLEMENTED.asRuntimeException();
-    }
-
-    @Override
-    public void collectServerStats(StatsRequest request,
-                                   StreamObserver<ServerStats> responseObserver) {
-      double nowSeconds = System.currentTimeMillis() / 1000.0;
-
-      ServerStats stats = ServerStats.newBuilder()
-                                     .setTimeNow(nowSeconds)
-                                     .setTimeUser(0)
-                                     .setTimeSystem(0)
-                                     .build();
-      responseObserver.onValue(stats);
+    public void unaryCall(SimpleRequest request, StreamObserver<SimpleResponse> responseObserver) {
+      SimpleResponse response = buildSimpleResponse(request);
+      responseObserver.onValue(response);
       responseObserver.onCompleted();
     }
 
     @Override
-    public void unaryCall(SimpleRequest request,
-                          StreamObserver<Qpstest.SimpleResponse> responseObserver) {
+    public StreamObserver<SimpleRequest> streamingCall(
+        final StreamObserver<SimpleResponse> responseObserver) {
+      return new StreamObserver<SimpleRequest>() {
+        @Override
+        public void onValue(SimpleRequest request) {
+          SimpleResponse response = buildSimpleResponse(request);
+          responseObserver.onValue(response);
+        }
+
+        @Override
+        public void onError(Throwable t) {
+          System.out.println("Encountered an error in streamingCall");
+          t.printStackTrace();
+        }
+
+        @Override
+        public void onCompleted() {
+          responseObserver.onCompleted();
+        }
+      };
+    }
+
+    private static SimpleResponse buildSimpleResponse(SimpleRequest request) {
       if (!request.hasResponseSize()) {
         throw Status.INTERNAL.augmentDescription("responseSize required").asRuntimeException();
-      } else if (!request.hasResponseType()) {
+      }
+      if (!request.hasResponseType()) {
         throw Status.INTERNAL.augmentDescription("responseType required").asRuntimeException();
-      } else if (request.getResponseSize() > 0) {
-        // I just added this condition to mimic the C++ QPS Server behaviour.
+      }
+      if (request.getResponseSize() > 0) {
         if (!PayloadType.COMPRESSABLE.equals(request.getResponseType())) {
           throw Status.INTERNAL.augmentDescription("Error creating payload.").asRuntimeException();
         }
@@ -196,37 +223,9 @@ public class QpsServer {
 
         Payload payload = Payload.newBuilder().setType(type).setBody(body).build();
         SimpleResponse response = SimpleResponse.newBuilder().setPayload(payload).build();
-
-        responseObserver.onValue(response);
-        responseObserver.onCompleted();
-      } else {
-        responseObserver.onValue(SimpleResponse.getDefaultInstance());
-        responseObserver.onCompleted();
+        return response;
       }
-    }
-
-    @Override
-    public void streamingOutputCall(StreamingOutputCallRequest request,
-                                    StreamObserver<StreamingOutputCallResponse> responseObserver) {
-      throw Status.UNIMPLEMENTED.asRuntimeException();
-    }
-
-    @Override
-    public StreamObserver<StreamingInputCallRequest> streamingInputCall(
-        StreamObserver<StreamingInputCallResponse> responseObserver) {
-      throw Status.UNIMPLEMENTED.asRuntimeException();
-    }
-
-    @Override
-    public StreamObserver<StreamingOutputCallRequest> fullDuplexCall(
-        StreamObserver<StreamingOutputCallResponse> responseObserver) {
-      throw Status.UNIMPLEMENTED.asRuntimeException();
-    }
-
-    @Override
-    public StreamObserver<StreamingOutputCallRequest> halfDuplexCall(
-        StreamObserver<StreamingOutputCallResponse> responseObserver) {
-      throw Status.UNIMPLEMENTED.asRuntimeException();
+      return SimpleResponse.getDefaultInstance();
     }
   }
 }
