@@ -573,7 +573,7 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
-	// TODO(zhaoq): PingFrame handler to be implemented"
+	t.controlBuf.put(&ping{true})
 }
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
@@ -719,6 +719,10 @@ func (t *http2Client) controller() {
 					t.framer.writeRSTStream(true, i.streamID, i.code)
 				case *flushIO:
 					t.framer.flushWrite()
+				case *ping:
+					// TODO(zhaoq): Ack with all-0 data now. will change to some
+					// meaningful content when this is actually in use.
+					t.framer.writePing(true, i.ack, [8]byte{})
 				default:
 					log.Printf("transport: http2Client.controller got unexpected item type %v\n", i)
 				}

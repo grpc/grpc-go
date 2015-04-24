@@ -85,6 +85,14 @@ func (flushIO) isItem() bool {
 	return true
 }
 
+type ping struct {
+	ack bool
+}
+
+func (ping) isItem() bool {
+	return true
+}
+
 // quotaPool is a pool which accumulates the quota and sends it to acquire()
 // when it is available.
 type quotaPool struct {
