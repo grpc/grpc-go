@@ -76,8 +76,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     super(new DefaultHttp2ConnectionDecoder(connection, encoder, frameReader,
         new LazyFrameListener()), new BufferingHttp2ConnectionEncoder(encoder));
     Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
-    this.connectionWindowSize =
-        connectionWindowSize == streamWindowSize ? -1 : connectionWindowSize;
+    this.connectionWindowSize = connectionWindowSize;
     try {
       decoder().flowController().initialWindowSize(streamWindowSize);
     } catch (Http2Exception e) {

@@ -37,6 +37,7 @@ import static io.grpc.transport.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.transport.netty.Utils.HTTP_METHOD;
 import static io.grpc.transport.netty.Utils.TE_HEADER;
 import static io.grpc.transport.netty.Utils.TE_TRAILERS;
+import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
 import static io.netty.handler.codec.http2.Http2Exception.connectionError;
 import static org.junit.Assert.assertArrayEquals;
@@ -272,7 +273,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     Http2Connection connection = new DefaultHttp2Connection(true);
     handler =
         new NettyServerHandler(transportListener, connection, new DefaultHttp2FrameReader(),
-            frameWriter, maxConcurrentStreams);
+            frameWriter, maxConcurrentStreams, DEFAULT_WINDOW_SIZE, DEFAULT_WINDOW_SIZE);
 
     when(channel.isActive()).thenReturn(true);
     mockContext();
@@ -291,6 +292,19 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     Http2Settings settings = captor.getValue();
     assertEquals(maxConcurrentStreams, settings.maxConcurrentStreams().intValue());
+  }
+
+  @Test
+  public void connectionWindowShouldBeOverridden() throws Exception {
+    int connectionWindow = 1048576; // 1MiB
+    handler = newHandler(transportListener, connectionWindow, DEFAULT_WINDOW_SIZE);
+    handler.handlerAdded(ctx);
+    int actualInitialWindowSize = handler.connection().connectionStream()
+                                         .localFlowState().initialWindowSize();
+    int actualWindowSize = handler.connection().connectionStream()
+                                  .localFlowState().windowSize();
+    assertEquals(connectionWindow, actualWindowSize);
+    assertEquals(connectionWindow, actualInitialWindowSize);
   }
 
   private void createStream() throws Exception {
@@ -343,11 +357,17 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     return captureWrite(ctx);
   }
 
-  private static NettyServerHandler newHandler(ServerTransportListener transportListener) {
+  private static NettyServerHandler newHandler(ServerTransportListener transportListener,
+                                               int connectionWindowSize,
+                                               int streamWindowSize) {
     Http2Connection connection = new DefaultHttp2Connection(true);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
     return new NettyServerHandler(transportListener, connection, frameReader, frameWriter,
-        Integer.MAX_VALUE);
+        Integer.MAX_VALUE, connectionWindowSize, streamWindowSize);
+  }
+
+  private static NettyServerHandler newHandler(ServerTransportListener transportListener) {
+    return newHandler(transportListener, DEFAULT_WINDOW_SIZE, DEFAULT_WINDOW_SIZE);
   }
 }

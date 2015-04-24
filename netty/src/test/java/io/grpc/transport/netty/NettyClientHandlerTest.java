@@ -70,7 +70,6 @@ import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
-import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
@@ -357,9 +356,12 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     int connectionWindow = 1048576; // 1MiB
     handler = newHandler(connectionWindow, DEFAULT_WINDOW_SIZE);
     handler.handlerAdded(ctx);
-    Http2Connection connection = handler.connection();
-    assertEquals(connectionWindow, handler.connection().connectionStream().localFlowState()
-        .windowSize());
+    int actualInitialWindowSize = handler.connection().connectionStream()
+                                         .localFlowState().initialWindowSize();
+    int actualWindowSize = handler.connection().connectionStream()
+                                  .localFlowState().windowSize();
+    assertEquals(connectionWindow, actualWindowSize);
+    assertEquals(connectionWindow, actualInitialWindowSize);
   }
 
   @Test
@@ -396,8 +398,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     mockContext();
   }
 
-  private static NettyClientHandler newHandler(int connectionWindowSize, int streamWindowSize)
-      throws Http2Exception {
+  private static NettyClientHandler newHandler(int connectionWindowSize, int streamWindowSize) {
     Http2Connection connection = new DefaultHttp2Connection(false);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();

@@ -39,6 +39,7 @@ import io.grpc.SharedResourceHolder;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
@@ -48,6 +49,8 @@ import java.net.SocketAddress;
  * A builder to help simplify the construction of a Netty-based GRPC server.
  */
 public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerBuilder> {
+  public static final int DEFAULT_CONNECTION_WINDOW_SIZE = 1048576; // 1MiB
+  public static final int DEFAULT_STREAM_WINDOW_SIZE = Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 
   private final SocketAddress address;
   private Class<? extends ServerChannel> channelType = NioServerSocketChannel.class;
@@ -55,6 +58,8 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
   private EventLoopGroup userWorkerEventLoopGroup;
   private SslContext sslContext;
   private int maxConcurrentCallsPerConnection = Integer.MAX_VALUE;
+  private int connectionWindowSize = DEFAULT_CONNECTION_WINDOW_SIZE;
+  private int streamWindowSize = DEFAULT_STREAM_WINDOW_SIZE;
 
   /**
    * Creates a server builder that will bind to the given port.
@@ -173,6 +178,26 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
     return this;
   }
 
+  /**
+   * Sets the HTTP/2 connection flow control window. If not called, the default value
+   * is {@link #DEFAULT_CONNECTION_WINDOW_SIZE}).
+   */
+  public NettyServerBuilder connectionWindowSize(int connectionWindowSize) {
+    Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
+    this.connectionWindowSize = connectionWindowSize;
+    return this;
+  }
+
+  /**
+   * Sets the HTTP/2 per-stream flow control window. If not called, the default value
+   * is {@link #DEFAULT_STREAM_WINDOW_SIZE}).
+   */
+  public NettyServerBuilder streamWindowSize(int streamWindowSize) {
+    Preconditions.checkArgument(streamWindowSize > 0, "streamWindowSize must be positive");
+    this.streamWindowSize = streamWindowSize;
+    return this;
+  }
+
   @Override
   protected ServerEssentials buildEssentials() {
     final EventLoopGroup bossEventLoopGroup  = (userBossEventLoopGroup == null)
@@ -181,7 +206,8 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
         ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP)
         : userWorkerEventLoopGroup;
     NettyServer server = new NettyServer(address, channelType, bossEventLoopGroup,
-        workerEventLoopGroup, sslContext, maxConcurrentCallsPerConnection);
+        workerEventLoopGroup, sslContext, maxConcurrentCallsPerConnection, connectionWindowSize,
+        streamWindowSize);
     Runnable terminationRunnable = new Runnable() {
       @Override
       public void run() {

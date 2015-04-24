@@ -84,13 +84,24 @@ class NettyServerHandler extends Http2ConnectionHandler {
   private Throwable connectionError;
   private ChannelHandlerContext ctx;
   private boolean teWarningLogged;
+  private int connectionWindowSize;
 
   NettyServerHandler(ServerTransportListener transportListener,
       Http2Connection connection,
       Http2FrameReader frameReader,
       Http2FrameWriter frameWriter,
-      int maxStreams) {
+      int maxStreams,
+      int connectionWindowSize,
+      int streamWindowSize) {
     super(connection, frameReader, frameWriter, new LazyFrameListener());
+    Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
+    this.connectionWindowSize = connectionWindowSize;
+    try {
+      decoder().flowController().initialWindowSize(streamWindowSize);
+    } catch (Http2Exception e) {
+      throw new RuntimeException(e);
+    }
+
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
     initListener();
     connection.local().allowPushTo(false);
@@ -110,6 +121,16 @@ class NettyServerHandler extends Http2ConnectionHandler {
   public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
     this.ctx = ctx;
     super.handlerAdded(ctx);
+    // Initialize the connection window if we haven't already.
+    initConnectionWindow();
+  }
+
+  @Override
+  public void channelActive(ChannelHandlerContext ctx) throws Exception {
+    // Sends connection preface if we haven't already.
+    super.channelActive(ctx);
+    // Initialize the connection window if we haven't already.
+    initConnectionWindow();
   }
 
   @Override
@@ -344,6 +365,19 @@ class NettyServerHandler extends Http2ConnectionHandler {
   private Http2Exception newStreamException(int streamId, Throwable cause) {
     return Http2Exception.streamError(
         streamId, Http2Error.INTERNAL_ERROR, cause.getMessage(), cause);
+  }
+
+  /**
+   * Initializes the connection window if we haven't already.
+   */
+  private void initConnectionWindow() throws Http2Exception {
+    if (connectionWindowSize > 0 && ctx.channel().isActive()) {
+      Http2Stream connectionStream = connection().connectionStream();
+      int currentSize = connectionStream.localFlowState().windowSize();
+      int delta = connectionWindowSize - currentSize;
+      decoder().flowController().incrementWindowSize(ctx, connectionStream, delta);
+      connectionWindowSize = -1;
+    }
   }
 
   private static class LazyFrameListener extends Http2FrameAdapter {

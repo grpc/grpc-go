@@ -118,9 +118,8 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   }
 
   /**
-   * Sets the HTTP/2 connection window used for the transport. If not called, uses the default
-   * initial window size from the HTTP/2 specification, as provided by Netty (
-   * {@link #DEFAULT_CONNECTION_WINDOW_SIZE}).
+   * Sets the HTTP/2 connection flow control window. If not called, the default value
+   * is {@link #DEFAULT_CONNECTION_WINDOW_SIZE}).
    */
   public NettyChannelBuilder connectionWindowSize(int connectionWindowSize) {
     Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
@@ -129,9 +128,8 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   }
 
   /**
-   * Sets the initial size HTTP/2 stream windows used for the transport. If not called, uses the
-   * default initial window size from the HTTP/2 specification, as provided by Netty (
-   * {@link #DEFAULT_STREAM_WINDOW_SIZE}).
+   * Sets the HTTP/2 per-stream flow control window. If not called, the default value
+   * is {@link #DEFAULT_STREAM_WINDOW_SIZE}).
    */
   public NettyChannelBuilder streamWindowSize(int streamWindowSize) {
     Preconditions.checkArgument(streamWindowSize > 0, "streamWindowSize must be positive");
