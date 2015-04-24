@@ -59,7 +59,8 @@ public class MessageFramer {
     /**
      * Delivers a frame via the transport.
      *
-     * @param frame the contents of the frame to deliver
+     * @param frame a non-empty buffer to deliver or {@code null} if the framer is being
+     *              closed and there is no data to deliver.
      * @param endOfStream whether the frame is the last one for the GRPC stream
      * @param flush {@code true} if more data may not be arriving soon
      */
@@ -218,6 +219,12 @@ public class MessageFramer {
    */
   public void close() {
     if (!isClosed()) {
+      // With the current code we don't expect readableBytes > 0 to be possible here, added
+      // defensively to prevent buffer leak issues if the framer code changes later.
+      if (buffer != null && buffer.readableBytes() == 0) {
+        buffer.release();
+        buffer = null;
+      }
       commitToSink(true, true);
       closed = true;
     }
@@ -236,9 +243,6 @@ public class MessageFramer {
   }
 
   private void commitToSink(boolean endOfStream, boolean flush) {
-    if (buffer == null) {
-      buffer = bufferAllocator.allocate(0);
-    }
     sink.deliverFrame(buffer, endOfStream, flush);
     buffer = null;
   }

@@ -142,7 +142,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
 
   @Override
   protected final void internalSendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-    if (frame.readableBytes() > 0) {
+    if (frame != null) {
       sendFrame(frame, false, endOfStream ? false : flush);
     }
     if (endOfStream) {

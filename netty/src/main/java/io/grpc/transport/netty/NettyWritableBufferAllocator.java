@@ -31,6 +31,7 @@
 
 package io.grpc.transport.netty;
 
+import io.grpc.transport.WritableBuffer;
 import io.grpc.transport.WritableBufferAllocator;
 import io.netty.buffer.ByteBufAllocator;
 
@@ -60,7 +61,7 @@ class NettyWritableBufferAllocator implements WritableBufferAllocator {
   }
 
   @Override
-  public NettyWritableBuffer allocate(int capacityHint) {
+  public WritableBuffer allocate(int capacityHint) {
     capacityHint = Math.min(MAX_BUFFER, Math.max(MIN_BUFFER, capacityHint));
     return new NettyWritableBuffer(allocator.buffer(capacityHint, capacityHint));
   }

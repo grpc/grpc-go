@@ -93,7 +93,7 @@ public abstract class AbstractStream<IdT> implements Stream {
     };
 
     framer = new MessageFramer(outboundFrameHandler, bufferAllocator);
-    this.deframer = new MessageDeframer(inboundMessageHandler);
+    deframer = new MessageDeframer(inboundMessageHandler);
   }
 
   /**

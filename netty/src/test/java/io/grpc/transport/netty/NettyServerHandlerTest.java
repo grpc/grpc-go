@@ -329,8 +329,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     MessageFramer framer = new MessageFramer(new MessageFramer.Sink() {
       @Override
       public void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-        ByteBuf bytebuf = ((NettyWritableBuffer)frame).bytebuf();
-        compressionFrame.writeBytes(bytebuf);
+        if (frame != null) {
+          ByteBuf bytebuf = ((NettyWritableBuffer) frame).bytebuf();
+          compressionFrame.writeBytes(bytebuf);
+        }
       }
     }, new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT));
     framer.writePayload(new ByteArrayInputStream(CONTENT), CONTENT.length);

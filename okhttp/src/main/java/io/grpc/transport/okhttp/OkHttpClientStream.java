@@ -59,6 +59,8 @@ class OkHttpClientStream extends Http2ClientStream {
   private static int WINDOW_UPDATE_THRESHOLD =
       OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2;
 
+  private static final Buffer EMPTY_BUFFER = new Buffer();
+
   private final MethodType type;
 
   /**
@@ -156,7 +158,12 @@ class OkHttpClientStream extends Http2ClientStream {
   @Override
   protected void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
     checkState(id() != 0, "streamId should be set");
-    Buffer buffer = ((OkHttpWritableBuffer) frame).buffer();
+    Buffer buffer;
+    if (frame == null) {
+      buffer = EMPTY_BUFFER;
+    } else {
+      buffer = ((OkHttpWritableBuffer) frame).buffer();
+    }
     // If buffer > frameWriter.maxDataLength() the flow-controller will ensure that it is
     // properly chunked.
     outboundFlow.data(endOfStream, id(), buffer, flush);

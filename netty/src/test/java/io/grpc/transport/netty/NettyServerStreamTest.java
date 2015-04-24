@@ -206,6 +206,16 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     assertTrue(stream().isClosed());
   }
 
+  @Test
+  public void emptyFramerShouldSendNoPayload() throws Exception {
+    stream().close(Status.OK, new Metadata.Trailers());
+    verify(channel).writeAndFlush(
+        new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
+            .status(new AsciiString("200"))
+            .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
+            .set(new AsciiString("grpc-status"), new AsciiString("0")), true));
+  }
+
   @Override
   protected AbstractStream<Integer> createStream() {
     NettyServerStream stream = new NettyServerStream(channel, http2Stream, handler);

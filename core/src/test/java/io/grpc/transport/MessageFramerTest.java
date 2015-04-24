@@ -77,6 +77,7 @@ public class MessageFramerTest {
     verifyNoMoreInteractions(sink);
     framer.flush();
     verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true);
+    assertEquals(1, allocator.allocCount);
     verifyNoMoreInteractions(sink);
   }
 
@@ -92,6 +93,7 @@ public class MessageFramerTest {
     verify(sink).deliverFrame(
         toWriteBuffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false, true);
     verifyNoMoreInteractions(sink);
+    assertEquals(1, allocator.allocCount);
   }
 
   @Test
@@ -102,13 +104,15 @@ public class MessageFramerTest {
     verify(sink).deliverFrame(
         toWriteBuffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true, true);
     verifyNoMoreInteractions(sink);
+    assertEquals(1, allocator.allocCount);
   }
 
   @Test
-  public void closeWithoutBufferedFrameGivesEmptySink() {
+  public void closeWithoutBufferedFrameGivesNullBuffer() {
     framer.close();
-    verify(sink).deliverFrame(new ByteWritableBuffer(0), true, true);
+    verify(sink).deliverFrame(null, true, true);
     verifyNoMoreInteractions(sink);
+    assertEquals(0, allocator.allocCount);
   }
 
   @Test
@@ -121,6 +125,7 @@ public class MessageFramerTest {
     framer.flush();
     verify(sink).deliverFrame(toWriteBuffer(new byte[] {5}), false, true);
     verifyNoMoreInteractions(sink);
+    assertEquals(2, allocator.allocCount);
   }
 
   @Test
@@ -136,6 +141,7 @@ public class MessageFramerTest {
     framer.flush();
     verify(sink).deliverFrame(toWriteBufferWithMinSize(new byte[] {1, 3}, 12), false, true);
     verifyNoMoreInteractions(sink);
+    assertEquals(2, allocator.allocCount);
   }
 
   @Test
@@ -143,6 +149,7 @@ public class MessageFramerTest {
     writePayload(framer, new byte[0]);
     framer.flush();
     verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true);
+    assertEquals(1, allocator.allocCount);
   }
 
   @Test
@@ -152,6 +159,7 @@ public class MessageFramerTest {
     framer.flush();
     verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true);
     verifyNoMoreInteractions(sink);
+    assertEquals(1, allocator.allocCount);
   }
 
   @Test
@@ -170,6 +178,7 @@ public class MessageFramerTest {
 
     assertEquals(toWriteBuffer(data), buffer);
     verifyNoMoreInteractions(sink);
+    assertEquals(1, allocator.allocCount);
   }
 
   @Test
@@ -188,6 +197,8 @@ public class MessageFramerTest {
     assertEquals(0, buffer.data[1]);
     assertEquals(0, buffer.data[2]);
     assertEquals(0, buffer.data[3]);
+
+    assertEquals(1, allocator.allocCount);
   }
 
   private static WritableBuffer toWriteBuffer(byte[] data) {
@@ -260,6 +271,7 @@ public class MessageFramerTest {
 
     public int minSize;
     public int maxSize;
+    public int allocCount = 0;
 
     BytesWritableBufferAllocator(int minSize, int maxSize) {
       this.minSize = minSize;
@@ -268,6 +280,7 @@ public class MessageFramerTest {
 
     @Override
     public WritableBuffer allocate(int capacityHint) {
+      allocCount++;
       return new ByteWritableBuffer(Math.min(maxSize, Math.max(capacityHint, minSize)));
     }
   }

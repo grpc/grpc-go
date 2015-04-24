@@ -184,13 +184,15 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
 
   @Override
   protected final void internalSendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+    Preconditions.checkArgument(frame != null || endOfStream, "null frame before EOS");
     sendFrame(frame, endOfStream, flush);
   }
 
   /**
    * Sends an outbound frame to the remote end point.
    *
-   * @param frame a buffer containing the chunk of data to be sent.
+   * @param frame a buffer containing the chunk of data to be sent or {@code null} if the framer is
+   *              closing and has no data to send.
    * @param endOfStream if {@code true} indicates that no more data will be sent on the stream by
    *        this endpoint.
    * @param flush {@code true} if more data may not be arriving soon

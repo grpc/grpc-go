@@ -38,6 +38,7 @@ import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.Http2ClientStream;
 import io.grpc.transport.WritableBuffer;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
@@ -116,7 +117,12 @@ class NettyClientStream extends Http2ClientStream {
 
   @Override
   protected void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-    ByteBuf bytebuf = ((NettyWritableBuffer) frame).bytebuf();
+    ByteBuf bytebuf;
+    if (frame == null) {
+      bytebuf = Unpooled.EMPTY_BUFFER;
+    } else {
+      bytebuf = ((NettyWritableBuffer) frame).bytebuf();
+    }
     channel.write(new SendGrpcFrameCommand(this, bytebuf, endOfStream));
     if (flush) {
       channel.flush();

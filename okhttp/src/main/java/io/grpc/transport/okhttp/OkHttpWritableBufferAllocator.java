@@ -31,6 +31,7 @@
 
 package io.grpc.transport.okhttp;
 
+import io.grpc.transport.WritableBuffer;
 import io.grpc.transport.WritableBufferAllocator;
 import okio.Buffer;
 
@@ -58,7 +59,7 @@ class OkHttpWritableBufferAllocator implements WritableBufferAllocator {
    * mechanism for chunking a large GRPC message over many DATA frames.
    */
   @Override
-  public OkHttpWritableBuffer allocate(int capacityHint) {
+  public WritableBuffer allocate(int capacityHint) {
     capacityHint = Math.min(MAX_BUFFER, Math.max(MIN_BUFFER, capacityHint));
     return new OkHttpWritableBuffer(new Buffer(), capacityHint);
   }
