@@ -31,6 +31,8 @@
 
 package io.grpc.transport;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
@@ -38,11 +40,18 @@ import com.google.common.base.Preconditions;
 import java.io.InputStream;
 
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Abstract base class for {@link Stream} implementations.
  */
 public abstract class AbstractStream<IdT> implements Stream {
+  /**
+   * The default number of queued bytes for a given stream, below which
+   * {@link StreamListener#onReady()} will be called.
+   */
+  public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
+
   /**
    * Indicates the phase of the GRPC stream in one direction.
    */
@@ -62,6 +71,25 @@ public abstract class AbstractStream<IdT> implements Stream {
    * Outbound phase is exclusively written to by the application thread.
    */
   private Phase outboundPhase = Phase.HEADERS;
+
+  /**
+   * The number of queued bytes for a given stream, below which {@link StreamListener#onReady()}
+   * will be called.
+   */
+  private int onReadyThreshold = DEFAULT_ONREADY_THRESHOLD;
+
+  /**
+   * The number of bytes currently queued, waiting to be sent. When this falls below
+   */
+  private int numSentBytesQueued;
+
+  /**
+   * Indicates whether the listener is currently eligible for notification of
+   * {@link StreamListener#onReady()}.
+   */
+  private boolean shouldNotifyOnReady = true;
+
+  private final Object onReadyLock = new Object();
 
   AbstractStream(WritableBufferAllocator bufferAllocator) {
     MessageDeframer.Listener inboundMessageHandler = new MessageDeframer.Listener() {
@@ -104,18 +132,32 @@ public abstract class AbstractStream<IdT> implements Stream {
   @Nullable
   public abstract IdT id();
 
+  /**
+   * The number of queued bytes for a given stream, below which {@link StreamListener#onReady()}
+   * will be called. Defaults to {@link #DEFAULT_ONREADY_THRESHOLD}.
+   */
+  public int getOnReadyThreshold() {
+    return onReadyThreshold;
+  }
+
+  /**
+   * Sets the number of queued bytes for a given stream, below which
+   * {@link StreamListener#onReady()} will be called. If not called, defaults to
+   * {@link #DEFAULT_ONREADY_THRESHOLD}.
+   */
+  public void setOnReadyThreshold(int onReadyThreshold) {
+    checkArgument(onReadyThreshold > 0, "onReadyThreshold must be > 0");
+    this.onReadyThreshold = onReadyThreshold;
+    notifyIfReady();
+  }
+
   @Override
-  public void writeMessage(InputStream message, int length, @Nullable Runnable accepted) {
+  public void writeMessage(InputStream message, int length) {
     Preconditions.checkNotNull(message, "message");
     Preconditions.checkArgument(length >= 0, "length must be >= 0");
     outboundPhase(Phase.MESSAGE);
     if (!framer.isClosed()) {
       framer.writePayload(message, length);
-    }
-
-    // TODO(nmittler): add flow control.
-    if (accepted != null) {
-      accepted.run();
     }
   }
 
@@ -124,6 +166,18 @@ public abstract class AbstractStream<IdT> implements Stream {
     if (!framer.isClosed()) {
       framer.flush();
     }
+  }
+
+  @Override
+  public final boolean isReady() {
+    if (listener() != null && outboundPhase() != Phase.STATUS) {
+      synchronized (onReadyLock) {
+        if (numSentBytesQueued < onReadyThreshold) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -148,6 +202,11 @@ public abstract class AbstractStream<IdT> implements Stream {
   public void dispose() {
     framer.dispose();
   }
+
+  /**
+   * Gets the listener to this stream.
+   */
+  protected abstract StreamListener listener();
 
   /**
    * Sends an outbound frame to the remote end point.
@@ -227,6 +286,70 @@ public abstract class AbstractStream<IdT> implements Stream {
     } catch (Throwable t) {
       deframeFailed(t);
     }
+  }
+
+  /**
+   * Event handler to be called by the subclass when a number of bytes are being queued for sending
+   * to the remote endpoint.
+   *
+   * @param numBytes the number of bytes being sent.
+   */
+  protected final void onSendingBytes(int numBytes) {
+    synchronized (onReadyLock) {
+      numSentBytesQueued += numBytes;
+      if (!isReady()) {
+        shouldNotifyOnReady = true;
+      }
+    }
+  }
+
+  /**
+   * Event handler to be called by the subclass when a number of bytes has been sent to the remote
+   * endpoint. May call back the listener's {@link StreamListener#onReady()} handler if appropriate.
+   * This must be called from the transport thread, since the listener may be called back directly.
+   *
+   * @param numBytes the number of bytes that were sent.
+   */
+  protected final void onSentBytes(int numBytes) {
+    boolean doNotify;
+    synchronized (onReadyLock) {
+      numSentBytesQueued -= numBytes;
+      doNotify = needToNotifyOnReady();
+    }
+    if (doNotify) {
+      listener().onReady();
+    }
+  }
+
+  /**
+   * Utility method for subclasses which calls back the listener's {@link StreamListener#onReady()}
+   * handler if appropriate. This must be called from the transport thread, since the listener
+   * is called back directly.
+   */
+  protected final void notifyIfReady() {
+    boolean doNotify;
+    synchronized (onReadyLock) {
+      doNotify = needToNotifyOnReady();
+    }
+    if (doNotify) {
+      listener().onReady();
+    }
+  }
+
+  /**
+   * Determines whether or not we need to call the {@link StreamListener#onReady()} handler now.
+   * Calling this method has the side-effect of unsetting {@link #shouldNotifyOnReady} so the
+   * handler should always be invoked immediately after calling this method.
+   */
+  @GuardedBy("onReadyLock")
+  private boolean needToNotifyOnReady() {
+    if (shouldNotifyOnReady && isReady()) {
+      // Returning true here counts as a call to the onReady callback, so
+      // unset the flag.
+      shouldNotifyOnReady = false;
+      return true;
+    }
+    return false;
   }
 
   final Phase inboundPhase() {

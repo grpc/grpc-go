@@ -56,8 +56,8 @@ public abstract class ForwardingCallListener<RespT> extends Call.Listener<RespT>
   }
 
   @Override
-  public void onReady(int numMessages) {
-    delegate().onReady(numMessages);
+  public void onReady() {
+    delegate().onReady();
   }
 
   /**

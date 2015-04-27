@@ -47,7 +47,6 @@ import static org.mockito.Mockito.verify;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
-import io.grpc.transport.AbstractStream;
 import io.grpc.transport.ClientStreamListener;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -61,6 +60,7 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
 /**
@@ -106,16 +106,16 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   public void writeMessageShouldSendRequest() throws Exception {
     // Force stream creation.
     stream().id(STREAM_ID);
-    stream.writeMessage(input, input.available(), accepted);
+    byte[] msg = smallMessage();
+    stream.writeMessage(new ByteArrayInputStream(msg), msg.length);
     stream.flush();
     verify(channel).write(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false));
     verify(channel).flush();
-    verify(accepted).run();
   }
 
   @Test
   public void setStatusWithOkShouldCloseStream() {
-    stream().id(1);
+    stream().id(STREAM_ID);
     stream().transportReportStatus(Status.OK, true, new Metadata.Trailers());
     verify(listener).closed(same(Status.OK), any(Metadata.Trailers.class));
     assertTrue(stream.isClosed());
@@ -152,14 +152,14 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void inboundMessageShouldCallListener() throws Exception {
     // Receive headers first so that it's a valid GRPC response.
-    stream().id(1);
+    stream().id(STREAM_ID);
     stream().transportHeadersReceived(grpcResponseHeaders(), false);
     super.inboundMessageShouldCallListener();
   }
 
   @Test
   public void inboundHeadersShouldCallListenerHeadersRead() throws Exception {
-    stream().id(1);
+    stream().id(STREAM_ID);
     Http2Headers headers = grpcResponseHeaders();
     stream().transportHeadersReceived(headers, false);
     verify(listener).headersRead(any(Metadata.Headers.class));
@@ -167,7 +167,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void inboundTrailersClosesCall() throws Exception {
-    stream().id(1);
+    stream().id(STREAM_ID);
     stream().transportHeadersReceived(grpcResponseHeaders(), false);
     super.inboundMessageShouldCallListener();
     stream().transportHeadersReceived(grpcResponseTrailers(Status.OK), true);
@@ -175,7 +175,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void inboundStatusShouldSetStatus() throws Exception {
-    stream().id(1);
+    stream().id(STREAM_ID);
 
     // Receive headers first so that it's a valid GRPC response.
     stream().transportHeadersReceived(grpcResponseHeaders(), false);
@@ -189,7 +189,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void invalidInboundHeadersCancelStream() throws Exception {
-    stream().id(1);
+    stream().id(STREAM_ID);
     Http2Headers headers = grpcResponseHeaders();
     headers.remove(CONTENT_TYPE_HEADER);
     // Remove once b/16290036 is fixed.
@@ -223,7 +223,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void deframedDataAfterCancelShouldBeIgnored() throws Exception {
-    stream().id(1);
+    stream().id(STREAM_ID);
     // Receive headers first so that it's a valid GRPC response.
     stream().transportHeadersReceived(grpcResponseHeaders(), false);
 
@@ -257,7 +257,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void dataFrameWithEosShouldDeframeAndThenFail() {
-    stream().id(1);
+    stream().id(STREAM_ID);
     stream().request(1);
 
     // Receive headers first so that it's a valid GRPC response.
@@ -274,13 +274,26 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     assertEquals(Status.Code.INTERNAL, captor.getValue().getCode());
   }
 
+  @Test
+  public void setHttp2StreamShouldNotifyReady() {
+    stream().id(STREAM_ID);
+    verify(listener, never()).onReady();
+    stream().setHttp2Stream(http2Stream);
+    verify(listener).onReady();
+  }
+
   @Override
-  protected AbstractStream<Integer> createStream() {
+  protected NettyClientStream createStream() {
     NettyClientStream stream = new NettyClientStream(listener, channel, handler);
     assertTrue(stream.canSend());
     assertTrue(stream.canReceive());
     stream.id(STREAM_ID);
     return stream;
+  }
+
+  @Override
+  protected void closeStream() {
+    stream().cancel();
   }
 
   private ByteBuf simpleGrpcFrame() {

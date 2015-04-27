@@ -62,8 +62,8 @@ public abstract class ForwardingServerCallListener<ReqT> extends ServerCall.List
   }
 
   @Override
-  public void onReady(int numMessages) {
-    delegate().onReady(numMessages);
+  public void onReady() {
+    delegate().onReady();
   }
 
   /**

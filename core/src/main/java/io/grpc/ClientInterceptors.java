@@ -129,19 +129,28 @@ public class ClientInterceptors {
 
   private static final Call<Object, Object> NOOP_CALL = new Call<Object, Object>() {
     @Override
-    public void start(Listener<Object> responseListener, Metadata.Headers headers) { }
+    public void start(Listener<Object> responseListener, Metadata.Headers headers) {}
 
     @Override
-    public void request(int numMessages) { }
+    public void request(int numMessages) {}
 
     @Override
-    public void cancel() { }
+    public void cancel() {}
 
     @Override
-    public void halfClose() { }
+    public void halfClose() {}
 
     @Override
-    public void sendPayload(Object payload) { }
+    public void sendPayload(Object payload) {}
+
+    /**
+     * Always returns {@code false}, since this is only used when the startup of the {@link Call}
+     * fails (i.e. the {@link Call} is closed).
+     */
+    @Override
+    public boolean isReady() {
+      return false;
+    }
   };
 
   /**

@@ -93,17 +93,12 @@ public abstract class ServerCall<ResponseT> {
     public abstract void onComplete();
 
     /**
-     * This indicates that the call is now capable of sending the given number of messages (via
+     * This indicates that the call is now capable of sending additional messages (via
      * {@link #sendPayload}) without requiring excessive buffering internally. This event is
      * just a suggestion and the application is free to ignore it, however doing so may
      * result in excessive buffering within the call.
-     *
-     * <p>NOTE: this method is not yet implemented!
-     *
-     * @param numMessages the number of messages that can be sent without requiring excessive
-     *        buffering.
      */
-    public void onReady(int numMessages) {}
+    public void onReady() {}
   }
 
   /**
@@ -136,6 +131,14 @@ public abstract class ServerCall<ResponseT> {
    * @throws IllegalStateException if call is {@link #close}d
    */
   public abstract void sendPayload(ResponseT payload);
+
+  /**
+   * If {@code true}, indicates that the call is capable of sending additional messages
+   * without requiring excessive buffering internally. This event is
+   * just a suggestion and the application is free to ignore it, however doing so may
+   * result in excessive buffering within the call.
+   */
+  public abstract boolean isReady();
 
   /**
    * Close the call with the provided status. No further sending or receiving will occur. If {@code

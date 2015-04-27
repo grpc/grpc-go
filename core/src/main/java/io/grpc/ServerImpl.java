@@ -306,7 +306,7 @@ public class ServerImpl implements Server {
     public void closed(Status status) {}
 
     @Override
-    public void onReady(int numMessages) {}
+    public void onReady() {}
   }
 
   /**
@@ -387,11 +387,11 @@ public class ServerImpl implements Server {
     }
 
     @Override
-    public void onReady(final int numMessages) {
+    public void onReady() {
       callExecutor.execute(new Runnable() {
         @Override
         public void run() {
-          getListener().onReady(numMessages);
+          getListener().onReady();
         }
       });
     }
@@ -421,12 +421,17 @@ public class ServerImpl implements Server {
     public void sendPayload(RespT payload) {
       try {
         InputStream message = methodDef.streamResponse(payload);
-        stream.writeMessage(message, message.available(), null);
+        stream.writeMessage(message, message.available());
         stream.flush();
       } catch (Throwable t) {
         close(Status.fromThrowable(t), new Metadata.Trailers());
         throw Throwables.propagate(t);
       }
+    }
+
+    @Override
+    public boolean isReady() {
+      return stream.isReady();
     }
 
     @Override
@@ -491,11 +496,11 @@ public class ServerImpl implements Server {
       }
 
       @Override
-      public void onReady(int numMessages) {
+      public void onReady() {
         if (cancelled) {
           return;
         }
-        listener.onReady(numMessages);
+        listener.onReady();
       }
     }
   }

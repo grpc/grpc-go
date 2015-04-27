@@ -41,8 +41,6 @@ import java.io.InputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.annotation.Nullable;
-
 /**
  * The abstract base class for {@link ClientStream} implementations.
  */
@@ -73,15 +71,15 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
+  protected final ClientStreamListener listener() {
+    return listener;
+  }
+
+  @Override
   protected void receiveMessage(InputStream is) {
     if (!listenerClosed) {
       listener.messageRead(is);
     }
-  }
-
-  @Override
-  public final void writeMessage(InputStream message, int length, @Nullable Runnable accepted) {
-    super.writeMessage(message, length, accepted);
   }
 
   /**

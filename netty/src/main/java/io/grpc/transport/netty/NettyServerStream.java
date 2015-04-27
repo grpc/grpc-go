@@ -38,6 +38,8 @@ import io.grpc.transport.AbstractServerStream;
 import io.grpc.transport.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
 
@@ -90,7 +92,19 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   @Override
   protected void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
     ByteBuf bytebuf = ((NettyWritableBuffer) frame).bytebuf();
-    channel.write(new SendGrpcFrameCommand(this, bytebuf, endOfStream));
+    final int numBytes = bytebuf.readableBytes();
+    // Add the bytes to outbound flow control.
+    onSendingBytes(numBytes);
+    channel.write(new SendGrpcFrameCommand(this, bytebuf, endOfStream)).addListener(
+        new ChannelFutureListener() {
+          @Override
+          public void operationComplete(ChannelFuture future) throws Exception {
+            // Remove the bytes from outbound flow control, optionally notifying
+            // the client that they can send more bytes.
+            onSentBytes(numBytes);
+          }
+        });
+
     if (flush) {
       channel.flush();
     }

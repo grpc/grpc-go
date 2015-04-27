@@ -43,7 +43,8 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder {
   private final AbstractStream<Integer> stream;
   private final boolean endStream;
 
-  SendGrpcFrameCommand(AbstractStream<Integer> stream, ByteBuf content, boolean endStream) {
+  SendGrpcFrameCommand(AbstractStream<Integer> stream, ByteBuf content,
+      boolean endStream) {
     super(content);
     this.stream = stream;
     this.endStream = endStream;

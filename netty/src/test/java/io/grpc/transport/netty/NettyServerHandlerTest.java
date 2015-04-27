@@ -186,6 +186,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     if (endStream) {
       verify(streamListener).halfClosed();
     }
+    verify(streamListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(streamListener);
   }
 
@@ -199,6 +200,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     verify(streamListener).messageRead(captor.capture());
     assertArrayEquals(new byte[0], ByteStreams.toByteArray(captor.getValue()));
     verify(streamListener).halfClosed();
+    verify(streamListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(streamListener);
   }
 
@@ -209,6 +211,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     handler.channelRead(ctx, rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
     verify(streamListener, never()).messageRead(any(InputStream.class));
     verify(streamListener).closed(Status.CANCELLED);
+    verify(streamListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(streamListener);
   }
 

@@ -42,27 +42,32 @@ public abstract class ForwardingCall<ReqT, RespT> extends Call<ReqT, RespT> {
 
   @Override
   public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
-    this.delegate().start(responseListener, headers);
+    delegate().start(responseListener, headers);
   }
 
   @Override
   public void request(int numMessages) {
-    this.delegate().request(numMessages);
+    delegate().request(numMessages);
   }
 
   @Override
   public void cancel() {
-    this.delegate().cancel();
+    delegate().cancel();
   }
 
   @Override
   public void halfClose() {
-    this.delegate().halfClose();
+    delegate().halfClose();
   }
 
   @Override
   public void sendPayload(ReqT payload) {
-    this.delegate().sendPayload(payload);
+    delegate().sendPayload(payload);
+  }
+
+  @Override
+  public boolean isReady() {
+    return delegate().isReady();
   }
 
   /**

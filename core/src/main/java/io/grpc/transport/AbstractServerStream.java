@@ -40,8 +40,6 @@ import java.io.InputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.annotation.Nullable;
-
 /**
  * Abstract base class for {@link ServerStream} implementations.
  */
@@ -66,10 +64,20 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   }
 
   /**
-   * Sets the listener to receive notifications.
+   * Sets the listener to receive notifications. Must be called in the context of the transport
+   * thread.
    */
   public final void setListener(ServerStreamListener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");
+
+    // Now that the stream has actually been initialized, call the listener's onReady callback if
+    // appropriate.
+    notifyIfReady();
+  }
+
+  @Override
+  protected ServerStreamListener listener() {
+    return this.listener;
   }
 
   @Override
@@ -88,12 +96,12 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
-  public final void writeMessage(InputStream message, int length, @Nullable Runnable accepted) {
+  public final void writeMessage(InputStream message, int length) {
     if (!headersSent) {
       writeHeaders(new Metadata.Headers());
       headersSent = true;
     }
-    super.writeMessage(message, length, accepted);
+    super.writeMessage(message, length);
   }
 
   @Override

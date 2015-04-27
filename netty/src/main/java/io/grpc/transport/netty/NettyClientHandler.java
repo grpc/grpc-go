@@ -252,14 +252,14 @@ class NettyClientHandler extends Http2ConnectionHandler {
               @Override
               public void operationComplete(ChannelFuture future) throws Exception {
                 if (future.isSuccess()) {
-                  // Attach the client stream to the HTTP/2 stream object as user data.
-                  Http2Stream http2Stream = connection().stream(streamId);
-                  stream.setHttp2Stream(http2Stream);
                   // The http2Stream will be null in case a stream buffered in the encoder
                   // was canceled via RST_STREAM.
+                  Http2Stream http2Stream = connection().stream(streamId);
                   if (http2Stream != null) {
                     http2Stream.setProperty(streamKey, stream);
                   }
+                  // Attach the client stream to the HTTP/2 stream object as user data.
+                  stream.setHttp2Stream(http2Stream);
                 } else {
                   if (future.cause() instanceof GoAwayClosedStreamException) {
                     GoAwayClosedStreamException e = (GoAwayClosedStreamException) future.cause();

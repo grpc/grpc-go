@@ -52,7 +52,12 @@ public class OkHttpReadableBufferTest extends ReadableBufferTestBase {
   @SuppressWarnings("resource")
   @Before
   public void setup() {
-    buffer = new OkHttpReadableBuffer(new Buffer().writeUtf8(msg));
+    Buffer empty = new Buffer();
+    try {
+      buffer = new OkHttpReadableBuffer(empty.writeUtf8(msg));
+    } finally {
+      empty.close();
+    }
   }
 
   @Override

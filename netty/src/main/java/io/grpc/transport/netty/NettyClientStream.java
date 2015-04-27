@@ -33,13 +33,15 @@ package io.grpc.transport.netty;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.Http2ClientStream;
 import io.grpc.transport.WritableBuffer;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
 
@@ -49,7 +51,6 @@ import javax.annotation.Nullable;
  * Client stream for a Netty transport.
  */
 class NettyClientStream extends Http2ClientStream {
-
   private final Channel channel;
   private final NettyClientHandler handler;
   private Http2Stream http2Stream;
@@ -81,12 +82,17 @@ class NettyClientStream extends Http2ClientStream {
   }
 
   /**
-   * Sets the underlying Netty {@link Http2Stream} for this stream.
+   * Sets the underlying Netty {@link Http2Stream} for this stream. This must be called in the
+   * context of the transport thread.
    */
   public void setHttp2Stream(Http2Stream http2Stream) {
     checkNotNull(http2Stream, "http2Stream");
     checkState(this.http2Stream == null, "Can only set http2Stream once");
     this.http2Stream = http2Stream;
+
+    // Now that the stream has actually been initialized, call the listener's onReady callback if
+    // appropriate.
+    notifyIfReady();
   }
 
   /**
@@ -117,13 +123,25 @@ class NettyClientStream extends Http2ClientStream {
 
   @Override
   protected void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-    ByteBuf bytebuf;
-    if (frame == null) {
-      bytebuf = Unpooled.EMPTY_BUFFER;
+    ByteBuf bytebuf = frame == null ? EMPTY_BUFFER : ((NettyWritableBuffer) frame).bytebuf();
+    final int numBytes = bytebuf.readableBytes();
+    if (numBytes > 0) {
+      // Add the bytes to outbound flow control.
+      onSendingBytes(numBytes);
+      channel.write(new SendGrpcFrameCommand(this, bytebuf, endOfStream)).addListener(
+          new ChannelFutureListener() {
+            @Override
+            public void operationComplete(ChannelFuture future) throws Exception {
+              // Remove the bytes from outbound flow control, optionally notifying
+              // the client that they can send more bytes.
+              onSentBytes(numBytes);
+            }
+          });
     } else {
-      bytebuf = ((NettyWritableBuffer) frame).bytebuf();
+      // The frame is empty and will not impact outbound flow control. Just send it.
+      channel.write(new SendGrpcFrameCommand(this, bytebuf, endOfStream));
     }
-    channel.write(new SendGrpcFrameCommand(this, bytebuf, endOfStream));
+
     if (flush) {
       channel.flush();
     }

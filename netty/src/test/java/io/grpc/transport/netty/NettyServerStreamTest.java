@@ -36,21 +36,20 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
-import static org.mockito.Mockito.when;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
-import io.grpc.transport.AbstractStream;
 import io.grpc.transport.ServerStreamListener;
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
 
 import org.junit.Before;
@@ -59,27 +58,33 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 
+import java.io.ByteArrayInputStream;
+
 /** Unit tests for {@link NettyServerStream}. */
 @RunWith(JUnit4.class)
 public class NettyServerStreamTest extends NettyStreamTestBase {
   @Mock
   protected ServerStreamListener serverListener;
+
   @Mock
   private NettyServerHandler handler;
-  @Mock
-  private Http2Stream http2Stream;
+
   private Metadata.Trailers trailers = new Metadata.Trailers();
 
-  @Override
   @Before
+  @Override
   public void setUp() {
     super.setUp();
-    when(http2Stream.id()).thenReturn(STREAM_ID);
+
+    // Verify onReady notification and then reset it.
+    verify(listener()).onReady();
+    reset(listener());
   }
 
   @Test
   public void writeMessageShouldSendResponse() throws Exception {
-    stream.writeMessage(input, input.available(), accepted);
+    byte[] msg = smallMessage();
+    stream.writeMessage(new ByteArrayInputStream(msg), msg.length);
     stream.flush();
     Http2Headers headers = new DefaultHttp2Headers()
         .status(Utils.STATUS_OK)
@@ -87,7 +92,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     verify(channel).writeAndFlush(new SendResponseHeadersCommand(STREAM_ID, headers, false));
     verify(channel).write(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false));
     verify(channel).flush();
-    verify(accepted).run();
   }
 
   @Test
@@ -217,13 +221,19 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   }
 
   @Override
-  protected AbstractStream<Integer> createStream() {
+  protected NettyServerStream createStream() {
     NettyServerStream stream = new NettyServerStream(channel, http2Stream, handler);
     stream.setListener(serverListener);
     assertTrue(stream.canReceive());
     assertTrue(stream.canSend());
-    verifyZeroInteractions(serverListener);
+    verify(serverListener, atLeastOnce()).onReady();
+    verifyNoMoreInteractions(serverListener);
     return stream;
+  }
+
+  @Override
+  protected void closeStream() {
+    stream().close(Status.ABORTED, new Metadata.Trailers());
   }
 
   @Override
