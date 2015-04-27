@@ -279,19 +279,6 @@ public class OkHttpClientTransport implements ClientTransport {
     return hasStreamStarted;
   }
 
-  private void failPendingStreams(Status status) {
-    LinkedList<PendingStream> streams;
-    synchronized (lock) {
-      streams = pendingStreams;
-      pendingStreams = new LinkedList<PendingStream>();
-    }
-    for (PendingStream stream : streams) {
-      stream.clientStream.transportReportStatus(
-          status, true, new Metadata.Trailers());
-      stream.createdFuture.set(null);
-    }
-  }
-
   @Override
   public void start(Listener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");
@@ -368,6 +355,7 @@ public class OkHttpClientTransport implements ClientTransport {
   private void onGoAway(int lastKnownStreamId, Status status) {
     boolean notifyShutdown;
     ArrayList<OkHttpClientStream> goAwayStreams = new ArrayList<OkHttpClientStream>();
+    List<PendingStream> pendingStreamsCopy;
     synchronized (lock) {
       notifyShutdown = !goAway;
       goAway = true;
@@ -382,6 +370,9 @@ public class OkHttpClientTransport implements ClientTransport {
           }
         }
       }
+
+      pendingStreamsCopy = pendingStreams;
+      pendingStreams = new LinkedList<PendingStream>();
     }
 
     if (notifyShutdown) {
@@ -390,7 +381,12 @@ public class OkHttpClientTransport implements ClientTransport {
     for (OkHttpClientStream stream : goAwayStreams) {
       stream.transportReportStatus(status, false, new Metadata.Trailers());
     }
-    failPendingStreams(status);
+
+    for (PendingStream stream : pendingStreamsCopy) {
+      stream.clientStream.transportReportStatus(
+          status, true, new Metadata.Trailers());
+      stream.createdFuture.set(null);
+    }
     stopIfNecessary();
   }
 
