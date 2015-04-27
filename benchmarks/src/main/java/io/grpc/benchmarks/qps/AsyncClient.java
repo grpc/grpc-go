@@ -34,6 +34,25 @@ package io.grpc.benchmarks.qps;
 import static grpc.testing.Qpstest.SimpleRequest;
 import static grpc.testing.Qpstest.SimpleResponse;
 import static grpc.testing.TestServiceGrpc.TestServiceStub;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.CHANNELS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.CLIENT_PAYLOAD;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.CONNECTION_WINDOW;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.DIRECTEXECUTOR;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.DURATION;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.HOST;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.OKHTTP;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.OUTSTANDING_RPCS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.PORT;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.SAVE_HISTOGRAM;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.SERVER_PAYLOAD;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.STREAMING_RPCS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.STREAM_WINDOW;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.TESTCA;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.TLS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.WARMUP_DURATION;
+import static io.grpc.benchmarks.qps.ClientConfiguration.HISTOGRAM_MAX_VALUE;
+import static io.grpc.benchmarks.qps.ClientConfiguration.HISTOGRAM_PRECISION;
+import static io.grpc.benchmarks.qps.ClientUtil.saveHistogram;
 import static io.grpc.testing.integration.Util.loadCert;
 
 import com.google.common.base.Preconditions;
@@ -54,9 +73,7 @@ import org.HdrHistogram.Histogram;
 import org.HdrHistogram.HistogramIterationValue;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -70,15 +87,11 @@ import java.util.concurrent.TimeoutException;
 /**
  * QPS Client using the non-blocking API.
  */
-public class QpsAsyncClient {
-  // The histogram can record values between 1 microsecond and 1 min.
-  private static final long HISTOGRAM_MAX_VALUE = 60000000L;
-  // Value quantization will be no larger than 1/10^3 = 0.1%.
-  private static final int HISTOGRAM_PRECISION = 3;
+public class AsyncClient {
 
   private final ClientConfiguration config;
 
-  public QpsAsyncClient(ClientConfiguration config) {
+  public AsyncClient(ClientConfiguration config) {
     this.config = config;
   }
 
@@ -109,7 +122,9 @@ public class QpsAsyncClient {
     Histogram merged = merge(histograms);
 
     printStats(merged, elapsedTime);
-    dumpHistogram(merged);
+    if (config.histogramFile != null) {
+      saveHistogram(merged, config.histogramFile);
+    }
     shutdown(channels);
   }
 
@@ -318,6 +333,7 @@ public class QpsAsyncClient {
     long latency95 = histogram.getValueAtPercentile(95);
     long latency99 = histogram.getValueAtPercentile(99);
     long latency999 = histogram.getValueAtPercentile(99.9);
+    long latencyMax = histogram.getValueAtPercentile(100);
     long queriesPerSecond = histogram.getTotalCount() * 1000000000L / elapsedTime;
 
     StringBuilder values = new StringBuilder();
@@ -331,27 +347,9 @@ public class QpsAsyncClient {
           .append("95%ile Latency (in micros):     ").append(latency95).append('\n')
           .append("99%ile Latency (in micros):     ").append(latency99).append('\n')
           .append("99.9%ile Latency (in micros):   ").append(latency999).append('\n')
+          .append("Maximum Latency (in micros):    ").append(latencyMax).append('\n')
           .append("QPS:                            ").append(queriesPerSecond).append('\n');
     System.out.println(values);
-  }
-
-  private void dumpHistogram(Histogram histogram) throws IOException {
-    if (config.dumpHistogram) {
-      File file;
-      PrintStream log = null;
-      try {
-        file = new File(config.histogramFile);
-        if (file.exists()) {
-          file.delete();
-        }
-        log = new PrintStream(new FileOutputStream(file), false);
-        histogram.outputPercentileDistribution(log, 1.0);
-      } finally {
-        if (log != null) {
-          log.close();
-        }
-      }
-    }
   }
 
   private static void shutdown(List<Channel> channels) {
@@ -364,15 +362,22 @@ public class QpsAsyncClient {
    * checkstyle complains if there is no javadoc comment here.
    */
   public static void main(String... args) throws Exception {
+    ClientConfiguration.Builder configBuilder =
+        ClientConfiguration.newBuilder()
+                           .addOptions(PORT, HOST, CHANNELS, OUTSTANDING_RPCS)
+                           .addOptions(CLIENT_PAYLOAD, SERVER_PAYLOAD, TLS, TESTCA)
+                           .addOptions(OKHTTP, DURATION, WARMUP_DURATION, DIRECTEXECUTOR)
+                           .addOptions(SAVE_HISTOGRAM, STREAMING_RPCS, CONNECTION_WINDOW)
+                           .addOptions(STREAM_WINDOW);
     ClientConfiguration config;
     try {
-      config = ClientConfiguration.parseArgs(args);
-    } catch (RuntimeException e) {
+      config = configBuilder.build(args);
+    } catch (Exception e) {
       System.out.println(e.getMessage());
-      ClientConfiguration.printUsage();
+      configBuilder.printUsage();
       return;
     }
-    QpsAsyncClient client = new QpsAsyncClient(config);
+    AsyncClient client = new AsyncClient(config);
     client.run();
   }
 

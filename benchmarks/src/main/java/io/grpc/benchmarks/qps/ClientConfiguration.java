@@ -31,19 +31,37 @@
 
 package io.grpc.benchmarks.qps;
 
+import static grpc.testing.Qpstest.RpcType.STREAMING;
+import static grpc.testing.Qpstest.RpcType.UNARY;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.HELP;
+import static java.lang.Integer.parseInt;
 import static java.lang.Math.max;
+import static java.util.Arrays.asList;
+
+import com.google.common.base.Strings;
 
 import grpc.testing.Qpstest.PayloadType;
 import grpc.testing.Qpstest.RpcType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+/**
+ * Configuration options for the client implementations.
+ */
 class ClientConfiguration {
+
+  // The histogram can record values between 1 microsecond and 1 min.
+  static final long HISTOGRAM_MAX_VALUE = 60000000L;
+  // Value quantization will be no larger than 1/10^3 = 0.1%.
+  static final int HISTOGRAM_PRECISION = 3;
 
   boolean okhttp;
   boolean tls;
   boolean testca;
   boolean directExecutor;
-  boolean dumpHistogram;
   int port;
   int channels = 4;
   int outstandingRpcsPerChannel = 10;
@@ -55,131 +73,226 @@ class ClientConfiguration {
   int duration = 60;
   // seconds
   int warmupDuration = 10;
-  String host = "127.0.0.1";
-  String histogramFile = "latencies.hgrm";
-  RpcType rpcType = RpcType.UNARY;
+  int targetQps;
+  String host;
+  String histogramFile;
+  RpcType rpcType = UNARY;
   PayloadType payloadType = PayloadType.COMPRESSABLE;
 
   private ClientConfiguration() {
   }
 
-  static ClientConfiguration parseArgs(String[] args) {
-    ClientConfiguration c = new ClientConfiguration();
-    boolean hasPort = false;
+  static Builder newBuilder() {
+    return new Builder();
+  }
 
-    for (String arg : args) {
-      if (!arg.startsWith("--")) {
-        throw new IllegalArgumentException("All arguments must start with '--': " + arg);
+  static class Builder {
+
+    private final Set<Option> options;
+
+    private Builder() {
+      options = new LinkedHashSet<Option>();
+      options.add(HELP);
+    }
+
+    Builder addOptions(Option... opts) {
+      options.addAll(asList(opts));
+      return this;
+    }
+
+    void printUsage() {
+      System.out.println("Usage: [ARGS...]");
+      int maxWidth = 0;
+      for (Option option : options) {
+        maxWidth = max(commandLineFlag(option).length(), maxWidth);
       }
-
-      String[] pair = arg.substring(2).split("=", 2);
-      String key = pair[0];
-      String value = "";
-      if (pair.length == 2) {
-        value = pair[1];
+      // padding
+      maxWidth += 2;
+      for (Option option : options) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(commandLineFlag(option))
+          .append(Strings.repeat(" ", maxWidth - sb.length()))
+          .append(option.description)
+          .append(option.required ? " Required." : "");
+        System.out.println("  " + sb);
       }
+      System.out.println();
+    }
 
-      if ("help".equals(key)) {
-        printUsage();
-        return null;
-      } else if ("port".equals(key)) {
-        c.port = Integer.parseInt(value);
-        hasPort = true;
-      } else if ("host".equals(key)) {
-        c.host = value;
-      } else if ("channels".equals(key)) {
-        c.channels = max(Integer.parseInt(value), 1);
-      } else if ("outstanding_rpcs_per_channel".equals(key)) {
-        c.outstandingRpcsPerChannel = max(Integer.parseInt(value), 1);
-      } else if ("client_payload".equals(key)) {
-        c.clientPayload = max(Integer.parseInt(value), 0);
-      } else if ("server_payload".equals(key)) {
-        c.serverPayload = max(Integer.parseInt(value), 0);
-      } else if ("tls".equals(key)) {
-        c.tls = true;
-      } else if ("testca".equals(key)) {
-        c.testca = true;
-      } else if ("okhttp".equals(key)) {
-        c.okhttp = true;
-      } else if ("duration".equals(key)) {
-        c.duration = parseDuration(value);
-      } else if ("warmup_duration".equals(key)) {
-        c.warmupDuration = parseDuration(value);
-      } else if ("directexecutor".equals(key)) {
-        c.directExecutor = true;
-      } else if ("dump_histogram".equals(key)) {
-        c.dumpHistogram = true;
-        if (!value.isEmpty()) {
-          c.histogramFile = value;
+    ClientConfiguration build(String[] args) {
+      ClientConfiguration config = new ClientConfiguration();
+      Set<Option> appliedOptions = new HashSet<Option>();
+
+      for (String arg : args) {
+        if (!arg.startsWith("--")) {
+          throw new IllegalArgumentException("All arguments must start with '--': " + arg);
         }
-      } else if ("streaming_rpcs".equals(key)) {
-        c.rpcType = RpcType.STREAMING;
-      } else if ("connection_window".equals(key)) {
-        c.connectionWindow = Integer.parseInt(value);
-      } else if ("stream_window".equals(key)) {
-        c.streamWindow = Integer.parseInt(value);
-      } else {
-        throw new IllegalArgumentException("Unrecognized argument '" + key + "'.");
+        String[] pair = arg.substring(2).split("=", 2);
+        String key = pair[0];
+        String value = "";
+        if (pair.length == 2) {
+          value = pair[1];
+        }
+        for (Option option : options) {
+          if (key.equals(option.toString())) {
+            if (option != HELP) {
+              option.action.applyNew(config, value);
+              appliedOptions.add(option);
+            } else {
+              throw new RuntimeException("");
+            }
+          }
+        }
       }
+      for (Option option : options) {
+        if (option.required && !appliedOptions.contains(option)) {
+          throw new IllegalArgumentException("Missing required option '--" + option + "'.");
+        }
+      }
+      return config;
     }
 
-    if (!hasPort) {
-      throw new IllegalArgumentException("'--port' was not specified.");
+    private static String commandLineFlag(Option option) {
+      return "--" + option + (option.type != "" ? '=' + option.type : "");
     }
-    return c;
-  }
 
-  static void printUsage() {
-    ClientConfiguration c = new ClientConfiguration();
-    System.out.println(
-        "Usage: [ARGS...]"
-            + "\n"
-            + "\n  --port=INT                           Port of the server. Required. No default."
-            + "\n  --host=STR                           Hostname or IP of the server. Default "
-            +                                           c.host
-            + "\n  --channels=INT                       Number of channels. Default "
-            +                                           c.channels
-            + "\n  --outstanding_rpcs_per_channel=INT   Number of outstanding RPCs per channel. "
-            + "\n                                       Default " + c.outstandingRpcsPerChannel
-            + "\n  --client_payload=BYTES               Request payload size in bytes. Default "
-            +                                           c.clientPayload
-            + "\n  --server_payload=BYTES               Response payload size in bytes. Default "
-            +                                           c.serverPayload
-            + "\n  --tls                                Enable TLS. Default disabled."
-            + "\n  --testca                             Use the provided test certificate for TLS."
-            + "\n  --okhttp                             Use OkHttp as the transport. Default netty"
-            + "\n  --duration=TIME                      Duration of the benchmark in either seconds"
-            + "\n                                       or minutes."
-            + "\n                                       For N seconds duration specify Ns and for"
-            + "\n                                       minutes Nm. Default " + c.duration + "s."
-            + "\n  --warmup_duration=TIME               How long to warmup."
-            + "\n                                       Default " + c.warmupDuration + "s."
-            + "\n  --directexecutor                     Use a direct executor i.e. execute all RPC"
-            + "\n                                       calls directly in Netty's event loop"
-            + "\n                                       without the overhead of a thread pool."
-            + "\n  --dump_histogram=FILENAME            Write the histogram with the latency"
-            + "\n                                       recordings to file. The default filename"
-            + "\n                                       is 'latencies.hgrm'."
-            + "\n  --streaming_rpcs                     Use streaming RPCs. Default unary RPCs."
-            + "\n  --connection_window=BYTES            The HTTP/2 connection flow control window."
-            + "\n                                       Default " + c.connectionWindow + " byte."
-            + "\n  --stream_window=BYTES                The HTTP/2 per-stream flow control window."
-            + "\n                                       Default " + c.streamWindow + " byte."
-    );
-  }
-
-  private static int parseDuration(String value) {
-    if (value == null || value.length() < 2) {
-      throw new IllegalArgumentException("value must be a number followed by a unit.");
+    private interface Action {
+      void applyNew(ClientConfiguration config, String value);
     }
-    char last = value.charAt(value.length() - 1);
-    int duration = Integer.parseInt(value.substring(0, value.length() - 1));
-    if (last == 's') {
-      return duration;
-    } else if (last == 'm') {
-      return duration * 60;
-    } else {
-      throw new IllegalArgumentException("Unknown unit " + last);
+
+    enum Option {
+      HELP("", "Print this text.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+        }
+      }),
+      PORT("INT", "Port of the Server.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.port = parseInt(value);
+        }
+      }, true),
+      HOST("STR", "Hostname or IP Address of the Server.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.host = value;
+        }
+      }, true),
+      CHANNELS("INT", "Number of Channels.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.channels = parseInt(value);
+        }
+      }),
+      OUTSTANDING_RPCS("INT", "Number of outstanding RPCs per Channel.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.outstandingRpcsPerChannel = parseInt(value);
+        }
+      }),
+      CLIENT_PAYLOAD("BYTES", "Payload Size of the Request.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.clientPayload = parseInt(value);
+        }
+      }),
+      SERVER_PAYLOAD("BYTES", "Payload Size of the Response.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.serverPayload = parseInt(value);
+        }
+      }),
+      TLS("", "Enable TLS.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.tls = true;
+        }
+      }),
+      TESTCA("", "Use the provided Test Certificate for TLS.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.testca = true;
+        }
+      }),
+      OKHTTP("", "Use OkHttp as the Transport.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.okhttp = true;
+        }
+      }),
+      DURATION("SECONDS", "Duration of the benchmark.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.duration = parseInt(value);
+        }
+      }),
+      WARMUP_DURATION("SECONDS", "Warmup Duration of the benchmark.",
+          new Action() {
+            @Override
+            public void applyNew(ClientConfiguration config, String value) {
+              config.warmupDuration = parseInt(value);
+            }
+          }),
+      DIRECTEXECUTOR("", "Don't use a threadpool for RPC calls, instead execute calls directly "
+                         + "in the transport thread.",
+          new Action() {
+            @Override
+            public void applyNew(ClientConfiguration config, String value) {
+              config.directExecutor = true;
+            }
+          }),
+      SAVE_HISTOGRAM("FILE", "Write the histogram with the latency recordings to file.",
+          new Action() {
+            @Override
+            public void applyNew(ClientConfiguration config, String value) {
+              config.histogramFile = value;
+            }
+          }),
+      STREAMING_RPCS("", "Use Streaming RPCs.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.rpcType = STREAMING;
+        }
+      }),
+      CONNECTION_WINDOW("BYTES", "The HTTP/2 connection flow control window.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.connectionWindow = parseInt(value);
+        }
+      }),
+      STREAM_WINDOW("BYTES", "The HTTP/2 per-stream flow control window.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.streamWindow = parseInt(value);
+        }
+      }),
+      TARGET_QPS("INT", "Average number of QPS to shoot for.", new Action() {
+        @Override
+        public void applyNew(ClientConfiguration config, String value) {
+          config.targetQps = parseInt(value);
+        }
+      }, true);
+
+      private final String type;
+      private final String description;
+      private final Action action;
+      private final boolean required;
+
+      Option(String type, String description, Action action) {
+        this(type, description, action, false);
+      }
+
+      Option(String type, String description, Action action, boolean required) {
+        this.type = type;
+        this.description = description;
+        this.action = action;
+        this.required = required;
+      }
+
+      @Override
+      public String toString() {
+        return name().toLowerCase();
+      }
     }
   }
 }

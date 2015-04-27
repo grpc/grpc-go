@@ -49,15 +49,23 @@ dependencies {
 
 
 task qps_client(type: CreateStartScripts) {
-    mainClassName = "io.grpc.benchmarks.qps.QpsAsyncClient"
+    mainClassName = "io.grpc.benchmarks.qps.AsyncClient"
     applicationName = "qps_client"
     defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }
 
+task openloop_client(type: CreateStartScripts) {
+    mainClassName = "io.grpc.benchmarks.qps.OpenLoopClient"
+    applicationName = "openloop_client"
+    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
+
 task qps_server(type: CreateStartScripts) {
-    mainClassName = "io.grpc.benchmarks.qps.QpsAsyncServer"
+    mainClassName = "io.grpc.benchmarks.qps.AsyncServer"
     applicationName = "qps_server"
     defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
     outputDir = new File(project.buildDir, 'tmp')
@@ -66,6 +74,7 @@ task qps_server(type: CreateStartScripts) {
 
 applicationDistribution.into("bin") {
     from(qps_client)
+    from(openloop_client)
     from(qps_server)
     fileMode = 0755
 }

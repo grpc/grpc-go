@@ -54,7 +54,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * QPS server using the non-blocking API.
  */
-public class QpsAsyncServer {
+public class AsyncServer {
 
   private boolean tls;
   private int port;
@@ -66,7 +66,7 @@ public class QpsAsyncServer {
    * checkstyle complains if there is no javadoc comment here.
    */
   public static void main(String... args) throws Exception {
-    new QpsAsyncServer().run(args);
+    new AsyncServer().run(args);
   }
 
   /** Equivalent of "main", but non-static. */
@@ -78,7 +78,7 @@ public class QpsAsyncServer {
     SslContext sslContext = null;
     if (tls) {
       System.out.println("Using fake CA for TLS certificate.\n"
-                         + "Run the Java client with --enable_tls --use_testca");
+                         + "Run the Java client with --tls --testca");
 
       File cert = loadCert("server1.pem");
       File key = loadCert("server1.key");
@@ -158,7 +158,7 @@ public class QpsAsyncServer {
   }
 
   private void printUsage() {
-    QpsAsyncServer s = new QpsAsyncServer();
+    AsyncServer s = new AsyncServer();
     System.out.println(
             "Usage: [ARGS...]"
             + "\n"
