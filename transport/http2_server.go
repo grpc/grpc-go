@@ -281,6 +281,8 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 			t.handlePing(frame)
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
+		case *http2.GoAwayFrame:
+			t.handleGoAway(frame)
 		default:
 			log.Printf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
 		}
@@ -397,6 +399,16 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 	}
 	if s, ok := t.getStream(f); ok {
 		s.sendQuotaPool.add(int(incr))
+	}
+}
+
+func (t *http2Server) handleGoAway(f *http2.GoAwayFrame) {
+	for id, _ := range t.activeStreams {
+		if id > f.LastStreamID {
+			if s, ok := t.activeStreams[f.LastStreamID]; ok {
+				t.closeStream(s)
+			}
+		}
 	}
 }
 
