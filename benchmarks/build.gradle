@@ -1,6 +1,7 @@
 apply plugin: 'application'
 apply plugin: 'protobuf'
 
+
 description = "grpc Benchmarks"
 
 startScripts.enabled = false
@@ -9,10 +10,23 @@ run.enabled = false
 buildscript {
     repositories {
         mavenCentral()
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
     }
     dependencies {
         classpath libraries.protobuf_plugin
+        classpath "me.champeau.gradle:jmh-gradle-plugin:0.2.0"
     }
+}
+apply plugin: 'me.champeau.gradle.jmh'
+
+jmh {
+    jmhVersion = '1.7.1'
+    warmupIterations = 10
+    iterations = 10
+    fork = 1
+    jvmArgs = "-server -Xms768m -Xmx768m -dsa -da -XX:+AggressiveOpts -XX:+UseBiasedLocking -XX:+UseFastAccessorMethods -XX:+OptimizeStringConcat"
 }
 
 configurations {
@@ -31,6 +45,8 @@ dependencies {
 
     alpnboot alpnboot_package_name
 }
+
+
 
 task qps_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.benchmarks.qps.QpsAsyncClient"

@@ -114,7 +114,7 @@ public abstract class AbstractTransportTest {
   protected TestServiceGrpc.TestService asyncStub;
 
   /**
-   * Must be called by the subclass setup method if overriden.
+   * Must be called by the subclass setup method if overridden.
    */
   @Before
   public void setUp() {

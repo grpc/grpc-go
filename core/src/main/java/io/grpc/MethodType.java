@@ -59,5 +59,23 @@ public enum MethodType {
    * Cardinality and temporal relationships are not known. Implementations should not make
    * buffering assumptions and should largely treat the same as {@link #DUPLEX_STREAMING}.
    */
-  UNKNOWN
+  UNKNOWN;
+
+  /**
+   * Returns {@code true} if the client will immediately send one request message to the server
+   * after calling {@link Call#start(io.grpc.Call.Listener, io.grpc.Metadata.Headers)} and then
+   * immediately half-close the stream by calling {@link io.grpc.Call#halfClose()}.
+   */
+  public final boolean clientSendsOneMessage() {
+    return this == UNARY || this == SERVER_STREAMING;
+  }
+
+  /**
+   * Returns {@code true} if the server will immediately send one response message to the client
+   * upon receipt of {@link io.grpc.ServerCall.Listener#onHalfClose()} and then immediately
+   * close the stream by calling {@link ServerCall#close(Status, io.grpc.Metadata.Trailers)}.
+   */
+  public final boolean serverSendsOneMessage() {
+    return this == UNARY || this == CLIENT_STREAMING;
+  }
 }
