@@ -36,6 +36,7 @@ package com.squareup.okhttp.internal.spdy;
  */
 public class OkHttpSettingsUtil {
   public static final int MAX_CONCURRENT_STREAMS = Settings.MAX_CONCURRENT_STREAMS;
+  public static final int INITIAL_WINDOW_SIZE = Settings.INITIAL_WINDOW_SIZE;
 
   public static boolean isSet(Settings settings, int id) {
     return settings.isSet(id);

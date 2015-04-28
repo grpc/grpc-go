@@ -71,9 +71,14 @@ class OutboundFlowController {
     int delta = newWindowSize - initialWindowSize;
     initialWindowSize = newWindowSize;
     for (OkHttpClientStream stream : getActiveStreams()) {
-      // Verify that the maximum value is not exceeded by this change.
-      OutboundFlowState state = state(stream);
-      state.incrementStreamWindow(delta);
+      OutboundFlowState state = (OutboundFlowState) stream.getOutboundFlowState();
+      if (state == null) {
+        // Create the OutboundFlowState with the new window size.
+        state = new OutboundFlowState(stream.id());
+        stream.setOutboundFlowState(state);
+      } else {
+        state.incrementStreamWindow(delta);
+      }
     }
 
     if (delta > 0) {

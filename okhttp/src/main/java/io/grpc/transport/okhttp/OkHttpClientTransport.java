@@ -548,6 +548,13 @@ public class OkHttpClientTransport implements ClientTransport {
           maxConcurrentStreams = receivedMaxConcurrentStreams;
         }
       }
+
+      if (OkHttpSettingsUtil.isSet(settings, OkHttpSettingsUtil.INITIAL_WINDOW_SIZE)) {
+        int initialWindowSize = OkHttpSettingsUtil.get(
+            settings, OkHttpSettingsUtil.INITIAL_WINDOW_SIZE);
+        outboundFlow.initialOutboundWindowSize(initialWindowSize);
+      }
+
       try {
         frameWriter.ackSettings(settings);
       } catch (IOException e) {
@@ -581,6 +588,16 @@ public class OkHttpClientTransport implements ClientTransport {
 
     @Override
     public void windowUpdate(int streamId, long delta) {
+      if (delta == 0) {
+        Status status =
+            Status.INTERNAL.withDescription("Received 0 flow control window increment.");
+        if (streamId == 0) {
+          frameWriter.goAway(0, ErrorCode.PROTOCOL_ERROR, new byte[0]);
+          onGoAway(0, status);
+        } else {
+          finishStream(streamId, status, ErrorCode.PROTOCOL_ERROR);
+        }
+      }
       outboundFlow.windowUpdate(streamId, (int) delta);
     }
 

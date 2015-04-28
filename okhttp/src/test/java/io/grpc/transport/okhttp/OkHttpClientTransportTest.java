@@ -39,6 +39,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -347,6 +349,77 @@ public class OkHttpClientTransportTest {
     listener.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
         listener.status.getCode());
+  }
+
+  @Test
+  public void outboundFlowControl() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream = clientTransport.newStream(method, new Metadata.Headers(), listener);
+
+    // The first message should be sent out.
+    int messageLength = Utils.DEFAULT_WINDOW_SIZE / 2 + 1;
+    InputStream input = new ByteArrayInputStream(new byte[messageLength]);
+    stream.writeMessage(input, input.available(), null);
+    stream.flush();
+    verify(frameWriter).data(
+        eq(false), eq(3), any(Buffer.class), eq(messageLength + HEADER_LENGTH));
+
+
+    // The second message should be partially sent out.
+    input = new ByteArrayInputStream(new byte[messageLength]);
+    stream.writeMessage(input, input.available(), null);
+    stream.flush();
+    int partiallySentSize =
+        Utils.DEFAULT_WINDOW_SIZE - messageLength - HEADER_LENGTH;
+    verify(frameWriter).data(eq(false), eq(3), any(Buffer.class), eq(partiallySentSize));
+
+    // Get more credit, the rest data should be sent out.
+    frameHandler.windowUpdate(3, Utils.DEFAULT_WINDOW_SIZE);
+    frameHandler.windowUpdate(0, Utils.DEFAULT_WINDOW_SIZE);
+    verify(frameWriter).data(
+        eq(false), eq(3), any(Buffer.class), eq(messageLength + HEADER_LENGTH - partiallySentSize));
+
+    stream.cancel();
+    listener.waitUntilStreamClosed();
+  }
+
+  @Test
+  public void outboundFlowControlWithInitialWindowSizeChange() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream = clientTransport.newStream(method, new Metadata.Headers(), listener);
+    int messageLength = 20;
+    setInitialWindowSize(HEADER_LENGTH + 10);
+    InputStream input = new ByteArrayInputStream(new byte[messageLength]);
+    stream.writeMessage(input, input.available(), null);
+    stream.flush();
+    // part of the message can be sent.
+    verify(frameWriter).data(eq(false), eq(3), any(Buffer.class), eq(HEADER_LENGTH + 10));
+    // Avoid connection flow control.
+    frameHandler.windowUpdate(0, HEADER_LENGTH + 10);
+
+    // Increase initial window size
+    setInitialWindowSize(HEADER_LENGTH + 20);
+    // The rest data should be sent.
+    verify(frameWriter).data(eq(false), eq(3), any(Buffer.class), eq(10));
+    frameHandler.windowUpdate(0, 10);
+
+    // Decrease initial window size to HEADER_LENGTH, since we've already sent out HEADER_LENGTH + 20 bytes
+    // data, the window size should be -20 now.
+    setInitialWindowSize(HEADER_LENGTH);
+    // Get 20 tokens back, still can't send any data.
+    frameHandler.windowUpdate(3, 20);
+    input = new ByteArrayInputStream(new byte[messageLength]);
+    stream.writeMessage(input, input.available(), null);
+    stream.flush();
+    // Only the previous two write operations happened.
+    verify(frameWriter, times(2)).data(anyBoolean(), anyInt(), any(Buffer.class), anyInt());
+
+    // Get enough tokens to send the pending message.
+    frameHandler.windowUpdate(3, HEADER_LENGTH + 20);
+    verify(frameWriter).data(eq(false), eq(3), any(Buffer.class), eq(HEADER_LENGTH + 20));
+
+    stream.cancel();
+    listener.waitUntilStreamClosed();
   }
 
   @Test
@@ -711,6 +784,12 @@ public class OkHttpClientTransportTest {
   private void setMaxConcurrentStreams(int num) {
     Settings settings = new Settings();
     OkHttpSettingsUtil.set(settings, OkHttpSettingsUtil.MAX_CONCURRENT_STREAMS, num);
+    frameHandler.settings(false, settings);
+  }
+
+  private void setInitialWindowSize(int size) {
+    Settings settings = new Settings();
+    OkHttpSettingsUtil.set(settings, OkHttpSettingsUtil.INITIAL_WINDOW_SIZE, size);
     frameHandler.settings(false, settings);
   }
 
