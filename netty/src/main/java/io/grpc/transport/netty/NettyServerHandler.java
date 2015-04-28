@@ -80,6 +80,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
   private static final Status GOAWAY_STATUS = Status.UNAVAILABLE;
 
+  private final Http2Connection.PropertyKey streamKey;
   private final ServerTransportListener transportListener;
   private Throwable connectionError;
   private ChannelHandlerContext ctx;
@@ -102,6 +103,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
       throw new RuntimeException(e);
     }
 
+    streamKey = connection.newKey();
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
     initListener();
     connection.local().allowPushTo(false);
@@ -159,7 +161,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
       // method.
       Http2Stream http2Stream = requireHttp2Stream(streamId);
       NettyServerStream stream = new NettyServerStream(ctx.channel(), http2Stream, this);
-      http2Stream.setProperty(NettyServerStream.class, stream);
+      http2Stream.setProperty(streamKey, stream);
       String method = determineMethod(streamId, headers);
       ServerStreamListener listener =
           transportListener.streamCreated(stream, method, Utils.convertHeaders(headers));
@@ -359,7 +361,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
    * Returns the server stream associated to the given HTTP/2 stream object.
    */
   private NettyServerStream serverStream(Http2Stream stream) {
-    return stream.getProperty(NettyServerStream.class);
+    return stream.getProperty(streamKey);
   }
 
   private Http2Exception newStreamException(int streamId, Throwable cause) {
@@ -373,7 +375,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   private void initConnectionWindow() throws Http2Exception {
     if (connectionWindowSize > 0 && ctx.channel().isActive()) {
       Http2Stream connectionStream = connection().connectionStream();
-      int currentSize = connectionStream.localFlowState().windowSize();
+      int currentSize = connection().local().flowController().windowSize(connectionStream);
       int delta = connectionWindowSize - currentSize;
       decoder().flowController().incrementWindowSize(ctx, connectionStream, delta);
       connectionWindowSize = -1;

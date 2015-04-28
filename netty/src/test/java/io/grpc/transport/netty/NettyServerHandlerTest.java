@@ -76,10 +76,12 @@ import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
+import io.netty.handler.codec.http2.Http2FlowController;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
+import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
 
 import org.junit.Before;
@@ -299,10 +301,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     int connectionWindow = 1048576; // 1MiB
     handler = newHandler(transportListener, connectionWindow, DEFAULT_WINDOW_SIZE);
     handler.handlerAdded(ctx);
-    int actualInitialWindowSize = handler.connection().connectionStream()
-                                         .localFlowState().initialWindowSize();
-    int actualWindowSize = handler.connection().connectionStream()
-                                  .localFlowState().windowSize();
+    Http2Stream connectionStream = handler.connection().connectionStream();
+    Http2FlowController localFlowController = handler.connection().local().flowController();
+    int actualInitialWindowSize = localFlowController.initialWindowSize(connectionStream);
+    int actualWindowSize = localFlowController.windowSize(connectionStream);
     assertEquals(connectionWindow, actualWindowSize);
     assertEquals(connectionWindow, actualInitialWindowSize);
   }

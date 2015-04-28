@@ -64,6 +64,7 @@ import javax.annotation.Nullable;
  */
 class NettyClientHandler extends Http2ConnectionHandler {
 
+  private final Http2Connection.PropertyKey streamKey;
   private int connectionWindowSize;
   private Throwable connectionError;
   private Status goAwayStatus;
@@ -84,6 +85,8 @@ class NettyClientHandler extends Http2ConnectionHandler {
     }
 
     initListener();
+
+    streamKey = connection.newKey();
 
     // Disallow stream creation by the server.
     connection.remote().maxActiveStreams(0);
@@ -260,7 +263,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
                   // The http2Stream will be null in case a stream buffered in the encoder
                   // was canceled via RST_STREAM.
                   if (http2Stream != null) {
-                    http2Stream.setProperty(NettyClientStream.class, stream);
+                    http2Stream.setProperty(streamKey, stream);
                   }
                 } else {
                   if (future.cause() instanceof GoAwayClosedStreamException) {
@@ -348,7 +351,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
    * Gets the client stream associated to the given HTTP/2 stream object.
    */
   private NettyClientStream clientStream(Http2Stream stream) {
-    return stream.getProperty(NettyClientStream.class);
+    return stream.getProperty(streamKey);
   }
 
   private int getAndIncrementNextStreamId() {
@@ -372,7 +375,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private void initConnectionWindow() throws Http2Exception {
     if (connectionWindowSize > 0 && ctx.channel().isActive()) {
       Http2Stream connectionStream = connection().connectionStream();
-      int currentSize = connectionStream.localFlowState().windowSize();
+      int currentSize = connection().local().flowController().windowSize(connectionStream);
       int delta = connectionWindowSize - currentSize;
       decoder().flowController().incrementWindowSize(ctx, connectionStream, delta);
       connectionWindowSize = -1;
