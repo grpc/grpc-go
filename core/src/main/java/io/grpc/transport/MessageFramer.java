@@ -219,6 +219,7 @@ public class MessageFramer {
    */
   public void close() {
     if (!isClosed()) {
+      closed = true;
       // With the current code we don't expect readableBytes > 0 to be possible here, added
       // defensively to prevent buffer leak issues if the framer code changes later.
       if (buffer != null && buffer.readableBytes() == 0) {
@@ -226,7 +227,6 @@ public class MessageFramer {
         buffer = null;
       }
       commitToSink(true, true);
-      closed = true;
     }
   }
 
