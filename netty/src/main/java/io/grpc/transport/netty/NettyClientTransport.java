@@ -34,8 +34,6 @@ package io.grpc.transport.netty;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -46,6 +44,7 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
@@ -82,7 +81,7 @@ class NettyClientTransport implements ClientTransport {
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
-  private final Http2Negotiator.Negotiation negotiation;
+  private final ChannelHandler negotiationHandler;
   private final NettyClientHandler handler;
   private final boolean ssl;
   private final AsciiString authority;
@@ -92,17 +91,9 @@ class NettyClientTransport implements ClientTransport {
   // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
   private Channel channel;
   private Listener listener;
-  /**
-   * Whether the transport started or failed during starting. Only transitions to true. When
-   * changed, this.notifyAll() must be called.
-   */
-  private volatile boolean started;
-  /** Guaranteed to be true when RUNNING. */
-  private volatile boolean negotiationComplete;
   /** Whether the transport started shutting down. */
   @GuardedBy("this")
   private boolean shutdown;
-  private Throwable shutdownCause;
   /** Whether the transport completed shutting down. */
   @GuardedBy("this")
   private boolean terminated;
@@ -132,11 +123,11 @@ class NettyClientTransport implements ClientTransport {
     handler = newHandler();
     switch (negotiationType) {
       case PLAINTEXT:
-        negotiation = Http2Negotiator.plaintext(handler);
+        negotiationHandler = Http2Negotiator.plaintext(handler);
         ssl = false;
         break;
       case PLAINTEXT_UPGRADE:
-        negotiation = Http2Negotiator.plaintextUpgrade(handler);
+        negotiationHandler = Http2Negotiator.plaintextUpgrade(handler);
         ssl = false;
         break;
       case TLS:
@@ -153,7 +144,7 @@ class NettyClientTransport implements ClientTransport {
         SSLParameters sslParams = new SSLParameters();
         sslParams.setEndpointIdentificationAlgorithm("HTTPS");
         sslEngine.setSSLParameters(sslParams);
-        negotiation = Http2Negotiator.tls(sslEngine, handler);
+        negotiationHandler = Http2Negotiator.tls(sslEngine, handler);
         ssl = true;
         break;
       default:
@@ -167,12 +158,6 @@ class NettyClientTransport implements ClientTransport {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     Preconditions.checkNotNull(listener, "listener");
-
-    // We can't write to the channel until negotiation is complete.
-    awaitStarted();
-    if (!negotiationComplete) {
-      throw new IllegalStateException("Negotiation failed to complete", shutdownCause);
-    }
 
     // Create the stream.
     NettyClientStream stream = new NettyClientStream(listener, channel, handler);
@@ -202,40 +187,14 @@ class NettyClientTransport implements ClientTransport {
     if (NioSocketChannel.class.isAssignableFrom(channelType)) {
       b.option(SO_KEEPALIVE, true);
     }
-    b.handler(negotiation.initializer());
-
+    /**
+     * We don't use a ChannelInitializer in the client bootstrap because its "initChannel" method
+     * is executed in the event loop and we need this handler to be in the pipeline immediately so
+     * that it may begin buffering writes.
+     */
+    b.handler(negotiationHandler);
     // Start the connection operation to the server.
-    final ChannelFuture connectFuture = b.connect(address);
-    channel = connectFuture.channel();
-
-    connectFuture.addListener(new ChannelFutureListener() {
-      @Override
-      public void operationComplete(ChannelFuture future) throws Exception {
-        if (!future.isSuccess()) {
-          // The connection attempt failed.
-          notifyTerminated(future.cause());
-          return;
-        }
-
-        // Connected successfully, start the protocol negotiation.
-        negotiation.onConnected(channel);
-      }
-    });
-    Futures.addCallback(negotiation.completeFuture(), new FutureCallback<Void>() {
-      @Override
-      public void onSuccess(Void result) {
-        // The negotiation was successful.
-        negotiationComplete = true;
-        notifyStarted();
-      }
-
-      @Override
-      public void onFailure(Throwable t) {
-        // The negotiation failed.
-        notifyTerminated(t);
-      }
-    });
-
+    channel = b.connect(address).channel();
     // Handle transport shutdown when the channel is closed.
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override
@@ -266,29 +225,6 @@ class NettyClientTransport implements ClientTransport {
     }
   }
 
-  /**
-   * Waits until started. Does not throw an exception if the transport has now failed.
-   */
-  private void awaitStarted() {
-    if (!started) {
-      try {
-        synchronized (this) {
-          while (!started) {
-            wait();
-          }
-        }
-      } catch (InterruptedException ex) {
-        Thread.currentThread().interrupt();
-        throw new RuntimeException("Interrupted while waiting for transport to start", ex);
-      }
-    }
-  }
-
-  private synchronized void notifyStarted() {
-    started = true;
-    notifyAll();
-  }
-
   private void notifyShutdown(Throwable t) {
     if (t != null) {
       log.log(Level.SEVERE, "Transport failed", t);
@@ -297,9 +233,7 @@ class NettyClientTransport implements ClientTransport {
     synchronized (this) {
       notifyShutdown = !shutdown;
       if (!shutdown) {
-        shutdownCause = t;
         shutdown = true;
-        notifyStarted();
       }
     }
     if (notifyShutdown) {

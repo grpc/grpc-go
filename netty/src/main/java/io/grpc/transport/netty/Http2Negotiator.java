@@ -32,32 +32,35 @@
 package io.grpc.transport.netty;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpClientUpgradeHandler;
+import io.netty.handler.codec.http.HttpClientUpgradeHandler.UpgradeEvent;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2OrHttpChooser;
 import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Queue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -67,7 +70,7 @@ import javax.net.ssl.SSLEngine;
  * A utility class that provides support methods for negotiating the use of HTTP/2 with the remote
  * endpoint.
  */
-public class Http2Negotiator {
+public final class Http2Negotiator {
   // TODO(madongfly): Remove "h2-xx" at a right time.
   private static final List<String> SUPPORTED_PROTOCOLS = Collections.unmodifiableList(
       Arrays.asList(
@@ -82,22 +85,7 @@ public class Http2Negotiator {
 
   private static final Logger log = Logger.getLogger(Http2Negotiator.class.getName());
 
-  /**
-   * A Netty-based negotiation that provides an pre-configured {@link ChannelInitializer} for to
-   * negotiate the requested protocol.
-   */
-  public interface Negotiation {
-    /**
-     * Gets the {@link ChannelInitializer} for negotiating the protocol.
-     */
-    ChannelInitializer<Channel> initializer();
-
-    void onConnected(Channel channel);
-
-    /**
-     * Completion future for this negotiation.
-     */
-    ListenableFuture<Void> completeFuture();
+  private Http2Negotiator() {
   }
 
   /**
@@ -112,168 +100,256 @@ public class Http2Negotiator {
   }
 
   /**
-   * Creates an TLS negotiation for HTTP/2 using ALPN/NPN.
+   * Returns a {@link ChannelHandler} that ensures the pipeline is set up so that TLS will
+   * be negotiated, the {@code handler} is added and writes to the {@link Channel} may happen
+   * immediately, even before the TLS Handshake is complete.
    */
-  public static Negotiation tls(final SSLEngine sslEngine, final ChannelHandler... handlers) {
-    Preconditions.checkArgument(handlers.length > 0, "No handlers were provided");
+  public static ChannelHandler tls(final SSLEngine sslEngine, final ChannelHandler handler) {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
-
     final SettableFuture<Void> completeFuture = SettableFuture.create();
     if (!installJettyTlsProtocolSelection(sslEngine, completeFuture, false)) {
       throw new IllegalStateException("NPN/ALPN extensions not installed");
     }
-    final ChannelInitializer<Channel> initializer = new ChannelInitializer<Channel>() {
-      @Override
-      public void initChannel(final Channel ch) throws Exception {
-        SslHandler sslHandler = new SslHandler(sslEngine, false);
-        sslHandler.handshakeFuture().addListener(
-            new GenericFutureListener<Future<? super Channel>>() {
-              @Override
-              public void operationComplete(Future<? super Channel> future) throws Exception {
-                // If an error occurred during the handshake, throw it
-                // to the pipeline.
-                java.util.concurrent.Future<?> doneFuture =
-                    future.isSuccess() ? completeFuture : future;
-                doneFuture.get();
-              }
-            });
-        ch.pipeline().addLast(sslHandler);
-        ch.pipeline().addLast(handlers);
-      }
-    };
-
-    return new Negotiation() {
-      @Override
-      public ChannelInitializer<Channel> initializer() {
-        return initializer;
-      }
-
-      @Override
-      public void onConnected(Channel channel) {
-        // Nothing to do.
-      }
-
-      @Override
-      public ListenableFuture<Void> completeFuture() {
-        return completeFuture;
-      }
-    };
+    SslHandler sslHandler = new SslHandler(sslEngine, false);
+    sslHandler.handshakeFuture().addListener(
+        new GenericFutureListener<Future<? super Channel>>() {
+          @Override
+          public void operationComplete(Future<? super Channel> future) throws Exception {
+            // If an error occurred during the handshake, throw it to the pipeline.
+            if (future.isSuccess()) {
+              completeFuture.get();
+            } else {
+              future.get();
+            }
+          }
+        });
+    return new BufferUntilTlsNegotiatedHandler(sslHandler, handler);
   }
 
   /**
-   * Create a plaintext upgrade negotiation for HTTP/1.1 to HTTP/2.
+   * Returns a {@link ChannelHandler} that ensures that the HTTP to HTTP/2 upgrade is performed,
+   * the {@code handler} is added to the pipeline writes to the {@link Channel} may happen
+   * immediately, even before the upgrade is complete.
    */
-  public static Negotiation plaintextUpgrade(Http2ConnectionHandler handler) {
+  public static ChannelHandler plaintextUpgrade(Http2ConnectionHandler handler) {
     // Register the plaintext upgrader
     Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(handler);
     HttpClientCodec httpClientCodec = new HttpClientCodec();
     final HttpClientUpgradeHandler upgrader =
         new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
-    final UpgradeCompletionHandler completionHandler = new UpgradeCompletionHandler();
-    final ChannelInitializer<Channel> initializer = new ChannelInitializer<Channel>() {
-      @Override
-      public void initChannel(Channel ch) throws Exception {
-        ch.pipeline().addLast(upgrader);
-        ch.pipeline().addLast(completionHandler);
-      }
-    };
-
-    return new Negotiation() {
-      @Override
-      public ChannelInitializer<Channel> initializer() {
-        return initializer;
-      }
-
-      @Override
-      public ListenableFuture<Void> completeFuture() {
-        return completionHandler.getUpgradeFuture();
-      }
-
-      @Override
-      public void onConnected(Channel channel) {
-        // Trigger the HTTP/1.1 plaintext upgrade protocol by issuing an HTTP request
-        // which causes the upgrade headers to be added
-        DefaultHttpRequest upgradeTrigger =
-            new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
-        channel.writeAndFlush(upgradeTrigger);
-      }
-    };
+    return new BufferingHttp2UpgradeHandler(upgrader);
   }
 
   /**
-   * Create a "no-op" negotiation that simply assumes the protocol to already be negotiated.
+   * Returns a {@link ChannelHandler} that ensures that the {@code handler} is added to the
+   * pipeline writes to the {@link Channel} may happen immediately, even before it is active.
    */
-  public static Negotiation plaintext(final ChannelHandler... handlers) {
-    final ChannelInitializer<Channel> initializer = new ChannelInitializer<Channel>() {
-      @Override
-      public void initChannel(Channel ch) throws Exception {
-        ch.pipeline().addLast(handlers);
-      }
-    };
-    return new Negotiation() {
-      private final SettableFuture<Void> completeFuture = SettableFuture.create();
-      @Override
-      public ChannelInitializer<Channel> initializer() {
-        return initializer;
-      }
-
-      @Override
-      public void onConnected(Channel channel) {
-        completeFuture.set(null);
-      }
-
-      @Override
-      public ListenableFuture<Void> completeFuture() {
-        return completeFuture;
-      }
-    };
+  public static ChannelHandler plaintext(final ChannelHandler handler) {
+    return new BufferUntilChannelActiveHandler(handler);
   }
 
   /**
-   * Report protocol upgrade completion using a promise.
+   * Buffers all writes until either {@link #writeBufferedAndRemove(ChannelHandlerContext)} or
+   * {@link #failBufferedAndClose(ChannelHandlerContext)} is called. This handler allows us to
+   * write to a {@link Channel} before we are allowed to write to it officially i.e.
+   * before it's active or the TLS Handshake is complete.
    */
-  private static class UpgradeCompletionHandler extends ChannelInboundHandlerAdapter {
-    private final SettableFuture<Void> upgradeFuture = SettableFuture.create();
+  private abstract static class AbstractBufferingHandler extends ChannelDuplexHandler {
 
-    public ListenableFuture<Void> getUpgradeFuture() {
-      return upgradeFuture;
+    private ChannelHandler[] handlers;
+    private Queue<ChannelWrite> bufferedWrites = new ArrayDeque<ChannelWrite>();
+    private boolean writing;
+    private boolean flushRequested;
+
+    /**
+     * @param handlers the ChannelHandlers are added to the pipeline on channelRegistered and
+     *                 before this handler.
+     */
+    AbstractBufferingHandler(ChannelHandler... handlers) {
+      this.handlers = handlers;
     }
 
     @Override
-    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-      if (!upgradeFuture.isDone()) {
-        if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_REJECTED) {
-          upgradeFuture.setException(new RuntimeException("HTTP/2 upgrade rejected"));
-        } else if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_SUCCESSFUL) {
-          upgradeFuture.set(null);
-          ctx.pipeline().remove(this);
-        }
+    public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
+      /**
+       * This check is necessary as a channel may be registered with different event loops during it
+       * lifetime and we only want to configure it once.
+       */
+      if (handlers != null) {
+        ctx.pipeline().addFirst(handlers);
+        handlers = null;
       }
+      super.channelRegistered(ctx);
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+      failBufferedAndClose(ctx);
       super.channelInactive(ctx);
-      if (!upgradeFuture.isDone()) {
-        upgradeFuture.setException(new RuntimeException("Channel closed before upgrade complete"));
+    }
+
+    @Override
+    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise)
+        throws Exception {
+      /**
+       * This check handles a race condition between Channel.write (in the calling thread) and the
+       * removal of this handler (in the event loop thread).
+       * The problem occurs in e.g. this sequence:
+       * 1) [caller thread] The write method identifies the context for this handler
+       * 2) [event loop] This handler removes itself from the pipeline
+       * 3) [caller thread] The write method delegates to the invoker to call the write method in
+       *    the event loop thread. When this happens, we identify that this handler has been
+       *    removed with "bufferedWrites == null".
+       */
+      if (bufferedWrites == null) {
+        super.write(ctx, msg, promise);
+      } else {
+        bufferedWrites.add(new ChannelWrite(msg, promise));
       }
     }
 
     @Override
-    public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
-      super.channelUnregistered(ctx);
-      if (!upgradeFuture.isDone()) {
-        upgradeFuture.setException(
-            new RuntimeException("Handler unregistered before upgrade complete"));
+    public void flush(ChannelHandlerContext ctx) {
+      /**
+       * Swallowing any flushes is not only an optimization but also required
+       * for the SslHandler to work correctly. If the SslHandler receives multiple
+       * flushes while the handshake is still ongoing, then the handshake "randomly"
+       * times out. Not sure at this point why this is happening. Doing a single flush
+       * seems to work but multiple flushes don't ...
+       */
+      if (bufferedWrites == null) {
+        ctx.flush();
+      } else {
+        flushRequested = true;
       }
     }
 
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-      super.exceptionCaught(ctx, cause);
-      if (!upgradeFuture.isDone()) {
-        upgradeFuture.setException(cause);
+    public void close(ChannelHandlerContext ctx, ChannelPromise future) throws Exception {
+      failBufferedAndClose(ctx);
+    }
+
+    protected void failBufferedAndClose(ChannelHandlerContext ctx) {
+      if (bufferedWrites != null) {
+        Exception e = new Exception("Buffered write failed.");
+        while (!bufferedWrites.isEmpty()) {
+          ChannelWrite write = bufferedWrites.poll();
+          write.promise.setFailure(e);
+        }
+        bufferedWrites = null;
       }
+      /**
+       * In case something goes wrong ensure that the channel gets closed as the
+       * NettyClientTransport relies on the channel's close future to get completed.
+       */
+      ctx.close();
+    }
+
+    protected void writeBufferedAndRemove(ChannelHandlerContext ctx) {
+      if (!ctx.channel().isActive() || writing) {
+        return;
+      }
+      // Make sure that method can't be reentered, so that the ordering
+      // in the queue can't be messed up.
+      writing = true;
+      while (!bufferedWrites.isEmpty()) {
+        ChannelWrite write = bufferedWrites.poll();
+        ctx.write(write.msg, write.promise);
+      }
+      assert bufferedWrites.isEmpty();
+      bufferedWrites = null;
+      if (flushRequested) {
+        ctx.flush();
+      }
+      // Removal has to happen last as the above writes will likely trigger
+      // new writes that have to be added to the end of queue in order to not
+      // mess up the ordering.
+      ctx.pipeline().remove(this);
+    }
+
+    private static class ChannelWrite {
+      Object msg;
+      ChannelPromise promise;
+
+      ChannelWrite(Object msg, ChannelPromise promise) {
+        this.msg = msg;
+        this.promise = promise;
+      }
+    }
+  }
+
+  /**
+   * Buffers all writes until the TLS Handshake is complete.
+   */
+  private static class BufferUntilTlsNegotiatedHandler extends AbstractBufferingHandler {
+
+    BufferUntilTlsNegotiatedHandler(ChannelHandler... handlers) {
+      super(handlers);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+      if (evt instanceof SslHandshakeCompletionEvent) {
+        SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
+        if (handshakeEvent.isSuccess()) {
+          writeBufferedAndRemove(ctx);
+        } else {
+          failBufferedAndClose(ctx);
+        }
+      }
+      super.userEventTriggered(ctx, evt);
+    }
+  }
+
+  /**
+   * Buffers all writes until the {@link Channel} is active.
+   */
+  private static class BufferUntilChannelActiveHandler extends AbstractBufferingHandler {
+
+    BufferUntilChannelActiveHandler(ChannelHandler... handlers) {
+      super(handlers);
+    }
+
+    @Override
+    public void handlerAdded(ChannelHandlerContext ctx) {
+      writeBufferedAndRemove(ctx);
+    }
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+      writeBufferedAndRemove(ctx);
+      super.channelActive(ctx);
+    }
+  }
+
+  /**
+   * Buffers all writes until the HTTP to HTTP/2 upgrade is complete.
+   */
+  private static class BufferingHttp2UpgradeHandler extends AbstractBufferingHandler {
+
+    BufferingHttp2UpgradeHandler(ChannelHandler... handlers) {
+      super(handlers);
+    }
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+      // Trigger the HTTP/1.1 plaintext upgrade protocol by issuing an HTTP request
+      // which causes the upgrade headers to be added
+      DefaultHttpRequest upgradeTrigger =
+          new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+      ctx.writeAndFlush(upgradeTrigger);
+      super.channelActive(ctx);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+      if (evt == UpgradeEvent.UPGRADE_SUCCESSFUL) {
+        writeBufferedAndRemove(ctx);
+      } else if (evt == UpgradeEvent.UPGRADE_REJECTED) {
+        failBufferedAndClose(ctx);
+        ctx.pipeline().fireExceptionCaught(new Exception("HTTP/2 upgrade rejected"));
+      }
+      super.userEventTriggered(ctx, evt);
     }
   }
 
