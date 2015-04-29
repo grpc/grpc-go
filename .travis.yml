@@ -36,4 +36,4 @@ cache:
 
 before_cache:
   - rm $HOME/.gradle/caches/modules-2/modules-2.lock
-  - find $HOME/.gradle/wrapper -not -name "*-all.zip" -delete
+  - find $HOME/.gradle/wrapper -not -name "*-all.zip" -and -not -name "*.-bin.zip" -delete
