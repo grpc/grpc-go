@@ -403,8 +403,8 @@ public class OkHttpClientTransportTest {
     verify(frameWriter).data(eq(false), eq(3), any(Buffer.class), eq(10));
     frameHandler.windowUpdate(0, 10);
 
-    // Decrease initial window size to HEADER_LENGTH, since we've already sent out HEADER_LENGTH + 20 bytes
-    // data, the window size should be -20 now.
+    // Decrease initial window size to HEADER_LENGTH, since we've already sent
+    // out HEADER_LENGTH + 20 bytes data, the window size should be -20 now.
     setInitialWindowSize(HEADER_LENGTH);
     // Get 20 tokens back, still can't send any data.
     frameHandler.windowUpdate(3, 20);
