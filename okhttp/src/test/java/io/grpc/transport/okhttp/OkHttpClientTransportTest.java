@@ -627,6 +627,8 @@ public class OkHttpClientTransportTest {
         newStreamReturn2.countDown();
       }
     }).start();
+    // Wait until stream2 is pending, to make sure stream2 is queued in front of stream3.
+    waitForStreamPending(1);
     new Thread(new Runnable() {
       @Override
       public void run() {
