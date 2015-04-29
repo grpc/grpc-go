@@ -410,6 +410,7 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 }
 
 func (t *http2Server) handleGoAway(f *http2.GoAwayFrame) {
+	t.goaway = true
 	for id, _ := range t.activeStreams {
 		if id > f.LastStreamID {
 			if s, ok := t.activeStreams[f.LastStreamID]; ok {
