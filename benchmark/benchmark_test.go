@@ -24,26 +24,31 @@ func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceCli
 	}
 
 	ch := make(chan int, maxConcurrentCalls*4)
-	var wg sync.WaitGroup
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
 	wg.Add(maxConcurrentCalls)
 
 	// Distribute the b.N calls over maxConcurrentCalls workers.
 	for i := 0; i < maxConcurrentCalls; i++ {
 		go func() {
 			for _ = range ch {
+				start := time.Now()
 				caller(tc)
+				elapse := time.Since(start)
+				mu.Lock()
+				s.Add(elapse)
+				mu.Unlock()
 			}
 			wg.Done()
 		}()
 	}
+	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		b.StartTimer()
-		start := time.Now()
 		ch <- i
-		elapsed := time.Since(start)
-		b.StopTimer()
-		s.Add(elapsed)
 	}
+	b.StopTimer()
 	close(ch)
 	wg.Wait()
 	conn.Close()
