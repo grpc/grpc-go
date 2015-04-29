@@ -84,7 +84,7 @@ type http2Server struct {
 	activeStreams map[uint32]*Stream
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
-	// Flag set after client sends GOAWAY so server knows to stop sending new streams
+	// set to true when server receives GOAWAY frame
 	goaway bool
 }
 
