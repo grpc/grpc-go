@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	server = flag.String("server", "", "The server address")
+	server            = flag.String("server", "", "The server address")
 	maxConcurrentRPCs = flag.Int("max_concurrent_rpcs", 1, "The max number of concurrent RPCs")
-	duration = flag.Int("duration", math.MaxInt32, "The duration in seconds to run the benchmark client")
+	duration          = flag.Int("duration", math.MaxInt32, "The duration in seconds to run the benchmark client")
 )
 
 func caller(client testpb.TestServiceClient) {
@@ -59,7 +59,7 @@ func closeLoop() {
 	ok := true
 	for ok {
 		select {
-		case ch <-0:
+		case ch <- 0:
 		case <-done:
 			ok = false
 		}
