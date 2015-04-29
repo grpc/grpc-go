@@ -146,7 +146,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 			hDec.state = decodeState{}
 		}
 	}()
-	if goaway {
+	if t.goaway {
 		//Stop creating streams on this transport
 		return nil
 	}
@@ -410,7 +410,9 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 }
 
 func (t *http2Server) handleGoAway(f *http2.GoAwayFrame) {
+	t.mu.Lock()
 	t.goaway = true
+	t.mu.Unlock()
 	for id, _ := range t.activeStreams {
 		if id > f.LastStreamID {
 			if s, ok := t.activeStreams[f.LastStreamID]; ok {
