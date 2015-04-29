@@ -2,12 +2,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"math"
 	"sync"
 	"time"
 
-	"fmt"
-	
 	"google.golang.org/grpc/benchmark"
 	"google.golang.org/grpc/benchmark/stats"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -32,14 +31,21 @@ func closeLoop() {
 		caller(tc)
 	}
 	ch := make(chan int, *maxConcurrentRPCs*4)
-	var wg sync.WaitGroup
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
 	wg.Add(*maxConcurrentRPCs)
-
 	// Distribute RPCs over maxConcurrentCalls workers.
 	for i := 0; i < *maxConcurrentRPCs; i++ {
 		go func() {
 			for _ = range ch {
+				start := time.Now()
 				caller(tc)
+				elapse := time.Since(start)
+				mu.Lock()
+				s.Add(elapse)
+				mu.Unlock()
 			}
 			wg.Done()
 		}()
@@ -52,10 +58,8 @@ func closeLoop() {
 	}()
 	ok := true
 	for ok {
-		start := time.Now()
 		select {
 		case ch <-0:
-			s.Add(time.Since(start))
 		case <-done:
 			ok = false
 		}
