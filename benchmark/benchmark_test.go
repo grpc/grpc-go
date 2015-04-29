@@ -44,11 +44,11 @@ func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceCli
 			wg.Done()
 		}()
 	}
+	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		b.StartTimer()
 		ch <- i
-		b.StopTimer()
 	}
+	b.StopTimer()
 	close(ch)
 	wg.Wait()
 	conn.Close()
