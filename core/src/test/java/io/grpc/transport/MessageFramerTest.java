@@ -50,7 +50,6 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
 import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Tests for {@link MessageFramer}.
@@ -78,7 +77,7 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {3, 14});
     verifyNoMoreInteractions(sink);
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[]{0, 0, 0, 0, 2, 3, 14}), false, true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true);
     assertEquals(1, allocator.allocCount);
     verifyNoMoreInteractions(sink);
   }
@@ -89,11 +88,11 @@ public class MessageFramerTest {
     framer = new MessageFramer(sink, allocator);
     writePayload(framer, new byte[] {3});
     verifyNoMoreInteractions(sink);
-    writePayload(framer, new byte[]{14});
+    writePayload(framer, new byte[] {14});
     verifyNoMoreInteractions(sink);
     framer.flush();
     verify(sink).deliverFrame(
-        toWriteBuffer(new byte[]{0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false, true);
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false, true);
     verifyNoMoreInteractions(sink);
     assertEquals(1, allocator.allocCount);
   }
@@ -104,7 +103,7 @@ public class MessageFramerTest {
     verifyNoMoreInteractions(sink);
     framer.close();
     verify(sink).deliverFrame(
-        toWriteBuffer(new byte[]{0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true, true);
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true, true);
     verifyNoMoreInteractions(sink);
     assertEquals(1, allocator.allocCount);
   }
@@ -125,7 +124,7 @@ public class MessageFramerTest {
     verifyNoMoreInteractions(sink);
 
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[]{5}), false, true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {5}), false, true);
     verifyNoMoreInteractions(sink);
     assertEquals(2, allocator.allocCount);
   }
@@ -141,7 +140,7 @@ public class MessageFramerTest {
     verifyNoMoreInteractions(sink);
 
     framer.flush();
-    verify(sink).deliverFrame(toWriteBufferWithMinSize(new byte[]{1, 3}, 12), false, true);
+    verify(sink).deliverFrame(toWriteBufferWithMinSize(new byte[] {1, 3}, 12), false, true);
     verifyNoMoreInteractions(sink);
     assertEquals(2, allocator.allocCount);
   }
@@ -159,7 +158,7 @@ public class MessageFramerTest {
     writePayload(framer, new byte[] {3, 14});
     framer.flush();
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[]{0, 0, 0, 0, 2, 3, 14}), false, true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true);
     verifyNoMoreInteractions(sink);
     assertEquals(1, allocator.allocCount);
   }
