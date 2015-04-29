@@ -84,6 +84,8 @@ type http2Server struct {
 	activeStreams map[uint32]*Stream
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
+	// Flag set after client sends GOAWAY so server knows to stop sending new streams
+	goaway bool
 }
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
@@ -128,6 +130,7 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32) (_ ServerTransport, err er
 		shutdownChan:    make(chan struct{}),
 		activeStreams:   make(map[uint32]*Stream),
 		streamSendQuota: defaultWindowSize,
+		goaway:          false,
 	}
 	go t.controller()
 	t.writableChan <- 0
@@ -143,6 +146,10 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 			hDec.state = decodeState{}
 		}
 	}()
+	if goaway {
+		//Stop creating streams on this transport
+		return nil
+	}
 	endHeaders, err := hDec.decodeServerHTTP2Headers(frame)
 	if s == nil {
 		// s has been closed.
