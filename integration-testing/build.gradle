@@ -1,4 +1,4 @@
-apply plugin: 'protobuf'
+apply plugin: 'com.google.protobuf'
 apply plugin:'application'
 
 description = "gRPC: Integration Testing"

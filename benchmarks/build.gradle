@@ -1,5 +1,5 @@
 apply plugin: 'application'
-apply plugin: 'protobuf'
+apply plugin: 'com.google.protobuf'
 
 
 description = "grpc Benchmarks"

@@ -47,7 +47,7 @@ subprojects {
                 okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
                 protobuf: 'com.google.protobuf:protobuf-java:3.0.0-alpha-2',
                 protobuf_nano: 'com.google.protobuf.nano:protobuf-javanano:3.0.0-alpha-2',
-                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.2.1',
+                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.3.1',
 
                 // TODO: Unreleased dependencies.
                 // These must already be installed in the local maven repository.
