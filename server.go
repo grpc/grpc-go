@@ -85,12 +85,19 @@ type Server struct {
 }
 
 type options struct {
+	handshaker           func(net.Conn) error
 	codec                Codec
 	maxConcurrentStreams uint32
 }
 
 // A ServerOption sets options.
 type ServerOption func(*options)
+
+func Handshaker(f func(net.Conn) error) ServerOption {
+	return func(o *options) {
+		o.handshaker = f
+	}
+}
 
 func CustomCodec(codec Codec) ServerOption {
 	return func(o *options) {
@@ -185,7 +192,14 @@ func (s *Server) Serve(lis net.Listener) error {
 		if err != nil {
 			return err
 		}
-
+		// Perform handshaking if it is required.
+		if s.opts.handshaker != nil {
+			if err := s.opts.handshaker(c); err != nil {
+				log.Println("grpc: Server.Serve failed to complete handshake.")
+				c.Close()
+				continue
+			}
+		}
 		s.mu.Lock()
 		if s.conns == nil {
 			s.mu.Unlock()
