@@ -99,7 +99,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
     if (transportError != null) {
       // Note we don't immediately report the transport error, instead we wait for more data on the
       // stream so we can accumulate more detail into the error before reporting it.
-      transportError = transportError.withDescription("\n" + headers.toString());
+      transportError = transportError.augmentDescription("\n" + headers.toString());
       errorCharset = extractCharset(headers);
     } else {
       stripTransportDetails(headers);
