@@ -65,11 +65,10 @@ public class CallsTest {
     MockitoAnnotations.initMocks(this);
   }
 
-  @SuppressWarnings("unchecked")
   @Test public void unaryFutureCallSuccess() throws Exception {
     Integer req = 2;
     ListenableFuture<String> future = Calls.unaryFutureCall(call, req);
-    ArgumentCaptor<Call.Listener> listenerCaptor = ArgumentCaptor.forClass(Call.Listener.class);
+    ArgumentCaptor<Call.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.Headers.class));
     Call.Listener<String> listener = listenerCaptor.getValue();
     verify(call).sendPayload(req);
@@ -79,11 +78,10 @@ public class CallsTest {
     assertEquals("bar", future.get());
   }
 
-  @SuppressWarnings("unchecked")
   @Test public void unaryFutureCallFailed() throws Exception {
     Integer req = 2;
     ListenableFuture<String> future = Calls.unaryFutureCall(call, req);
-    ArgumentCaptor<Call.Listener> listenerCaptor = ArgumentCaptor.forClass(Call.Listener.class);
+    ArgumentCaptor<Call.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.Headers.class));
     Call.Listener<String> listener = listenerCaptor.getValue();
     listener.onClose(Status.INVALID_ARGUMENT, new Metadata.Trailers());
@@ -96,11 +94,10 @@ public class CallsTest {
     }
   }
 
-  @SuppressWarnings("unchecked")
   @Test public void unaryFutureCallCancelled() throws Exception {
     Integer req = 2;
     ListenableFuture<String> future = Calls.unaryFutureCall(call, req);
-    ArgumentCaptor<Call.Listener> listenerCaptor = ArgumentCaptor.forClass(Call.Listener.class);
+    ArgumentCaptor<Call.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.Headers.class));
     Call.Listener<String> listener = listenerCaptor.getValue();
     future.cancel(true);

@@ -93,7 +93,7 @@ public abstract class AbstractBenchmark {
   protected ServerImpl server;
   protected ByteBuf request;
   protected ByteBuf response;
-  protected MethodDescriptor unaryMethod;
+  protected MethodDescriptor<ByteBuf, ByteBuf> unaryMethod;
   protected ChannelImpl[] channels;
 
   public AbstractBenchmark() {
@@ -215,9 +215,9 @@ public abstract class AbstractBenchmark {
                               final AtomicBoolean done) {
     for (final ChannelImpl channel : channels) {
       for (int i = 0; i < callsPerChannel; i++) {
-        StreamObserver observer = new StreamObserver() {
+        StreamObserver<ByteBuf> observer = new StreamObserver<ByteBuf>() {
           @Override
-          public void onValue(Object value) {
+          public void onValue(ByteBuf value) {
             counter.incrementAndGet();
           }
 

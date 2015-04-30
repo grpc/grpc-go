@@ -327,9 +327,9 @@ public class Calls {
   }
 
   private static class GrpcFuture<RespT> extends AbstractFuture<RespT> {
-    private final Call call;
+    private final Call<?, RespT> call;
 
-    GrpcFuture(Call call) {
+    GrpcFuture(Call<?, RespT> call) {
       this.call = call;
     }
 

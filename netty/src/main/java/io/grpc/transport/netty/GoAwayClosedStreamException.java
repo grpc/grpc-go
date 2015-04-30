@@ -34,6 +34,7 @@ package io.grpc.transport.netty;
 import io.netty.buffer.ByteBuf;
 
 class GoAwayClosedStreamException extends Exception {
+  private static final long serialVersionUID = 1326785622777291198L;
   private final int lastStreamId;
   private final long errorCode;
   private final ByteBuf debugData;

@@ -452,7 +452,7 @@ public final class Status {
    * Exception thrown by implementations while managing an operation.
    */
   public static class OperationException extends Exception {
-
+    private static final long serialVersionUID = -660954903976144640L;
     private final Status status;
 
     public OperationException(Status status) {
@@ -469,7 +469,7 @@ public final class Status {
    * Runtime exception thrown by implementations while managing an operation.
    */
   public static class OperationRuntimeException extends RuntimeException {
-
+    private static final long serialVersionUID = 1950934672280720624L;
     private final Status status;
 
     public OperationRuntimeException(Status status) {

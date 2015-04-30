@@ -108,7 +108,6 @@ public class MetadataUtils {
    * @param trailersCapture to record the last received trailers
    * @return an implementation of the channel with captures installed.
    */
-  @SuppressWarnings("unchecked")
   public static ClientInterceptor newCaptureMetadataInterceptor(
       final AtomicReference<Metadata.Headers> headersCapture,
       final AtomicReference<Metadata.Trailers> trailersCapture) {

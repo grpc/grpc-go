@@ -102,7 +102,6 @@ public class ClientAuthInterceptorTests {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   public void testCopyCredentialToHeaders() throws IOException {
     ListMultimap<String, String> values = LinkedListMultimap.create();
     values.put("Authorization", "token1");
@@ -110,7 +109,7 @@ public class ClientAuthInterceptorTests {
     values.put("Extra-Authorization", "token3");
     values.put("Extra-Authorization", "token4");
     when(credentials.getRequestMetadata()).thenReturn(Multimaps.asMap(values));
-    Call interceptedCall = interceptor.interceptCall(descriptor, channel);
+    Call<String, Integer> interceptedCall = interceptor.interceptCall(descriptor, channel);
     Metadata.Headers headers = new Metadata.Headers();
     interceptedCall.start(listener, headers);
     verify(call).start(listener, headers);
@@ -124,10 +123,9 @@ public class ClientAuthInterceptorTests {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   public void testCredentialsThrows() throws IOException {
     when(credentials.getRequestMetadata()).thenThrow(new IOException("Broken"));
-    Call interceptedCall = interceptor.interceptCall(descriptor, channel);
+    Call<String, Integer> interceptedCall = interceptor.interceptCall(descriptor, channel);
     Metadata.Headers headers = new Metadata.Headers();
     interceptedCall.start(listener, headers);
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
@@ -139,7 +137,6 @@ public class ClientAuthInterceptorTests {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   public void testWithOAuth2Credential() throws IOException {
     final AccessToken token = new AccessToken("allyourbase", new Date(Long.MAX_VALUE));
     final OAuth2Credentials oAuth2Credentials = new OAuth2Credentials() {

@@ -33,7 +33,9 @@ package io.grpc.transport.okhttp;
 
 import io.grpc.transport.ReadableBuffer;
 import io.grpc.transport.ReadableBufferTestBase;
+
 import okio.Buffer;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -47,6 +49,7 @@ public class OkHttpReadableBufferTest extends ReadableBufferTestBase {
 
   private OkHttpReadableBuffer buffer;
 
+  @SuppressWarnings("resource")
   @Before
   public void setup() {
     buffer = new OkHttpReadableBuffer(new Buffer().writeUtf8(msg));

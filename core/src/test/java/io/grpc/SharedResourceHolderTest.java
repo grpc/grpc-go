@@ -196,9 +196,9 @@ public class SharedResourceHolderTest {
     public ScheduledExecutorService createScheduledExecutor() {
       ScheduledExecutorService mockExecutor = mock(ScheduledExecutorService.class);
       when(mockExecutor.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class))).thenAnswer(
-          new Answer() {
+          new Answer<MockScheduledFuture<Void>>() {
             @Override
-            public Object answer(InvocationOnMock invocation) {
+            public MockScheduledFuture<Void> answer(InvocationOnMock invocation) {
               Object[] args = invocation.getArguments();
               Runnable command = (Runnable) args[0];
               long delay = (Long) args[1];
