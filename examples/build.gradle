@@ -25,7 +25,7 @@ dependencies {
 protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
 
 project.afterEvaluate {
-  generateProto.dependsOn ':grpc-compiler:local_archJava_pluginExecutable'
+  generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
 }
 
 task routeGuideServer(type: JavaExec) {

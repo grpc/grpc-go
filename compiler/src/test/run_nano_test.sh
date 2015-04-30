@@ -12,7 +12,7 @@ OUTPUT_FILE="$TEST_TMP_DIR/TestServiceGrpc.src.jar"
 GRPC_FILE="$TEST_TMP_DIR/io/grpc/testing/integration/TestServiceGrpc.java"
 GOLDEN_FILE="golden/TestServiceNano.java.txt"
 
-protoc --plugin=protoc-gen-java_rpc=../../build/binaries/java_pluginExecutable/local_arch/protoc-gen-grpc-java \
+protoc --plugin=protoc-gen-java_rpc=../../build/binaries/java_pluginExecutable/protoc-gen-grpc-java \
   --java_rpc_out=nano=true:"$OUTPUT_FILE" "$INPUT_FILE" && \
   unzip -o -d "$TEST_TMP_DIR" "$OUTPUT_FILE" && \
   diff "$GRPC_FILE" "$GOLDEN_FILE" && \

@@ -69,7 +69,7 @@ subprojects {
 
         def exeSuffix = osdetector.os == 'windows' ? ".exe" : ""
         protocPluginBaseName = 'protoc-gen-grpc-java'
-        javaPluginPath = "$rootDir/compiler/build/binaries/java_pluginExecutable/local_arch/$protocPluginBaseName$exeSuffix"
+        javaPluginPath = "$rootDir/compiler/build/binaries/java_pluginExecutable/$protocPluginBaseName$exeSuffix"
     }
 
     dependencies {

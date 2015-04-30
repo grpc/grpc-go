@@ -59,19 +59,31 @@ On Linux, Mac or MinGW:
 $ ./gradlew install
 ```
 
+### Notes for Visual C++
+
 When building on Windows and VC++, you need to specify project properties for
 Gradle to find protobuf:
 ```
-.\gradlew install -Pprotobuf.include=C:\path\to\protobuf-3.0.0-alpha-2\src ^
-    -Pprotobuf.libs=C:\path\to\protobuf-3.0.0-alpha-2\vsprojects\Release
+.\gradlew install ^
+    -Pvc.protobuf.include=C:\path\to\protobuf-3.0.0-alpha-2\src ^
+    -Pvc.protobuf.libs=C:\path\to\protobuf-3.0.0-alpha-2\vsprojects\Release
 ```
 
 Since specifying those properties every build is bothersome, you can instead
 create ``%HOMEDRIVE%%HOMEPATH%\.gradle\gradle.properties`` with contents like:
 ```
-protobuf.include=C:\\path\\to\\protobuf-3.0.0-alpha-2\\src
-protobuf.libs=C:\\path\\to\\protobuf-3.0.0-alpha-2\\vsprojects\\Release
+vc.protobuf.include=C:\\path\\to\\protobuf-3.0.0-alpha-2\\src
+vc.protobuf.libs=C:\\path\\to\\protobuf-3.0.0-alpha-2\\vsprojects\\Release
 ```
+
+The build script will build the codegen for the same architecture as the Java
+runtime installed on your system. If you are using 64-bit JVM, the codegen will
+be compiled for 64-bit, that means you must have compiled Protobuf in 64-bit.
+
+### Notes for MinGW on Windows
+If you have both MinGW and VC++ installed on Windows, VC++ will be used by
+default. To override this default and use MinGW, add ``-Dvc.disable`` to your
+Gradle command line.
 
 Navigating Around the Source
 ----------------------------

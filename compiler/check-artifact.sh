@@ -125,5 +125,5 @@ checkDependencies ()
   echo
 }
 
-FILE="build/artifacts/java_pluginExecutable/$ARCH/protoc-gen-grpc-java.exe"
+FILE="build/artifacts/java_pluginExecutable/protoc-gen-grpc-java.exe"
 checkArch "$FILE" && checkDependencies "$FILE"

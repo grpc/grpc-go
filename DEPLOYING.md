@@ -129,8 +129,7 @@ the header files and libraries of Protobuf.
 #### Linux
 ```
 $ export CXXFLAGS="-I$HOME/protobuf-32/include" \
-  LDFLAGS="-L$HOME/protobuf-32/lib -L$HOME/protobuf-64/lib" \
-  TARGET_ARCHS="x86_32 x86_64"
+  LDFLAGS="-L$HOME/protobuf-32/lib -L$HOME/protobuf-64/lib"
 ```
 
 #### Windows 64-bit with MSYS2
@@ -139,23 +138,20 @@ $ export CXXFLAGS="-I$HOME/protobuf-32/include" \
 
 ```
 $ export CXXFLAGS="-I$HOME/protobuf-32/include" \
-  LDFLAGS="-L$HOME/protobuf-32/lib" \
-  TARGET_ARCHS="x86_32"
+  LDFLAGS="-L$HOME/protobuf-32/lib"
 ```
 
 ##### Under MinGW-w64 Win64 Shell
 ```
 $ export CXXFLAGS="-I$HOME/protobuf-64/include" \
-  LDFLAGS="-L$HOME/protobuf-64/lib" \
-  TARGET_ARCHS="x86_64"
+  LDFLAGS="-L$HOME/protobuf-64/lib"
 ```
 
 
 #### Mac
 ```
 $ export CXXFLAGS="-I$HOME/protobuf/include" \
-  LDFLAGS="$HOME/protobuf/lib/libprotobuf.a $HOME/protobuf/lib/libprotoc.a" \
-  TARGET_ARCHS="x86_64"
+  LDFLAGS="$HOME/protobuf/lib/libprotobuf.a $HOME/protobuf/lib/libprotoc.a"
 ```
 
 
@@ -174,19 +170,27 @@ artifacts will go to a freshly created staging repository.
 
 
 ### Deploy GRPC Codegen for Additional Platforms
-The previous step will only deploy the codegen artifacts for the platform you
-run on it. For a fully fledged deployment, you will need to deploy the codegen
-for all other supported platforms. To do so, move on the next platform, set up
-the prerequisites and environment variables, then
+The previous step will only deploy the codegen artifacts for the OS you run on
+it and the architecture of your JVM. For a fully fledged deployment, you will
+need to deploy the codegen for all other supported OSes and architectures.
+
+To deploy the codegen for an OS and architecture, you must run the following
+commands on that OS and specify the architecture by the flag ``-Darch=<arch>``.
+
+We currently distribute the following OSes and architectures:
+- Linux: ``x86_32``, ``x86_64``
+- Windows: ``x86_32``, ``x86_64``
+- Mac: ``x86_64``
 
 If you are doing a snapshot deployment:
 ```
-grpc-java$ ./gradlew clean grpc-compiler:uploadArchives
+grpc-java$ ./gradlew clean grpc-compiler:uploadArchives -Darch=<arch>
 ```
 
 If you are doing a release deployment:
 ```
-grpc-java$ ./gradlew clean grpc-compiler:uploadArchives -DrepositoryId=<repository-id>
+grpc-java$ ./gradlew clean grpc-compiler:uploadArchives -Darch=<arch> \
+    -DrepositoryId=<repository-id>
 ```
 where ``<repository-id>`` is the ID of the staging repository that you have
 found from the OSSRH UI after the first deployment, usually in the form of

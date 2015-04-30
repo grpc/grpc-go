@@ -13,25 +13,7 @@ buildscript {
     }
 }
 
-// When there is only one platform available, Gradle doesn't create a directory
-// for the sole platform. In order to keep the script simple, we intentionally
-// always build the 'local_arch' even though it's duplicate with one of the
-// targetArchs, so that we always have at least two platforms.
-def targetArchs = ['local_arch'] as HashSet
-
 def artifactStagingPath = "$buildDir/artifacts" as File
-def artifactPath = { arch ->
-  return "$artifactStagingPath/java_pluginExecutable/" + arch + "/${protocPluginBaseName}.exe"
-}
-
-
-if (System.env.TARGET_ARCHS != null) {
-  def archs = System.env.TARGET_ARCHS.split(' +')
-  targetArchs.addAll(archs)
-} else {
-  targetArchs.add(osdetector.arch)
-}
-
 // Adds space-delimited arguments from the environment variable env to the
 // argList.
 def addEnvArgs = { env, argList ->
@@ -53,55 +35,40 @@ def addLibraryIfNotLinked = { libName, argList ->
   }
 }
 
+def String arch = osdetector.arch
+if (System.getProperty('arch')) {
+  arch = System.getProperty('arch')
+}
+
 model {
   toolChains {
+    // If you have both VC and Gcc installed, VC will be selected, unless you
+    // use '-Dvc.disable'
+    if (System.getProperty('vc.disable') == null) {
+      visualCpp(VisualCpp) {
+      }
+    }
     gcc(Gcc) {
-      target("x86_64") {
-        cppCompiler.withArguments { args ->
-          args << "-m64"
-        }
-        linker.withArguments { args ->
-          args << "-m64"
-        }
-      }
-      target("x86_32") {
-        cppCompiler.withArguments { args ->
-          args << "-m32"
-        }
-        linker.withArguments { args ->
-          args << "-m32"
-        }
-      }
-      target('local_arch') { }
     }
     clang(Clang) {
-      target("x86_64") {
-        cppCompiler.withArguments { args ->
-          args << "-m64"
-        }
-        linker.withArguments { args ->
-          args << "-m64"
-        }
-      }
-      target('local_arch') { }
     }
   }
+
   platforms {
     x86_32 {
-      architecture "x86_32"
+      architecture "x86"
     }
     x86_64 {
       architecture "x86_64"
-    }
-    local_arch {
-      architecture 'local_arch'
     }
   }
 
   components {
     java_plugin(NativeExecutableSpec) {
-      targetArchs.each {
-        targetPlatform it
+      if (arch in ['x86_32', 'x86_64']) {
+        // If arch is not within the defined platforms, we do not specify the
+        // targetPlatform so that Gradle will choose what is appropriate.
+        targetPlatform arch
       }
       baseName "$protocPluginBaseName"
     }
@@ -134,20 +101,18 @@ binaries.all {
     addEnvArgs("LDFLAGS", linker.args)
   } else if (toolChain in VisualCpp) {
     cppCompiler.args "/EHsc", "/MD"
-    if (rootProject.hasProperty('protobuf.include')) {
-      cppCompiler.args "/I" + rootProject.properties['protobuf.include']
+    if (rootProject.hasProperty('vc.protobuf.include')) {
+      cppCompiler.args "/I" + rootProject.properties['vc.protobuf.include']
     }
     linker.args "libprotobuf.lib", "libprotoc.lib"
-    if (rootProject.hasProperty('protobuf.libs')) {
-      linker.args "/LIBPATH:" + rootProject.properties['protobuf.libs']
+    if (rootProject.hasProperty('vc.protobuf.libs')) {
+      linker.args "/LIBPATH:" + rootProject.properties['vc.protobuf.libs']
     }
   }
 }
 
 task buildArtifacts(type: Copy) {
-  targetArchs.each {
-    dependsOn it + 'Java_pluginExecutable'
-  }
+  dependsOn 'java_pluginExecutable'
   from("$buildDir/binaries") {
     if (osdetector.os != 'windows') {
       rename 'protoc-gen-grpc-java', '$0.exe'
@@ -159,13 +124,11 @@ task buildArtifacts(type: Copy) {
 archivesBaseName = "$protocPluginBaseName"
 
 artifacts {
-  for (arch in (targetArchs - 'local_arch')) {
-    archives(artifactPath(arch) as File) {
-      classifier osdetector.os + "-" + arch
-      type "exe"
-      extension "exe"
-      builtBy buildArtifacts
-    }
+  archives("$artifactStagingPath/java_pluginExecutable/${protocPluginBaseName}.exe" as File) {
+    classifier osdetector.os + "-" + arch
+    type "exe"
+    extension "exe"
+    builtBy buildArtifacts
   }
 }
 
@@ -181,21 +144,19 @@ artifacts {
 [
   uploadArchives.repositories.mavenDeployer,
 ]*.beforeDeployment {
-  for (arch in (targetArchs - 'local_arch')) {
-    def ret = exec {
-      executable 'bash'
-      args 'check-artifact.sh', osdetector.os, arch
-    }
-    if (ret.exitValue != 0) {
-      throw new GradleException("check-artifact.sh exited with " + ret.exitValue)
-    }
+  def ret = exec {
+    executable 'bash'
+    args 'check-artifact.sh', osdetector.os, arch
+  }
+  if (ret.exitValue != 0) {
+    throw new GradleException("check-artifact.sh exited with " + ret.exitValue)
   }
 }
 
 protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
 
 project.afterEvaluate {
-  generateTestProto.dependsOn 'local_archJava_pluginExecutable'
+  generateTestProto.dependsOn 'java_pluginExecutable'
 }
 
 // Ignore test for the moment on Windows. It will be easier to run once the
@@ -216,7 +177,7 @@ task testGolden(type: Exec, dependsOn: 'generateTestProto') {
        "$projectDir/src/test/golden/TestService.java.txt"
 }
 
-task testNanoGolden(type: Exec, dependsOn: 'local_archJava_pluginExecutable') {
+task testNanoGolden(type: Exec, dependsOn: 'java_pluginExecutable') {
   doFirst {
       temporaryDir.createNewFile();
   }
