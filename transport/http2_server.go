@@ -167,6 +167,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	t.mu.Lock()
 	if t.goaway {
 		//Stop creating streams on this transport
+		log.Printf("transport: http2server received GOAWAY, rejecting new streams")
 		t.mu.Unlock()
 		return nil
 	}
