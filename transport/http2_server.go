@@ -130,7 +130,6 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32) (_ ServerTransport, err er
 		shutdownChan:    make(chan struct{}),
 		activeStreams:   make(map[uint32]*Stream),
 		streamSendQuota: defaultWindowSize,
-		goaway:          false,
 	}
 	go t.controller()
 	t.writableChan <- 0
@@ -165,11 +164,12 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	if !endHeaders {
 		return s
 	}
+	t.mu.Lock()
 	if t.goaway {
 		//Stop creating streams on this transport
+		t.mu.Unlock()
 		return nil
 	}
-	t.mu.Lock()
 	if t.state != reachable {
 		t.mu.Unlock()
 		return nil
