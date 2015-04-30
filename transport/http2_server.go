@@ -146,10 +146,6 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 			hDec.state = decodeState{}
 		}
 	}()
-	if t.goaway {
-		//Stop creating streams on this transport
-		return nil
-	}
 	endHeaders, err := hDec.decodeServerHTTP2Headers(frame)
 	if s == nil {
 		// s has been closed.
@@ -168,6 +164,10 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	}
 	if !endHeaders {
 		return s
+	}
+	if t.goaway {
+		//Stop creating streams on this transport
+		return nil
 	}
 	t.mu.Lock()
 	if t.state != reachable {
@@ -413,13 +413,6 @@ func (t *http2Server) handleGoAway(f *http2.GoAwayFrame) {
 	t.mu.Lock()
 	t.goaway = true
 	t.mu.Unlock()
-	for id, _ := range t.activeStreams {
-		if id > f.LastStreamID {
-			if s, ok := t.activeStreams[f.LastStreamID]; ok {
-				t.closeStream(s)
-			}
-		}
-	}
 }
 
 func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) error {
