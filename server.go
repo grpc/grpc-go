@@ -101,7 +101,7 @@ func Handshaker(f func(net.Conn) error) ServerOption {
 	}
 }
 
-// CustomeCodec returns a ServerOption that sets a codec for message marshaling and unmarshaling.
+// CustomCodec returns a ServerOption that sets a codec for message marshaling and unmarshaling.
 func CustomCodec(codec Codec) ServerOption {
 	return func(o *options) {
 		o.codec = codec
