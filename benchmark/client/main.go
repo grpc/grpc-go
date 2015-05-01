@@ -3,7 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"math"
+	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"sync"
 	"time"
 
@@ -72,5 +76,15 @@ func closeLoop() {
 
 func main() {
 	flag.Parse()
+	go func() {
+		lis, err := net.Listen("tcp", ":0")
+		if err != nil {
+			log.Fatalf("Failed to listen: %v", err)
+		}
+		log.Println("Client profiling address: ", lis.Addr().String())
+		if err := http.Serve(lis, nil); err != nil {
+			log.Fatalf("Failed to serve: %v", err)
+		}
+	}()
 	closeLoop()
 }
