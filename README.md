@@ -4,6 +4,7 @@ grpc-java
 How to Build
 ------------
 
+### Build Netty
 grpc-java requires Netty 4.1, which is still in flux. The version we need can be
 found in the lib/netty submodule, which requires Maven 3.2 or higher to build:
 ```
@@ -12,7 +13,10 @@ $ cd lib/netty
 $ mvn install -pl codec-http2 -am -DskipTests=true
 ```
 
-The codegen plugin requires protobuf 3.0.0-alpha-2:
+### Build Protobuf
+The codegen plugin requires protobuf 3.0.0-alpha-2.
+
+For Linux, Mac and MinGW:
 ```
 $ git clone https://github.com/google/protobuf.git
 $ cd protobuf
@@ -25,18 +29,32 @@ $ sudo make install
 ```
 
 If you are comfortable with C++ compilation and autotools, you can specify a
---prefix for protobuf and use -I in CXXFLAGS, -L in LDFLAGS, LD\_LIBRARY\_PATH,
-and PATH to reference it. The environment variables will be used when building
-grpc-java.
+``--prefix`` for Protobuf and use ``-I`` in ``CXXFLAGS``, ``-L`` in
+``LDFLAGS``, ``LD_LIBRARY_PATH``, and ``PATH`` to reference it. The
+environment variables will be used when building grpc-java.
 
-Protobuf installs to /usr/local by default.
-If /usr/local/lib is not in your library search path, you can add it by running:
+Protobuf installs to ``/usr/local`` by default.
+
+For Visual C++, please refer to the [Protobuf README](https://github.com/google/protobuf/blob/master/vsprojects/readme.txt)
+for how to compile Protobuf.
+
+#### Linux and MinGW
+If ``/usr/local/lib`` is not in your library search path, you can add it by running:
 ```
 $ sudo sh -c 'echo /usr/local/lib >> /etc/ld.so.conf'
 $ sudo ldconfig
 ```
 
-Now to build grpc-java itself:
+#### Mac
+Some versions of Mac OS X (e.g., 10.10) doesn't have ``/usr/local`` in the
+default search paths for header files and libraries. You will need to set
+environment variables:
+```
+$ export CXXFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/lib"
+```
+
+### Build GRPC
+On Linux, Mac or MinGW:
 ```
 $ ./gradlew install
 ```
@@ -49,7 +67,7 @@ Gradle to find protobuf:
 ```
 
 Since specifying those properties every build is bothersome, you can instead
-create %HOMEDRIVE%%HOMEPATH%\.gradle\gradle.properties with contents like:
+create ``%HOMEDRIVE%%HOMEPATH%\.gradle\gradle.properties`` with contents like:
 ```
 protobuf.include=C:\\path\\to\\protobuf-3.0.0-alpha-2\\src
 protobuf.libs=C:\\path\\to\\protobuf-3.0.0-alpha-2\\vsprojects\\Release
