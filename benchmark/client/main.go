@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"math"
 	"net"
@@ -71,7 +70,7 @@ func closeLoop() {
 	close(ch)
 	wg.Wait()
 	conn.Close()
-	fmt.Println(s.String())
+	log.Println(s.String())
 }
 
 func main() {
