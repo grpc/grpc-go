@@ -130,6 +130,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
 
     // Initialize the connection window if we haven't already.
     initConnectionWindow();
+    ctx.flush();
   }
 
   /**

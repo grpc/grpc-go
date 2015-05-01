@@ -35,6 +35,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -49,6 +50,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -180,6 +184,26 @@ public class MessageDeframerTest {
     deframer.deframe(buffer(Bytes.concat(header, payload)), false);
     verify(listener).messageRead(messages.capture());
     assertEquals(Bytes.asList(new byte[1000]), bytes(messages));
+    verify(listener, atLeastOnce()).bytesRead(anyInt());
+    verifyNoMoreInteractions(listener);
+  }
+
+  @Test
+  public void deliverIsReentrantSafe() {
+    doAnswer(new Answer() {
+      @Override
+      public Object answer(InvocationOnMock invocation) throws Throwable {
+        deframer.request(1);
+        return null;
+      }
+    }).when(listener).messageRead(Matchers.<InputStream>any());
+    deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3}), true);
+    verifyNoMoreInteractions(listener);
+
+    deframer.request(1);
+    verify(listener).messageRead(messages.capture());
+    assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
+    verify(listener).endOfStream();
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
   }

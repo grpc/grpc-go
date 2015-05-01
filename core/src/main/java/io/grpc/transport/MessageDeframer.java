@@ -103,6 +103,7 @@ public class MessageDeframer implements Closeable {
   private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
   private long pendingDeliveries;
   private boolean deliveryStalled = true;
+  private boolean inDelivery = false;
 
   /**
    * Creates a deframer. Compression will not be supported.
@@ -216,49 +217,59 @@ public class MessageDeframer implements Closeable {
    * Reads and delivers as many messages to the sink as possible.
    */
   private void deliver() {
-    // Process the uncompressed bytes.
-    boolean stalled = false;
-    while (pendingDeliveries > 0 && readRequiredBytes()) {
-      switch (state) {
-        case HEADER:
-          processHeader();
-          break;
-        case BODY:
-          // Read the body and deliver the message.
-          processBody();
-
-          // Since we've delivered a message, decrement the number of pending
-          // deliveries remaining.
-          pendingDeliveries--;
-          break;
-        default:
-          throw new AssertionError("Invalid state: " + state);
-      }
+    // We can have reentrancy here when using a direct executor, triggered by calls to
+    // request more messages. This is safe as we simply loop until pendingDelivers = 0
+    if (inDelivery) {
+      return;
     }
-    // We are stalled when there are no more bytes to process. This allows delivering errors as soon
-    // as the buffered input has been consumed, independent of whether the application has requested
-    // another message.
-    stalled = !isDataAvailable();
+    inDelivery = true;
+    try {
+      // Process the uncompressed bytes.
+      boolean stalled = false;
+      while (pendingDeliveries > 0 && readRequiredBytes()) {
+        switch (state) {
+          case HEADER:
+            processHeader();
+            break;
+          case BODY:
+            // Read the body and deliver the message.
+            processBody();
 
-    if (endOfStream) {
-      if (!isDataAvailable()) {
-        listener.endOfStream();
-      } else if (stalled) {
-        // We've received the entire stream and have data available but we don't have
-        // enough to read the next frame ... this is bad.
-        throw Status.INTERNAL.withDescription("Encountered end-of-stream mid-frame")
-            .asRuntimeException();
+            // Since we've delivered a message, decrement the number of pending
+            // deliveries remaining.
+            pendingDeliveries--;
+            break;
+          default:
+            throw new AssertionError("Invalid state: " + state);
+        }
       }
-    }
+      // We are stalled when there are no more bytes to process. This allows delivering errors as
+      // soon as the buffered input has been consumed, independent of whether the application
+      // has requested another message.
+      stalled = !isDataAvailable();
 
-    // Never indicate that we're stalled if we've received all the data for the stream.
-    stalled &= !endOfStream;
+      if (endOfStream) {
+        if (!isDataAvailable()) {
+          listener.endOfStream();
+        } else if (stalled) {
+          // We've received the entire stream and have data available but we don't have
+          // enough to read the next frame ... this is bad.
+          throw Status.INTERNAL.withDescription("Encountered end-of-stream mid-frame")
+              .asRuntimeException();
+        }
+      }
 
-    // If we're transitioning to the stalled state, notify the listener.
-    boolean previouslyStalled = deliveryStalled;
-    deliveryStalled = stalled;
-    if (stalled && !previouslyStalled) {
-      listener.deliveryStalled();
+      // Never indicate that we're stalled if we've received all the data for the stream.
+      stalled &= !endOfStream;
+
+      // If we're transitioning to the stalled state, notify the listener.
+      boolean previouslyStalled = deliveryStalled;
+      deliveryStalled = stalled;
+      if (stalled && !previouslyStalled) {
+        listener.deliveryStalled();
+      }
+    } finally {
+      inDelivery = false;
     }
   }
 

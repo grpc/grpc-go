@@ -190,7 +190,6 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
     ByteBuf expected = rstStreamFrame(3, (int) Http2Error.CANCEL.code());
     verify(ctx).write(eq(expected), eq(promise));
-    verify(ctx).flush();
   }
 
   @Test
@@ -221,7 +220,6 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
     ByteBuf expected = rstStreamFrame(3, (int) Http2Error.CANCEL.code());
     verify(ctx).write(eq(expected), eq(promise));
-    verify(ctx).flush();
 
     promise = mock(ChannelPromise.class);
     handler.write(ctx, new CancelStreamCommand(stream), promise);
@@ -235,7 +233,6 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     handler.write(ctx, new SendGrpcFrameCommand(stream, content, true), promise);
     verify(promise, never()).setFailure(any(Throwable.class));
     ByteBuf bufWritten = captureWrite(ctx);
-    verify(ctx).flush();
     int startIndex = bufWritten.readerIndex() + Http2CodecUtil.FRAME_HEADER_LENGTH;
     int length = bufWritten.writerIndex() - startIndex;
     ByteBuf writtenContent = bufWritten.slice(startIndex, length);

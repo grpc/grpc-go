@@ -105,5 +105,7 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   @Override
   protected void returnProcessedBytes(int processedBytes) {
     handler.returnProcessedBytes(http2Stream, processedBytes);
+    // Need to flush as window update may have been written
+    channel.flush();
   }
 }
