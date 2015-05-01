@@ -85,6 +85,7 @@ type Server struct {
 }
 
 type options struct {
+	handshaker           func(net.Conn) error
 	codec                Codec
 	maxConcurrentStreams uint32
 }
@@ -92,13 +93,22 @@ type options struct {
 // A ServerOption sets options.
 type ServerOption func(*options)
 
+// Handshaker returns a ServerOption that specifies a function to perform user-specified
+// handshaking on the connection before it becomes usable for gRPC.
+func Handshaker(f func(net.Conn) error) ServerOption {
+	return func(o *options) {
+		o.handshaker = f
+	}
+}
+
+// CustomCodec returns a ServerOption that sets a codec for message marshaling and unmarshaling.
 func CustomCodec(codec Codec) ServerOption {
 	return func(o *options) {
 		o.codec = codec
 	}
 }
 
-// MaxConcurrentStreams returns an Option that will apply a limit on the number
+// MaxConcurrentStreams returns a ServerOption that will apply a limit on the number
 // of concurrent streams to each ServerTransport.
 func MaxConcurrentStreams(n uint32) ServerOption {
 	return func(o *options) {
@@ -185,7 +195,14 @@ func (s *Server) Serve(lis net.Listener) error {
 		if err != nil {
 			return err
 		}
-
+		// Perform handshaking if it is required.
+		if s.opts.handshaker != nil {
+			if err := s.opts.handshaker(c); err != nil {
+				log.Println("grpc: Server.Serve failed to complete handshake.")
+				c.Close()
+				continue
+			}
+		}
 		s.mu.Lock()
 		if s.conns == nil {
 			s.mu.Unlock()
