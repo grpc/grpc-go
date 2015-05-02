@@ -90,8 +90,8 @@ type TransportAuthenticator interface {
 	// NewListener creates a listener which accepts connections with requested
 	// authentication handshake.
 	NewListener(lis net.Listener) net.Listener
-	// ProtocolInfo provides the ProtocolInfo of this TransportAuthenticator.
-	ProtocolInfo() ProtocolInfo
+	// Info provides the ProtocolInfo of this TransportAuthenticator.
+	Info() ProtocolInfo
 	Credentials
 }
 
@@ -101,7 +101,7 @@ type tlsCreds struct {
 	config tls.Config
 }
 
-func (c *tlsCreds) ProtocolInfo() ProtocolInfo {
+func (c *tlsCreds) Info() ProtocolInfo {
 	return ProtocolInfo{
 		SecurityProtocol: "tls",
 		SecurityVersion:  "1.2",
