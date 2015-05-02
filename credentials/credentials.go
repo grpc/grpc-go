@@ -70,6 +70,17 @@ type Credentials interface {
 	GetRequestMetadata(ctx context.Context) (map[string]string, error)
 }
 
+// ProtocolInfo provides information regarding the gRPC wire protocol version,
+// security protocol, security protocol version in use, etc.
+type ProtocolInfo struct {
+	// ProtocolVersion is the gRPC wire protocol version.
+	ProtocolVersion string
+	// SecurityProtocol is the security protocol in use.
+	SecurityProtocol string
+	// SecurityVersion is the security protocol version.
+	SecurityVersion string
+}
+
 // TransportAuthenticator defines the common interface for all the live gRPC wire
 // protocols and supported transport security protocols (e.g., TLS, SSL).
 type TransportAuthenticator interface {
@@ -79,6 +90,8 @@ type TransportAuthenticator interface {
 	// NewListener creates a listener which accepts connections with requested
 	// authentication handshake.
 	NewListener(lis net.Listener) net.Listener
+	// ProtocolInfo provides the ProtocolInfo of this TransportAuthenticator.
+	ProtocolInfo() ProtocolInfo
 	Credentials
 }
 
@@ -86,6 +99,13 @@ type TransportAuthenticator interface {
 type tlsCreds struct {
 	// TLS configuration
 	config tls.Config
+}
+
+func (c *tlsCreds) ProtocolInfo() ProtocolInfo {
+	return ProtocolInfo{
+		SecurityProtocol: "tls",
+		SecurityVersion:  "1.2",
+	}
 }
 
 // GetRequestMetadata returns nil, nil since TLS credentials does not have
