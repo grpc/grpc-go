@@ -572,6 +572,63 @@ public abstract class AbstractTransportTest {
     return 10485760;
   }
 
+  @org.junit.Ignore
+  @Test(timeout = 10000)
+  public void gracefulShutdown() throws Exception {
+    final List<StreamingOutputCallRequest> requests = Arrays.asList(
+        StreamingOutputCallRequest.newBuilder()
+            .addResponseParameters(ResponseParameters.newBuilder()
+                .setSize(3))
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[2])))
+            .build(),
+        StreamingOutputCallRequest.newBuilder()
+            .addResponseParameters(ResponseParameters.newBuilder()
+                .setSize(1))
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[7])))
+            .build(),
+        StreamingOutputCallRequest.newBuilder()
+            .addResponseParameters(ResponseParameters.newBuilder()
+                .setSize(4))
+            .setPayload(Payload.newBuilder()
+                .setBody(ByteString.copyFrom(new byte[1])))
+            .build());
+    final List<StreamingOutputCallResponse> goldenResponses = Arrays.asList(
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[3])))
+            .build(),
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[1])))
+            .build(),
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+                .setType(PayloadType.COMPRESSABLE)
+                .setBody(ByteString.copyFrom(new byte[4])))
+            .build());
+
+    @SuppressWarnings("unchecked")
+    StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
+    StreamObserver<StreamingOutputCallRequest> requestObserver
+        = asyncStub.fullDuplexCall(responseObserver);
+    requestObserver.onValue(requests.get(0));
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onValue(goldenResponses.get(0));
+    // Initiate graceful shutdown.
+    channel.shutdown();
+    requestObserver.onValue(requests.get(1));
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onValue(goldenResponses.get(1));
+    // The previous ping-pong could have raced with the shutdown, but this one certainly shouldn't.
+    requestObserver.onValue(requests.get(2));
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onValue(goldenResponses.get(2));
+    requestObserver.onCompleted();
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onCompleted();
+    verifyNoMoreInteractions(responseObserver);
+  }
+
   protected static void assertSuccess(StreamRecorder<?> recorder) {
     if (recorder.getError() != null) {
       throw new AssertionError(recorder.getError());

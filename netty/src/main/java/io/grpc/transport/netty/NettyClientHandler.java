@@ -94,12 +94,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
     nextStreamId = connection.local().nextStreamId();
     connection.addListener(new Http2ConnectionAdapter() {
       @Override
-      public void onGoAwaySent(int lastStreamId, long errorCode, ByteBuf debugData) {
-        goAwayStatus(statusFromGoAway(errorCode, debugData));
-        goingAway();
-      }
-
-      @Override
       public void onGoAwayReceived(int lastStreamId, long errorCode, ByteBuf debugData) {
         goAwayStatus(statusFromGoAway(errorCode, debugData));
         goingAway();
