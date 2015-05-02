@@ -70,8 +70,8 @@ type Credentials interface {
 	GetRequestMetadata(ctx context.Context) (map[string]string, error)
 }
 
-// TransportAuthenticator defines the common interface all supported transport
-// authentication protocols (e.g., TLS, SSL) must implement.
+// TransportAuthenticator defines the common interface for all the live gRPC wire
+// protocol and supported transport security protocols (e.g., TLS, SSL).
 type TransportAuthenticator interface {
 	// Handshake does the authentication handshake specified by the corresponding
 	// authentication protocol on rawConn.
