@@ -1,5 +1,5 @@
 apply plugin: 'com.google.protobuf'
-apply plugin:'application'
+apply plugin: 'application'
 
 description = "gRPC: Integration Testing"
 startScripts.enabled = false
@@ -41,17 +41,26 @@ test {
     }
 }
 
-// Allow execution of test client and server.
-task execute(dependsOn: classes, type:JavaExec) {
-    main = project.hasProperty('mainClass') ? project.mainClass : ''
-    classpath = sourceSets.main.runtimeClasspath
-    jvmArgs = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
-    workingDir = project.rootDir
+task test_client(type: CreateStartScripts) {
+    mainClassName = "io.grpc.testing.integration.TestServiceClient"
+    applicationName = "test-client"
+    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
 
-    // If appArgs were provided, set the program arguments.
-    if (project.hasProperty("appArgs")) {  
-        args = Eval.me(appArgs)  
-    } 
+task test_server(type: CreateStartScripts) {
+    mainClassName = "io.grpc.testing.integration.TestServiceServer"
+    applicationName = "test-server"
+    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
+
+applicationDistribution.into("bin") {
+    from(test_client)
+    from(test_server)
+    fileMode = 0755
 }
 
 protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
