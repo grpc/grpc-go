@@ -111,6 +111,17 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)
 	}
+	// Perform handshake if opts.Handshaker is set.
+	if opts.Handshaker != nil {
+		auth, err := opts.Handshaker(conn)
+		if err != nil {
+			return nil, ConnectionErrorf("transport: handshaking failed %v", err)
+		}
+		// Prepend the resulting authenticator to opts.AuthOptions.
+		if auth != nil {
+			opts.AuthOptions = append([]credentials.Credentials{auth}, opts.AuthOptions...)
+		}
+	}
 	for _, c := range opts.AuthOptions {
 		if ccreds, ok := c.(credentials.TransportAuthenticator); ok {
 			scheme = "https"

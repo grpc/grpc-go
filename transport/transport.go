@@ -316,6 +316,7 @@ func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32) (Serv
 // ConnectOptions covers all relevant options for dialing a server.
 type ConnectOptions struct {
 	Dialer      func(string, time.Duration) (net.Conn, error)
+	Handshaker  func(conn net.Conn) (credentials.TransportAuthenticator, error)
 	AuthOptions []credentials.Credentials
 	Timeout     time.Duration
 }

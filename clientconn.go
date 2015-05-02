@@ -104,6 +104,15 @@ func WithDialer(f func(addr string, timeout time.Duration) (net.Conn, error)) Di
 	}
 }
 
+// WithHandshaker returns a DialOption that specifies a function to perform some handshaking
+// with the server. It is typically used to negotiate the wire protocol version and security
+// protocol with the server.
+func WithHandshaker(h func(conn net.Conn) (credentials.TransportAuthenticator, error)) DialOption {
+	return func(o *dialOptions) {
+		o.copts.Handshaker = h
+	}
+}
+
 // Dial creates a client connection the given target.
 // TODO(zhaoq): Have an option to make Dial return immediately without waiting
 // for connection to complete.
