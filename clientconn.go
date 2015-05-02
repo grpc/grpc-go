@@ -104,6 +104,12 @@ func WithDialer(f func(addr string, timeout time.Duration) (net.Conn, error)) Di
 	}
 }
 
+func WithHandshaker(h func(conn net.Conn) (credentials.TransportAuthenticator, error)) DialOption {
+	return func(o *dialOptions) {
+		o.copts.Handshaker = h
+	}
+}
+
 // Dial creates a client connection the given target.
 // TODO(zhaoq): Have an option to make Dial return immediately without waiting
 // for connection to complete.
