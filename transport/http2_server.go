@@ -84,8 +84,6 @@ type http2Server struct {
 	activeStreams map[uint32]*Stream
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
-	// set to true when server receives GOAWAY frame
-	goaway bool
 }
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
@@ -165,12 +163,6 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 		return s
 	}
 	t.mu.Lock()
-	if t.goaway {
-		//Stop creating streams on this transport
-		log.Printf("transport: http2server received GOAWAY, rejecting new streams")
-		t.mu.Unlock()
-		return nil
-	}
 	if t.state != reachable {
 		t.mu.Unlock()
 		return nil
@@ -290,7 +282,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		case *http2.GoAwayFrame:
-			t.handleGoAway(frame)
+			break
 		default:
 			log.Printf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
 		}
@@ -408,12 +400,6 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 	if s, ok := t.getStream(f); ok {
 		s.sendQuotaPool.add(int(incr))
 	}
-}
-
-func (t *http2Server) handleGoAway(f *http2.GoAwayFrame) {
-	t.mu.Lock()
-	t.goaway = true
-	t.mu.Unlock()
 }
 
 func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) error {
