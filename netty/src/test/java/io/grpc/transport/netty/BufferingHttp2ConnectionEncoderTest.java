@@ -186,7 +186,7 @@ public class BufferingHttp2ConnectionEncoderTest {
   }
 
   @Test
-  public void sendingGoAwayCompletesBufferedStreams() {
+  public void sendingGoAwayShouldNotFailStreams() {
     connection.local().maxActiveStreams(1);
 
     encoderWriteHeaders(3, promise);
@@ -197,8 +197,7 @@ public class BufferingHttp2ConnectionEncoderTest {
     encoder.writeGoAway(ctx, 3, CANCEL.code(), empty, promise);
 
     assertEquals(1, connection.numActiveStreams());
-    // The 2 buffered streams should be completed.
-    verify(promise, times(2)).setFailure(any(GoAwayClosedStreamException.class));
+    verify(promise, never()).setFailure(any(GoAwayClosedStreamException.class));
   }
 
   @Test

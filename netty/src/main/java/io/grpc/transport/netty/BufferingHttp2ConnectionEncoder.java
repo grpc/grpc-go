@@ -81,11 +81,6 @@ class BufferingHttp2ConnectionEncoder extends DecoratingHttp2ConnectionEncoder {
     connection().addListener(new Http2ConnectionAdapter() {
 
       @Override
-      public void onGoAwaySent(int lastStreamId, long errorCode, ByteBuf debugData) {
-        cancelGoAwayStreams(lastStreamId, errorCode, debugData);
-      }
-
-      @Override
       public void onGoAwayReceived(int lastStreamId, long errorCode, ByteBuf debugData) {
         cancelGoAwayStreams(lastStreamId, errorCode, debugData);
       }
