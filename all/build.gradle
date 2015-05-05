@@ -41,3 +41,18 @@ javadoc {
         options.links subproject.javadoc.options.links.toArray(new String[0])
     }
 }
+
+task jacocoMerge(type: JacocoMerge) {
+    destinationFile = file("${buildDir}/jacoco/test.exec")
+    executionData = files(rootProject.subprojects.jacocoTestReport.executionData)
+        .minus(files("${buildDir}/jacoco/test.exec"))
+        .filter { f -> f.exists() }
+}
+
+jacocoTestReport {
+    dependsOn(jacocoMerge)
+
+    additionalSourceDirs = files(rootProject.subprojects.sourceSets.main.allSource.srcDirs)
+    sourceDirectories = files(rootProject.subprojects.sourceSets.main.allSource.srcDirs)
+    classDirectories = files(rootProject.subprojects.sourceSets.main.output)
+}

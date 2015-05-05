@@ -15,6 +15,7 @@ subprojects {
     apply plugin: "idea"
     apply plugin: "osdetector"
     apply plugin: "signing"
+    apply plugin: "jacoco"
 
     group = "io.grpc"
     version = "0.1.0-SNAPSHOT"
