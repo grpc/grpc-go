@@ -186,12 +186,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
     stream.transportReportStatus(Status.UNKNOWN, false, new Metadata.Trailers());
   }
 
-  @Override
-  public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
-    goAwayStatus(Status.UNAVAILABLE.withDescription("Network channel closed by the client"));
-    super.close(ctx, promise);
-  }
-
   /**
    * Handler for the Channel shutting down.
    */
