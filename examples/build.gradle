@@ -1,5 +1,4 @@
 apply plugin: 'application'
-apply plugin: 'com.google.protobuf'
 
 description = "grpc Examples"
 
@@ -22,11 +21,7 @@ dependencies {
             libraries.jsonp
 }
 
-protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
-
-project.afterEvaluate {
-  generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
-}
+configureProtoCompilation()
 
 task routeGuideServer(type: JavaExec) {
     main = "io.grpc.examples.routeguide.RouteGuideServer"

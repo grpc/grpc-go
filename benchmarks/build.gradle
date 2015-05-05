@@ -1,6 +1,4 @@
 apply plugin: 'application'
-apply plugin: 'com.google.protobuf'
-
 
 description = "grpc Benchmarks"
 
@@ -46,7 +44,7 @@ dependencies {
     alpnboot alpnboot_package_name
 }
 
-
+configureProtoCompilation()
 
 task qps_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.benchmarks.qps.AsyncClient"
@@ -77,12 +75,6 @@ applicationDistribution.into("bin") {
     from(openloop_client)
     from(qps_server)
     fileMode = 0755
-}
-
-protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
-
-project.afterEvaluate {
-  generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
 }
 
 // Allow intellij projects to refer to generated-sources

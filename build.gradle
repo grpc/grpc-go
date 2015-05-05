@@ -39,6 +39,28 @@ subprojects {
     }
 
     ext {
+        configureProtoCompilation = {
+          if (rootProject.childProjects.containsKey('grpc-compiler')) {
+            // Only when the codegen is built along with the project, will we be able to recompile
+            // the proto files.
+            project.apply plugin: 'com.google.protobuf'
+            project.protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
+            project.generatedFileDir = "${projectDir}/src/generated"
+            project.afterEvaluate {
+              generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
+            }
+          } else {
+            // Otherwise, we just use the checked-in generated code.
+            project.sourceSets {
+              main {
+                java {
+                  srcDir 'src/generated/main'
+                }
+              }
+            }
+          }
+        }
+
         libraries = [
                 guava: 'com.google.guava:guava:18.0',
                 // used to collect benchmark results

@@ -14,7 +14,13 @@ $ mvn install -pl codec-http2 -am -DskipTests=true
 ```
 
 ### Build Protobuf
-The codegen plugin requires protobuf 3.0.0-alpha-2.
+The codegen plugin is C++ code and requires protobuf 3.0.0-alpha-2.
+
+If you are not changing the codegen plugin, nor any of the ``.proto`` files in
+the source tree, you can skip this chapter and add ``grpc.skip.codegen=true``
+to ``$HOME/.gradle/gradle.properties``.  It will make the build script skip the
+build and invocation of the codegen, and use generated code that has been
+checked in.
 
 For Linux, Mac and MinGW:
 ```
@@ -47,8 +53,8 @@ $ sudo ldconfig
 
 #### Mac
 Some versions of Mac OS X (e.g., 10.10) doesn't have ``/usr/local`` in the
-default search paths for header files and libraries. You will need to set
-environment variables:
+default search paths for header files and libraries. It will fail the build of
+the codegen. To work around this, you will need to set environment variables:
 ```
 $ export CXXFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/lib"
 ```

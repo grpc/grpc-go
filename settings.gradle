@@ -7,7 +7,6 @@ include ":grpc-protobuf"
 include ":grpc-protobuf-nano"
 include ":grpc-netty"
 include ":grpc-testing"
-include ":grpc-compiler"
 include ":grpc-integration-testing"
 include ":grpc-all"
 include ":grpc-benchmarks"
@@ -21,8 +20,15 @@ project(':grpc-protobuf').projectDir = "$rootDir/protobuf" as File
 project(':grpc-protobuf-nano').projectDir = "$rootDir/protobuf-nano" as File
 project(':grpc-netty').projectDir = "$rootDir/netty" as File
 project(':grpc-testing').projectDir = "$rootDir/testing" as File
-project(':grpc-compiler').projectDir = "$rootDir/compiler" as File
 project(':grpc-integration-testing').projectDir = "$rootDir/integration-testing" as File
 project(':grpc-all').projectDir = "$rootDir/all" as File
 project(':grpc-benchmarks').projectDir = "$rootDir/benchmarks" as File
 project(':grpc-examples').projectDir = "$rootDir/examples" as File
+
+if (settings.hasProperty('grpc.skip.codegen')
+    && settings.getProperty('grpc.skip.codegen').toBoolean()) {
+  println '*** Skipping the build of codegen and compilation of proto files because grpc.skip.codegen=true'
+} else {
+  include ":grpc-compiler"
+  project(':grpc-compiler').projectDir = "$rootDir/compiler" as File
+}
