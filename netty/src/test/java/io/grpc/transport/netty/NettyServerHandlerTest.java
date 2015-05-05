@@ -267,7 +267,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     assertEquals(expected, actual);
 
     // Verify that the context was closed.
-    verify(ctx).close();
+    verify(ctx).close(promise);
   }
 
   @Test

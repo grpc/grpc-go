@@ -167,6 +167,16 @@ public abstract class NettyHandlerTestBase {
         return null;
       }
     }).when(eventLoop).execute(any(Runnable.class));
+
+    // Make all writes complete immediately.
+    doAnswer(new Answer<ChannelFuture>() {
+      @Override
+      public ChannelFuture answer(InvocationOnMock in) throws Throwable {
+        ChannelPromise promise = (ChannelPromise) in.getArguments()[1];
+        promise.setSuccess();
+        return promise;
+      }
+    }).when(ctx).write(any(), any(ChannelPromise.class));
   }
 
   protected final void mockFuture(boolean succeeded) {
