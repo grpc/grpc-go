@@ -87,7 +87,7 @@ class BufferingHttp2ConnectionEncoder extends DecoratingHttp2ConnectionEncoder {
 
       @Override
       public void onStreamClosed(Http2Stream stream) {
-        createNextPendingStream();
+        tryCreatePendingStreams();
       }
     });
   }
@@ -178,18 +178,11 @@ class BufferingHttp2ConnectionEncoder extends DecoratingHttp2ConnectionEncoder {
 
   private void tryCreatePendingStreams() {
     while (!pendingStreams.isEmpty() && connection().local().canCreateStream()) {
-      createNextPendingStream();
+      Map.Entry<Integer, PendingStream> entry = pendingStreams.pollFirstEntry();
+      PendingStream pendingStream = entry.getValue();
+      pendingStream.sendFrames();
+      largestCreatedStreamId = pendingStream.streamId;
     }
-  }
-
-  private void createNextPendingStream() {
-    Map.Entry<Integer, PendingStream> entry = pendingStreams.pollFirstEntry();
-    if (entry == null) {
-      return;
-    }
-    PendingStream pendingStream = entry.getValue();
-    pendingStream.sendFrames();
-    largestCreatedStreamId = pendingStream.streamId;
   }
 
   private void cancelPendingStreams() {

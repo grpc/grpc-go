@@ -144,6 +144,28 @@ public class BufferingHttp2ConnectionEncoderTest {
   }
 
   @Test
+  public void ensureCanCreateNextStreamWhenStreamCloses() {
+    connection.local().maxActiveStreams(1);
+
+    encoderWriteHeaders(3, promise);
+    // This one gets buffered.
+    encoderWriteHeaders(5, promise);
+    assertEquals(1, connection.numActiveStreams());
+
+    // Now prevent us from creating another stream.
+    connection.local().maxActiveStreams(0);
+
+    // Close the previous stream.
+    connection.stream(3).close();
+
+    // Ensure that no streams are currently active and that only the HEADERS from the first
+    // stream were written.
+    writeVerifyWriteHeaders(times(1), 3, promise);
+    writeVerifyWriteHeaders(never(), 5, promise);
+    assertEquals(0, connection.numActiveStreams());
+  }
+
+  @Test
   public void alternatingWritesToActiveAndBufferedStreams() {
     connection.local().maxActiveStreams(1);
 
