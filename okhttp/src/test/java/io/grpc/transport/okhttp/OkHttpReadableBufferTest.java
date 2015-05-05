@@ -49,6 +49,7 @@ public class OkHttpReadableBufferTest extends ReadableBufferTestBase {
 
   private OkHttpReadableBuffer buffer;
 
+  /** Initialize buffer. */
   @SuppressWarnings("resource")
   @Before
   public void setup() {
