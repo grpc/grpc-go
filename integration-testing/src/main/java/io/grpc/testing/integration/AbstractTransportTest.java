@@ -572,7 +572,6 @@ public abstract class AbstractTransportTest {
     return 10485760;
   }
 
-  @org.junit.Ignore
   @Test(timeout = 10000)
   public void gracefulShutdown() throws Exception {
     final List<StreamingOutputCallRequest> requests = Arrays.asList(

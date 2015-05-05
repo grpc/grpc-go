@@ -294,7 +294,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
    */
   private void goingAway() {
     final Status goAwayStatus = goAwayStatus();
-    final int lastKnownStream = connection().local().lastKnownStream();
+    final int lastKnownStream = connection().local().lastStreamKnownByPeer();
     try {
       connection().forEachActiveStream(new Http2StreamVisitor() {
         @Override
