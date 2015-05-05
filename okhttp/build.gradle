@@ -15,3 +15,6 @@ dependencies {
 animalsniffer {
     signature = "org.codehaus.mojo.signature:java16:+@signature"
 }
+
+javadoc.exclude 'com/squareup/**'
+javadoc.options.links 'http://square.github.io/okhttp/javadoc/'

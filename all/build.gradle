@@ -3,6 +3,13 @@ description = "gRPC: All"
 // Make sure that no transitive dependencies are included.
 configurations.compile.transitive = false
 
+for (subproject in rootProject.subprojects) {
+    if (subproject == project) {
+        continue
+    }
+    evaluationDependsOn(subproject.path)
+}
+
 dependencies {
     compile project(':grpc-auth'),
             project(':grpc-core'),
@@ -22,3 +29,15 @@ jar {
     }
 }
 
+javadoc {
+    classpath = files(rootProject.subprojects.collect { subproject ->
+        subproject.javadoc.classpath
+    })
+    for (subproject in rootProject.subprojects) {
+        if (subproject == project) {
+            continue;
+        }
+        source subproject.javadoc.source
+        options.links subproject.javadoc.options.links.toArray(new String[0])
+    }
+}

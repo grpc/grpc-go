@@ -7,3 +7,5 @@ dependencies {
     // Tests depend on base class defined by core module.
     testCompile project(':grpc-core').sourceSets.test.output
 }
+
+javadoc.options.links 'https://netty.io/4.1/api/'
