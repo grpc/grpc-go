@@ -35,6 +35,8 @@ import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
 
+import com.sun.istack.internal.logging.Logger;
+
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.transport.HttpUtil;
@@ -63,6 +65,7 @@ import javax.annotation.Nullable;
  * the context of the Netty Channel thread.
  */
 class NettyClientHandler extends Http2ConnectionHandler {
+  private static final Logger logger = Logger.getLogger(NettyClientHandler.class);
 
   private final Http2Connection.PropertyKey streamKey;
   private int connectionWindowSize;
@@ -186,12 +189,19 @@ class NettyClientHandler extends Http2ConnectionHandler {
     stream.transportReportStatus(Status.UNKNOWN, false, new Metadata.Trailers());
   }
 
+  @Override
+  public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
+    logger.fine("Network channel being closed by the application.");
+    super.close(ctx, promise);
+  }
+
   /**
    * Handler for the Channel shutting down.
    */
   @Override
   public void channelInactive(ChannelHandlerContext ctx) throws Exception {
     try {
+      logger.fine("Network channel is closed");
       goAwayStatus(goAwayStatus().augmentDescription("Network channel closed"));
       // Report status to the application layer for any open streams
       connection().forEachActiveStream(new Http2StreamVisitor() {
@@ -210,6 +220,8 @@ class NettyClientHandler extends Http2ConnectionHandler {
   @Override
   protected void onConnectionError(ChannelHandlerContext ctx, Throwable cause,
       Http2Exception http2Ex) {
+    logger.fine("Caught a connection error", cause);
+
     // Save the error.
     connectionError = cause;
     goAwayStatus(Status.fromThrowable(connectionError));
