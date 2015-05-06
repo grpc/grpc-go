@@ -175,7 +175,7 @@ it and the architecture of your JVM. For a fully fledged deployment, you will
 need to deploy the codegen for all other supported OSes and architectures.
 
 To deploy the codegen for an OS and architecture, you must run the following
-commands on that OS and specify the architecture by the flag ``-Darch=<arch>``.
+commands on that OS and specify the architecture by the flag ``-PtargetArch=<arch>``.
 
 We currently distribute the following OSes and architectures:
 - Linux: ``x86_32``, ``x86_64``
@@ -184,13 +184,13 @@ We currently distribute the following OSes and architectures:
 
 If you are doing a snapshot deployment:
 ```
-grpc-java$ ./gradlew clean grpc-compiler:uploadArchives -Darch=<arch>
+grpc-java$ ./gradlew clean grpc-compiler:uploadArchives -PtargetArch=<arch>
 ```
 
 If you are doing a release deployment:
 ```
-grpc-java$ ./gradlew clean grpc-compiler:uploadArchives -Darch=<arch> \
-    -DrepositoryId=<repository-id>
+grpc-java$ ./gradlew clean grpc-compiler:uploadArchives -PtargetArch=<arch> \
+    -PrepositoryId=<repository-id>
 ```
 where ``<repository-id>`` is the ID of the staging repository that you have
 found from the OSSRH UI after the first deployment, usually in the form of

@@ -25,9 +25,8 @@ project(':grpc-all').projectDir = "$rootDir/all" as File
 project(':grpc-benchmarks').projectDir = "$rootDir/benchmarks" as File
 project(':grpc-examples').projectDir = "$rootDir/examples" as File
 
-if (settings.hasProperty('grpc.skip.codegen')
-    && settings.getProperty('grpc.skip.codegen').toBoolean()) {
-  println '*** Skipping the build of codegen and compilation of proto files because grpc.skip.codegen=true'
+if (settings.hasProperty('skipCodegen') && skipCodegen.toBoolean()) {
+  println '*** Skipping the build of codegen and compilation of proto files because skipCodegen=true'
 } else {
   include ":grpc-compiler"
   project(':grpc-compiler').projectDir = "$rootDir/compiler" as File

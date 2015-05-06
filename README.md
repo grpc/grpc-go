@@ -19,8 +19,8 @@ $ mvn install -pl codec-http2 -am -DskipTests=true
 The codegen plugin is C++ code and requires protobuf 3.0.0-alpha-2.
 
 If you are not changing the codegen plugin, nor any of the ``.proto`` files in
-the source tree, you can skip this chapter and add ``grpc.skip.codegen=true``
-to ``$HOME/.gradle/gradle.properties``.  It will make the build script skip the
+the source tree, you can skip this chapter and add ``skipCodegen=true``
+to ``<project-root>/gradle.properties``.  It will make the build script skip the
 build and invocation of the codegen, and use generated code that has been
 checked in.
 
@@ -73,15 +73,15 @@ When building on Windows and VC++, you need to specify project properties for
 Gradle to find protobuf:
 ```
 .\gradlew install ^
-    -Pvc.protobuf.include=C:\path\to\protobuf-3.0.0-alpha-2\src ^
-    -Pvc.protobuf.libs=C:\path\to\protobuf-3.0.0-alpha-2\vsprojects\Release
+    -PvcProtobufInclude=C:\path\to\protobuf-3.0.0-alpha-2\src ^
+    -PvcProtobufLibs=C:\path\to\protobuf-3.0.0-alpha-2\vsprojects\Release
 ```
 
 Since specifying those properties every build is bothersome, you can instead
-create ``%HOMEDRIVE%%HOMEPATH%\.gradle\gradle.properties`` with contents like:
+create ``<project-root>\gradle.properties`` with contents like:
 ```
-vc.protobuf.include=C:\\path\\to\\protobuf-3.0.0-alpha-2\\src
-vc.protobuf.libs=C:\\path\\to\\protobuf-3.0.0-alpha-2\\vsprojects\\Release
+vcProtobufInclude=C:\\path\\to\\protobuf-3.0.0-alpha-2\\src
+vcProtobufLibs=C:\\path\\to\\protobuf-3.0.0-alpha-2\\vsprojects\\Release
 ```
 
 The build script will build the codegen for the same architecture as the Java
@@ -90,8 +90,9 @@ be compiled for 64-bit, that means you must have compiled Protobuf in 64-bit.
 
 ### Notes for MinGW on Windows
 If you have both MinGW and VC++ installed on Windows, VC++ will be used by
-default. To override this default and use MinGW, add ``-Dvc.disable`` to your
-Gradle command line.
+default. To override this default and use MinGW, add ``-PvcDisable=true``
+to your Gradle command line or add ``vcDisable=true`` to your
+``<project-root>\gradle.properties``.
 
 Navigating Around the Source
 ----------------------------

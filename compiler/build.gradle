@@ -35,16 +35,14 @@ def addLibraryIfNotLinked = { libName, argList ->
   }
 }
 
-def String arch = osdetector.arch
-if (System.getProperty('arch')) {
-  arch = System.getProperty('arch')
-}
+def String arch = rootProject.hasProperty('targetArch') ? rootProject.targetArch : osdetector.arch
+def boolean vcDisable = rootProject.hasProperty('vcDisable') ? rootProject.vcDisable : false
 
 model {
   toolChains {
     // If you have both VC and Gcc installed, VC will be selected, unless you
-    // use '-Dvc.disable'
-    if (System.getProperty('vc.disable') == null) {
+    // set 'vcDisable=true'
+    if (!vcDisable) {
       visualCpp(VisualCpp) {
       }
     }
@@ -101,12 +99,12 @@ binaries.all {
     addEnvArgs("LDFLAGS", linker.args)
   } else if (toolChain in VisualCpp) {
     cppCompiler.args "/EHsc", "/MD"
-    if (rootProject.hasProperty('vc.protobuf.include')) {
-      cppCompiler.args "/I" + rootProject.properties['vc.protobuf.include']
+    if (rootProject.hasProperty('vcProtobufInclude')) {
+      cppCompiler.args "/I${rootProject.vcProtobufInclude}"
     }
     linker.args "libprotobuf.lib", "libprotoc.lib"
-    if (rootProject.hasProperty('vc.protobuf.libs')) {
-      linker.args "/LIBPATH:" + rootProject.properties['vc.protobuf.libs']
+    if (rootProject.hasProperty('vcProtobufLibs')) {
+      linker.args "/LIBPATH:${rootProject.vcProtobufLibs}"
     }
   }
 }
