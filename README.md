@@ -1,5 +1,7 @@
-grpc-java
-=========
+gRPC-Java - An RPC library and framework
+========================================
+
+[![Build Status](https://travis-ci.org/grpc/grpc-java.svg?branch=master)](https://travis-ci.org/grpc/grpc-java)
 
 How to Build
 ------------
