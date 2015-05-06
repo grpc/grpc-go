@@ -22,7 +22,9 @@ build automatically will provide warnings for style issues.
 [Eclipse](https://google-styleguide.googlecode.com/svn/trunk/eclipse-java-google-style.xml)
 and
 [IntelliJ](https://google-styleguide.googlecode.com/svn/trunk/intellij-java-google-style.xml)
-style configurations are commonly useful.
+style configurations are commonly useful. For IntelliJ 14, copy the style to
+`~/.IdeaIC14/config/codestyles/`, start IntelliJ, go to File > Settings > Code
+Style, and set the Scheme to `GoogleStyle`.
 
 If planning on making a large change, feel free to [create an issue on
 GitHub](https://github.com/grpc/grpc-java/issues/new), visit the [#grpc IRC
