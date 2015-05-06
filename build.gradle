@@ -39,12 +39,14 @@ subprojects {
     }
 
     ext {
+        protobufVersion = '3.0.0-alpha-2'
         configureProtoCompilation = {
           if (rootProject.childProjects.containsKey('grpc-compiler')) {
             // Only when the codegen is built along with the project, will we be able to recompile
             // the proto files.
             project.apply plugin: 'com.google.protobuf'
             project.protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
+            project.protocDep = "com.google.protobuf:protoc:${protobufVersion}"
             project.generatedFileDir = "${projectDir}/src/generated"
             project.afterEvaluate {
               generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
@@ -71,8 +73,8 @@ subprojects {
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
                 oauth_client: 'com.google.auth:google-auth-library-oauth2-http:0.1.0',
                 okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
-                protobuf: 'com.google.protobuf:protobuf-java:3.0.0-alpha-2',
-                protobuf_nano: 'com.google.protobuf.nano:protobuf-javanano:3.0.0-alpha-2',
+                protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
+                protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufVersion}",
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.3.1',
 
                 // TODO: Unreleased dependencies.

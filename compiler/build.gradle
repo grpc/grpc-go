@@ -153,6 +153,7 @@ artifacts {
   }
 }
 
+project.protocDep = "com.google.protobuf:protoc:${protobufVersion}"
 protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
 
 project.afterEvaluate {
