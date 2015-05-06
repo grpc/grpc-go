@@ -92,6 +92,13 @@ class BufferingHttp2ConnectionEncoder extends DecoratingHttp2ConnectionEncoder {
     });
   }
 
+  /**
+   * Indicates the number of streams that are currently buffered, awaiting creation.
+   */
+  public int numBufferedStreams() {
+    return pendingStreams.size();
+  }
+
   @Override
   public ChannelFuture writeHeaders(ChannelHandlerContext ctx, int streamId, Http2Headers headers,
                                     int padding, boolean endStream, ChannelPromise promise) {
@@ -199,6 +206,7 @@ class BufferingHttp2ConnectionEncoder extends DecoratingHttp2ConnectionEncoder {
     while (iter.hasNext()) {
       PendingStream stream = iter.next();
       if (stream.streamId > lastStreamId) {
+        iter.remove();
         stream.close(e);
       }
     }
