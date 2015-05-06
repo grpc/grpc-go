@@ -127,13 +127,11 @@ subprojects {
     }
 
     checkstyleMain {
-        source = fileTree(dir: "src", include: "**/*.java",
-            excludes: ["${buildDir}/generated-sources", "**/TestServiceGrpc.java"])
+        source = fileTree(dir: "src/main", include: "**/*.java")
     }
 
     checkstyleTest {
-        source = fileTree(dir: "test", include: "**/*.java",
-            exclude: "${buildDir}/generated-sources")
+        source = fileTree(dir: "src/test", include: "**/*.java")
     }
 
     task javadocJar(type: Jar) {
