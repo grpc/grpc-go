@@ -32,7 +32,7 @@ beforehand.
 
 ## Proposing changes
 
-Make sure that ```./gradle build``` (```.\gradle.bat build``` on Windows)
-completes successfully without any new warnings. Then create a Pull Request
-with your changes. When the changes are accepted, they will be merged or
-cherry-picked by a gRPC core developer.
+Make sure that `./gradlew build` (`gradlew build` on Windows) completes
+successfully without any new warnings. Then create a Pull Request with your
+changes. When the changes are accepted, they will be merged or cherry-picked by
+a gRPC core developer.
