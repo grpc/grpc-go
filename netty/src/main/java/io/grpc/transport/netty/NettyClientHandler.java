@@ -244,6 +244,13 @@ class NettyClientHandler extends Http2ConnectionHandler {
     super.onStreamError(ctx, cause, http2Ex);
   }
 
+  @Override
+  protected boolean isGracefulShutdownComplete() {
+    // Only allow graceful shutdown to complete after all pending streams have completed.
+    return super.isGracefulShutdownComplete()
+        && ((BufferingHttp2ConnectionEncoder) encoder()).numBufferedStreams() == 0;
+  }
+
   /**
    * Attempts to create a new stream from the given command. If there are too many active streams,
    * the creation request is queued.
