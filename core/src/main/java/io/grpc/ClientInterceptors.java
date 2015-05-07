@@ -77,7 +77,7 @@ public class ClientInterceptors {
     return new InterceptorChannel(channel, interceptors);
   }
 
-  private static class InterceptorChannel implements Channel {
+  private static class InterceptorChannel extends Channel {
     private final Channel channel;
     private final Iterable<ClientInterceptor> interceptors;
 
@@ -92,7 +92,7 @@ public class ClientInterceptors {
     }
   }
 
-  private static class ProcessInterceptorChannel implements Channel {
+  private static class ProcessInterceptorChannel extends Channel {
     private final Channel channel;
     private Iterator<ClientInterceptor> interceptors;
 

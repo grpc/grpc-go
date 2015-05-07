@@ -52,7 +52,7 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
-public final class ChannelImpl implements Channel {
+public final class ChannelImpl extends Channel {
 
   private static final Logger log = Logger.getLogger(ChannelImpl.class.getName());
 

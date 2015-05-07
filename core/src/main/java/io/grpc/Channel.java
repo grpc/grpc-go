@@ -41,11 +41,11 @@ import javax.annotation.concurrent.ThreadSafe;
  *
  * <p>Applications can add common cross-cutting behaviors to stubs by decorating Channel
  * implementations using {@link ClientInterceptor}. It is expected that most application
- * code will not use this interface directly but rather work with stubs that have been bound to a
+ * code will not use this class directly but rather work with stubs that have been bound to a
  * Channel that was decorated during application initialization,
  */
 @ThreadSafe
-public interface Channel {
+public abstract class Channel {
 
   /**
    * Create a {@link Call} to the remote operation specified by the given
@@ -57,6 +57,6 @@ public interface Channel {
    * @return a {@link Call} bound to the specified method.
    *
    */
-  public <RequestT, ResponseT> Call<RequestT, ResponseT> newCall(
+  public abstract <RequestT, ResponseT> Call<RequestT, ResponseT> newCall(
       MethodDescriptor<RequestT, ResponseT> methodDescriptor);
 }

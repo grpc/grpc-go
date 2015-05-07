@@ -34,8 +34,8 @@ package io.grpc;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * Server for listening for and dispatching incoming calls. Although Server is an interface, it is
- * not expected to be implemented by application code or interceptors.
+ * Server for listening for and dispatching incoming calls. It is not expected to be implemented by
+ * application code or interceptors.
  */
 @ThreadSafe
-public interface Server {}
+public abstract class Server {}

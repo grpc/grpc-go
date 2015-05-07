@@ -61,7 +61,7 @@ import java.util.concurrent.TimeUnit;
  * <p>Starting the server starts the underlying transport for servicing requests. Stopping the
  * server stops servicing new requests and waits for all connections to terminate.
  */
-public class ServerImpl implements Server {
+public final class ServerImpl extends Server {
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
 
   /** Executor for application processing. */

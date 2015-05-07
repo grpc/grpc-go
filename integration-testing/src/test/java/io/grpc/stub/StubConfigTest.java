@@ -70,7 +70,7 @@ public class StubConfigTest {
   }
 
 
-  private static class FakeChannel implements Channel {
+  private static class FakeChannel extends Channel {
     @Override
     public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
       return null;
