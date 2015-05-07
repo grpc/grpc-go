@@ -15,14 +15,30 @@ $ cd lib/netty
 $ mvn install -pl codec-http2 -am -DskipTests=true
 ```
 
+### Build gRPC
+grpc-java has a C++ code generation plugin for protoc. Since many Java
+developers don't have C compilers installed and don't need to modify the
+codegen, the build can skip it. To skip, create the file
+`<project-root>/gradle.properties` and add `skipCodegen=true`.
+
+Then, to build, run:
+```
+$ ./gradlew build
+```
+
+To install the artifacts to your Maven local repository for use in your own
+project, run:
+```
+$ ./gradlew install
+```
+
+How to Build Code Generation Plugin
+-----------------------------------
+This section is only necessary if you are making changes to the code
+generation. Most users only need to use `skipCodegen=true` as discussed above.
+
 ### Build Protobuf
 The codegen plugin is C++ code and requires protobuf 3.0.0-alpha-2.
-
-If you are not changing the codegen plugin, nor any of the ``.proto`` files in
-the source tree, you can skip this chapter and add ``skipCodegen=true``
-to ``<project-root>/gradle.properties``.  It will make the build script skip the
-build and invocation of the codegen, and use generated code that has been
-checked in.
 
 For Linux, Mac and MinGW:
 ```
@@ -59,12 +75,6 @@ default search paths for header files and libraries. It will fail the build of
 the codegen. To work around this, you will need to set environment variables:
 ```
 $ export CXXFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/lib"
-```
-
-### Build GRPC
-On Linux, Mac or MinGW:
-```
-$ ./gradlew install
 ```
 
 ### Notes for Visual C++
