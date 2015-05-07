@@ -152,6 +152,10 @@ public abstract class Call<RequestT, ResponseT> {
    * without requiring excessive buffering internally. This event is
    * just a suggestion and the application is free to ignore it, however doing so may
    * result in excessive buffering within the call.
+   *
+   * <p>This implementation always returns {@code true}.
    */
-  public abstract boolean isReady();
+  public boolean isReady() {
+    return true;
+  }
 }
