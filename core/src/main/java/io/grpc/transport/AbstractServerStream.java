@@ -72,7 +72,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
 
     // Now that the stream has actually been initialized, call the listener's onReady callback if
     // appropriate.
-    notifyIfReady();
+    onStreamAllocated();
   }
 
   @Override

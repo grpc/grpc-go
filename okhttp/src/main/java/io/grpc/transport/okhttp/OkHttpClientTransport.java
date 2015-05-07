@@ -251,6 +251,7 @@ public class OkHttpClientTransport implements ClientTransport {
     stream.id(nextStreamId);
     streams.put(stream.id(), stream);
     frameWriter.synStream(false, false, stream.id(), 0, requestHeaders);
+    stream.allocated();
     // For unary and server streaming, there will be a data frame soon, no need to flush the header.
     if (stream.getType() != MethodType.UNARY
         && stream.getType() != MethodType.SERVER_STREAMING) {

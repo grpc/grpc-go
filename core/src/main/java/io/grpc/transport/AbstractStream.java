@@ -87,7 +87,14 @@ public abstract class AbstractStream<IdT> implements Stream {
    * Indicates whether the listener is currently eligible for notification of
    * {@link StreamListener#onReady()}.
    */
+  @GuardedBy("onReadyLock")
   private boolean shouldNotifyOnReady = true;
+  /**
+   * Indicates the stream has been created on the connection. This implies that the stream is no
+   * longer limited by MAX_CONCURRENT_STREAMS.
+   */
+  @GuardedBy("onReadyLock")
+  private boolean allocated;
 
   private final Object onReadyLock = new Object();
 
@@ -144,11 +151,19 @@ public abstract class AbstractStream<IdT> implements Stream {
    * Sets the number of queued bytes for a given stream, below which
    * {@link StreamListener#onReady()} will be called. If not called, defaults to
    * {@link #DEFAULT_ONREADY_THRESHOLD}.
+   *
+   * <p>This must be called from the transport thread, since a listener may be called back directly.
    */
   public void setOnReadyThreshold(int onReadyThreshold) {
     checkArgument(onReadyThreshold > 0, "onReadyThreshold must be > 0");
-    this.onReadyThreshold = onReadyThreshold;
-    notifyIfReady();
+    boolean doNotify;
+    synchronized (onReadyLock) {
+      this.onReadyThreshold = onReadyThreshold;
+      doNotify = needToNotifyOnReady();
+    }
+    if (doNotify) {
+      listener().onReady();
+    }
   }
 
   @Override
@@ -172,7 +187,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   public final boolean isReady() {
     if (listener() != null && outboundPhase() != Phase.STATUS) {
       synchronized (onReadyLock) {
-        if (numSentBytesQueued < onReadyThreshold) {
+        if (allocated && numSentBytesQueued < onReadyThreshold) {
           return true;
         }
       }
@@ -289,6 +304,26 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   /**
+   * Event handler to be called by the subclass when the stream's headers have passed any connection
+   * flow control (i.e., MAX_CONCURRENT_STREAMS). It may call the listener's {@link
+   * StreamListener#onReady()} handler if appropriate. This must be called from the transport
+   * thread, since the listener may be called back directly.
+   */
+  protected void onStreamAllocated() {
+    boolean doNotify;
+    synchronized (onReadyLock) {
+      if (allocated) {
+        throw new IllegalStateException("Already allocated");
+      }
+      allocated = true;
+      doNotify = needToNotifyOnReady();
+    }
+    if (doNotify) {
+      listener().onReady();
+    }
+  }
+
+  /**
    * Event handler to be called by the subclass when a number of bytes are being queued for sending
    * to the remote endpoint.
    *
@@ -314,21 +349,6 @@ public abstract class AbstractStream<IdT> implements Stream {
     boolean doNotify;
     synchronized (onReadyLock) {
       numSentBytesQueued -= numBytes;
-      doNotify = needToNotifyOnReady();
-    }
-    if (doNotify) {
-      listener().onReady();
-    }
-  }
-
-  /**
-   * Utility method for subclasses which calls back the listener's {@link StreamListener#onReady()}
-   * handler if appropriate. This must be called from the transport thread, since the listener
-   * is called back directly.
-   */
-  protected final void notifyIfReady() {
-    boolean doNotify;
-    synchronized (onReadyLock) {
       doNotify = needToNotifyOnReady();
     }
     if (doNotify) {

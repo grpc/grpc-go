@@ -92,7 +92,7 @@ class NettyClientStream extends Http2ClientStream {
 
     // Now that the stream has actually been initialized, call the listener's onReady callback if
     // appropriate.
-    notifyIfReady();
+    onStreamAllocated();
   }
 
   /**

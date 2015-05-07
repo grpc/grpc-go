@@ -42,7 +42,9 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.Metadata;
@@ -276,10 +278,14 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Test
   public void setHttp2StreamShouldNotifyReady() {
+    listener = mock(ClientStreamListener.class);
+    stream = new NettyClientStream(listener, channel, handler);
     stream().id(STREAM_ID);
     verify(listener, never()).onReady();
+    assertFalse(stream.isReady());
     stream().setHttp2Stream(http2Stream);
     verify(listener).onReady();
+    assertTrue(stream.isReady());
   }
 
   @Override
@@ -288,6 +294,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     assertTrue(stream.canSend());
     assertTrue(stream.canReceive());
     stream.id(STREAM_ID);
+    stream.setHttp2Stream(http2Stream);
+    reset(listener);
     return stream;
   }
 

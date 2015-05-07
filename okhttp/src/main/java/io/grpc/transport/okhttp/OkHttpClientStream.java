@@ -126,6 +126,16 @@ class OkHttpClientStream extends Http2ClientStream {
     this.id = id;
   }
 
+  /**
+   * Notification that this stream was allocated for the connection. This means the stream has
+   * passed through any delay caused by MAX_CONCURRENT_STREAMS.
+   */
+  public void allocated() {
+    // Now that the stream has actually been initialized, call the listener's onReady callback if
+    // appropriate.
+    onStreamAllocated();
+  }
+
   public void transportHeadersReceived(List<Header> headers, boolean endOfStream) {
     synchronized (lock) {
       if (endOfStream) {
