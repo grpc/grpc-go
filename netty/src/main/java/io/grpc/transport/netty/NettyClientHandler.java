@@ -35,8 +35,6 @@ import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
 
-import com.sun.istack.internal.logging.Logger;
-
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.transport.HttpUtil;
@@ -58,6 +56,9 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamVisitor;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 /**
@@ -65,7 +66,7 @@ import javax.annotation.Nullable;
  * the context of the Netty Channel thread.
  */
 class NettyClientHandler extends Http2ConnectionHandler {
-  private static final Logger logger = Logger.getLogger(NettyClientHandler.class);
+  private static final Logger logger = Logger.getLogger(NettyClientHandler.class.getName());
 
   private final Http2Connection.PropertyKey streamKey;
   private int connectionWindowSize;
@@ -220,7 +221,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   @Override
   protected void onConnectionError(ChannelHandlerContext ctx, Throwable cause,
       Http2Exception http2Ex) {
-    logger.fine("Caught a connection error", cause);
+    logger.log(Level.FINE, "Caught a connection error", cause);
 
     // Save the error.
     connectionError = cause;
