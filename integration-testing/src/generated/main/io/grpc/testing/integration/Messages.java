@@ -194,7 +194,8 @@ public final class Messages {
     }
     private Payload(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -225,11 +226,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -252,16 +252,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new Payload(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new Payload(input, extensionRegistry);
       }
     };
 
@@ -319,6 +310,7 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (type_ != io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE.getNumber()) {
         output.writeEnum(1, type_);
       }
@@ -399,17 +391,12 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(io.grpc.testing.integration.Messages.Payload prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -650,8 +637,7 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.Payload)
-    private static final io.grpc.testing.integration.Messages.Payload defaultInstance;
-    static {
+    private static final io.grpc.testing.integration.Messages.Payload defaultInstance;static {
       defaultInstance = new io.grpc.testing.integration.Messages.Payload();
     }
 
@@ -663,8 +649,6 @@ public final class Messages {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface SimpleRequestOrBuilder extends
@@ -772,7 +756,8 @@ public final class Messages {
     }
     private SimpleRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -826,11 +811,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -853,16 +837,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new SimpleRequest(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new SimpleRequest(input, extensionRegistry);
       }
     };
 
@@ -982,6 +957,7 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (responseType_ != io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE.getNumber()) {
         output.writeEnum(1, responseType_);
       }
@@ -1083,17 +1059,12 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(io.grpc.testing.integration.Messages.SimpleRequest prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -1594,8 +1565,7 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.SimpleRequest)
-    private static final io.grpc.testing.integration.Messages.SimpleRequest defaultInstance;
-    static {
+    private static final io.grpc.testing.integration.Messages.SimpleRequest defaultInstance;static {
       defaultInstance = new io.grpc.testing.integration.Messages.SimpleRequest();
     }
 
@@ -1607,8 +1577,6 @@ public final class Messages {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface SimpleResponseOrBuilder extends
@@ -1705,7 +1673,8 @@ public final class Messages {
     }
     private SimpleResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -1750,11 +1719,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -1777,16 +1745,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new SimpleResponse(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new SimpleResponse(input, extensionRegistry);
       }
     };
 
@@ -1930,6 +1889,7 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (payload_ != null) {
         output.writeMessage(1, getPayload());
       }
@@ -2017,17 +1977,12 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(io.grpc.testing.integration.Messages.SimpleResponse prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -2517,8 +2472,7 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.SimpleResponse)
-    private static final io.grpc.testing.integration.Messages.SimpleResponse defaultInstance;
-    static {
+    private static final io.grpc.testing.integration.Messages.SimpleResponse defaultInstance;static {
       defaultInstance = new io.grpc.testing.integration.Messages.SimpleResponse();
     }
 
@@ -2530,8 +2484,6 @@ public final class Messages {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface SimpleContextOrBuilder extends
@@ -2570,7 +2522,8 @@ public final class Messages {
     }
     private SimpleContext(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -2596,11 +2549,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -2623,16 +2575,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new SimpleContext(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new SimpleContext(input, extensionRegistry);
       }
     };
 
@@ -2689,6 +2632,7 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (!getValueBytes().isEmpty()) {
         output.writeBytes(1, getValueBytes());
       }
@@ -2762,17 +2706,12 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(io.grpc.testing.integration.Messages.SimpleContext prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -2969,8 +2908,7 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.SimpleContext)
-    private static final io.grpc.testing.integration.Messages.SimpleContext defaultInstance;
-    static {
+    private static final io.grpc.testing.integration.Messages.SimpleContext defaultInstance;static {
       defaultInstance = new io.grpc.testing.integration.Messages.SimpleContext();
     }
 
@@ -2982,8 +2920,6 @@ public final class Messages {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface StreamingInputCallRequestOrBuilder extends
@@ -3040,7 +2976,8 @@ public final class Messages {
     }
     private StreamingInputCallRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -3073,11 +3010,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -3100,16 +3036,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new StreamingInputCallRequest(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new StreamingInputCallRequest(input, extensionRegistry);
       }
     };
 
@@ -3163,6 +3090,7 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (payload_ != null) {
         output.writeMessage(1, getPayload());
       }
@@ -3236,17 +3164,12 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingInputCallRequest prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -3537,8 +3460,7 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.StreamingInputCallRequest)
-    private static final io.grpc.testing.integration.Messages.StreamingInputCallRequest defaultInstance;
-    static {
+    private static final io.grpc.testing.integration.Messages.StreamingInputCallRequest defaultInstance;static {
       defaultInstance = new io.grpc.testing.integration.Messages.StreamingInputCallRequest();
     }
 
@@ -3550,8 +3472,6 @@ public final class Messages {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface StreamingInputCallResponseOrBuilder extends
@@ -3593,7 +3513,8 @@ public final class Messages {
     }
     private StreamingInputCallResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -3618,11 +3539,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -3645,16 +3565,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new StreamingInputCallResponse(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new StreamingInputCallResponse(input, extensionRegistry);
       }
     };
 
@@ -3688,6 +3599,7 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (aggregatedPayloadSize_ != 0) {
         output.writeInt32(1, aggregatedPayloadSize_);
       }
@@ -3761,17 +3673,12 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingInputCallResponse prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -3939,8 +3846,7 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.StreamingInputCallResponse)
-    private static final io.grpc.testing.integration.Messages.StreamingInputCallResponse defaultInstance;
-    static {
+    private static final io.grpc.testing.integration.Messages.StreamingInputCallResponse defaultInstance;static {
       defaultInstance = new io.grpc.testing.integration.Messages.StreamingInputCallResponse();
     }
 
@@ -3952,8 +3858,6 @@ public final class Messages {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface ResponseParametersOrBuilder extends
@@ -4007,7 +3911,8 @@ public final class Messages {
     }
     private ResponseParameters(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -4037,11 +3942,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -4064,16 +3968,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new ResponseParameters(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new ResponseParameters(input, extensionRegistry);
       }
     };
 
@@ -4122,6 +4017,7 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (size_ != 0) {
         output.writeInt32(1, size_);
       }
@@ -4202,17 +4098,12 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(io.grpc.testing.integration.Messages.ResponseParameters prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -4430,8 +4321,7 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.ResponseParameters)
-    private static final io.grpc.testing.integration.Messages.ResponseParameters defaultInstance;
-    static {
+    private static final io.grpc.testing.integration.Messages.ResponseParameters defaultInstance;static {
       defaultInstance = new io.grpc.testing.integration.Messages.ResponseParameters();
     }
 
@@ -4443,8 +4333,6 @@ public final class Messages {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface StreamingOutputCallRequestOrBuilder extends
@@ -4570,7 +4458,8 @@ public final class Messages {
     }
     private StreamingOutputCallRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -4617,11 +4506,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
           responseParameters_ = java.util.Collections.unmodifiableList(responseParameters_);
@@ -4647,16 +4535,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new StreamingOutputCallRequest(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new StreamingOutputCallRequest(input, extensionRegistry);
       }
     };
 
@@ -4796,6 +4675,7 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (responseType_ != io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE.getNumber()) {
         output.writeEnum(1, responseType_);
       }
@@ -4883,17 +4763,12 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingOutputCallRequest prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -5627,8 +5502,7 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.StreamingOutputCallRequest)
-    private static final io.grpc.testing.integration.Messages.StreamingOutputCallRequest defaultInstance;
-    static {
+    private static final io.grpc.testing.integration.Messages.StreamingOutputCallRequest defaultInstance;static {
       defaultInstance = new io.grpc.testing.integration.Messages.StreamingOutputCallRequest();
     }
 
@@ -5640,8 +5514,6 @@ public final class Messages {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface StreamingOutputCallResponseOrBuilder extends
@@ -5698,7 +5570,8 @@ public final class Messages {
     }
     private StreamingOutputCallResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -5731,11 +5604,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -5758,16 +5630,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new StreamingOutputCallResponse(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new StreamingOutputCallResponse(input, extensionRegistry);
       }
     };
 
@@ -5821,6 +5684,7 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (payload_ != null) {
         output.writeMessage(1, getPayload());
       }
@@ -5894,17 +5758,12 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingOutputCallResponse prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -6195,8 +6054,7 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.StreamingOutputCallResponse)
-    private static final io.grpc.testing.integration.Messages.StreamingOutputCallResponse defaultInstance;
-    static {
+    private static final io.grpc.testing.integration.Messages.StreamingOutputCallResponse defaultInstance;static {
       defaultInstance = new io.grpc.testing.integration.Messages.StreamingOutputCallResponse();
     }
 
@@ -6208,8 +6066,6 @@ public final class Messages {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   private static final com.google.protobuf.Descriptors.Descriptor

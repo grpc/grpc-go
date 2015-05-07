@@ -30,7 +30,8 @@ public  final class Feature extends
   }
   private Feature(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+      throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -69,11 +70,10 @@ public  final class Feature extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new RuntimeException(e.setUnfinishedMessage(this));
+      throw e.setUnfinishedMessage(this);
     } catch (java.io.IOException e) {
-      throw new RuntimeException(
-          new com.google.protobuf.InvalidProtocolBufferException(
-              e.getMessage()).setUnfinishedMessage(this));
+      throw new com.google.protobuf.InvalidProtocolBufferException(
+          e.getMessage()).setUnfinishedMessage(this);
     } finally {
       makeExtensionsImmutable();
     }
@@ -96,16 +96,7 @@ public  final class Feature extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      try {
-        return new Feature(input, extensionRegistry);
-      } catch (RuntimeException e) {
-        if (e.getCause() instanceof
-            com.google.protobuf.InvalidProtocolBufferException) {
-          throw (com.google.protobuf.InvalidProtocolBufferException)
-              e.getCause();
-        }
-        throw e;
-      }
+      return new Feature(input, extensionRegistry);
     }
   };
 
@@ -203,6 +194,7 @@ public  final class Feature extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
+    getSerializedSize();
     if (!getNameBytes().isEmpty()) {
       output.writeBytes(1, getNameBytes());
     }
@@ -283,17 +275,12 @@ public  final class Feature extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
+  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder() {
-    return defaultInstance.toBuilder();
-  }
   public static Builder newBuilder(io.grpc.examples.routeguide.Feature prototype) {
-    return defaultInstance.toBuilder().mergeFrom(prototype);
+    return newBuilder().mergeFrom(prototype);
   }
-  public Builder toBuilder() {
-    return this == defaultInstance
-        ? new Builder() : new Builder().mergeFrom(this);
-  }
+  public Builder toBuilder() { return newBuilder(this); }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -682,8 +669,7 @@ public  final class Feature extends
   }
 
   // @@protoc_insertion_point(class_scope:routeguide.Feature)
-  private static final io.grpc.examples.routeguide.Feature defaultInstance;
-  static {
+  private static final io.grpc.examples.routeguide.Feature defaultInstance;static {
     defaultInstance = new io.grpc.examples.routeguide.Feature();
   }
 
@@ -695,7 +681,5 @@ public  final class Feature extends
     return defaultInstance;
   }
 
-  static {
-  }
 }
 

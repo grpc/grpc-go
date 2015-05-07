@@ -42,7 +42,8 @@ public final class EmptyProtos {
     }
     private Empty(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -64,11 +65,10 @@ public final class EmptyProtos {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -92,16 +92,7 @@ public final class EmptyProtos {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new Empty(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new Empty(input, extensionRegistry);
       }
     };
 
@@ -122,6 +113,7 @@ public final class EmptyProtos {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       unknownFields.writeTo(output);
     }
 
@@ -190,17 +182,12 @@ public final class EmptyProtos {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(com.google.protobuf.EmptyProtos.Empty prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -320,8 +307,7 @@ public final class EmptyProtos {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.Empty)
-    private static final com.google.protobuf.EmptyProtos.Empty defaultInstance;
-    static {
+    private static final com.google.protobuf.EmptyProtos.Empty defaultInstance;static {
       defaultInstance = new com.google.protobuf.EmptyProtos.Empty();
     }
 
@@ -333,8 +319,6 @@ public final class EmptyProtos {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   private static final com.google.protobuf.Descriptors.Descriptor

@@ -33,7 +33,8 @@ public  final class Point extends
   }
   private Point(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+      throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -63,11 +64,10 @@ public  final class Point extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new RuntimeException(e.setUnfinishedMessage(this));
+      throw e.setUnfinishedMessage(this);
     } catch (java.io.IOException e) {
-      throw new RuntimeException(
-          new com.google.protobuf.InvalidProtocolBufferException(
-              e.getMessage()).setUnfinishedMessage(this));
+      throw new com.google.protobuf.InvalidProtocolBufferException(
+          e.getMessage()).setUnfinishedMessage(this);
     } finally {
       makeExtensionsImmutable();
     }
@@ -90,16 +90,7 @@ public  final class Point extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      try {
-        return new Point(input, extensionRegistry);
-      } catch (RuntimeException e) {
-        if (e.getCause() instanceof
-            com.google.protobuf.InvalidProtocolBufferException) {
-          throw (com.google.protobuf.InvalidProtocolBufferException)
-              e.getCause();
-        }
-        throw e;
-      }
+      return new Point(input, extensionRegistry);
     }
   };
 
@@ -138,6 +129,7 @@ public  final class Point extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
+    getSerializedSize();
     if (latitude_ != 0) {
       output.writeInt32(1, latitude_);
     }
@@ -218,17 +210,12 @@ public  final class Point extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
+  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder() {
-    return defaultInstance.toBuilder();
-  }
   public static Builder newBuilder(io.grpc.examples.routeguide.Point prototype) {
-    return defaultInstance.toBuilder().mergeFrom(prototype);
+    return newBuilder().mergeFrom(prototype);
   }
-  public Builder toBuilder() {
-    return this == defaultInstance
-        ? new Builder() : new Builder().mergeFrom(this);
-  }
+  public Builder toBuilder() { return newBuilder(this); }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -419,8 +406,7 @@ public  final class Point extends
   }
 
   // @@protoc_insertion_point(class_scope:routeguide.Point)
-  private static final io.grpc.examples.routeguide.Point defaultInstance;
-  static {
+  private static final io.grpc.examples.routeguide.Point defaultInstance;static {
     defaultInstance = new io.grpc.examples.routeguide.Point();
   }
 
@@ -432,7 +418,5 @@ public  final class Point extends
     return defaultInstance;
   }
 
-  static {
-  }
 }
 

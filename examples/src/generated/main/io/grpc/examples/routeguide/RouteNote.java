@@ -29,7 +29,8 @@ public  final class RouteNote extends
   }
   private RouteNote(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+      throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -68,11 +69,10 @@ public  final class RouteNote extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new RuntimeException(e.setUnfinishedMessage(this));
+      throw e.setUnfinishedMessage(this);
     } catch (java.io.IOException e) {
-      throw new RuntimeException(
-          new com.google.protobuf.InvalidProtocolBufferException(
-              e.getMessage()).setUnfinishedMessage(this));
+      throw new com.google.protobuf.InvalidProtocolBufferException(
+          e.getMessage()).setUnfinishedMessage(this);
     } finally {
       makeExtensionsImmutable();
     }
@@ -95,16 +95,7 @@ public  final class RouteNote extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      try {
-        return new RouteNote(input, extensionRegistry);
-      } catch (RuntimeException e) {
-        if (e.getCause() instanceof
-            com.google.protobuf.InvalidProtocolBufferException) {
-          throw (com.google.protobuf.InvalidProtocolBufferException)
-              e.getCause();
-        }
-        throw e;
-      }
+      return new RouteNote(input, extensionRegistry);
     }
   };
 
@@ -202,6 +193,7 @@ public  final class RouteNote extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
+    getSerializedSize();
     if (location_ != null) {
       output.writeMessage(1, getLocation());
     }
@@ -282,17 +274,12 @@ public  final class RouteNote extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
+  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder() {
-    return defaultInstance.toBuilder();
-  }
   public static Builder newBuilder(io.grpc.examples.routeguide.RouteNote prototype) {
-    return defaultInstance.toBuilder().mergeFrom(prototype);
+    return newBuilder().mergeFrom(prototype);
   }
-  public Builder toBuilder() {
-    return this == defaultInstance
-        ? new Builder() : new Builder().mergeFrom(this);
-  }
+  public Builder toBuilder() { return newBuilder(this); }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -680,8 +667,7 @@ public  final class RouteNote extends
   }
 
   // @@protoc_insertion_point(class_scope:routeguide.RouteNote)
-  private static final io.grpc.examples.routeguide.RouteNote defaultInstance;
-  static {
+  private static final io.grpc.examples.routeguide.RouteNote defaultInstance;static {
     defaultInstance = new io.grpc.examples.routeguide.RouteNote();
   }
 
@@ -693,7 +679,5 @@ public  final class RouteNote extends
     return defaultInstance;
   }
 
-  static {
-  }
 }
 

@@ -29,7 +29,8 @@ public  final class HelloRequest extends
   }
   private HelloRequest(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+      throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -55,11 +56,10 @@ public  final class HelloRequest extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new RuntimeException(e.setUnfinishedMessage(this));
+      throw e.setUnfinishedMessage(this);
     } catch (java.io.IOException e) {
-      throw new RuntimeException(
-          new com.google.protobuf.InvalidProtocolBufferException(
-              e.getMessage()).setUnfinishedMessage(this));
+      throw new com.google.protobuf.InvalidProtocolBufferException(
+          e.getMessage()).setUnfinishedMessage(this);
     } finally {
       makeExtensionsImmutable();
     }
@@ -82,16 +82,7 @@ public  final class HelloRequest extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      try {
-        return new HelloRequest(input, extensionRegistry);
-      } catch (RuntimeException e) {
-        if (e.getCause() instanceof
-            com.google.protobuf.InvalidProtocolBufferException) {
-          throw (com.google.protobuf.InvalidProtocolBufferException)
-              e.getCause();
-        }
-        throw e;
-      }
+      return new HelloRequest(input, extensionRegistry);
     }
   };
 
@@ -148,6 +139,7 @@ public  final class HelloRequest extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
+    getSerializedSize();
     if (!getNameBytes().isEmpty()) {
       output.writeBytes(1, getNameBytes());
     }
@@ -221,17 +213,12 @@ public  final class HelloRequest extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
+  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder() {
-    return defaultInstance.toBuilder();
-  }
   public static Builder newBuilder(io.grpc.examples.helloworld.HelloRequest prototype) {
-    return defaultInstance.toBuilder().mergeFrom(prototype);
+    return newBuilder().mergeFrom(prototype);
   }
-  public Builder toBuilder() {
-    return this == defaultInstance
-        ? new Builder() : new Builder().mergeFrom(this);
-  }
+  public Builder toBuilder() { return newBuilder(this); }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -432,8 +419,7 @@ public  final class HelloRequest extends
   }
 
   // @@protoc_insertion_point(class_scope:helloworld.HelloRequest)
-  private static final io.grpc.examples.helloworld.HelloRequest defaultInstance;
-  static {
+  private static final io.grpc.examples.helloworld.HelloRequest defaultInstance;static {
     defaultInstance = new io.grpc.examples.helloworld.HelloRequest();
   }
 
@@ -445,7 +431,5 @@ public  final class HelloRequest extends
     return defaultInstance;
   }
 
-  static {
-  }
 }
 

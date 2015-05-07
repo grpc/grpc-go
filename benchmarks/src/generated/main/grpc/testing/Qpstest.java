@@ -420,7 +420,8 @@ public final class Qpstest {
     }
     private StatsRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -448,11 +449,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -476,16 +476,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new StatsRequest(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new StatsRequest(input, extensionRegistry);
       }
     };
 
@@ -530,6 +521,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         output.writeInt32(1, testNum_);
       }
@@ -605,17 +597,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.StatsRequest prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -787,8 +774,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.StatsRequest)
-    private static final grpc.testing.Qpstest.StatsRequest defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.StatsRequest defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.StatsRequest();
     }
 
@@ -800,8 +786,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface ServerStatsOrBuilder extends
@@ -883,7 +867,8 @@ public final class Qpstest {
     }
     private ServerStats(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -921,11 +906,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -949,16 +933,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new ServerStats(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new ServerStats(input, extensionRegistry);
       }
     };
 
@@ -1061,6 +1036,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         output.writeDouble(1, timeElapsed_);
       }
@@ -1150,17 +1126,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.ServerStats prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -1458,8 +1429,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.ServerStats)
-    private static final grpc.testing.Qpstest.ServerStats defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.ServerStats defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.ServerStats();
     }
 
@@ -1471,8 +1441,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface PayloadOrBuilder extends
@@ -1536,7 +1504,8 @@ public final class Qpstest {
     }
     private Payload(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -1575,11 +1544,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -1603,16 +1571,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new Payload(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new Payload(input, extensionRegistry);
       }
     };
 
@@ -1681,6 +1640,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         output.writeEnum(1, type_);
       }
@@ -1763,17 +1723,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.Payload prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -2009,8 +1964,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.Payload)
-    private static final grpc.testing.Qpstest.Payload defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.Payload defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.Payload();
     }
 
@@ -2022,8 +1976,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface HistogramDataOrBuilder extends
@@ -2115,7 +2067,8 @@ public final class Qpstest {
     }
     private HistogramData(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -2184,11 +2137,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
           bucket_ = java.util.Collections.unmodifiableList(bucket_);
@@ -2215,16 +2167,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new HistogramData(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new HistogramData(input, extensionRegistry);
       }
     };
 
@@ -2363,6 +2306,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       for (int i = 0; i < bucket_.size(); i++) {
         output.writeUInt32(1, bucket_.get(i));
       }
@@ -2478,17 +2422,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.HistogramData prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -2911,8 +2850,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.HistogramData)
-    private static final grpc.testing.Qpstest.HistogramData defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.HistogramData defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.HistogramData();
     }
 
@@ -2924,8 +2862,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface ClientConfigOrBuilder extends
@@ -3051,7 +2987,8 @@ public final class Qpstest {
     }
     private ClientConfig(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -3130,11 +3067,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
           serverTargets_ = serverTargets_.getUnmodifiableView();
@@ -3161,16 +3097,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new ClientConfig(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new ClientConfig(input, extensionRegistry);
       }
     };
 
@@ -3352,6 +3279,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       for (int i = 0; i < serverTargets_.size(); i++) {
         output.writeBytes(1, serverTargets_.getByteString(i));
       }
@@ -3481,17 +3409,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.ClientConfig prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -4043,8 +3966,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.ClientConfig)
-    private static final grpc.testing.Qpstest.ClientConfig defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.ClientConfig defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.ClientConfig();
     }
 
@@ -4056,8 +3978,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface MarkOrBuilder extends
@@ -4089,7 +4009,8 @@ public final class Qpstest {
     }
     private Mark(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -4111,11 +4032,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -4139,16 +4059,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new Mark(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new Mark(input, extensionRegistry);
       }
     };
 
@@ -4169,6 +4080,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       unknownFields.writeTo(output);
     }
 
@@ -4237,17 +4149,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.Mark prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -4362,8 +4269,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.Mark)
-    private static final grpc.testing.Qpstest.Mark defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.Mark defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.Mark();
     }
 
@@ -4375,8 +4281,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface ClientArgsOrBuilder extends
@@ -4430,7 +4334,8 @@ public final class Qpstest {
     }
     private ClientArgs(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -4479,11 +4384,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -4507,16 +4411,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new ClientArgs(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new ClientArgs(input, extensionRegistry);
       }
     };
 
@@ -4627,6 +4522,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (argtypeCase_ == 1) {
         output.writeMessage(1, (grpc.testing.Qpstest.ClientConfig) argtype_);
       }
@@ -4709,17 +4605,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.ClientArgs prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -5157,8 +5048,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.ClientArgs)
-    private static final grpc.testing.Qpstest.ClientArgs defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.ClientArgs defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.ClientArgs();
     }
 
@@ -5170,8 +5060,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface ClientStatsOrBuilder extends
@@ -5242,7 +5130,8 @@ public final class Qpstest {
     }
     private ClientStats(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -5293,11 +5182,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -5321,16 +5209,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new ClientStats(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new ClientStats(input, extensionRegistry);
       }
     };
 
@@ -5438,6 +5317,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         output.writeMessage(1, getLatencies());
       }
@@ -5534,17 +5414,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.ClientStats prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -5938,8 +5813,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.ClientStats)
-    private static final grpc.testing.Qpstest.ClientStats defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.ClientStats defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.ClientStats();
     }
 
@@ -5951,8 +5825,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface ClientStatusOrBuilder extends
@@ -5993,7 +5865,8 @@ public final class Qpstest {
     }
     private ClientStatus(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -6029,11 +5902,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -6057,16 +5929,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new ClientStatus(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new ClientStatus(input, extensionRegistry);
       }
     };
 
@@ -6115,6 +5978,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         output.writeMessage(1, getStats());
       }
@@ -6190,17 +6054,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.ClientStatus prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -6457,8 +6316,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.ClientStatus)
-    private static final grpc.testing.Qpstest.ClientStatus defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.ClientStatus defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.ClientStatus();
     }
 
@@ -6470,8 +6328,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface ServerConfigOrBuilder extends
@@ -6529,7 +6385,8 @@ public final class Qpstest {
     }
     private ServerConfig(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -6573,11 +6430,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -6601,16 +6457,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new ServerConfig(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new ServerConfig(input, extensionRegistry);
       }
     };
 
@@ -6682,6 +6529,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         output.writeEnum(1, serverType_);
       }
@@ -6771,17 +6619,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.ServerConfig prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -7027,8 +6870,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.ServerConfig)
-    private static final grpc.testing.Qpstest.ServerConfig defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.ServerConfig defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.ServerConfig();
     }
 
@@ -7040,8 +6882,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface ServerArgsOrBuilder extends
@@ -7095,7 +6935,8 @@ public final class Qpstest {
     }
     private ServerArgs(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -7144,11 +6985,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -7172,16 +7012,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new ServerArgs(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new ServerArgs(input, extensionRegistry);
       }
     };
 
@@ -7292,6 +7123,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (argtypeCase_ == 1) {
         output.writeMessage(1, (grpc.testing.Qpstest.ServerConfig) argtype_);
       }
@@ -7374,17 +7206,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.ServerArgs prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -7822,8 +7649,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.ServerArgs)
-    private static final grpc.testing.Qpstest.ServerArgs defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.ServerArgs defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.ServerArgs();
     }
 
@@ -7835,8 +7661,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface ServerStatusOrBuilder extends
@@ -7887,7 +7711,8 @@ public final class Qpstest {
     }
     private ServerStatus(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -7928,11 +7753,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -7956,16 +7780,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new ServerStatus(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new ServerStatus(input, extensionRegistry);
       }
     };
 
@@ -8033,6 +7848,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         output.writeMessage(1, getStats());
       }
@@ -8115,17 +7931,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.ServerStatus prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -8427,8 +8238,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.ServerStatus)
-    private static final grpc.testing.Qpstest.ServerStatus defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.ServerStatus defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.ServerStatus();
     }
 
@@ -8440,8 +8250,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface SimpleRequestOrBuilder extends
@@ -8534,7 +8342,8 @@ public final class Qpstest {
     }
     private SimpleRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -8586,11 +8395,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -8614,16 +8422,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new SimpleRequest(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new SimpleRequest(input, extensionRegistry);
       }
     };
 
@@ -8729,6 +8528,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         output.writeEnum(1, responseType_);
       }
@@ -8818,17 +8618,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.SimpleRequest prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -9241,8 +9036,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.SimpleRequest)
-    private static final grpc.testing.Qpstest.SimpleRequest defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.SimpleRequest defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.SimpleRequest();
     }
 
@@ -9254,8 +9048,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   public interface SimpleResponseOrBuilder extends
@@ -9296,7 +9088,8 @@ public final class Qpstest {
     }
     private SimpleResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
@@ -9332,11 +9125,10 @@ public final class Qpstest {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e.getMessage()).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -9360,16 +9152,7 @@ public final class Qpstest {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
-          return new SimpleResponse(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
+        return new SimpleResponse(input, extensionRegistry);
       }
     };
 
@@ -9412,6 +9195,7 @@ public final class Qpstest {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         output.writeMessage(1, getPayload());
       }
@@ -9487,17 +9271,12 @@ public final class Qpstest {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
+    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return defaultInstance.toBuilder();
-    }
     public static Builder newBuilder(grpc.testing.Qpstest.SimpleResponse prototype) {
-      return defaultInstance.toBuilder().mergeFrom(prototype);
+      return newBuilder().mergeFrom(prototype);
     }
-    public Builder toBuilder() {
-      return this == defaultInstance
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
+    public Builder toBuilder() { return newBuilder(this); }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -9748,8 +9527,7 @@ public final class Qpstest {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.SimpleResponse)
-    private static final grpc.testing.Qpstest.SimpleResponse defaultInstance;
-    static {
+    private static final grpc.testing.Qpstest.SimpleResponse defaultInstance;static {
       defaultInstance = new grpc.testing.Qpstest.SimpleResponse();
     }
 
@@ -9761,8 +9539,6 @@ public final class Qpstest {
       return defaultInstance;
     }
 
-    static {
-    }
   }
 
   private static final com.google.protobuf.Descriptors.Descriptor
