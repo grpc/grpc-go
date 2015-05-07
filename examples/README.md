@@ -1,25 +1,31 @@
 grpc Examples
 ==============================================
 
-In order to run the examples simply execute one of the gradle tasks `routeGuideServer`,
-`routeGuideClient`, `helloWorldServer`, or `helloWorldClient`.
-
-For example, say you want to play around with the route guide examples. First you want to start
-the server and then have the client connect to it and let the good times roll.
-
-Assuming you are in the grpc-java root folder you would first start the route guide server
-by running
+To build the examples, run in this directory:
 
 ```
-$ ./gradlew :grpc-examples:routeGuideServer
+$ ../gradlew installDist
 ```
 
-and in a different terminal window then run the route guide client by typing
+This creates the scripts `hello-world-server`, `hello-world-client`,
+`route-guide-server`, and `route-guide-client` in the
+`build/install/grpc-examples/bin/` directory that run the examples. Each
+example requires the server to be running before starting the client.
+
+For example, to try the hello world example first run:
 
 ```
-$ ./gradlew :grpc-examples:routeGuideClient
+$ ./build/install/grpc-examples/bin/hello-world-server
+```
+
+And in a different terminal window run:
+
+```
+$ ./build/install/grpc-examples/bin/hello-world-client
 ```
 
 That's it!
 
-Please refer to [Getting Started Guide for Java] (https://github.com/grpc/grpc-common/blob/master/java/javatutorial.md) for more information.
+Please refer to [Getting Started Guide for Java]
+(https://github.com/grpc/grpc-common/blob/master/java/javatutorial.md) for more
+information.
