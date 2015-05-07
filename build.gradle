@@ -39,7 +39,12 @@ subprojects {
     }
 
     ext {
+        def exeSuffix = osdetector.os == 'windows' ? ".exe" : ""
+        protocPluginBaseName = 'protoc-gen-grpc-java'
+        javaPluginPath = "$rootDir/compiler/build/binaries/java_pluginExecutable/$protocPluginBaseName$exeSuffix"
+
         protobufVersion = '3.0.0-alpha-2'
+
         configureProtoCompilation = {
           if (rootProject.childProjects.containsKey('grpc-compiler')) {
             // Only when the codegen is built along with the project, will we be able to recompile
@@ -50,6 +55,11 @@ subprojects {
             project.generatedFileDir = "${projectDir}/src/generated"
             project.afterEvaluate {
               generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
+              // Recompile protos when the codegen has been changed
+              generateProto.inputs.file javaPluginPath
+              // Recompile protos when build.gradle has been changed, because
+              // it's possible the version of protoc has been changed.
+              generateProto.inputs.file "${rootProject.projectDir}/build.gradle"
             }
           } else {
             // Otherwise, we just use the checked-in generated code.
@@ -94,10 +104,6 @@ subprojects {
         }
 
         alpnboot_package_name = 'org.mortbay.jetty.alpn:alpn-boot:' + alpnboot_version
-
-        def exeSuffix = osdetector.os == 'windows' ? ".exe" : ""
-        protocPluginBaseName = 'protoc-gen-grpc-java'
-        javaPluginPath = "$rootDir/compiler/build/binaries/java_pluginExecutable/$protocPluginBaseName$exeSuffix"
     }
 
     dependencies {
