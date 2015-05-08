@@ -73,9 +73,45 @@ model {
   }
 }
 
+configurations {
+  testNanoCompile
+}
+
 dependencies {
   testCompile project(':grpc-protobuf'),
               project(':grpc-stub')
+  testNanoCompile project(':grpc-protobuf-nano'),
+                  project(':grpc-stub')
+}
+
+sourceSets {
+  test {
+    proto {
+      plugins {
+        grpc { }
+      }
+    }
+  }
+  testNano {
+    proto {
+      setSrcDirs(['src/test/proto'])
+      builtins {
+        remove java
+        javanano {
+          option 'ignore_services=true'
+        }
+      }
+      plugins {
+        grpc {
+          option 'nano=true'
+        }
+      }
+    }
+  }
+}
+
+checkstyleTestNano {
+  source = fileTree(dir: "src/testNano", include: "**/*.java")
 }
 
 binaries.all {
@@ -152,35 +188,28 @@ artifacts {
 }
 
 project.protocDep = "com.google.protobuf:protoc:${protobufVersion}"
-protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
+protobufCodeGenPlugins = ["grpc:$javaPluginPath"]
 
 project.afterEvaluate {
-  generateTestProto.dependsOn 'java_pluginExecutable'
+  [generateTestProto, generateTestNanoProto]*.dependsOn 'java_pluginExecutable'
 }
 
-// Ignore test for the moment on Windows. It will be easier to run once the
-// gradle protobuf plugin can support nano.
-if (osdetector.os != 'windows') {
-  test.dependsOn('testGolden','testNanoGolden')
-}
+test.dependsOn('testGolden', 'testNanoGolden')
 
-task testGolden(type: Exec, dependsOn: 'generateTestProto') {
+def configureTestTask(Task task, String suffix) {
+  task.dependsOn "generateTest${suffix}Proto"
   if (osdetector.os != 'windows') {
-    executable "diff"
+    task.executable "diff"
   } else {
-    executable "fc"
+    task.executable "fc"
   }
   // File isn't found on Windows if last slash is forward-slash
   def slash = System.getProperty("file.separator")
-  args "$buildDir/generated-sources/test/io/grpc/testing/integration" + slash + "TestServiceGrpc.java",
-       "$projectDir/src/test/golden/TestService.java.txt"
+  task.args "$buildDir/generated-sources/test${suffix}/io/grpc/testing/integration" + slash + "TestServiceGrpc.java",
+       "$projectDir/src/test/golden/TestService${suffix}.java.txt"
 }
 
-task testNanoGolden(type: Exec, dependsOn: 'java_pluginExecutable') {
-  doFirst {
-      temporaryDir.createNewFile();
-  }
-
-  environment 'TEST_TMP_DIR', temporaryDir
-  commandLine './src/test/run_nano_test.sh'
-}
+task testGolden(type: Exec)
+task testNanoGolden(type: Exec)
+configureTestTask(testGolden, '')
+configureTestTask(testNanoGolden, 'Nano')

@@ -50,7 +50,7 @@ subprojects {
             // Only when the codegen is built along with the project, will we be able to recompile
             // the proto files.
             project.apply plugin: 'com.google.protobuf'
-            project.protobufCodeGenPlugins = ["java_plugin:$javaPluginPath"]
+            project.protobufCodeGenPlugins = ["grpc:$javaPluginPath"]
             project.protocDep = "com.google.protobuf:protoc:${protobufVersion}"
             project.generatedFileDir = "${projectDir}/src/generated"
             project.afterEvaluate {
@@ -67,6 +67,11 @@ subprojects {
               main {
                 java {
                   srcDir 'src/generated/main'
+                }
+                proto {
+                  plugins {
+                    grpc { }
+                  }
                 }
               }
             }
@@ -85,7 +90,7 @@ subprojects {
                 okhttp: 'com.squareup.okhttp:okhttp:2.2.0',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufVersion}",
-                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.3.1',
+                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.4.0',
 
                 netty: 'io.netty:netty-codec-http2:4.1.0.Beta5',
 
