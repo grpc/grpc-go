@@ -14,6 +14,9 @@ before_install:
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
 
+before_script:
+  - test -z "$(git status --porcelain)" || (git status && echo Error Working directory is not clean. Forget to commit generated files? && false)
+
 jdk:
   - oraclejdk8
 
