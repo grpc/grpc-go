@@ -39,11 +39,16 @@ package logs // import "google.golang.org/grpc/logs"
 import (
 	"log"
 	"os"
+
+	"github.com/golang/glog"
 )
 
 var (
-	// DefaultLogger is the default Logger used.
-	DefaultLogger = log.New(os.Stdout, "", log.LstdFlags)
+	// DefaultLogger is the default Logger used. It uses glog.
+	DefaultLogger = &glogger{}
+
+	// StdLogger is a Logger that uses golang's standard logger.
+	StdLogger = log.New(os.Stdout, "", log.LstdFlags)
 )
 
 // Logger mimics golang's standard Logger as an interface.
@@ -54,4 +59,30 @@ type Logger interface {
 	Print(args ...interface{})
 	Printf(format string, args ...interface{})
 	Println(args ...interface{})
+}
+
+type glogger struct{}
+
+func (g *glogger) Fatal(args ...interface{}) {
+	glog.Fatal(args...)
+}
+
+func (g *glogger) Fatalf(format string, args ...interface{}) {
+	glog.Fatalf(format, args...)
+}
+
+func (g *glogger) Fatalln(args ...interface{}) {
+	glog.Fatalln(args...)
+}
+
+func (g *glogger) Print(args ...interface{}) {
+	glog.Info(args...)
+}
+
+func (g *glogger) Printf(format string, args ...interface{}) {
+	glog.Infof(format, args...)
+}
+
+func (g *glogger) Println(args ...interface{}) {
+	glog.Infoln(args...)
 }
