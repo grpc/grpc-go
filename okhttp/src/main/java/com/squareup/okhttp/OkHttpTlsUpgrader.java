@@ -74,9 +74,16 @@ public final class OkHttpTlsUpgrader {
     spec.apply(sslSocket, getOkHttpRoute(host, port, spec));
 
     Platform platform = Platform.get();
-    // It's possible that the user provided SSLSocketFactory has already done the handshake
-    // when creates the SSLSocket.
-    String negotiatedProtocol = platform.getSelectedProtocol(sslSocket);
+
+    String negotiatedProtocol = null;
+    try {
+      // It's possible that the user provided SSLSocketFactory has already done the handshake
+      // when creates the SSLSocket.
+      negotiatedProtocol = platform.getSelectedProtocol(sslSocket);
+    } catch (Exception e) {
+      // In some implementations, querying selected protocol before the handshake will fail with
+      // exception.
+    }
     if (negotiatedProtocol == null) {
 
       try {
