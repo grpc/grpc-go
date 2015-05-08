@@ -37,7 +37,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"sync/atomic"
@@ -46,6 +45,7 @@ import (
 	"github.com/bradfitz/http2"
 	"github.com/bradfitz/http2/hpack"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/logs"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -136,7 +136,7 @@ func isReservedHeader(hdr string) bool {
 	}
 }
 
-func newHPACKDecoder() *hpackDecoder {
+func newHPACKDecoder(logger logs.Logger) *hpackDecoder {
 	d := &hpackDecoder{}
 	d.h = hpack.NewDecoder(http2InitHeaderTableSize, func(f hpack.HeaderField) {
 		switch f.Name {
@@ -166,7 +166,7 @@ func newHPACKDecoder() *hpackDecoder {
 				}
 				k, v, err := metadata.DecodeKeyValue(f.Name, f.Value)
 				if err != nil {
-					log.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
+					logger.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
 					return
 				}
 				d.state.mdata[k] = v

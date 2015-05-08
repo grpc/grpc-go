@@ -49,6 +49,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/logs"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -284,17 +285,30 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 type key int
 
 // The key to save transport.Stream in the context.
-const streamKey = key(0)
+const (
+	streamKey = key(0)
+	loggerKey = key(1)
+)
 
-// newContextWithStream creates a new context from ctx and attaches stream
-// to it.
-func newContextWithStream(ctx context.Context, stream *Stream) context.Context {
-	return context.WithValue(ctx, streamKey, stream)
+// newContextWithStreamAndLogger creates a new context from ctx and attaches stream
+// and logger to it. logger may be nil.
+func newContextWithStreamAndLogger(ctx context.Context, stream *Stream, logger logs.Logger) context.Context {
+	newCtx := context.WithValue(ctx, streamKey, stream)
+	if logger != nil {
+		return context.WithValue(newCtx, loggerKey, logger)
+	}
+	return newCtx
 }
 
 // StreamFromContext returns the stream saved in ctx.
 func StreamFromContext(ctx context.Context) (s *Stream, ok bool) {
 	s, ok = ctx.Value(streamKey).(*Stream)
+	return
+}
+
+// LoggerFromContext returns the logger saved in ctx.
+func LoggerFromContext(ctx context.Context) (l logs.Logger, ok bool) {
+	l, ok = ctx.Value(loggerKey).(logs.Logger)
 	return
 }
 
@@ -309,8 +323,8 @@ const (
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
 // if it fails.
-func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32) (ServerTransport, error) {
-	return newHTTP2Server(conn, maxStreams)
+func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, logger logs.Logger) (ServerTransport, error) {
+	return newHTTP2Server(conn, maxStreams, logger)
 }
 
 // ConnectOptions covers all relevant options for dialing a server.
@@ -323,8 +337,8 @@ type ConnectOptions struct {
 
 // NewClientTransport establishes the transport with the required ConnectOptions
 // and returns it to the caller.
-func NewClientTransport(target string, opts *ConnectOptions) (ClientTransport, error) {
-	return newHTTP2Client(target, opts)
+func NewClientTransport(target string, logger logs.Logger, opts *ConnectOptions) (ClientTransport, error) {
+	return newHTTP2Client(target, logger, opts)
 }
 
 // Options provides additional hints and information for message

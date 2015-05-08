@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"log"
 	"math"
 	"net"
 	"net/http"
@@ -13,21 +12,23 @@ import (
 	"google.golang.org/grpc/benchmark"
 	"google.golang.org/grpc/benchmark/stats"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/logs"
 )
 
 var (
 	server            = flag.String("server", "", "The server address")
 	maxConcurrentRPCs = flag.Int("max_concurrent_rpcs", 1, "The max number of concurrent RPCs")
 	duration          = flag.Int("duration", math.MaxInt32, "The duration in seconds to run the benchmark client")
+	logger            = logs.DefaultLogger
 )
 
 func caller(client testpb.TestServiceClient) {
-	benchmark.DoUnaryCall(client, 1, 1)
+	benchmark.DoUnaryCall(client, 1, 1, logger)
 }
 
 func closeLoop() {
 	s := stats.NewStats(256)
-	conn := benchmark.NewClientConn(*server)
+	conn := benchmark.NewClientConn(*server, logger)
 	tc := testpb.NewTestServiceClient(conn)
 	// Warm up connection.
 	for i := 0; i < 100; i++ {
@@ -70,7 +71,7 @@ func closeLoop() {
 	close(ch)
 	wg.Wait()
 	conn.Close()
-	log.Println(s.String())
+	logger.Println(s.String())
 }
 
 func main() {
@@ -78,11 +79,11 @@ func main() {
 	go func() {
 		lis, err := net.Listen("tcp", ":0")
 		if err != nil {
-			log.Fatalf("Failed to listen: %v", err)
+			logger.Fatalf("Failed to listen: %v", err)
 		}
-		log.Println("Client profiling address: ", lis.Addr().String())
+		logger.Println("Client profiling address: ", lis.Addr().String())
 		if err := http.Serve(lis, nil); err != nil {
-			log.Fatalf("Failed to serve: %v", err)
+			logger.Fatalf("Failed to serve: %v", err)
 		}
 	}()
 	closeLoop()

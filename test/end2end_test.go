@@ -36,7 +36,6 @@ package grpc_test
 import (
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net"
 	"reflect"
@@ -51,6 +50,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/logs"
 	"google.golang.org/grpc/metadata"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -60,6 +60,7 @@ var (
 		"key1": "value1",
 		"key2": "value2",
 	}
+	logger = logs.DefaultLogger
 )
 
 type testServer struct {
@@ -75,15 +76,15 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 
 func newPayload(t testpb.PayloadType, size int32) *testpb.Payload {
 	if size < 0 {
-		log.Fatalf("Requested a response with invalid length %d", size)
+		logger.Fatalf("Requested a response with invalid length %d", size)
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		log.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+		logger.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		log.Fatalf("Unsupported payload type: %d", t)
+		logger.Fatalf("Unsupported payload type: %d", t)
 	}
 	return &testpb.Payload{
 		Type: t.Enum(),
@@ -95,7 +96,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	md, ok := metadata.FromContext(ctx)
 	if ok {
 		if err := grpc.SendHeader(ctx, md); err != nil {
-			log.Fatalf("grpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
+			logger.Fatalf("grpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
 		}
 		grpc.SetTrailer(ctx, md)
 	}
@@ -146,7 +147,7 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 	md, ok := metadata.FromContext(stream.Context())
 	if ok {
 		if err := stream.SendHeader(md); err != nil {
-			log.Fatalf("%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
+			logger.Fatalf("%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
 		}
 		stream.SetTrailer(md)
 	}
@@ -293,13 +294,13 @@ func setUp(maxStream uint32, e env) (s *grpc.Server, cc *grpc.ClientConn) {
 	}
 	lis, err := net.Listen(e.network, la)
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		logger.Fatalf("Failed to listen: %v", err)
 	}
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	if e.security == "tls" {
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
-			log.Fatalf("Failed to generate credentials %v", err)
+			logger.Fatalf("Failed to generate credentials %v", err)
 		}
 		go s.Serve(creds.NewListener(lis))
 	} else {
@@ -311,21 +312,21 @@ func setUp(maxStream uint32, e env) (s *grpc.Server, cc *grpc.ClientConn) {
 	default:
 		_, port, err := net.SplitHostPort(lis.Addr().String())
 		if err != nil {
-			log.Fatalf("Failed to parse listener address: %v", err)
+			logger.Fatalf("Failed to parse listener address: %v", err)
 		}
 		addr = "localhost:" + port
 	}
 	if e.security == "tls" {
 		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 		if err != nil {
-			log.Fatalf("Failed to create credentials %v", err)
+			logger.Fatalf("Failed to create credentials %v", err)
 		}
 		cc, err = grpc.Dial(addr, grpc.WithTransportCredentials(creds), grpc.WithDialer(e.dialer))
 	} else {
 		cc, err = grpc.Dial(addr, grpc.WithDialer(e.dialer))
 	}
 	if err != nil {
-		log.Fatalf("Dial(%q) = %v", addr, err)
+		logger.Fatalf("Dial(%q) = %v", addr, err)
 	}
 	return
 }
