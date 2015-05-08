@@ -38,7 +38,6 @@ package benchmark
 
 import (
 	"io"
-	"log"
 	"math"
 	"net"
 	"time"
@@ -47,19 +46,20 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/logs"
 )
 
-func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
+func newPayload(t testpb.PayloadType, size int, logger logs.Logger) *testpb.Payload {
 	if size < 0 {
-		log.Fatalf("Requested a response with invalid length %d", size)
+		logger.Fatalf("Requested a response with invalid length %d", size)
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		log.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+		logger.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		log.Fatalf("Unsupported payload type: %d", t)
+		logger.Fatalf("Unsupported payload type: %d", t)
 	}
 	return &testpb.Payload{
 		Type: t.Enum(),
@@ -68,6 +68,7 @@ func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
 }
 
 type testServer struct {
+	logger logs.Logger
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -76,7 +77,7 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	return &testpb.SimpleResponse{
-		Payload: newPayload(in.GetResponseType(), int(in.GetResponseSize())),
+		Payload: newPayload(in.GetResponseType(), int(in.GetResponseSize()), s.logger),
 	}, nil
 }
 
@@ -87,7 +88,7 @@ func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest
 			time.Sleep(time.Duration(us) * time.Microsecond)
 		}
 		if err := stream.Send(&testpb.StreamingOutputCallResponse{
-			Payload: newPayload(args.GetResponseType(), int(c.GetSize())),
+			Payload: newPayload(args.GetResponseType(), int(c.GetSize()), s.logger),
 		}); err != nil {
 			return err
 		}
@@ -128,7 +129,7 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 				time.Sleep(time.Duration(us) * time.Microsecond)
 			}
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: newPayload(in.GetResponseType(), int(c.GetSize())),
+				Payload: newPayload(in.GetResponseType(), int(c.GetSize()), s.logger),
 			}); err != nil {
 				return err
 			}
@@ -156,7 +157,7 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 				time.Sleep(time.Duration(us) * time.Microsecond)
 			}
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: newPayload(m.GetResponseType(), int(c.GetSize())),
+				Payload: newPayload(m.GetResponseType(), int(c.GetSize()), s.logger),
 			}); err != nil {
 				return err
 			}
@@ -167,13 +168,13 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 
 // StartServer starts a gRPC server serving a benchmark service. It returns its
 // listen address and a function to stop the server.
-func StartServer() (string, func()) {
+func StartServer(logger logs.Logger) (string, func()) {
 	lis, err := net.Listen("tcp", ":0")
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		logger.Fatalf("Failed to listen: %v", err)
 	}
-	s := grpc.NewServer(grpc.MaxConcurrentStreams(math.MaxUint32))
-	testpb.RegisterTestServiceServer(s, &testServer{})
+	s := grpc.NewServer(grpc.MaxConcurrentStreams(math.MaxUint32), grpc.CustomLogger(logger))
+	testpb.RegisterTestServiceServer(s, &testServer{logger})
 	go s.Serve(lis)
 	return lis.Addr().String(), func() {
 		s.Stop()
@@ -181,23 +182,23 @@ func StartServer() (string, func()) {
 }
 
 // DoUnaryCall performs an unary RPC with given stub and request and response sizes.
-func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
-	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
+func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int, logger logs.Logger) {
+	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize, logger)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
-		log.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		logger.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
 }
 
 // NewClientConn creates a gRPC client connection to addr.
-func NewClientConn(addr string) *grpc.ClientConn {
-	conn, err := grpc.Dial(addr)
+func NewClientConn(addr string, logger logs.Logger) *grpc.ClientConn {
+	conn, err := grpc.Dial(addr, grpc.WithLogger(logger))
 	if err != nil {
-		log.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
+		logger.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
 	}
 	return conn
 }

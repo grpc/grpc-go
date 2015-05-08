@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"log"
 	"math"
 	"net"
 	"net/http"
@@ -10,10 +9,12 @@ import (
 	"time"
 
 	"google.golang.org/grpc/benchmark"
+	"google.golang.org/grpc/logs"
 )
 
 var (
 	duration = flag.Int("duration", math.MaxInt32, "The duration in seconds to run the benchmark server")
+	logger   = logs.DefaultLogger
 )
 
 func main() {
@@ -21,15 +22,15 @@ func main() {
 	go func() {
 		lis, err := net.Listen("tcp", ":0")
 		if err != nil {
-			log.Fatalf("Failed to listen: %v", err)
+			logger.Fatalf("Failed to listen: %v", err)
 		}
-		log.Println("Server profiling address: ", lis.Addr().String())
+		logger.Println("Server profiling address: ", lis.Addr().String())
 		if err := http.Serve(lis, nil); err != nil {
-			log.Fatalf("Failed to serve: %v", err)
+			logger.Fatalf("Failed to serve: %v", err)
 		}
 	}()
-	addr, stopper := benchmark.StartServer()
-	log.Println("Server Address: ", addr)
+	addr, stopper := benchmark.StartServer(logger)
+	logger.Println("Server Address: ", addr)
 	<-time.After(time.Duration(*duration) * time.Second)
 	stopper()
 }
