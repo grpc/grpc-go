@@ -191,9 +191,17 @@ public final class ChannelImpl extends Channel {
     if (activeTransport != null) {
       return activeTransport;
     }
+    // Set activeTransport and add to transports before start() in case start() calls
+    // transportShutdown() and transportTerminated()
     activeTransport = transportFactory.newClientTransport();
     transports.add(activeTransport);
-    activeTransport.start(new TransportListener(activeTransport));
+    try {
+      activeTransport.start(new TransportListener(activeTransport));
+    } catch (RuntimeException ex) {
+      transports.remove(activeTransport);
+      activeTransport = null;
+      throw ex;
+    }
     return activeTransport;
   }
 
@@ -253,7 +261,15 @@ public final class ChannelImpl extends Channel {
     public void start(Listener<RespT> observer, Metadata.Headers headers) {
       Preconditions.checkState(stream == null, "Already started");
       ClientStreamListener listener = new ClientStreamListenerImpl(observer);
-      ClientTransport transport = obtainActiveTransport();
+      ClientTransport transport;
+      try {
+        transport = obtainActiveTransport();
+      } catch (RuntimeException ex) {
+        stream = new NoopClientStream();
+        listener.closed(Status.INTERNAL.withDescription("Failed starting transport").withCause(ex),
+            new Metadata.Trailers());
+        return;
+      }
       if (transport == null) {
         stream = new NoopClientStream();
         listener.closed(Status.CANCELLED.withDescription("Channel is shutdown"),
