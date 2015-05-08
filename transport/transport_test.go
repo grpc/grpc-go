@@ -438,7 +438,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 			time.Sleep(time.Millisecond)
 			continue
 		}
-		for k, _ := range server.conns {
+		for k := range server.conns {
 			var ok bool
 			sc, ok = k.(*http2Server)
 			if !ok {
@@ -493,7 +493,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 			t.Fatalf("Failed to write data: %v", err)
 		}
 		cc.writableChan <- 0
-		sent += 1
+		sent++
 	}
 	// Server sent a resetStream for s already.
 	code := http2RSTErrConvTab[http2.ErrCodeFlowControl]
