@@ -8,14 +8,19 @@ import (
 
 	"google.golang.org/grpc/benchmark/stats"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/logs"
+)
+
+var (
+	logger = logs.DefaultLogger
 )
 
 func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceClient)) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
-	target, stopper := StartServer()
+	target, stopper := StartServer(logger)
 	defer stopper()
-	conn := NewClientConn(target)
+	conn := NewClientConn(target, logger)
 	tc := testpb.NewTestServiceClient(conn)
 
 	// Warm up connection.
@@ -55,7 +60,7 @@ func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceCli
 }
 
 func smallCaller(client testpb.TestServiceClient) {
-	DoUnaryCall(client, 1, 1)
+	DoUnaryCall(client, 1, 1, logger)
 }
 
 func BenchmarkClientSmallc1(b *testing.B) {

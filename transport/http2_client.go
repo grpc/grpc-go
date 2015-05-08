@@ -37,7 +37,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log"
 	"math"
 	"net"
 	"sync"
@@ -48,6 +47,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/logs"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -92,12 +92,13 @@ type http2Client struct {
 	maxStreams uint32
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
+	logger          logs.Logger
 }
 
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err error) {
+func newHTTP2Client(addr string, logger logs.Logger, opts *ConnectOptions) (_ ClientTransport, err error) {
 	if opts.Dialer == nil {
 		// Set the default Dialer.
 		opts.Dialer = func(addr string, timeout time.Duration) (net.Conn, error) {
@@ -188,6 +189,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 		maxStreams:      math.MaxUint32,
 		authCreds:       opts.AuthOptions,
 		streamSendQuota: defaultWindowSize,
+		logger:          logger,
 	}
 	go t.controller()
 	t.writableChan <- 0
@@ -553,7 +555,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	s.state = streamDone
 	s.statusCode, ok = http2RSTErrConvTab[http2.ErrCode(f.ErrCode)]
 	if !ok {
-		log.Println("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error ", f.ErrCode)
+		t.logger.Println("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error ", f.ErrCode)
 	}
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
@@ -671,7 +673,7 @@ func (t *http2Client) reader() {
 	}
 	t.handleSettings(sf)
 
-	hDec := newHPACKDecoder()
+	hDec := newHPACKDecoder(t.logger)
 	var curStream *Stream
 	// loop to keep reading incoming messages on this transport.
 	for {
@@ -703,7 +705,7 @@ func (t *http2Client) reader() {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		default:
-			log.Printf("transport: http2Client.reader got unhandled frame type %v.", frame)
+			t.logger.Printf("transport: http2Client.reader got unhandled frame type %v.", frame)
 		}
 	}
 }
@@ -735,7 +737,7 @@ func (t *http2Client) controller() {
 					// meaningful content when this is actually in use.
 					t.framer.writePing(true, i.ack, [8]byte{})
 				default:
-					log.Printf("transport: http2Client.controller got unexpected item type %v\n", i)
+					t.logger.Printf("transport: http2Client.controller got unexpected item type %v\n", i)
 				}
 				t.writableChan <- 0
 				continue
@@ -759,6 +761,6 @@ func (t *http2Client) notifyError(err error) {
 	if t.state == reachable {
 		t.state = unreachable
 		close(t.errorChan)
-		log.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
+		t.logger.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
 	}
 }

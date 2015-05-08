@@ -36,7 +36,6 @@ package transport
 import (
 	"bytes"
 	"io"
-	"log"
 	"math"
 	"net"
 	"reflect"
@@ -49,6 +48,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/logs"
 )
 
 type server struct {
@@ -66,6 +66,7 @@ var (
 	expectedResponse      = []byte("pong")
 	expectedRequestLarge  = make([]byte, initialWindowSize*2)
 	expectedResponseLarge = make([]byte, initialWindowSize*2)
+	logger                = logs.DefaultLogger
 )
 
 type testStreamHandler struct {
@@ -93,7 +94,7 @@ func (h *testStreamHandler) handleStream(s *Stream) {
 		if err == ErrConnClosing {
 			return
 		}
-		log.Fatalf("handleStream got error: %v, want <nil>; result: %v, want %v", err, p, req)
+		logger.Fatalf("handleStream got error: %v, want <nil>; result: %v, want %v", err, p, req)
 	}
 	// send a response back to the client.
 	h.t.Write(s, resp, &Options{})
@@ -109,7 +110,7 @@ func (h *testStreamHandler) handleStreamSuspension(s *Stream) {
 func (h *testStreamHandler) handleStreamMisbehave(s *Stream) {
 	conn, ok := s.ServerTransport().(*http2Server)
 	if !ok {
-		log.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
+		logger.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
 	}
 	size := 1
 	if s.Method() == "foo.MaxFrame" {
@@ -137,18 +138,18 @@ func (s *server) start(useTLS bool, port int, maxStreams uint32, ht hType) {
 		s.lis, err = net.Listen("tcp", ":"+strconv.Itoa(port))
 	}
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		logger.Fatalf("failed to listen: %v", err)
 	}
 	if useTLS {
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
-			log.Fatalf("Failed to generate credentials %v", err)
+			logger.Fatalf("Failed to generate credentials %v", err)
 		}
 		s.lis = creds.NewListener(s.lis)
 	}
 	_, p, err := net.SplitHostPort(s.lis.Addr().String())
 	if err != nil {
-		log.Fatalf("failed to parse listener address: %v", err)
+		logger.Fatalf("failed to parse listener address: %v", err)
 	}
 	s.port = p
 	s.conns = make(map[ServerTransport]bool)
@@ -160,7 +161,7 @@ func (s *server) start(useTLS bool, port int, maxStreams uint32, ht hType) {
 		if err != nil {
 			return
 		}
-		t, err := NewServerTransport("http2", conn, maxStreams)
+		t, err := NewServerTransport("http2", conn, maxStreams, logger)
 		if err != nil {
 			return
 		}
@@ -219,9 +220,9 @@ func setUp(t *testing.T, useTLS bool, port int, maxStreams uint32, ht hType) (*s
 		dopts := ConnectOptions{
 			AuthOptions: []credentials.Credentials{creds},
 		}
-		ct, connErr = NewClientTransport(addr, &dopts)
+		ct, connErr = NewClientTransport(addr, logger, &dopts)
 	} else {
-		ct, connErr = NewClientTransport(addr, &ConnectOptions{})
+		ct, connErr = NewClientTransport(addr, logger, &ConnectOptions{})
 	}
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
@@ -582,7 +583,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 
 func TestStreamContext(t *testing.T) {
 	expectedStream := Stream{}
-	ctx := newContextWithStream(context.Background(), &expectedStream)
+	ctx := newContextWithStreamAndLogger(context.Background(), &expectedStream, nil)
 	s, ok := StreamFromContext(ctx)
 	if !ok || !reflect.DeepEqual(expectedStream, *s) {
 		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, *s, ok, expectedStream)

@@ -37,7 +37,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"time"
@@ -47,6 +46,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/logs"
 )
 
 var (
@@ -54,6 +54,7 @@ var (
 	certFile = flag.String("tls_cert_file", "testdata/server1.pem", "The TLS cert file")
 	keyFile  = flag.String("tls_key_file", "testdata/server1.key", "The TLS key file")
 	port     = flag.Int("port", 10000, "The server port")
+	logger   = logs.DefaultLogger
 )
 
 type testServer struct {
@@ -193,14 +194,14 @@ func main() {
 	p := strconv.Itoa(*port)
 	lis, err := net.Listen("tcp", ":"+p)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		logger.Fatalf("failed to listen: %v", err)
 	}
 	server := grpc.NewServer()
 	testpb.RegisterTestServiceServer(server, &testServer{})
 	if *useTLS {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			log.Fatalf("Failed to generate credentials %v", err)
+			logger.Fatalf("Failed to generate credentials %v", err)
 		}
 		server.Serve(creds.NewListener(lis))
 	} else {

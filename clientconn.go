@@ -35,7 +35,6 @@ package grpc
 
 import (
 	"errors"
-	"log"
 	"net"
 	"strings"
 	"sync"
@@ -43,6 +42,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/logs"
 	"google.golang.org/grpc/transport"
 )
 
@@ -60,8 +60,9 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	codec Codec
-	copts transport.ConnectOptions
+	codec  Codec
+	logger logs.Logger
+	copts  transport.ConnectOptions
 }
 
 // DialOption configures how we set up the connection.
@@ -71,6 +72,13 @@ type DialOption func(*dialOptions)
 func WithCodec(c Codec) DialOption {
 	return func(o *dialOptions) {
 		o.codec = c
+	}
+}
+
+// WithLogger returns a DialOption which sets a Logger used by the ClientConn.
+func WithLogger(l logs.Logger) DialOption {
+	return func(o *dialOptions) {
+		o.logger = l
 	}
 }
 
@@ -135,6 +143,10 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		// Set the default codec.
 		cc.dopts.codec = protoCodec{}
 	}
+	if cc.dopts.logger == nil {
+		// Set the default logger.
+		cc.dopts.logger = logs.DefaultLogger
+	}
 	if err := cc.resetTransport(false); err != nil {
 		return nil, err
 	}
@@ -194,7 +206,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 				return ErrClientConnTimeout
 			}
 		}
-		newTransport, err := transport.NewClientTransport(cc.target, &copts)
+		newTransport, err := transport.NewClientTransport(cc.target, cc.dopts.logger, &copts)
 		if err != nil {
 			sleepTime := backoff(retries)
 			// Fail early before falling into sleep.
@@ -206,7 +218,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			time.Sleep(sleepTime)
 			retries++
 			// TODO(zhaoq): Record the error with glog.V.
-			log.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
+			cc.dopts.logger.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
 			continue
 		}
 		cc.mu.Lock()
@@ -240,7 +252,7 @@ func (cc *ClientConn) transportMonitor() {
 			if err := cc.resetTransport(true); err != nil {
 				// The channel is closing.
 				// TODO(zhaoq): Record the error with glog.V.
-				log.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
+				cc.dopts.logger.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
 				return
 			}
 			continue
