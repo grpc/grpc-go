@@ -360,11 +360,6 @@ func (t *http2Server) handleRSTStream(f *http2.RSTStreamFrame) {
 	if !ok {
 		return
 	}
-	s.mu.Lock()
-	// Sets the stream state to avoid sending RSTStreamFrame to client
-	// unnecessarily.
-	s.state = streamDone
-	s.mu.Unlock()
 	t.closeStream(s)
 }
 
