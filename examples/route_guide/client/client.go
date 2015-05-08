@@ -40,7 +40,6 @@ package main
 import (
 	"flag"
 	"io"
-	"log"
 	"math/rand"
 	"time"
 
@@ -48,6 +47,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/route_guide/proto"
+	"google.golang.org/grpc/log"
 )
 
 var (

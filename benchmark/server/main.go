@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"log"
 	"math"
 	"net"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/benchmark"
+	"google.golang.org/grpc/log"
 )
 
 var (

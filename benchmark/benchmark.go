@@ -38,7 +38,6 @@ package benchmark
 
 import (
 	"io"
-	"log"
 	"math"
 	"net"
 	"time"
@@ -47,6 +46,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/log"
 )
 
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"log"
 	"math"
 	"net"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 	"google.golang.org/grpc/benchmark"
 	"google.golang.org/grpc/benchmark/stats"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/log"
 )
 
 var (

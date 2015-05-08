@@ -36,7 +36,6 @@ package grpc_test
 import (
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net"
 	"reflect"
@@ -51,6 +50,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/log"
 	"google.golang.org/grpc/metadata"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )

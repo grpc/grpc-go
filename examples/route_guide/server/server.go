@@ -43,7 +43,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"net"
 	"time"
@@ -52,6 +51,7 @@ import (
 	"google.golang.org/grpc"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/log"
 
 	proto "github.com/golang/protobuf/proto"
 

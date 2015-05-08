@@ -37,7 +37,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"time"
@@ -47,6 +46,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/log"
 )
 
 var (

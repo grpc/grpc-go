@@ -37,7 +37,6 @@ import (
 	"flag"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -48,6 +47,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/log"
 	"google.golang.org/grpc/metadata"
 )
 

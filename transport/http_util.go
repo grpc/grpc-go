@@ -37,7 +37,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"sync/atomic"
@@ -46,6 +45,7 @@ import (
 	"github.com/bradfitz/http2"
 	"github.com/bradfitz/http2/hpack"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/log"
 	"google.golang.org/grpc/metadata"
 )
 

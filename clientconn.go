@@ -35,7 +35,6 @@ package grpc
 
 import (
 	"errors"
-	"log"
 	"net"
 	"strings"
 	"sync"
@@ -43,6 +42,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/log"
 	"google.golang.org/grpc/transport"
 )
 

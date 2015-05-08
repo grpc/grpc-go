@@ -37,7 +37,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"reflect"
 	"strings"
@@ -45,6 +44,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/log"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
 )

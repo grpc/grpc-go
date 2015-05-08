@@ -37,7 +37,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log"
 	"math"
 	"net"
 	"sync"
@@ -48,6 +47,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/log"
 	"google.golang.org/grpc/metadata"
 )
 

@@ -37,7 +37,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log"
 	"math"
 	"net"
 	"strconv"
@@ -47,6 +46,7 @@ import (
 	"github.com/bradfitz/http2/hpack"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/log"
 	"google.golang.org/grpc/metadata"
 )
 
