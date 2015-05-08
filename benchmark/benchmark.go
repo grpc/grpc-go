@@ -137,7 +137,7 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 }
 
 func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServer) error {
-	msgBuf := make([]*testpb.StreamingOutputCallRequest, 0)
+	var msgBuf []*testpb.StreamingOutputCallRequest
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {

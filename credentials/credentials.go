@@ -202,6 +202,7 @@ type TokenSource struct {
 	oauth2.TokenSource
 }
 
+// GetRequestMetadata gets the request metadata as a map from a TokenSource.
 func (ts TokenSource) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
 	token, err := ts.Token()
 	if err != nil {

@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	// Used for testing.
-	TimeNow func() time.Time = time.Now
+	// TimeNow is used for testing.
+	TimeNow = time.Now
 )
 
 const (

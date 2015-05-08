@@ -47,8 +47,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/metadata"
 )
 
 var (
@@ -268,7 +268,7 @@ func doComputeEngineCreds(tc testpb.TestServiceClient) {
 	log.Println("ComputeEngineCreds done")
 }
 
-func getServiceAccountJsonKey() []byte {
+func getServiceAccountJSONKey() []byte {
 	jsonKey, err := ioutil.ReadFile(*serviceAccountKeyFile)
 	if err != nil {
 		log.Fatalf("Failed to read the service account key file: %v", err)
@@ -289,7 +289,7 @@ func doServiceAccountCreds(tc testpb.TestServiceClient) {
 	if err != nil {
 		log.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
-	jsonKey := getServiceAccountJsonKey()
+	jsonKey := getServiceAccountJSONKey()
 	user := reply.GetUsername()
 	scope := reply.GetOauthScope()
 	if !strings.Contains(string(jsonKey), user) {
