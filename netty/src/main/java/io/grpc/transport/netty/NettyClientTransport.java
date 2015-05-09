@@ -64,6 +64,7 @@ import io.netty.util.AsciiString;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -115,6 +116,12 @@ class NettyClientTransport implements ClientTransport {
 
     handler = newHandler();
     negotiationHandler = negotiator.newHandler(handler);
+  }
+
+  @Override
+  public void ping(PingCallback callback, Executor executor) {
+    // Write the command requesting the ping
+    handler.getWriteQueue().enqueue(new SendPingCommand(callback, executor), true);
   }
 
   @Override

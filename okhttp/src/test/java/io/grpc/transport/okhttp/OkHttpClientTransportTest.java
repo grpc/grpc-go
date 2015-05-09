@@ -50,7 +50,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.MoreExecutors;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
@@ -63,6 +65,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodType;
 import io.grpc.Status;
+import io.grpc.StatusException;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
 import io.grpc.transport.okhttp.OkHttpClientTransport.ClientFrameHandler;
@@ -116,6 +119,7 @@ public class OkHttpClientTransportTest {
   private Map<Integer, OkHttpClientStream> streams;
   private ClientFrameHandler frameHandler;
   private ExecutorService executor;
+  private long nanoTime; // backs a ticker, for testing ping round-trip time measurement
 
   /** Set up for test. */
   @Before
@@ -125,8 +129,14 @@ public class OkHttpClientTransportTest {
     frameReader = new MockFrameReader();
     socket = new MockSocket(frameReader);
     executor = Executors.newCachedThreadPool();
+    Ticker ticker = new Ticker() {
+      @Override
+      public long read() {
+        return nanoTime;
+      }
+    };
     clientTransport = new OkHttpClientTransport(
-        executor, frameReader, frameWriter, 3, socket);
+        executor, frameReader, frameWriter, 3, socket, ticker);
     clientTransport.start(transportListener);
     frameHandler = clientTransport.getHandler();
     streams = clientTransport.getStreams();
@@ -469,7 +479,7 @@ public class OkHttpClientTransportTest {
     // Stream 2 should be closed.
     listener2.waitUntilStreamClosed();
     assertEquals(1, streams.size());
-    assertEquals(Status.UNAVAILABLE.getCode(), listener2.status.getCode());
+    assertEquals(Status.CANCELLED.getCode(), listener2.status.getCode());
 
     // New stream should be failed.
     assertNewStreamFail(clientTransport);
@@ -576,7 +586,7 @@ public class OkHttpClientTransportTest {
     assertTrue("newStream() call is still blocking",
         newStreamReturn.await(TIME_OUT_MS, TimeUnit.MILLISECONDS));
     listener.waitUntilStreamClosed();
-    assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
+    assertEquals(Status.CANCELLED.getCode(), listener.status.getCode());
     assertEquals(0, clientTransport.getPendingStreamSize());
   }
 
@@ -600,7 +610,7 @@ public class OkHttpClientTransportTest {
     assertTrue("newStream() call is still blocking",
         newStreamReturn.await(TIME_OUT_MS, TimeUnit.MILLISECONDS));
     listener.waitUntilStreamClosed();
-    assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
+    assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
     assertEquals(0, clientTransport.getPendingStreamSize());
   }
 
@@ -739,7 +749,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void receiveDataWithoutHeaderAndTrailer() throws Exception {
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method,new Metadata.Headers(), listener).request(1);
+    clientTransport.newStream(method, new Metadata.Headers(), listener).request(1);
     Buffer buffer = createMessageFrame(new byte[1]);
     frameHandler.data(false, 3, buffer, (int) buffer.size());
 
@@ -870,6 +880,92 @@ public class OkHttpClientTransportTest {
     assertTrue(listener.isOnReadyCalled());
 
     stream.cancel();
+  }
+
+  @Test
+  public void ping() throws Exception {
+    PingCallbackImpl callback1 = new PingCallbackImpl();
+    clientTransport.ping(callback1, MoreExecutors.directExecutor());
+    // add'l ping will be added as listener to outstanding operation
+    PingCallbackImpl callback2 = new PingCallbackImpl();
+    clientTransport.ping(callback2, MoreExecutors.directExecutor());
+
+    ArgumentCaptor<Integer> captor1 = ArgumentCaptor.forClass(int.class);
+    ArgumentCaptor<Integer> captor2 = ArgumentCaptor.forClass(int.class);
+    verify(frameWriter).ping(eq(false), captor1.capture(), captor2.capture());
+    // callback not invoked until we see acknowledgement
+    assertEquals(0, callback1.invocationCount);
+    assertEquals(0, callback2.invocationCount);
+
+    int payload1 = captor1.getValue();
+    int payload2 = captor2.getValue();
+    // getting a bad ack won't complete the future
+    // to make the ack "bad", we modify the payload so it doesn't match
+    frameHandler.ping(true, payload1, payload2 - 1);
+    // operation not complete because ack was wrong
+    assertEquals(0, callback1.invocationCount);
+    assertEquals(0, callback2.invocationCount);
+
+    nanoTime += TimeUnit.MICROSECONDS.toNanos(10101);
+
+    // reading the proper response should complete the future
+    frameHandler.ping(true, payload1, payload2);
+    assertEquals(1, callback1.invocationCount);
+    assertEquals(10101, callback1.roundTripTime);
+    assertNull(callback1.failureCause);
+    // callback2 piggy-backed on same operation
+    assertEquals(1, callback2.invocationCount);
+    assertEquals(10101, callback2.roundTripTime);
+    assertNull(callback2.failureCause);
+
+    // now that previous ping is done, next request returns a different future
+    callback1 = new PingCallbackImpl();
+    clientTransport.ping(callback1, MoreExecutors.directExecutor());
+    assertEquals(0, callback1.invocationCount);
+  }
+
+  @Test
+  public void ping_failsWhenTransportShutdown() throws Exception {
+    PingCallbackImpl callback = new PingCallbackImpl();
+    clientTransport.ping(callback, MoreExecutors.directExecutor());
+    assertEquals(0, callback.invocationCount);
+
+    clientTransport.shutdown();
+    // ping failed on channel shutdown
+    assertEquals(1, callback.invocationCount);
+    assertTrue(callback.failureCause instanceof StatusException);
+    assertEquals(Status.Code.UNAVAILABLE,
+        ((StatusException) callback.failureCause).getStatus().getCode());
+
+    // now that handler is in terminal state, all future pings fail immediately
+    callback = new PingCallbackImpl();
+    clientTransport.ping(callback, MoreExecutors.directExecutor());
+    assertEquals(1, callback.invocationCount);
+    assertTrue(callback.failureCause instanceof StatusException);
+    assertEquals(Status.Code.UNAVAILABLE,
+        ((StatusException) callback.failureCause).getStatus().getCode());
+  }
+
+  @Test
+  public void ping_failsIfTransportFails() throws Exception {
+    PingCallbackImpl callback = new PingCallbackImpl();
+    clientTransport.ping(callback, MoreExecutors.directExecutor());
+    assertEquals(0, callback.invocationCount);
+
+    clientTransport.onIoException(new IOException());
+    // ping failed on error
+    assertEquals(1, callback.invocationCount);
+    assertTrue(callback.failureCause instanceof StatusException);
+    assertEquals(Status.Code.INTERNAL,
+        ((StatusException) callback.failureCause).getStatus().getCode());
+
+    // now that handler is in terminal state, all future pings fail immediately
+    callback = new PingCallbackImpl();
+    clientTransport.ping(callback, MoreExecutors.directExecutor());
+    assertEquals(1, callback.invocationCount);
+    assertTrue(callback.failureCause instanceof StatusException);
+    assertEquals(Status.Code.INTERNAL,
+        ((StatusException) callback.failureCause).getStatus().getCode());
   }
 
   private void waitForStreamPending(int expected) throws Exception {
@@ -1057,6 +1153,24 @@ public class OkHttpClientTransportTest {
     @Override
     public void close() {
       frameReader.nextFrameAtEndOfStream();
+    }
+  }
+
+  static class PingCallbackImpl implements ClientTransport.PingCallback {
+    int invocationCount;
+    long roundTripTime;
+    Throwable failureCause;
+
+    @Override
+    public void pingAcknowledged(long roundTripTimeMicros) {
+      invocationCount++;
+      this.roundTripTime = roundTripTimeMicros;
+    }
+
+    @Override
+    public void pingFailed(Throwable cause) {
+      invocationCount++;
+      this.failureCause = cause;
     }
   }
 }

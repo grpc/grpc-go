@@ -31,8 +31,12 @@
 
 package io.grpc.transport.okhttp;
 
+import static com.google.common.base.Preconditions.checkState;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
+import com.google.common.base.Ticker;
 import com.google.common.util.concurrent.SettableFuture;
 
 import com.squareup.okhttp.CipherSuite;
@@ -55,6 +59,8 @@ import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
+import io.grpc.transport.Http2Ping;
+import io.grpc.transport.HttpUtil;
 
 import okio.Buffer;
 import okio.BufferedSink;
@@ -72,6 +78,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;
@@ -142,6 +149,8 @@ public class OkHttpClientTransport implements ClientTransport {
   private final InetSocketAddress address;
   private final String authorityHost;
   private final String defaultAuthority;
+  private final Random random = new Random();
+  private final Ticker ticker;
   private Listener listener;
   private FrameReader frameReader;
   private AsyncFrameWriter frameWriter;
@@ -159,6 +168,8 @@ public class OkHttpClientTransport implements ClientTransport {
   private boolean goAway;
   @GuardedBy("lock")
   private Status goAwayStatus;
+  @GuardedBy("lock")
+  private Http2Ping ping;
   @GuardedBy("lock")
   private boolean stopped;
   private SSLSocketFactory sslSocketFactory;
@@ -182,6 +193,7 @@ public class OkHttpClientTransport implements ClientTransport {
     if (connectionSpec != null) {
       this.connectionSpec = connectionSpec;
     }
+    this.ticker = Ticker.systemTicker();
   }
 
   /**
@@ -190,6 +202,15 @@ public class OkHttpClientTransport implements ClientTransport {
   @VisibleForTesting
   OkHttpClientTransport(Executor executor, FrameReader frameReader, AsyncFrameWriter frameWriter,
       int nextStreamId, Socket socket) {
+    this(executor, frameReader, frameWriter, nextStreamId, socket, Ticker.systemTicker());
+  }
+
+  /**
+   * Create a transport connected to a fake peer for test, with a custom ticker.
+   */
+  @VisibleForTesting
+  OkHttpClientTransport(Executor executor, FrameReader frameReader, AsyncFrameWriter frameWriter,
+      int nextStreamId, Socket socket, Ticker ticker) {
     address = null;
     authorityHost = null;
     defaultAuthority = "notarealauthority:80";
@@ -199,6 +220,38 @@ public class OkHttpClientTransport implements ClientTransport {
     this.socket = Preconditions.checkNotNull(socket);
     this.outboundFlow = new OutboundFlowController(this, frameWriter);
     this.nextStreamId = nextStreamId;
+    this.ticker = ticker;
+  }
+
+  @Override
+  public void ping(final PingCallback callback, Executor executor) {
+    checkState(frameWriter != null);
+    long data = 0;
+    Http2Ping p;
+    boolean writePing;
+    synchronized (lock) {
+      if (stopped) {
+        Http2Ping.notifyFailed(callback, executor, getPingFailure());
+        return;
+      }
+      if (ping != null) {
+        // we only allow one outstanding ping at a time, so just add the callback to
+        // any outstanding operation
+        p = ping;
+        writePing = false;
+      } else {
+        // set outstanding operation and then write the ping after releasing lock
+        data = random.nextLong();
+        p = ping = new Http2Ping(data, Stopwatch.createStarted(ticker));
+        writePing = true;
+      }
+    }
+    if (writePing) {
+      frameWriter.ping(false, (int) (data >>> 32), (int) data);
+    }
+    // If transport concurrently failed/stopped since we released the lock above, this could
+    // immediately invoke callback (which we shouldn't do while holding a lock)
+    p.addCallback(callback, executor);
   }
 
   @Override
@@ -301,6 +354,8 @@ public class OkHttpClientTransport implements ClientTransport {
         source = Okio.buffer(Okio.source(socket));
         sink = Okio.buffer(Okio.sink(socket));
       } catch (IOException e) {
+        // TODO(jhump): should we instead notify the listener of shutdown+terminated?
+        // (and probably do all of this work asynchronously instead of in calling thread)
         throw new RuntimeException(e);
       }
       Variant variant = new Http2();
@@ -328,7 +383,7 @@ public class OkHttpClientTransport implements ClientTransport {
       if (frameWriter != null) {
         frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
       }
-      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Transport stopped"));
+      onGoAway(Integer.MAX_VALUE, Status.UNAVAILABLE.withDescription("Transport stopped"));
     }
     stopIfNecessary();
   }
@@ -383,7 +438,6 @@ public class OkHttpClientTransport implements ClientTransport {
           }
         }
       }
-
       pendingStreamsCopy = pendingStreams;
       pendingStreams = new LinkedList<PendingStream>();
     }
@@ -394,7 +448,6 @@ public class OkHttpClientTransport implements ClientTransport {
     for (OkHttpClientStream stream : goAwayStreams) {
       stream.transportReportStatus(status, false, new Metadata.Trailers());
     }
-
     for (PendingStream stream : pendingStreamsCopy) {
       stream.clientStream.transportReportStatus(
           status, true, new Metadata.Trailers());
@@ -438,14 +491,18 @@ public class OkHttpClientTransport implements ClientTransport {
    */
   void stopIfNecessary() {
     boolean shouldStop;
+    Http2Ping outstandingPing = null;
     synchronized (lock) {
       shouldStop = (goAway && streams.size() == 0);
       if (shouldStop) {
         if (stopped) {
           // We've already stopped, don't stop again.
           shouldStop = false;
+        } else {
+          stopped = true;
+          outstandingPing = ping;
+          ping = null;
         }
-        stopped = true;
       }
     }
     if (shouldStop) {
@@ -459,6 +516,19 @@ public class OkHttpClientTransport implements ClientTransport {
         } catch (IOException e) {
           log.log(Level.WARNING, "Failed closing socket", e);
         }
+      }
+    }
+    if (outstandingPing != null) {
+      outstandingPing.failed(getPingFailure());
+    }
+  }
+
+  private Throwable getPingFailure() {
+    synchronized (lock) {
+      if (goAwayStatus != null) {
+        return goAwayStatus.asException();
+      } else {
+        return Status.UNAVAILABLE.withDescription("Connection closed").asException();
       }
     }
   }
@@ -592,6 +662,26 @@ public class OkHttpClientTransport implements ClientTransport {
     public void ping(boolean ack, int payload1, int payload2) {
       if (!ack) {
         frameWriter.ping(true, payload1, payload2);
+      } else {
+        Http2Ping p = null;
+        long ackPayload = (((long) payload1) << 32) | (payload2 & 0xffffffffL);
+        synchronized (lock) {
+          if (ping != null) {
+            if (ping.payload() == ackPayload) {
+              p = ping;
+              ping = null;
+            } else {
+              log.log(Level.WARNING, String.format("Received unexpected ping ack. "
+                  + "Expecting %d, got %d", ping.payload(), ackPayload));
+            }
+          } else {
+            log.warning("Received unexpected ping ack. No ping outstanding");
+          }
+        }
+        // don't complete it while holding lock since callbacks could run immediately
+        if (p != null) {
+          p.complete();
+        }
       }
     }
 
@@ -602,7 +692,12 @@ public class OkHttpClientTransport implements ClientTransport {
 
     @Override
     public void goAway(int lastGoodStreamId, ErrorCode errorCode, ByteString debugData) {
-      onGoAway(lastGoodStreamId, Status.UNAVAILABLE.withDescription("Go away"));
+      Status status = HttpUtil.Http2Error.statusForCode(errorCode.httpCode);
+      if (debugData != null && debugData.size() > 0) {
+        // If a debug message was provided, use it.
+        status.augmentDescription(debugData.utf8());
+      }
+      onGoAway(lastGoodStreamId, status);
     }
 
     @Override

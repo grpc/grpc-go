@@ -42,6 +42,8 @@ import static io.grpc.transport.netty.Utils.TE_TRAILERS;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -56,8 +58,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.google.common.base.Ticker;
+import com.google.common.util.concurrent.MoreExecutors;
+
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.Status.Code;
+import io.grpc.StatusException;
+import io.grpc.transport.ClientTransport;
+import io.grpc.transport.ClientTransport.PingCallback;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -91,6 +100,10 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.util.ArrayList;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Tests for {@link NettyClientHandler}.
  */
@@ -107,6 +120,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   private ByteBuf content;
   private Http2Headers grpcHeaders;
   private WriteQueue writeQueue;
+  private long nanoTime; // backs a ticker, for testing ping round-trip time measurement
 
   /** Set up for test. */
   @Before
@@ -227,7 +241,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   /**
    * Although nobody is listening to an exception should it occur during cancel(), we don't want an
    * exception to be thrown because it would negatively impact performance, and we don't want our
-   * users workarounding around such performance issues.
+   * users working around around such performance issues.
    */
   @Test
   public void cancelTwiceShouldSucceed() throws Exception {
@@ -394,6 +408,102 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     verify(stream).id(eq(7));
   }
 
+  @Test
+  public void ping() throws Exception {
+    when(channel.isOpen()).thenReturn(true);
+
+    PingCallbackImpl callback1 = new PingCallbackImpl();
+    sendPing(callback1, MoreExecutors.directExecutor());
+    // add'l ping will be added as listener to outstanding operation
+    PingCallbackImpl callback2 = new PingCallbackImpl();
+    sendPing(callback2, MoreExecutors.directExecutor());
+
+    ByteBuf ping = captureWrite(ctx);
+    frameReader.readFrame(ctx, ping, frameListener);
+    ArgumentCaptor<ByteBuf> captor = ArgumentCaptor.forClass(ByteBuf.class);
+    verify(frameListener).onPingRead(eq(ctx), captor.capture());
+    // callback not invoked until we see acknowledgement
+    assertEquals(0, callback1.invocationCount);
+    assertEquals(0, callback2.invocationCount);
+
+    // getting a bad ack won't cause the callback to be invoked
+    ByteBuf pingPayload = captor.getValue();
+    // to compute bad payload, read the good payload and subtract one
+    ByteBuf badPingPayload = Unpooled.copyLong(pingPayload.slice().readLong() - 1);
+
+    handler.decoder().decodeFrame(ctx, pingFrame(true, badPingPayload), new ArrayList<Object>());
+    // operation not complete because ack was wrong
+    assertEquals(0, callback1.invocationCount);
+    assertEquals(0, callback2.invocationCount);
+
+    nanoTime += TimeUnit.MICROSECONDS.toNanos(10101);
+
+    // reading the proper response should complete the future
+    handler.decoder().decodeFrame(ctx, pingFrame(true, pingPayload), new ArrayList<Object>());
+    assertEquals(1, callback1.invocationCount);
+    assertEquals(10101, callback1.roundTripTime);
+    assertNull(callback1.failureCause);
+    // callback2 piggy-backed on same operation
+    assertEquals(1, callback2.invocationCount);
+    assertEquals(10101, callback2.roundTripTime);
+    assertNull(callback2.failureCause);
+
+    // now that previous ping is done, next request starts a new operation
+    callback1 = new PingCallbackImpl();
+    sendPing(callback1, MoreExecutors.directExecutor());
+    assertEquals(0, callback1.invocationCount);
+  }
+
+  @Test
+  public void ping_failsIfChannelClosed() throws Exception {
+    // channel already closed
+    when(channel.isOpen()).thenReturn(false);
+
+    PingCallbackImpl callback = new PingCallbackImpl();
+    sendPing(callback, MoreExecutors.directExecutor());
+
+    // ping immediately fails because channel is closed
+    assertEquals(1, callback.invocationCount);
+    assertTrue(callback.failureCause instanceof StatusException);
+    assertEquals(Code.UNAVAILABLE,
+        ((StatusException) callback.failureCause).getStatus().getCode());
+  }
+
+  @Test
+  public void ping_failsWhenChannelCloses() throws Exception {
+    when(channel.isOpen()).thenReturn(true);
+
+    PingCallbackImpl callback = new PingCallbackImpl();
+    sendPing(callback, MoreExecutors.directExecutor());
+    assertEquals(0, callback.invocationCount);
+
+    handler.channelInactive(ctx);
+    // ping failed on channel going inactive
+    assertEquals(1, callback.invocationCount);
+    assertTrue(callback.failureCause instanceof StatusException);
+    assertEquals(Status.Code.UNAVAILABLE,
+        ((StatusException) callback.failureCause).getStatus().getCode());
+  }
+
+  @Test
+  public void ping_failsOnConnectionError() throws Exception {
+    when(channel.isOpen()).thenReturn(true);
+
+    PingCallbackImpl callback = new PingCallbackImpl();
+    sendPing(callback, MoreExecutors.directExecutor());
+    assertEquals(0, callback.invocationCount);
+
+    Throwable connectionError = new Throwable();
+    handler.onConnectionError(ctx, connectionError, null);
+    // ping failed on connection error
+    assertEquals(1, callback.invocationCount);
+    assertSame(connectionError, callback.failureCause);
+  }
+
+  private void sendPing(PingCallback callback, Executor executor) {
+    writeQueue.enqueue(new SendPingCommand(callback, executor), true);
+  }
+
   private void receiveMaxConcurrentStreams(int max) throws Exception {
     ByteBuf serializedSettings = serializeSettings(new Http2Settings().maxConcurrentStreams(max));
     handler.channelRead(ctx, serializedSettings);
@@ -409,6 +519,14 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     return captureWrite(ctx);
   }
 
+  private ByteBuf pingFrame(boolean ack, ByteBuf payload) {
+    // Need to retain the content since the frameWriter releases it.
+    content.retain();
+    ChannelHandlerContext ctx = newContext();
+    frameWriter.writePing(ctx, ack, payload, newPromise());
+    return captureWrite(ctx);
+  }
+
   private void createStream() throws Exception {
     writeQueue.enqueue(new CreateStreamCommand(grpcHeaders, stream), true);
     when(stream.id()).thenReturn(3);
@@ -416,17 +534,53 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     mockContext();
   }
 
-  private static NettyClientHandler newHandler(int connectionWindowSize, int streamWindowSize) {
+  private NettyClientHandler newHandler(int connectionWindowSize, int streamWindowSize) {
     Http2Connection connection = new DefaultHttp2Connection(false);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
     BufferingHttp2ConnectionEncoder encoder = new BufferingHttp2ConnectionEncoder(
             new DefaultHttp2ConnectionEncoder(connection, frameWriter));
+    Ticker ticker = new Ticker() {
+      @Override
+      public long read() {
+        return nanoTime;
+      }
+    };
     return new NettyClientHandler(encoder, connection, frameReader, connectionWindowSize,
-        streamWindowSize);
+        streamWindowSize, ticker);
   }
 
   private AsciiString as(String string) {
     return new AsciiString(string);
+  }
+
+  private void mockContextForPing() {
+    mockContext();
+    /*when(ctx.write(any(SendPingCommand.class))).then(new Answer<ChannelFuture>() {
+      @Override
+      public ChannelFuture answer(InvocationOnMock invocation) throws Throwable {
+        SendPingCommand command = (SendPingCommand) invocation.getArguments()[0];
+        handler.write(ctx, command, promise);
+        return future;
+      }
+    });*/
+  }
+
+  private static class PingCallbackImpl implements ClientTransport.PingCallback {
+    int invocationCount;
+    long roundTripTime;
+    Throwable failureCause;
+
+    @Override
+    public void pingAcknowledged(long roundTripTimeMicros) {
+      invocationCount++;
+      this.roundTripTime = roundTripTimeMicros;
+    }
+
+    @Override
+    public void pingFailed(Throwable cause) {
+      invocationCount++;
+      this.failureCause = cause;
+    }
   }
 }

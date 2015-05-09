@@ -34,6 +34,8 @@ package io.grpc.transport;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 
+import java.util.concurrent.Executor;
+
 /**
  * The client-side transport encapsulating a single connection to a remote server. Allows creation
  * of new {@link Stream} instances for communication with the server.
@@ -69,6 +71,15 @@ public interface ClientTransport {
   void start(Listener listener);
 
   /**
+   * Pings the remote endpoint to verify that the transport is still active. When an acknowledgement
+   * is received, the given callback will be invoked using the given executor.
+   *
+   * <p>This is an optional method. Transports that do not have any mechanism by which to ping the
+   * remote endpoint may throw {@link UnsupportedOperationException}.
+   */
+  void ping(PingCallback callback, Executor executor);
+
+  /**
    * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
    * fail (once {@link Listener#transportShutdown()} callback called).
    */
@@ -88,5 +99,27 @@ public interface ClientTransport {
      * The transport completed shutting down. All resources have been released.
      */
     void transportTerminated();
+  }
+
+  /**
+   * A callback that is invoked when the acknowledgement to a {@link #ping} is received.
+   */
+  interface PingCallback {
+
+    /**
+     * Invoked when a ping is acknowledged. The given argument is the round-trip time of the ping,
+     * in microseconds.
+     *
+     * @param roundTripTimeMicros the round-trip duration between the ping being sent and the
+     *     acknowledgement received
+     */
+    void pingAcknowledged(long roundTripTimeMicros);
+
+    /**
+     * Invoked when a ping fails. The given argument is the cause of the failure.
+     *
+     * @param cause the cause of the ping failure
+     */
+    void pingFailed(Throwable cause);
   }
 }

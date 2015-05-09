@@ -37,11 +37,13 @@ import com.google.common.base.Throwables;
 import io.grpc.transport.ClientStream;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
+import io.grpc.transport.ClientTransport.PingCallback;
 import io.grpc.transport.ClientTransportFactory;
 
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -176,6 +178,21 @@ public final class ChannelImpl extends Channel {
   }
 
   /**
+   * Pings the remote endpoint to verify that the transport is still active. When an acknowledgement
+   * is received, the given callback will be invoked using the given executor.
+   *
+   * <p>If the underlying transport has no mechanism by when to send a ping, this method may throw
+   * an {@link UnsupportedOperationException}. The operation may
+   * {@linkplain PingCallback#pingFailed(Throwable) fail} due to transient transport errors. In
+   * that case, trying again may succeed.
+   *
+   * @see ClientTransport#ping(PingCallback, Executor)
+   */
+  public void ping(PingCallback callback, Executor executor) {
+    obtainActiveTransport().ping(callback, executor);
+  }
+
+  /*
    * Creates a new outgoing call on the channel.
    */
   @Override
