@@ -42,7 +42,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/log"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/transport"
 )
 
@@ -205,8 +205,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			closeTransport = false
 			time.Sleep(sleepTime)
 			retries++
-			// TODO(zhaoq): Record the error with glog.V.
-			log.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
+			grpclog.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
 			continue
 		}
 		cc.mu.Lock()
@@ -239,8 +238,7 @@ func (cc *ClientConn) transportMonitor() {
 		case <-cc.transport.Error():
 			if err := cc.resetTransport(true); err != nil {
 				// The channel is closing.
-				// TODO(zhaoq): Record the error with glog.V.
-				log.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
+				grpclog.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
 				return
 			}
 			continue

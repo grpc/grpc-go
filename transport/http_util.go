@@ -45,7 +45,7 @@ import (
 	"github.com/bradfitz/http2"
 	"github.com/bradfitz/http2/hpack"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/log"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -166,7 +166,7 @@ func newHPACKDecoder() *hpackDecoder {
 				}
 				k, v, err := metadata.DecodeKeyValue(f.Name, f.Value)
 				if err != nil {
-					log.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
+					grpclog.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
 					return
 				}
 				d.state.mdata[k] = v

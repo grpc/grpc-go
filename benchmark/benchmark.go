@@ -45,21 +45,21 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/log"
 )
 
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
 	if size < 0 {
-		log.Fatalf("Requested a response with invalid length %d", size)
+		grpclog.Fatalf("Requested a response with invalid length %d", size)
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		log.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+		grpclog.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		log.Fatalf("Unsupported payload type: %d", t)
+		grpclog.Fatalf("Unsupported payload type: %d", t)
 	}
 	return &testpb.Payload{
 		Type: t.Enum(),
@@ -170,7 +170,7 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 func StartServer() (string, func()) {
 	lis, err := net.Listen("tcp", ":0")
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		grpclog.Fatalf("Failed to listen: %v", err)
 	}
 	s := grpc.NewServer(grpc.MaxConcurrentStreams(math.MaxUint32))
 	testpb.RegisterTestServiceServer(s, &testServer{})
@@ -189,7 +189,7 @@ func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
-		log.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
 }
 
@@ -197,7 +197,7 @@ func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
 func NewClientConn(addr string) *grpc.ClientConn {
 	conn, err := grpc.Dial(addr)
 	if err != nil {
-		log.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
+		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
 	}
 	return conn
 }

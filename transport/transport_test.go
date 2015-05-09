@@ -48,7 +48,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/log"
+	"google.golang.org/grpc/grpclog"
 )
 
 type server struct {
@@ -93,7 +93,7 @@ func (h *testStreamHandler) handleStream(s *Stream) {
 		if err == ErrConnClosing {
 			return
 		}
-		log.Fatalf("handleStream got error: %v, want <nil>; result: %v, want %v", err, p, req)
+		grpclog.Fatalf("handleStream got error: %v, want <nil>; result: %v, want %v", err, p, req)
 	}
 	// send a response back to the client.
 	h.t.Write(s, resp, &Options{})
@@ -109,7 +109,7 @@ func (h *testStreamHandler) handleStreamSuspension(s *Stream) {
 func (h *testStreamHandler) handleStreamMisbehave(s *Stream) {
 	conn, ok := s.ServerTransport().(*http2Server)
 	if !ok {
-		log.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
+		grpclog.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
 	}
 	size := 1
 	if s.Method() == "foo.MaxFrame" {
@@ -137,18 +137,18 @@ func (s *server) start(useTLS bool, port int, maxStreams uint32, ht hType) {
 		s.lis, err = net.Listen("tcp", ":"+strconv.Itoa(port))
 	}
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		grpclog.Fatalf("failed to listen: %v", err)
 	}
 	if useTLS {
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
-			log.Fatalf("Failed to generate credentials %v", err)
+			grpclog.Fatalf("Failed to generate credentials %v", err)
 		}
 		s.lis = creds.NewListener(s.lis)
 	}
 	_, p, err := net.SplitHostPort(s.lis.Addr().String())
 	if err != nil {
-		log.Fatalf("failed to parse listener address: %v", err)
+		grpclog.Fatalf("failed to parse listener address: %v", err)
 	}
 	s.port = p
 	s.conns = make(map[ServerTransport]bool)

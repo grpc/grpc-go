@@ -11,8 +11,8 @@ import (
 
 	"google.golang.org/grpc/benchmark"
 	"google.golang.org/grpc/benchmark/stats"
+	"google.golang.org/grpc/grpclog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/log"
 )
 
 var (
@@ -70,7 +70,7 @@ func closeLoop() {
 	close(ch)
 	wg.Wait()
 	conn.Close()
-	log.Println(s.String())
+	grpclog.Println(s.String())
 }
 
 func main() {
@@ -78,11 +78,11 @@ func main() {
 	go func() {
 		lis, err := net.Listen("tcp", ":0")
 		if err != nil {
-			log.Fatalf("Failed to listen: %v", err)
+			grpclog.Fatalf("Failed to listen: %v", err)
 		}
-		log.Println("Client profiling address: ", lis.Addr().String())
+		grpclog.Println("Client profiling address: ", lis.Addr().String())
 		if err := http.Serve(lis, nil); err != nil {
-			log.Fatalf("Failed to serve: %v", err)
+			grpclog.Fatalf("Failed to serve: %v", err)
 		}
 	}()
 	closeLoop()
