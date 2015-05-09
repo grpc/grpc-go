@@ -87,9 +87,7 @@ subprojects {
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufVersion}",
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.3.1',
 
-                // TODO: Unreleased dependencies.
-                // These must already be installed in the local maven repository.
-                netty: 'io.netty:netty-codec-http2:4.1.0.Beta5-SNAPSHOT',
+                netty: 'io.netty:netty-codec-http2:4.1.0.Beta5',
 
                 // Test dependencies.
                 junit: 'junit:junit:4.11',
