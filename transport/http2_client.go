@@ -37,7 +37,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log"
 	"math"
 	"net"
 	"sync"
@@ -48,6 +47,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -553,7 +553,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	s.state = streamDone
 	s.statusCode, ok = http2RSTErrConvTab[http2.ErrCode(f.ErrCode)]
 	if !ok {
-		log.Println("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error ", f.ErrCode)
+		grpclog.Println("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error ", f.ErrCode)
 	}
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
@@ -703,7 +703,7 @@ func (t *http2Client) reader() {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		default:
-			log.Printf("transport: http2Client.reader got unhandled frame type %v.", frame)
+			grpclog.Printf("transport: http2Client.reader got unhandled frame type %v.", frame)
 		}
 	}
 }
@@ -735,7 +735,7 @@ func (t *http2Client) controller() {
 					// meaningful content when this is actually in use.
 					t.framer.writePing(true, i.ack, [8]byte{})
 				default:
-					log.Printf("transport: http2Client.controller got unexpected item type %v\n", i)
+					grpclog.Printf("transport: http2Client.controller got unexpected item type %v\n", i)
 				}
 				t.writableChan <- 0
 				continue
@@ -759,6 +759,6 @@ func (t *http2Client) notifyError(err error) {
 	if t.state == reachable {
 		t.state = unreachable
 		close(t.errorChan)
-		log.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
+		grpclog.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
 	}
 }
