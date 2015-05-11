@@ -35,19 +35,25 @@ import static io.grpc.transport.netty.NettyTestUtil.messageFrame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.when;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.transport.ServerStreamListener;
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
@@ -57,6 +63,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.ByteArrayInputStream;
 
@@ -89,25 +97,26 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     Http2Headers headers = new DefaultHttp2Headers()
         .status(Utils.STATUS_OK)
         .set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_GRPC);
-    verify(channel).writeAndFlush(new SendResponseHeadersCommand(STREAM_ID, headers, false));
-    verify(channel).write(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false));
-    verify(channel).flush();
+    verify(writeQueue).enqueue(new SendResponseHeadersCommand(STREAM_ID, headers, false), true);
+    verify(writeQueue).enqueue(eq(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false)),
+        any(ChannelPromise.class),
+        eq(true));
   }
 
   @Test
   public void writeHeadersShouldSendHeaders() throws Exception {
     Metadata.Headers headers = new Metadata.Headers();
     stream().writeHeaders(headers);
-    verify(channel).writeAndFlush(new SendResponseHeadersCommand(STREAM_ID,
-        Utils.convertServerHeaders(headers), false));
+    verify(writeQueue).enqueue(new SendResponseHeadersCommand(STREAM_ID,
+        Utils.convertServerHeaders(headers), false), true);
   }
 
   @Test
   public void duplicateWriteHeadersShouldFail() throws Exception {
     Metadata.Headers headers = new Metadata.Headers();
     stream().writeHeaders(headers);
-    verify(channel).writeAndFlush(new SendResponseHeadersCommand(STREAM_ID,
-        Utils.convertServerHeaders(headers), false));
+    verify(writeQueue).enqueue(new SendResponseHeadersCommand(STREAM_ID,
+        Utils.convertServerHeaders(headers), false), true);
     try {
       stream().writeHeaders(headers);
       fail("Can only write response headers once");
@@ -119,11 +128,12 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   @Test
   public void closeBeforeClientHalfCloseShouldSucceed() throws Exception {
     stream().close(Status.OK, new Metadata.Trailers());
-    verify(channel).writeAndFlush(
+    verify(writeQueue).enqueue(
         new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
-          .status(new AsciiString("200"))
-          .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
-          .set(new AsciiString("grpc-status"), new AsciiString("0")), true));
+            .status(new AsciiString("200"))
+            .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
+            .set(new AsciiString("grpc-status"), new AsciiString("0")), true),
+        true);
     verifyZeroInteractions(serverListener);
     // Sending complete. Listener gets closed()
     stream().complete();
@@ -136,11 +146,12 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   public void closeWithErrorBeforeClientHalfCloseShouldSucceed() throws Exception {
     // Error is sent on wire and ends the stream
     stream().close(Status.CANCELLED, trailers);
-    verify(channel).writeAndFlush(
+    verify(writeQueue).enqueue(
         new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
-          .status(new AsciiString("200"))
-          .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
-          .set(new AsciiString("grpc-status"), new AsciiString("1")), true));
+            .status(new AsciiString("200"))
+            .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
+            .set(new AsciiString("grpc-status"), new AsciiString("1")), true),
+        true);
     verifyZeroInteractions(serverListener);
     // Sending complete. Listener gets closed()
     stream().complete();
@@ -159,11 +170,12 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     stream().close(Status.OK, trailers);
     assertTrue(stream().isClosed());
     verifyNoMoreInteractions(serverListener);
-    verify(channel).writeAndFlush(
+    verify(writeQueue).enqueue(
         new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
-          .status(new AsciiString("200"))
-          .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
-          .set(new AsciiString("grpc-status"), new AsciiString("0")), true));
+            .status(new AsciiString("200"))
+            .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
+            .set(new AsciiString("grpc-status"), new AsciiString("0")), true),
+        true);
     // Sending and receiving complete. Listener gets closed()
     stream().complete();
     verify(serverListener).closed(Status.OK);
@@ -176,12 +188,13 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     stream().abortStream(status, true);
     assertTrue(stream().isClosed());
     verify(serverListener).closed(same(status));
-    verify(channel).writeAndFlush(
+    verify(writeQueue).enqueue(
         new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
             .status(new AsciiString("200"))
             .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
             .set(new AsciiString("grpc-status"), new AsciiString("" + status.getCode().value())),
-          true));
+            true),
+        true);
     verifyNoMoreInteractions(serverListener);
   }
 
@@ -213,15 +226,27 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   @Test
   public void emptyFramerShouldSendNoPayload() throws Exception {
     stream().close(Status.OK, new Metadata.Trailers());
-    verify(channel).writeAndFlush(
+    verify(writeQueue).enqueue(
         new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
             .status(new AsciiString("200"))
             .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
-            .set(new AsciiString("grpc-status"), new AsciiString("0")), true));
+            .set(new AsciiString("grpc-status"), new AsciiString("0")), true),
+        true);
   }
 
   @Override
   protected NettyServerStream createStream() {
+    when(handler.getWriteQueue()).thenReturn(writeQueue);
+    doAnswer(new Answer() {
+      @Override
+      public Object answer(InvocationOnMock invocation) throws Throwable {
+        if (future.isDone()) {
+          ((ChannelPromise) invocation.getArguments()[1]).setSuccess();
+        }
+        return null;
+      }
+    }).when(writeQueue).enqueue(any(), any(ChannelPromise.class), anyBoolean());
+    doNothing().when(writeQueue).enqueue(any(), anyBoolean());
     NettyServerStream stream = new NettyServerStream(channel, http2Stream, handler);
     stream.setListener(serverListener);
     assertTrue(stream.canReceive());

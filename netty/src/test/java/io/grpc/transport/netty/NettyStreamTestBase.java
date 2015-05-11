@@ -48,10 +48,10 @@ import io.grpc.transport.StreamListener;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
+import io.netty.channel.DefaultChannelPromise;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2Stream;
 
@@ -96,6 +96,9 @@ public abstract class NettyStreamTestBase {
   @Mock
   protected Http2Stream http2Stream;
 
+  @Mock
+  protected WriteQueue writeQueue;
+
   protected AbstractStream<Integer> stream;
 
   /** Set up for test. */
@@ -109,6 +112,8 @@ public abstract class NettyStreamTestBase {
     when(channel.alloc()).thenReturn(UnpooledByteBufAllocator.DEFAULT);
     when(channel.pipeline()).thenReturn(pipeline);
     when(channel.eventLoop()).thenReturn(eventLoop);
+    when(channel.newPromise()).thenReturn(new DefaultChannelPromise(channel));
+    when(channel.voidPromise()).thenReturn(new DefaultChannelPromise(channel));
     when(pipeline.firstContext()).thenReturn(ctx);
     when(eventLoop.inEventLoop()).thenReturn(true);
     when(http2Stream.id()).thenReturn(STREAM_ID);
@@ -218,14 +223,5 @@ public abstract class NettyStreamTestBase {
     if (!succeeded) {
       when(future.cause()).thenReturn(new Exception("fake"));
     }
-
-    doAnswer(new Answer<ChannelFuture>() {
-      @Override
-      public ChannelFuture answer(InvocationOnMock invocation) throws Throwable {
-        ChannelFutureListener listener = (ChannelFutureListener) invocation.getArguments()[0];
-        listener.operationComplete(future);
-        return future;
-      }
-    }).when(future).addListener(any(ChannelFutureListener.class));
   }
 }

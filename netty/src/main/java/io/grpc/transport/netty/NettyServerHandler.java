@@ -83,6 +83,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   private ChannelHandlerContext ctx;
   private boolean teWarningLogged;
   private int connectionWindowSize;
+  private WriteQueue serverWriteQueue;
 
   NettyServerHandler(ServerTransportListener transportListener,
       Http2Connection connection,
@@ -119,6 +120,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   @Override
   public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
     this.ctx = ctx;
+    serverWriteQueue = new WriteQueue(ctx.channel());
     super.handlerAdded(ctx);
     // Initialize the connection window if we haven't already.
     initConnectionWindow();
@@ -219,6 +221,10 @@ class NettyServerHandler extends Http2ConnectionHandler {
     });
   }
 
+  WriteQueue getWriteQueue() {
+    return serverWriteQueue;
+  }
+
   /**
    * Handler for commands sent from the stream.
    */
@@ -229,6 +235,8 @@ class NettyServerHandler extends Http2ConnectionHandler {
       sendGrpcFrame(ctx, (SendGrpcFrameCommand) msg, promise);
     } else if (msg instanceof SendResponseHeadersCommand) {
       sendResponseHeaders(ctx, (SendResponseHeadersCommand) msg, promise);
+    } else if (msg instanceof RequestMessagesCommand) {
+      ((RequestMessagesCommand) msg).requestMessages();
     } else {
       AssertionError e =
           new AssertionError("Write called for unexpected type: " + msg.getClass().getName());
@@ -269,7 +277,6 @@ class NettyServerHandler extends Http2ConnectionHandler {
     }
     // Call the base class to write the HTTP/2 DATA frame.
     encoder().writeData(ctx, cmd.streamId(), cmd.content(), 0, cmd.endStream(), promise);
-    ctx.flush();
   }
 
   /**
@@ -281,7 +288,6 @@ class NettyServerHandler extends Http2ConnectionHandler {
       closeStreamWhenDone(promise, cmd.streamId());
     }
     encoder().writeHeaders(ctx, cmd.streamId(), cmd.headers(), 0, cmd.endOfStream(), promise);
-    ctx.flush();
   }
 
   private Http2Stream requireHttp2Stream(int streamId) {

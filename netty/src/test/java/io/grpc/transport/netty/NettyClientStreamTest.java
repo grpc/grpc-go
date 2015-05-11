@@ -40,18 +40,23 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.transport.ClientStreamListener;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
@@ -61,6 +66,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -95,13 +102,13 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     // Set stream id to indicate it has been created
     stream().id(STREAM_ID);
     stream().cancel();
-    verify(channel).writeAndFlush(any(CancelStreamCommand.class));
+    verify(writeQueue).enqueue(any(CancelStreamCommand.class), eq(true));
   }
 
   @Test
   public void cancelShouldStillSendCommandIfStreamNotCreatedToCancelCreation() {
     stream().cancel();
-    verify(channel).writeAndFlush(any(CancelStreamCommand.class));
+    verify(writeQueue).enqueue(any(CancelStreamCommand.class), eq(true));
   }
 
   @Test
@@ -111,8 +118,10 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     byte[] msg = smallMessage();
     stream.writeMessage(new ByteArrayInputStream(msg), msg.length);
     stream.flush();
-    verify(channel).write(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false));
-    verify(channel).flush();
+    verify(writeQueue).enqueue(
+        eq(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false)),
+        any(ChannelPromise.class),
+        eq(true));
   }
 
   @Test
@@ -207,7 +216,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     stream().transportDataReceived(Unpooled.buffer(1000).writeZero(1000), false);
 
     // Now verify that cancel is sent and an error is reported to the listener
-    verify(channel).writeAndFlush(any(CancelStreamCommand.class));
+    verify(writeQueue).enqueue(any(CancelStreamCommand.class), eq(true));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
     assertEquals(Status.INTERNAL.getCode(), captor.getValue().getCode());
@@ -290,6 +299,17 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Override
   protected NettyClientStream createStream() {
+    when(handler.getWriteQueue()).thenReturn(writeQueue);
+    doAnswer(new Answer() {
+      @Override
+      public Object answer(InvocationOnMock invocation) throws Throwable {
+        if (future.isDone()) {
+          ((ChannelPromise) invocation.getArguments()[1]).setSuccess();
+        }
+        return null;
+      }
+    }).when(writeQueue).enqueue(any(), any(ChannelPromise.class), anyBoolean());
+    doNothing().when(writeQueue).enqueue(any(), anyBoolean());
     NettyClientStream stream = new NettyClientStream(listener, channel, handler);
     assertTrue(stream.canSend());
     assertTrue(stream.canReceive());

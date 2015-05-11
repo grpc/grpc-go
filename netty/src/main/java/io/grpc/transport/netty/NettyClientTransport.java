@@ -159,14 +159,8 @@ class NettyClientTransport implements ClientTransport {
     Http2Headers http2Headers = Utils.convertClientHeaders(headers, ssl, defaultPath, authority);
 
     // Write the command requesting the creation of the stream.
-    CreateStreamCommand msg = new CreateStreamCommand(http2Headers, stream);
-    if (method.getType().clientSendsOneMessage()) {
-      // No need to flush yet if the client is required to send at least one message
-      channel.write(msg);
-    } else {
-      channel.writeAndFlush(msg);
-    }
-
+    handler.getWriteQueue().enqueue(new CreateStreamCommand(http2Headers, stream),
+        !method.getType().clientSendsOneMessage());
     return stream;
   }
 
@@ -187,6 +181,8 @@ class NettyClientTransport implements ClientTransport {
     b.handler(negotiationHandler);
     // Start the connection operation to the server.
     channel = b.connect(address).channel();
+    // Start the write queue as soon as the channel is constructed
+    handler.startWriteQueue(channel);
     // Handle transport shutdown when the channel is closed.
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override

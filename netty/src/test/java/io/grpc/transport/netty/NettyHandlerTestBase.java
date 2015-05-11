@@ -88,6 +88,7 @@ public abstract class NettyHandlerTestBase {
 
   @Mock
   protected EventLoop eventLoop;
+  private boolean inEventLoop;
 
   protected Http2FrameWriter frameWriter;
   protected Http2FrameReader frameReader;
@@ -156,15 +157,28 @@ public abstract class NettyHandlerTestBase {
     when(ctx.newSucceededFuture()).thenReturn(succeededFuture);
     when(ctx.executor()).thenReturn(eventLoop);
     when(channel.eventLoop()).thenReturn(eventLoop);
+    when(channel.newPromise()).thenReturn(promise);
+
+    when(eventLoop.inEventLoop()).thenAnswer(new Answer<Boolean>() {
+      @Override
+      public Boolean answer(InvocationOnMock invocation) throws Throwable {
+        return inEventLoop;
+      }
+    });
 
     mockFuture(succeededFuture, true);
 
     doAnswer(new Answer<Void>() {
       @Override
       public Void answer(InvocationOnMock invocation) throws Throwable {
-        Runnable runnable = (Runnable) invocation.getArguments()[0];
-        runnable.run();
-        return null;
+        try {
+          inEventLoop = true;
+          Runnable runnable = (Runnable) invocation.getArguments()[0];
+          runnable.run();
+          return null;
+        } finally {
+          inEventLoop = false;
+        }
       }
     }).when(eventLoop).execute(any(Runnable.class));
 

@@ -51,9 +51,11 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   private final Channel channel;
   private final NettyServerHandler handler;
   private final Http2Stream http2Stream;
+  private WriteQueue writeQueue;
 
   NettyServerStream(Channel channel, Http2Stream http2Stream, NettyServerHandler handler) {
     super(new NettyWritableBufferAllocator(channel.alloc()));
+    writeQueue = handler.getWriteQueue();
     this.channel = checkNotNull(channel, "channel");
     this.http2Stream = checkNotNull(http2Stream, "http2Stream");
     this.handler = checkNotNull(handler, "handler");
@@ -70,12 +72,12 @@ class NettyServerStream extends AbstractServerStream<Integer> {
 
   @Override
   public void request(final int numMessages) {
-    channel.eventLoop().execute(new Runnable() {
-      @Override
-      public void run() {
-        requestMessagesFromDeframer(numMessages);
-      }
-    });
+    if (channel.eventLoop().inEventLoop()) {
+      // Processing data read in the event loop so can call into the deframer immediately
+      requestMessagesFromDeframer(numMessages);
+    } else {
+      writeQueue.enqueue(new RequestMessagesCommand(this, numMessages), true);
+    }
   }
 
   @Override
@@ -85,8 +87,9 @@ class NettyServerStream extends AbstractServerStream<Integer> {
 
   @Override
   protected void internalSendHeaders(Metadata.Headers headers) {
-    channel.writeAndFlush(new SendResponseHeadersCommand(id(),
-        Utils.convertServerHeaders(headers), false));
+    writeQueue.enqueue(new SendResponseHeadersCommand(id(),
+        Utils.convertServerHeaders(headers), false),
+        true);
   }
 
   @Override
@@ -95,31 +98,27 @@ class NettyServerStream extends AbstractServerStream<Integer> {
     final int numBytes = bytebuf.readableBytes();
     // Add the bytes to outbound flow control.
     onSendingBytes(numBytes);
-    channel.write(new SendGrpcFrameCommand(this, bytebuf, endOfStream)).addListener(
-        new ChannelFutureListener() {
+    writeQueue.enqueue(
+        new SendGrpcFrameCommand(this, bytebuf, endOfStream),
+        channel.newPromise().addListener(new ChannelFutureListener() {
           @Override
           public void operationComplete(ChannelFuture future) throws Exception {
             // Remove the bytes from outbound flow control, optionally notifying
             // the client that they can send more bytes.
             onSentBytes(numBytes);
           }
-        });
-
-    if (flush) {
-      channel.flush();
-    }
+        }), flush);
   }
 
   @Override
   protected void sendTrailers(Metadata.Trailers trailers, boolean headersSent) {
     Http2Headers http2Trailers = Utils.convertTrailers(trailers, headersSent);
-    channel.writeAndFlush(new SendResponseHeadersCommand(id(), http2Trailers, true));
+    writeQueue.enqueue(new SendResponseHeadersCommand(id(), http2Trailers, true), true);
   }
 
   @Override
   protected void returnProcessedBytes(int processedBytes) {
     handler.returnProcessedBytes(http2Stream, processedBytes);
-    // Need to flush as window update may have been written
-    channel.flush();
+    writeQueue.scheduleFlush();
   }
 }
