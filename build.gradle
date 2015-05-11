@@ -46,6 +46,7 @@ subprojects {
         protobufVersion = '3.0.0-alpha-2'
 
         configureProtoCompilation = {
+          String generatedSourcePath = 'src/generated'
           if (rootProject.childProjects.containsKey('grpc-compiler')) {
             // Only when the codegen is built along with the project, will we be able to recompile
             // the proto files.
@@ -61,17 +62,24 @@ subprojects {
               // it's possible the version of protoc has been changed.
               generateProto.inputs.file "${rootProject.projectDir}/build.gradle"
             }
+            // Delete the generated sources first, so that we can be alerted if they are not re-compiled.
+            project.delete project.fileTree(dir: generatedSourcePath)
+
+            project.sourceSets {
+              main {
+                proto {
+                  plugins {
+                    grpc { }
+                  }
+                }
+              }
+            }
           } else {
             // Otherwise, we just use the checked-in generated code.
             project.sourceSets {
               main {
                 java {
-                  srcDir 'src/generated/main'
-                }
-                proto {
-                  plugins {
-                    grpc { }
-                  }
+                  srcDir "${generatedSourcePath}/main"
                 }
               }
             }
