@@ -224,7 +224,7 @@ class BufferingHttp2ConnectionEncoder extends DecoratingHttp2ConnectionEncoder {
    * Determines whether or not we're allowed to create a new stream right now.
    */
   private boolean canCreateStream() {
-    Http2Connection.Endpoint local = connection().local();
+    Http2Connection.Endpoint<?> local = connection().local();
     return (receivedSettings || local.numActiveStreams() < NUM_STREAMS_INITIALLY_ALLOWED)
             && local.canCreateStream();
   }
