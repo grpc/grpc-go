@@ -401,8 +401,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     Http2Connection connection = new DefaultHttp2Connection(false);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
-    DefaultHttp2ConnectionEncoder encoder =
-        new DefaultHttp2ConnectionEncoder(connection, frameWriter);
+    BufferingHttp2ConnectionEncoder encoder = new BufferingHttp2ConnectionEncoder(
+            new DefaultHttp2ConnectionEncoder(connection, frameWriter));
     return new NettyClientHandler(encoder, connection, frameReader, connectionWindowSize,
         streamWindowSize);
   }

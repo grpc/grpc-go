@@ -258,13 +258,12 @@ class NettyClientTransport implements ClientTransport {
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
 
-    Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG);
+    Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, getClass());
     frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
     frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
 
-    DefaultHttp2ConnectionEncoder encoder =
-        new DefaultHttp2ConnectionEncoder(connection, frameWriter);
-
+    BufferingHttp2ConnectionEncoder encoder = new BufferingHttp2ConnectionEncoder(
+            new DefaultHttp2ConnectionEncoder(connection, frameWriter));
     return new NettyClientHandler(encoder, connection, frameReader, connectionWindowSize,
         streamWindowSize);
   }

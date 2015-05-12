@@ -111,7 +111,7 @@ public class BufferingHttp2ConnectionEncoderTest {
     when(configuration.frameSizePolicy()).thenReturn(frameSizePolicy);
     when(frameSizePolicy.maxFrameSize()).thenReturn(DEFAULT_MAX_FRAME_SIZE);
     when(writer.writeRstStream(eq(ctx), anyInt(), anyLong(), eq(promise))).thenAnswer(
-        successAnswer());
+            successAnswer());
     when(writer.writeGoAway(eq(ctx), anyInt(), anyLong(), any(ByteBuf.class), eq(promise)))
         .thenAnswer(successAnswer());
 
@@ -132,6 +132,7 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void multipleWritesToActiveStream() {
+    encoder.writeSettingsAck(ctx, promise);
     encoderWriteHeaders(3, promise);
     assertEquals(0, encoder.numBufferedStreams());
     encoder.writeData(ctx, 3, data(), 0, false, promise);
@@ -146,6 +147,7 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void ensureCanCreateNextStreamWhenStreamCloses() {
+    encoder.writeSettingsAck(ctx, promise);
     connection.local().maxActiveStreams(1);
 
     encoderWriteHeaders(3, promise);
@@ -172,6 +174,7 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void alternatingWritesToActiveAndBufferedStreams() {
+    encoder.writeSettingsAck(ctx, promise);
     connection.local().maxActiveStreams(1);
 
     encoderWriteHeaders(3, promise);
@@ -190,6 +193,7 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void bufferingNewStreamFailsAfterGoAwayReceived() {
+    encoder.writeSettingsAck(ctx, promise);
     connection.local().maxActiveStreams(0);
     connection.goAwayReceived(1, 8, null);
 
@@ -201,6 +205,7 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void receivingGoAwayFailsBufferedStreams() {
+    encoder.writeSettingsAck(ctx, promise);
     connection.local().maxActiveStreams(5);
 
     int streamId = 3;
@@ -220,6 +225,7 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void sendingGoAwayShouldNotFailStreams() {
+    encoder.writeSettingsAck(ctx, promise);
     connection.local().maxActiveStreams(1);
 
     encoderWriteHeaders(3, promise);
@@ -239,6 +245,7 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void endStreamDoesNotFailBufferedStream() {
+    encoder.writeSettingsAck(ctx, promise);
     connection.local().maxActiveStreams(0);
 
     encoderWriteHeaders(3, promise);
@@ -262,6 +269,7 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void rstStreamClosesBufferedStream() {
+    encoder.writeSettingsAck(ctx, promise);
     connection.local().maxActiveStreams(0);
 
     encoderWriteHeaders(3, promise);
@@ -277,6 +285,7 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void bufferUntilActiveStreamsAreReset() {
+    encoder.writeSettingsAck(ctx, promise);
     connection.local().maxActiveStreams(1);
 
     encoderWriteHeaders(3, promise);
@@ -303,6 +312,7 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void bufferUntilMaxStreamsIncreased() {
+    encoder.writeSettingsAck(ctx, promise);
     connection.local().maxActiveStreams(2);
 
     encoderWriteHeaders(3, promise);
@@ -333,7 +343,44 @@ public class BufferingHttp2ConnectionEncoderTest {
   }
 
   @Test
+  public void bufferUntilSettingsReceived() {
+    encoderWriteHeaders(3, promise);
+    encoderWriteHeaders(5, promise);
+    encoderWriteHeaders(7, promise);
+    encoderWriteHeaders(9, promise);
+    encoderWriteHeaders(11, promise);
+    encoderWriteHeaders(13, promise);
+    encoderWriteHeaders(15, promise);
+    encoderWriteHeaders(17, promise);
+    encoderWriteHeaders(19, promise);
+    encoderWriteHeaders(21, promise);
+    encoderWriteHeaders(23, promise);
+    assertEquals(1, encoder.numBufferedStreams());
+
+    writeVerifyWriteHeaders(times(1), 3, promise);
+    writeVerifyWriteHeaders(times(1), 5, promise);
+    writeVerifyWriteHeaders(times(1), 7, promise);
+    writeVerifyWriteHeaders(times(1), 9, promise);
+    writeVerifyWriteHeaders(times(1), 11, promise);
+    writeVerifyWriteHeaders(times(1), 13, promise);
+    writeVerifyWriteHeaders(times(1), 15, promise);
+    writeVerifyWriteHeaders(times(1), 17, promise);
+    writeVerifyWriteHeaders(times(1), 19, promise);
+    writeVerifyWriteHeaders(times(1), 21, promise);
+    writeVerifyWriteHeaders(never(), 23, promise);
+
+    // Simulate that we received a SETTINGS frame.
+    encoder.writeSettingsAck(ctx, promise);
+
+    assertEquals(0, encoder.numBufferedStreams());
+    writeVerifyWriteHeaders(times(1), 23, promise);
+
+    assertEquals(11, connection.local().numActiveStreams());
+  }
+
+  @Test
   public void closedBufferedStreamReleasesByteBuf() {
+    encoder.writeSettingsAck(ctx, promise);
     connection.local().maxActiveStreams(0);
     ByteBuf data = mock(ByteBuf.class);
     encoderWriteHeaders(3, promise);

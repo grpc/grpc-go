@@ -129,7 +129,7 @@ class NettyServerTransport implements ServerTransport {
    */
   private NettyServerHandler createHandler(ServerTransportListener transportListener) {
     Http2Connection connection = new DefaultHttp2Connection(true);
-    Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG);
+    Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, getClass());
     Http2FrameReader frameReader =
         new Http2InboundFrameLogger(new DefaultHttp2FrameReader(), frameLogger);
     Http2FrameWriter frameWriter =

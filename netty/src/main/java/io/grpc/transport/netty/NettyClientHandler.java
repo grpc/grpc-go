@@ -38,6 +38,7 @@ import com.google.common.base.Preconditions;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.transport.HttpUtil;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -46,7 +47,6 @@ import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
-import io.netty.handler.codec.http2.Http2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
@@ -75,11 +75,11 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private ChannelHandlerContext ctx;
   private int nextStreamId;
 
-  public NettyClientHandler(Http2ConnectionEncoder encoder, Http2Connection connection,
+  public NettyClientHandler(BufferingHttp2ConnectionEncoder encoder, Http2Connection connection,
                             Http2FrameReader frameReader,
                             int connectionWindowSize, int streamWindowSize) {
     super(new DefaultHttp2ConnectionDecoder(connection, encoder, frameReader,
-        new LazyFrameListener()), new BufferingHttp2ConnectionEncoder(encoder));
+        new LazyFrameListener()), encoder);
     Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
     this.connectionWindowSize = connectionWindowSize;
     try {
