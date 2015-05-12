@@ -39,7 +39,9 @@ dependencies {
             project(':grpc-integration-testing'),
             libraries.junit,
             libraries.mockito,
-            libraries.hdrhistogram
+            libraries.hdrhistogram,
+            libraries.netty_tcnative,
+            libraries.netty_transport_native_epoll
 
     alpnboot alpnboot_package_name
 }

@@ -40,6 +40,7 @@ import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.CONNECTI
 import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.DIRECTEXECUTOR;
 import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.DURATION;
 import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.HOST;
+import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.NETTY_NATIVE_TRANSPORT;
 import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.OKHTTP;
 import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.OUTSTANDING_RPCS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.PORT;
@@ -61,6 +62,7 @@ import com.google.protobuf.ByteString;
 
 import grpc.testing.Qpstest.Payload;
 import grpc.testing.TestServiceGrpc;
+
 import io.grpc.Channel;
 import io.grpc.ChannelImpl;
 import io.grpc.Status;
@@ -69,7 +71,14 @@ import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollSocketChannel;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslProvider;
+
 import org.HdrHistogram.Histogram;
 import org.HdrHistogram.HistogramIterationValue;
 
@@ -185,10 +194,23 @@ public class AsyncClient {
       // Force the hostname to match the cert the server uses.
       address = InetAddress.getByAddress("foo.test.google.fr", address.getAddress());
       File cert = loadCert("ca.pem");
-      context = GrpcSslContexts.forClient().trustManager(cert).build();
+      context = GrpcSslContexts.forClient().trustManager(cert)
+          .sslProvider(config.nettyNativeTransport ? SslProvider.OPENSSL : SslProvider.JDK)
+          .build();
+    }
+    final EventLoopGroup group;
+    final Class<? extends io.netty.channel.Channel> channelType;
+    if (config.nettyNativeTransport) {
+      group = new EpollEventLoopGroup();
+      channelType = EpollSocketChannel.class;
+    } else {
+      group = new NioEventLoopGroup();
+      channelType = NioSocketChannel.class;
     }
     return NettyChannelBuilder
              .forAddress(new InetSocketAddress(address, config.port))
+             .eventLoopGroup(group)
+             .channelType(channelType)
              .negotiationType(negotiationType)
              .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null)
              .sslContext(context)
@@ -369,7 +391,7 @@ public class AsyncClient {
                            .addOptions(CLIENT_PAYLOAD, SERVER_PAYLOAD, TLS, TESTCA)
                            .addOptions(OKHTTP, DURATION, WARMUP_DURATION, DIRECTEXECUTOR)
                            .addOptions(SAVE_HISTOGRAM, STREAMING_RPCS, CONNECTION_WINDOW)
-                           .addOptions(STREAM_WINDOW);
+                           .addOptions(STREAM_WINDOW, NETTY_NATIVE_TRANSPORT);
     ClientConfiguration config;
     try {
       config = configBuilder.build(args);

@@ -42,12 +42,20 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
 import grpc.testing.TestServiceGrpc;
+
 import io.grpc.ServerImpl;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.ServerChannel;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollServerSocketChannel;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslProvider;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
@@ -62,6 +70,7 @@ public class AsyncServer {
   private int connectionWindow = NettyServerBuilder.DEFAULT_CONNECTION_WINDOW_SIZE;
   private int streamWindow = NettyServerBuilder.DEFAULT_STREAM_WINDOW_SIZE;
   private boolean directExecutor;
+  private boolean nettyNativeTransport;
 
   /**
    * checkstyle complains if there is no javadoc comment here.
@@ -79,19 +88,35 @@ public class AsyncServer {
     SslContext sslContext = null;
     if (tls) {
       System.out.println("Using fake CA for TLS certificate.\n"
-                         + "Run the Java client with --tls --testca");
+          + "Run the Java client with --tls --testca");
 
       File cert = loadCert("server1.pem");
       File key = loadCert("server1.key");
-      sslContext = GrpcSslContexts.forServer(cert, key).build();
+      sslContext = GrpcSslContexts.forServer(cert, key)
+          .sslProvider(nettyNativeTransport ? SslProvider.OPENSSL : SslProvider.JDK).build();
     }
 
     if (port == 0) {
       port = pickUnusedPort();
     }
 
+    final EventLoopGroup boss;
+    final EventLoopGroup worker;
+    final Class<? extends ServerChannel> channelType;
+    if (nettyNativeTransport) {
+      boss = new EpollEventLoopGroup();
+      worker = new EpollEventLoopGroup();
+      channelType = EpollServerSocketChannel.class;
+    } else {
+      boss = new NioEventLoopGroup();
+      worker = new NioEventLoopGroup();
+      channelType = NioServerSocketChannel.class;
+    }
     final ServerImpl server = NettyServerBuilder
             .forPort(port)
+            .bossEventLoopGroup(boss)
+            .workerEventLoopGroup(worker)
+            .channelType(channelType)
             .addService(TestServiceGrpc.bindService(new TestServiceImpl()))
             .sslContext(sslContext)
             .executor(directExecutor ? MoreExecutors.newDirectExecutorService() : null)
@@ -145,6 +170,8 @@ public class AsyncServer {
           connectionWindow = Integer.parseInt(value);
         } else if ("stream_window".equals(key)) {
           streamWindow = Integer.parseInt(value);
+        } else if ("netty_native_transport".equals(key)) {
+          nettyNativeTransport = true;
         } else {
           System.err.println("Unrecognized argument '" + key + "'.");
         }
@@ -159,7 +186,6 @@ public class AsyncServer {
   }
 
   private void printUsage() {
-    AsyncServer s = new AsyncServer();
     System.out.println(
             "Usage: [ARGS...]"
             + "\n"
@@ -168,6 +194,8 @@ public class AsyncServer {
             + "\n  --directexecutor            Use a direct executor i.e. execute all RPC"
             + "\n                              calls directly in Netty's event loop"
             + "\n                              overhead of a thread pool."
+            + "\n  --netty_native_transport    Whether to use Netty's native transport."
+            + "\n                              Only supported on linux."
             + "\n  --connection_window=BYTES   The HTTP/2 connection flow control window."
             + "\n                              Default " + connectionWindow + " byte."
             + "\n  --stream_window=BYTES       The HTTP/2 per-stream flow control window."
@@ -223,8 +251,7 @@ public class AsyncServer {
         PayloadType type = request.getResponseType();
 
         Payload payload = Payload.newBuilder().setType(type).setBody(body).build();
-        SimpleResponse response = SimpleResponse.newBuilder().setPayload(payload).build();
-        return response;
+        return SimpleResponse.newBuilder().setPayload(payload).build();
       }
       return SimpleResponse.getDefaultInstance();
     }

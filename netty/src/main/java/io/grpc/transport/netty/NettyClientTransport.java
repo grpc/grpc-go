@@ -68,9 +68,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.concurrent.GuardedBy;
-import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLParameters;
 
 /**
  * A Netty-based {@link ClientTransport} implementation.
@@ -138,13 +136,7 @@ class NettyClientTransport implements ClientTransport {
             throw new RuntimeException(ex);
           }
         }
-        // TODO(ejona86): specify allocator. The method currently ignores it though.
-        SSLEngine sslEngine
-            = sslContext.newEngine(null, inetAddress.getHostString(), inetAddress.getPort());
-        SSLParameters sslParams = new SSLParameters();
-        sslParams.setEndpointIdentificationAlgorithm("HTTPS");
-        sslEngine.setSSLParameters(sslParams);
-        negotiationHandler = Http2Negotiator.tls(sslEngine, handler);
+        negotiationHandler = Http2Negotiator.tls(sslContext, inetAddress, handler);
         ssl = true;
         break;
       default:

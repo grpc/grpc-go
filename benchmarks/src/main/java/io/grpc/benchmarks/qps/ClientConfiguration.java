@@ -62,6 +62,7 @@ class ClientConfiguration {
   boolean tls;
   boolean testca;
   boolean directExecutor;
+  boolean nettyNativeTransport;
   int port;
   int channels = 4;
   int outstandingRpcsPerChannel = 10;
@@ -206,18 +207,27 @@ class ClientConfiguration {
         @Override
         public void applyNew(ClientConfiguration config, String value) {
           config.tls = true;
+          if (!value.isEmpty()) {
+            config.tls = Boolean.parseBoolean(value);
+          }
         }
       }),
       TESTCA("", "Use the provided Test Certificate for TLS.", new Action() {
         @Override
         public void applyNew(ClientConfiguration config, String value) {
           config.testca = true;
+          if (!value.isEmpty()) {
+            config.testca = Boolean.parseBoolean(value);
+          }
         }
       }),
       OKHTTP("", "Use OkHttp as the Transport.", new Action() {
         @Override
         public void applyNew(ClientConfiguration config, String value) {
           config.okhttp = true;
+          if (!value.isEmpty()) {
+            config.okhttp = Boolean.parseBoolean(value);
+          }
         }
       }),
       DURATION("SECONDS", "Duration of the benchmark.", new Action() {
@@ -239,6 +249,20 @@ class ClientConfiguration {
             @Override
             public void applyNew(ClientConfiguration config, String value) {
               config.directExecutor = true;
+              if (!value.isEmpty()) {
+                config.directExecutor = Boolean.parseBoolean(value);
+              }
+            }
+          }),
+      NETTY_NATIVE_TRANSPORT("", "Whether to use Netty's native transport. Only supported when "
+          + "using the Netty transport on Linux.",
+          new Action() {
+            @Override
+            public void applyNew(ClientConfiguration config, String value) {
+              config.nettyNativeTransport = true;
+              if (!value.isEmpty()) {
+                config.nettyNativeTransport = Boolean.parseBoolean(value);
+              }
             }
           }),
       SAVE_HISTOGRAM("FILE", "Write the histogram with the latency recordings to file.",

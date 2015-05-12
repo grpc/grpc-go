@@ -37,6 +37,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -48,6 +49,7 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2OrHttpChooser;
+import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.util.concurrent.Future;
@@ -56,6 +58,7 @@ import io.netty.util.concurrent.GenericFutureListener;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.net.InetSocketAddress;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
@@ -65,6 +68,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
 
 /**
  * A utility class that provides support methods for negotiating the use of HTTP/2 with the remote
@@ -93,8 +97,11 @@ public final class Http2Negotiator {
    */
   public static ChannelHandler serverTls(SSLEngine sslEngine) {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
-    if (!installJettyTlsProtocolSelection(sslEngine, SettableFuture.<Void>create(), true)) {
-      throw new IllegalStateException("NPN/ALPN extensions not installed");
+    if (!isOpenSsl(sslEngine.getClass())) {
+      // Using JDK SSL
+      if (!installJettyTlsProtocolSelection(sslEngine, SettableFuture.<Void>create(), true)) {
+        throw new IllegalStateException("NPN/ALPN extensions not installed");
+      }
     }
     return new SslHandler(sslEngine, false);
   }
@@ -104,26 +111,48 @@ public final class Http2Negotiator {
    * be negotiated, the {@code handler} is added and writes to the {@link Channel} may happen
    * immediately, even before the TLS Handshake is complete.
    */
-  public static ChannelHandler tls(final SSLEngine sslEngine, final ChannelHandler handler) {
-    Preconditions.checkNotNull(sslEngine, "sslEngine");
-    final SettableFuture<Void> completeFuture = SettableFuture.create();
-    if (!installJettyTlsProtocolSelection(sslEngine, completeFuture, false)) {
-      throw new IllegalStateException("NPN/ALPN extensions not installed");
-    }
-    SslHandler sslHandler = new SslHandler(sslEngine, false);
-    sslHandler.handshakeFuture().addListener(
-        new GenericFutureListener<Future<? super Channel>>() {
-          @Override
-          public void operationComplete(Future<? super Channel> future) throws Exception {
-            // If an error occurred during the handshake, throw it to the pipeline.
-            if (future.isSuccess()) {
-              completeFuture.get();
-            } else {
-              future.get();
-            }
+  public static ChannelHandler tls(final SslContext sslContext, final InetSocketAddress inetAddress,
+      final ChannelHandler handler) {
+    Preconditions.checkNotNull(sslContext, "sslContext");
+    Preconditions.checkNotNull(inetAddress, "inetAddress");
+
+    ChannelHandler sslBootstrapHandler = new ChannelHandlerAdapter() {
+      @Override
+      public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+        // TODO(nmittler): This method is currently unsupported for OpenSSL. Need to fix in Netty.
+        SSLEngine sslEngine = sslEngine = sslContext.newEngine(ctx.alloc(),
+                inetAddress.getHostName(), inetAddress.getPort());
+        SSLParameters sslParams = new SSLParameters();
+        sslParams.setEndpointIdentificationAlgorithm("HTTPS");
+        sslEngine.setSSLParameters(sslParams);
+
+        final SettableFuture<Void> completeFuture = SettableFuture.create();
+        if (isOpenSsl(sslContext.getClass())) {
+          completeFuture.set(null);
+        } else {
+          // Using JDK SSL
+          if (!installJettyTlsProtocolSelection(sslEngine, completeFuture, false)) {
+            throw new IllegalStateException("NPN/ALPN extensions not installed");
           }
-        });
-    return new BufferUntilTlsNegotiatedHandler(sslHandler, handler);
+        }
+
+        SslHandler sslHandler = new SslHandler(sslEngine, false);
+        sslHandler.handshakeFuture().addListener(
+            new GenericFutureListener<Future<? super Channel>>() {
+              @Override
+              public void operationComplete(Future<? super Channel> future) throws Exception {
+                // If an error occurred during the handshake, throw it to the pipeline.
+                if (future.isSuccess()) {
+                  completeFuture.get();
+                } else {
+                  future.get();
+                }
+              }
+            });
+        ctx.pipeline().replace(this, "sslHandler", sslHandler);
+      }
+    };
+    return new BufferUntilTlsNegotiatedHandler(sslBootstrapHandler, handler);
   }
 
   /**
@@ -146,6 +175,13 @@ public final class Http2Negotiator {
    */
   public static ChannelHandler plaintext(final ChannelHandler handler) {
     return new BufferUntilChannelActiveHandler(handler);
+  }
+
+  /**
+   * Returns {@code true} if the given class is for use with Netty OpenSsl.
+   */
+  private static boolean isOpenSsl(Class<?> clazz) {
+    return clazz.getSimpleName().toLowerCase().contains("openssl");
   }
 
   /**
