@@ -3,8 +3,8 @@ How to Deploy GRPC Java to Maven Central (for Maintainers Only)
 
 Build Environments
 ------------------
-We have succesfully deployed GRPC to Maven Central under the following systems:
-- Ubuntu 14.04 64-bit
+We deploy GRPC to Maven Central under the following systems:
+- Ubuntu 14.04 with Docker 1.6.1 that runs CentOS 6.6
 - Windows 7 64-bit with MSYS2 with mingw32 and mingw64
 - Mac OS X 10.9.5
 
@@ -48,21 +48,11 @@ separately and install it under your personal directory, because
    system paths.
 
 
-#### Linux
-You must have multilib GCC installed on your system.
-
-Compile and install 32-bit protobuf:
+#### Linux with Docker
+Build the ``protoc-artifacts`` image under the Protobuf source directory:
 ```
-protobuf$ CXXFLAGS="-m32" ./configure --disable-shared --prefix=$HOME/protobuf-32
-protobuf$ make clean && make && make install
+protobuf$ docker build -t protoc-artifacts protoc-artifacts
 ```
-
-Compile and install 64-bit protobuf:
-```
-protobuf$ CXXFLAGS="-m64" ./configure --disable-shared --prefix=$HOME/protobuf-64
-protobuf$ make clean && make && make install
-```
-
 
 #### Windows 64-bit with MSYS2 (Recommended for Windows)
 Because the gcc shipped with MSYS2 doesn't support multilib, you have to
@@ -127,30 +117,39 @@ Compilation of the codegen requires additional environment variables to locate
 the header files and libraries of Protobuf.
 
 #### Linux
+Build the ``grpc-java-deploy`` image:
 ```
-$ export CXXFLAGS="-I$HOME/protobuf-32/include" \
-  LDFLAGS="-L$HOME/protobuf-32/lib -L$HOME/protobuf-64/lib"
+grpc-java$ docker build -t grpc-java-deploy grpc-compiler
 ```
+
+Start a Docker container that has the deploy environment set up for you. The
+gRPC source is cloned into ``/grpc-java``.
+```
+$ docker run -it --rm=true grpc-java-deploy
+```
+Note that the container will be deleted after you exit. Any changes you have
+made will be lost. If you want to keep the container, remove ``--rm=true`` from
+the command line.
 
 #### Windows 64-bit with MSYS2
 
 ##### Under MinGW-w64 Win32 Shell
 
 ```
-$ export CXXFLAGS="-I$HOME/protobuf-32/include" \
+grpc-java$ export CXXFLAGS="-I$HOME/protobuf-32/include" \
   LDFLAGS="-L$HOME/protobuf-32/lib"
 ```
 
 ##### Under MinGW-w64 Win64 Shell
 ```
-$ export CXXFLAGS="-I$HOME/protobuf-64/include" \
+grpc-java$ export CXXFLAGS="-I$HOME/protobuf-64/include" \
   LDFLAGS="-L$HOME/protobuf-64/lib"
 ```
 
 
 #### Mac
 ```
-$ export CXXFLAGS="-I$HOME/protobuf/include" \
+grpc-java$ export CXXFLAGS="-I$HOME/protobuf/include" \
   LDFLAGS="$HOME/protobuf/lib/libprotobuf.a $HOME/protobuf/lib/libprotoc.a"
 ```
 
