@@ -208,6 +208,11 @@ class OkHttpClientStream extends Http2ClientStream {
   @Override
   public void remoteEndClosed() {
     super.remoteEndClosed();
+    if (canSend()) {
+      // If server's end-of-stream is received before client sends end-of-stream, we just send a
+      // reset to server to fully close the server side stream.
+      frameWriter.rstStream(id(), ErrorCode.CANCEL);
+    }
     transport.finishStream(id(), null, null);
   }
 
