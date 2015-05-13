@@ -15,6 +15,8 @@ creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 if err != nil {
   log.Fatalf("Failed to generate credentials %v", err)
 }
+server := grpc.NewServer(grpc.Creds(creds))
+...
 server.Serve(creds.NewListener(lis))
 ```
 

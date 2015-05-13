@@ -195,15 +195,15 @@ func main() {
 	if err != nil {
 		grpclog.Fatalf("failed to listen: %v", err)
 	}
-	server := grpc.NewServer()
-	testpb.RegisterTestServiceServer(server, &testServer{})
+	var opts []grpc.ServerOption
 	if *useTLS {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
 			grpclog.Fatalf("Failed to generate credentials %v", err)
 		}
-		server.Serve(creds.NewListener(lis))
-	} else {
-		server.Serve(lis)
+		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
+	server := grpc.NewServer(opts...)
+	testpb.RegisterTestServiceServer(server, &testServer{})
+	server.Serve(lis)
 }

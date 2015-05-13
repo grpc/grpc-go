@@ -47,7 +47,6 @@ import (
 	"github.com/bradfitz/http2"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -61,7 +60,6 @@ type server struct {
 }
 
 var (
-	tlsDir                = "testdata/"
 	expectedRequest       = []byte("ping")
 	expectedResponse      = []byte("pong")
 	expectedRequestLarge  = make([]byte, initialWindowSize*2)
@@ -129,7 +127,7 @@ func (h *testStreamHandler) handleStreamMisbehave(s *Stream) {
 }
 
 // start starts server. Other goroutines should block on s.readyChan for futher operations.
-func (s *server) start(useTLS bool, port int, maxStreams uint32, ht hType) {
+func (s *server) start(port int, maxStreams uint32, ht hType) {
 	var err error
 	if port == 0 {
 		s.lis, err = net.Listen("tcp", ":0")
@@ -138,13 +136,6 @@ func (s *server) start(useTLS bool, port int, maxStreams uint32, ht hType) {
 	}
 	if err != nil {
 		grpclog.Fatalf("failed to listen: %v", err)
-	}
-	if useTLS {
-		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
-		if err != nil {
-			grpclog.Fatalf("Failed to generate credentials %v", err)
-		}
-		s.lis = creds.NewListener(s.lis)
 	}
 	_, p, err := net.SplitHostPort(s.lis.Addr().String())
 	if err != nil {
@@ -202,27 +193,16 @@ func (s *server) stop() {
 	s.mu.Unlock()
 }
 
-func setUp(t *testing.T, useTLS bool, port int, maxStreams uint32, ht hType) (*server, ClientTransport) {
+func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, ClientTransport) {
 	server := &server{readyChan: make(chan bool)}
-	go server.start(useTLS, port, maxStreams, ht)
+	go server.start(port, maxStreams, ht)
 	server.wait(t, 2*time.Second)
 	addr := "localhost:" + server.port
 	var (
 		ct      ClientTransport
 		connErr error
 	)
-	if useTLS {
-		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
-		if err != nil {
-			t.Fatalf("Failed to create credentials %v", err)
-		}
-		dopts := ConnectOptions{
-			AuthOptions: []credentials.Credentials{creds},
-		}
-		ct, connErr = NewClientTransport(addr, &dopts)
-	} else {
-		ct, connErr = NewClientTransport(addr, &ConnectOptions{})
-	}
+	ct, connErr = NewClientTransport(addr, &ConnectOptions{})
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
@@ -230,7 +210,7 @@ func setUp(t *testing.T, useTLS bool, port int, maxStreams uint32, ht hType) (*s
 }
 
 func TestClientSendAndReceive(t *testing.T) {
-	server, ct := setUp(t, true, 0, math.MaxUint32, normal)
+	server, ct := setUp(t, 0, math.MaxUint32, normal)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Small",
@@ -270,7 +250,7 @@ func TestClientSendAndReceive(t *testing.T) {
 }
 
 func TestClientErrorNotify(t *testing.T) {
-	server, ct := setUp(t, true, 0, math.MaxUint32, normal)
+	server, ct := setUp(t, 0, math.MaxUint32, normal)
 	go server.stop()
 	// ct.reader should detect the error and activate ct.Error().
 	<-ct.Error()
@@ -304,7 +284,7 @@ func performOneRPC(ct ClientTransport) {
 }
 
 func TestClientMix(t *testing.T) {
-	s, ct := setUp(t, true, 0, math.MaxUint32, normal)
+	s, ct := setUp(t, 0, math.MaxUint32, normal)
 	go func(s *server) {
 		time.Sleep(5 * time.Second)
 		s.stop()
@@ -320,7 +300,7 @@ func TestClientMix(t *testing.T) {
 }
 
 func TestExceedMaxStreamsLimit(t *testing.T) {
-	server, ct := setUp(t, true, 0, 1, normal)
+	server, ct := setUp(t, 0, 1, normal)
 	defer func() {
 		ct.Close()
 		server.stop()
@@ -368,7 +348,7 @@ func TestExceedMaxStreamsLimit(t *testing.T) {
 }
 
 func TestLargeMessage(t *testing.T) {
-	server, ct := setUp(t, true, 0, math.MaxUint32, normal)
+	server, ct := setUp(t, 0, math.MaxUint32, normal)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Large",
@@ -402,7 +382,7 @@ func TestLargeMessage(t *testing.T) {
 }
 
 func TestLargeMessageSuspension(t *testing.T) {
-	server, ct := setUp(t, true, 0, math.MaxUint32, suspended)
+	server, ct := setUp(t, 0, math.MaxUint32, suspended)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Large",
@@ -424,7 +404,7 @@ func TestLargeMessageSuspension(t *testing.T) {
 }
 
 func TestServerWithMisbehavedClient(t *testing.T) {
-	server, ct := setUp(t, true, 0, math.MaxUint32, suspended)
+	server, ct := setUp(t, 0, math.MaxUint32, suspended)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo",
@@ -524,7 +504,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 }
 
 func TestClientWithMisbehavedServer(t *testing.T) {
-	server, ct := setUp(t, true, 0, math.MaxUint32, misbehaved)
+	server, ct := setUp(t, 0, math.MaxUint32, misbehaved)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo",
