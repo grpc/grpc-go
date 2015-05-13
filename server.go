@@ -86,7 +86,7 @@ type Server struct {
 }
 
 type options struct {
-	creds                []credentials.Credentials
+	creds                credentials.Credentials
 	codec                Codec
 	maxConcurrentStreams uint32
 }
@@ -112,7 +112,7 @@ func MaxConcurrentStreams(n uint32) ServerOption {
 // Creds returns a ServerOption that sets credentials for server connections.
 func Creds(c credentials.Credentials) ServerOption {
 	return func(o *options) {
-		o.creds = append(o.creds, c)
+		o.creds = c
 	}
 }
 
@@ -195,14 +195,11 @@ func (s *Server) Serve(lis net.Listener) error {
 		if err != nil {
 			return err
 		}
-		for _, o := range s.opts.creds {
-			if creds, ok := o.(credentials.TransportAuthenticator); ok {
-				c, err = creds.ServerHandshake(c)
-				if err != nil {
-					grpclog.Println("grpc: Server.Serve failed to complete security handshake.")
-					continue
-				}
-				break
+		if creds, ok := s.opts.creds.(credentials.TransportAuthenticator); ok {
+			c, err = creds.ServerHandshake(c)
+			if err != nil {
+				grpclog.Println("grpc: Server.Serve failed to complete security handshake.")
+				continue
 			}
 		}
 		s.mu.Lock()
