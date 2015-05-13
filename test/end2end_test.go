@@ -284,27 +284,27 @@ func listTestEnv() []env {
 }
 
 func setUp(maxStream uint32, e env) (s *grpc.Server, cc *grpc.ClientConn) {
-	s = grpc.NewServer(grpc.MaxConcurrentStreams(maxStream))
+	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(maxStream)}
 	la := ":0"
 	switch e.network {
 	case "unix":
-		la = "/tmp/testsock" + fmt.Sprintf("%p", s)
+		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now())
 		syscall.Unlink(la)
 	}
 	lis, err := net.Listen(e.network, la)
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
-	testpb.RegisterTestServiceServer(s, &testServer{})
 	if e.security == "tls" {
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
 			grpclog.Fatalf("Failed to generate credentials %v", err)
 		}
-		go s.Serve(creds.NewListener(lis))
-	} else {
-		go s.Serve(lis)
+		sopts = append(sopts, grpc.Creds(creds))
 	}
+	s = grpc.NewServer(sopts...)
+	testpb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
 	addr := la
 	switch e.network {
 	case "unix":

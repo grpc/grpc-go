@@ -44,6 +44,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
@@ -85,21 +86,13 @@ type Server struct {
 }
 
 type options struct {
-	handshaker           func(net.Conn) error
+	creds                []credentials.Credentials
 	codec                Codec
 	maxConcurrentStreams uint32
 }
 
 // A ServerOption sets options.
 type ServerOption func(*options)
-
-// Handshaker returns a ServerOption that specifies a function to perform user-specified
-// handshaking on the connection before it becomes usable for gRPC.
-func Handshaker(f func(net.Conn) error) ServerOption {
-	return func(o *options) {
-		o.handshaker = f
-	}
-}
 
 // CustomCodec returns a ServerOption that sets a codec for message marshaling and unmarshaling.
 func CustomCodec(codec Codec) ServerOption {
@@ -113,6 +106,13 @@ func CustomCodec(codec Codec) ServerOption {
 func MaxConcurrentStreams(n uint32) ServerOption {
 	return func(o *options) {
 		o.maxConcurrentStreams = n
+	}
+}
+
+// Creds returns a ServerOption that sets credentials for server connections.
+func Creds(c credentials.Credentials) ServerOption {
+	return func(o *options) {
+		o.creds = append(o.creds, c)
 	}
 }
 
@@ -195,12 +195,14 @@ func (s *Server) Serve(lis net.Listener) error {
 		if err != nil {
 			return err
 		}
-		// Perform handshaking if it is required.
-		if s.opts.handshaker != nil {
-			if err := s.opts.handshaker(c); err != nil {
-				grpclog.Println("grpc: Server.Serve failed to complete handshake.")
-				c.Close()
-				continue
+		for _, o := range s.opts.creds {
+			if creds, ok := o.(credentials.TransportAuthenticator); ok {
+				c, err = creds.ServerHandshake(c)
+				if err != nil {
+					grpclog.Println("grpc: Server.Serve failed to complete security handshake.")
+					continue
+				}
+				break
 			}
 		}
 		s.mu.Lock()

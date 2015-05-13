@@ -84,12 +84,14 @@ type ProtocolInfo struct {
 // TransportAuthenticator defines the common interface for all the live gRPC wire
 // protocols and supported transport security protocols (e.g., TLS, SSL).
 type TransportAuthenticator interface {
-	// Handshake does the authentication handshake specified by the corresponding
-	// authentication protocol on rawConn.
-	Handshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, error)
+	// ClientHandshake does the authentication handshake specified by the corresponding
+	// authentication protocol on rawConn for clients.
+	ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, error)
+	// ServerHandshake does the authentication handshake for servers.
+	ServerHandshake(rawConn net.Conn) (net.Conn, error)
 	// NewListener creates a listener which accepts connections with requested
 	// authentication handshake.
-	NewListener(lis net.Listener) net.Listener
+	//NewListener(lis net.Listener) net.Listener
 	// Info provides the ProtocolInfo of this TransportAuthenticator.
 	Info() ProtocolInfo
 	Credentials
@@ -120,7 +122,7 @@ func (timeoutError) Error() string   { return "credentials: Dial timed out" }
 func (timeoutError) Timeout() bool   { return true }
 func (timeoutError) Temporary() bool { return true }
 
-func (c *tlsCreds) Handshake(addr string, rawConn net.Conn, timeout time.Duration) (_ net.Conn, err error) {
+func (c *tlsCreds) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (_ net.Conn, err error) {
 	// borrow some code from tls.DialWithDialer
 	var errChannel chan error
 	if timeout != 0 {
@@ -152,9 +154,13 @@ func (c *tlsCreds) Handshake(addr string, rawConn net.Conn, timeout time.Duratio
 	return conn, nil
 }
 
-// NewListener creates a net.Listener using the information in tlsCreds.
-func (c *tlsCreds) NewListener(lis net.Listener) net.Listener {
-	return tls.NewListener(lis, &c.config)
+func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, error) {
+	conn := tls.Server(rawConn, &c.config)
+	if err := conn.Handshake(); err != nil {
+		rawConn.Close()
+		return nil, err
+	}
+	return conn, nil
 }
 
 // NewTLS uses c to construct a TransportAuthenticator based on TLS.
