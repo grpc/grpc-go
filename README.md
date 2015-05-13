@@ -116,16 +116,6 @@ How to Build
 ------------
 This section is only necessary if you are making changes to gRPC-Java.
 
-### Build Netty
-grpc-java requires Netty 4.1, which is still in flux. The version we need can be
-found in the lib/netty submodule, which requires Maven 3.2 or higher to build:
-```
-$ git submodule update --init
-$ cd lib/netty
-$ mvn install -pl codec-http2 -am -DskipTests=true
-```
-
-### Build gRPC
 Building requires JDK 8, as our tests use TLS.
 
 grpc-java has a C++ code generation plugin for protoc. Since many Java

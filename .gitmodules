@@ -1,3 +1,0 @@
-[submodule "lib/netty"]
-	path = lib/netty
-	url = https://github.com/netty/netty.git
