@@ -344,38 +344,23 @@ public class BufferingHttp2ConnectionEncoderTest {
 
   @Test
   public void bufferUntilSettingsReceived() {
-    encoderWriteHeaders(3, promise);
-    encoderWriteHeaders(5, promise);
-    encoderWriteHeaders(7, promise);
-    encoderWriteHeaders(9, promise);
-    encoderWriteHeaders(11, promise);
-    encoderWriteHeaders(13, promise);
-    encoderWriteHeaders(15, promise);
-    encoderWriteHeaders(17, promise);
-    encoderWriteHeaders(19, promise);
-    encoderWriteHeaders(21, promise);
-    encoderWriteHeaders(23, promise);
-    assertEquals(1, encoder.numBufferedStreams());
-
-    writeVerifyWriteHeaders(times(1), 3, promise);
-    writeVerifyWriteHeaders(times(1), 5, promise);
-    writeVerifyWriteHeaders(times(1), 7, promise);
-    writeVerifyWriteHeaders(times(1), 9, promise);
-    writeVerifyWriteHeaders(times(1), 11, promise);
-    writeVerifyWriteHeaders(times(1), 13, promise);
-    writeVerifyWriteHeaders(times(1), 15, promise);
-    writeVerifyWriteHeaders(times(1), 17, promise);
-    writeVerifyWriteHeaders(times(1), 19, promise);
-    writeVerifyWriteHeaders(times(1), 21, promise);
-    writeVerifyWriteHeaders(never(), 23, promise);
+    int initialLimit = BufferingHttp2ConnectionEncoder.SMALLEST_MAX_CONCURRENT_STREAMS;
+    int numStreams = initialLimit * 2;
+    for (int ix = 0, nextStreamId = 3; ix < numStreams; ++ix, nextStreamId += 2) {
+      encoderWriteHeaders(nextStreamId, promise);
+      if (ix < initialLimit) {
+        writeVerifyWriteHeaders(times(1), nextStreamId, promise);
+      } else {
+        writeVerifyWriteHeaders(never(), nextStreamId, promise);
+      }
+    }
+    assertEquals(numStreams / 2, encoder.numBufferedStreams());
 
     // Simulate that we received a SETTINGS frame.
     encoder.writeSettingsAck(ctx, promise);
 
     assertEquals(0, encoder.numBufferedStreams());
-    writeVerifyWriteHeaders(times(1), 23, promise);
-
-    assertEquals(11, connection.local().numActiveStreams());
+    assertEquals(numStreams, connection.local().numActiveStreams());
   }
 
   @Test

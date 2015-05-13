@@ -68,10 +68,10 @@ import java.util.TreeMap;
  */
 class BufferingHttp2ConnectionEncoder extends DecoratingHttp2ConnectionEncoder {
   /**
-   * The number of new streams we allow to be created before receiving the first {@code SETTINGS}
-   * frame from the server.
+   * The assumed minimum value for {@code SETTINGS_MAX_CONCURRENT_STREAMS} as
+   * recommended by the HTTP/2 spec.
    */
-  private static final int NUM_STREAMS_INITIALLY_ALLOWED = 10;
+  static final int SMALLEST_MAX_CONCURRENT_STREAMS = 100;
 
   /**
    * Buffer for any streams and corresponding frames that could not be created
@@ -79,12 +79,19 @@ class BufferingHttp2ConnectionEncoder extends DecoratingHttp2ConnectionEncoder {
    */
   private final TreeMap<Integer, PendingStream> pendingStreams =
           new TreeMap<Integer, PendingStream>();
+  private final int initialMaxConcurrentStreams;
   // Smallest stream id whose corresponding frames do not get buffered.
   private int largestCreatedStreamId;
   private boolean receivedSettings;
 
   protected BufferingHttp2ConnectionEncoder(Http2ConnectionEncoder delegate) {
+    this(delegate, SMALLEST_MAX_CONCURRENT_STREAMS);
+  }
+
+  protected BufferingHttp2ConnectionEncoder(Http2ConnectionEncoder delegate,
+                                            int initialMaxConcurrentStreams) {
     super(delegate);
+    this.initialMaxConcurrentStreams = initialMaxConcurrentStreams;
     connection().addListener(new Http2ConnectionAdapter() {
 
       @Override
@@ -225,7 +232,7 @@ class BufferingHttp2ConnectionEncoder extends DecoratingHttp2ConnectionEncoder {
    */
   private boolean canCreateStream() {
     Http2Connection.Endpoint<?> local = connection().local();
-    return (receivedSettings || local.numActiveStreams() < NUM_STREAMS_INITIALLY_ALLOWED)
+    return (receivedSettings || local.numActiveStreams() < initialMaxConcurrentStreams)
             && local.canCreateStream();
   }
 
