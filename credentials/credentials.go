@@ -89,9 +89,6 @@ type TransportAuthenticator interface {
 	ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, error)
 	// ServerHandshake does the authentication handshake for servers.
 	ServerHandshake(rawConn net.Conn) (net.Conn, error)
-	// NewListener creates a listener which accepts connections with requested
-	// authentication handshake.
-	//NewListener(lis net.Listener) net.Listener
 	// Info provides the ProtocolInfo of this TransportAuthenticator.
 	Info() ProtocolInfo
 	Credentials
