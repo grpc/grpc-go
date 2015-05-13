@@ -187,7 +187,11 @@ artifacts {
   }
 }
 
-project.protocDep = "com.google.protobuf:protoc:${protobufVersion}"
+if (project.hasProperty('protoc')) {
+  project.protocPath = project.protoc
+} else {
+  project.protocDep = "com.google.protobuf:protoc:${protobufVersion}"
+}
 protobufCodeGenPlugins = ["grpc:$javaPluginPath"]
 
 project.afterEvaluate {

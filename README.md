@@ -104,6 +104,16 @@ default. To override this default and use MinGW, add ``-PvcDisable=true``
 to your Gradle command line or add ``vcDisable=true`` to your
 ``<project-root>\gradle.properties``.
 
+### Notes for unsupported operating systems
+The build script pulls pre-compiled ``protoc`` from Maven Central by default.
+We have built ``protoc`` binaries for popular systems, but they may not work
+for your system. If ``protoc`` cannot be downloaded or would not run, you can
+use the one that has been built by your own, by adding this property to
+``<project-root>/gradle.properties``:
+```
+protoc=/path/to/protoc
+```
+
 Navigating Around the Source
 ----------------------------
 
