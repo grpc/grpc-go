@@ -72,8 +72,6 @@ import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.epoll.EpollEventLoopGroup;
-import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
@@ -201,8 +199,18 @@ public class AsyncClient {
     final EventLoopGroup group;
     final Class<? extends io.netty.channel.Channel> channelType;
     if (config.nettyNativeTransport) {
-      group = new EpollEventLoopGroup();
-      channelType = EpollSocketChannel.class;
+      try {
+        // These classes are only available on linux.
+        Class<?> groupClass = Class.forName("io.netty.channel.epoll.EpollEventLoopGroup");
+        @SuppressWarnings("unchecked")
+        Class<? extends io.netty.channel.Channel> channelClass =
+                (Class<? extends io.netty.channel.Channel>) Class.forName(
+                        "io.netty.channel.epoll.EpollSocketChannel");
+        group = (EventLoopGroup) groupClass.newInstance();
+        channelType = channelClass;
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
     } else {
       group = new NioEventLoopGroup();
       channelType = NioSocketChannel.class;

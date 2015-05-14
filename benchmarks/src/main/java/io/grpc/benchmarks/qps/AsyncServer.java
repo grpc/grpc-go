@@ -50,8 +50,6 @@ import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
-import io.netty.channel.epoll.EpollEventLoopGroup;
-import io.netty.channel.epoll.EpollServerSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
@@ -104,9 +102,18 @@ public class AsyncServer {
     final EventLoopGroup worker;
     final Class<? extends ServerChannel> channelType;
     if (nettyNativeTransport) {
-      boss = new EpollEventLoopGroup();
-      worker = new EpollEventLoopGroup();
-      channelType = EpollServerSocketChannel.class;
+      try {
+        // These classes are only available on linux.
+        Class<?> groupClass = Class.forName("io.netty.channel.epoll.EpollEventLoopGroup");
+        @SuppressWarnings("unchecked")
+        Class<? extends ServerChannel> channelClass = (Class<? extends ServerChannel>)
+                Class.forName("io.netty.channel.epoll.EpollServerSocketChannel");
+        boss = (EventLoopGroup) groupClass.newInstance();
+        worker = (EventLoopGroup) groupClass.newInstance();
+        channelType = channelClass;
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
     } else {
       boss = new NioEventLoopGroup();
       worker = new NioEventLoopGroup();
