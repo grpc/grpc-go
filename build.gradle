@@ -58,16 +58,19 @@ subprojects {
               project.protocDep = "com.google.protobuf:protoc:${protobufVersion}"
             }
             project.generatedFileDir = "${projectDir}/src/generated"
+            task deleteGeneratedSource << {
+              project.delete project.fileTree(dir: generatedSourcePath)
+            }
             project.afterEvaluate {
               generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
+              // Delete the generated sources first, so that we can be alerted if they are not re-compiled.
+              generateProto.dependsOn deleteGeneratedSource
               // Recompile protos when the codegen has been changed
               generateProto.inputs.file javaPluginPath
               // Recompile protos when build.gradle has been changed, because
               // it's possible the version of protoc has been changed.
               generateProto.inputs.file "${rootProject.projectDir}/build.gradle"
             }
-            // Delete the generated sources first, so that we can be alerted if they are not re-compiled.
-            project.delete project.fileTree(dir: generatedSourcePath)
 
             project.sourceSets {
               main {
