@@ -1,7 +1,11 @@
+[![Build Status](https://travis-ci.org/grpc/grpc-java.svg?branch=master)](https://travis-ci.org/grpc/grpc-java)
+
 gRPC-Java - An RPC library and framework
 ========================================
 
-[![Build Status](https://travis-ci.org/grpc/grpc-java.svg?branch=master)](https://travis-ci.org/grpc/grpc-java)
+gRPC-Java works with JDK 6. TLS usage typically requires using Java 8, or Play
+Services Dynamic Security Provider on Android. Please see the [Auth
+Readme](AUTH-README.md).
 
 How to Build
 ------------
@@ -16,6 +20,8 @@ $ mvn install -pl codec-http2 -am -DskipTests=true
 ```
 
 ### Build gRPC
+Building requires JDK 8, as our tests use TLS.
+
 grpc-java has a C++ code generation plugin for protoc. Since many Java
 developers don't have C compilers installed and don't need to modify the
 codegen, the build can skip it. To skip, create the file
