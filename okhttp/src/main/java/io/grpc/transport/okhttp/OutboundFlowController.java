@@ -47,6 +47,8 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Queue;
 
+import javax.annotation.Nullable;
+
 /**
  * Simple outbound flow controller that evenly splits the connection window across all existing
  * streams.
@@ -87,14 +89,17 @@ class OutboundFlowController {
     }
   }
 
-  synchronized void windowUpdate(int streamId, int delta) {
-    if (streamId == CONNECTION_STREAM_ID) {
+  /**
+   * Update the outbound window for given stream, or for the connection if stream is null.
+   */
+  synchronized void windowUpdate(@Nullable OkHttpClientStream stream, int delta) {
+    if (stream == null) {
       // Update the connection window and write any pending frames for all streams.
       connectionState.incrementStreamWindow(delta);
       writeStreams();
     } else {
       // Update the stream window and write any pending frames for the stream.
-      OutboundFlowState state = stateOrFail(streamId);
+      OutboundFlowState state = state(stream);
       state.incrementStreamWindow(delta);
 
       WriteStatus writeStatus = new WriteStatus();
@@ -107,11 +112,19 @@ class OutboundFlowController {
 
   synchronized void data(boolean outFinished, int streamId, Buffer source, boolean flush) {
     Preconditions.checkNotNull(source, "source");
-    if (streamId <= 0) {
-      throw new IllegalArgumentException("streamId must be > 0");
+    if (streamId <= 0 || !transport.mayHaveCreatedStream(streamId)) {
+      throw new IllegalArgumentException("Invalid streamId: " + streamId);
     }
 
-    OutboundFlowState state = stateOrFail(streamId);
+    OkHttpClientStream stream = transport.getStreams().get(streamId);
+    if (stream == null) {
+      // This is possible for a stream that has received end-of-stream from server (but hasn't sent
+      // end-of-stream), and was removed from the transport stream map.
+      // In such case, we just throw away the data.
+      return;
+    }
+
+    OutboundFlowState state = state(stream);
     int window = state.writableWindow();
     boolean framesAlreadyQueued = state.hasFrame();
 
@@ -156,19 +169,6 @@ class OutboundFlowController {
     if (state == null) {
       state = new OutboundFlowState(stream.id());
       stream.setOutboundFlowState(state);
-    }
-    return state;
-  }
-
-  private OutboundFlowState state(int streamId) {
-    OkHttpClientStream stream = transport.getStreams().get(streamId);
-    return stream != null ? state(stream) : null;
-  }
-
-  private OutboundFlowState stateOrFail(int streamId) {
-    OutboundFlowState state = state(streamId);
-    if (state == null) {
-      throw new RuntimeException("Missing flow control window for stream: " + streamId);
     }
     return state;
   }

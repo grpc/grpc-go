@@ -618,7 +618,19 @@ public class OkHttpClientTransport implements ClientTransport {
         }
         return;
       }
-      outboundFlow.windowUpdate(streamId, (int) delta);
+
+      if (streamId == Utils.CONNECTION_STREAM_ID) {
+        outboundFlow.windowUpdate(null, (int) delta);
+        return;
+      }
+
+      OkHttpClientStream stream = streams.get(streamId);
+      if (stream != null) {
+        outboundFlow.windowUpdate(stream, (int) delta);
+      } else if (!mayHaveCreatedStream(streamId)) {
+        onError(ErrorCode.PROTOCOL_ERROR,
+            "Received window_update for unknown stream: " + streamId);
+      }
     }
 
     @Override

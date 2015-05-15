@@ -41,7 +41,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -110,7 +109,7 @@ public class OkHttpClientTransportTest {
   @Mock
   MethodDescriptor<?, ?> method;
   @Mock
-  private ClientTransport.Listener listener;
+  private ClientTransport.Listener transportListener;
   private OkHttpClientTransport clientTransport;
   private MockFrameReader frameReader;
   private MockSocket socket;
@@ -128,7 +127,7 @@ public class OkHttpClientTransportTest {
     executor = Executors.newCachedThreadPool();
     clientTransport = new OkHttpClientTransport(
         executor, frameReader, frameWriter, 3, socket);
-    clientTransport.start(listener);
+    clientTransport.start(transportListener);
     frameHandler = clientTransport.getHandler();
     streams = clientTransport.getStreams();
     when(method.getName()).thenReturn("fakemethod");
@@ -166,8 +165,8 @@ public class OkHttpClientTransportTest {
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
     assertEquals(Status.INTERNAL.getCode(), listener1.status.getCode());
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
-    verify(listener).transportShutdown();
-    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
+    verify(transportListener).transportShutdown();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
@@ -199,16 +198,16 @@ public class OkHttpClientTransportTest {
     frameHandler.headers(false, false, 3, 0, new ArrayList<Header>(),
         HeadersMode.HTTP_20_HEADERS);
     verify(frameWriter).goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
-    verify(listener).transportShutdown();
-    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
+    verify(transportListener).transportShutdown();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
   public void receivedDataForInvalidStreamShouldKillConnection() throws Exception {
     frameHandler.data(false, 3, createMessageFrame(new String(new char[1000])), 1000);
     verify(frameWriter).goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
-    verify(listener).transportShutdown();
-    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
+    verify(transportListener).transportShutdown();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
@@ -439,7 +438,7 @@ public class OkHttpClientTransportTest {
     clientTransport.shutdown();
     verify(frameWriter).goAway(eq(0), eq(ErrorCode.NO_ERROR), (byte[]) any());
     assertEquals(2, streams.size());
-    verify(listener).transportShutdown();
+    verify(transportListener).transportShutdown();
 
     stream1.cancel();
     stream2.cancel();
@@ -448,7 +447,7 @@ public class OkHttpClientTransportTest {
     assertEquals(0, streams.size());
     assertEquals(Status.CANCELLED.getCode(), listener1.status.getCode());
     assertEquals(Status.CANCELLED.getCode(), listener2.status.getCode());
-    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
@@ -464,8 +463,8 @@ public class OkHttpClientTransportTest {
     frameHandler.goAway(3, ErrorCode.CANCEL, null);
 
     // Transport should be in STOPPING state.
-    verify(listener).transportShutdown();
-    verify(listener, never()).transportTerminated();
+    verify(transportListener).transportShutdown();
+    verify(transportListener, never()).transportTerminated();
 
     // Stream 2 should be closed.
     listener2.waitUntilStreamClosed();
@@ -500,7 +499,7 @@ public class OkHttpClientTransportTest {
     assertEquals(receivedMessage, listener1.messages.get(0));
 
     // The transport should be stopped after all active streams finished.
-    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
@@ -510,7 +509,7 @@ public class OkHttpClientTransportTest {
     MockFrameReader frameReader = new MockFrameReader();
     OkHttpClientTransport transport = new OkHttpClientTransport(
         executor, frameReader, writer, startId, new MockSocket(frameReader));
-    transport.start(listener);
+    transport.start(transportListener);
     streams = transport.getStreams();
 
     MockStreamListener listener1 = new MockStreamListener();
@@ -521,8 +520,8 @@ public class OkHttpClientTransportTest {
     streams.get(startId).cancel();
     listener1.waitUntilStreamClosed();
     verify(writer).rstStream(eq(startId), eq(ErrorCode.CANCEL));
-    verify(listener).transportShutdown();
-    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
+    verify(transportListener).transportShutdown();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
@@ -610,7 +609,7 @@ public class OkHttpClientTransportTest {
     int startId = Integer.MAX_VALUE - 4;
     clientTransport = new OkHttpClientTransport(
         executor, frameReader, frameWriter, startId, new MockSocket(frameReader));
-    clientTransport.start(listener);
+    clientTransport.start(transportListener);
     frameHandler = clientTransport.getHandler();
     streams = clientTransport.getStreams();
     setMaxConcurrentStreams(1);
@@ -784,9 +783,27 @@ public class OkHttpClientTransportTest {
         HEADER_LENGTH + OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1);
     buffer = createMessageFrame(
         new byte[OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1]);
+
+    // This should kill the connection, since we never created stream 5.
     frameHandler.data(false, 5, buffer, (int) buffer.size());
-    // We are sure we never created stream 5, so we don't update window.
-    verify(frameWriter, times(1)).windowUpdate(anyInt(), anyLong());
+    verify(frameWriter).goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
+    verify(transportListener).transportShutdown();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+  }
+
+  @Test
+  public void receiveWindowUpdateForUnknownStream() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream = clientTransport.newStream(method, new Metadata.Headers(), listener);
+    stream.cancel();
+    // This should be ignored.
+    frameHandler.windowUpdate(3, 73);
+    listener.waitUntilStreamClosed();
+    // This should kill the connection, since we never created stream 5.
+    frameHandler.windowUpdate(5, 73);
+    verify(frameWriter).goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
+    verify(transportListener).transportShutdown();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   private void waitForStreamPending(int expected) throws Exception {
