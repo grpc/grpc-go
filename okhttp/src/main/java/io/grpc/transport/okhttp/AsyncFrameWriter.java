@@ -72,7 +72,7 @@ class AsyncFrameWriter implements FrameWriter {
   }
 
   @Override
-  public void ackSettings(final Settings peerSettings) throws IOException {
+  public void ackSettings(final Settings peerSettings) {
     executor.execute(new WriteRunnable() {
       @Override
       public void doRun() throws IOException {
@@ -230,7 +230,7 @@ class AsyncFrameWriter implements FrameWriter {
       try {
         doRun();
       } catch (IOException ex) {
-        transport.abort(ex);
+        transport.onIoException(ex);
         throw new RuntimeException(ex);
       }
     }

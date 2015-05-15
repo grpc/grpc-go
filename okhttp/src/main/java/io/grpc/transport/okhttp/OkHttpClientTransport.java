@@ -346,11 +346,19 @@ public class OkHttpClientTransport implements ClientTransport {
   }
 
   /**
-   * Finish all active streams due to a failure, then close the transport.
+   * Finish all active streams due to an IOException, then close the transport.
    */
-  void abort(Throwable failureCause) {
+  void onIoException(IOException failureCause) {
     log.log(Level.SEVERE, "Transport failed", failureCause);
     onGoAway(0, Status.INTERNAL.withCause(failureCause));
+  }
+
+  /**
+   * Send GOAWAY to the server, then finish all active streams and close the transport.
+   */
+  private void onError(ErrorCode errorCode, String moreDetail) {
+    frameWriter.goAway(0, errorCode, new byte[0]);
+    onGoAway(0, toGrpcStatus(errorCode).augmentDescription(moreDetail));
   }
 
   private void onGoAway(int lastKnownStreamId, Status status) {
@@ -445,9 +453,15 @@ public class OkHttpClientTransport implements ClientTransport {
         try {
           socket.close();
         } catch (IOException e) {
-          log.log(Level.WARNING, "Failed closing socekt", e);
+          log.log(Level.WARNING, "Failed closing socket", e);
         }
       }
+    }
+  }
+
+  boolean mayHaveCreatedStream(int streamId) {
+    synchronized (lock) {
+      return streamId < nextStreamId && (streamId & 1) == 1;
     }
   }
 
@@ -475,7 +489,7 @@ public class OkHttpClientTransport implements ClientTransport {
         while (frameReader.nextFrame(this)) {
         }
       } catch (IOException ioe) {
-        abort(ioe);
+        onIoException(ioe);
       } finally {
         try {
           frameReader.close();
@@ -497,16 +511,20 @@ public class OkHttpClientTransport implements ClientTransport {
       final OkHttpClientStream stream;
       stream = streams.get(streamId);
       if (stream == null) {
-        frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
-        return;
+        if (mayHaveCreatedStream(streamId)) {
+          frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
+        } else {
+          onError(ErrorCode.PROTOCOL_ERROR, "Received data for unknown stream: " + streamId);
+          return;
+        }
+      } else {
+        // Wait until the frame is complete.
+        in.require(length);
+
+        Buffer buf = new Buffer();
+        buf.write(in.buffer(), length);
+        stream.transportDataReceived(buf, inFinished);
       }
-
-      // Wait until the frame is complete.
-      in.require(length);
-
-      Buffer buf = new Buffer();
-      buf.write(in.buffer(), length);
-      stream.transportDataReceived(buf, inFinished);
 
       // connection window update
       connectionUnacknowledgedBytesRead += length;
@@ -529,7 +547,12 @@ public class OkHttpClientTransport implements ClientTransport {
       OkHttpClientStream stream;
       stream = streams.get(streamId);
       if (stream == null) {
-        frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
+        if (mayHaveCreatedStream(streamId)) {
+          frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
+        } else {
+          // We don't expect any server-initiated streams.
+          onError(ErrorCode.PROTOCOL_ERROR, "Received header for unknown stream: " + streamId);
+        }
         return;
       }
       stream.transportHeadersReceived(headerBlock, inFinished);
@@ -556,11 +579,7 @@ public class OkHttpClientTransport implements ClientTransport {
         outboundFlow.initialOutboundWindowSize(initialWindowSize);
       }
 
-      try {
-        frameWriter.ackSettings(settings);
-      } catch (IOException e) {
-        abort(e);
-      }
+      frameWriter.ackSettings(settings);
     }
 
     @Override
@@ -590,14 +609,14 @@ public class OkHttpClientTransport implements ClientTransport {
     @Override
     public void windowUpdate(int streamId, long delta) {
       if (delta == 0) {
-        Status status =
-            Status.INTERNAL.withDescription("Received 0 flow control window increment.");
+        String errorMsg = "Received 0 flow control window increment.";
         if (streamId == 0) {
-          frameWriter.goAway(0, ErrorCode.PROTOCOL_ERROR, new byte[0]);
-          onGoAway(0, status);
+          onError(ErrorCode.PROTOCOL_ERROR, errorMsg);
         } else {
-          finishStream(streamId, status, ErrorCode.PROTOCOL_ERROR);
+          finishStream(streamId,
+              Status.INTERNAL.withDescription(errorMsg), ErrorCode.PROTOCOL_ERROR);
         }
+        return;
       }
       outboundFlow.windowUpdate(streamId, (int) delta);
     }

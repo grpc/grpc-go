@@ -41,6 +41,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -193,17 +194,21 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
-  public void receivedHeadersForInvalidStreamShouldResetStream() throws Exception {
+  public void receivedHeadersForInvalidStreamShouldKillConnection() throws Exception {
     // Empty headers block without correct content type or status
     frameHandler.headers(false, false, 3, 0, new ArrayList<Header>(),
         HeadersMode.HTTP_20_HEADERS);
-    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.INVALID_STREAM));
+    verify(frameWriter).goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
+    verify(listener).transportShutdown();
+    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
-  public void receivedDataForInvalidStreamShouldResetStream() throws Exception {
+  public void receivedDataForInvalidStreamShouldKillConnection() throws Exception {
     frameHandler.data(false, 3, createMessageFrame(new String(new char[1000])), 1000);
-    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.INVALID_STREAM));
+    verify(frameWriter).goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
+    verify(listener).transportShutdown();
+    verify(listener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   @Test
@@ -763,6 +768,25 @@ public class OkHttpClientTransportTest {
     assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
     assertTrue(listener.status.getDescription().startsWith("no headers received prior to data"));
     assertEquals(0, listener.messages.size());
+  }
+
+  @Test
+  public void receiveDataForUnknownStreamUpdateConnectionWindow() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream = clientTransport.newStream(method, new Metadata.Headers(), listener);
+    stream.cancel();
+
+    Buffer buffer = createMessageFrame(
+        new byte[OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1]);
+    frameHandler.data(false, 3, buffer, (int) buffer.size());
+    // Should still update the connection window even stream 3 is gone.
+    verify(frameWriter).windowUpdate(0,
+        HEADER_LENGTH + OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1);
+    buffer = createMessageFrame(
+        new byte[OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1]);
+    frameHandler.data(false, 5, buffer, (int) buffer.size());
+    // We are sure we never created stream 5, so we don't update window.
+    verify(frameWriter, times(1)).windowUpdate(anyInt(), anyLong());
   }
 
   private void waitForStreamPending(int expected) throws Exception {
