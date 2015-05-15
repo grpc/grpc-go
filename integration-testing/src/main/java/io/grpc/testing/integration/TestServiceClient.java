@@ -38,20 +38,11 @@ import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
 import io.netty.handler.ssl.SslContext;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.security.KeyStore;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
 
-import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.TrustManagerFactory;
-import javax.security.auth.x500.X500Principal;
 
 /**
  * Application that starts a client for the {@link TestServiceGrpc.TestService} and runs through a
@@ -242,35 +233,16 @@ public class TestServiceClient {
         }
         if (useTls) {
           try {
-            builder.sslSocketFactory(getSslSocketFactory());
+            SSLSocketFactory factory = useTestCa
+                ? Util.getSslSocketFactoryForCertainCert(Util.loadCert("ca.pem"))
+                : (SSLSocketFactory) SSLSocketFactory.getDefault();
+            builder.sslSocketFactory(factory);
           } catch (Exception e) {
             throw new RuntimeException(e);
           }
         }
         return builder.build();
       }
-    }
-
-    private SSLSocketFactory getSslSocketFactory() throws Exception {
-      if (!useTestCa) {
-        return (SSLSocketFactory) SSLSocketFactory.getDefault();
-      }
-      File certChainFile = Util.loadCert("ca.pem");
-      KeyStore ks = KeyStore.getInstance("JKS");
-      ks.load(null, null);
-      CertificateFactory cf = CertificateFactory.getInstance("X.509");
-      X509Certificate cert = (X509Certificate) cf.generateCertificate(
-          new BufferedInputStream(new FileInputStream(certChainFile)));
-      X500Principal principal = cert.getSubjectX500Principal();
-      ks.setCertificateEntry(principal.getName("RFC2253"), cert);
-
-      // Set up trust manager factory to use our key store.
-      TrustManagerFactory trustManagerFactory =
-          TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-      trustManagerFactory.init(ks);
-      SSLContext context = SSLContext.getInstance("TLS");
-      context.init(null, trustManagerFactory.getTrustManagers(), null);
-      return context.getSocketFactory();
     }
   }
 }

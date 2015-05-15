@@ -32,6 +32,7 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ChannelImpl;
+import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
 
@@ -40,6 +41,8 @@ import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.IOException;
+
 /**
  * Integration tests for GRPC over Http2 using the OkHttp framework.
  */
@@ -47,9 +50,16 @@ import org.junit.runners.JUnit4;
 public class Http2OkHttpTest extends AbstractTransportTest {
   private static int serverPort = Util.pickUnusedPort();
 
+  /** Starts the server with HTTPS. */
   @BeforeClass
   public static void startServer() throws Exception {
-    startStaticServer(NettyServerBuilder.forPort(serverPort));
+    try {
+      startStaticServer(NettyServerBuilder.forPort(serverPort)
+          .sslContext(GrpcSslContexts.forServer(
+              Util.loadCert("server1.pem"), Util.loadCert("server1.key")).build()));
+    } catch (IOException ex) {
+      throw new RuntimeException(ex);
+    }
   }
 
   @AfterClass
@@ -59,6 +69,13 @@ public class Http2OkHttpTest extends AbstractTransportTest {
 
   @Override
   protected ChannelImpl createChannel() {
-    return OkHttpChannelBuilder.forAddress("127.0.0.1", serverPort).build();
+    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", serverPort)
+        .overrideHostForAuthority("foo.test.google.fr");
+    try {
+      builder.sslSocketFactory(Util.getSslSocketFactoryForCertainCert(Util.loadCert("ca.pem")));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    return builder.build();
   }
 }
