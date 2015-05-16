@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Common utility methods.
@@ -198,7 +199,7 @@ class Utils {
 
     @Override
     public void close(EventLoopGroup instance) {
-      instance.shutdownGracefully();
+      instance.shutdownGracefully(0, 0, TimeUnit.SECONDS);
     }
 
     @Override
