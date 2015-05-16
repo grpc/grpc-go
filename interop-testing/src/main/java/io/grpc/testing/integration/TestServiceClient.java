@@ -80,6 +80,7 @@ public class TestServiceClient {
     } finally {
       client.tearDown();
     }
+    System.exit(0);
   }
 
   private String serverHost = "localhost";
