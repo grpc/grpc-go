@@ -45,13 +45,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Benchmark using configuration intended to allow maximum QPS.
+ * Benchmark using configuration intended to allow maximum QPS for unary calls.
  */
 @State(Scope.Benchmark)
 @Fork(1)
-public class MaxQpsBenchmark extends AbstractBenchmark {
+public class UnaryCallQpsBenchmark extends AbstractBenchmark {
 
-  @Param({"1", "2", "4", "8", "16", "32"})
+  @Param({"1", "2", "4", "8"})
   public int channelCount = 4;
 
   @Param({"10", "100", "1000"})
@@ -93,17 +93,18 @@ public class MaxQpsBenchmark extends AbstractBenchmark {
         channelCount);
     callCounter = new AtomicLong();
     completed = new AtomicBoolean();
-    startUnaryCalls(maxConcurrentStreams, callCounter, completed);
+    startUnaryCalls(maxConcurrentStreams, callCounter, completed, 1);
   }
 
   /**
    * Stop the running calls then stop the server and client channels.
    */
+  @Override
   @TearDown(Level.Trial)
-  public void stopChannelsAndServers() throws Exception {
+  public void teardown() throws Exception {
     completed.set(true);
     Thread.sleep(5000);
-    super.stopChannelsAndServers();
+    super.teardown();
   }
 
   /**
@@ -111,7 +112,7 @@ public class MaxQpsBenchmark extends AbstractBenchmark {
    * of received responses.
    */
   @Benchmark
-  public void measureUnary(AdditionalCounters counters) throws Exception {
+  public void unary(AdditionalCounters counters) throws Exception {
     // No need to do anything, just sleep here.
     Thread.sleep(1001);
   }
@@ -120,10 +121,10 @@ public class MaxQpsBenchmark extends AbstractBenchmark {
    * Useful for triggering a subset of the benchmark in a profiler.
    */
   public static void main(String[] argv) throws Exception {
-    MaxQpsBenchmark bench = new MaxQpsBenchmark();
+    UnaryCallQpsBenchmark bench = new UnaryCallQpsBenchmark();
     bench.setup();
     Thread.sleep(30000);
-    bench.stopChannelsAndServers();
+    bench.teardown();
     System.exit(0);
   }
 }
