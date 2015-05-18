@@ -32,31 +32,32 @@
 package io.grpc.benchmarks.qps;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static grpc.testing.TestServiceGrpc.TestServiceStub;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.CLIENT_PAYLOAD;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.CONNECTION_WINDOW;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.DURATION;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.HOST;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.OKHTTP;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.PORT;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.SAVE_HISTOGRAM;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.SERVER_PAYLOAD;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.STREAM_WINDOW;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.TARGET_QPS;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.TESTCA;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.TLS;
-import static io.grpc.benchmarks.qps.ClientConfiguration.HISTOGRAM_MAX_VALUE;
-import static io.grpc.benchmarks.qps.ClientConfiguration.HISTOGRAM_PRECISION;
-import static io.grpc.benchmarks.qps.ClientUtil.newRequest;
-import static io.grpc.benchmarks.qps.ClientUtil.saveHistogram;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.ADDRESS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CLIENT_PAYLOAD;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CONNECTION_WINDOW;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.DURATION;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.SAVE_HISTOGRAM;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.SERVER_PAYLOAD;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.STREAM_WINDOW;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TARGET_QPS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TESTCA;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TLS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TRANSPORT;
+import static io.grpc.benchmarks.qps.Utils.HISTOGRAM_MAX_VALUE;
+import static io.grpc.benchmarks.qps.Utils.HISTOGRAM_PRECISION;
+import static io.grpc.benchmarks.qps.Utils.newClientChannel;
+import static io.grpc.benchmarks.qps.Utils.newRequest;
+import static io.grpc.benchmarks.qps.Utils.saveHistogram;
 
-import grpc.testing.Qpstest;
-import grpc.testing.Qpstest.SimpleRequest;
-import grpc.testing.TestServiceGrpc;
 import io.grpc.Channel;
 import io.grpc.ChannelImpl;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import io.grpc.testing.SimpleRequest;
+import io.grpc.testing.SimpleResponse;
+import io.grpc.testing.TestServiceGrpc;
+import io.grpc.testing.TestServiceGrpc.TestServiceStub;
+
 import org.HdrHistogram.AtomicHistogram;
 import org.HdrHistogram.Histogram;
 
@@ -83,10 +84,9 @@ public class OpenLoopClient {
    * Comment for checkstyle.
    */
   public static void main(String... args) throws Exception {
-    ClientConfiguration.Builder configBuilder =
-        ClientConfiguration.newBuilder()
-            .addOptions(PORT, HOST, TARGET_QPS, CLIENT_PAYLOAD, SERVER_PAYLOAD, TLS, TESTCA)
-            .addOptions(OKHTTP, DURATION, SAVE_HISTOGRAM, CONNECTION_WINDOW, STREAM_WINDOW);
+    ClientConfiguration.Builder configBuilder = ClientConfiguration.newBuilder(
+        ADDRESS, TARGET_QPS, CLIENT_PAYLOAD, SERVER_PAYLOAD, TLS,
+        TESTCA, TRANSPORT, DURATION, SAVE_HISTOGRAM, CONNECTION_WINDOW, STREAM_WINDOW);
     ClientConfiguration config;
     try {
       config = configBuilder.build(args);
@@ -108,7 +108,7 @@ public class OpenLoopClient {
     }
     config.channels = 1;
     config.directExecutor = true;
-    Channel ch = ClientUtil.newChannel(config);
+    Channel ch = newClientChannel(config);
     SimpleRequest req = newRequest(config);
     LoadGenerationWorker worker =
         new LoadGenerationWorker(ch, req, config.targetQps, config.duration);
@@ -198,12 +198,12 @@ public class OpenLoopClient {
     }
 
     private void newRpc(TestServiceStub stub) {
-      stub.unaryCall(request, new StreamObserver<Qpstest.SimpleResponse>() {
+      stub.unaryCall(request, new StreamObserver<SimpleResponse>() {
 
         private final long start = System.nanoTime();
 
         @Override
-        public void onValue(Qpstest.SimpleResponse value) {
+        public void onValue(SimpleResponse value) {
         }
 
         @Override

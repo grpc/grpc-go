@@ -31,59 +31,42 @@
 
 package io.grpc.benchmarks.qps;
 
-import static grpc.testing.Qpstest.SimpleRequest;
-import static grpc.testing.Qpstest.SimpleResponse;
-import static grpc.testing.TestServiceGrpc.TestServiceStub;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.CHANNELS;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.CLIENT_PAYLOAD;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.CONNECTION_WINDOW;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.DIRECTEXECUTOR;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.DURATION;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.HOST;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.NETTY_NATIVE_TRANSPORT;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.OKHTTP;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.OUTSTANDING_RPCS;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.PORT;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.SAVE_HISTOGRAM;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.SERVER_PAYLOAD;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.STREAMING_RPCS;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.STREAM_WINDOW;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.TESTCA;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.TLS;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.WARMUP_DURATION;
-import static io.grpc.benchmarks.qps.ClientConfiguration.HISTOGRAM_MAX_VALUE;
-import static io.grpc.benchmarks.qps.ClientConfiguration.HISTOGRAM_PRECISION;
-import static io.grpc.benchmarks.qps.ClientUtil.saveHistogram;
-import static io.grpc.testing.integration.Util.loadCert;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.ADDRESS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CHANNELS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CLIENT_PAYLOAD;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CONNECTION_WINDOW;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.DIRECTEXECUTOR;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.DURATION;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.OUTSTANDING_RPCS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.SAVE_HISTOGRAM;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.SERVER_PAYLOAD;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.STREAMING_RPCS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.STREAM_WINDOW;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TESTCA;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TLS;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TRANSPORT;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.WARMUP_DURATION;
+import static io.grpc.benchmarks.qps.Utils.HISTOGRAM_MAX_VALUE;
+import static io.grpc.benchmarks.qps.Utils.HISTOGRAM_PRECISION;
+import static io.grpc.benchmarks.qps.Utils.newClientChannel;
+import static io.grpc.benchmarks.qps.Utils.saveHistogram;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
-
-import grpc.testing.Qpstest.Payload;
-import grpc.testing.TestServiceGrpc;
 
 import io.grpc.Channel;
 import io.grpc.ChannelImpl;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import io.grpc.transport.netty.GrpcSslContexts;
-import io.grpc.transport.netty.NegotiationType;
-import io.grpc.transport.netty.NettyChannelBuilder;
-import io.grpc.transport.okhttp.OkHttpChannelBuilder;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslProvider;
+import io.grpc.testing.Payload;
+import io.grpc.testing.SimpleRequest;
+import io.grpc.testing.SimpleResponse;
+import io.grpc.testing.TestServiceGrpc;
+import io.grpc.testing.TestServiceGrpc.TestServiceStub;
 
 import org.HdrHistogram.Histogram;
 import org.HdrHistogram.HistogramIterationValue;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -115,7 +98,7 @@ public class AsyncClient {
 
     List<Channel> channels = new ArrayList<Channel>(config.channels);
     for (int i = 0; i < config.channels; i++) {
-      channels.add(newChannel());
+      channels.add(newClientChannel(config));
     }
 
     // Do a warmup first. It's the same as the actual benchmark, except that
@@ -173,58 +156,6 @@ public class AsyncClient {
       histograms.add(future.get());
     }
     return histograms;
-  }
-
-  private Channel newChannel() throws IOException {
-    if (config.okhttp) {
-      if (config.tls) {
-        throw new IllegalStateException("TLS unsupported with okhttp");
-      }
-      return OkHttpChannelBuilder
-               .forAddress(config.host, config.port)
-               .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null)
-               .build();
-    }
-    SslContext context = null;
-    InetAddress address = InetAddress.getByName(config.host);
-    NegotiationType negotiationType = config.tls ? NegotiationType.TLS : NegotiationType.PLAINTEXT;
-    if (config.tls && config.testca) {
-      // Force the hostname to match the cert the server uses.
-      address = InetAddress.getByAddress("foo.test.google.fr", address.getAddress());
-      File cert = loadCert("ca.pem");
-      context = GrpcSslContexts.forClient().trustManager(cert)
-          .sslProvider(config.nettyNativeTransport ? SslProvider.OPENSSL : SslProvider.JDK)
-          .build();
-    }
-    final EventLoopGroup group;
-    final Class<? extends io.netty.channel.Channel> channelType;
-    if (config.nettyNativeTransport) {
-      try {
-        // These classes are only available on linux.
-        Class<?> groupClass = Class.forName("io.netty.channel.epoll.EpollEventLoopGroup");
-        @SuppressWarnings("unchecked")
-        Class<? extends io.netty.channel.Channel> channelClass =
-                (Class<? extends io.netty.channel.Channel>) Class.forName(
-                        "io.netty.channel.epoll.EpollSocketChannel");
-        group = (EventLoopGroup) groupClass.newInstance();
-        channelType = channelClass;
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    } else {
-      group = new NioEventLoopGroup();
-      channelType = NioSocketChannel.class;
-    }
-    return NettyChannelBuilder
-             .forAddress(new InetSocketAddress(address, config.port))
-             .eventLoopGroup(group)
-             .channelType(channelType)
-             .negotiationType(negotiationType)
-             .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null)
-             .sslContext(context)
-             .connectionWindowSize(config.connectionWindow)
-             .streamWindowSize(config.streamWindow)
-             .build();
   }
 
   private Future<Histogram> doRpcs(Channel channel, SimpleRequest request, long endTime) {
@@ -393,13 +324,10 @@ public class AsyncClient {
    * checkstyle complains if there is no javadoc comment here.
    */
   public static void main(String... args) throws Exception {
-    ClientConfiguration.Builder configBuilder =
-        ClientConfiguration.newBuilder()
-                           .addOptions(PORT, HOST, CHANNELS, OUTSTANDING_RPCS)
-                           .addOptions(CLIENT_PAYLOAD, SERVER_PAYLOAD, TLS, TESTCA)
-                           .addOptions(OKHTTP, DURATION, WARMUP_DURATION, DIRECTEXECUTOR)
-                           .addOptions(SAVE_HISTOGRAM, STREAMING_RPCS, CONNECTION_WINDOW)
-                           .addOptions(STREAM_WINDOW, NETTY_NATIVE_TRANSPORT);
+    ClientConfiguration.Builder configBuilder = ClientConfiguration.newBuilder(
+        ADDRESS, CHANNELS, OUTSTANDING_RPCS, CLIENT_PAYLOAD, SERVER_PAYLOAD,
+        TLS, TESTCA, TRANSPORT, DURATION, WARMUP_DURATION, DIRECTEXECUTOR,
+        SAVE_HISTOGRAM, STREAMING_RPCS, CONNECTION_WINDOW, STREAM_WINDOW);
     ClientConfiguration config;
     try {
       config = configBuilder.build(args);

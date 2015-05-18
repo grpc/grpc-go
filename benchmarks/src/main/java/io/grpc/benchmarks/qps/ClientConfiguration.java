@@ -31,51 +31,50 @@
 
 package io.grpc.benchmarks.qps;
 
-import static grpc.testing.Qpstest.RpcType.STREAMING;
-import static grpc.testing.Qpstest.RpcType.UNARY;
-import static io.grpc.benchmarks.qps.ClientConfiguration.Builder.Option.HELP;
+import static io.grpc.benchmarks.qps.SocketAddressValidator.INET;
+import static io.grpc.benchmarks.qps.SocketAddressValidator.UDS;
+import static io.grpc.benchmarks.qps.Utils.parseBoolean;
+import static io.grpc.testing.RpcType.STREAMING;
+import static io.grpc.testing.RpcType.UNARY;
 import static java.lang.Integer.parseInt;
-import static java.lang.Math.max;
 import static java.util.Arrays.asList;
 
-import com.google.common.base.Strings;
-
-import grpc.testing.Qpstest.PayloadType;
-import grpc.testing.Qpstest.RpcType;
+import io.grpc.testing.PayloadType;
+import io.grpc.testing.RpcType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 
-import java.util.HashSet;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.net.UnknownHostException;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Configuration options for the client implementations.
+ * Configuration options for benchmark clients.
  */
-class ClientConfiguration {
+class ClientConfiguration implements Configuration {
+  private static final String TESTCA_HOST = "foo.test.google.fr";
+  private static final ClientConfiguration DEFAULT = new ClientConfiguration();
 
-  // The histogram can record values between 1 microsecond and 1 min.
-  static final long HISTOGRAM_MAX_VALUE = 60000000L;
-  // Value quantization will be no larger than 1/10^3 = 0.1%.
-  static final int HISTOGRAM_PRECISION = 3;
-
-  boolean okhttp;
+  Transport transport = Transport.NETTY_NIO;
   boolean tls;
   boolean testca;
   boolean directExecutor;
-  boolean nettyNativeTransport;
-  int port;
+  SocketAddress address;
   int channels = 4;
   int outstandingRpcsPerChannel = 10;
   int serverPayload;
   int clientPayload;
   int connectionWindow = NettyChannelBuilder.DEFAULT_CONNECTION_WINDOW_SIZE;
-  int streamWindow = NettyChannelBuilder.DEFAULT_CONNECTION_WINDOW_SIZE;
+  int streamWindow = NettyChannelBuilder.DEFAULT_STREAM_WINDOW_SIZE;
   // seconds
   int duration = 60;
   // seconds
   int warmupDuration = 10;
   int targetQps;
-  String host;
   String histogramFile;
   RpcType rpcType = UNARY;
   PayloadType payloadType = PayloadType.COMPRESSABLE;
@@ -83,240 +82,269 @@ class ClientConfiguration {
   private ClientConfiguration() {
   }
 
-  static Builder newBuilder() {
-    return new Builder();
+  /**
+   * Constructs a builder for configuring a client application with supported parameters. If no
+   * parameters are provided, all parameters are assumed to be supported.
+   */
+  static Builder newBuilder(ClientParam... supportedParams) {
+    return new Builder(supportedParams);
   }
 
-  static class Builder {
+  static class Builder extends AbstractConfigurationBuilder<ClientConfiguration> {
+    private final Collection<Param> supportedParams;
 
-    private final Set<Option> options;
-
-    private Builder() {
-      options = new LinkedHashSet<Option>();
-      options.add(HELP);
+    private Builder(ClientParam... supportedParams) {
+      this.supportedParams = supportedOptionsSet(supportedParams);
     }
 
-    Builder addOptions(Option... opts) {
-      options.addAll(asList(opts));
-      return this;
+    @Override
+    protected ClientConfiguration newConfiguration() {
+      return new ClientConfiguration();
     }
 
-    void printUsage() {
-      System.out.println("Usage: [ARGS...]");
-      int maxWidth = 0;
-      for (Option option : options) {
-        maxWidth = max(commandLineFlag(option).length(), maxWidth);
-      }
-      // padding
-      maxWidth += 2;
-      for (Option option : options) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(commandLineFlag(option))
-          .append(Strings.repeat(" ", maxWidth - sb.length()))
-          .append(option.description)
-          .append(option.required ? " Required." : "");
-        System.out.println("  " + sb);
-      }
-      System.out.println();
+    @Override
+    protected Collection<Param> getParams() {
+      return supportedParams;
     }
 
-    ClientConfiguration build(String[] args) {
-      ClientConfiguration config = new ClientConfiguration();
-      Set<Option> appliedOptions = new HashSet<Option>();
-
-      for (String arg : args) {
-        if (!arg.startsWith("--")) {
-          throw new IllegalArgumentException("All arguments must start with '--': " + arg);
+    @Override
+    protected ClientConfiguration build0(ClientConfiguration config) {
+      if (config.tls) {
+        if (!config.transport.tlsSupported) {
+          throw new IllegalArgumentException(
+              "Transport " + config.transport.name().toLowerCase() + " does not support TLS.");
         }
-        String[] pair = arg.substring(2).split("=", 2);
-        String key = pair[0];
-        String value = "";
-        if (pair.length == 2) {
-          value = pair[1];
-        }
-        for (Option option : options) {
-          if (key.equals(option.toString())) {
-            if (option != HELP) {
-              option.action.applyNew(config, value);
-              appliedOptions.add(option);
-            } else {
-              throw new RuntimeException("");
-            }
+
+        if (config.testca && config.address instanceof InetSocketAddress) {
+          // Override the socket address with the host from the testca.
+          try {
+            InetSocketAddress prevAddress = (InetSocketAddress) config.address;
+            InetAddress inetAddress = InetAddress.getByName(prevAddress.getHostName());
+            inetAddress = InetAddress.getByAddress(TESTCA_HOST, inetAddress.getAddress());
+            config.address = new InetSocketAddress(inetAddress, prevAddress.getPort());
+          } catch (UnknownHostException e) {
+            throw new RuntimeException(e);
           }
         }
       }
-      for (Option option : options) {
-        if (option.required && !appliedOptions.contains(option)) {
-          throw new IllegalArgumentException("Missing required option '--" + option + "'.");
-        }
-      }
+
+      // Verify that the address type is correct for the transport type.
+      config.transport.validateSocketAddress(config.address);
+
       return config;
     }
 
-    private static String commandLineFlag(Option option) {
-      return "--" + option + (option.type != "" ? '=' + option.type : "");
+    private static Set<Param> supportedOptionsSet(ClientParam... supportedParams) {
+      if (supportedParams.length == 0) {
+        // If no options are supplied, default to including all options.
+        supportedParams = ClientParam.values();
+      }
+      return Collections.unmodifiableSet(new LinkedHashSet<Param>(asList(supportedParams)));
+    }
+  }
+
+  /**
+   * All of the supported transports.
+   */
+  enum Transport {
+    NETTY_NIO(true, "The Netty Java NIO transport. Using this with TLS requires "
+        + "that the Java bootclasspath be configured with Jetty ALPN boot.", INET),
+    NETTY_EPOLL(true, "The Netty native EPOLL transport. Using this with TLS requires that "
+        + "OpenSSL be installed and configured as described in "
+        + "http://netty.io/wiki/forked-tomcat-native.html. Only supported on Linux.", INET),
+    NETTY_UNIX_DOMAIN_SOCKET(false, "The Netty Unix Domain Socket transport. This currently "
+        + "does not support TLS.", UDS),
+    OK_HTTP(false, "The OkHttp transport. This currently does not support TLS.", INET);
+
+    final boolean tlsSupported;
+    final String description;
+    final SocketAddressValidator socketAddressValidator;
+
+    Transport(boolean tlsSupported, String description,
+              SocketAddressValidator socketAddressValidator) {
+      this.tlsSupported = tlsSupported;
+      this.description = description;
+      this.socketAddressValidator = socketAddressValidator;
     }
 
-    private interface Action {
-      void applyNew(ClientConfiguration config, String value);
+    /**
+     * Validates the given address for this transport.
+     *
+     * @throws IllegalArgumentException if the given address is invalid for this transport.
+     */
+    void validateSocketAddress(SocketAddress address) {
+      if (!socketAddressValidator.isValidSocketAddress(address)) {
+        throw new IllegalArgumentException(
+            "Invalid address " + address + " for transport " + this);
+      }
     }
 
-    enum Option {
-      HELP("", "Print this text.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
+    static String getDescriptionString() {
+      StringBuilder builder = new StringBuilder("Select the transport to use. Options:\n");
+      boolean first = true;
+      for (Transport transport : Transport.values()) {
+        if (!first) {
+          builder.append("\n");
         }
-      }),
-      PORT("INT", "Port of the Server.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.port = parseInt(value);
-        }
-      }, true),
-      HOST("STR", "Hostname or IP Address of the Server.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.host = value;
-        }
-      }, true),
-      CHANNELS("INT", "Number of Channels.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.channels = parseInt(value);
-        }
-      }),
-      OUTSTANDING_RPCS("INT", "Number of outstanding RPCs per Channel.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.outstandingRpcsPerChannel = parseInt(value);
-        }
-      }),
-      CLIENT_PAYLOAD("BYTES", "Payload Size of the Request.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.clientPayload = parseInt(value);
-        }
-      }),
-      SERVER_PAYLOAD("BYTES", "Payload Size of the Response.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.serverPayload = parseInt(value);
-        }
-      }),
-      TLS("", "Enable TLS.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.tls = true;
-          if (!value.isEmpty()) {
-            config.tls = Boolean.parseBoolean(value);
-          }
-        }
-      }),
-      TESTCA("", "Use the provided Test Certificate for TLS.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.testca = true;
-          if (!value.isEmpty()) {
-            config.testca = Boolean.parseBoolean(value);
-          }
-        }
-      }),
-      OKHTTP("", "Use OkHttp as the Transport.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.okhttp = true;
-          if (!value.isEmpty()) {
-            config.okhttp = Boolean.parseBoolean(value);
-          }
-        }
-      }),
-      DURATION("SECONDS", "Duration of the benchmark.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.duration = parseInt(value);
-        }
-      }),
-      WARMUP_DURATION("SECONDS", "Warmup Duration of the benchmark.",
-          new Action() {
-            @Override
-            public void applyNew(ClientConfiguration config, String value) {
-              config.warmupDuration = parseInt(value);
-            }
-          }),
-      DIRECTEXECUTOR("", "Don't use a threadpool for RPC calls, instead execute calls directly "
-                         + "in the transport thread.",
-          new Action() {
-            @Override
-            public void applyNew(ClientConfiguration config, String value) {
-              config.directExecutor = true;
-              if (!value.isEmpty()) {
-                config.directExecutor = Boolean.parseBoolean(value);
-              }
-            }
-          }),
-      NETTY_NATIVE_TRANSPORT("", "Whether to use Netty's native transport. Only supported when "
-          + "using the Netty transport on Linux.",
-          new Action() {
-            @Override
-            public void applyNew(ClientConfiguration config, String value) {
-              config.nettyNativeTransport = true;
-              if (!value.isEmpty()) {
-                config.nettyNativeTransport = Boolean.parseBoolean(value);
-              }
-            }
-          }),
-      SAVE_HISTOGRAM("FILE", "Write the histogram with the latency recordings to file.",
-          new Action() {
-            @Override
-            public void applyNew(ClientConfiguration config, String value) {
-              config.histogramFile = value;
-            }
-          }),
-      STREAMING_RPCS("", "Use Streaming RPCs.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.rpcType = STREAMING;
-        }
-      }),
-      CONNECTION_WINDOW("BYTES", "The HTTP/2 connection flow control window.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.connectionWindow = parseInt(value);
-        }
-      }),
-      STREAM_WINDOW("BYTES", "The HTTP/2 per-stream flow control window.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.streamWindow = parseInt(value);
-        }
-      }),
-      TARGET_QPS("INT", "Average number of QPS to shoot for.", new Action() {
-        @Override
-        public void applyNew(ClientConfiguration config, String value) {
-          config.targetQps = parseInt(value);
-        }
-      }, true);
-
-      private final String type;
-      private final String description;
-      private final Action action;
-      private final boolean required;
-
-      Option(String type, String description, Action action) {
-        this(type, description, action, false);
+        builder.append(transport.name().toLowerCase());
+        builder.append(": ");
+        builder.append(transport.description);
+        first = false;
       }
+      return builder.toString();
+    }
+  }
 
-      Option(String type, String description, Action action, boolean required) {
-        this.type = type;
-        this.description = description;
-        this.action = action;
-        this.required = required;
-      }
-
+  enum ClientParam implements AbstractConfigurationBuilder.Param {
+    ADDRESS("STR", "Socket address (host:port) or Unix Domain Socket file name "
+        + "(unix:///path/to/file), depending on the transport selected.", null, true) {
       @Override
-      public String toString() {
-        return name().toLowerCase();
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.address = Utils.parseSocketAddress(value);
       }
+    },
+    CHANNELS("INT", "Number of Channels.", "" + DEFAULT.channels) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.channels = parseInt(value);
+      }
+    },
+    OUTSTANDING_RPCS("INT", "Number of outstanding RPCs per Channel.",
+        "" + DEFAULT.outstandingRpcsPerChannel) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.outstandingRpcsPerChannel = parseInt(value);
+      }
+    },
+    CLIENT_PAYLOAD("BYTES", "Payload Size of the Request.", "" + DEFAULT.clientPayload) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.clientPayload = parseInt(value);
+      }
+    },
+    SERVER_PAYLOAD("BYTES", "Payload Size of the Response.", "" + DEFAULT.serverPayload) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.serverPayload = parseInt(value);
+      }
+    },
+    TLS("", "Enable TLS.", "" + DEFAULT.tls) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.tls = parseBoolean(value);
+      }
+    },
+    TESTCA("", "Use the provided Test Certificate for TLS.", "" + DEFAULT.testca) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.testca = parseBoolean(value);
+      }
+    },
+    TRANSPORT("STR", Transport.getDescriptionString(), DEFAULT.transport.name().toLowerCase()) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.transport = Transport.valueOf(value.toUpperCase());
+      }
+    },
+    DURATION("SECONDS", "Duration of the benchmark.", "" + DEFAULT.duration) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.duration = parseInt(value);
+      }
+    },
+    WARMUP_DURATION("SECONDS", "Warmup Duration of the benchmark.", "" + DEFAULT.warmupDuration) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.warmupDuration = parseInt(value);
+      }
+    },
+    DIRECTEXECUTOR("",
+        "Don't use a threadpool for RPC calls, instead execute calls directly "
+            + "in the transport thread.", "" + DEFAULT.directExecutor) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.directExecutor = parseBoolean(value);
+      }
+    },
+    SAVE_HISTOGRAM("FILE", "Write the histogram with the latency recordings to file.", null) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.histogramFile = value;
+      }
+    },
+    STREAMING_RPCS("", "Use Streaming RPCs.", "false") {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.rpcType = STREAMING;
+      }
+    },
+    CONNECTION_WINDOW("BYTES", "The HTTP/2 connection flow control window.",
+        "" + DEFAULT.connectionWindow) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.connectionWindow = parseInt(value);
+      }
+    },
+    STREAM_WINDOW("BYTES", "The HTTP/2 per-stream flow control window.",
+        "" + DEFAULT.streamWindow) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.streamWindow = parseInt(value);
+      }
+    },
+    TARGET_QPS("INT", "Average number of QPS to shoot for.", "" + DEFAULT.targetQps, true) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.targetQps = parseInt(value);
+      }
+    };
+
+    private final String type;
+    private final String description;
+    private final String defaultValue;
+    private final boolean required;
+
+    ClientParam(String type, String description, String defaultValue) {
+      this(type, description, defaultValue, false);
     }
+
+    ClientParam(String type, String description, String defaultValue, boolean required) {
+      this.type = type;
+      this.description = description;
+      this.defaultValue = defaultValue;
+      this.required = required;
+    }
+
+    @Override
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    @Override
+    public String getType() {
+      return type;
+    }
+
+    @Override
+    public String getDescription() {
+      return description;
+    }
+
+    @Override
+    public String getDefaultValue() {
+      return defaultValue;
+    }
+
+    @Override
+    public boolean isRequired() {
+      return required;
+    }
+
+    @Override
+    public void setValue(Configuration config, String value) {
+      setClientValue((ClientConfiguration) config, value);
+    }
+
+    protected abstract void setClientValue(ClientConfiguration config, String value);
   }
 }

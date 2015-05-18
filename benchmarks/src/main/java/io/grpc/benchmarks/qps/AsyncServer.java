@@ -31,21 +31,19 @@
 
 package io.grpc.benchmarks.qps;
 
-import static grpc.testing.Qpstest.Payload;
-import static grpc.testing.Qpstest.PayloadType;
-import static grpc.testing.Qpstest.SimpleRequest;
-import static grpc.testing.Qpstest.SimpleResponse;
 import static io.grpc.testing.integration.Util.loadCert;
-import static io.grpc.testing.integration.Util.pickUnusedPort;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
-import grpc.testing.TestServiceGrpc;
-
 import io.grpc.ServerImpl;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import io.grpc.testing.Payload;
+import io.grpc.testing.PayloadType;
+import io.grpc.testing.SimpleRequest;
+import io.grpc.testing.SimpleResponse;
+import io.grpc.testing.TestServiceGrpc;
 import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
 import io.netty.channel.EventLoopGroup;
@@ -56,19 +54,13 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslProvider;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
  * QPS server using the non-blocking API.
  */
 public class AsyncServer {
-
-  private boolean tls;
-  private int port;
-  private int connectionWindow = NettyServerBuilder.DEFAULT_CONNECTION_WINDOW_SIZE;
-  private int streamWindow = NettyServerBuilder.DEFAULT_STREAM_WINDOW_SIZE;
-  private boolean directExecutor;
-  private boolean nettyNativeTransport;
 
   /**
    * checkstyle complains if there is no javadoc comment here.
@@ -79,60 +71,20 @@ public class AsyncServer {
 
   /** Equivalent of "main", but non-static. */
   public void run(String[] args) throws Exception {
-    if (!parseArgs(args)) {
+    ServerConfiguration.Builder configBuilder = ServerConfiguration.newBuilder();
+    ServerConfiguration config;
+    try {
+      config = configBuilder.build(args);
+    } catch (Exception e) {
+      System.out.println(e.getMessage());
+      configBuilder.printUsage();
       return;
     }
 
-    SslContext sslContext = null;
-    if (tls) {
-      System.out.println("Using fake CA for TLS certificate.\n"
-          + "Run the Java client with --tls --testca");
-
-      File cert = loadCert("server1.pem");
-      File key = loadCert("server1.key");
-      sslContext = GrpcSslContexts.forServer(cert, key)
-          .sslProvider(nettyNativeTransport ? SslProvider.OPENSSL : SslProvider.JDK).build();
-    }
-
-    if (port == 0) {
-      port = pickUnusedPort();
-    }
-
-    final EventLoopGroup boss;
-    final EventLoopGroup worker;
-    final Class<? extends ServerChannel> channelType;
-    if (nettyNativeTransport) {
-      try {
-        // These classes are only available on linux.
-        Class<?> groupClass = Class.forName("io.netty.channel.epoll.EpollEventLoopGroup");
-        @SuppressWarnings("unchecked")
-        Class<? extends ServerChannel> channelClass = (Class<? extends ServerChannel>)
-                Class.forName("io.netty.channel.epoll.EpollServerSocketChannel");
-        boss = (EventLoopGroup) groupClass.newInstance();
-        worker = (EventLoopGroup) groupClass.newInstance();
-        channelType = channelClass;
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    } else {
-      boss = new NioEventLoopGroup();
-      worker = new NioEventLoopGroup();
-      channelType = NioServerSocketChannel.class;
-    }
-    final ServerImpl server = NettyServerBuilder
-            .forPort(port)
-            .bossEventLoopGroup(boss)
-            .workerEventLoopGroup(worker)
-            .channelType(channelType)
-            .addService(TestServiceGrpc.bindService(new TestServiceImpl()))
-            .sslContext(sslContext)
-            .executor(directExecutor ? MoreExecutors.newDirectExecutorService() : null)
-            .connectionWindowSize(connectionWindow)
-            .streamWindowSize(streamWindow)
-            .build();
+    final ServerImpl server = newServer(config);
     server.start();
 
-    System.out.println("QPS Server started on port " + port);
+    System.out.println("QPS Server started on " + config.address);
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
@@ -148,66 +100,77 @@ public class AsyncServer {
     });
   }
 
-  private boolean parseArgs(String[] args) {
-    try {
-      for (String arg : args) {
-        if (!arg.startsWith("--")) {
-          System.err.println("All arguments must start with '--': " + arg);
-          printUsage();
-          return false;
-        }
+  static ServerImpl newServer(ServerConfiguration config) throws IOException {
+    SslContext sslContext = null;
+    if (config.tls) {
+      System.out.println("Using fake CA for TLS certificate.\n"
+          + "Run the Java client with --tls --testca");
 
-        String[] pair = arg.substring(2).split("=", 2);
-        String key = pair[0];
-        String value = "";
-        if (pair.length == 2) {
-          value = pair[1];
-        }
-
-        if ("help".equals(key)) {
-          printUsage();
-          return false;
-        } else if ("port".equals(key)) {
-          port = Integer.parseInt(value);
-        } else if ("tls".equals(key)) {
-          tls = true;
-        } else if ("directexecutor".equals(key)) {
-          directExecutor = true;
-        } else if ("connection_window".equals(key)) {
-          connectionWindow = Integer.parseInt(value);
-        } else if ("stream_window".equals(key)) {
-          streamWindow = Integer.parseInt(value);
-        } else if ("netty_native_transport".equals(key)) {
-          nettyNativeTransport = true;
-        } else {
-          System.err.println("Unrecognized argument '" + key + "'.");
-        }
-      }
-    } catch (Exception e) {
-      e.printStackTrace();
-      printUsage();
-      return false;
+      File cert = loadCert("server1.pem");
+      File key = loadCert("server1.key");
+      boolean useJdkSsl = config.transport == ServerConfiguration.Transport.NETTY_NIO;
+      sslContext = GrpcSslContexts.forServer(cert, key)
+          .sslProvider(useJdkSsl ? SslProvider.JDK : SslProvider.OPENSSL)
+          .build();
     }
 
-    return true;
-  }
+    final EventLoopGroup boss;
+    final EventLoopGroup worker;
+    final Class<? extends ServerChannel> channelType;
+    switch (config.transport) {
+      case NETTY_NIO: {
+        boss = new NioEventLoopGroup();
+        worker = new NioEventLoopGroup();
+        channelType = NioServerSocketChannel.class;
+        break;
+      }
+      case NETTY_EPOLL: {
+        try {
+          // These classes are only available on linux.
+          Class<?> groupClass = Class.forName("io.netty.channel.epoll.EpollEventLoopGroup");
+          @SuppressWarnings("unchecked")
+          Class<? extends ServerChannel> channelClass = (Class<? extends ServerChannel>)
+              Class.forName("io.netty.channel.epoll.EpollServerSocketChannel");
+          boss = (EventLoopGroup) groupClass.newInstance();
+          worker = (EventLoopGroup) groupClass.newInstance();
+          channelType = channelClass;
+          break;
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+      case NETTY_UNIX_DOMAIN_SOCKET: {
+        try {
+          // These classes are only available on linux.
+          Class<?> groupClass = Class.forName("io.netty.channel.epoll.EpollEventLoopGroup");
+          @SuppressWarnings("unchecked")
+          Class<? extends ServerChannel> channelClass = (Class<? extends ServerChannel>)
+              Class.forName("io.netty.channel.epoll.EpollServerDomainSocketChannel");
+          boss = (EventLoopGroup) groupClass.newInstance();
+          worker = (EventLoopGroup) groupClass.newInstance();
+          channelType = channelClass;
+          break;
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+      default: {
+        // Should never get here.
+        throw new IllegalArgumentException("Unsupported transport: " + config.transport);
+      }
+    }
 
-  private void printUsage() {
-    System.out.println(
-            "Usage: [ARGS...]"
-            + "\n"
-            + "\n  --port=INT                  Port of the server. Required. No default."
-            + "\n  --tls                       Enable TLS. Default disabled."
-            + "\n  --directexecutor            Use a direct executor i.e. execute all RPC"
-            + "\n                              calls directly in Netty's event loop"
-            + "\n                              overhead of a thread pool."
-            + "\n  --netty_native_transport    Whether to use Netty's native transport."
-            + "\n                              Only supported on linux."
-            + "\n  --connection_window=BYTES   The HTTP/2 connection flow control window."
-            + "\n                              Default " + connectionWindow + " byte."
-            + "\n  --stream_window=BYTES       The HTTP/2 per-stream flow control window."
-            + "\n                              Default " + streamWindow + " byte."
-    );
+    return NettyServerBuilder
+        .forAddress(config.address)
+        .bossEventLoopGroup(boss)
+        .workerEventLoopGroup(worker)
+        .channelType(channelType)
+        .addService(TestServiceGrpc.bindService(new TestServiceImpl()))
+        .sslContext(sslContext)
+        .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null)
+        .connectionWindowSize(config.connectionWindow)
+        .streamWindowSize(config.streamWindow)
+        .build();
   }
 
   private static class TestServiceImpl implements TestServiceGrpc.TestService {
@@ -243,12 +206,6 @@ public class AsyncServer {
     }
 
     private static SimpleResponse buildSimpleResponse(SimpleRequest request) {
-      if (!request.hasResponseSize()) {
-        throw Status.INTERNAL.augmentDescription("responseSize required").asRuntimeException();
-      }
-      if (!request.hasResponseType()) {
-        throw Status.INTERNAL.augmentDescription("responseType required").asRuntimeException();
-      }
       if (request.getResponseSize() > 0) {
         if (!PayloadType.COMPRESSABLE.equals(request.getResponseType())) {
           throw Status.INTERNAL.augmentDescription("Error creating payload.").asRuntimeException();
