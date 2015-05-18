@@ -18,6 +18,8 @@ Note that you must use the release of the Jetty-ALPN jar specific to the version
 
 An option is provided to use GRPC over plaintext without TLS. This is convenient for testing environments, however users must be aware of the secuirty risks of doing so for real production systems.
 
+ALPN is supported starting Android 4.4, but it only works well in 5.0 and higher. 
+In lower versions, an alternative is to use NPN which Android has support from 4.1. However, the corresponding GRPC server will also need to enable NPN.
 
 # Using OAuth2
 
