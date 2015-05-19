@@ -78,7 +78,7 @@ public final class TransportFrameUtil {
    */
   public static byte[][] toHttp2Headers(Metadata headers) {
     byte[][] serializedHeaders = headers.serialize();
-    ArrayList<byte[]> result = new ArrayList<byte[]>();
+    ArrayList<byte[]> result = new ArrayList<byte[]>(serializedHeaders.length);
     for (int i = 0; i < serializedHeaders.length; i += 2) {
       byte[] key = serializedHeaders[i];
       byte[] value = serializedHeaders[i + 1];
