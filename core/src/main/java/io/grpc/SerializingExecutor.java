@@ -55,8 +55,10 @@ public final class SerializingExecutor implements Executor {
   private final Executor executor;
 
   /** A list of Runnables to be run in order. */
+  // Initial size set to 4 because it is a nice number and at least the size necessary for handling
+  // a unary response: onHeaders + onPayload + onClose
   @GuardedBy("internalLock")
-  private final Queue<Runnable> waitQueue = new ArrayDeque<Runnable>();
+  private final Queue<Runnable> waitQueue = new ArrayDeque<Runnable>(4);
 
   /**
    * We explicitly keep track of if the TaskRunner is currently scheduled to
