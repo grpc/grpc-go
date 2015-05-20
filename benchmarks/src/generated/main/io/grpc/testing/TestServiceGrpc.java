@@ -1,4 +1,4 @@
-package grpc.testing;
+package io.grpc.testing;
 
 import static io.grpc.stub.Calls.createMethodDescriptor;
 import static io.grpc.stub.Calls.asyncUnaryCall;
@@ -15,18 +15,18 @@ import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;
 @javax.annotation.Generated("by gRPC proto compiler")
 public class TestServiceGrpc {
 
-  private static final io.grpc.stub.Method<grpc.testing.Qpstest.SimpleRequest,
-      grpc.testing.Qpstest.SimpleResponse> METHOD_UNARY_CALL =
+  private static final io.grpc.stub.Method<io.grpc.testing.SimpleRequest,
+      io.grpc.testing.SimpleResponse> METHOD_UNARY_CALL =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.UNARY, "UnaryCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(grpc.testing.Qpstest.SimpleRequest.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(grpc.testing.Qpstest.SimpleResponse.PARSER));
-  private static final io.grpc.stub.Method<grpc.testing.Qpstest.SimpleRequest,
-      grpc.testing.Qpstest.SimpleResponse> METHOD_STREAMING_CALL =
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.PARSER));
+  private static final io.grpc.stub.Method<io.grpc.testing.SimpleRequest,
+      io.grpc.testing.SimpleResponse> METHOD_STREAMING_CALL =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.DUPLEX_STREAMING, "StreamingCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(grpc.testing.Qpstest.SimpleRequest.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(grpc.testing.Qpstest.SimpleResponse.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.PARSER));
 
   public static TestServiceStub newStub(io.grpc.Channel channel) {
     return new TestServiceStub(channel, CONFIG);
@@ -48,10 +48,10 @@ public class TestServiceGrpc {
   @javax.annotation.concurrent.Immutable
   public static class TestServiceServiceDescriptor extends
       io.grpc.stub.AbstractServiceDescriptor<TestServiceServiceDescriptor> {
-    public final io.grpc.MethodDescriptor<grpc.testing.Qpstest.SimpleRequest,
-        grpc.testing.Qpstest.SimpleResponse> unaryCall;
-    public final io.grpc.MethodDescriptor<grpc.testing.Qpstest.SimpleRequest,
-        grpc.testing.Qpstest.SimpleResponse> streamingCall;
+    public final io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
+        io.grpc.testing.SimpleResponse> unaryCall;
+    public final io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
+        io.grpc.testing.SimpleResponse> streamingCall;
 
     private TestServiceServiceDescriptor() {
       unaryCall = createMethodDescriptor(
@@ -63,11 +63,11 @@ public class TestServiceGrpc {
     @SuppressWarnings("unchecked")
     private TestServiceServiceDescriptor(
         java.util.Map<java.lang.String, io.grpc.MethodDescriptor<?, ?>> methodMap) {
-      unaryCall = (io.grpc.MethodDescriptor<grpc.testing.Qpstest.SimpleRequest,
-          grpc.testing.Qpstest.SimpleResponse>) methodMap.get(
+      unaryCall = (io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
+          io.grpc.testing.SimpleResponse>) methodMap.get(
           CONFIG.unaryCall.getName());
-      streamingCall = (io.grpc.MethodDescriptor<grpc.testing.Qpstest.SimpleRequest,
-          grpc.testing.Qpstest.SimpleResponse>) methodMap.get(
+      streamingCall = (io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
+          io.grpc.testing.SimpleResponse>) methodMap.get(
           CONFIG.streamingCall.getName());
     }
 
@@ -87,22 +87,22 @@ public class TestServiceGrpc {
 
   public static interface TestService {
 
-    public void unaryCall(grpc.testing.Qpstest.SimpleRequest request,
-        io.grpc.stub.StreamObserver<grpc.testing.Qpstest.SimpleResponse> responseObserver);
+    public void unaryCall(io.grpc.testing.SimpleRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver);
 
-    public io.grpc.stub.StreamObserver<grpc.testing.Qpstest.SimpleRequest> streamingCall(
-        io.grpc.stub.StreamObserver<grpc.testing.Qpstest.SimpleResponse> responseObserver);
+    public io.grpc.stub.StreamObserver<io.grpc.testing.SimpleRequest> streamingCall(
+        io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver);
   }
 
   public static interface TestServiceBlockingClient {
 
-    public grpc.testing.Qpstest.SimpleResponse unaryCall(grpc.testing.Qpstest.SimpleRequest request);
+    public io.grpc.testing.SimpleResponse unaryCall(io.grpc.testing.SimpleRequest request);
   }
 
   public static interface TestServiceFutureClient {
 
-    public com.google.common.util.concurrent.ListenableFuture<grpc.testing.Qpstest.SimpleResponse> unaryCall(
-        grpc.testing.Qpstest.SimpleRequest request);
+    public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.SimpleResponse> unaryCall(
+        io.grpc.testing.SimpleRequest request);
   }
 
   public static class TestServiceStub extends
@@ -120,15 +120,15 @@ public class TestServiceGrpc {
     }
 
     @java.lang.Override
-    public void unaryCall(grpc.testing.Qpstest.SimpleRequest request,
-        io.grpc.stub.StreamObserver<grpc.testing.Qpstest.SimpleResponse> responseObserver) {
+    public void unaryCall(io.grpc.testing.SimpleRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
       asyncUnaryCall(
           channel.newCall(config.unaryCall), request, responseObserver);
     }
 
     @java.lang.Override
-    public io.grpc.stub.StreamObserver<grpc.testing.Qpstest.SimpleRequest> streamingCall(
-        io.grpc.stub.StreamObserver<grpc.testing.Qpstest.SimpleResponse> responseObserver) {
+    public io.grpc.stub.StreamObserver<io.grpc.testing.SimpleRequest> streamingCall(
+        io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
       return duplexStreamingCall(
           channel.newCall(config.streamingCall), responseObserver);
     }
@@ -149,7 +149,7 @@ public class TestServiceGrpc {
     }
 
     @java.lang.Override
-    public grpc.testing.Qpstest.SimpleResponse unaryCall(grpc.testing.Qpstest.SimpleRequest request) {
+    public io.grpc.testing.SimpleResponse unaryCall(io.grpc.testing.SimpleRequest request) {
       return blockingUnaryCall(
           channel.newCall(config.unaryCall), request);
     }
@@ -170,8 +170,8 @@ public class TestServiceGrpc {
     }
 
     @java.lang.Override
-    public com.google.common.util.concurrent.ListenableFuture<grpc.testing.Qpstest.SimpleResponse> unaryCall(
-        grpc.testing.Qpstest.SimpleRequest request) {
+    public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.SimpleResponse> unaryCall(
+        io.grpc.testing.SimpleRequest request) {
       return unaryFutureCall(
           channel.newCall(config.unaryCall), request);
     }
@@ -184,12 +184,12 @@ public class TestServiceGrpc {
           METHOD_UNARY_CALL,
           asyncUnaryRequestCall(
             new io.grpc.stub.ServerCalls.UnaryRequestMethod<
-                grpc.testing.Qpstest.SimpleRequest,
-                grpc.testing.Qpstest.SimpleResponse>() {
+                io.grpc.testing.SimpleRequest,
+                io.grpc.testing.SimpleResponse>() {
               @java.lang.Override
               public void invoke(
-                  grpc.testing.Qpstest.SimpleRequest request,
-                  io.grpc.stub.StreamObserver<grpc.testing.Qpstest.SimpleResponse> responseObserver) {
+                  io.grpc.testing.SimpleRequest request,
+                  io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
                 serviceImpl.unaryCall(request, responseObserver);
               }
             })))
@@ -197,11 +197,11 @@ public class TestServiceGrpc {
           METHOD_STREAMING_CALL,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<
-                grpc.testing.Qpstest.SimpleRequest,
-                grpc.testing.Qpstest.SimpleResponse>() {
+                io.grpc.testing.SimpleRequest,
+                io.grpc.testing.SimpleResponse>() {
               @java.lang.Override
-              public io.grpc.stub.StreamObserver<grpc.testing.Qpstest.SimpleRequest> invoke(
-                  io.grpc.stub.StreamObserver<grpc.testing.Qpstest.SimpleResponse> responseObserver) {
+              public io.grpc.stub.StreamObserver<io.grpc.testing.SimpleRequest> invoke(
+                  io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
                 return serviceImpl.streamingCall(responseObserver);
               }
             }))).build();

@@ -1,4 +1,4 @@
-package grpc.testing;
+package io.grpc.testing;
 
 import static io.grpc.stub.Calls.createMethodDescriptor;
 import static io.grpc.stub.Calls.asyncUnaryCall;
@@ -15,18 +15,18 @@ import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;
 @javax.annotation.Generated("by gRPC proto compiler")
 public class WorkerGrpc {
 
-  private static final io.grpc.stub.Method<grpc.testing.Qpstest.ClientArgs,
-      grpc.testing.Qpstest.ClientStatus> METHOD_RUN_TEST =
+  private static final io.grpc.stub.Method<io.grpc.testing.ClientArgs,
+      io.grpc.testing.ClientStatus> METHOD_RUN_TEST =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.DUPLEX_STREAMING, "RunTest",
-          io.grpc.protobuf.ProtoUtils.marshaller(grpc.testing.Qpstest.ClientArgs.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(grpc.testing.Qpstest.ClientStatus.PARSER));
-  private static final io.grpc.stub.Method<grpc.testing.Qpstest.ServerArgs,
-      grpc.testing.Qpstest.ServerStatus> METHOD_RUN_SERVER =
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientArgs.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientStatus.PARSER));
+  private static final io.grpc.stub.Method<io.grpc.testing.ServerArgs,
+      io.grpc.testing.ServerStatus> METHOD_RUN_SERVER =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.DUPLEX_STREAMING, "RunServer",
-          io.grpc.protobuf.ProtoUtils.marshaller(grpc.testing.Qpstest.ServerArgs.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(grpc.testing.Qpstest.ServerStatus.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerArgs.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerStatus.PARSER));
 
   public static WorkerStub newStub(io.grpc.Channel channel) {
     return new WorkerStub(channel, CONFIG);
@@ -48,10 +48,10 @@ public class WorkerGrpc {
   @javax.annotation.concurrent.Immutable
   public static class WorkerServiceDescriptor extends
       io.grpc.stub.AbstractServiceDescriptor<WorkerServiceDescriptor> {
-    public final io.grpc.MethodDescriptor<grpc.testing.Qpstest.ClientArgs,
-        grpc.testing.Qpstest.ClientStatus> runTest;
-    public final io.grpc.MethodDescriptor<grpc.testing.Qpstest.ServerArgs,
-        grpc.testing.Qpstest.ServerStatus> runServer;
+    public final io.grpc.MethodDescriptor<io.grpc.testing.ClientArgs,
+        io.grpc.testing.ClientStatus> runTest;
+    public final io.grpc.MethodDescriptor<io.grpc.testing.ServerArgs,
+        io.grpc.testing.ServerStatus> runServer;
 
     private WorkerServiceDescriptor() {
       runTest = createMethodDescriptor(
@@ -63,11 +63,11 @@ public class WorkerGrpc {
     @SuppressWarnings("unchecked")
     private WorkerServiceDescriptor(
         java.util.Map<java.lang.String, io.grpc.MethodDescriptor<?, ?>> methodMap) {
-      runTest = (io.grpc.MethodDescriptor<grpc.testing.Qpstest.ClientArgs,
-          grpc.testing.Qpstest.ClientStatus>) methodMap.get(
+      runTest = (io.grpc.MethodDescriptor<io.grpc.testing.ClientArgs,
+          io.grpc.testing.ClientStatus>) methodMap.get(
           CONFIG.runTest.getName());
-      runServer = (io.grpc.MethodDescriptor<grpc.testing.Qpstest.ServerArgs,
-          grpc.testing.Qpstest.ServerStatus>) methodMap.get(
+      runServer = (io.grpc.MethodDescriptor<io.grpc.testing.ServerArgs,
+          io.grpc.testing.ServerStatus>) methodMap.get(
           CONFIG.runServer.getName());
     }
 
@@ -87,11 +87,11 @@ public class WorkerGrpc {
 
   public static interface Worker {
 
-    public io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ClientArgs> runTest(
-        io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ClientStatus> responseObserver);
+    public io.grpc.stub.StreamObserver<io.grpc.testing.ClientArgs> runTest(
+        io.grpc.stub.StreamObserver<io.grpc.testing.ClientStatus> responseObserver);
 
-    public io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ServerArgs> runServer(
-        io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ServerStatus> responseObserver);
+    public io.grpc.stub.StreamObserver<io.grpc.testing.ServerArgs> runServer(
+        io.grpc.stub.StreamObserver<io.grpc.testing.ServerStatus> responseObserver);
   }
 
   public static interface WorkerBlockingClient {
@@ -115,15 +115,15 @@ public class WorkerGrpc {
     }
 
     @java.lang.Override
-    public io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ClientArgs> runTest(
-        io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ClientStatus> responseObserver) {
+    public io.grpc.stub.StreamObserver<io.grpc.testing.ClientArgs> runTest(
+        io.grpc.stub.StreamObserver<io.grpc.testing.ClientStatus> responseObserver) {
       return duplexStreamingCall(
           channel.newCall(config.runTest), responseObserver);
     }
 
     @java.lang.Override
-    public io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ServerArgs> runServer(
-        io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ServerStatus> responseObserver) {
+    public io.grpc.stub.StreamObserver<io.grpc.testing.ServerArgs> runServer(
+        io.grpc.stub.StreamObserver<io.grpc.testing.ServerStatus> responseObserver) {
       return duplexStreamingCall(
           channel.newCall(config.runServer), responseObserver);
     }
@@ -166,11 +166,11 @@ public class WorkerGrpc {
           METHOD_RUN_TEST,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<
-                grpc.testing.Qpstest.ClientArgs,
-                grpc.testing.Qpstest.ClientStatus>() {
+                io.grpc.testing.ClientArgs,
+                io.grpc.testing.ClientStatus>() {
               @java.lang.Override
-              public io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ClientArgs> invoke(
-                  io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ClientStatus> responseObserver) {
+              public io.grpc.stub.StreamObserver<io.grpc.testing.ClientArgs> invoke(
+                  io.grpc.stub.StreamObserver<io.grpc.testing.ClientStatus> responseObserver) {
                 return serviceImpl.runTest(responseObserver);
               }
             })))
@@ -178,11 +178,11 @@ public class WorkerGrpc {
           METHOD_RUN_SERVER,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<
-                grpc.testing.Qpstest.ServerArgs,
-                grpc.testing.Qpstest.ServerStatus>() {
+                io.grpc.testing.ServerArgs,
+                io.grpc.testing.ServerStatus>() {
               @java.lang.Override
-              public io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ServerArgs> invoke(
-                  io.grpc.stub.StreamObserver<grpc.testing.Qpstest.ServerStatus> responseObserver) {
+              public io.grpc.stub.StreamObserver<io.grpc.testing.ServerArgs> invoke(
+                  io.grpc.stub.StreamObserver<io.grpc.testing.ServerStatus> responseObserver) {
                 return serviceImpl.runServer(responseObserver);
               }
             }))).build();
