@@ -112,7 +112,7 @@ class Utils {
   }
 
   public static Http2Headers convertClientHeaders(Metadata.Headers headers,
-      boolean ssl,
+      ByteString scheme,
       ByteString defaultPath,
       ByteString defaultAuthority) {
     Preconditions.checkNotNull(defaultPath, "defaultPath");
@@ -124,7 +124,7 @@ class Utils {
     http2Headers.authority(defaultAuthority)
         .path(defaultPath)
         .method(HTTP_METHOD)
-        .scheme(ssl ? HTTPS : HTTP)
+        .scheme(scheme)
         .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC)
         .set(TE_HEADER, TE_TRAILERS);
 

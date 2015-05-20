@@ -44,7 +44,6 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
@@ -59,7 +58,6 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.logging.LogLevel;
-import io.netty.handler.ssl.SslContext;
 import io.netty.util.AsciiString;
 
 import java.net.InetSocketAddress;
@@ -68,7 +66,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.concurrent.GuardedBy;
-import javax.net.ssl.SSLException;
 
 /**
  * A Netty-based {@link ClientTransport} implementation.
@@ -79,9 +76,8 @@ class NettyClientTransport implements ClientTransport {
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
-  private final ChannelHandler negotiationHandler;
+  private final ProtocolNegotiator.Handler negotiationHandler;
   private final NettyClientHandler handler;
-  private final boolean ssl;
   private final AsciiString authority;
   private final int connectionWindowSize;
   private final int streamWindowSize;
@@ -97,51 +93,26 @@ class NettyClientTransport implements ClientTransport {
   private boolean terminated;
 
   NettyClientTransport(SocketAddress address, Class<? extends Channel> channelType,
-      NegotiationType negotiationType, EventLoopGroup group, SslContext sslContext,
-      int connectionWindowSize, int streamWindowSize) {
-    Preconditions.checkNotNull(negotiationType, "negotiationType");
+                       EventLoopGroup group, ProtocolNegotiator negotiator,
+                       int connectionWindowSize, int streamWindowSize) {
+    Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
     this.connectionWindowSize = connectionWindowSize;
     this.streamWindowSize = streamWindowSize;
 
-    InetSocketAddress inetAddress = null;
     if (address instanceof InetSocketAddress) {
-      inetAddress = (InetSocketAddress) address;
+      InetSocketAddress inetAddress = (InetSocketAddress) address;
       authority = new AsciiString(inetAddress.getHostString() + ":" + inetAddress.getPort());
     } else {
-      Preconditions.checkState(negotiationType != NegotiationType.TLS,
-          "TLS not supported for non-internet socket types");
       // Specialized address types are allowed to support custom Channel types so just assume their
       // toString() values are valid :authority values
       authority = new AsciiString(address.toString());
     }
 
     handler = newHandler();
-    switch (negotiationType) {
-      case PLAINTEXT:
-        negotiationHandler = Http2Negotiator.plaintext(handler);
-        ssl = false;
-        break;
-      case PLAINTEXT_UPGRADE:
-        negotiationHandler = Http2Negotiator.plaintextUpgrade(handler);
-        ssl = false;
-        break;
-      case TLS:
-        if (sslContext == null) {
-          try {
-            sslContext = GrpcSslContexts.forClient().build();
-          } catch (SSLException ex) {
-            throw new RuntimeException(ex);
-          }
-        }
-        negotiationHandler = Http2Negotiator.tls(sslContext, inetAddress, handler);
-        ssl = true;
-        break;
-      default:
-        throw new IllegalArgumentException("Unsupported negotiationType: " + negotiationType);
-    }
+    negotiationHandler = negotiator.newHandler(handler);
   }
 
   @Override
@@ -156,7 +127,8 @@ class NettyClientTransport implements ClientTransport {
 
     // Convert the headers into Netty HTTP/2 headers.
     AsciiString defaultPath = new AsciiString("/" + method.getName());
-    Http2Headers http2Headers = Utils.convertClientHeaders(headers, ssl, defaultPath, authority);
+    Http2Headers http2Headers = Utils.convertClientHeaders(headers, negotiationHandler.scheme(),
+        defaultPath, authority);
 
     // Write the command requesting the creation of the stream.
     handler.getWriteQueue().enqueue(new CreateStreamCommand(http2Headers, stream),

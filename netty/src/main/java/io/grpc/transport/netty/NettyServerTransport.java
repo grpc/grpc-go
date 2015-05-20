@@ -54,6 +54,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
+import javax.net.ssl.SSLEngine;
 
 /**
  * The Netty-based server transport.
@@ -102,7 +103,8 @@ class NettyServerTransport implements ServerTransport {
     });
 
     if (sslContext != null) {
-      channel.pipeline().addLast(Http2Negotiator.serverTls(sslContext.newEngine(channel.alloc())));
+      SSLEngine sslEngine = sslContext.newEngine(channel.alloc());
+      channel.pipeline().addLast(ProtocolNegotiators.serverTls(sslEngine));
     }
     channel.pipeline().addLast(handler);
   }

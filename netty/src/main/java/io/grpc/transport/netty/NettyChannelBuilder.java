@@ -46,6 +46,8 @@ import io.netty.handler.ssl.SslContext;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
+import javax.net.ssl.SSLException;
+
 /**
  * A builder to help simplify construction of channels using the Netty transport.
  */
@@ -146,14 +148,38 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
         ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP) : userEventLoopGroup;
     final NegotiationType negotiationType = this.negotiationType;
     final Class<? extends Channel> channelType = this.channelType;
-    final SslContext sslContext = this.sslContext;
     final int connectionWindowSize = this.connectionWindowSize;
     final int streamWindowSize = this.streamWindowSize;
+    final ProtocolNegotiator negotiator;
+    switch (negotiationType) {
+      case PLAINTEXT:
+        negotiator = ProtocolNegotiators.plaintext();
+        break;
+      case PLAINTEXT_UPGRADE:
+        negotiator = ProtocolNegotiators.plaintextUpgrade();
+        break;
+      case TLS:
+        if (!(serverAddress instanceof InetSocketAddress)) {
+          throw new IllegalStateException("TLS not supported for non-internet socket types");
+        }
+        if (sslContext == null) {
+          try {
+            sslContext = GrpcSslContexts.forClient().build();
+          } catch (SSLException ex) {
+            throw new RuntimeException(ex);
+          }
+        }
+        negotiator = ProtocolNegotiators.tls(sslContext, (InetSocketAddress) serverAddress);
+        break;
+      default:
+        throw new IllegalArgumentException("Unsupported negotiationType: " + negotiationType);
+    }
+
     ClientTransportFactory transportFactory = new ClientTransportFactory() {
       @Override
       public ClientTransport newClientTransport() {
-        return new NettyClientTransport(serverAddress, channelType, negotiationType, group,
-            sslContext, connectionWindowSize, streamWindowSize);
+        return new NettyClientTransport(serverAddress, channelType, group,
+            negotiator, connectionWindowSize, streamWindowSize);
       }
     };
     Runnable terminationRunnable = null;

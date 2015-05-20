@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -43,7 +43,6 @@ import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpClientUpgradeHandler;
-import io.netty.handler.codec.http.HttpClientUpgradeHandler.UpgradeEvent;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
@@ -52,6 +51,7 @@ import io.netty.handler.codec.http2.Http2OrHttpChooser;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
+import io.netty.util.ByteString;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
@@ -71,10 +71,11 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
 
 /**
- * A utility class that provides support methods for negotiating the use of HTTP/2 with the remote
- * endpoint.
+ * Common {@link ProtocolNegotiator}s used by gRPC.
  */
-public final class Http2Negotiator {
+public final class ProtocolNegotiators {
+  private static final Logger log = Logger.getLogger(ProtocolNegotiators.class.getName());
+
   // TODO(madongfly): Remove "h2-xx" at a right time.
   private static final List<String> SUPPORTED_PROTOCOLS = Collections.unmodifiableList(
       Arrays.asList(
@@ -87,9 +88,7 @@ public final class Http2Negotiator {
   private static final String[] JETTY_TLS_NEGOTIATION_IMPL =
       {"org.eclipse.jetty.alpn.ALPN", "org.eclipse.jetty.npn.NextProtoNego"};
 
-  private static final Logger log = Logger.getLogger(Http2Negotiator.class.getName());
-
-  private Http2Negotiator() {
+  private ProtocolNegotiators() {
   }
 
   /**
@@ -107,21 +106,21 @@ public final class Http2Negotiator {
   }
 
   /**
-   * Returns a {@link ChannelHandler} that ensures the pipeline is set up so that TLS will
+   * Returns a {@link ProtocolNegotiator} that ensures the pipeline is set up so that TLS will
    * be negotiated, the {@code handler} is added and writes to the {@link Channel} may happen
    * immediately, even before the TLS Handshake is complete.
    */
-  public static ChannelHandler tls(final SslContext sslContext, final InetSocketAddress inetAddress,
-      final ChannelHandler handler) {
+  public static ProtocolNegotiator tls(final SslContext sslContext,
+                                       final InetSocketAddress inetAddress) {
     Preconditions.checkNotNull(sslContext, "sslContext");
     Preconditions.checkNotNull(inetAddress, "inetAddress");
 
-    ChannelHandler sslBootstrapHandler = new ChannelHandlerAdapter() {
+    final ChannelHandler sslBootstrapHandler = new ChannelHandlerAdapter() {
       @Override
       public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
         // TODO(nmittler): This method is currently unsupported for OpenSSL. Need to fix in Netty.
-        SSLEngine sslEngine = sslEngine = sslContext.newEngine(ctx.alloc(),
-                inetAddress.getHostName(), inetAddress.getPort());
+        SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(),
+            inetAddress.getHostName(), inetAddress.getPort());
         SSLParameters sslParams = new SSLParameters();
         sslParams.setEndpointIdentificationAlgorithm("HTTPS");
         sslEngine.setSSLParameters(sslParams);
@@ -152,29 +151,42 @@ public final class Http2Negotiator {
         ctx.pipeline().replace(this, "sslHandler", sslHandler);
       }
     };
-    return new BufferUntilTlsNegotiatedHandler(sslBootstrapHandler, handler);
+    return new ProtocolNegotiator() {
+      @Override
+      public Handler newHandler(Http2ConnectionHandler handler) {
+        return new BufferUntilTlsNegotiatedHandler(sslBootstrapHandler, handler);
+      }
+    };
   }
 
   /**
-   * Returns a {@link ChannelHandler} that ensures that the HTTP to HTTP/2 upgrade is performed,
-   * the {@code handler} is added to the pipeline writes to the {@link Channel} may happen
-   * immediately, even before the upgrade is complete.
+   * Returns a {@link ProtocolNegotiator} used for upgrading to HTTP/2 from HTTP/1.x.
    */
-  public static ChannelHandler plaintextUpgrade(Http2ConnectionHandler handler) {
-    // Register the plaintext upgrader
-    Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(handler);
-    HttpClientCodec httpClientCodec = new HttpClientCodec();
-    final HttpClientUpgradeHandler upgrader =
-        new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
-    return new BufferingHttp2UpgradeHandler(upgrader);
+  public static ProtocolNegotiator plaintextUpgrade() {
+    return new ProtocolNegotiator() {
+      @Override
+      public Handler newHandler(Http2ConnectionHandler handler) {
+        // Register the plaintext upgrader
+        Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(handler);
+        HttpClientCodec httpClientCodec = new HttpClientCodec();
+        final HttpClientUpgradeHandler upgrader =
+            new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
+        return new BufferingHttp2UpgradeHandler(upgrader);
+      }
+    };
   }
 
   /**
    * Returns a {@link ChannelHandler} that ensures that the {@code handler} is added to the
    * pipeline writes to the {@link Channel} may happen immediately, even before it is active.
    */
-  public static ChannelHandler plaintext(final ChannelHandler handler) {
-    return new BufferUntilChannelActiveHandler(handler);
+  public static ProtocolNegotiator plaintext() {
+    return new ProtocolNegotiator() {
+      @Override
+      public Handler newHandler(Http2ConnectionHandler handler) {
+        return new BufferUntilChannelActiveHandler(handler);
+      }
+    };
   }
 
   /**
@@ -317,10 +329,16 @@ public final class Http2Negotiator {
   /**
    * Buffers all writes until the TLS Handshake is complete.
    */
-  private static class BufferUntilTlsNegotiatedHandler extends AbstractBufferingHandler {
+  private static class BufferUntilTlsNegotiatedHandler extends AbstractBufferingHandler
+      implements ProtocolNegotiator.Handler {
 
     BufferUntilTlsNegotiatedHandler(ChannelHandler... handlers) {
       super(handlers);
+    }
+
+    @Override
+    public ByteString scheme() {
+      return Utils.HTTPS;
     }
 
     @Override
@@ -340,10 +358,16 @@ public final class Http2Negotiator {
   /**
    * Buffers all writes until the {@link Channel} is active.
    */
-  private static class BufferUntilChannelActiveHandler extends AbstractBufferingHandler {
+  private static class BufferUntilChannelActiveHandler extends AbstractBufferingHandler
+      implements ProtocolNegotiator.Handler {
 
     BufferUntilChannelActiveHandler(ChannelHandler... handlers) {
       super(handlers);
+    }
+
+    @Override
+    public ByteString scheme() {
+      return Utils.HTTP;
     }
 
     @Override
@@ -361,10 +385,16 @@ public final class Http2Negotiator {
   /**
    * Buffers all writes until the HTTP to HTTP/2 upgrade is complete.
    */
-  private static class BufferingHttp2UpgradeHandler extends AbstractBufferingHandler {
+  private static class BufferingHttp2UpgradeHandler extends AbstractBufferingHandler
+      implements ProtocolNegotiator.Handler {
 
     BufferingHttp2UpgradeHandler(ChannelHandler... handlers) {
       super(handlers);
+    }
+
+    @Override
+    public ByteString scheme() {
+      return Utils.HTTP;
     }
 
     @Override
@@ -379,9 +409,9 @@ public final class Http2Negotiator {
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-      if (evt == UpgradeEvent.UPGRADE_SUCCESSFUL) {
+      if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_SUCCESSFUL) {
         writeBufferedAndRemove(ctx);
-      } else if (evt == UpgradeEvent.UPGRADE_REJECTED) {
+      } else if (evt == HttpClientUpgradeHandler.UpgradeEvent.UPGRADE_REJECTED) {
         failBufferedAndClose(ctx);
         ctx.pipeline().fireExceptionCaught(new Exception("HTTP/2 upgrade rejected"));
       }
@@ -429,7 +459,7 @@ public final class Http2Negotiator {
                   removeMethod.invoke(null, engine);
                   protocolNegotiated.setException(new RuntimeException(
                       "Endpoint does not support any of " + SUPPORTED_PROTOCOLS
-                      + " in ALPN/NPN negotiation"));
+                          + " in ALPN/NPN negotiation"));
                   return null;
                 }
                 if ("protocols".equals(methodName)) {
