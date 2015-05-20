@@ -119,7 +119,7 @@ the header files and libraries of Protobuf.
 #### Linux
 Build the ``grpc-java-deploy`` image:
 ```
-grpc-java$ docker build -t grpc-java-deploy grpc-compiler
+grpc-java$ docker build -t grpc-java-deploy compiler
 ```
 
 Start a Docker container that has the deploy environment set up for you. The
@@ -160,7 +160,7 @@ grpc-java$ export CXXFLAGS="-I$HOME/protobuf/include" \
 The following command will build the whole project and upload it to Maven
 Central.
 ```
-grpc-java$ ./gradlew clean uploadArchives
+grpc-java$ ./gradlew clean build && ./gradlew uploadArchives
 ```
 
 If the version has the ``SNAPSHOT`` suffix, the artifacts will automatically
@@ -183,12 +183,12 @@ We currently distribute the following OSes and architectures:
 
 If you are doing a snapshot deployment:
 ```
-grpc-java$ ./gradlew clean grpc-compiler:uploadArchives -PtargetArch=<arch>
+grpc-java$ ./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives -PtargetArch=<arch>
 ```
 
 If you are doing a release deployment:
 ```
-grpc-java$ ./gradlew clean grpc-compiler:uploadArchives -PtargetArch=<arch> \
+grpc-java$ ./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives -PtargetArch=<arch> \
     -PrepositoryId=<repository-id>
 ```
 where ``<repository-id>`` is the ID of the staging repository that you have
