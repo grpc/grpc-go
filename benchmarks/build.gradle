@@ -36,7 +36,7 @@ dependencies {
                  project(':grpc-netty'),
                  project(':grpc-okhttp'),
                  project(':grpc-stub'),
-                 project(':grpc-integration-testing'),
+                 project(':grpc-interop-testing'),
                  libraries.junit,
                  libraries.mockito,
                  libraries.hdrhistogram]

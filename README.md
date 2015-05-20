@@ -177,4 +177,4 @@ The 'transport' layer does the heavy lifting of putting & taking bytes off the w
 
 ### Examples
 
-Tests showing how these layers are composed to execute calls using protobuf messages can be found here https://github.com/google/grpc-java/tree/master/integration-testing/src/main/java/io/grpc/testing/integration
+Tests showing how these layers are composed to execute calls using protobuf messages can be found here https://github.com/google/grpc-java/tree/master/interop-testing/src/main/java/io/grpc/testing/integration
