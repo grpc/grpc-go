@@ -288,7 +288,11 @@ public class OkHttpClientTransport implements ClientTransport {
       BufferedSource source;
       BufferedSink sink;
       try {
-        socket = new Socket(address.getAddress(), address.getPort());
+        if (address.isUnresolved()) {
+          socket = new Socket(address.getHostName(), address.getPort());
+        } else {
+          socket = new Socket(address.getAddress(), address.getPort());
+        }
         if (sslSocketFactory != null) {
           socket = OkHttpTlsUpgrader.upgrade(
               sslSocketFactory, socket, authorityHost, address.getPort(), connectionSpec);
