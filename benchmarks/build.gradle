@@ -32,20 +32,19 @@ configurations {
 }
 
 dependencies {
-    List deps = [project(':grpc-core'),
-                 project(':grpc-netty'),
-                 project(':grpc-okhttp'),
-                 project(':grpc-stub'),
-                 project(':grpc-interop-testing'),
-                 libraries.junit,
-                 libraries.mockito,
-                 libraries.hdrhistogram]
+    compile project(':grpc-core'),
+            project(':grpc-netty'),
+            project(':grpc-okhttp'),
+            project(':grpc-stub'),
+            project(':grpc-interop-testing'),
+            libraries.junit,
+            libraries.mockito,
+            libraries.hdrhistogram
     if (osdetector.os == "linux") {
         // These are only available on linux.
-        deps += [libraries.netty_tcnative, libraries.netty_transport_native_epoll]
+        compile libraries.netty_tcnative,
+                libraries.netty_transport_native_epoll
     }
-
-    compile deps
 
     alpnboot alpnboot_package_name
 }
