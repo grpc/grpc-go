@@ -806,6 +806,72 @@ public class OkHttpClientTransportTest {
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
+  @Test
+  public void shouldBeInitiallyReady() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream = clientTransport.newStream(
+        method,new Metadata.Headers(), listener);
+    assertTrue(stream.isReady());
+    assertTrue(listener.isOnReadyCalled());
+    stream.cancel();
+    assertFalse(stream.isReady());
+  }
+
+  @Test
+  public void notifyOnReady() throws Exception {
+    final int messageLength = 15;
+    setInitialWindowSize(0);
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream = clientTransport.newStream(
+        method,new Metadata.Headers(), listener);
+    stream.setOnReadyThreshold(HEADER_LENGTH + 20);
+    assertTrue(stream.isReady());
+    // Be notified at the beginning.
+    assertTrue(listener.isOnReadyCalled());
+
+    // Write a message that will not exceed the notification threshold and queue it.
+    InputStream input = new ByteArrayInputStream(new byte[messageLength]);
+    stream.writeMessage(input, input.available());
+    stream.flush();
+    assertTrue(stream.isReady());
+
+    // Write another two messages, still be queued.
+    input = new ByteArrayInputStream(new byte[messageLength]);
+    stream.writeMessage(input, input.available());
+    stream.flush();
+    assertFalse(stream.isReady());
+    input = new ByteArrayInputStream(new byte[messageLength]);
+    stream.writeMessage(input, input.available());
+    stream.flush();
+    assertFalse(stream.isReady());
+
+    // Let the first message out.
+    frameHandler.windowUpdate(0, HEADER_LENGTH + messageLength);
+    frameHandler.windowUpdate(3, HEADER_LENGTH + messageLength);
+    assertFalse(stream.isReady());
+    assertFalse(listener.isOnReadyCalled());
+
+    // Let the second message out.
+    frameHandler.windowUpdate(0, HEADER_LENGTH + messageLength);
+    frameHandler.windowUpdate(3, HEADER_LENGTH + messageLength);
+    assertTrue(stream.isReady());
+    assertTrue(listener.isOnReadyCalled());
+
+    // Now the first message is still in the queue, and it's size is smaller than the threshold.
+    // Increase the threshold should have no affection.
+    stream.setOnReadyThreshold(messageLength * 10);
+    assertFalse(listener.isOnReadyCalled());
+    // Decrease the threshold should have no affection too.
+    stream.setOnReadyThreshold(HEADER_LENGTH);
+    assertFalse(listener.isOnReadyCalled());
+    // But now increase the threshold to larger than the queued message size, onReady should be
+    // triggered.
+    stream.setOnReadyThreshold(HEADER_LENGTH + messageLength + 1);
+    assertTrue(listener.isOnReadyCalled());
+
+    stream.cancel();
+  }
+
   private void waitForStreamPending(int expected) throws Exception {
     int duration = TIME_OUT_MS / 10;
     for (int i = 0; i < 10; i++) {
@@ -922,6 +988,7 @@ public class OkHttpClientTransportTest {
     Metadata.Trailers trailers;
     CountDownLatch closed = new CountDownLatch(1);
     ArrayList<String> messages = new ArrayList<String>();
+    boolean onReadyCalled;
 
     MockStreamListener() {
     }
@@ -948,6 +1015,13 @@ public class OkHttpClientTransportTest {
 
     @Override
     public void onReady() {
+      onReadyCalled = true;
+    }
+
+    boolean isOnReadyCalled() {
+      boolean value = onReadyCalled;
+      onReadyCalled = false;
+      return value;
     }
 
     void waitUntilStreamClosed() throws InterruptedException {

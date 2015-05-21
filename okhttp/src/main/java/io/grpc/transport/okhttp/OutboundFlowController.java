@@ -76,7 +76,7 @@ class OutboundFlowController {
       OutboundFlowState state = (OutboundFlowState) stream.getOutboundFlowState();
       if (state == null) {
         // Create the OutboundFlowState with the new window size.
-        state = new OutboundFlowState(stream.id());
+        state = new OutboundFlowState(stream);
         stream.setOutboundFlowState(state);
       } else {
         state.incrementStreamWindow(delta);
@@ -167,7 +167,7 @@ class OutboundFlowController {
   private OutboundFlowState state(OkHttpClientStream stream) {
     OutboundFlowState state = (OutboundFlowState) stream.getOutboundFlowState();
     if (state == null) {
-      state = new OutboundFlowState(stream.id());
+      state = new OutboundFlowState(stream);
       stream.setOutboundFlowState(state);
     }
     return state;
@@ -245,10 +245,16 @@ class OutboundFlowController {
     int queuedBytes;
     int window = initialWindowSize;
     int allocatedBytes;
+    OkHttpClientStream stream;
 
     OutboundFlowState(int streamId) {
       this.streamId = streamId;
       pendingWriteQueue = new ArrayDeque<Frame>(2);
+    }
+
+    OutboundFlowState(OkHttpClientStream stream) {
+      this(stream.id());
+      this.stream = stream;
     }
 
     int window() {
@@ -397,6 +403,8 @@ class OutboundFlowController {
             } catch (IOException e) {
               throw new RuntimeException(e);
             }
+            stream.onStreamSentBytes(bytesToWrite);
+
             if (enqueued) {
               // It's enqueued - remove it from the head of the pending write queue.
               queuedBytes -= bytesToWrite;

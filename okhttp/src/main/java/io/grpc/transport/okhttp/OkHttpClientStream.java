@@ -136,6 +136,10 @@ class OkHttpClientStream extends Http2ClientStream {
     onStreamAllocated();
   }
 
+  void onStreamSentBytes(int numBytes) {
+    onSentBytes(numBytes);
+  }
+
   public void transportHeadersReceived(List<Header> headers, boolean endOfStream) {
     synchronized (lock) {
       if (endOfStream) {
@@ -173,6 +177,10 @@ class OkHttpClientStream extends Http2ClientStream {
       buffer = EMPTY_BUFFER;
     } else {
       buffer = ((OkHttpWritableBuffer) frame).buffer();
+      int size = (int) buffer.size();
+      if (size > 0) {
+        onSendingBytes(size);
+      }
     }
     // If buffer > frameWriter.maxDataLength() the flow-controller will ensure that it is
     // properly chunked.

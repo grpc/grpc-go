@@ -80,6 +80,7 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   /**
    * The number of bytes currently queued, waiting to be sent. When this falls below
+   * onReadyThreshold, {@link StreamListener#onReady()} will be called.
    */
   private int numSentBytesQueued;
 
@@ -158,6 +159,9 @@ public abstract class AbstractStream<IdT> implements Stream {
     checkArgument(onReadyThreshold > 0, "onReadyThreshold must be > 0");
     boolean doNotify;
     synchronized (onReadyLock) {
+      if (this.onReadyThreshold <= numSentBytesQueued && onReadyThreshold > numSentBytesQueued) {
+        shouldNotifyOnReady = true;
+      }
       this.onReadyThreshold = onReadyThreshold;
       doNotify = needToNotifyOnReady();
     }
