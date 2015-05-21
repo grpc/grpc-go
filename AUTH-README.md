@@ -7,6 +7,8 @@ As outlined in <a href="https://github.com/grpc/grpc-common/blob/master/grpc-aut
 ## Cipher-Suites
 Java 7 does not support the <a href="https://tools.ietf.org/html/draft-ietf-httpbis-http2-17#section-9.2.2">the cipher suites recommended</a> by the HTTP2 specification. To address this we suggest servers use Java 8 where possible or use an alternative JCE implementation such as <a href="https://www.bouncycastle.org/java.html">Bouncy Castle</a>. If this is not practical it is possible to use other ciphers but you need to ensure that the services you intend to call have <a href="https://github.com/grpc/grpc/issues/681">allowed out-of-spec ciphers</a> and have evaluated the security risks of doing so. On Android we recommend the use of the <a href="http://appfoundry.be/blog/2014/11/18/Google-Play-Services-Dynamic-Security-Provider/">Play Services Dynamic Security Provider</a> to ensure your application has an up-to-date OpenSSL library with the necessary ciper-suites and a reliable ALPN implementation.
 
+Users should be aware that GCM is [_very_ slow (1 MB/s)](https://bugzilla.redhat.com/show_bug.cgi?id=1135504) in JDK 8. GCM cipher suites are the only suites available that comply with HTTP2's cipher requirements.
+
 ## Protocol Negotiation (TLS-ALPN)
 HTTP2 mandates the use of <a href="https://tools.ietf.org/html/draft-ietf-tls-applayerprotoneg-05">ALPN</a> to negotiate the use of the protocol over SSL. No standard Java release has built-in support for ALPN today (<a href="https://bugs.openjdk.java.net/browse/JDK-8051498">there is a tracking issue</a> so go upvote it!) so we need to use the <a href="https://github.com/jetty-project/jetty-alpn">Jetty-ALPN</a> bootclasspath extension for OpenJDK to make it work.
 
