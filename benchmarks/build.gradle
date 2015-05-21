@@ -39,12 +39,9 @@ dependencies {
             project(':grpc-interop-testing'),
             libraries.junit,
             libraries.mockito,
-            libraries.hdrhistogram
-    if (osdetector.os == "linux") {
-        // These are only available on linux.
-        compile libraries.netty_tcnative,
-                libraries.netty_transport_native_epoll
-    }
+            libraries.hdrhistogram,
+            libraries.netty_tcnative,
+            libraries.netty_transport_native_epoll
 
     alpnboot alpnboot_package_name
 }

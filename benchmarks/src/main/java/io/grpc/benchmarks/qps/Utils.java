@@ -44,8 +44,12 @@ import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.epoll.EpollDomainSocketChannel;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslProvider;
 
@@ -79,24 +83,22 @@ final class Utils {
   static SocketAddress parseSocketAddress(String value) {
     if (value.startsWith(UNIX_DOMAIN_SOCKET_PREFIX)) {
       // Unix Domain Socket address.
+      // Create the underlying file for the Unix Domain Socket.
+      String filePath = value.substring(UNIX_DOMAIN_SOCKET_PREFIX.length());
+      File file = new File(filePath);
+      if (!file.isAbsolute()) {
+        throw new IllegalArgumentException("File path must be absolute: " + filePath);
+      }
       try {
-        // Create the underlying file for the Unix Domain Socket.
-        String filePath = value.substring(UNIX_DOMAIN_SOCKET_PREFIX.length());
-        File file = new File(filePath);
-        if (!file.isAbsolute()) {
-          throw new IllegalArgumentException("File path must be absolute: " + filePath);
-        }
         if (file.createNewFile()) {
           // If this application created the file, delete it when the application exits.
           file.deleteOnExit();
         }
-        // Create the SocketAddress referencing the file.
-        Class<?> addressClass = Class.forName("io.netty.channel.unix.DomainSocketAddress");
-        return (SocketAddress) addressClass.getDeclaredConstructor(File.class)
-            .newInstance(file);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
+      } catch (IOException ex) {
+        throw new RuntimeException(ex);
       }
+      // Create the SocketAddress referencing the file.
+      return new DomainSocketAddress(file);
     } else {
       // Standard TCP/IP address.
       String[] parts = value.split(":", 2);
@@ -146,45 +148,26 @@ final class Utils {
     final EventLoopGroup group;
     final Class<? extends io.netty.channel.Channel> channelType;
     switch (config.transport) {
-      case NETTY_NIO: {
+      case NETTY_NIO:
         group = new NioEventLoopGroup();
         channelType = NioSocketChannel.class;
         break;
-      }
-      case NETTY_EPOLL: {
-        try {
-          // These classes are only available on linux.
-          Class<?> groupClass = Class.forName("io.netty.channel.epoll.EpollEventLoopGroup");
-          @SuppressWarnings("unchecked")
-          Class<? extends io.netty.channel.Channel> channelClass =
-              (Class<? extends io.netty.channel.Channel>) Class.forName(
-                  "io.netty.channel.epoll.EpollSocketChannel");
-          group = (EventLoopGroup) groupClass.newInstance();
-          channelType = channelClass;
-          break;
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-      }
-      case NETTY_UNIX_DOMAIN_SOCKET: {
-        try {
-          // These classes are only available on linux.
-          Class<?> groupClass = Class.forName("io.netty.channel.epoll.EpollEventLoopGroup");
-          @SuppressWarnings("unchecked")
-          Class<? extends io.netty.channel.Channel> channelClass =
-              (Class<? extends io.netty.channel.Channel>) Class.forName(
-                  "io.netty.channel.epoll.EpollDomainSocketChannel");
-          group = (EventLoopGroup) groupClass.newInstance();
-          channelType = channelClass;
-          break;
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-      }
-      default: {
+
+      case NETTY_EPOLL:
+        // These classes only work on Linux.
+        group = new EpollEventLoopGroup();
+        channelType = EpollSocketChannel.class;
+        break;
+
+      case NETTY_UNIX_DOMAIN_SOCKET:
+        // These classes only work on Linux.
+        group = new EpollEventLoopGroup();
+        channelType = EpollDomainSocketChannel.class;
+        break;
+
+      default:
         // Should never get here.
         throw new IllegalArgumentException("Unsupported transport: " + config.transport);
-      }
     }
     return NettyChannelBuilder
         .forAddress(config.address)
