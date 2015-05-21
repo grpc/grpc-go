@@ -99,7 +99,11 @@ final class Utils {
       }
     } else {
       // Standard TCP/IP address.
-      String[] parts = value.split(":");
+      String[] parts = value.split(":", 2);
+      if (parts.length < 2) {
+        throw new IllegalArgumentException(
+            "Address must be a unix:// path or be in the form host:port. Got: " + value);
+      }
       String host = parts[0];
       int port = Integer.parseInt(parts[1]);
       return new InetSocketAddress(host, port);
