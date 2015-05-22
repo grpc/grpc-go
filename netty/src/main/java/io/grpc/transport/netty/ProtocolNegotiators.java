@@ -79,6 +79,7 @@ public final class ProtocolNegotiators {
   // TODO(madongfly): Remove "h2-xx" at a right time.
   private static final List<String> SUPPORTED_PROTOCOLS = Collections.unmodifiableList(
       Arrays.asList(
+          "h2",
           Http2OrHttpChooser.SelectedProtocol.HTTP_2.protocolName(),
           "h2-14",
           "h2-15",
