@@ -32,7 +32,6 @@
 package io.grpc.transport.netty;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.SettableFuture;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
@@ -55,17 +54,12 @@ import io.netty.util.ByteString;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Queue;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
@@ -74,20 +68,6 @@ import javax.net.ssl.SSLParameters;
  * Common {@link ProtocolNegotiator}s used by gRPC.
  */
 public final class ProtocolNegotiators {
-  private static final Logger log = Logger.getLogger(ProtocolNegotiators.class.getName());
-
-  // TODO(madongfly): Remove "h2-xx" at a right time.
-  private static final List<String> SUPPORTED_PROTOCOLS = Collections.unmodifiableList(
-      Arrays.asList(
-          "h2",
-          Http2OrHttpChooser.SelectedProtocol.HTTP_2.protocolName(),
-          "h2-14",
-          "h2-15",
-          "h2-16"));
-
-  // Prefer ALPN to NPN so try it first.
-  private static final String[] JETTY_TLS_NEGOTIATION_IMPL =
-      {"org.eclipse.jetty.alpn.ALPN", "org.eclipse.jetty.npn.NextProtoNego"};
 
   private ProtocolNegotiators() {
   }
@@ -97,12 +77,6 @@ public final class ProtocolNegotiators {
    */
   public static ChannelHandler serverTls(SSLEngine sslEngine) {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
-    if (!isOpenSsl(sslEngine.getClass())) {
-      // Using JDK SSL
-      if (!installJettyTlsProtocolSelection(sslEngine, SettableFuture.<Void>create(), true)) {
-        throw new IllegalStateException("NPN/ALPN extensions not installed");
-      }
-    }
     return new SslHandler(sslEngine, false);
   }
 
@@ -126,27 +100,13 @@ public final class ProtocolNegotiators {
         sslParams.setEndpointIdentificationAlgorithm("HTTPS");
         sslEngine.setSSLParameters(sslParams);
 
-        final SettableFuture<Void> completeFuture = SettableFuture.create();
-        if (isOpenSsl(sslContext.getClass())) {
-          completeFuture.set(null);
-        } else {
-          // Using JDK SSL
-          if (!installJettyTlsProtocolSelection(sslEngine, completeFuture, false)) {
-            throw new IllegalStateException("NPN/ALPN extensions not installed");
-          }
-        }
-
         SslHandler sslHandler = new SslHandler(sslEngine, false);
         sslHandler.handshakeFuture().addListener(
             new GenericFutureListener<Future<? super Channel>>() {
               @Override
               public void operationComplete(Future<? super Channel> future) throws Exception {
                 // If an error occurred during the handshake, throw it to the pipeline.
-                if (future.isSuccess()) {
-                  completeFuture.get();
-                } else {
-                  future.get();
-                }
+                future.get();
               }
             });
         ctx.pipeline().replace(this, "sslHandler", sslHandler);
@@ -188,13 +148,6 @@ public final class ProtocolNegotiators {
         return new BufferUntilChannelActiveHandler(handler);
       }
     };
-  }
-
-  /**
-   * Returns {@code true} if the given class is for use with Netty OpenSsl.
-   */
-  private static boolean isOpenSsl(Class<?> clazz) {
-    return clazz.getSimpleName().toLowerCase().contains("openssl");
   }
 
   /**
@@ -418,103 +371,5 @@ public final class ProtocolNegotiators {
       }
       super.userEventTriggered(ctx, evt);
     }
-  }
-
-  /**
-   * Find Jetty's TLS NPN/ALPN extensions and attempt to use them
-   *
-   * @return true if NPN/ALPN support is available.
-   */
-  private static boolean installJettyTlsProtocolSelection(final SSLEngine engine,
-      final SettableFuture<Void> protocolNegotiated, boolean server) {
-    for (String protocolNegoClassName : JETTY_TLS_NEGOTIATION_IMPL) {
-      try {
-        Class<?> negoClass;
-        try {
-          negoClass = Class.forName(protocolNegoClassName, true, null);
-        } catch (ClassNotFoundException ignored) {
-          // Not on the classpath.
-          log.warning("Jetty extension " + protocolNegoClassName + " not found");
-          continue;
-        }
-        Class<?> providerClass = Class.forName(protocolNegoClassName + "$Provider", true, null);
-        Class<?> clientProviderClass
-            = Class.forName(protocolNegoClassName + "$ClientProvider", true, null);
-        Class<?> serverProviderClass
-            = Class.forName(protocolNegoClassName + "$ServerProvider", true, null);
-        Method putMethod = negoClass.getMethod("put", SSLEngine.class, providerClass);
-        final Method removeMethod = negoClass.getMethod("remove", SSLEngine.class);
-        putMethod.invoke(null, engine, Proxy.newProxyInstance(
-            null,
-            new Class[] {server ? serverProviderClass : clientProviderClass},
-            new InvocationHandler() {
-              @Override
-              public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                String methodName = method.getName();
-                if ("supports".equals(methodName)) {
-                  // NPN client
-                  return true;
-                }
-                if ("unsupported".equals(methodName)) {
-                  // all
-                  removeMethod.invoke(null, engine);
-                  protocolNegotiated.setException(new RuntimeException(
-                      "Endpoint does not support any of " + SUPPORTED_PROTOCOLS
-                          + " in ALPN/NPN negotiation"));
-                  return null;
-                }
-                if ("protocols".equals(methodName)) {
-                  // ALPN client, NPN server
-                  return SUPPORTED_PROTOCOLS;
-                }
-                if ("selected".equals(methodName) || "protocolSelected".equals(methodName)) {
-                  // ALPN client, NPN server
-                  removeMethod.invoke(null, engine);
-                  String protocol = (String) args[0];
-                  if (!SUPPORTED_PROTOCOLS.contains(protocol)) {
-                    RuntimeException e = new RuntimeException(
-                        "Unsupported protocol selected via ALPN/NPN: " + protocol);
-                    protocolNegotiated.setException(e);
-                    if ("selected".equals(methodName)) {
-                      // ALPN client
-                      // Throwing exception causes TLS alert.
-                      throw e;
-                    } else {
-                      return null;
-                    }
-                  }
-                  protocolNegotiated.set(null);
-                  return null;
-                }
-                if ("select".equals(methodName) || "selectProtocol".equals(methodName)) {
-                  // ALPN server, NPN client
-                  removeMethod.invoke(null, engine);
-                  @SuppressWarnings("unchecked")
-                  List<String> names = (List<String>) args[0];
-                  for (String name : names) {
-                    if (SUPPORTED_PROTOCOLS.contains(name)) {
-                      protocolNegotiated.set(null);
-                      return name;
-                    }
-                  }
-                  RuntimeException e =
-                      new RuntimeException("Protocol not available via ALPN/NPN: " + names);
-                  protocolNegotiated.setException(e);
-                  if ("select".equals(methodName)) {
-                    // ALPN server
-                    throw e; // Throwing exception causes TLS alert.
-                  }
-                  return null;
-                }
-                throw new IllegalStateException("Unknown method " + methodName);
-              }
-            }));
-        return true;
-      } catch (Exception e) {
-        log.log(Level.SEVERE,
-            "Unable to initialize protocol negotation for " + protocolNegoClassName, e);
-      }
-    }
-    return false;
   }
 }

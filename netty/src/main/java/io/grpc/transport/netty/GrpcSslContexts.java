@@ -32,6 +32,10 @@
 package io.grpc.transport.netty;
 
 import io.netty.handler.codec.http2.Http2SecurityUtil;
+import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
+import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
+import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
@@ -42,6 +46,16 @@ import java.io.File;
  */
 public class GrpcSslContexts {
   private GrpcSslContexts() {}
+
+  private static ApplicationProtocolConfig DEFAULT_APN = new ApplicationProtocolConfig(
+          Protocol.ALPN,
+          SelectorFailureBehavior.FATAL_ALERT,
+          SelectedListenerFailureBehavior.FATAL_ALERT,
+          "h2",
+          "h2-17",
+          "h2-16",
+          "h2-15",
+          "h2-14");
 
   /**
    * Creates a SslContextBuilder with ciphers and APN appropriate for gRPC.
@@ -80,7 +94,6 @@ public class GrpcSslContexts {
    */
   public static SslContextBuilder configure(SslContextBuilder builder) {
     return builder.ciphers(Http2SecurityUtil.CIPHERS, SupportedCipherSuiteFilter.INSTANCE)
-        // We currently handle ALPN ourselves, so we require ALPN in Netty disabled.
-        .applicationProtocolConfig(null);
+        .applicationProtocolConfig(DEFAULT_APN);
   }
 }

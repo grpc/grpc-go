@@ -20,6 +20,7 @@ Note that you must use the release of the Jetty-ALPN jar specific to the version
 
 An option is provided to use GRPC over plaintext without TLS. This is convenient for testing environments, however users must be aware of the secuirty risks of doing so for real production systems.
 
+### TLS-ALPN on Android
 On Android, it is needed to <a href="https://developer.android.com/training/articles/security-gms-provider.html">update your security provider</a> to enable ALPN support, especially for Android versions < 5.0. If the provider fails to update, ALPN may not work.
 
 After the update is done, you'll need to pass an SSLSocketFactorty to OkHttpChannelBuilder, like the code snippet below shows.
@@ -29,6 +30,23 @@ OkHttpChannelBuilder channelBuilder = OkHttpChannelBuilder.forAddress(host, port
     .sslSocketFactory(SSLContext.getDefault().getSocketFactory());
 ```
 
+### TLS-ALPN in Jetty
+Some web containers, such as <a href="http://www.eclipse.org/jetty/documentation/current/jetty-classloading.html">Jetty</a> restrict access to server classes for web applications. A gRPC client running within such a container must be properly configured to allow access to the ALPN classes.
+
+In Jetty, this is done by including a `WEB-INF/jetty-env.xml` file containing the following:
+
+```xml
+<?xml version="1.0"  encoding="ISO-8859-1"?>
+<!DOCTYPE Configure PUBLIC "-//Mort Bay Consulting//DTD Configure//EN" "http://www.eclipse.org/jetty/configure.dtd">
+<Configure class="org.eclipse.jetty.webapp.WebAppContext">
+    <!-- Must be done in jetty-env.xml, since jetty-web.xml is loaded too late.   -->
+    <!-- Removing ALPN from the blacklisted server classes (using "-" to remove). -->
+    <!-- Must prepend to the blacklist since order matters.                       -->
+    <Call name="prependServerClass">
+        <Arg>-org.eclipse.jetty.alpn.</Arg>
+    </Call>
+</Configure>
+```
 
 # Using OAuth2
 
