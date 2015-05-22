@@ -27,10 +27,6 @@ jmh {
     jvmArgs = "-server -Xms768m -Xmx768m -dsa -da -XX:+AggressiveOpts -XX:+UseBiasedLocking -XX:+UseFastAccessorMethods -XX:+OptimizeStringConcat"
 }
 
-configurations {
-    alpnboot
-}
-
 dependencies {
     compile project(':grpc-core'),
             project(':grpc-netty'),
@@ -42,8 +38,6 @@ dependencies {
             libraries.hdrhistogram,
             libraries.netty_tcnative,
             libraries.netty_transport_native_epoll
-
-    alpnboot alpnboot_package_name
 }
 
 configureProtoCompilation()

@@ -13,10 +13,6 @@ buildscript {
     }
 }
 
-configurations {
-    alpnboot
-}
-
 dependencies {
     compile project(':grpc-core'),
             project(':grpc-netty'),
@@ -26,8 +22,6 @@ dependencies {
             project(':grpc-testing'),
             libraries.junit,
             libraries.mockito
-
-    alpnboot alpnboot_package_name
 }
 
 test {

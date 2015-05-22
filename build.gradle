@@ -136,9 +136,17 @@ subprojects {
         alpnboot_package_name = 'org.mortbay.jetty.alpn:alpn-boot:' + alpnboot_version
     }
 
+    // Define a separate configuration for managing the dependency on Jetty alpnboot jar.
+    configurations {
+        alpnboot
+    }
+
     dependencies {
         testCompile libraries.junit,
                     libraries.mockito
+
+        // Make the Jetty alpnboot jar available to submodules via the alpnboot configuration.
+        alpnboot alpnboot_package_name
     }
 
     signing {
