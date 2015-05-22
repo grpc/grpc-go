@@ -268,7 +268,7 @@ public class OkHttpClientTransportTest {
     OkHttpClientStream stream = streams.get(3);
     InputStream input = new ByteArrayInputStream(message.getBytes(UTF_8));
     assertEquals(12, input.available());
-    stream.writeMessage(input, input.available());
+    stream.writeMessage(input);
     stream.flush();
     ArgumentCaptor<Buffer> captor = ArgumentCaptor.forClass(Buffer.class);
     verify(frameWriter).data(eq(false), eq(3), captor.capture(), eq(12 + HEADER_LENGTH));
@@ -363,7 +363,7 @@ public class OkHttpClientTransportTest {
     // The first message should be sent out.
     int messageLength = Utils.DEFAULT_WINDOW_SIZE / 2 + 1;
     InputStream input = new ByteArrayInputStream(new byte[messageLength]);
-    stream.writeMessage(input, input.available());
+    stream.writeMessage(input);
     stream.flush();
     verify(frameWriter).data(
         eq(false), eq(3), any(Buffer.class), eq(messageLength + HEADER_LENGTH));
@@ -371,7 +371,7 @@ public class OkHttpClientTransportTest {
 
     // The second message should be partially sent out.
     input = new ByteArrayInputStream(new byte[messageLength]);
-    stream.writeMessage(input, input.available());
+    stream.writeMessage(input);
     stream.flush();
     int partiallySentSize =
         Utils.DEFAULT_WINDOW_SIZE - messageLength - HEADER_LENGTH;
@@ -394,7 +394,7 @@ public class OkHttpClientTransportTest {
     int messageLength = 20;
     setInitialWindowSize(HEADER_LENGTH + 10);
     InputStream input = new ByteArrayInputStream(new byte[messageLength]);
-    stream.writeMessage(input, input.available());
+    stream.writeMessage(input);
     stream.flush();
     // part of the message can be sent.
     verify(frameWriter).data(eq(false), eq(3), any(Buffer.class), eq(HEADER_LENGTH + 10));
@@ -413,7 +413,7 @@ public class OkHttpClientTransportTest {
     // Get 20 tokens back, still can't send any data.
     frameHandler.windowUpdate(3, 20);
     input = new ByteArrayInputStream(new byte[messageLength]);
-    stream.writeMessage(input, input.available());
+    stream.writeMessage(input);
     stream.flush();
     // Only the previous two write operations happened.
     verify(frameWriter, times(2)).data(anyBoolean(), anyInt(), any(Buffer.class), anyInt());
@@ -480,7 +480,7 @@ public class OkHttpClientTransportTest {
     InputStream input =
         new ByteArrayInputStream(sentMessage.getBytes(UTF_8));
     assertEquals(22, input.available());
-    stream.writeMessage(input, input.available());
+    stream.writeMessage(input);
     stream.flush();
     ArgumentCaptor<Buffer> captor =
         ArgumentCaptor.forClass(Buffer.class);
@@ -831,17 +831,17 @@ public class OkHttpClientTransportTest {
 
     // Write a message that will not exceed the notification threshold and queue it.
     InputStream input = new ByteArrayInputStream(new byte[messageLength]);
-    stream.writeMessage(input, input.available());
+    stream.writeMessage(input);
     stream.flush();
     assertTrue(stream.isReady());
 
     // Write another two messages, still be queued.
     input = new ByteArrayInputStream(new byte[messageLength]);
-    stream.writeMessage(input, input.available());
+    stream.writeMessage(input);
     stream.flush();
     assertFalse(stream.isReady());
     input = new ByteArrayInputStream(new byte[messageLength]);
-    stream.writeMessage(input, input.available());
+    stream.writeMessage(input);
     stream.flush();
     assertFalse(stream.isReady());
 

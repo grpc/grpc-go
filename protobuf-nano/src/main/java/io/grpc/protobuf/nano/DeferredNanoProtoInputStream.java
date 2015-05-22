@@ -36,6 +36,7 @@ import com.google.protobuf.nano.CodedOutputByteBufferNano;
 import com.google.protobuf.nano.MessageNano;
 
 import io.grpc.DeferredInputStream;
+import io.grpc.KnownLength;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -46,7 +47,8 @@ import javax.annotation.Nullable;
 /**
  * Implementation of {@link DeferredInputStream} backed by a nano proto.
  */
-public class DeferredNanoProtoInputStream extends DeferredInputStream<MessageNano> {
+public class DeferredNanoProtoInputStream extends DeferredInputStream<MessageNano>
+    implements KnownLength {
 
   // DeferredNanoProtoInputStream is first initialized with a *message*. *partial* is initially
   // null.
@@ -127,11 +129,5 @@ public class DeferredNanoProtoInputStream extends DeferredInputStream<MessageNan
       return partial.available();
     }
     return 0;
-  }
-
-  @Override
-  @Nullable
-  public MessageNano getDeferred() {
-    return message;
   }
 }

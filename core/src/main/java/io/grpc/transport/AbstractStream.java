@@ -171,12 +171,11 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   @Override
-  public void writeMessage(InputStream message, int length) {
+  public void writeMessage(InputStream message) {
     Preconditions.checkNotNull(message, "message");
-    Preconditions.checkArgument(length >= 0, "length must be >= 0");
     outboundPhase(Phase.MESSAGE);
     if (!framer.isClosed()) {
-      framer.writePayload(message, length);
+      framer.writePayload(message);
     }
   }
 

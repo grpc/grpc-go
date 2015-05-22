@@ -69,6 +69,7 @@ import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
@@ -116,10 +117,28 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     // Force stream creation.
     stream().id(STREAM_ID);
     byte[] msg = smallMessage();
-    stream.writeMessage(new ByteArrayInputStream(msg), msg.length);
+    stream.writeMessage(new ByteArrayInputStream(msg));
     stream.flush();
     verify(writeQueue).enqueue(
         eq(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false)),
+        any(ChannelPromise.class),
+        eq(true));
+  }
+
+  @Test
+  public void writeMessageShouldSendRequestUnknownLength() throws Exception {
+    // Force stream creation.
+    stream().id(STREAM_ID);
+    byte[] msg = smallMessage();
+    stream.writeMessage(new BufferedInputStream(new ByteArrayInputStream(msg)));
+    stream.flush();
+    // Two writes occur, one for the GRPC frame header and the second with the payload
+    verify(writeQueue).enqueue(
+        eq(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE).slice(0, 5), false)),
+        any(ChannelPromise.class),
+        eq(false));
+    verify(writeQueue).enqueue(
+        eq(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE).slice(5, 11), false)),
         any(ChannelPromise.class),
         eq(true));
   }
@@ -304,7 +323,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
       @Override
       public Object answer(InvocationOnMock invocation) throws Throwable {
         if (future.isDone()) {
-          ((ChannelPromise) invocation.getArguments()[1]).setSuccess();
+          ((ChannelPromise) invocation.getArguments()[1]).trySuccess();
         }
         return null;
       }

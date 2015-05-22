@@ -38,7 +38,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.timeout;
@@ -200,7 +199,7 @@ public class ServerImplTest {
 
     call.sendPayload(314);
     ArgumentCaptor<InputStream> inputCaptor = ArgumentCaptor.forClass(InputStream.class);
-    verify(stream).writeMessage(inputCaptor.capture(), eq(3));
+    verify(stream).writeMessage(inputCaptor.capture());
     verify(stream).flush();
     assertEquals(314, INTEGER_MARSHALLER.parse(inputCaptor.getValue()).intValue());
 
@@ -209,7 +208,7 @@ public class ServerImplTest {
     verify(callListener).onHalfClose();
 
     call.sendPayload(50);
-    verify(stream).writeMessage(inputCaptor.capture(), eq(2));
+    verify(stream, times(2)).writeMessage(inputCaptor.capture());
     verify(stream, times(2)).flush();
     assertEquals(50, INTEGER_MARSHALLER.parse(inputCaptor.getValue()).intValue());
 

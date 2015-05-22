@@ -92,7 +92,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   @Test
   public void writeMessageShouldSendResponse() throws Exception {
     byte[] msg = smallMessage();
-    stream.writeMessage(new ByteArrayInputStream(msg), msg.length);
+    stream.writeMessage(new ByteArrayInputStream(msg));
     stream.flush();
     Http2Headers headers = new DefaultHttp2Headers()
         .status(Utils.STATUS_OK)

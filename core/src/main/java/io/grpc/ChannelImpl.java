@@ -39,7 +39,6 @@ import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
 import io.grpc.transport.ClientTransportFactory;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -57,7 +56,7 @@ public final class ChannelImpl extends Channel {
   private static final Logger log = Logger.getLogger(ChannelImpl.class.getName());
 
   private static class NoopClientStream implements ClientStream {
-    @Override public void writeMessage(InputStream message, int length) {}
+    @Override public void writeMessage(InputStream message) {}
 
     @Override public void flush() {}
 
@@ -308,21 +307,13 @@ public final class ChannelImpl extends Channel {
       stream.halfClose();
     }
 
-    private int available(InputStream is) {
-      try {
-        return is.available();
-      } catch (IOException ex) {
-        throw new RuntimeException(ex);
-      }
-    }
-
     @Override
     public void sendPayload(ReqT payload) {
       Preconditions.checkState(stream != null, "Not started");
       boolean failed = true;
       try {
         InputStream payloadIs = method.streamRequest(payload);
-        stream.writeMessage(payloadIs, available(payloadIs));
+        stream.writeMessage(payloadIs);
         failed = false;
       } finally {
         if (failed) {

@@ -49,9 +49,10 @@ public interface Stream {
   void request(int numMessages);
 
   /**
-   * Writes a message payload to the remote end-point. The bytes from the stream are immediate read
-   * by the Transport. This method will always return immediately and will not wait for the write to
-   * complete.
+   * Writes a message payload to the remote end-point. The bytes from the stream are immediately
+   * read by the Transport. Where possible callers should use streams that are
+   * {@link io.grpc.KnownLength} to improve efficiency. This method will always return immediately
+   * and will not wait for the write to complete.
    *
    * <p>
    * When the write is "accepted" by the transport, the given callback (if provided) will be called.
@@ -61,9 +62,8 @@ public interface Stream {
    * accepted, the callback will never be invoked.
    *
    * @param message stream containing the serialized message to be sent
-   * @param length the length of the {@link InputStream}.
    */
-  void writeMessage(InputStream message, int length);
+  void writeMessage(InputStream message);
 
   /**
    * Flushes any internally buffered messages to the remote end-point.

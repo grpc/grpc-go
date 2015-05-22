@@ -421,7 +421,7 @@ public final class ServerImpl extends Server {
     public void sendPayload(RespT payload) {
       try {
         InputStream message = methodDef.streamResponse(payload);
-        stream.writeMessage(message, message.available());
+        stream.writeMessage(message);
         stream.flush();
       } catch (Throwable t) {
         close(Status.fromThrowable(t), new Metadata.Trailers());

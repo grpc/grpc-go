@@ -37,13 +37,15 @@ import com.google.common.base.Preconditions;
 import com.google.common.io.ByteStreams;
 
 import io.grpc.DeferredInputStream;
+import io.grpc.KnownLength;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.GZIPOutputStream;
 
 /**
@@ -111,21 +113,25 @@ public class MessageFramer {
    * Writes out a payload message.
    *
    * @param message contains the message to be written out. It will be completely consumed.
-   * @param messageLength the number of bytes in the message. It must match the actual number of
-   *        bytes in the {@code InputStream}.
    */
-  public void writePayload(InputStream message, int messageLength) {
+  public void writePayload(InputStream message) {
+    verifyNotClosed();
     try {
       switch (compression) {
         case NONE:
-          writeFrame(message, messageLength, false);
+          int messageLength = getKnownLength(message);
+          if (messageLength != -1) {
+            writeKnownLength(message, messageLength, false);
+          } else {
+            BufferChainOutputStream bufferChain = new BufferChainOutputStream();
+            writeToOutputStream(message, bufferChain);
+            writeBufferChain(bufferChain, false);
+          }
           break;
         case GZIP:
-          DirectAccessByteArrayOutputStream out = new DirectAccessByteArrayOutputStream();
-          gzipCompressTo(message, messageLength, out);
-          InputStream compressedMessage =
-                  new DeferredByteArrayInputStream(out.getBuf(), 0, out.getCount());
-          writeFrame(compressedMessage, out.getCount(), true);
+          BufferChainOutputStream bufferChain = new BufferChainOutputStream();
+          gzipCompressTo(message, bufferChain);
+          writeBufferChain(bufferChain, true);
           break;
         default:
           throw new AssertionError("Unknown compression type");
@@ -135,12 +141,23 @@ public class MessageFramer {
     }
   }
 
-  private void gzipCompressTo(InputStream in, int messageLength, OutputStream out)
+  private int getKnownLength(InputStream inputStream) throws IOException {
+    if (inputStream instanceof KnownLength || inputStream instanceof ByteArrayInputStream) {
+      return inputStream.available();
+    }
+    return -1;
+  }
+
+  private static void gzipCompressTo(InputStream in, OutputStream out)
       throws IOException {
+    int messageLength = -1;
+    if (in instanceof KnownLength) {
+      messageLength = in.available();
+    }
     GZIPOutputStream compressingStream = new GZIPOutputStream(out);
     try {
       long written = writeToOutputStream(in, compressingStream);
-      if (messageLength != written) {
+      if (messageLength != -1 && messageLength != written) {
         throw new RuntimeException("Message length was inaccurate");
       }
     } finally {
@@ -148,9 +165,11 @@ public class MessageFramer {
     }
   }
 
-  private void writeFrame(InputStream message, int messageLength, boolean compressed)
+  /**
+   * Write an unserialized message with a known length.
+   */
+  private void writeKnownLength(InputStream message, int messageLength, boolean compressed)
       throws IOException {
-    verifyNotClosed();
     ByteBuffer header = ByteBuffer.wrap(headerScratch);
     header.put(compressed ? COMPRESSED : UNCOMPRESSED);
     header.putInt(messageLength);
@@ -166,13 +185,41 @@ public class MessageFramer {
     }
   }
 
+  /**
+   * Write a message that has been serialized to a sequence of buffers.
+   */
+  private void writeBufferChain(BufferChainOutputStream bufferChain, boolean compressed)
+      throws IOException {
+    ByteBuffer header = ByteBuffer.wrap(headerScratch);
+    header.put(compressed ? COMPRESSED : UNCOMPRESSED);
+    int messageLength = bufferChain.readableBytes();
+    header.putInt(messageLength);
+    WritableBuffer writeableHeader = bufferAllocator.allocate(HEADER_LENGTH);
+    writeableHeader.write(headerScratch, 0, header.position());
+    if (messageLength == 0) {
+      // the payload had 0 length so make the header the current buffer.
+      buffer = writeableHeader;
+      return;
+    }
+    // Note that we are always delivering a small message to the transport here which
+    // may incur transport framing overhead as it may be sent separately to the contents
+    // of the GRPC frame.
+    sink.deliverFrame(writeableHeader, false, false);
+    // Commit all except the last buffer to the sink
+    List<WritableBuffer> bufferList = bufferChain.bufferList;
+    for (int i = 0; i < bufferList.size() - 1; i++) {
+      sink.deliverFrame(bufferList.get(i), false, false);
+    }
+    // Assign the current buffer to the last in the chain so it can be used
+    // for future writes or written with end-of-stream=true on close.
+    buffer =  bufferList.get(bufferList.size() - 1);
+  }
+
   @SuppressWarnings("rawtypes")
   private static long writeToOutputStream(InputStream message, OutputStream outputStream)
       throws IOException {
     if (message instanceof DeferredInputStream) {
       return ((DeferredInputStream) message).flushTo(outputStream);
-    } else if (message instanceof DeferredByteArrayInputStream) {
-      return ((DeferredByteArrayInputStream) message).flushTo(outputStream);
     } else {
       // This makes an unnecessary copy of the bytes when bytebuf supports array(). However, we
       // expect performance-critical code to support flushTo().
@@ -270,26 +317,53 @@ public class MessageFramer {
   }
 
   /**
-   * Implements the same general contract of DeferredInputStream, although is unable to extend it.
+   * Produce a collection of {@link WritableBuffer} instances from the data written to an
+   * {@link OutputStream}.
    */
-  private static class DeferredByteArrayInputStream extends ByteArrayInputStream {
-    public DeferredByteArrayInputStream(byte[] buf, int offset, int length) {
-      super(buf, offset, length);
+  private class BufferChainOutputStream extends OutputStream {
+
+    private final byte[] singleByte = new byte[1];
+    private List<WritableBuffer> bufferList;
+    private WritableBuffer current;
+
+    private BufferChainOutputStream() {
+      bufferList = new ArrayList<WritableBuffer>();
     }
 
-    public int flushTo(OutputStream os) throws IOException {
-      os.write(buf, pos, count - pos);
-      return count - pos;
-    }
-  }
-
-  private static class DirectAccessByteArrayOutputStream extends ByteArrayOutputStream {
-    public byte[] getBuf() {
-      return buf;
+    @Override
+    public void write(int b) throws IOException {
+      singleByte[0] = (byte) b;
+      write(singleByte, 0, 1);
     }
 
-    public int getCount() {
-      return count;
+    @Override
+    public void write(byte[] b, int off, int len) throws IOException {
+      if (current == null) {
+        // Request len bytes initially from the allocator, it may give us more.
+        current = bufferAllocator.allocate(len);
+        bufferList.add(current);
+      }
+      while (len > 0) {
+        int canWrite = Math.min(len, current.writableBytes());
+        if (canWrite == 0) {
+          // Assume message is twice as large as previous assumption if were still not done,
+          // the allocator may allocate more or less than this amount.
+          current = bufferAllocator.allocate(current.readableBytes() * 2);
+          bufferList.add(current);
+        } else {
+          current.write(b, off, canWrite);
+          off += canWrite;
+          len -= canWrite;
+        }
+      }
+    }
+
+    private int readableBytes() {
+      int readable = 0;
+      for (WritableBuffer writableBuffer : bufferList) {
+        readable += writableBuffer.readableBytes();
+      }
+      return readable;
     }
   }
 }

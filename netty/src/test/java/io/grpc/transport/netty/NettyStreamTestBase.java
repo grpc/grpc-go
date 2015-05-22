@@ -163,7 +163,7 @@ public abstract class NettyStreamTestBase {
     assertTrue(stream.isReady());
     byte[] msg = largeMessage();
     // The future is set up to automatically complete, indicating that the write is done.
-    stream.writeMessage(new ByteArrayInputStream(msg), msg.length);
+    stream.writeMessage(new ByteArrayInputStream(msg));
     stream.flush();
     assertTrue(stream.isReady());
     verify(listener()).onReady();
@@ -176,7 +176,7 @@ public abstract class NettyStreamTestBase {
 
     assertTrue(stream.isReady());
     byte[] msg = smallMessage();
-    stream.writeMessage(new ByteArrayInputStream(msg), msg.length);
+    stream.writeMessage(new ByteArrayInputStream(msg));
     stream.flush();
     assertTrue(stream.isReady());
     verify(listener(), never()).onReady();
@@ -189,7 +189,7 @@ public abstract class NettyStreamTestBase {
 
     assertTrue(stream.isReady());
     byte[] msg = largeMessage();
-    stream.writeMessage(new ByteArrayInputStream(msg), msg.length);
+    stream.writeMessage(new ByteArrayInputStream(msg));
     stream.flush();
     assertFalse(stream.isReady());
     verify(listener(), never()).onReady();

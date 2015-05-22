@@ -45,6 +45,8 @@ public interface Marshaller<T> {
 
   /**
    * Given a message, produce an {@link InputStream} for it so that it can be written to the wire.
+   * Where possible implementations should produce streams that are {@link io.grpc.KnownLength}
+   * to improve transport efficiency.
    *
    * @param value to serialize.
    * @return serialized value as stream of bytes.

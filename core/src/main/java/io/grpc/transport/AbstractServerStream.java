@@ -96,12 +96,12 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
-  public final void writeMessage(InputStream message, int length) {
+  public final void writeMessage(InputStream message) {
     if (!headersSent) {
       writeHeaders(new Metadata.Headers());
       headersSent = true;
     }
-    super.writeMessage(message, length);
+    super.writeMessage(message);
   }
 
   @Override

@@ -36,6 +36,7 @@ import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.MessageLite;
 
 import io.grpc.DeferredInputStream;
+import io.grpc.KnownLength;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -46,7 +47,8 @@ import javax.annotation.Nullable;
 /**
  * Implementation of {@link io.grpc.DeferredInputStream} backed by a protobuf.
  */
-public class DeferredProtoInputStream extends DeferredInputStream<MessageLite> {
+public class DeferredProtoInputStream extends DeferredInputStream<MessageLite>
+    implements KnownLength {
 
   // DeferredProtoInputStream is first initialized with a *message*. *partial* is initially null.
   // Once there has been a read operation on this stream, *message* is serialized to *partial* and
@@ -56,15 +58,6 @@ public class DeferredProtoInputStream extends DeferredInputStream<MessageLite> {
 
   public DeferredProtoInputStream(MessageLite message) {
     this.message = message;
-  }
-
-  /**
-   * Returns the original protobuf message. Returns null after this stream has been read.
-   */
-  @Override
-  @Nullable
-  public MessageLite getDeferred() {
-    return message;
   }
 
   @Override

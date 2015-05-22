@@ -36,8 +36,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -48,6 +50,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 
@@ -63,7 +66,7 @@ public class MessageFramerTest {
   @Captor
   private ArgumentCaptor<ByteWritableBuffer> frameCaptor;
   private BytesWritableBufferAllocator allocator =
-      new BytesWritableBufferAllocator(0, 12);
+      new BytesWritableBufferAllocator(1000, 1000);
 
   /** Set up for test. */
   @Before
@@ -74,7 +77,7 @@ public class MessageFramerTest {
 
   @Test
   public void simplePayload() {
-    writePayload(framer, new byte[] {3, 14});
+    writeKnownLength(framer, new byte[]{3, 14});
     verifyNoMoreInteractions(sink);
     framer.flush();
     verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true);
@@ -83,12 +86,21 @@ public class MessageFramerTest {
   }
 
   @Test
-  public void smallPayloadsShouldBeCombined() {
-    allocator = new BytesWritableBufferAllocator(12, 12);
-    framer = new MessageFramer(sink, allocator);
-    writePayload(framer, new byte[] {3});
+  public void simpleUnknownLengthPayload() {
+    writeUnknownLength(framer, new byte[]{3, 14});
+    framer.flush();
+    // Header is written first, then payload
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2}), false, false);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {3, 14}), false, true);
+    assertEquals(2, allocator.allocCount);
     verifyNoMoreInteractions(sink);
-    writePayload(framer, new byte[] {14});
+  }
+
+  @Test
+  public void smallPayloadsShouldBeCombined() {
+    writeKnownLength(framer, new byte[]{3});
+    verifyNoMoreInteractions(sink);
+    writeKnownLength(framer, new byte[]{14});
     verifyNoMoreInteractions(sink);
     framer.flush();
     verify(sink).deliverFrame(
@@ -99,7 +111,7 @@ public class MessageFramerTest {
 
   @Test
   public void closeCombinedWithFullSink() {
-    writePayload(framer, new byte[] {3, 14, 1, 5, 9, 2, 6});
+    writeKnownLength(framer, new byte[]{3, 14, 1, 5, 9, 2, 6});
     verifyNoMoreInteractions(sink);
     framer.close();
     verify(sink).deliverFrame(
@@ -118,7 +130,9 @@ public class MessageFramerTest {
 
   @Test
   public void payloadSplitBetweenSinks() {
-    writePayload(framer, new byte[] {3, 14, 1, 5, 9, 2, 6, 5});
+    allocator = new BytesWritableBufferAllocator(12, 12);
+    framer = new MessageFramer(sink, allocator);
+    writeKnownLength(framer, new byte[]{3, 14, 1, 5, 9, 2, 6, 5});
     verify(sink).deliverFrame(
         toWriteBuffer(new byte[] {0, 0, 0, 0, 8, 3, 14, 1, 5, 9, 2, 6}), false, false);
     verifyNoMoreInteractions(sink);
@@ -133,8 +147,8 @@ public class MessageFramerTest {
   public void frameHeaderSplitBetweenSinks() {
     allocator = new BytesWritableBufferAllocator(12, 12);
     framer = new MessageFramer(sink, allocator);
-    writePayload(framer, new byte[] {3, 14, 1});
-    writePayload(framer, new byte[] {3});
+    writeKnownLength(framer, new byte[]{3, 14, 1});
+    writeKnownLength(framer, new byte[]{3});
     verify(sink).deliverFrame(
             toWriteBuffer(new byte[] {0, 0, 0, 0, 3, 3, 14, 1, 0, 0, 0, 0}), false, false);
     verifyNoMoreInteractions(sink);
@@ -147,15 +161,25 @@ public class MessageFramerTest {
 
   @Test
   public void emptyPayloadYieldsFrame() throws Exception {
-    writePayload(framer, new byte[0]);
+    writeKnownLength(framer, new byte[0]);
     framer.flush();
     verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true);
     assertEquals(1, allocator.allocCount);
   }
 
   @Test
+  public void emptyUnknownLengthPayloadYieldsFrame() throws Exception {
+    writeUnknownLength(framer, new byte[0]);
+    verifyZeroInteractions(sink);
+    framer.flush();
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true);
+    // One alloc for the header
+    assertEquals(1, allocator.allocCount);
+  }
+
+  @Test
   public void flushIsIdempotent() {
-    writePayload(framer, new byte[] {3, 14});
+    writeKnownLength(framer, new byte[]{3, 14});
     framer.flush();
     framer.flush();
     verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true);
@@ -167,7 +191,7 @@ public class MessageFramerTest {
   public void largerFrameSize() throws Exception {
     allocator = new BytesWritableBufferAllocator(0, 10000);
     framer = new MessageFramer(sink, allocator);
-    writePayload(framer, new byte[1000]);
+    writeKnownLength(framer, new byte[1000]);
     framer.flush();
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
     ByteWritableBuffer buffer = frameCaptor.getValue();
@@ -183,15 +207,43 @@ public class MessageFramerTest {
   }
 
   @Test
+  public void largerFrameSizeUnknownLength() throws Exception {
+    // Force payload to be split into two chunks
+    allocator = new BytesWritableBufferAllocator(500, 500);
+    framer = new MessageFramer(sink, allocator);
+    writeUnknownLength(framer, new byte[1000]);
+    framer.flush();
+    // Header and first chunk written with flush = false
+    verify(sink, times(2)).deliverFrame(frameCaptor.capture(), eq(false), eq(false));
+    // On flush third buffer written with flish = true
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
+
+    // header has fixed length of 5 and specifies correct length
+    assertEquals(5, frameCaptor.getAllValues().get(0).readableBytes());
+    byte[] data = new byte[5];
+    data[3] = 3;
+    data[4] = (byte) 232;
+    assertEquals(toWriteBuffer(data), frameCaptor.getAllValues().get(0));
+
+    assertEquals(500, frameCaptor.getAllValues().get(1).readableBytes());
+    assertEquals(500, frameCaptor.getAllValues().get(2).readableBytes());
+
+    verifyNoMoreInteractions(sink);
+    assertEquals(3, allocator.allocCount);
+  }
+
+  @Test
   public void compressed() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
     framer = new MessageFramer(sink, allocator, Compression.GZIP);
-    writePayload(framer, new byte[1000]);
+    writeKnownLength(framer, new byte[1000]);
+    // The GRPC header is written first as a separate frame
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(false));
     framer.flush();
+    // and then the payload is written with flush=true
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
-    ByteWritableBuffer buffer = frameCaptor.getValue();
-    // It should have compressed very well.
-    assertTrue(buffer.size() < 100);
+    // Check the header
+    ByteWritableBuffer buffer = frameCaptor.getAllValues().get(0);
     // We purposefully don't check the last byte of length, since that depends on how exactly it
     // compressed.
     assertEquals(1, buffer.data[0]);
@@ -199,7 +251,12 @@ public class MessageFramerTest {
     assertEquals(0, buffer.data[2]);
     assertEquals(0, buffer.data[3]);
 
-    assertEquals(1, allocator.allocCount);
+    // check the payload
+    buffer = frameCaptor.getAllValues().get(1);
+    // Payload should have compressed very well.
+    assertTrue(buffer.size() < 100);
+
+    assertEquals(2, allocator.allocCount);
   }
 
   @Test
@@ -217,7 +274,7 @@ public class MessageFramerTest {
       }
     };
     framer = new MessageFramer(reentrant, allocator, Compression.NONE);
-    writePayload(framer, new byte[]{3, 14});
+    writeKnownLength(framer, new byte[]{3, 14});
     framer.close();
   }
 
@@ -232,8 +289,12 @@ public class MessageFramerTest {
     return buffer;
   }
 
-  private static void writePayload(MessageFramer framer, byte[] bytes) {
-    framer.writePayload(new ByteArrayInputStream(bytes), bytes.length);
+  private static void writeUnknownLength(MessageFramer framer, byte[] bytes) {
+    framer.writePayload(new BufferedInputStream(new ByteArrayInputStream(bytes)));
+  }
+
+  private static void writeKnownLength(MessageFramer framer, byte[] bytes) {
+    framer.writePayload(new ByteArrayInputStream(bytes));
   }
 
   static class ByteWritableBuffer implements WritableBuffer {
@@ -277,9 +338,9 @@ public class MessageFramerTest {
 
       ByteWritableBuffer other = (ByteWritableBuffer) buffer;
 
-      return writableBytes() == other.writableBytes()
-          && readableBytes() == other.readableBytes()
-          && Arrays.equals(data, other.data);
+      return readableBytes() == other.readableBytes()
+          && Arrays.equals(Arrays.copyOf(data, readableBytes()),
+            Arrays.copyOf(other.data, readableBytes()));
     }
 
     @Override

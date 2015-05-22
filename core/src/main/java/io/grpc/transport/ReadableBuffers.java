@@ -35,6 +35,8 @@ import static com.google.common.base.Charsets.UTF_8;
 
 import com.google.common.base.Preconditions;
 
+import io.grpc.KnownLength;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -310,7 +312,7 @@ public final class ReadableBuffers {
   /**
    * An {@link InputStream} that is backed by a {@link ReadableBuffer}.
    */
-  private static class BufferInputStream extends InputStream {
+  private static class BufferInputStream extends InputStream implements KnownLength {
     final ReadableBuffer buffer;
 
     public BufferInputStream(ReadableBuffer buffer) {

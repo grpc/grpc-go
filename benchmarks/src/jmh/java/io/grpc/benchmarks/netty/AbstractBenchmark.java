@@ -5,6 +5,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Call;
 import io.grpc.ChannelImpl;
 import io.grpc.DeferredInputStream;
+import io.grpc.KnownLength;
 import io.grpc.Marshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -37,8 +38,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
-import javax.annotation.Nullable;
 
 /**
  * Abstract base class for Netty end-to-end benchmarks.
@@ -462,7 +461,8 @@ public abstract class AbstractBenchmark {
   /**
    * Implementation of {@link io.grpc.DeferredInputStream} for {@link io.netty.buffer.ByteBuf}.
    */
-  private static class DeferredByteBufInputStream extends DeferredInputStream<ByteBuf> {
+  private static class DeferredByteBufInputStream extends DeferredInputStream<ByteBuf>
+      implements KnownLength {
 
     private ByteBuf buf;
 
@@ -476,12 +476,6 @@ public abstract class AbstractBenchmark {
       buf.readBytes(target, readbableBytes);
       buf = null;
       return readbableBytes;
-    }
-
-    @Nullable
-    @Override
-    public ByteBuf getDeferred() {
-      return buf;
     }
 
     @Override
