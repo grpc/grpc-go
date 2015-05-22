@@ -43,6 +43,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.auth.oauth2.ComputeEngineCredentials;
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 
@@ -68,7 +70,6 @@ import io.grpc.testing.integration.Messages.StreamingInputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingInputCallResponse;
 import io.grpc.testing.integration.Messages.StreamingOutputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingOutputCallResponse;
-
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -76,6 +77,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -630,6 +632,43 @@ public abstract class AbstractTransportTest {
     requestObserver.onCompleted();
     verify(responseObserver, timeout(OPERATION_TIMEOUT)).onCompleted();
     verifyNoMoreInteractions(responseObserver);
+  }
+
+  /** Sends a large unary rpc with service account credentials. */
+  public void serviceAccountCreds(String jsonKey, InputStream credentialsStream, String authScope)
+      throws Exception {
+    // cast to ServiceAccountCredentials to double-check the right type of object was created.
+    GoogleCredentials credentials =
+        (ServiceAccountCredentials) GoogleCredentials.fromStream(credentialsStream);
+    credentials = credentials.createScoped(Arrays.<String>asList(authScope));
+    TestServiceGrpc.TestServiceBlockingStub stub = blockingStub.configureNewStub()
+        .addInterceptor(new ClientAuthInterceptor(credentials, testServiceExecutor))
+        .build();
+    final SimpleRequest request = SimpleRequest.newBuilder()
+        .setFillUsername(true)
+        .setFillOauthScope(true)
+        .setResponseSize(314159)
+        .setResponseType(PayloadType.COMPRESSABLE)
+        .setPayload(Payload.newBuilder()
+            .setBody(ByteString.copyFrom(new byte[271828])))
+        .build();
+
+    final SimpleResponse response = stub.unaryCall(request);
+    assertFalse(response.getUsername().isEmpty());
+    assertTrue("Received username: " + response.getUsername(),
+        jsonKey.contains(response.getUsername()));
+    assertFalse(response.getOauthScope().isEmpty());
+    assertTrue("Received oauth scope: " + response.getOauthScope(),
+        authScope.contains(response.getOauthScope()));
+
+    final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
+        .setOauthScope(response.getOauthScope())
+        .setUsername(response.getUsername())
+        .setPayload(Payload.newBuilder()
+            .setType(PayloadType.COMPRESSABLE)
+            .setBody(ByteString.copyFrom(new byte[314159])))
+        .build();
+    assertEquals(goldenResponse, response);
   }
 
   /** Sends a large unary rpc with compute engine credentials. */

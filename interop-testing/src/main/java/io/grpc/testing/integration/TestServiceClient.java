@@ -31,6 +31,8 @@
 
 package io.grpc.testing.integration;
 
+import com.google.common.io.Files;
+
 import io.grpc.ChannelImpl;
 import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.GrpcSslContexts;
@@ -39,9 +41,12 @@ import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
 import io.netty.handler.ssl.SslContext;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.Charset;
 
 import javax.net.ssl.SSLSocketFactory;
 
@@ -85,6 +90,7 @@ public class TestServiceClient {
   private boolean useTestCa;
   private boolean useOkHttp;
   private String defaultServiceAccount;
+  private String serviceAccountKeyFile;
   private String oauthScope;
 
   private Tester tester = new Tester();
@@ -131,6 +137,8 @@ public class TestServiceClient {
         }
       } else if ("default_service_account".equals(key)) {
         defaultServiceAccount = value;
+      } else if ("service_account_key_file".equals(key)) {
+        serviceAccountKeyFile = value;
       } else if ("oauth_scope".equals(key)) {
         oauthScope = value;
       } else {
@@ -152,9 +160,11 @@ public class TestServiceClient {
           + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
           + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Default " + c.useTestCa
           + "\n  --use_okhttp=true|false     Whether to use OkHttp instead of Netty. Default "
-              + c.useOkHttp
+            + c.useOkHttp
           + "\n  --default_service_account   Email of GCE default service account. Default "
-              + c.defaultServiceAccount
+            + c.defaultServiceAccount
+          + "\n  --service_account_key_file  Path to service account json key file."
+            + c.serviceAccountKeyFile
           + "\n  --oauth_scope               Scope for OAuth tokens. Default " + c.oauthScope
       );
       System.exit(1);
@@ -206,6 +216,10 @@ public class TestServiceClient {
       tester.cancelAfterFirstResponse();
     } else if ("compute_engine_creds".equals(testCase)) {
       tester.computeEngineCreds(defaultServiceAccount, oauthScope);
+    } else if ("service_account_creds".equals(testCase)) {
+      String jsonKey = Files.toString(new File(serviceAccountKeyFile), Charset.forName("UTF-8"));
+      FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
+      tester.serviceAccountCreds(jsonKey, credentialsStream, oauthScope);
     } else {
       throw new IllegalArgumentException("Unknown test case: " + testCase);
     }
