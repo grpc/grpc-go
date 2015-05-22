@@ -18,8 +18,14 @@ Note that you must use the release of the Jetty-ALPN jar specific to the version
 
 An option is provided to use GRPC over plaintext without TLS. This is convenient for testing environments, however users must be aware of the secuirty risks of doing so for real production systems.
 
-ALPN is supported starting Android 4.4, but it only works well in 5.0 and higher. 
-In lower versions, an alternative is to use NPN which Android has support from 4.1. However, the corresponding GRPC server will also need to enable NPN.
+On Android, it is needed to <a href="https://developer.android.com/training/articles/security-gms-provider.html">update your security provider</a> to enable ALPN support, especially for Android versions < 5.0. If the provider fails to update, ALPN may not work.
+After the update is done, you'll need to pass an SSLSocketFactorty to OkHttpChannelBuilder, like the code snippet below shows.
+
+```java
+OkHttpChannelBuilder channelBuilder = OkHttpChannelBuilder.forAddress(host, port)
+    .sslSocketFactory(SSLContext.getDefault().getSocketFactory());
+```
+
 
 # Using OAuth2
 
