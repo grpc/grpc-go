@@ -32,6 +32,7 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ChannelImpl;
+import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
@@ -48,7 +49,7 @@ import java.io.IOException;
  */
 @RunWith(JUnit4.class)
 public class Http2OkHttpTest extends AbstractTransportTest {
-  private static int serverPort = Util.pickUnusedPort();
+  private static int serverPort = TestUtils.pickUnusedPort();
 
   /** Starts the server with HTTPS. */
   @BeforeClass
@@ -56,7 +57,7 @@ public class Http2OkHttpTest extends AbstractTransportTest {
     try {
       startStaticServer(NettyServerBuilder.forPort(serverPort)
           .sslContext(GrpcSslContexts.forServer(
-              Util.loadCert("server1.pem"), Util.loadCert("server1.key")).build()));
+                  TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key")).build()));
     } catch (IOException ex) {
       throw new RuntimeException(ex);
     }
@@ -72,7 +73,8 @@ public class Http2OkHttpTest extends AbstractTransportTest {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", serverPort)
         .overrideHostForAuthority("foo.test.google.fr");
     try {
-      builder.sslSocketFactory(Util.getSslSocketFactoryForCertainCert(Util.loadCert("ca.pem")));
+      builder.sslSocketFactory(TestUtils.getSslSocketFactoryForCertainCert(
+              TestUtils.loadCert("ca.pem")));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

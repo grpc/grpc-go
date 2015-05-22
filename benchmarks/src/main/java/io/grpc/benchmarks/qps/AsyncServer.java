@@ -31,8 +31,6 @@
 
 package io.grpc.benchmarks.qps;
 
-import static io.grpc.testing.integration.Util.loadCert;
-
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
@@ -44,8 +42,10 @@ import io.grpc.testing.PayloadType;
 import io.grpc.testing.SimpleRequest;
 import io.grpc.testing.SimpleResponse;
 import io.grpc.testing.TestServiceGrpc;
+import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
+
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -106,8 +106,8 @@ public class AsyncServer {
       System.out.println("Using fake CA for TLS certificate.\n"
           + "Run the Java client with --tls --testca");
 
-      File cert = loadCert("server1.pem");
-      File key = loadCert("server1.key");
+      File cert = TestUtils.loadCert("server1.pem");
+      File key = TestUtils.loadCert("server1.key");
       boolean useJdkSsl = config.transport == ServerConfiguration.Transport.NETTY_NIO;
       sslContext = GrpcSslContexts.forServer(cert, key)
           .sslProvider(useJdkSsl ? SslProvider.JDK : SslProvider.OPENSSL)

@@ -32,6 +32,7 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ChannelImpl;
+import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.netty.NettyServerBuilder;
@@ -50,7 +51,7 @@ import java.net.InetSocketAddress;
  */
 @RunWith(JUnit4.class)
 public class Http2NettyTest extends AbstractTransportTest {
-  private static int serverPort = Util.pickUnusedPort();
+  private static int serverPort = TestUtils.pickUnusedPort();
 
   /** Starts the server with HTTPS. */
   @BeforeClass
@@ -58,7 +59,7 @@ public class Http2NettyTest extends AbstractTransportTest {
     try {
       startStaticServer(NettyServerBuilder.forPort(serverPort)
           .sslContext(GrpcSslContexts.forServer(
-              Util.loadCert("server1.pem"), Util.loadCert("server1.key")).build()));
+                  TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key")).build()));
     } catch (IOException ex) {
       throw new RuntimeException(ex);
     }
@@ -76,7 +77,8 @@ public class Http2NettyTest extends AbstractTransportTest {
           = InetAddress.getByAddress("foo.test.google.fr", new byte[] {127, 0, 0, 1});
       return NettyChannelBuilder
           .forAddress(new InetSocketAddress(address, serverPort))
-          .sslContext(GrpcSslContexts.forClient().trustManager(Util.loadCert("ca.pem")).build())
+          .sslContext(GrpcSslContexts.forClient().trustManager(
+                  TestUtils.loadCert("ca.pem")).build())
           .build();
     } catch (Exception ex) {
       throw new RuntimeException(ex);

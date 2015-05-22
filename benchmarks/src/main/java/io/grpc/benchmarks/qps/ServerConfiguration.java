@@ -34,9 +34,9 @@ package io.grpc.benchmarks.qps;
 import static io.grpc.benchmarks.qps.SocketAddressValidator.INET;
 import static io.grpc.benchmarks.qps.SocketAddressValidator.UDS;
 import static io.grpc.benchmarks.qps.Utils.parseBoolean;
-import static io.grpc.testing.integration.Util.pickUnusedPort;
 import static java.lang.Integer.parseInt;
 
+import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.NettyChannelBuilder;
 
 import java.net.InetSocketAddress;
@@ -160,7 +160,7 @@ class ServerConfiguration implements Configuration {
         SocketAddress address = Utils.parseSocketAddress(value);
         if (address instanceof InetSocketAddress) {
           InetSocketAddress addr = (InetSocketAddress) address;
-          int port = addr.getPort() == 0 ? pickUnusedPort() : addr.getPort();
+          int port = addr.getPort() == 0 ? TestUtils.pickUnusedPort() : addr.getPort();
           // Re-create the address so that the server is available on all local addresses.
           address = new InetSocketAddress(port);
         }

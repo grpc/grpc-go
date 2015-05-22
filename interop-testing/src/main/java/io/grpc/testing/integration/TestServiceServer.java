@@ -135,7 +135,7 @@ public class TestServiceServer {
     SslContext sslContext = null;
     if (useTls) {
       sslContext = GrpcSslContexts.forServer(
-              Util.loadCert("server1.pem"), Util.loadCert("server1.key")).build();
+              TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key")).build();
     }
     server = NettyServerBuilder.forPort(port)
         .sslContext(sslContext)

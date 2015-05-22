@@ -31,18 +31,18 @@
 
 package io.grpc.benchmarks.qps;
 
-import static io.grpc.testing.integration.Util.loadCert;
-
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
 import io.grpc.Channel;
 import io.grpc.testing.Payload;
 import io.grpc.testing.SimpleRequest;
+import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
+
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.EpollDomainSocketChannel;
 import io.netty.channel.epoll.EpollEventLoopGroup;
@@ -139,7 +139,7 @@ final class Utils {
     SslContext context = null;
     NegotiationType negotiationType = config.tls ? NegotiationType.TLS : NegotiationType.PLAINTEXT;
     if (config.tls && config.testca) {
-      File cert = loadCert("ca.pem");
+      File cert = TestUtils.loadCert("ca.pem");
       boolean useJdkSsl = config.transport == ClientConfiguration.Transport.NETTY_NIO;
       context = GrpcSslContexts.forClient().trustManager(cert)
           .sslProvider(useJdkSsl ? SslProvider.JDK : SslProvider.OPENSSL)

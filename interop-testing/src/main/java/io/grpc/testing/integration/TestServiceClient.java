@@ -32,6 +32,7 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ChannelImpl;
+import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
@@ -216,7 +217,8 @@ public class TestServiceClient {
         SslContext sslContext = null;
         if (useTestCa) {
           try {
-            sslContext = GrpcSslContexts.forClient().trustManager(Util.loadCert("ca.pem")).build();
+            sslContext = GrpcSslContexts.forClient().trustManager(
+                    TestUtils.loadCert("ca.pem")).build();
           } catch (Exception ex) {
             throw new RuntimeException(ex);
           }
@@ -234,7 +236,7 @@ public class TestServiceClient {
         if (useTls) {
           try {
             SSLSocketFactory factory = useTestCa
-                ? Util.getSslSocketFactoryForCertainCert(Util.loadCert("ca.pem"))
+                ? TestUtils.getSslSocketFactoryForCertainCert(TestUtils.loadCert("ca.pem"))
                 : (SSLSocketFactory) SSLSocketFactory.getDefault();
             builder.sslSocketFactory(factory);
           } catch (Exception e) {
