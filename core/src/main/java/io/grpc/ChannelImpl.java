@@ -88,9 +88,11 @@ public final class ChannelImpl extends Channel {
    */
   @GuardedBy("this")
   private Collection<ClientTransport> transports = new ArrayList<ClientTransport>();
-  /** The transport for new outgoing requests. */
-  @GuardedBy("this")
-  private ClientTransport activeTransport;
+  /**
+   * The transport for new outgoing requests. 'this' lock must be held when assigning to
+   * activeTransport.
+   */
+  private volatile ClientTransport activeTransport;
   @GuardedBy("this")
   private boolean shutdown;
   @GuardedBy("this")
@@ -202,25 +204,39 @@ public final class ChannelImpl extends Channel {
     return new CallImpl<ReqT, RespT>(method, new SerializingExecutor(executor));
   }
 
-  private synchronized ClientTransport obtainActiveTransport() {
-    if (shutdown) {
-      return null;
+  private ClientTransport obtainActiveTransport() {
+    ClientTransport savedActiveTransport = activeTransport;
+    if (savedActiveTransport != null) {
+      return savedActiveTransport;
     }
-    if (activeTransport != null) {
-      return activeTransport;
+    synchronized (this) {
+      if (shutdown) {
+        return null;
+      }
+      savedActiveTransport = activeTransport;
+      if (savedActiveTransport != null) {
+        return savedActiveTransport;
+      }
+      ClientTransport newActiveTransport = transportFactory.newClientTransport();
+      transports.add(newActiveTransport);
+      boolean failed = true;
+      try {
+        newActiveTransport.start(new TransportListener(newActiveTransport));
+        failed = false;
+      } finally {
+        if (failed) {
+          transports.remove(newActiveTransport);
+        }
+      }
+      // It's possible that start() called transportShutdown() and transportTerminated(). If so, we
+      // wouldn't want to make it the active transport.
+      if (transports.contains(newActiveTransport)) {
+        // start() must return before we set activeTransport, since activeTransport is accessed
+        // without a lock.
+        activeTransport = newActiveTransport;
+      }
+      return newActiveTransport;
     }
-    // Set activeTransport and add to transports before start() in case start() calls
-    // transportShutdown() and transportTerminated()
-    activeTransport = transportFactory.newClientTransport();
-    transports.add(activeTransport);
-    try {
-      activeTransport.start(new TransportListener(activeTransport));
-    } catch (RuntimeException ex) {
-      transports.remove(activeTransport);
-      activeTransport = null;
-      throw ex;
-    }
-    return activeTransport;
   }
 
   private class TransportListener implements ClientTransport.Listener {
