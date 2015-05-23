@@ -14,14 +14,16 @@ buildscript {
 }
 
 dependencies {
-    compile project(':grpc-core'),
+    compile project(':grpc-auth'),
+            project(':grpc-core'),
             project(':grpc-netty'),
             project(':grpc-okhttp'),
             project(':grpc-protobuf'),
             project(':grpc-stub'),
             project(':grpc-testing'),
             libraries.junit,
-            libraries.mockito
+            libraries.mockito,
+            libraries.oauth_client
 }
 
 test {

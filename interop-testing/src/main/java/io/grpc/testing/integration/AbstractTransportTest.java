@@ -34,12 +34,15 @@ package io.grpc.testing.integration;
 import static io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE;
 import static io.grpc.testing.integration.Util.assertEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.google.auth.oauth2.ComputeEngineCredentials;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 
@@ -50,6 +53,7 @@ import io.grpc.Metadata;
 import io.grpc.ServerImpl;
 import io.grpc.ServerInterceptors;
 import io.grpc.Status;
+import io.grpc.auth.ClientAuthInterceptor;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
@@ -626,6 +630,37 @@ public abstract class AbstractTransportTest {
     requestObserver.onCompleted();
     verify(responseObserver, timeout(OPERATION_TIMEOUT)).onCompleted();
     verifyNoMoreInteractions(responseObserver);
+  }
+
+  /** Sends a large unary rpc with compute engine credentials. */
+  public void computeEngineCreds(String serviceAccount, String oauthScope) throws Exception {
+    ComputeEngineCredentials credentials = new ComputeEngineCredentials();
+    TestServiceGrpc.TestServiceBlockingStub stub = blockingStub.configureNewStub()
+        .addInterceptor(new ClientAuthInterceptor(credentials, testServiceExecutor))
+        .build();
+    final SimpleRequest request = SimpleRequest.newBuilder()
+        .setFillUsername(true)
+        .setFillOauthScope(true)
+        .setResponseSize(314159)
+        .setResponseType(PayloadType.COMPRESSABLE)
+        .setPayload(Payload.newBuilder()
+            .setBody(ByteString.copyFrom(new byte[271828])))
+        .build();
+
+    final SimpleResponse response = stub.unaryCall(request);
+    assertEquals(serviceAccount, response.getUsername());
+    assertFalse(response.getOauthScope().isEmpty());
+    assertTrue("Received oauth scope: " + response.getOauthScope(),
+        oauthScope.contains(response.getOauthScope()));
+
+    final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
+        .setOauthScope(response.getOauthScope())
+        .setUsername(response.getUsername())
+        .setPayload(Payload.newBuilder()
+            .setType(PayloadType.COMPRESSABLE)
+            .setBody(ByteString.copyFrom(new byte[314159])))
+        .build();
+    assertEquals(goldenResponse, response);
   }
 
   protected static void assertSuccess(StreamRecorder<?> recorder) {

@@ -84,6 +84,8 @@ public class TestServiceClient {
   private boolean useTls = true;
   private boolean useTestCa;
   private boolean useOkHttp;
+  private String defaultServiceAccount;
+  private String oauthScope;
 
   private Tester tester = new Tester();
 
@@ -127,6 +129,10 @@ public class TestServiceClient {
           usage = true;
           break;
         }
+      } else if ("default_service_account".equals(key)) {
+        defaultServiceAccount = value;
+      } else if ("oauth_scope".equals(key)) {
+        oauthScope = value;
       } else {
         System.err.println("Unknown argument: " + key);
         usage = true;
@@ -146,7 +152,10 @@ public class TestServiceClient {
           + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
           + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Default " + c.useTestCa
           + "\n  --use_okhttp=true|false     Whether to use OkHttp instead of Netty. Default "
-            + c.useOkHttp
+              + c.useOkHttp
+          + "\n  --default_service_account   Email of GCE default service account. Default "
+              + c.defaultServiceAccount
+          + "\n  --oauth_scope               Scope for OAuth tokens. Default " + c.oauthScope
       );
       System.exit(1);
     }
@@ -195,6 +204,8 @@ public class TestServiceClient {
       tester.cancelAfterBegin();
     } else if ("cancel_after_first_response".equals(testCase)) {
       tester.cancelAfterFirstResponse();
+    } else if ("compute_engine_creds".equals(testCase)) {
+      tester.computeEngineCreds(defaultServiceAccount, oauthScope);
     } else {
       throw new IllegalArgumentException("Unknown test case: " + testCase);
     }
