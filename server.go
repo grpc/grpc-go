@@ -55,7 +55,7 @@ var (
 	LogUnaryServerRequests ServerOption = func(o *options) {
 		o.logUnaryRequests = true
 	}
-	// LogUnaryServerRequests tells a Server to log all unary responses.
+	// LogUnaryServerResponses tells a Server to log all unary responses.
 	LogUnaryServerResponses ServerOption = func(o *options) {
 		o.logUnaryResponses = true
 	}
