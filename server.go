@@ -57,7 +57,7 @@ var (
 	}
 	// LogUnaryServerRequests tells a Server to log all unary responses.
 	LogUnaryServerResponses ServerOption = func(o *options) {
-		o.logResponses = true
+		o.logUnaryResponses = true
 	}
 )
 
@@ -102,7 +102,7 @@ type options struct {
 	codec                Codec
 	maxConcurrentStreams uint32
 	logUnaryRequests     bool
-	logResponses         bool
+	logUnaryResponses    bool
 }
 
 // A ServerOption sets options.
@@ -318,7 +318,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 			}
 			t.WriteStatus(stream, statusCode, statusDesc)
-			if s.opts.logResponses {
+			if s.opts.logUnaryResponses {
 				grpclog.Printf("grpc: service=%s method=%s rersponse=%+v", srv.name, md.MethodName, reply)
 			}
 		default:
