@@ -5,6 +5,7 @@
 	testdeps \
 	updatetestdeps \
 	build \
+	proto \
 	lint \
 	pretest \
 	test \
@@ -28,9 +29,19 @@ updatetestdeps:
 build: deps
 	go build ./...
 
+proto:
+	@ if ! which protoc > /dev/null; then \
+		echo "error: protoc not installed" >&2; \
+		exit 1; \
+	fi
+	go get -v github.com/golang/protobuf/protoc-gen-go
+	for file in $$(git ls-files '*.proto'); do \
+		protoc -I $$(dirname $$file) --go_out=plugins=grpc:$$(dirname $$file) $$file; \
+	done
+
 lint: testdeps
 	go get -v github.com/golang/lint/golint
-	for file in $(shell git ls-files '*.go' | grep -v '\.pb\.go$$' | grep -v '_string\.go$$'); do \
+	for file in $$(git ls-files '*.go' | grep -v '\.pb\.go$$' | grep -v '_string\.go$$'); do \
 		golint $$file; \
 	done
 
