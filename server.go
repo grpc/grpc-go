@@ -281,7 +281,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			return
 		}
 		if s.opts.logUnaryRequests {
-			grpclog.Printf("grpc: service=%s method=%s request=%+v", srv.name, md.MethodName, req)
+			grpclog.Printf("grpc: service=%s method=%s request=%s", srv.name, md.MethodName, requestOrResponseString(req))
 		}
 		switch pf {
 		case compressionNone:
@@ -319,7 +319,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 			t.WriteStatus(stream, statusCode, statusDesc)
 			if s.opts.logUnaryResponses {
-				grpclog.Printf("grpc: service=%s method=%s rersponse=%+v", srv.name, md.MethodName, reply)
+				grpclog.Printf("grpc: service=%s method=%s response=%s", srv.name, md.MethodName, requestOrResponseString(reply))
 			}
 		default:
 			panic(fmt.Sprintf("payload format to be supported: %d", pf))
@@ -438,4 +438,11 @@ func SetTrailer(ctx context.Context, md metadata.MD) error {
 		return fmt.Errorf("grpc: failed to fetch the stream from the context %v", ctx)
 	}
 	return stream.SetTrailer(md)
+}
+
+func requestOrResponseString(object interface{}) string {
+	if stringer, ok := object.(fmt.Stringer); ok {
+		return stringer.String()
+	}
+	return fmt.Sprintf("%+v", object)
 }
