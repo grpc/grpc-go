@@ -7,8 +7,97 @@ gRPC-Java works with JDK 6. TLS usage typically requires using Java 8, or Play
 Services Dynamic Security Provider on Android. Please see the [Auth
 Readme](AUTH-README.md).
 
+Download
+--------
+
+Download [the JAR][]. Or for Maven, add to your `pom.xml`:
+```xml
+<dependency>
+  <groupId>io.grpc</groupId>
+  <artifactId>grpc-all</artifactId>
+  <version>0.7.0</version>
+</dependency>
+```
+
+Or for Gradle, add to your dependencies:
+```gradle
+compile 'io.grpc:grpc-all:0.7.0'
+```
+
+[the JAR]: https://search.maven.org/remote_content?g=io.grpc&a=grpc-all&v=0.7.0
+
+Development snapshots are available in [Sonatypes's snapshot
+repository](https://oss.sonatype.org/content/repositories/snapshots/).
+
+For protobuf-based codegen integrated with the Maven build system, you can use
+[maven-protoc-plugin][]:
+```xml
+<build>
+  <extensions>
+    <extension>
+      <groupId>kr.motd.maven</groupId>
+      <artifactId>os-maven-plugin</artifactId>
+      <version>1.2.3.Final</version>
+    </extension>
+  </extensions>
+  <plugins>
+    <plugin>
+      <groupId>com.google.protobuf.tools</groupId>
+      <artifactId>maven-protoc-plugin</artifactId>
+      <version>0.4.2</version>
+      <configuration>
+        <protocArtifact>com.google.protobuf:protoc:3.0.0-alpha-2:exe:${os.detected.classifier}</protocArtifact>
+        <pluginId>grpc-java</pluginId>
+        <pluginArtifact>io.grpc:protoc-gen-grpc-java:0.7.0:exe:${os.detected.classifier}</pluginArtifact>
+      </configuration>
+      <executions>
+        <execution>
+          <goals>
+            <goal>compile</goal>
+            <goal>compile-custom</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+  </plugins>
+</build>
+```
+
+[maven-protoc-plugin]: http://sergei-ivanov.github.io/maven-protoc-plugin/
+
+For protobuf-based codegen integrated with the Gradle build system, you can use
+[protobuf-gradle-plugin][]:
+```gradle
+apply plugin: 'com.google.protobuf'
+
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath 'com.google.protobuf:protobuf-gradle-plugin:0.4.1'
+  }
+}
+
+sourceSets {
+  main {
+    proto {
+      plugins {
+        grpc { }
+      }
+    }
+  }
+}
+
+protocDep = "com.google.protobuf:protoc:3.0.0-alpha-2"
+protobufNativeCodeGenPluginDeps = ["grpc:io.grpc:protoc-gen-grpc-java:0.7.0"]
+```
+
+[protobuf-gradle-plugin]: https://github.com/google/protobuf-gradle-plugin
+
 How to Build
 ------------
+This section is only necessary if you are making changes to gRPC-Java.
 
 ### Build Netty
 grpc-java requires Netty 4.1, which is still in flux. The version we need can be
