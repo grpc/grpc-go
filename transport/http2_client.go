@@ -79,6 +79,7 @@ type http2Client struct {
 	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
+	// streamsQuota limits the max number of concurrent streams.
 	streamsQuota  *quotaPool
 
 	// The scheme used: https if TLS is on, http otherwise.
@@ -248,6 +249,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			t.mu.Unlock()
 			return nil, err
 		}
+		// Returns the quota balance back.
 		if q > 1 {
 			t.streamsQuota.add(q-1)
 		}
