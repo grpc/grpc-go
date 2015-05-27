@@ -79,6 +79,7 @@ type http2Client struct {
 	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
+	streamsQuota  *quotaPool
 
 	// The scheme used: https if TLS is on, http otherwise.
 	scheme string
@@ -89,7 +90,7 @@ type http2Client struct {
 	state         transportState // the state of underlying connection
 	activeStreams map[uint32]*Stream
 	// The max number of concurrent streams
-	maxStreams uint32
+	maxStreams int
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
 }
@@ -174,8 +175,8 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 		scheme:          scheme,
 		state:           reachable,
 		activeStreams:   make(map[uint32]*Stream),
-		maxStreams:      math.MaxUint32,
 		authCreds:       opts.AuthOptions,
+		maxStreams:      math.MaxInt32,
 		streamSendQuota: defaultWindowSize,
 	}
 	go t.controller()
@@ -236,19 +237,26 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			authData[k] = v
 		}
 	}
-	if _, err := wait(ctx, t.shutdownChan, t.writableChan); err != nil {
-		return nil, err
-	}
 	t.mu.Lock()
 	if t.state != reachable {
 		t.mu.Unlock()
 		return nil, ErrConnClosing
 	}
-	if uint32(len(t.activeStreams)) >= t.maxStreams {
-		t.mu.Unlock()
-		t.writableChan <- 0
-		return nil, StreamErrorf(codes.Unavailable, "transport: failed to create new stream because the limit has been reached.")
+	if t.streamsQuota != nil {
+		q, err := wait(ctx, t.shutdownChan, t.streamsQuota.acquire())
+		if err != nil {
+			t.mu.Unlock()
+			return nil, err
+		}
+		if q > 1 {
+			t.streamsQuota.add(q-1)
+		}
 	}
+	t.mu.Unlock()
+	if _, err := wait(ctx, t.shutdownChan, t.writableChan); err != nil {
+		return nil, err
+	}
+	t.mu.Lock()
 	s := t.newStream(ctx, callHdr)
 	t.activeStreams[s.id] = s
 	t.mu.Unlock()
@@ -318,6 +326,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 func (t *http2Client) CloseStream(s *Stream, err error) {
 	t.mu.Lock()
 	delete(t.activeStreams, s.id)
+	if t.streamsQuota != nil {
+		t.streamsQuota.add(1)
+	}
 	t.mu.Unlock()
 	s.mu.Lock()
 	if q := s.fc.restoreConn(); q > 0 {
@@ -558,7 +569,18 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 			defer t.mu.Unlock()
 			switch s.ID {
 			case http2.SettingMaxConcurrentStreams:
-				t.maxStreams = v
+				// TODO(zhaoq): This is a hack to avoid significant refactoring of the
+				// code to deal with int32 overflow. Have a better way to handle this
+				// later.
+				if v > math.MaxInt32 {
+					v = math.MaxInt32
+				}
+				if t.streamsQuota == nil {
+					t.streamsQuota = newQuotaPool(int(v))
+				} else {
+					t.streamsQuota.reset(int(v) - t.maxStreams)
+				}
+				t.maxStreams = int(v)
 			case http2.SettingInitialWindowSize:
 				for _, s := range t.activeStreams {
 					// Adjust the sending quota for each s.

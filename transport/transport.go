@@ -451,3 +451,14 @@ func wait(ctx context.Context, closing <-chan struct{}, proceed <-chan int) (int
 		return i, nil
 	}
 }
+
+func wait64(ctx context.Context, closing <-chan struct{}, proceed <-chan int64) (int64, error) {
+	select {
+	case <-ctx.Done():
+		return 0, ContextErr(ctx.Err())
+	case <-closing:
+		return 0, ErrConnClosing
+	case i := <-proceed:
+		return i, nil
+	}
+}

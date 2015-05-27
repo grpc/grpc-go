@@ -795,17 +795,23 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	s, cc := setUp(1, e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
-	var err error
-	for {
-		time.Sleep(2 * time.Millisecond)
-		_, err = tc.StreamingInputCall(context.Background())
-		// Loop until the settings of max concurrent streams is
-		// received by the client.
-		if err != nil {
-			break
+	// Perform an unary RPC to make sure the new settings were propagated to the client.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("fhaof")
+	}
+	// Initiate the 1st stream
+	if _, err := tc.StreamingInputCall(context.Background()); err != nil {
+		t.Fatalf("faf")
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		// The 2nd stream should block until its deadline exceeds.
+		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		if _, err := tc.StreamingInputCall(ctx); grpc.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("1414")
 		}
-	}
-	if grpc.Code(err) != codes.Unavailable {
-		t.Fatalf("got %v, want error code %d", err, codes.Unavailable)
-	}
+		wg.Done()
+	}()
+	wg.Wait()
 }
