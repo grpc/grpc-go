@@ -572,8 +572,8 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 			switch s.ID {
 			case http2.SettingMaxConcurrentStreams:
 				// TODO(zhaoq): This is a hack to avoid significant refactoring of the
-				// code to deal with int32 overflow. Have a better way to handle this
-				// later.
+				// code to deal with the unrealistic int32 overflow. Probably will try
+				// to find a better way to handle this later.
 				if v > math.MaxInt32 {
 					v = math.MaxInt32
 				}
