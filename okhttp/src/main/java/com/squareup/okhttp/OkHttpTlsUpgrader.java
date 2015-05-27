@@ -37,9 +37,6 @@ import com.squareup.okhttp.internal.Platform;
 import com.squareup.okhttp.internal.SelectedProtocolQuerier;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Proxy;
-import java.net.ProxySelector;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,10 +54,8 @@ public final class OkHttpTlsUpgrader {
   // TODO(madongfly): We should only support "h2" at a right time.
   private static final List<String> SUPPORTED_HTTP2_PROTOCOLS = Collections.unmodifiableList(
       Arrays.asList("h2", "h2-14", "h2-15", "h2-16"));
-
-  // A dummy address used to bypass null check.
-  private static final InetSocketAddress DUMMY_INET_SOCKET_ADDRESS =
-      InetSocketAddress.createUnresolved("fake", 73);
+  private static final List<Protocol> TLS_PROTOCOLS =
+      Collections.unmodifiableList(Arrays.<Protocol>asList(Protocol.HTTP_2));
 
   /**
    * Upgrades given Socket to be a SSLSocket.
@@ -72,9 +67,11 @@ public final class OkHttpTlsUpgrader {
     Preconditions.checkNotNull(spec);
     SSLSocket sslSocket = (SSLSocket) sslSocketFactory.createSocket(
         socket, host, port, true /* auto close */);
-    spec.apply(sslSocket, getOkHttpRoute(host, port, spec));
-
+    spec.apply(sslSocket, false);
     Platform platform = Platform.get();
+    if (spec.supportsTlsExtensions()) {
+      platform.configureTlsExtensions(sslSocket, host, TLS_PROTOCOLS);
+    }
 
     // It's possible that the user provided SSLSocketFactory has already done the handshake
     // when creates the SSLSocket.
@@ -97,30 +94,5 @@ public final class OkHttpTlsUpgrader {
         "negotiated protocol %s is unsupported", negotiatedProtocol);
 
     return sslSocket;
-  }
-
-  private static Route getOkHttpRoute(String host, int port, ConnectionSpec spec) {
-    return new Route(getOkHttpAddress(host, port), Proxy.NO_PROXY, DUMMY_INET_SOCKET_ADDRESS, spec);
-  }
-
-  private static Address getOkHttpAddress(String host, int port) {
-    return new Address(host, port, null, null, null, null,
-        DummyAuthenticator.INSTANCE, Proxy.NO_PROXY, Arrays.<Protocol>asList(Protocol.HTTP_2),
-        Collections.<ConnectionSpec>emptyList(), ProxySelector.getDefault());
-  }
-
-  /**
-   * A dummy implementation does nothing.
-   */
-  private static class DummyAuthenticator implements Authenticator {
-    static final DummyAuthenticator INSTANCE = new DummyAuthenticator();
-
-    @Override public Request authenticate(Proxy proxy, Response response) throws IOException {
-      return null;
-    }
-
-    @Override public Request authenticateProxy(Proxy proxy, Response response) throws IOException {
-      return null;
-    }
   }
 }
