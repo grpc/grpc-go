@@ -34,6 +34,7 @@ package com.squareup.okhttp;
 import com.google.common.base.Preconditions;
 
 import com.squareup.okhttp.internal.Platform;
+import com.squareup.okhttp.internal.SelectedProtocolQuerier;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -75,22 +76,15 @@ public final class OkHttpTlsUpgrader {
 
     Platform platform = Platform.get();
 
-    String negotiatedProtocol = null;
-    try {
-      // It's possible that the user provided SSLSocketFactory has already done the handshake
-      // when creates the SSLSocket.
-      negotiatedProtocol = platform.getSelectedProtocol(sslSocket);
-    } catch (Exception e) {
-      // In some implementations, querying selected protocol before the handshake will fail with
-      // exception.
-    }
+    // It's possible that the user provided SSLSocketFactory has already done the handshake
+    // when creates the SSLSocket.
+    String negotiatedProtocol = SelectedProtocolQuerier.getSelectedProtocol(sslSocket);
     if (negotiatedProtocol == null) {
-
       try {
         // Force handshake.
         sslSocket.startHandshake();
 
-        negotiatedProtocol = platform.getSelectedProtocol(sslSocket);
+        negotiatedProtocol = SelectedProtocolQuerier.getSelectedProtocol(sslSocket);
         if (negotiatedProtocol == null) {
           throw new RuntimeException("protocol negotiation failed");
         }
