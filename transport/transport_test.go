@@ -299,6 +299,54 @@ func TestClientMix(t *testing.T) {
 	}
 }
 
+func TestExceedMaxStreamsLimit(t *testing.T) {
+	server, ct := setUp(t, 0, 1, normal)
+	defer func() {
+		ct.Close()
+		server.stop()
+	}()
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Small",
+	}
+	// Creates the 1st stream and keep it alive.
+	_, err1 := ct.NewStream(context.Background(), callHdr)
+	if err1 != nil {
+		t.Fatalf("failed to open stream: %v", err1)
+	}
+	// Creates the 2nd stream. It has chance to succeed when the settings
+	// frame from the server has not received at the client.
+	s, err2 := ct.NewStream(context.Background(), callHdr)
+	if err2 != nil {
+		se, ok := err2.(StreamError)
+		if !ok {
+			t.Fatalf("Received unexpected error %v", err2)
+		}
+		if se.Code != codes.Unavailable {
+			t.Fatalf("Got error code: %d, want: %d", se.Code, codes.Unavailable)
+		}
+		return
+	}
+	// If the 2nd stream is created successfully, sends the request.
+	if err := ct.Write(s, expectedRequest, &Options{Last: true, Delay: false}); err != nil {
+		t.Fatalf("failed to send data: %v", err)
+	}
+	// The 2nd stream was rejected by the server via a reset.
+	p := make([]byte, len(expectedResponse))
+	_, recvErr := io.ReadFull(s, p)
+	if recvErr != io.EOF || s.StatusCode() != codes.Unavailable {
+		t.Fatalf("Error: %v, StatusCode: %d; want <EOF>, %d", recvErr, s.StatusCode(), codes.Unavailable)
+	}
+	// Server's setting has been received. From now on, new stream will be rejected instantly.
+	_, err3 := ct.NewStream(context.Background(), callHdr)
+	if err3 == nil {
+		t.Fatalf("Received unexpected <nil>, want an error with code %d", codes.Unavailable)
+	}
+	if se, ok := err3.(StreamError); !ok || se.Code != codes.Unavailable {
+		t.Fatalf("Got: %v, want a StreamError with error code %d", err3, codes.Unavailable)
+	}
+}
+
 func TestLargeMessage(t *testing.T) {
 	server, ct := setUp(t, 0, math.MaxUint32, normal)
 	callHdr := &CallHdr{
