@@ -54,7 +54,7 @@ import (
 
 var (
 	// alpnProtoStr are the specified application level protocols for gRPC.
-	alpnProtoStr = []string{"h2-14", "h2-15", "h2-16"}
+	alpnProtoStr = []string{"h2", "h2-14", "h2-15", "h2-16"}
 )
 
 // Credentials defines the common interface all supported credentials must
