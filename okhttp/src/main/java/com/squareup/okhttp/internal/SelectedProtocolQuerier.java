@@ -57,7 +57,13 @@ public class SelectedProtocolQuerier {
       // exception.
     }
     if (protocol == null && android && GET_NPN_SELECTED_PROTOCOL.isSupported(socket)) {
-      byte[] result = (byte[]) GET_NPN_SELECTED_PROTOCOL.invokeWithoutCheckedException(socket);
+      byte[] result = null;
+      try {
+        result = (byte[]) GET_NPN_SELECTED_PROTOCOL.invokeWithoutCheckedException(socket);
+      } catch (Exception e) {
+        // In some implementations, querying selected protocol before the handshake will fail with
+        // exception.
+      }
       if (result != null) {
         protocol = new String(result, Util.UTF_8);
       }
