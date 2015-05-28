@@ -795,7 +795,7 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	s, cc := setUp(1, e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
-	// Perform an unary RPC to make sure the new settings were propagated to the client.
+	// Perform a unary RPC to make sure the new settings were propagated to the client.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", tc, err)
 	}

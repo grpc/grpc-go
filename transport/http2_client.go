@@ -190,7 +190,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	return t, nil
 }
 
-func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
+func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr, sq bool) *Stream {
 	fc := &inFlow{
 		limit: initialWindowSize,
 		conn:  t.fc,
@@ -200,6 +200,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		id:            t.nextID,
 		method:        callHdr.Method,
 		buf:           newRecvBuffer(),
+		updateStreams: sq,
 		fc:            fc,
 		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
 		headerChan:    make(chan struct{}),
@@ -260,7 +261,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		return nil, err
 	}
 	t.mu.Lock()
-	s := t.newStream(ctx, callHdr)
+	s := t.newStream(ctx, callHdr, checkStreamsQuota)
 	t.activeStreams[s.id] = s
 	t.mu.Unlock()
 	// HPACK encodes various headers. Note that once WriteField(...) is
@@ -329,10 +330,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 func (t *http2Client) CloseStream(s *Stream, err error) {
 	t.mu.Lock()
 	delete(t.activeStreams, s.id)
-	if t.streamsQuota != nil {
+	t.mu.Unlock()
+	if s.updateStreams {
 		t.streamsQuota.add(1)
 	}
-	t.mu.Unlock()
 	s.mu.Lock()
 	if q := s.fc.restoreConn(); q > 0 {
 		t.controlBuf.put(&windowUpdate{0, q})
@@ -568,8 +569,6 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 	}
 	f.ForeachSetting(func(s http2.Setting) error {
 		if v, ok := f.Value(s.ID); ok {
-			t.mu.Lock()
-			defer t.mu.Unlock()
 			switch s.ID {
 			case http2.SettingMaxConcurrentStreams:
 				// TODO(zhaoq): This is a hack to avoid significant refactoring of the
@@ -578,18 +577,24 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 				if v > math.MaxInt32 {
 					v = math.MaxInt32
 				}
-				if t.streamsQuota == nil {
+				t.mu.Lock()
+				reset := t.streamsQuota != nil
+				ms := t.maxStreams
+				t.maxStreams = int(v)
+				t.mu.Unlock()
+				if !reset {
 					t.streamsQuota = newQuotaPool(int(v))
 				} else {
-					t.streamsQuota.reset(int(v) - t.maxStreams)
+					t.streamsQuota.reset(int(v) - ms)
 				}
-				t.maxStreams = int(v)
 			case http2.SettingInitialWindowSize:
+				t.mu.Lock()
 				for _, s := range t.activeStreams {
 					// Adjust the sending quota for each s.
 					s.sendQuotaPool.reset(int(v - t.streamSendQuota))
 				}
 				t.streamSendQuota = v
+				t.mu.Unlock()
 			}
 		}
 		return nil
