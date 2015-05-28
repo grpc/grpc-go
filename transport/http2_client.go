@@ -243,19 +243,20 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		t.mu.Unlock()
 		return nil, ErrConnClosing
 	}
-	if t.streamsQuota != nil {
-		q, err := wait(ctx, t.shutdownChan, t.streamsQuota.acquire())
+	checkStreamsQuota := t.streamsQuota != nil
+	t.mu.Unlock()
+	if checkStreamsQuota {
+		sq, err := wait(ctx, t.shutdownChan, t.streamsQuota.acquire())
 		if err != nil {
-			t.mu.Unlock()
 			return nil, err
 		}
 		// Returns the quota balance back.
-		if q > 1 {
-			t.streamsQuota.add(q - 1)
+		if sq > 1 {
+			t.streamsQuota.add(sq - 1)
 		}
 	}
-	t.mu.Unlock()
 	if _, err := wait(ctx, t.shutdownChan, t.writableChan); err != nil {
+		// t.streamsQuota will be updated when t.CloseStream is invoked.
 		return nil, err
 	}
 	t.mu.Lock()

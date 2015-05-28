@@ -806,12 +806,12 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		// The 2nd stream should block until its deadline exceeds.
 		ctx, _ := context.WithTimeout(context.Background(), time.Second)
 		if _, err := tc.StreamingInputCall(ctx); grpc.Code(err) != codes.DeadlineExceeded {
-			t.Fatalf("%v.StreamingInputCall(%v) = _, %v, want error code %d", tc, ctx, err, codes.DeadlineExceeded)
+			t.Errorf("%v.StreamingInputCall(%v) = _, %v, want error code %d", tc, ctx, err, codes.DeadlineExceeded)
 		}
-		wg.Done()
 	}()
 	wg.Wait()
 }
