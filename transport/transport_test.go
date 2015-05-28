@@ -309,23 +309,23 @@ func TestLargeMessage(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			s, err := ct.NewStream(context.Background(), callHdr)
 			if err != nil {
-				t.Fatalf("failed to open stream: %v", err)
+				t.Errorf("failed to open stream: %v", err)
 			}
 			if err := ct.Write(s, expectedRequestLarge, &Options{Last: true, Delay: false}); err != nil {
-				t.Fatalf("failed to send data: %v", err)
+				t.Errorf("failed to send data: %v", err)
 			}
 			p := make([]byte, len(expectedResponseLarge))
 			_, recvErr := io.ReadFull(s, p)
 			if recvErr != nil || !bytes.Equal(p, expectedResponseLarge) {
-				t.Fatalf("Error: %v, want <nil>; Result len: %d, want len %d", recvErr, len(p), len(expectedResponseLarge))
+				t.Errorf("Error: %v, want <nil>; Result len: %d, want len %d", recvErr, len(p), len(expectedResponseLarge))
 			}
 			_, recvErr = io.ReadFull(s, p)
 			if recvErr != io.EOF {
-				t.Fatalf("Error: %v; want <EOF>", recvErr)
+				t.Errorf("Error: %v; want <EOF>", recvErr)
 			}
-			wg.Done()
 		}()
 	}
 	wg.Wait()
