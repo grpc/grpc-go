@@ -493,7 +493,9 @@ public class OkHttpClientTransport implements ClientTransport {
         while (frameReader.nextFrame(this)) {
         }
       } catch (IOException ioe) {
-        onIoException(ioe);
+        // We call onError instead of onIoException here, because OkHttp wraps many protocol errors
+        // as IOException, we should send GoAway for such errors.
+        onError(ErrorCode.PROTOCOL_ERROR, ioe.getMessage());
       } finally {
         try {
           frameReader.close();
