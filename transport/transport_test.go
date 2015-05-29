@@ -500,7 +500,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	for i := 0; i < int(initialConnWindowSize/initialWindowSize+10); i++ {
 		s, err := ct.NewStream(context.Background(), callHdr)
 		if err != nil {
-			t.Fatalf("Failed to open stream: %v", err)
+			break
 		}
 		if err := ct.Write(s, expectedRequest, &Options{Last: true, Delay: false}); err != nil {
 			break
