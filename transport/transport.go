@@ -173,8 +173,13 @@ type Stream struct {
 	buf    *recvBuffer
 	dec    io.Reader
 
-	fc        *inFlow
-	recvQuota uint32
+	// updateStreams indicates whether the transport's streamsQuota needed
+	// to be updated when this stream is closed. It is false when the transport
+	// sticks to the initial infinite value of the number of concurrent streams.
+	// Ture otherwise.
+	updateStreams bool
+	fc            *inFlow
+	recvQuota     uint32
 	// The accumulated inbound quota pending for window update.
 	updateQuota uint32
 	// The handler to control the window update procedure for both this

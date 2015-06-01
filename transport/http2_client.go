@@ -79,6 +79,8 @@ type http2Client struct {
 	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
+	// streamsQuota limits the max number of concurrent streams.
+	streamsQuota *quotaPool
 
 	// The scheme used: https if TLS is on, http otherwise.
 	scheme string
@@ -89,7 +91,7 @@ type http2Client struct {
 	state         transportState // the state of underlying connection
 	activeStreams map[uint32]*Stream
 	// The max number of concurrent streams
-	maxStreams uint32
+	maxStreams int
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
 }
@@ -174,8 +176,8 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 		scheme:          scheme,
 		state:           reachable,
 		activeStreams:   make(map[uint32]*Stream),
-		maxStreams:      math.MaxUint32,
 		authCreds:       opts.AuthOptions,
+		maxStreams:      math.MaxInt32,
 		streamSendQuota: defaultWindowSize,
 	}
 	go t.controller()
@@ -188,7 +190,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	return t, nil
 }
 
-func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
+func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr, sq bool) *Stream {
 	fc := &inFlow{
 		limit: initialWindowSize,
 		conn:  t.fc,
@@ -198,6 +200,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		id:            t.nextID,
 		method:        callHdr.Method,
 		buf:           newRecvBuffer(),
+		updateStreams: sq,
 		fc:            fc,
 		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
 		headerChan:    make(chan struct{}),
@@ -236,20 +239,29 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			authData[k] = v
 		}
 	}
-	if _, err := wait(ctx, t.shutdownChan, t.writableChan); err != nil {
-		return nil, err
-	}
 	t.mu.Lock()
 	if t.state != reachable {
 		t.mu.Unlock()
 		return nil, ErrConnClosing
 	}
-	if uint32(len(t.activeStreams)) >= t.maxStreams {
-		t.mu.Unlock()
-		t.writableChan <- 0
-		return nil, StreamErrorf(codes.Unavailable, "transport: failed to create new stream because the limit has been reached.")
+	checkStreamsQuota := t.streamsQuota != nil
+	t.mu.Unlock()
+	if checkStreamsQuota {
+		sq, err := wait(ctx, t.shutdownChan, t.streamsQuota.acquire())
+		if err != nil {
+			return nil, err
+		}
+		// Returns the quota balance back.
+		if sq > 1 {
+			t.streamsQuota.add(sq - 1)
+		}
 	}
-	s := t.newStream(ctx, callHdr)
+	if _, err := wait(ctx, t.shutdownChan, t.writableChan); err != nil {
+		// t.streamsQuota will be updated when t.CloseStream is invoked.
+		return nil, err
+	}
+	t.mu.Lock()
+	s := t.newStream(ctx, callHdr, checkStreamsQuota)
 	t.activeStreams[s.id] = s
 	t.mu.Unlock()
 	// HPACK encodes various headers. Note that once WriteField(...) is
@@ -319,6 +331,9 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	t.mu.Lock()
 	delete(t.activeStreams, s.id)
 	t.mu.Unlock()
+	if s.updateStreams {
+		t.streamsQuota.add(1)
+	}
 	s.mu.Lock()
 	if q := s.fc.restoreConn(); q > 0 {
 		t.controlBuf.put(&windowUpdate{0, q})
@@ -554,17 +569,32 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 	}
 	f.ForeachSetting(func(s http2.Setting) error {
 		if v, ok := f.Value(s.ID); ok {
-			t.mu.Lock()
-			defer t.mu.Unlock()
 			switch s.ID {
 			case http2.SettingMaxConcurrentStreams:
-				t.maxStreams = v
+				// TODO(zhaoq): This is a hack to avoid significant refactoring of the
+				// code to deal with the unrealistic int32 overflow. Probably will try
+				// to find a better way to handle this later.
+				if v > math.MaxInt32 {
+					v = math.MaxInt32
+				}
+				t.mu.Lock()
+				reset := t.streamsQuota != nil
+				ms := t.maxStreams
+				t.maxStreams = int(v)
+				t.mu.Unlock()
+				if !reset {
+					t.streamsQuota = newQuotaPool(int(v))
+				} else {
+					t.streamsQuota.reset(int(v) - ms)
+				}
 			case http2.SettingInitialWindowSize:
+				t.mu.Lock()
 				for _, s := range t.activeStreams {
 					// Adjust the sending quota for each s.
 					s.sendQuotaPool.reset(int(v - t.streamSendQuota))
 				}
 				t.streamSendQuota = v
+				t.mu.Unlock()
 			}
 		}
 		return nil
