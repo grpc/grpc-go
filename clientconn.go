@@ -114,9 +114,10 @@ func WithDialer(f func(addr string, timeout time.Duration) (net.Conn, error)) Di
 	}
 }
 
-// Dial creates a client connection the given target.
-// TODO(zhaoq): Have an option to make Dial return immediately without waiting
-// for connection to complete.
+// Dial creates a client connection the given target. By default, Dial returns
+// immediately without establish the connection to target. The connection will
+// be created when there are pending RPCs on the ClientConn. If a blocking
+// dailing is needed, please use WithBlock DialOption.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	if target == "" {
 		return nil, ErrUnspecTarget
