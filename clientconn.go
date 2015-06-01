@@ -76,7 +76,8 @@ func WithCodec(c Codec) DialOption {
 }
 
 // WithBlock returns a DialOption which makes caller of Dial blocks until the underlying
-// connection is up.
+// connection is up. Without this, Dial returns immediately without connecting to the
+// server. The transport is connected when the first RPC is issued.
 func WithBlock() DialOption {
 	return func(o *dialOptions) {
 		o.block = true
