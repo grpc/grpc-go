@@ -71,7 +71,7 @@ public class Http2OkHttpTest extends AbstractTransportTest {
   @Override
   protected ChannelImpl createChannel() {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", serverPort)
-        .overrideHostForAuthority("foo.test.google.fr");
+        .overrideHostForAuthority(TestUtils.TEST_SERVER_HOST);
     try {
       builder.sslSocketFactory(TestUtils.getSslSocketFactoryForCertainCert(
               TestUtils.loadCert("ca.pem")));

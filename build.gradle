@@ -252,6 +252,9 @@ subprojects {
     test {
         testLogging {
             exceptionFormat = 'full'
+            showExceptions true
+            showCauses true
+            showStackTraces true
         }
     }
 }

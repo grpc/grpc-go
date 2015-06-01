@@ -41,12 +41,11 @@ import static java.util.Arrays.asList;
 
 import io.grpc.testing.PayloadType;
 import io.grpc.testing.RpcType;
+import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.NettyChannelBuilder;
 
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.net.UnknownHostException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -56,7 +55,6 @@ import java.util.Set;
  * Configuration options for benchmark clients.
  */
 class ClientConfiguration implements Configuration {
-  private static final String TESTCA_HOST = "foo.test.google.fr";
   private static final ClientConfiguration DEFAULT = new ClientConfiguration();
 
   Transport transport = Transport.NETTY_NIO;
@@ -117,14 +115,9 @@ class ClientConfiguration implements Configuration {
 
         if (config.testca && config.address instanceof InetSocketAddress) {
           // Override the socket address with the host from the testca.
-          try {
-            InetSocketAddress prevAddress = (InetSocketAddress) config.address;
-            InetAddress inetAddress = InetAddress.getByName(prevAddress.getHostName());
-            inetAddress = InetAddress.getByAddress(TESTCA_HOST, inetAddress.getAddress());
-            config.address = new InetSocketAddress(inetAddress, prevAddress.getPort());
-          } catch (UnknownHostException e) {
-            throw new RuntimeException(e);
-          }
+          InetSocketAddress address = (InetSocketAddress) config.address;
+          config.address = TestUtils.testServerAddress(address.getHostName(),
+                  address.getPort());
         }
       }
 

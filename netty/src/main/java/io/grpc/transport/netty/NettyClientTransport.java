@@ -37,9 +37,11 @@ import com.google.common.base.Preconditions;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.Status;
 import io.grpc.transport.ClientStream;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
+
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -123,16 +125,27 @@ class NettyClientTransport implements ClientTransport {
     Preconditions.checkNotNull(listener, "listener");
 
     // Create the stream.
-    NettyClientStream stream = new NettyClientStream(listener, channel, handler);
+    final NettyClientStream stream = new NettyClientStream(listener, channel, handler);
 
     // Convert the headers into Netty HTTP/2 headers.
     AsciiString defaultPath = new AsciiString("/" + method.getName());
     Http2Headers http2Headers = Utils.convertClientHeaders(headers, negotiationHandler.scheme(),
         defaultPath, authority);
 
+    ChannelFutureListener failureListener = new ChannelFutureListener() {
+      @Override
+      public void operationComplete(ChannelFuture future) throws Exception {
+        if (!future.isSuccess()) {
+          // Stream creation failed. Close the stream if not already closed.
+          stream.transportReportStatus(Status.fromThrowable(future.cause()), true,
+                  new Metadata.Trailers());
+        }
+      }
+    };
+
     // Write the command requesting the creation of the stream.
     handler.getWriteQueue().enqueue(new CreateStreamCommand(http2Headers, stream),
-        !method.getType().clientSendsOneMessage());
+            !method.getType().clientSendsOneMessage()).addListener(failureListener);
     return stream;
   }
 
@@ -159,19 +172,7 @@ class NettyClientTransport implements ClientTransport {
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
-        if (!future.isSuccess()) {
-          // The close failed. Just notify that transport shutdown failed.
-          notifyTerminated(future.cause());
-          return;
-        }
-
-        if (handler.connectionError() != null) {
-          // The handler encountered a connection error.
-          notifyTerminated(handler.connectionError());
-        } else {
-          // Normal termination of the connection.
-          notifyTerminated(null);
-        }
+        notifyTerminated(handler.connectionError());
       }
     });
   }

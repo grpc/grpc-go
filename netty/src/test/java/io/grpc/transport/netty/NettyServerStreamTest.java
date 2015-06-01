@@ -40,7 +40,6 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
@@ -51,6 +50,7 @@ import static org.mockito.Mockito.when;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.transport.ServerStreamListener;
+
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.ChannelPromise;
@@ -246,7 +246,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
         return null;
       }
     }).when(writeQueue).enqueue(any(), any(ChannelPromise.class), anyBoolean());
-    doNothing().when(writeQueue).enqueue(any(), anyBoolean());
+    when(writeQueue.enqueue(any(), anyBoolean())).thenReturn(future);
     NettyServerStream stream = new NettyServerStream(channel, http2Stream, handler);
     stream.setListener(serverListener);
     assertTrue(stream.canReceive());

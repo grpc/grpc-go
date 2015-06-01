@@ -43,8 +43,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
 
 /**
  * Integration tests for GRPC over HTTP2 using the Netty framework.
@@ -73,10 +71,8 @@ public class Http2NettyTest extends AbstractTransportTest {
   @Override
   protected ChannelImpl createChannel() {
     try {
-      InetAddress address
-          = InetAddress.getByAddress("foo.test.google.fr", new byte[] {127, 0, 0, 1});
       return NettyChannelBuilder
-          .forAddress(new InetSocketAddress(address, serverPort))
+          .forAddress(TestUtils.testServerAddress(serverPort))
           .sslContext(GrpcSslContexts.forClient().trustManager(
                   TestUtils.loadCert("ca.pem")).build())
           .build();

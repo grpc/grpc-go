@@ -90,15 +90,7 @@ class NettyServerTransport implements ServerTransport {
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
-        if (!future.isSuccess()) {
-          notifyTerminated(future.cause());
-        } else if (handler.connectionError() != null) {
-          // The handler encountered a connection error.
-          notifyTerminated(handler.connectionError());
-        } else {
-          // Normal termination of the connection.
-          notifyTerminated(null);
-        }
+        notifyTerminated(handler.connectionError());
       }
     });
 

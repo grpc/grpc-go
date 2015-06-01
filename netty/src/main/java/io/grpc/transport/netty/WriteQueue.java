@@ -34,6 +34,7 @@ package io.grpc.transport.netty;
 import com.google.common.base.Preconditions;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelPromise;
 
 import java.util.ArrayDeque;
@@ -92,8 +93,8 @@ class WriteQueue {
    * @param flush true if a flush of the write should be schedule, false if a later call to
    *              enqueue will schedule the flush.
    */
-  void enqueue(Object command, boolean flush) {
-    enqueue(command, channel.newPromise(), flush);
+  ChannelFuture enqueue(Object command, boolean flush) {
+    return enqueue(command, channel.newPromise(), flush);
   }
 
   /**
@@ -104,11 +105,12 @@ class WriteQueue {
    * @param flush true if a flush of the write should be schedule, false if a later call to
    *              enqueue will schedule the flush.
    */
-  void enqueue(Object command, ChannelPromise promise, boolean flush) {
+  ChannelFuture enqueue(Object command, ChannelPromise promise, boolean flush) {
     queue.add(new QueuedCommand(command, promise));
     if (flush) {
       scheduleFlush();
     }
+    return promise;
   }
 
   /**
