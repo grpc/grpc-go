@@ -180,6 +180,8 @@ type ClientConn struct {
 	transport    transport.ClientTransport
 }
 
+// resetTransport reconnects the transport. timeout is non-zero if there is another timeout
+// needed besides the one passed in dialOptions (e.g., the timeout of the ongoing rpc).
 func (cc *ClientConn) resetTransport(closeTransport bool, timeout time.Duration) error {
 	var retries int
 	start := time.Now()
@@ -289,7 +291,7 @@ func (cc *ClientConn) wait(ctx context.Context, ts int) (transport.ClientTranspo
 				cc.ready = ready
 			}
 			var needConnect bool
-			if cc.transport == nil {
+			if cc.state != ready {
 				needConnect = true
 			}
 			cc.mu.Unlock()
