@@ -579,12 +579,13 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 				}
 				t.mu.Lock()
 				reset := t.streamsQuota != nil
+				if !reset {
+					t.streamsQuota = newQuotaPool(int(v))
+				}
 				ms := t.maxStreams
 				t.maxStreams = int(v)
 				t.mu.Unlock()
-				if !reset {
-					t.streamsQuota = newQuotaPool(int(v))
-				} else {
+				if reset {
 					t.streamsQuota.reset(int(v) - ms)
 				}
 			case http2.SettingInitialWindowSize:
