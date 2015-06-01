@@ -357,27 +357,27 @@ public abstract class Metadata {
   /**
    * Marshaller for metadata values that are serialized into raw binary.
    */
-  public static interface BinaryMarshaller<T> {
+  public interface BinaryMarshaller<T> {
     /**
      * Serialize a metadata value to bytes.
      * @param value to serialize
      * @return serialized version of value
      */
-    public byte[] toBytes(T value);
+    byte[] toBytes(T value);
 
     /**
      * Parse a serialized metadata value from bytes.
      * @param serialized value of metadata to parse
      * @return a parsed instance of type T
      */
-    public T parseBytes(byte[] serialized);
+    T parseBytes(byte[] serialized);
   }
 
   /**
    * Marshaller for metadata values that are serialized into ASCII strings that contain only
    * printable characters and space.
    */
-  public static interface AsciiMarshaller<T> {
+  public interface AsciiMarshaller<T> {
     /**
      * Serialize a metadata value to a ASCII string that contains only printable characters and
      * space.
@@ -385,14 +385,14 @@ public abstract class Metadata {
      * @param value to serialize
      * @return serialized version of value, or null if value cannot be transmitted.
      */
-    public String toAsciiString(T value);
+    String toAsciiString(T value);
 
     /**
      * Parse a serialized metadata value from an ASCII string.
      * @param serialized value of metadata to parse
      * @return a parsed instance of type T
      */
-    public T parseAsciiString(String serialized);
+    T parseAsciiString(String serialized);
   }
 
   /**

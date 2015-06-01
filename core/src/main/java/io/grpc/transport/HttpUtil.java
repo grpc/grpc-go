@@ -36,16 +36,24 @@ import io.grpc.Status;
 
 import java.net.HttpURLConnection;
 
+import javax.annotation.Nullable;
+
 /**
  * Constants for GRPC-over-HTTP (or HTTP/2).
  */
 public final class HttpUtil {
+
   /**
-   * The Content-Type header name. Defined here since it is not explicitly defined by the HTTP/2
-   * spec.
+   * {@link Metadata.Key} for the Content-Type request/response header.
    */
-  public static final Metadata.Key<String> CONTENT_TYPE =
-      Metadata.Key.of("content-type", Metadata.ASCII_STRING_MARSHALLER);
+  public static final Metadata.Key<String> CONTENT_TYPE_KEY =
+          Metadata.Key.of("content-type", Metadata.ASCII_STRING_MARSHALLER);
+
+  /**
+   * {@link Metadata.Key} for the Content-Type request/response header.
+   */
+  public static final Metadata.Key<String> USER_AGENT_KEY =
+          Metadata.Key.of("user-agent", Metadata.ASCII_STRING_MARSHALLER);
 
   /**
    * Content-Type used for GRPC-over-HTTP/2.
@@ -56,12 +64,6 @@ public final class HttpUtil {
    * The HTTP method used for GRPC requests.
    */
   public static final String HTTP_METHOD = "POST";
-
-  /**
-   * The TE header name. Defined here since it is not explicitly defined by the HTTP/2 spec.
-   */
-  public static final Metadata.Key<String> TE = Metadata.Key.of("te",
-      Metadata.ASCII_STRING_MARSHALLER);
 
   /**
    * The TE (transport encoding) header for requests over HTTP/2.
@@ -136,7 +138,7 @@ public final class HttpUtil {
     private final int code;
     private final Status status;
 
-    private Http2Error(int code, Status status) {
+    Http2Error(int code, Status status) {
       this.code = code;
       this.status = status.augmentDescription("HTTP/2 error code: " + this.name());
     }
@@ -189,6 +191,24 @@ public final class HttpUtil {
 
       return error.status();
     }
+  }
+
+  /**
+   * Gets the User-Agent string for the gRPC transport.
+   */
+  public static String getGrpcUserAgent(String transportName,
+                                        @Nullable String applicationUserAgent) {
+    StringBuilder builder = new StringBuilder("grpc-java-").append(transportName);
+    String version = HttpUtil.class.getPackage().getImplementationVersion();
+    if (version != null) {
+      builder.append("/");
+      builder.append(version);
+    }
+    if (applicationUserAgent != null) {
+      builder.append(' ');
+      builder.append(applicationUserAgent);
+    }
+    return builder.toString();
   }
 
   private HttpUtil() {}

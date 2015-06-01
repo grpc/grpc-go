@@ -71,6 +71,9 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
   @Nullable
   private ExecutorService userExecutor;
 
+  @Nullable
+  private String userAgent;
+
   /**
    * Provides a custom executor.
    *
@@ -83,6 +86,18 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
   @SuppressWarnings("unchecked")
   public final BuilderT executor(ExecutorService executor) {
     userExecutor = executor;
+    return (BuilderT) this;
+  }
+
+  /**
+   * Provides a custom {@code User-Agent} for the application.
+   *
+   * <p>It's an optional parameter. If provided, the given agent will be prepended by the
+   * grpc {@code User-Agent}.
+   */
+  @SuppressWarnings("unchecked")
+  public final BuilderT userAgent(String userAgent) {
+    this.userAgent = userAgent;
     return (BuilderT) this;
   }
 
@@ -101,7 +116,7 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
     }
 
     final ChannelEssentials essentials = buildEssentials();
-    ChannelImpl channel = new ChannelImpl(essentials.transportFactory, executor);
+    ChannelImpl channel = new ChannelImpl(essentials.transportFactory, executor, userAgent);
     channel.setTerminationRunnable(new Runnable() {
       @Override
       public void run() {

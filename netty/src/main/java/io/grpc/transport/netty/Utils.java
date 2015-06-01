@@ -31,6 +31,8 @@
 
 package io.grpc.transport.netty;
 
+import static io.grpc.transport.HttpUtil.CONTENT_TYPE_KEY;
+import static io.grpc.transport.HttpUtil.USER_AGENT_KEY;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
@@ -40,8 +42,7 @@ import io.grpc.Metadata;
 import io.grpc.SharedResourceHolder.Resource;
 import io.grpc.transport.HttpUtil;
 import io.grpc.transport.TransportFrameUtil;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
+
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
@@ -50,7 +51,6 @@ import io.netty.util.ByteString;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -66,27 +66,19 @@ class Utils {
   public static final ByteString HTTP_METHOD = new ByteString(HttpUtil.HTTP_METHOD.getBytes(UTF_8));
   public static final ByteString HTTPS = new ByteString("https".getBytes(UTF_8));
   public static final ByteString HTTP = new ByteString("http".getBytes(UTF_8));
-  public static final ByteString CONTENT_TYPE_HEADER = new ByteString(HttpUtil.CONTENT_TYPE.name()
+  public static final ByteString CONTENT_TYPE_HEADER = new ByteString(CONTENT_TYPE_KEY.name()
       .getBytes(UTF_8));
   public static final ByteString CONTENT_TYPE_GRPC = new ByteString(
       HttpUtil.CONTENT_TYPE_GRPC.getBytes(UTF_8));
-  public static final ByteString TE_HEADER = new ByteString(HttpUtil.TE.name().getBytes(UTF_8));
+  public static final ByteString TE_HEADER = new ByteString("te".getBytes(UTF_8));
   public static final ByteString TE_TRAILERS = new ByteString(HttpUtil.TE_TRAILERS.getBytes(UTF_8));
+  public static final ByteString USER_AGENT = new ByteString(USER_AGENT_KEY.name().getBytes(UTF_8));
 
   public static final Resource<EventLoopGroup> DEFAULT_BOSS_EVENT_LOOP_GROUP =
       new DefaultEventLoopGroupResource(1, "grpc-default-boss-ELG");
 
   public static final Resource<EventLoopGroup> DEFAULT_WORKER_EVENT_LOOP_GROUP =
       new DefaultEventLoopGroupResource(0, "grpc-default-worker-ELG");
-
-  /**
-   * Copies the content of the given {@link ByteBuffer} to a new {@link ByteBuf} instance.
-   */
-  static ByteBuf toByteBuf(ByteBufAllocator alloc, ByteBuffer source) {
-    ByteBuf buf = alloc.buffer(source.remaining());
-    buf.writeBytes(source);
-    return buf;
-  }
 
   public static Metadata.Headers convertHeaders(Http2Headers http2Headers) {
     Metadata.Headers headers = new Metadata.Headers(convertHeadersToArray(http2Headers));
@@ -137,6 +129,10 @@ class Utils {
       http2Headers.path(new ByteString(headers.getPath().getBytes(UTF_8)));
     }
 
+    // Set the User-Agent header.
+    String userAgent = HttpUtil.getGrpcUserAgent("netty", headers.get(USER_AGENT_KEY));
+    http2Headers.set(USER_AGENT, new ByteString(userAgent.getBytes(UTF_8)));
+
     return http2Headers;
   }
 
@@ -165,9 +161,11 @@ class Utils {
     Http2Headers http2Headers = new DefaultHttp2Headers();
     byte[][] serializedHeaders = TransportFrameUtil.toHttp2Headers(headers);
     for (int i = 0; i < serializedHeaders.length; i += 2) {
-      http2Headers.add(new ByteString(serializedHeaders[i], false),
-          new ByteString(serializedHeaders[i + 1], false));
+      ByteString name = new ByteString(serializedHeaders[i], false);
+      ByteString value = new ByteString(serializedHeaders[i + 1], false);
+      http2Headers.add(name, value);
     }
+
     return http2Headers;
   }
 

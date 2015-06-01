@@ -94,7 +94,7 @@ public class ChannelImplTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    channel = new ChannelImpl(mockTransportFactory, executor);
+    channel = new ChannelImpl(mockTransportFactory, executor, null);
     when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport);
   }
 

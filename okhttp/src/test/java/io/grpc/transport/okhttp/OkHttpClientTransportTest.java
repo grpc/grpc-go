@@ -32,6 +32,10 @@
 package io.grpc.transport.okhttp;
 
 import static com.google.common.base.Charsets.UTF_8;
+import static io.grpc.transport.okhttp.Headers.CONTENT_TYPE_HEADER;
+import static io.grpc.transport.okhttp.Headers.METHOD_HEADER;
+import static io.grpc.transport.okhttp.Headers.SCHEME_HEADER;
+import static io.grpc.transport.okhttp.Headers.TE_HEADER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -68,6 +72,7 @@ import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
+import io.grpc.transport.HttpUtil;
 import io.grpc.transport.okhttp.OkHttpClientTransport.ClientFrameHandler;
 
 import okio.Buffer;
@@ -89,6 +94,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,7 +121,6 @@ public class OkHttpClientTransportTest {
   private ClientTransport.Listener transportListener;
   private OkHttpClientTransport clientTransport;
   private MockFrameReader frameReader;
-  private MockSocket socket;
   private Map<Integer, OkHttpClientStream> streams;
   private ClientFrameHandler frameHandler;
   private ExecutorService executor;
@@ -127,7 +132,7 @@ public class OkHttpClientTransportTest {
     MockitoAnnotations.initMocks(this);
     streams = new HashMap<Integer, OkHttpClientStream>();
     frameReader = new MockFrameReader();
-    socket = new MockSocket(frameReader);
+    MockSocket socket = new MockSocket(frameReader);
     executor = Executors.newCachedThreadPool();
     Ticker ticker = new Ticker() {
       @Override
@@ -206,7 +211,7 @@ public class OkHttpClientTransportTest {
   public void receivedHeadersForInvalidStreamShouldKillConnection() throws Exception {
     // Empty headers block without correct content type or status
     frameHandler.headers(false, false, 3, 0, new ArrayList<Header>(),
-        HeadersMode.HTTP_20_HEADERS);
+            HeadersMode.HTTP_20_HEADERS);
     verify(frameWriter).goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
     verify(transportListener).transportShutdown();
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
@@ -268,6 +273,37 @@ public class OkHttpClientTransportTest {
     listener.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
         listener.status.getCode());
+  }
+
+  @Test
+  public void headersShouldAddDefaultUserAgent() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    clientTransport.newStream(method, new Metadata.Headers(), listener);
+    Header userAgentHeader = new Header(HttpUtil.USER_AGENT_KEY.name(),
+            HttpUtil.getGrpcUserAgent("okhttp", null));
+    List<Header> expectedHeaders = Arrays.asList(SCHEME_HEADER, METHOD_HEADER,
+            new Header(Header.TARGET_AUTHORITY, "notarealauthority:80"),
+            new Header(Header.TARGET_PATH, "/fakemethod"),
+            userAgentHeader, CONTENT_TYPE_HEADER, TE_HEADER);
+    verify(frameWriter).synStream(eq(false), eq(false), eq(3), eq(0), eq(expectedHeaders));
+    streams.get(3).cancel();
+  }
+
+  @Test
+  public void headersShouldOverrideDefaultUserAgent() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    String userAgent = "fakeUserAgent";
+    Metadata.Headers metadata = new Metadata.Headers();
+    metadata.put(HttpUtil.USER_AGENT_KEY, userAgent);
+    clientTransport.newStream(method, metadata, listener);
+    List<Header> expectedHeaders = Arrays.asList(SCHEME_HEADER, METHOD_HEADER,
+            new Header(Header.TARGET_AUTHORITY, "notarealauthority:80"),
+            new Header(Header.TARGET_PATH, "/fakemethod"),
+            new Header(HttpUtil.USER_AGENT_KEY.name(),
+                    HttpUtil.getGrpcUserAgent("okhttp", userAgent)),
+            CONTENT_TYPE_HEADER, TE_HEADER);
+    verify(frameWriter).synStream(eq(false), eq(false), eq(3), eq(0), eq(expectedHeaders));
+    streams.get(3).cancel();
   }
 
   @Test
@@ -1013,7 +1049,7 @@ public class OkHttpClientTransportTest {
   private List<Header> grpcResponseHeaders() {
     return ImmutableList.<Header>builder()
         .add(new Header(":status", "200"))
-        .add(Headers.CONTENT_TYPE_HEADER)
+        .add(CONTENT_TYPE_HEADER)
         .build();
   }
 
