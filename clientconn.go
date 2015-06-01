@@ -290,10 +290,7 @@ func (cc *ClientConn) wait(ctx context.Context, ts int) (transport.ClientTranspo
 				ready = make(chan struct{})
 				cc.ready = ready
 			}
-			var needConnect bool
-			if cc.state != ready {
-				needConnect = true
-			}
+			needConnect := cc.state == idle
 			cc.mu.Unlock()
 			if needConnect {
 				var timeout time.Duration
