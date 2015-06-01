@@ -40,13 +40,13 @@ import (
 	"io"
 	"math"
 	"net"
-	"time"
+	//	"time"
 
-	"github.com/golang/protobuf/proto"
+	//	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/grpclog"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
@@ -62,7 +62,7 @@ func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
 		grpclog.Fatalf("Unsupported payload type: %d", t)
 	}
 	return &testpb.Payload{
-		Type: t.Enum(),
+		Type: t,
 		Body: body,
 	}
 }
@@ -70,49 +70,13 @@ func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
 type testServer struct {
 }
 
-func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-	return new(testpb.Empty), nil
-}
-
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	return &testpb.SimpleResponse{
-		Payload: newPayload(in.GetResponseType(), int(in.GetResponseSize())),
+		Payload: newPayload(in.ResponseType, int(in.ResponseSize)),
 	}, nil
 }
 
-func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
-	cs := args.GetResponseParameters()
-	for _, c := range cs {
-		if us := c.GetIntervalUs(); us > 0 {
-			time.Sleep(time.Duration(us) * time.Microsecond)
-		}
-		if err := stream.Send(&testpb.StreamingOutputCallResponse{
-			Payload: newPayload(args.GetResponseType(), int(c.GetSize())),
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
-	var sum int
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			return stream.SendAndClose(&testpb.StreamingInputCallResponse{
-				AggregatedPayloadSize: proto.Int32(int32(sum)),
-			})
-		}
-		if err != nil {
-			return err
-		}
-		p := in.GetPayload().GetBody()
-		sum += len(p)
-	}
-}
-
-func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+func (s *testServer) StreamingCall(stream testpb.TestService_StreamingCallServer) error {
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -122,47 +86,12 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 		if err != nil {
 			return err
 		}
-		cs := in.GetResponseParameters()
-		for _, c := range cs {
-			if us := c.GetIntervalUs(); us > 0 {
-				time.Sleep(time.Duration(us) * time.Microsecond)
-			}
-			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: newPayload(in.GetResponseType(), int(c.GetSize())),
-			}); err != nil {
-				return err
-			}
-		}
-	}
-}
-
-func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServer) error {
-	var msgBuf []*testpb.StreamingOutputCallRequest
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			// read done.
-			break
-		}
-		if err != nil {
+		if err := stream.Send(&testpb.SimpleResponse{
+			Payload: newPayload(in.ResponseType, int(in.ResponseSize)),
+		}); err != nil {
 			return err
 		}
-		msgBuf = append(msgBuf, in)
 	}
-	for _, m := range msgBuf {
-		cs := m.GetResponseParameters()
-		for _, c := range cs {
-			if us := c.GetIntervalUs(); us > 0 {
-				time.Sleep(time.Duration(us) * time.Microsecond)
-			}
-			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: newPayload(m.GetResponseType(), int(c.GetSize())),
-			}); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // StartServer starts a gRPC server serving a benchmark service. It returns its
@@ -184,12 +113,33 @@ func StartServer() (string, func()) {
 func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(respSize)),
+		ResponseType: pl.Type,
+		ResponseSize: int32(respSize),
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
 		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+	}
+}
+
+//DoStreamingcall performs a streaming RPC with given stub and request and response size.client side
+func DoStreamingCall(tc testpb.TestServiceClient, reqSize, respSize int) {
+	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
+	req := &testpb.SimpleRequest{
+		ResponseType: pl.Type,
+		ResponseSize: int32(respSize),
+		Payload:      pl,
+	}
+	stream, err := tc.StreamingCall(context.Background())
+	if err != nil {
+		grpclog.Fatalf("TestService/Streaming call rpc failred: ", err)
+	}
+	if err := stream.Send(req); err != nil {
+		grpclog.Fatalf("/TestService/Streaming call send failed: ", err)
+	}
+	_, err = stream.Recv()
+	if err != nil {
+		grpclog.Fatal("/TestService/streamingCall receive failed: ", err)
 	}
 }
 

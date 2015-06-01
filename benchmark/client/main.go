@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc/benchmark"
+	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
@@ -21,17 +21,21 @@ var (
 	duration          = flag.Int("duration", math.MaxInt32, "The duration in seconds to run the benchmark client")
 )
 
-func caller(client testpb.TestServiceClient) {
+func unaryCaller(client testpb.TestServiceClient) {
 	benchmark.DoUnaryCall(client, 1, 1)
 }
 
-func closeLoop() {
+func streamCaller(client testpb.TestServiceClient) {
+	benchmark.DoStreamingCall(client, 1, 1)
+}
+
+func closeLoopStream() {
 	s := stats.NewStats(256)
 	conn := benchmark.NewClientConn(*server)
 	tc := testpb.NewTestServiceClient(conn)
 	// Warm up connection.
 	for i := 0; i < 100; i++ {
-		caller(tc)
+		streamCaller(tc)
 	}
 	ch := make(chan int, *maxConcurrentRPCs*4)
 	var (
@@ -44,7 +48,55 @@ func closeLoop() {
 		go func() {
 			for _ = range ch {
 				start := time.Now()
-				caller(tc)
+				streamCaller(tc)
+				elapse := time.Since(start)
+				mu.Lock()
+				s.Add(elapse)
+				mu.Unlock()
+			}
+			wg.Done()
+		}()
+	}
+	// Stop the client when time is up.
+	done := make(chan struct{})
+	go func() {
+		<-time.After(time.Duration(*duration) * time.Second)
+		close(done)
+	}()
+	ok := true
+	for ok {
+		select {
+		case ch <- 0:
+		case <-done:
+			ok = false
+		}
+	}
+	close(ch)
+	wg.Wait()
+	conn.Close()
+	grpclog.Println(s.String())
+}
+
+func closeLoop() {
+	s := stats.NewStats(256)
+	conn := benchmark.NewClientConn(*server)
+	tc := testpb.NewTestServiceClient(conn)
+	// Warm up connection.
+	for i := 0; i < 100; i++ {
+		unaryCaller(tc)
+	}
+	ch := make(chan int, *maxConcurrentRPCs*4)
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	wg.Add(*maxConcurrentRPCs)
+	// Distribute RPCs over maxConcurrentCalls workers.
+	for i := 0; i < *maxConcurrentRPCs; i++ {
+		go func() {
+			for _ = range ch {
+				start := time.Now()
+				unaryCaller(tc)
 				elapse := time.Since(start)
 				mu.Lock()
 				s.Add(elapse)
