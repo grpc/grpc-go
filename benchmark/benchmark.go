@@ -37,16 +37,13 @@ Package benchmark implements the building blocks to setup end-to-end gRPC benchm
 package benchmark
 
 import (
-	"io"
-	"math"
-	"net"
-	//	"time"
-
-	//	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/grpclog"
+	"io"
+	"math"
+	"net"
 )
 
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
@@ -122,24 +119,19 @@ func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
 	}
 }
 
-//DoStreamingcall performs a streaming RPC with given stub and request and response size.client side
-func DoStreamingCall(tc testpb.TestServiceClient, reqSize, respSize int) {
+// DoStreamingcall performs a streaming RPC with given stub and request and response size.client side
+func DoStreamingCall(stream testpb.TestService_StreamingCallClient, tc testpb.TestServiceClient, reqSize, respSize int) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
 		ResponseSize: int32(respSize),
 		Payload:      pl,
 	}
-	stream, err := tc.StreamingCall(context.Background())
-	if err != nil {
-		grpclog.Fatalf("TestService/Streaming call rpc failred: ", err)
-	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("/TestService/Streaming call send failed: ", err)
+		grpclog.Fatalf("%v.StreamingCall()= %v ", tc, err)
 	}
-	_, err = stream.Recv()
-	if err != nil {
-		grpclog.Fatal("/TestService/streamingCall receive failed: ", err)
+	if _, err := stream.Recv(); err != nil {
+		grpclog.Fatal("%v.StreamingCall()= %v", tc, err)
 	}
 }
 

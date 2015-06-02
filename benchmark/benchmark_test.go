@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/stats"
+	"google.golang.org/grpc/grpclog"
 )
 
-func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceClient)) {
+func runUnary(b *testing.B, maxConcurrentCalls int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
 	target, stopper := StartServer()
@@ -20,9 +22,8 @@ func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceCli
 
 	// Warm up connection.
 	for i := 0; i < 10; i++ {
-		caller(tc)
+		unaryCaller(tc)
 	}
-
 	ch := make(chan int, maxConcurrentCalls*4)
 	var (
 		mu sync.Mutex
@@ -35,7 +36,7 @@ func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceCli
 		go func() {
 			for _ = range ch {
 				start := time.Now()
-				caller(tc)
+				unaryCaller(tc)
 				elapse := time.Since(start)
 				mu.Lock()
 				s.Add(elapse)
@@ -54,17 +55,20 @@ func run(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceCli
 	conn.Close()
 }
 
-func runStream(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServiceClient)) {
+func runStream(b *testing.B, maxConcurrentCalls int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
 	target, stopper := StartServer()
 	defer stopper()
 	conn := NewClientConn(target)
 	tc := testpb.NewTestServiceClient(conn)
-
+	stream, err := tc.StreamingCall(context.Background())
+	if err != nil {
+		grpclog.Fatalf("%v.StreamingCall()=%v", tc, err)
+	}
 	// Warm up connection.
 	for i := 0; i < 10; i++ {
-		caller(tc)
+		streamCaller(stream, tc)
 	}
 
 	ch := make(chan int, maxConcurrentCalls*4)
@@ -79,7 +83,7 @@ func runStream(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServ
 		go func() {
 			for _ = range ch {
 				start := time.Now()
-				caller(tc)
+				streamCaller(stream, tc)
 				elapse := time.Since(start)
 				mu.Lock()
 				s.Add(elapse)
@@ -97,47 +101,43 @@ func runStream(b *testing.B, maxConcurrentCalls int, caller func(testpb.TestServ
 	wg.Wait()
 	conn.Close()
 }
-
-func smallCaller(client testpb.TestServiceClient) {
+func unaryCaller(client testpb.TestServiceClient) {
 	DoUnaryCall(client, 1, 1)
 }
 
-func streamCaller(client testpb.TestServiceClient) {
-	//func streamCaller(client testpb.TestServiceClient){
-	DoStreamingCall(client, 1, 1)
-
-	//DoStreamingCall(client,1,1)
+func streamCaller(stream testpb.TestService_StreamingCallClient, client testpb.TestServiceClient) {
+	DoStreamingCall(stream, client, 1, 1)
 }
 
 func BenchmarkClientStreamc1(b *testing.B) {
-	runStream(b, 1, streamCaller)
+	runStream(b, 1)
 }
 
 func BenchmarkClientStreamc8(b *testing.B) {
-	runStream(b, 8, streamCaller)
+	runStream(b, 8)
 }
 
 func BenchmarkClientStreamc64(b *testing.B) {
-	runStream(b, 64, streamCaller)
+	runStream(b, 64)
 }
 
 func BenchmarkClientStreamc512(b *testing.B) {
-	runStream(b, 512, streamCaller)
+	runStream(b, 512)
 }
-func BenchmarkClientSmallc1(b *testing.B) {
-	run(b, 1, smallCaller)
-}
-
-func BenchmarkClientSmallc8(b *testing.B) {
-	run(b, 8, smallCaller)
+func BenchmarkClientUnaryc1(b *testing.B) {
+	runUnary(b, 1)
 }
 
-func BenchmarkClientSmallc64(b *testing.B) {
-	run(b, 64, smallCaller)
+func BenchmarkClientUnaryc8(b *testing.B) {
+	runUnary(b, 8)
 }
 
-func BenchmarkClientSmallc512(b *testing.B) {
-	run(b, 512, smallCaller)
+func BenchmarkClientUnaryc64(b *testing.B) {
+	runUnary(b, 64)
+}
+
+func BenchmarkClientUnaryc512(b *testing.B) {
+	runUnary(b, 512)
 }
 
 func TestMain(m *testing.M) {

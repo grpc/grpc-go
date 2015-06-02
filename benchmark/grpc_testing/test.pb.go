@@ -323,8 +323,6 @@ func (m *SimpleRequest) GetPayload() *Payload {
 	return nil
 }
 
-
-func caller(client testpb.TestServiceClient) {
 type SimpleResponse struct {
 	Payload *Payload `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
 }
