@@ -94,7 +94,7 @@ func closeLoopStream() {
 	s, conn, tc := buildConnection()
 	stream, err := tc.StreamingCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.StreamingCall(_) = _,%v: ", tc, err)
+		grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 	}
 	for i := 0; i < 100; i++ {
 		streamCaller(tc, stream)
