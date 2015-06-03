@@ -21,7 +21,10 @@ var (
 	server            = flag.String("server", "", "The server address")
 	maxConcurrentRPCs = flag.Int("max_concurrent_rpcs", 1, "The max number of concurrent RPCs")
 	duration          = flag.Int("duration", math.MaxInt32, "The duration in seconds to run the benchmark client")
-	rpcType           = flag.Int("rpc_type", 0, "client rpc type")
+	rpcType           = flag.Int("rpc_type", 0,
+		`Configure different client rpc type. Valid options are:
+		   0 : unary call;
+		   1 : streaming call.`)
 )
 
 func unaryCaller(client testpb.TestServiceClient) {
@@ -91,7 +94,7 @@ func closeLoopStream() {
 	s, conn, tc := buildConnection()
 	stream, err := tc.StreamingCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.StreamingCall(_)=_,%v: ", tc, err)
+		grpclog.Fatalf("%v.StreamingCall(_) = _,%v: ", tc, err)
 	}
 	for i := 0; i < 100; i++ {
 		streamCaller(tc, stream)

@@ -64,7 +64,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	tc := testpb.NewTestServiceClient(conn)
 	stream, err := tc.StreamingCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.StreamingCall(_)=_,%v: ", tc, err)
+		grpclog.Fatalf("%v.StreamingCall(_) = _,%v: ", tc, err)
 	}
 	// Warm up connection.
 	for i := 0; i < 10; i++ {

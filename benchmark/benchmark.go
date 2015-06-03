@@ -129,10 +129,10 @@ func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("%v.StreamingCall(_)=_, %v: ", tc, err)
+		grpclog.Fatalf("%v.StreamingCall(_) = _, %v: ", tc, err)
 	}
 	if _, err := stream.Recv(); err != nil {
-		grpclog.Fatal("%v.StreamingCall(_)=_, %v: ", tc, err)
+		grpclog.Fatal("%v.StreamingCall(_) = _, %v: ", tc, err)
 	}
 }
 
