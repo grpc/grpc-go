@@ -37,15 +37,14 @@ Package benchmark implements the building blocks to setup end-to-end gRPC benchm
 package benchmark
 
 import (
-	"golang.org/x/net/context"
 	"io"
 	"math"
 	"net"
-	
+
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/grpclog"
-
 )
 
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
@@ -121,8 +120,8 @@ func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
 	}
 }
 
-// DoStreamingcall performs a streaming RPC with given stub and request and response size.client side
-func DoStreamingCall(stream testpb.TestService_StreamingCallClient, tc testpb.TestServiceClient, reqSize, respSize int) {
+// DoStreamingRoundTrip performs a round trip  for a single streaming rpc.
+func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService_StreamingCallClient, reqSize, respSize int) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -130,10 +129,10 @@ func DoStreamingCall(stream testpb.TestService_StreamingCallClient, tc testpb.Te
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("%v.StreamingCall()= %v ", tc, err)
+		grpclog.Fatalf("%v.StreamingCall(_)=_, %v: ", tc, err)
 	}
 	if _, err := stream.Recv(); err != nil {
-		grpclog.Fatal("%v.StreamingCall()= %v", tc, err)
+		grpclog.Fatal("%v.StreamingCall(_)=_, %v: ", tc, err)
 	}
 }
 

@@ -28,8 +28,8 @@ func unaryCaller(client testpb.TestServiceClient) {
 	benchmark.DoUnaryCall(client, 1, 1)
 }
 
-func streamCaller(stream testpb.TestService_StreamingCallClient, client testpb.TestServiceClient) {
-	benchmark.DoStreamingCall(stream, client, 1, 1)
+func streamCaller(client testpb.TestServiceClient, stream testpb.TestService_StreamingCallClient) {
+	benchmark.DoStreamingRoundTrip(client, stream, 1, 1)
 }
 
 func buildConnection() (s *stats.Stats, conn *grpc.ClientConn, tc testpb.TestServiceClient) {
@@ -91,10 +91,10 @@ func closeLoopStream() {
 	s, conn, tc := buildConnection()
 	stream, err := tc.StreamingCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.StreamingCall()=%v", tc, err)
+		grpclog.Fatalf("%v.StreamingCall(_)=_,%v: ", tc, err)
 	}
 	for i := 0; i < 100; i++ {
-		streamCaller(stream, tc)
+		streamCaller(tc, stream)
 	}
 	ch := make(chan int, *maxConcurrentRPCs*4)
 	var (
@@ -107,7 +107,7 @@ func closeLoopStream() {
 		go func() {
 			for _ = range ch {
 				start := time.Now()
-				streamCaller(stream, tc)
+				streamCaller(tc, stream)
 				elapse := time.Since(start)
 				mu.Lock()
 				s.Add(elapse)
