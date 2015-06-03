@@ -31,11 +31,16 @@
 
 package io.grpc.testing.integration;
 
+import com.squareup.okhttp.ConnectionSpec;
+import com.squareup.okhttp.TlsVersion;
+
 import io.grpc.ChannelImpl;
 import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
+import io.grpc.transport.okhttp.OkHttpClientTransport;
+import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -56,8 +61,10 @@ public class Http2OkHttpTest extends AbstractTransportTest {
   public static void startServer() throws Exception {
     try {
       startStaticServer(NettyServerBuilder.forPort(serverPort)
-          .sslContext(GrpcSslContexts.forServer(
-                  TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key")).build()));
+          .sslContext(GrpcSslContexts
+              .forServer(TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key"))
+              .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
+              .build()));
     } catch (IOException ex) {
       throw new RuntimeException(ex);
     }
@@ -71,6 +78,10 @@ public class Http2OkHttpTest extends AbstractTransportTest {
   @Override
   protected ChannelImpl createChannel() {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", serverPort)
+        .setConnectionSpec(new ConnectionSpec.Builder(OkHttpClientTransport.DEFAULT_CONNECTION_SPEC)
+            .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
+            .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))
+            .build())
         .overrideHostForAuthority(TestUtils.TEST_SERVER_HOST);
     try {
       builder.sslSocketFactory(TestUtils.getSslSocketFactoryForCertainCert(

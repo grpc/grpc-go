@@ -58,6 +58,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import org.junit.After;
 import org.junit.Before;
@@ -174,7 +175,8 @@ public class NettyClientTransportTest {
   private NettyClientTransport newTransport() throws IOException {
     // Create the protocol negotiator.
     File clientCert = TestUtils.loadCert("ca.pem");
-    SslContext clientContext = GrpcSslContexts.forClient().trustManager(clientCert).build();
+    SslContext clientContext = GrpcSslContexts.forClient().trustManager(clientCert)
+        .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
     ProtocolNegotiator negotiator = ProtocolNegotiators.tls(clientContext, address);
 
     NettyClientTransport transport = new NettyClientTransport(address, NioSocketChannel.class,
@@ -186,7 +188,8 @@ public class NettyClientTransportTest {
   private void startServer(int maxStreamsPerConnection) throws IOException {
     File serverCert = TestUtils.loadCert("server1.pem");
     File key = TestUtils.loadCert("server1.key");
-    SslContext serverContext = GrpcSslContexts.forServer(serverCert, key).build();
+    SslContext serverContext = GrpcSslContexts.forServer(serverCert, key)
+        .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
     server = new NettyServer(address, NioServerSocketChannel.class,
             group, group, serverContext, maxStreamsPerConnection,
             DEFAULT_WINDOW_SIZE, DEFAULT_WINDOW_SIZE);
