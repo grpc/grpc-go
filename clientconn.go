@@ -144,6 +144,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		// Start to monitor the error status of transport.
 		go cc.transportMonitor()
 	} else {
+		// Start a goroutine connecting to the server asynchronously.
 		go func() {
 			if err := cc.resetTransport(false); err != nil {
 				grpclog.Printf("Failed to dial %s: %v; please retry.", target, err)
