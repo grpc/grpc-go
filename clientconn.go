@@ -76,8 +76,8 @@ func WithCodec(c Codec) DialOption {
 }
 
 // WithBlock returns a DialOption which makes caller of Dial blocks until the underlying
-// connection is up. Without this, Dial returns immediately and connects the server in
-// background.
+// connection is up. Without this, Dial returns immediately and connecting the server
+// happens in background.
 func WithBlock() DialOption {
 	return func(o *dialOptions) {
 		o.block = true
@@ -122,7 +122,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		return nil, ErrUnspecTarget
 	}
 	cc := &ClientConn{
-		target: target,
+		target:       target,
 		shutdownChan: make(chan struct{}),
 	}
 	for _, opt := range opts {
