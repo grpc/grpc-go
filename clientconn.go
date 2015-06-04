@@ -61,6 +61,7 @@ var (
 // values passed to Dial.
 type dialOptions struct {
 	codec Codec
+	block bool
 	copts transport.ConnectOptions
 }
 
@@ -71,6 +72,15 @@ type DialOption func(*dialOptions)
 func WithCodec(c Codec) DialOption {
 	return func(o *dialOptions) {
 		o.codec = c
+	}
+}
+
+// WithBlock returns a DialOption which makes caller of Dial blocks until the underlying
+// connection is up. Without this, Dial returns immediately and connecting the server
+// happens in background.
+func WithBlock() DialOption {
+	return func(o *dialOptions) {
+		o.block = true
 	}
 }
 
@@ -112,7 +122,8 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		return nil, ErrUnspecTarget
 	}
 	cc := &ClientConn{
-		target: target,
+		target:       target,
+		shutdownChan: make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(&cc.dopts)
@@ -126,12 +137,22 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		// Set the default codec.
 		cc.dopts.codec = protoCodec{}
 	}
-	if err := cc.resetTransport(false); err != nil {
-		return nil, err
+	if cc.dopts.block {
+		if err := cc.resetTransport(false); err != nil {
+			return nil, err
+		}
+		// Start to monitor the error status of transport.
+		go cc.transportMonitor()
+	} else {
+		// Start a goroutine connecting to the server asynchronously.
+		go func() {
+			if err := cc.resetTransport(false); err != nil {
+				grpclog.Printf("Failed to dial %s: %v; please retry.", target, err)
+				return
+			}
+			go cc.transportMonitor()
+		}()
 	}
-	cc.shutdownChan = make(chan struct{})
-	// Start to monitor the error status of transport.
-	go cc.transportMonitor()
 	return cc, nil
 }
 
