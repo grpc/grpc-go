@@ -236,7 +236,7 @@ The 'channel' layer is an abstraction over transport handling that is suitable f
 
 #### Client
 * [Channel - client side binding](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/Channel.java)
-* [Call](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/Call.java)
+* [Client Call](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/ClientCall.java)
 * [Client Interceptor](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/ClientInterceptor.java)
 
 #### Server

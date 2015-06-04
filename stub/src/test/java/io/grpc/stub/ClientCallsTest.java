@@ -38,7 +38,7 @@ import static org.mockito.Mockito.verify;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
-import io.grpc.Call;
+import io.grpc.ClientCall;
 import io.grpc.Metadata;
 import io.grpc.Status;
 
@@ -54,12 +54,12 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 
 /**
- * Unit tests for {@link Calls}.
+ * Unit tests for {@link ClientCalls}.
  */
 @RunWith(JUnit4.class)
-public class CallsTest {
+public class ClientCallsTest {
 
-  @Mock private Call<Integer, String> call;
+  @Mock private ClientCall<Integer, String> call;
 
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
@@ -67,10 +67,10 @@ public class CallsTest {
 
   @Test public void unaryFutureCallSuccess() throws Exception {
     Integer req = 2;
-    ListenableFuture<String> future = Calls.unaryFutureCall(call, req);
-    ArgumentCaptor<Call.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
+    ListenableFuture<String> future = ClientCalls.unaryFutureCall(call, req);
+    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.Headers.class));
-    Call.Listener<String> listener = listenerCaptor.getValue();
+    ClientCall.Listener<String> listener = listenerCaptor.getValue();
     verify(call).sendPayload(req);
     verify(call).halfClose();
     listener.onPayload("bar");
@@ -80,10 +80,10 @@ public class CallsTest {
 
   @Test public void unaryFutureCallFailed() throws Exception {
     Integer req = 2;
-    ListenableFuture<String> future = Calls.unaryFutureCall(call, req);
-    ArgumentCaptor<Call.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
+    ListenableFuture<String> future = ClientCalls.unaryFutureCall(call, req);
+    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.Headers.class));
-    Call.Listener<String> listener = listenerCaptor.getValue();
+    ClientCall.Listener<String> listener = listenerCaptor.getValue();
     listener.onClose(Status.INVALID_ARGUMENT, new Metadata.Trailers());
     try {
       future.get();
@@ -96,10 +96,10 @@ public class CallsTest {
 
   @Test public void unaryFutureCallCancelled() throws Exception {
     Integer req = 2;
-    ListenableFuture<String> future = Calls.unaryFutureCall(call, req);
-    ArgumentCaptor<Call.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
+    ListenableFuture<String> future = ClientCalls.unaryFutureCall(call, req);
+    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.Headers.class));
-    Call.Listener<String> listener = listenerCaptor.getValue();
+    ClientCall.Listener<String> listener = listenerCaptor.getValue();
     future.cancel(true);
     verify(call).cancel();
     listener.onPayload("bar");

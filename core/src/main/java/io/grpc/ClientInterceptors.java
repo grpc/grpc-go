@@ -34,8 +34,8 @@ package io.grpc;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
-import io.grpc.ForwardingCall.SimpleForwardingCall;
-import io.grpc.ForwardingCallListener.SimpleForwardingCallListener;
+import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 
 import java.util.Arrays;
 import java.util.Iterator;
@@ -87,7 +87,7 @@ public class ClientInterceptors {
     }
 
     @Override
-    public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
+    public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
       return new ProcessInterceptorChannel(channel, interceptors).newCall(method);
     }
   }
@@ -102,7 +102,7 @@ public class ClientInterceptors {
     }
 
     @Override
-    public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
+    public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
       if (interceptors != null && interceptors.hasNext()) {
         return interceptors.next().interceptCall(method, this);
       } else {
@@ -116,18 +116,19 @@ public class ClientInterceptors {
   }
 
   /**
-   * A {@link Call} which forwards all of it's methods to another {@link Call}.
+   * A {@link ClientCall} which forwards all of it's methods to another {@link ClientCall}.
    *
-   * @deprecated Use {@link SimpleForwardingCall}.
+   * @deprecated Use {@link SimpleForwardingClientCall}.
    */
   @Deprecated
-  public static class ForwardingCall<ReqT, RespT> extends SimpleForwardingCall<ReqT, RespT> {
-    public ForwardingCall(Call<ReqT, RespT> delegate) {
+  public static class ForwardingClientCall<ReqT, RespT>
+      extends SimpleForwardingClientCall<ReqT, RespT> {
+    public ForwardingClientCall(ClientCall<ReqT, RespT> delegate) {
       super(delegate);
     }
   }
 
-  private static final Call<Object, Object> NOOP_CALL = new Call<Object, Object>() {
+  private static final ClientCall<Object, Object> NOOP_CALL = new ClientCall<Object, Object>() {
     @Override
     public void start(Listener<Object> responseListener, Metadata.Headers headers) {}
 
@@ -144,8 +145,8 @@ public class ClientInterceptors {
     public void sendPayload(Object payload) {}
 
     /**
-     * Always returns {@code false}, since this is only used when the startup of the {@link Call}
-     * fails (i.e. the {@link Call} is closed).
+     * Always returns {@code false}, since this is only used when the startup of the {@link
+     * ClientCall} fails (i.e. the {@link ClientCall} is closed).
      */
     @Override
     public boolean isReady() {
@@ -154,36 +155,38 @@ public class ClientInterceptors {
   };
 
   /**
-   * A {@link io.grpc.ForwardingCall} that delivers exceptions from its start logic to the call
-   * listener.
+   * A {@link io.grpc.ForwardingClientCall} that delivers exceptions from its start logic to the
+   * call listener.
    *
-   * <p>{@link Call#start(Call.Listener, Metadata.Headers)} should not throw any exception other
-   * than those caused by misuse, e.g., {@link IllegalStateException}.  {@code
-   * CheckedForwardingCall} provides {@code checkedStart()} in which throwing exceptions is allowed.
+   * <p>{@link ClientCall#start(ClientCall.Listener, Metadata.Headers)} should not throw any
+   * exception other than those caused by misuse, e.g., {@link IllegalStateException}.  {@code
+   * CheckedForwardingClientCall} provides {@code checkedStart()} in which throwing exceptions is
+   * allowed.
    */
-  public abstract static class CheckedForwardingCall<ReqT, RespT>
-      extends io.grpc.ForwardingCall<ReqT, RespT> {
+  public abstract static class CheckedForwardingClientCall<ReqT, RespT>
+      extends io.grpc.ForwardingClientCall<ReqT, RespT> {
 
-    private Call<ReqT, RespT> delegate;
+    private ClientCall<ReqT, RespT> delegate;
 
     /**
      * Subclasses implement the start logic here that would normally belong to {@code start()}.
      *
      * <p>Implementation should call {@code this.delegate().start()} in the normal path. Exceptions
      * may safely be thrown prior to calling {@code this.delegate().start()}. Such exceptions will
-     * be handled by {@code CheckedForwardingCall} and be delivered to {@code responseListener}.
-     * Exceptions <em>must not</em> be thrown after calling {@code this.delegate().start()}, as this
-     * can result in {@link Call.Listener#onClose} being called multiple times.
+     * be handled by {@code CheckedForwardingClientCall} and be delivered to {@code
+     * responseListener}.  Exceptions <em>must not</em> be thrown after calling {@code
+     * this.delegate().start()}, as this can result in {@link ClientCall.Listener#onClose} being
+     * called multiple times.
      */
     protected abstract void checkedStart(Listener<RespT> responseListener, Metadata.Headers headers)
         throws Exception;
 
-    protected CheckedForwardingCall(Call<ReqT, RespT> delegate) {
+    protected CheckedForwardingClientCall(ClientCall<ReqT, RespT> delegate) {
       this.delegate = delegate;
     }
 
     @Override
-    protected final Call<ReqT, RespT> delegate() {
+    protected final ClientCall<ReqT, RespT> delegate() {
       return delegate;
     }
 
@@ -198,22 +201,22 @@ public class ClientInterceptors {
         // IllegalStateException because delegate().start() was not called. We switch the delegate
         // to a NO-OP one to prevent the IllegalStateException. The user will finally get notified
         // about the error through the listener.
-        delegate = (Call<ReqT, RespT>) NOOP_CALL;
+        delegate = (ClientCall<ReqT, RespT>) NOOP_CALL;
         responseListener.onClose(Status.fromThrowable(e), new Metadata.Trailers());
       }
     }
   }
 
   /**
-   * A {@link Call.Listener} which forwards all of its methods to another
-   * {@link Call.Listener}.
+   * A {@link ClientCall.Listener} which forwards all of its methods to another
+   * {@link ClientCall.Listener}.
    *
-   * @deprecated Use {@link SimpleForwardingCallListener}.
+   * @deprecated Use {@link SimpleForwardingClientCallListener}.
    */
   @Deprecated
-  public static class ForwardingListener<T> extends SimpleForwardingCallListener<T> {
+  public static class ForwardingListener<T> extends SimpleForwardingClientCallListener<T> {
 
-    public ForwardingListener(Call.Listener<T> delegate) {
+    public ForwardingListener(ClientCall.Listener<T> delegate) {
       super(delegate);
     }
   }

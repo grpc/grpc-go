@@ -38,7 +38,7 @@ import com.google.common.util.concurrent.ExecutionError;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 
-import io.grpc.Call;
+import io.grpc.ClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -58,7 +58,7 @@ import javax.annotation.Nullable;
  * between utilities in this class and the potential signatures in a generated stub class so
  * that the runtime can vary behavior without requiring regeneration of the stub.
  */
-public class Calls {
+public class ClientCalls {
 
   /**
    * Creates a {@link MethodDescriptor} for a given method.
@@ -80,7 +80,7 @@ public class Calls {
    * @return a future for the single response message.
    */
   public static <ReqT, RespT> ListenableFuture<RespT> unaryFutureCall(
-      Call<ReqT, RespT> call,
+      ClientCall<ReqT, RespT> call,
       ReqT param) {
     GrpcFuture<RespT> responseFuture = new GrpcFuture<RespT>(call);
     asyncServerStreamingCall(call, param, new UnaryStreamToFuture<RespT>(responseFuture));
@@ -124,7 +124,7 @@ public class Calls {
    * Executes a unary call and blocks on the response.
    * @return the single response message.
    */
-  public static <ReqT, RespT> RespT blockingUnaryCall(Call<ReqT, RespT> call, ReqT param) {
+  public static <ReqT, RespT> RespT blockingUnaryCall(ClientCall<ReqT, RespT> call, ReqT param) {
     try {
       return getUnchecked(unaryFutureCall(call, param));
     } catch (Throwable t) {
@@ -137,7 +137,7 @@ public class Calls {
    * Executes a unary call with a response {@link StreamObserver}.
    */
   public static <ReqT, RespT> void asyncUnaryCall(
-      Call<ReqT, RespT> call,
+      ClientCall<ReqT, RespT> call,
       ReqT param,
       StreamObserver<RespT> observer) {
     asyncServerStreamingCall(call, param, observer);
@@ -150,7 +150,7 @@ public class Calls {
    */
   // TODO(louiscryan): Not clear if we want to use this idiom for 'simple' stubs.
   public static <ReqT, RespT> Iterator<RespT> blockingServerStreamingCall(
-      Call<ReqT, RespT> call, ReqT param) {
+      ClientCall<ReqT, RespT> call, ReqT param) {
     BlockingResponseStream<RespT> result = new BlockingResponseStream<RespT>(call);
     asyncServerStreamingCall(call, param, result.listener());
     return result;
@@ -160,7 +160,7 @@ public class Calls {
    * Executes a server-streaming call with a response {@link StreamObserver}.
    */
   public static <ReqT, RespT> void asyncServerStreamingCall(
-      Call<ReqT, RespT> call,
+      ClientCall<ReqT, RespT> call,
       ReqT param,
       StreamObserver<RespT> responseObserver) {
     asyncServerStreamingCall(call, param,
@@ -168,9 +168,9 @@ public class Calls {
   }
 
   private static <ReqT, RespT> void asyncServerStreamingCall(
-      Call<ReqT, RespT> call,
+      ClientCall<ReqT, RespT> call,
       ReqT param,
-      Call.Listener<RespT> responseListener) {
+      ClientCall.Listener<RespT> responseListener) {
     call.start(responseListener, new Metadata.Headers());
     call.request(1);
     try {
@@ -187,7 +187,7 @@ public class Calls {
    * @return the single response value.
    */
   public static <ReqT, RespT> RespT blockingClientStreamingCall(
-      Call<ReqT, RespT> call,
+      ClientCall<ReqT, RespT> call,
       Iterator<ReqT> clientStream) {
     GrpcFuture<RespT> responseFuture = new GrpcFuture<RespT>(call);
     call.start(new UnaryStreamToFuture<RespT>(responseFuture), new Metadata.Headers());
@@ -213,7 +213,7 @@ public class Calls {
    * @return request stream observer.
    */
   public static <ReqT, RespT> StreamObserver<ReqT> asyncClientStreamingCall(
-      Call<ReqT, RespT> call,
+      ClientCall<ReqT, RespT> call,
       StreamObserver<RespT> responseObserver) {
     return duplexStreamingCall(call, responseObserver);
   }
@@ -222,7 +222,7 @@ public class Calls {
    * Executes a duplex-streaming call.
    * @return request stream observer.
    */
-  public static <ReqT, RespT> StreamObserver<ReqT> duplexStreamingCall(Call<ReqT, RespT> call,
+  public static <ReqT, RespT> StreamObserver<ReqT> duplexStreamingCall(ClientCall<ReqT, RespT> call,
       StreamObserver<RespT> responseObserver) {
     call.start(new StreamObserverToCallListenerAdapter<RespT>(call, responseObserver),
         new Metadata.Headers());
@@ -231,9 +231,9 @@ public class Calls {
   }
 
   private static class CallToStreamObserverAdapter<T> implements StreamObserver<T> {
-    private final Call<T, ?> call;
+    private final ClientCall<T, ?> call;
 
-    public CallToStreamObserverAdapter(Call<T, ?> call) {
+    public CallToStreamObserverAdapter(ClientCall<T, ?> call) {
       this.call = call;
     }
 
@@ -254,12 +254,13 @@ public class Calls {
     }
   }
 
-  private static class StreamObserverToCallListenerAdapter<RespT> extends Call.Listener<RespT> {
-    private final Call<?, RespT> call;
+  private static class StreamObserverToCallListenerAdapter<RespT>
+      extends ClientCall.Listener<RespT> {
+    private final ClientCall<?, RespT> call;
     private final StreamObserver<RespT> observer;
 
     public StreamObserverToCallListenerAdapter(
-        Call<?, RespT> call, StreamObserver<RespT> observer) {
+        ClientCall<?, RespT> call, StreamObserver<RespT> observer) {
       this.call = call;
       this.observer = observer;
     }
@@ -289,7 +290,7 @@ public class Calls {
   /**
    * Complete a GrpcFuture using {@link StreamObserver} events.
    */
-  private static class UnaryStreamToFuture<RespT> extends Call.Listener<RespT> {
+  private static class UnaryStreamToFuture<RespT> extends ClientCall.Listener<RespT> {
     private final GrpcFuture<RespT> responseFuture;
     private RespT value;
 
@@ -327,9 +328,9 @@ public class Calls {
   }
 
   private static class GrpcFuture<RespT> extends AbstractFuture<RespT> {
-    private final Call<?, RespT> call;
+    private final ClientCall<?, RespT> call;
 
-    GrpcFuture(Call<?, RespT> call) {
+    GrpcFuture(ClientCall<?, RespT> call) {
       this.call = call;
     }
 
@@ -350,26 +351,26 @@ public class Calls {
   }
 
   /**
-   * Convert events on a {@link io.grpc.Call.Listener} into a blocking
+   * Convert events on a {@link io.grpc.ClientCall.Listener} into a blocking
    * {@link Iterator}.
    *
-   * <p>The class is not thread-safe, but it does permit {@link Call.Listener} calls in a separate
-   * thread from {@code Iterator} calls.
+   * <p>The class is not thread-safe, but it does permit {@link ClientCall.Listener} calls in a
+   * separate thread from {@code Iterator} calls.
    */
-  // TODO(ejona86): determine how to allow Call.cancel() in case of application error.
+  // TODO(ejona86): determine how to allow ClientCall.cancel() in case of application error.
   private static class BlockingResponseStream<T> implements Iterator<T> {
     // Due to flow control, only needs to hold up to 2 items: 1 for value, 1 for close.
     private final BlockingQueue<Object> buffer = new ArrayBlockingQueue<Object>(2);
-    private final Call.Listener<T> listener = new QueuingListener();
-    private final Call<?, T> call;
+    private final ClientCall.Listener<T> listener = new QueuingListener();
+    private final ClientCall<?, T> call;
     // Only accessed when iterating.
     private Object last;
 
-    private BlockingResponseStream(Call<?, T> call) {
+    private BlockingResponseStream(ClientCall<?, T> call) {
       this.call = call;
     }
 
-    Call.Listener<T> listener() {
+    ClientCall.Listener<T> listener() {
       return listener;
     }
 
@@ -409,7 +410,7 @@ public class Calls {
       throw new UnsupportedOperationException();
     }
 
-    private class QueuingListener extends Call.Listener<T> {
+    private class QueuingListener extends ClientCall.Listener<T> {
       private boolean done = false;
 
       @Override
@@ -418,13 +419,13 @@ public class Calls {
 
       @Override
       public void onPayload(T value) {
-        Preconditions.checkState(!done, "Call already closed");
+        Preconditions.checkState(!done, "ClientCall already closed");
         buffer.add(value);
       }
 
       @Override
       public void onClose(Status status, Metadata.Trailers trailers) {
-        Preconditions.checkState(!done, "Call already closed");
+        Preconditions.checkState(!done, "ClientCall already closed");
         if (status.isOk()) {
           buffer.add(BlockingResponseStream.this);
         } else {

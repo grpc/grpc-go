@@ -49,8 +49,8 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 
 import io.grpc.AbstractServerBuilder;
-import io.grpc.Call;
 import io.grpc.ChannelImpl;
+import io.grpc.ClientCall;
 import io.grpc.Metadata;
 import io.grpc.ServerImpl;
 import io.grpc.ServerInterceptors;
@@ -435,9 +435,9 @@ public abstract class AbstractTransportTest {
     long start = System.nanoTime();
 
     final ArrayBlockingQueue<Object> queue = new ArrayBlockingQueue<Object>(10);
-    Call<StreamingOutputCallRequest, StreamingOutputCallResponse> call =
+    ClientCall<StreamingOutputCallRequest, StreamingOutputCallResponse> call =
         channel.newCall(TestServiceGrpc.CONFIG.streamingOutputCall);
-    call.start(new Call.Listener<StreamingOutputCallResponse>() {
+    call.start(new ClientCall.Listener<StreamingOutputCallResponse>() {
       @Override
       public void onHeaders(Metadata.Headers headers) {}
 

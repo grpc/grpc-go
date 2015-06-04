@@ -53,7 +53,7 @@ package io.grpc;
  * @param <RequestT> type of message sent one or more times to the server.
  * @param <ResponseT> type of message received one or more times from the server.
  */
-public abstract class Call<RequestT, ResponseT> {
+public abstract class ClientCall<RequestT, ResponseT> {
   /**
    * Callbacks for receiving metadata, response messages and completion status from the server.
    *
@@ -80,10 +80,10 @@ public abstract class Call<RequestT, ResponseT> {
     public abstract void onPayload(T payload);
 
     /**
-     * The Call has been closed. No further sending or receiving can occur. If {@code status} is
-     * not equal to {@link Status#OK}, then the call failed. An additional block of trailer metadata
-     * may be received at the end of the call from the server. An empty {@link Metadata} object is
-     * passed if no trailers are received.
+     * The ClientCall has been closed. No further sending or receiving can occur. If {@code status}
+     * is not equal to {@link Status#OK}, then the call failed. An additional block of trailer
+     * metadata may be received at the end of the call from the server. An empty {@link Metadata}
+     * object is passed if no trailers are received.
      *
      * @param status the result of the remote call.
      * @param trailers metadata provided at call completion.
@@ -91,10 +91,10 @@ public abstract class Call<RequestT, ResponseT> {
     public abstract void onClose(Status status, Metadata.Trailers trailers);
 
     /**
-     * This indicates that the Call is now capable of sending additional messages (via
+     * This indicates that the ClientCall is now capable of sending additional messages (via
      * {@link #sendPayload}) without requiring excessive buffering internally. This event is
      * just a suggestion and the application is free to ignore it, however doing so may
-     * result in excessive buffering within the Call.
+     * result in excessive buffering within the ClientCall.
      */
     public void onReady() {}
   }
@@ -125,7 +125,7 @@ public abstract class Call<RequestT, ResponseT> {
   public abstract void request(int numMessages);
 
   /**
-   * Prevent any further processing for this Call. No further messages may be sent or will be
+   * Prevent any further processing for this ClientCall. No further messages may be sent or will be
    * received. The server is informed of cancellations, but may not stop processing the call.
    * Cancellation is permitted even if previously {@code cancel()}ed or {@link #halfClose}d.
    */

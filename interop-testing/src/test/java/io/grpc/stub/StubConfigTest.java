@@ -33,8 +33,8 @@ package io.grpc.stub;
 
 import static org.junit.Assert.assertEquals;
 
-import io.grpc.Call;
 import io.grpc.Channel;
+import io.grpc.ClientCall;
 import io.grpc.MethodDescriptor;
 import io.grpc.testing.integration.TestServiceGrpc;
 
@@ -72,7 +72,7 @@ public class StubConfigTest {
 
   private static class FakeChannel extends Channel {
     @Override
-    public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
+    public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
       return null;
     }
   }

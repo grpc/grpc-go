@@ -1,13 +1,13 @@
 package io.grpc.examples.routeguide;
 
-import static io.grpc.stub.Calls.createMethodDescriptor;
-import static io.grpc.stub.Calls.asyncUnaryCall;
-import static io.grpc.stub.Calls.asyncServerStreamingCall;
-import static io.grpc.stub.Calls.asyncClientStreamingCall;
-import static io.grpc.stub.Calls.duplexStreamingCall;
-import static io.grpc.stub.Calls.blockingUnaryCall;
-import static io.grpc.stub.Calls.blockingServerStreamingCall;
-import static io.grpc.stub.Calls.unaryFutureCall;
+import static io.grpc.stub.ClientCalls.createMethodDescriptor;
+import static io.grpc.stub.ClientCalls.asyncUnaryCall;
+import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
+import static io.grpc.stub.ClientCalls.duplexStreamingCall;
+import static io.grpc.stub.ClientCalls.blockingUnaryCall;
+import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
+import static io.grpc.stub.ClientCalls.unaryFutureCall;
 import static io.grpc.stub.ServerCalls.createMethodDefinition;
 import static io.grpc.stub.ServerCalls.asyncUnaryRequestCall;
 import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;

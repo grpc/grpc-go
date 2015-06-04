@@ -67,8 +67,8 @@ public final class ChannelImpl extends Channel {
     @Override public void request(int numMessages) {}
 
     /**
-     * Always returns {@code false}, since this is only used when the startup of the {@link Call}
-     * fails (i.e. the {@link Call} is closed).
+     * Always returns {@code false}, since this is only used when the startup of the {@link
+     * ClientCall} fails (i.e. the {@link ClientCall} is closed).
      */
     @Override public boolean isReady() {
       return false;
@@ -179,7 +179,7 @@ public final class ChannelImpl extends Channel {
    * Creates a new outgoing call on the channel.
    */
   @Override
-  public <ReqT, RespT> Call<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
+  public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
     return new CallImpl<ReqT, RespT>(method, new SerializingExecutor(executor));
   }
 
@@ -243,7 +243,7 @@ public final class ChannelImpl extends Channel {
     }
   }
 
-  private class CallImpl<ReqT, RespT> extends Call<ReqT, RespT> {
+  private class CallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     private final MethodDescriptor<ReqT, RespT> method;
     private final SerializingExecutor callExecutor;
     private final boolean unaryRequest;

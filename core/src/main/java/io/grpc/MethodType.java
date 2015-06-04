@@ -63,8 +63,8 @@ public enum MethodType {
 
   /**
    * Returns {@code true} if the client will immediately send one request message to the server
-   * after calling {@link Call#start(io.grpc.Call.Listener, io.grpc.Metadata.Headers)} and then
-   * immediately half-close the stream by calling {@link io.grpc.Call#halfClose()}.
+   * after calling {@link ClientCall#start(io.grpc.ClientCall.Listener, io.grpc.Metadata.Headers)}
+   * and then immediately half-close the stream by calling {@link io.grpc.ClientCall#halfClose()}.
    */
   public final boolean clientSendsOneMessage() {
     return this == UNARY || this == SERVER_STREAMING;

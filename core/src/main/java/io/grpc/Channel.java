@@ -35,8 +35,8 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * A Channel provides an abstraction over the transport layer that is designed to be consumed
- * by stub implementations. Channel and its associated types {@link Call} and
- * {@link Call.Listener} exchange parsed request and response objects whereas the
+ * by stub implementations. Channel and its associated types {@link ClientCall} and
+ * {@link ClientCall.Listener} exchange parsed request and response objects whereas the
  * transport layer only works with serialized data.
  *
  * <p>Applications can add common cross-cutting behaviors to stubs by decorating Channel
@@ -48,15 +48,15 @@ import javax.annotation.concurrent.ThreadSafe;
 public abstract class Channel {
 
   /**
-   * Create a {@link Call} to the remote operation specified by the given
-   * {@link MethodDescriptor}. The returned {@link Call} does not trigger any remote
-   * behavior until {@link Call#start(Call.Listener, Metadata.Headers)} is
+   * Create a {@link ClientCall} to the remote operation specified by the given
+   * {@link MethodDescriptor}. The returned {@link ClientCall} does not trigger any remote
+   * behavior until {@link ClientCall#start(ClientCall.Listener, Metadata.Headers)} is
    * invoked.
    *
    * @param methodDescriptor describes the name and parameter types of the operation to call.
-   * @return a {@link Call} bound to the specified method.
+   * @return a {@link ClientCall} bound to the specified method.
    *
    */
-  public abstract <RequestT, ResponseT> Call<RequestT, ResponseT> newCall(
+  public abstract <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
       MethodDescriptor<RequestT, ResponseT> methodDescriptor);
 }

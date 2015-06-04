@@ -31,11 +31,11 @@
 
 package io.grpc.examples.header;
 
-import io.grpc.Call;
 import io.grpc.Channel;
+import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
-import io.grpc.ForwardingCall.SimpleForwardingCall;
-import io.grpc.ForwardingCallListener.SimpleForwardingCallListener;
+import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 
@@ -52,15 +52,15 @@ public class HeaderClientInterceptor implements ClientInterceptor {
       Metadata.Key.of("custom_client_header_key", Metadata.ASCII_STRING_MARSHALLER);
 
   @Override
-  public <ReqT, RespT> Call<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-                                                       Channel next) {
-    return new SimpleForwardingCall<ReqT, RespT>(next.newCall(method)) {
+  public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+                                                             Channel next) {
+    return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method)) {
 
       @Override
       public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
         /* put custom header */
         headers.put(customHeadKey, "customRequestValue");
-        super.start(new SimpleForwardingCallListener<RespT>(responseListener) {
+        super.start(new SimpleForwardingClientCallListener<RespT>(responseListener) {
           @Override
           public void onHeaders(Metadata.Headers headers) {
             /**

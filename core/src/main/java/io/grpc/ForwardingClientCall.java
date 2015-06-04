@@ -32,49 +32,58 @@
 package io.grpc;
 
 /**
- * A {@link Call.Listener} which forwards all of its methods to another {@link Call.Listener}.
+ * A {@link ClientCall} which forwards all of it's methods to another {@link ClientCall}.
  */
-public abstract class ForwardingCallListener<RespT> extends Call.Listener<RespT> {
+public abstract class ForwardingClientCall<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   /**
-   * Returns the delegated {@code Call.Listener}.
+   * Returns the delegated {@code ClientCall}.
    */
-  protected abstract Call.Listener<RespT> delegate();
+  protected abstract ClientCall<ReqT, RespT> delegate();
 
   @Override
-  public void onHeaders(Metadata.Headers headers) {
-    delegate().onHeaders(headers);
+  public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
+    delegate().start(responseListener, headers);
   }
 
   @Override
-  public void onPayload(RespT payload) {
-    delegate().onPayload(payload);
+  public void request(int numMessages) {
+    delegate().request(numMessages);
   }
 
   @Override
-  public void onClose(Status status, Metadata.Trailers trailers) {
-    delegate().onClose(status, trailers);
+  public void cancel() {
+    delegate().cancel();
   }
 
   @Override
-  public void onReady() {
-    delegate().onReady();
+  public void halfClose() {
+    delegate().halfClose();
+  }
+
+  @Override
+  public void sendPayload(ReqT payload) {
+    delegate().sendPayload(payload);
+  }
+
+  @Override
+  public boolean isReady() {
+    return delegate().isReady();
   }
 
   /**
-   * A simplified version of {@link ForwardingCallListener} where subclasses can pass in a {@link
-   * Call.Listener} as the delegate.
+   * A simplified version of {@link ForwardingClientCall} where subclasses can pass in a {@link
+   * ClientCall} as the delegate.
    */
-  public abstract static class SimpleForwardingCallListener<RespT>
-      extends ForwardingCallListener<RespT> {
+  public abstract static class SimpleForwardingClientCall<ReqT, RespT>
+      extends ForwardingClientCall<ReqT, RespT> {
+    private final ClientCall<ReqT, RespT> delegate;
 
-    private final Call.Listener<RespT> delegate;
-
-    protected SimpleForwardingCallListener(Call.Listener<RespT> delegate) {
+    protected SimpleForwardingClientCall(ClientCall<ReqT, RespT> delegate) {
       this.delegate = delegate;
     }
 
     @Override
-    protected Call.Listener<RespT> delegate() {
+    protected ClientCall<ReqT, RespT> delegate() {
       return delegate;
     }
   }

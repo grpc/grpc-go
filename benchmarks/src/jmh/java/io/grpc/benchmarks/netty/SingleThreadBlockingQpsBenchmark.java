@@ -1,6 +1,6 @@
 package io.grpc.benchmarks.netty;
 
-import io.grpc.stub.Calls;
+import io.grpc.stub.ClientCalls;
 import io.netty.buffer.Unpooled;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -50,7 +50,7 @@ public class SingleThreadBlockingQpsBenchmark extends AbstractBenchmark {
    */
   @Benchmark
   public void blockingUnary() throws Exception {
-    Calls.blockingUnaryCall(channels[0].newCall(unaryMethod), Unpooled.EMPTY_BUFFER);
+    ClientCalls.blockingUnaryCall(channels[0].newCall(unaryMethod), Unpooled.EMPTY_BUFFER);
   }
 
   /**

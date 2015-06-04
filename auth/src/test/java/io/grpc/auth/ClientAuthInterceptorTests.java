@@ -44,8 +44,8 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 
-import io.grpc.Call;
 import io.grpc.Channel;
+import io.grpc.ClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -82,13 +82,13 @@ public class ClientAuthInterceptorTests {
   MethodDescriptor<String, Integer> descriptor;
 
   @Mock
-  Call.Listener<Integer> listener;
+  ClientCall.Listener<Integer> listener;
 
   @Mock
   Channel channel;
 
   @Mock
-  Call<String, Integer> call;
+  ClientCall<String, Integer> call;
 
   ClientAuthInterceptor interceptor;
 
@@ -109,7 +109,7 @@ public class ClientAuthInterceptorTests {
     values.put("Extra-Authorization", "token3");
     values.put("Extra-Authorization", "token4");
     when(credentials.getRequestMetadata()).thenReturn(Multimaps.asMap(values));
-    Call<String, Integer> interceptedCall = interceptor.interceptCall(descriptor, channel);
+    ClientCall<String, Integer> interceptedCall = interceptor.interceptCall(descriptor, channel);
     Metadata.Headers headers = new Metadata.Headers();
     interceptedCall.start(listener, headers);
     verify(call).start(listener, headers);
@@ -125,7 +125,7 @@ public class ClientAuthInterceptorTests {
   @Test
   public void testCredentialsThrows() throws IOException {
     when(credentials.getRequestMetadata()).thenThrow(new IOException("Broken"));
-    Call<String, Integer> interceptedCall = interceptor.interceptCall(descriptor, channel);
+    ClientCall<String, Integer> interceptedCall = interceptor.interceptCall(descriptor, channel);
     Metadata.Headers headers = new Metadata.Headers();
     interceptedCall.start(listener, headers);
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
@@ -146,7 +146,7 @@ public class ClientAuthInterceptorTests {
       }
     };
     interceptor = new ClientAuthInterceptor(oAuth2Credentials, Executors.newSingleThreadExecutor());
-    Call<String, Integer> interceptedCall = interceptor.interceptCall(descriptor, channel);
+    ClientCall<String, Integer> interceptedCall = interceptor.interceptCall(descriptor, channel);
     Metadata.Headers headers = new Metadata.Headers();
     interceptedCall.start(listener, headers);
     verify(call).start(listener, headers);

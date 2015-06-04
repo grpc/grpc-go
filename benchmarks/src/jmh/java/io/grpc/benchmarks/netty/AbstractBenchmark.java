@@ -2,8 +2,8 @@ package io.grpc.benchmarks.netty;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
-import io.grpc.Call;
 import io.grpc.ChannelImpl;
+import io.grpc.ClientCall;
 import io.grpc.DeferredInputStream;
 import io.grpc.KnownLength;
 import io.grpc.Marshaller;
@@ -15,7 +15,7 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerImpl;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
-import io.grpc.stub.Calls;
+import io.grpc.stub.ClientCalls;
 import io.grpc.stub.StreamObserver;
 import io.grpc.transport.netty.NegotiationType;
 import io.grpc.transport.netty.NettyChannelBuilder;
@@ -326,7 +326,7 @@ public abstract class AbstractBenchmark {
           public void onCompleted() {
             if (!done.get()) {
               ByteBuf slice = request.slice();
-              Calls.asyncUnaryCall(channel.newCall(unaryMethod), slice, this);
+              ClientCalls.asyncUnaryCall(channel.newCall(unaryMethod), slice, this);
             }
           }
         };
@@ -346,10 +346,10 @@ public abstract class AbstractBenchmark {
                                      final long counterDelta) {
     for (final ChannelImpl channel : channels) {
       for (int i = 0; i < callsPerChannel; i++) {
-        final Call<ByteBuf, ByteBuf> streamingCall = channel.newCall(pingPongMethod);
+        final ClientCall<ByteBuf, ByteBuf> streamingCall = channel.newCall(pingPongMethod);
         final AtomicReference<StreamObserver<ByteBuf>> requestObserverRef =
             new AtomicReference<StreamObserver<ByteBuf>>();
-        StreamObserver<ByteBuf> requestObserver = Calls.duplexStreamingCall(streamingCall,
+        StreamObserver<ByteBuf> requestObserver = ClientCalls.duplexStreamingCall(streamingCall,
             new StreamObserver<ByteBuf>() {
               @Override
               public void onValue(ByteBuf value) {
@@ -389,10 +389,10 @@ public abstract class AbstractBenchmark {
                                                    final long counterDelta) {
     for (final ChannelImpl channel : channels) {
       for (int i = 0; i < callsPerChannel; i++) {
-        final Call<ByteBuf, ByteBuf> streamingCall = channel.newCall(flowControlledStreaming);
+        final ClientCall<ByteBuf, ByteBuf> streamingCall = channel.newCall(flowControlledStreaming);
         final AtomicReference<StreamObserver<ByteBuf>> requestObserverRef =
             new AtomicReference<StreamObserver<ByteBuf>>();
-        StreamObserver<ByteBuf> requestObserver = Calls.duplexStreamingCall(streamingCall,
+        StreamObserver<ByteBuf> requestObserver = ClientCalls.duplexStreamingCall(streamingCall,
             new StreamObserver<ByteBuf>() {
               @Override
               public void onValue(ByteBuf value) {
