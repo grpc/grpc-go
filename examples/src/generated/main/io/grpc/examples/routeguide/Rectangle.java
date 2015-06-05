@@ -29,8 +29,7 @@ public  final class Rectangle extends
   }
   private Rectangle(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-      throws com.google.protobuf.InvalidProtocolBufferException {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -76,10 +75,11 @@ public  final class Rectangle extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw e.setUnfinishedMessage(this);
+      throw new RuntimeException(e.setUnfinishedMessage(this));
     } catch (java.io.IOException e) {
-      throw new com.google.protobuf.InvalidProtocolBufferException(
-          e.getMessage()).setUnfinishedMessage(this);
+      throw new RuntimeException(
+          new com.google.protobuf.InvalidProtocolBufferException(
+              e.getMessage()).setUnfinishedMessage(this));
     } finally {
       makeExtensionsImmutable();
     }
@@ -94,21 +94,6 @@ public  final class Rectangle extends
     return io.grpc.examples.routeguide.RouteGuideProto.internal_static_routeguide_Rectangle_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.examples.routeguide.Rectangle.class, io.grpc.examples.routeguide.Rectangle.Builder.class);
-  }
-
-  public static final com.google.protobuf.Parser<Rectangle> PARSER =
-      new com.google.protobuf.AbstractParser<Rectangle>() {
-    public Rectangle parsePartialFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return new Rectangle(input, extensionRegistry);
-    }
-  };
-
-  @java.lang.Override
-  public com.google.protobuf.Parser<Rectangle> getParserForType() {
-    return PARSER;
   }
 
   public static final int LO_FIELD_NUMBER = 1;
@@ -189,7 +174,6 @@ public  final class Rectangle extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    getSerializedSize();
     if (lo_ != null) {
       output.writeMessage(1, getLo());
     }
@@ -270,12 +254,17 @@ public  final class Rectangle extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
-  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder(io.grpc.examples.routeguide.Rectangle prototype) {
-    return newBuilder().mergeFrom(prototype);
+  public static Builder newBuilder() {
+    return DEFAULT_INSTANCE.toBuilder();
   }
-  public Builder toBuilder() { return newBuilder(this); }
+  public static Builder newBuilder(io.grpc.examples.routeguide.Rectangle prototype) {
+    return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+  }
+  public Builder toBuilder() {
+    return this == DEFAULT_INSTANCE
+        ? new Builder() : new Builder().mergeFrom(this);
+  }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -734,16 +723,41 @@ public  final class Rectangle extends
   }
 
   // @@protoc_insertion_point(class_scope:routeguide.Rectangle)
-  private static final io.grpc.examples.routeguide.Rectangle defaultInstance;static {
-    defaultInstance = new io.grpc.examples.routeguide.Rectangle();
+  private static final io.grpc.examples.routeguide.Rectangle DEFAULT_INSTANCE;
+  static {
+    DEFAULT_INSTANCE = new io.grpc.examples.routeguide.Rectangle();
   }
 
   public static io.grpc.examples.routeguide.Rectangle getDefaultInstance() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
+  }
+
+  public static final com.google.protobuf.Parser<Rectangle> PARSER =
+      new com.google.protobuf.AbstractParser<Rectangle>() {
+    public Rectangle parsePartialFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      try {
+        return new Rectangle(input, extensionRegistry);
+      } catch (RuntimeException e) {
+        if (e.getCause() instanceof
+            com.google.protobuf.InvalidProtocolBufferException) {
+          throw (com.google.protobuf.InvalidProtocolBufferException)
+              e.getCause();
+        }
+        throw e;
+      }
+    }
+  };
+
+  @java.lang.Override
+  public com.google.protobuf.Parser<Rectangle> getParserForType() {
+    return PARSER;
   }
 
   public io.grpc.examples.routeguide.Rectangle getDefaultInstanceForType() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
   }
 
 }

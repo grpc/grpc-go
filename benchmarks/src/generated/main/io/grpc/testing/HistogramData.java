@@ -30,8 +30,7 @@ public  final class HistogramData extends
   }
   private HistogramData(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-      throws com.google.protobuf.InvalidProtocolBufferException {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -97,10 +96,11 @@ public  final class HistogramData extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw e.setUnfinishedMessage(this);
+      throw new RuntimeException(e.setUnfinishedMessage(this));
     } catch (java.io.IOException e) {
-      throw new com.google.protobuf.InvalidProtocolBufferException(
-          e.getMessage()).setUnfinishedMessage(this);
+      throw new RuntimeException(
+          new com.google.protobuf.InvalidProtocolBufferException(
+              e.getMessage()).setUnfinishedMessage(this));
     } finally {
       if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
         bucket_ = java.util.Collections.unmodifiableList(bucket_);
@@ -118,21 +118,6 @@ public  final class HistogramData extends
     return io.grpc.testing.QpsTestProto.internal_static_grpc_testing_HistogramData_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.testing.HistogramData.class, io.grpc.testing.HistogramData.Builder.class);
-  }
-
-  public static final com.google.protobuf.Parser<HistogramData> PARSER =
-      new com.google.protobuf.AbstractParser<HistogramData>() {
-    public HistogramData parsePartialFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return new HistogramData(input, extensionRegistry);
-    }
-  };
-
-  @java.lang.Override
-  public com.google.protobuf.Parser<HistogramData> getParserForType() {
-    return PARSER;
   }
 
   private int bitField0_;
@@ -157,6 +142,7 @@ public  final class HistogramData extends
   public int getBucket(int index) {
     return bucket_.get(index);
   }
+  private int bucketMemoizedSerializedSize = -1;
 
   public static final int MIN_SEEN_FIELD_NUMBER = 2;
   private double minSeen_;
@@ -216,8 +202,12 @@ public  final class HistogramData extends
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
     getSerializedSize();
+    if (getBucketList().size() > 0) {
+      output.writeRawVarint32(10);
+      output.writeRawVarint32(bucketMemoizedSerializedSize);
+    }
     for (int i = 0; i < bucket_.size(); i++) {
-      output.writeUInt32(1, bucket_.get(i));
+      output.writeUInt32NoTag(bucket_.get(i));
     }
     if (minSeen_ != 0D) {
       output.writeDouble(2, minSeen_);
@@ -249,7 +239,12 @@ public  final class HistogramData extends
           .computeUInt32SizeNoTag(bucket_.get(i));
       }
       size += dataSize;
-      size += 1 * getBucketList().size();
+      if (!getBucketList().isEmpty()) {
+        size += 1;
+        size += com.google.protobuf.CodedOutputStream
+            .computeInt32SizeNoTag(dataSize);
+      }
+      bucketMemoizedSerializedSize = dataSize;
     }
     if (minSeen_ != 0D) {
       size += com.google.protobuf.CodedOutputStream
@@ -329,12 +324,17 @@ public  final class HistogramData extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
-  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder(io.grpc.testing.HistogramData prototype) {
-    return newBuilder().mergeFrom(prototype);
+  public static Builder newBuilder() {
+    return DEFAULT_INSTANCE.toBuilder();
   }
-  public Builder toBuilder() { return newBuilder(this); }
+  public static Builder newBuilder(io.grpc.testing.HistogramData prototype) {
+    return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+  }
+  public Builder toBuilder() {
+    return this == DEFAULT_INSTANCE
+        ? new Builder() : new Builder().mergeFrom(this);
+  }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -701,16 +701,41 @@ public  final class HistogramData extends
   }
 
   // @@protoc_insertion_point(class_scope:grpc.testing.HistogramData)
-  private static final io.grpc.testing.HistogramData defaultInstance;static {
-    defaultInstance = new io.grpc.testing.HistogramData();
+  private static final io.grpc.testing.HistogramData DEFAULT_INSTANCE;
+  static {
+    DEFAULT_INSTANCE = new io.grpc.testing.HistogramData();
   }
 
   public static io.grpc.testing.HistogramData getDefaultInstance() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
+  }
+
+  public static final com.google.protobuf.Parser<HistogramData> PARSER =
+      new com.google.protobuf.AbstractParser<HistogramData>() {
+    public HistogramData parsePartialFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      try {
+        return new HistogramData(input, extensionRegistry);
+      } catch (RuntimeException e) {
+        if (e.getCause() instanceof
+            com.google.protobuf.InvalidProtocolBufferException) {
+          throw (com.google.protobuf.InvalidProtocolBufferException)
+              e.getCause();
+        }
+        throw e;
+      }
+    }
+  };
+
+  @java.lang.Override
+  public com.google.protobuf.Parser<HistogramData> getParserForType() {
+    return PARSER;
   }
 
   public io.grpc.testing.HistogramData getDefaultInstanceForType() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
   }
 
 }

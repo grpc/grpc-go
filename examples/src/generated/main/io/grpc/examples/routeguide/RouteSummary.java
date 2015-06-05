@@ -35,8 +35,7 @@ public  final class RouteSummary extends
   }
   private RouteSummary(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-      throws com.google.protobuf.InvalidProtocolBufferException {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -76,10 +75,11 @@ public  final class RouteSummary extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw e.setUnfinishedMessage(this);
+      throw new RuntimeException(e.setUnfinishedMessage(this));
     } catch (java.io.IOException e) {
-      throw new com.google.protobuf.InvalidProtocolBufferException(
-          e.getMessage()).setUnfinishedMessage(this);
+      throw new RuntimeException(
+          new com.google.protobuf.InvalidProtocolBufferException(
+              e.getMessage()).setUnfinishedMessage(this));
     } finally {
       makeExtensionsImmutable();
     }
@@ -94,21 +94,6 @@ public  final class RouteSummary extends
     return io.grpc.examples.routeguide.RouteGuideProto.internal_static_routeguide_RouteSummary_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.examples.routeguide.RouteSummary.class, io.grpc.examples.routeguide.RouteSummary.Builder.class);
-  }
-
-  public static final com.google.protobuf.Parser<RouteSummary> PARSER =
-      new com.google.protobuf.AbstractParser<RouteSummary>() {
-    public RouteSummary parsePartialFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return new RouteSummary(input, extensionRegistry);
-    }
-  };
-
-  @java.lang.Override
-  public com.google.protobuf.Parser<RouteSummary> getParserForType() {
-    return PARSER;
   }
 
   public static final int POINT_COUNT_FIELD_NUMBER = 1;
@@ -175,7 +160,6 @@ public  final class RouteSummary extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    getSerializedSize();
     if (pointCount_ != 0) {
       output.writeInt32(1, pointCount_);
     }
@@ -270,12 +254,17 @@ public  final class RouteSummary extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
-  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder(io.grpc.examples.routeguide.RouteSummary prototype) {
-    return newBuilder().mergeFrom(prototype);
+  public static Builder newBuilder() {
+    return DEFAULT_INSTANCE.toBuilder();
   }
-  public Builder toBuilder() { return newBuilder(this); }
+  public static Builder newBuilder(io.grpc.examples.routeguide.RouteSummary prototype) {
+    return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+  }
+  public Builder toBuilder() {
+    return this == DEFAULT_INSTANCE
+        ? new Builder() : new Builder().mergeFrom(this);
+  }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -578,16 +567,41 @@ public  final class RouteSummary extends
   }
 
   // @@protoc_insertion_point(class_scope:routeguide.RouteSummary)
-  private static final io.grpc.examples.routeguide.RouteSummary defaultInstance;static {
-    defaultInstance = new io.grpc.examples.routeguide.RouteSummary();
+  private static final io.grpc.examples.routeguide.RouteSummary DEFAULT_INSTANCE;
+  static {
+    DEFAULT_INSTANCE = new io.grpc.examples.routeguide.RouteSummary();
   }
 
   public static io.grpc.examples.routeguide.RouteSummary getDefaultInstance() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
+  }
+
+  public static final com.google.protobuf.Parser<RouteSummary> PARSER =
+      new com.google.protobuf.AbstractParser<RouteSummary>() {
+    public RouteSummary parsePartialFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      try {
+        return new RouteSummary(input, extensionRegistry);
+      } catch (RuntimeException e) {
+        if (e.getCause() instanceof
+            com.google.protobuf.InvalidProtocolBufferException) {
+          throw (com.google.protobuf.InvalidProtocolBufferException)
+              e.getCause();
+        }
+        throw e;
+      }
+    }
+  };
+
+  @java.lang.Override
+  public com.google.protobuf.Parser<RouteSummary> getParserForType() {
+    return PARSER;
   }
 
   public io.grpc.examples.routeguide.RouteSummary getDefaultInstanceForType() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
   }
 
 }

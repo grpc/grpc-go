@@ -25,8 +25,7 @@ public  final class StatsRequest extends
   }
   private StatsRequest(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-      throws com.google.protobuf.InvalidProtocolBufferException {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -51,10 +50,11 @@ public  final class StatsRequest extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw e.setUnfinishedMessage(this);
+      throw new RuntimeException(e.setUnfinishedMessage(this));
     } catch (java.io.IOException e) {
-      throw new com.google.protobuf.InvalidProtocolBufferException(
-          e.getMessage()).setUnfinishedMessage(this);
+      throw new RuntimeException(
+          new com.google.protobuf.InvalidProtocolBufferException(
+              e.getMessage()).setUnfinishedMessage(this));
     } finally {
       makeExtensionsImmutable();
     }
@@ -69,21 +69,6 @@ public  final class StatsRequest extends
     return io.grpc.testing.QpsTestProto.internal_static_grpc_testing_StatsRequest_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.testing.StatsRequest.class, io.grpc.testing.StatsRequest.Builder.class);
-  }
-
-  public static final com.google.protobuf.Parser<StatsRequest> PARSER =
-      new com.google.protobuf.AbstractParser<StatsRequest>() {
-    public StatsRequest parsePartialFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return new StatsRequest(input, extensionRegistry);
-    }
-  };
-
-  @java.lang.Override
-  public com.google.protobuf.Parser<StatsRequest> getParserForType() {
-    return PARSER;
   }
 
   public static final int TEST_NUM_FIELD_NUMBER = 1;
@@ -111,7 +96,6 @@ public  final class StatsRequest extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    getSerializedSize();
     if (testNum_ != 0) {
       output.writeInt32(1, testNum_);
     }
@@ -185,12 +169,17 @@ public  final class StatsRequest extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
-  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder(io.grpc.testing.StatsRequest prototype) {
-    return newBuilder().mergeFrom(prototype);
+  public static Builder newBuilder() {
+    return DEFAULT_INSTANCE.toBuilder();
   }
-  public Builder toBuilder() { return newBuilder(this); }
+  public static Builder newBuilder(io.grpc.testing.StatsRequest prototype) {
+    return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+  }
+  public Builder toBuilder() {
+    return this == DEFAULT_INSTANCE
+        ? new Builder() : new Builder().mergeFrom(this);
+  }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -354,16 +343,41 @@ public  final class StatsRequest extends
   }
 
   // @@protoc_insertion_point(class_scope:grpc.testing.StatsRequest)
-  private static final io.grpc.testing.StatsRequest defaultInstance;static {
-    defaultInstance = new io.grpc.testing.StatsRequest();
+  private static final io.grpc.testing.StatsRequest DEFAULT_INSTANCE;
+  static {
+    DEFAULT_INSTANCE = new io.grpc.testing.StatsRequest();
   }
 
   public static io.grpc.testing.StatsRequest getDefaultInstance() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
+  }
+
+  public static final com.google.protobuf.Parser<StatsRequest> PARSER =
+      new com.google.protobuf.AbstractParser<StatsRequest>() {
+    public StatsRequest parsePartialFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      try {
+        return new StatsRequest(input, extensionRegistry);
+      } catch (RuntimeException e) {
+        if (e.getCause() instanceof
+            com.google.protobuf.InvalidProtocolBufferException) {
+          throw (com.google.protobuf.InvalidProtocolBufferException)
+              e.getCause();
+        }
+        throw e;
+      }
+    }
+  };
+
+  @java.lang.Override
+  public com.google.protobuf.Parser<StatsRequest> getParserForType() {
+    return PARSER;
   }
 
   public io.grpc.testing.StatsRequest getDefaultInstanceForType() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
   }
 
 }

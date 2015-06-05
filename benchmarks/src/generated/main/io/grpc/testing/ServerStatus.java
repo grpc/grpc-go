@@ -25,8 +25,7 @@ public  final class ServerStatus extends
   }
   private ServerStatus(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-      throws com.google.protobuf.InvalidProtocolBufferException {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -64,10 +63,11 @@ public  final class ServerStatus extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw e.setUnfinishedMessage(this);
+      throw new RuntimeException(e.setUnfinishedMessage(this));
     } catch (java.io.IOException e) {
-      throw new com.google.protobuf.InvalidProtocolBufferException(
-          e.getMessage()).setUnfinishedMessage(this);
+      throw new RuntimeException(
+          new com.google.protobuf.InvalidProtocolBufferException(
+              e.getMessage()).setUnfinishedMessage(this));
     } finally {
       makeExtensionsImmutable();
     }
@@ -82,21 +82,6 @@ public  final class ServerStatus extends
     return io.grpc.testing.QpsTestProto.internal_static_grpc_testing_ServerStatus_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.testing.ServerStatus.class, io.grpc.testing.ServerStatus.Builder.class);
-  }
-
-  public static final com.google.protobuf.Parser<ServerStatus> PARSER =
-      new com.google.protobuf.AbstractParser<ServerStatus>() {
-    public ServerStatus parsePartialFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return new ServerStatus(input, extensionRegistry);
-    }
-  };
-
-  @java.lang.Override
-  public com.google.protobuf.Parser<ServerStatus> getParserForType() {
-    return PARSER;
   }
 
   public static final int STATS_FIELD_NUMBER = 1;
@@ -141,7 +126,6 @@ public  final class ServerStatus extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    getSerializedSize();
     if (stats_ != null) {
       output.writeMessage(1, getStats());
     }
@@ -222,12 +206,17 @@ public  final class ServerStatus extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
-  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder(io.grpc.testing.ServerStatus prototype) {
-    return newBuilder().mergeFrom(prototype);
+  public static Builder newBuilder() {
+    return DEFAULT_INSTANCE.toBuilder();
   }
-  public Builder toBuilder() { return newBuilder(this); }
+  public static Builder newBuilder(io.grpc.testing.ServerStatus prototype) {
+    return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+  }
+  public Builder toBuilder() {
+    return this == DEFAULT_INSTANCE
+        ? new Builder() : new Builder().mergeFrom(this);
+  }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -510,16 +499,41 @@ public  final class ServerStatus extends
   }
 
   // @@protoc_insertion_point(class_scope:grpc.testing.ServerStatus)
-  private static final io.grpc.testing.ServerStatus defaultInstance;static {
-    defaultInstance = new io.grpc.testing.ServerStatus();
+  private static final io.grpc.testing.ServerStatus DEFAULT_INSTANCE;
+  static {
+    DEFAULT_INSTANCE = new io.grpc.testing.ServerStatus();
   }
 
   public static io.grpc.testing.ServerStatus getDefaultInstance() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
+  }
+
+  public static final com.google.protobuf.Parser<ServerStatus> PARSER =
+      new com.google.protobuf.AbstractParser<ServerStatus>() {
+    public ServerStatus parsePartialFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      try {
+        return new ServerStatus(input, extensionRegistry);
+      } catch (RuntimeException e) {
+        if (e.getCause() instanceof
+            com.google.protobuf.InvalidProtocolBufferException) {
+          throw (com.google.protobuf.InvalidProtocolBufferException)
+              e.getCause();
+        }
+        throw e;
+      }
+    }
+  };
+
+  @java.lang.Override
+  public com.google.protobuf.Parser<ServerStatus> getParserForType() {
+    return PARSER;
   }
 
   public io.grpc.testing.ServerStatus getDefaultInstanceForType() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
   }
 
 }

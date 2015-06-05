@@ -29,8 +29,7 @@ public  final class RouteNote extends
   }
   private RouteNote(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-      throws com.google.protobuf.InvalidProtocolBufferException {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -69,10 +68,11 @@ public  final class RouteNote extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw e.setUnfinishedMessage(this);
+      throw new RuntimeException(e.setUnfinishedMessage(this));
     } catch (java.io.IOException e) {
-      throw new com.google.protobuf.InvalidProtocolBufferException(
-          e.getMessage()).setUnfinishedMessage(this);
+      throw new RuntimeException(
+          new com.google.protobuf.InvalidProtocolBufferException(
+              e.getMessage()).setUnfinishedMessage(this));
     } finally {
       makeExtensionsImmutable();
     }
@@ -87,21 +87,6 @@ public  final class RouteNote extends
     return io.grpc.examples.routeguide.RouteGuideProto.internal_static_routeguide_RouteNote_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.examples.routeguide.RouteNote.class, io.grpc.examples.routeguide.RouteNote.Builder.class);
-  }
-
-  public static final com.google.protobuf.Parser<RouteNote> PARSER =
-      new com.google.protobuf.AbstractParser<RouteNote>() {
-    public RouteNote parsePartialFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return new RouteNote(input, extensionRegistry);
-    }
-  };
-
-  @java.lang.Override
-  public com.google.protobuf.Parser<RouteNote> getParserForType() {
-    return PARSER;
   }
 
   public static final int LOCATION_FIELD_NUMBER = 1;
@@ -138,7 +123,7 @@ public  final class RouteNote extends
   }
 
   public static final int MESSAGE_FIELD_NUMBER = 2;
-  private java.lang.Object message_;
+  private volatile java.lang.Object message_;
   /**
    * <code>optional string message = 2;</code>
    *
@@ -193,7 +178,6 @@ public  final class RouteNote extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    getSerializedSize();
     if (location_ != null) {
       output.writeMessage(1, getLocation());
     }
@@ -274,12 +258,17 @@ public  final class RouteNote extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
-  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder(io.grpc.examples.routeguide.RouteNote prototype) {
-    return newBuilder().mergeFrom(prototype);
+  public static Builder newBuilder() {
+    return DEFAULT_INSTANCE.toBuilder();
   }
-  public Builder toBuilder() { return newBuilder(this); }
+  public static Builder newBuilder(io.grpc.examples.routeguide.RouteNote prototype) {
+    return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+  }
+  public Builder toBuilder() {
+    return this == DEFAULT_INSTANCE
+        ? new Builder() : new Builder().mergeFrom(this);
+  }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -667,16 +656,41 @@ public  final class RouteNote extends
   }
 
   // @@protoc_insertion_point(class_scope:routeguide.RouteNote)
-  private static final io.grpc.examples.routeguide.RouteNote defaultInstance;static {
-    defaultInstance = new io.grpc.examples.routeguide.RouteNote();
+  private static final io.grpc.examples.routeguide.RouteNote DEFAULT_INSTANCE;
+  static {
+    DEFAULT_INSTANCE = new io.grpc.examples.routeguide.RouteNote();
   }
 
   public static io.grpc.examples.routeguide.RouteNote getDefaultInstance() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
+  }
+
+  public static final com.google.protobuf.Parser<RouteNote> PARSER =
+      new com.google.protobuf.AbstractParser<RouteNote>() {
+    public RouteNote parsePartialFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      try {
+        return new RouteNote(input, extensionRegistry);
+      } catch (RuntimeException e) {
+        if (e.getCause() instanceof
+            com.google.protobuf.InvalidProtocolBufferException) {
+          throw (com.google.protobuf.InvalidProtocolBufferException)
+              e.getCause();
+        }
+        throw e;
+      }
+    }
+  };
+
+  @java.lang.Override
+  public com.google.protobuf.Parser<RouteNote> getParserForType() {
+    return PARSER;
   }
 
   public io.grpc.examples.routeguide.RouteNote getDefaultInstanceForType() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
   }
 
 }

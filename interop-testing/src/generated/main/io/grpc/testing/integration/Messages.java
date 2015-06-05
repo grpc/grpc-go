@@ -194,8 +194,7 @@ public final class Messages {
     }
     private Payload(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -226,10 +225,11 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
+        throw new RuntimeException(e.setUnfinishedMessage(this));
       } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e.getMessage()).setUnfinishedMessage(this);
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
       } finally {
         makeExtensionsImmutable();
       }
@@ -244,21 +244,6 @@ public final class Messages {
       return io.grpc.testing.integration.Messages.internal_static_grpc_testing_Payload_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Messages.Payload.class, io.grpc.testing.integration.Messages.Payload.Builder.class);
-    }
-
-    public static final com.google.protobuf.Parser<Payload> PARSER =
-        new com.google.protobuf.AbstractParser<Payload>() {
-      public Payload parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        return new Payload(input, extensionRegistry);
-      }
-    };
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<Payload> getParserForType() {
-      return PARSER;
     }
 
     public static final int TYPE_FIELD_NUMBER = 1;
@@ -310,7 +295,6 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (type_ != io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE.getNumber()) {
         output.writeEnum(1, type_);
       }
@@ -391,12 +375,17 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
-    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder(io.grpc.testing.integration.Messages.Payload prototype) {
-      return newBuilder().mergeFrom(prototype);
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
     }
-    public Builder toBuilder() { return newBuilder(this); }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.Payload prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -637,16 +626,41 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.Payload)
-    private static final io.grpc.testing.integration.Messages.Payload defaultInstance;static {
-      defaultInstance = new io.grpc.testing.integration.Messages.Payload();
+    private static final io.grpc.testing.integration.Messages.Payload DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.Payload();
     }
 
     public static io.grpc.testing.integration.Messages.Payload getDefaultInstance() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
+    }
+
+    public static final com.google.protobuf.Parser<Payload> PARSER =
+        new com.google.protobuf.AbstractParser<Payload>() {
+      public Payload parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new Payload(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<Payload> getParserForType() {
+      return PARSER;
     }
 
     public io.grpc.testing.integration.Messages.Payload getDefaultInstanceForType() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
     }
 
   }
@@ -756,8 +770,7 @@ public final class Messages {
     }
     private SimpleRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -811,10 +824,11 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
+        throw new RuntimeException(e.setUnfinishedMessage(this));
       } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e.getMessage()).setUnfinishedMessage(this);
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
       } finally {
         makeExtensionsImmutable();
       }
@@ -829,21 +843,6 @@ public final class Messages {
       return io.grpc.testing.integration.Messages.internal_static_grpc_testing_SimpleRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Messages.SimpleRequest.class, io.grpc.testing.integration.Messages.SimpleRequest.Builder.class);
-    }
-
-    public static final com.google.protobuf.Parser<SimpleRequest> PARSER =
-        new com.google.protobuf.AbstractParser<SimpleRequest>() {
-      public SimpleRequest parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        return new SimpleRequest(input, extensionRegistry);
-      }
-    };
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<SimpleRequest> getParserForType() {
-      return PARSER;
     }
 
     public static final int RESPONSE_TYPE_FIELD_NUMBER = 1;
@@ -957,7 +956,6 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (responseType_ != io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE.getNumber()) {
         output.writeEnum(1, responseType_);
       }
@@ -1059,12 +1057,17 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
-    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder(io.grpc.testing.integration.Messages.SimpleRequest prototype) {
-      return newBuilder().mergeFrom(prototype);
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
     }
-    public Builder toBuilder() { return newBuilder(this); }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.SimpleRequest prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -1565,16 +1568,41 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.SimpleRequest)
-    private static final io.grpc.testing.integration.Messages.SimpleRequest defaultInstance;static {
-      defaultInstance = new io.grpc.testing.integration.Messages.SimpleRequest();
+    private static final io.grpc.testing.integration.Messages.SimpleRequest DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.SimpleRequest();
     }
 
     public static io.grpc.testing.integration.Messages.SimpleRequest getDefaultInstance() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
+    }
+
+    public static final com.google.protobuf.Parser<SimpleRequest> PARSER =
+        new com.google.protobuf.AbstractParser<SimpleRequest>() {
+      public SimpleRequest parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new SimpleRequest(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<SimpleRequest> getParserForType() {
+      return PARSER;
     }
 
     public io.grpc.testing.integration.Messages.SimpleRequest getDefaultInstanceForType() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
     }
 
   }
@@ -1673,8 +1701,7 @@ public final class Messages {
     }
     private SimpleResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -1719,10 +1746,11 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
+        throw new RuntimeException(e.setUnfinishedMessage(this));
       } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e.getMessage()).setUnfinishedMessage(this);
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
       } finally {
         makeExtensionsImmutable();
       }
@@ -1737,21 +1765,6 @@ public final class Messages {
       return io.grpc.testing.integration.Messages.internal_static_grpc_testing_SimpleResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Messages.SimpleResponse.class, io.grpc.testing.integration.Messages.SimpleResponse.Builder.class);
-    }
-
-    public static final com.google.protobuf.Parser<SimpleResponse> PARSER =
-        new com.google.protobuf.AbstractParser<SimpleResponse>() {
-      public SimpleResponse parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        return new SimpleResponse(input, extensionRegistry);
-      }
-    };
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<SimpleResponse> getParserForType() {
-      return PARSER;
     }
 
     public static final int PAYLOAD_FIELD_NUMBER = 1;
@@ -1788,7 +1801,7 @@ public final class Messages {
     }
 
     public static final int USERNAME_FIELD_NUMBER = 2;
-    private java.lang.Object username_;
+    private volatile java.lang.Object username_;
     /**
      * <code>optional string username = 2;</code>
      *
@@ -1834,7 +1847,7 @@ public final class Messages {
     }
 
     public static final int OAUTH_SCOPE_FIELD_NUMBER = 3;
-    private java.lang.Object oauthScope_;
+    private volatile java.lang.Object oauthScope_;
     /**
      * <code>optional string oauth_scope = 3;</code>
      *
@@ -1889,7 +1902,6 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (payload_ != null) {
         output.writeMessage(1, getPayload());
       }
@@ -1977,12 +1989,17 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
-    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder(io.grpc.testing.integration.Messages.SimpleResponse prototype) {
-      return newBuilder().mergeFrom(prototype);
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
     }
-    public Builder toBuilder() { return newBuilder(this); }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.SimpleResponse prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -2472,16 +2489,41 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.SimpleResponse)
-    private static final io.grpc.testing.integration.Messages.SimpleResponse defaultInstance;static {
-      defaultInstance = new io.grpc.testing.integration.Messages.SimpleResponse();
+    private static final io.grpc.testing.integration.Messages.SimpleResponse DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.SimpleResponse();
     }
 
     public static io.grpc.testing.integration.Messages.SimpleResponse getDefaultInstance() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
+    }
+
+    public static final com.google.protobuf.Parser<SimpleResponse> PARSER =
+        new com.google.protobuf.AbstractParser<SimpleResponse>() {
+      public SimpleResponse parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new SimpleResponse(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<SimpleResponse> getParserForType() {
+      return PARSER;
     }
 
     public io.grpc.testing.integration.Messages.SimpleResponse getDefaultInstanceForType() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
     }
 
   }
@@ -2522,8 +2564,7 @@ public final class Messages {
     }
     private SimpleContext(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -2549,10 +2590,11 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
+        throw new RuntimeException(e.setUnfinishedMessage(this));
       } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e.getMessage()).setUnfinishedMessage(this);
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
       } finally {
         makeExtensionsImmutable();
       }
@@ -2569,23 +2611,8 @@ public final class Messages {
               io.grpc.testing.integration.Messages.SimpleContext.class, io.grpc.testing.integration.Messages.SimpleContext.Builder.class);
     }
 
-    public static final com.google.protobuf.Parser<SimpleContext> PARSER =
-        new com.google.protobuf.AbstractParser<SimpleContext>() {
-      public SimpleContext parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        return new SimpleContext(input, extensionRegistry);
-      }
-    };
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<SimpleContext> getParserForType() {
-      return PARSER;
-    }
-
     public static final int VALUE_FIELD_NUMBER = 1;
-    private java.lang.Object value_;
+    private volatile java.lang.Object value_;
     /**
      * <code>optional string value = 1;</code>
      */
@@ -2632,7 +2659,6 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (!getValueBytes().isEmpty()) {
         output.writeBytes(1, getValueBytes());
       }
@@ -2706,12 +2732,17 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
-    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder(io.grpc.testing.integration.Messages.SimpleContext prototype) {
-      return newBuilder().mergeFrom(prototype);
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
     }
-    public Builder toBuilder() { return newBuilder(this); }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.SimpleContext prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -2908,16 +2939,41 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.SimpleContext)
-    private static final io.grpc.testing.integration.Messages.SimpleContext defaultInstance;static {
-      defaultInstance = new io.grpc.testing.integration.Messages.SimpleContext();
+    private static final io.grpc.testing.integration.Messages.SimpleContext DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.SimpleContext();
     }
 
     public static io.grpc.testing.integration.Messages.SimpleContext getDefaultInstance() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
+    }
+
+    public static final com.google.protobuf.Parser<SimpleContext> PARSER =
+        new com.google.protobuf.AbstractParser<SimpleContext>() {
+      public SimpleContext parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new SimpleContext(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<SimpleContext> getParserForType() {
+      return PARSER;
     }
 
     public io.grpc.testing.integration.Messages.SimpleContext getDefaultInstanceForType() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
     }
 
   }
@@ -2976,8 +3032,7 @@ public final class Messages {
     }
     private StreamingInputCallRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -3010,10 +3065,11 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
+        throw new RuntimeException(e.setUnfinishedMessage(this));
       } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e.getMessage()).setUnfinishedMessage(this);
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
       } finally {
         makeExtensionsImmutable();
       }
@@ -3028,21 +3084,6 @@ public final class Messages {
       return io.grpc.testing.integration.Messages.internal_static_grpc_testing_StreamingInputCallRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Messages.StreamingInputCallRequest.class, io.grpc.testing.integration.Messages.StreamingInputCallRequest.Builder.class);
-    }
-
-    public static final com.google.protobuf.Parser<StreamingInputCallRequest> PARSER =
-        new com.google.protobuf.AbstractParser<StreamingInputCallRequest>() {
-      public StreamingInputCallRequest parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        return new StreamingInputCallRequest(input, extensionRegistry);
-      }
-    };
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<StreamingInputCallRequest> getParserForType() {
-      return PARSER;
     }
 
     public static final int PAYLOAD_FIELD_NUMBER = 1;
@@ -3090,7 +3131,6 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (payload_ != null) {
         output.writeMessage(1, getPayload());
       }
@@ -3164,12 +3204,17 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
-    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingInputCallRequest prototype) {
-      return newBuilder().mergeFrom(prototype);
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
     }
-    public Builder toBuilder() { return newBuilder(this); }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingInputCallRequest prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -3460,16 +3505,41 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.StreamingInputCallRequest)
-    private static final io.grpc.testing.integration.Messages.StreamingInputCallRequest defaultInstance;static {
-      defaultInstance = new io.grpc.testing.integration.Messages.StreamingInputCallRequest();
+    private static final io.grpc.testing.integration.Messages.StreamingInputCallRequest DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.StreamingInputCallRequest();
     }
 
     public static io.grpc.testing.integration.Messages.StreamingInputCallRequest getDefaultInstance() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
+    }
+
+    public static final com.google.protobuf.Parser<StreamingInputCallRequest> PARSER =
+        new com.google.protobuf.AbstractParser<StreamingInputCallRequest>() {
+      public StreamingInputCallRequest parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new StreamingInputCallRequest(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<StreamingInputCallRequest> getParserForType() {
+      return PARSER;
     }
 
     public io.grpc.testing.integration.Messages.StreamingInputCallRequest getDefaultInstanceForType() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
     }
 
   }
@@ -3513,8 +3583,7 @@ public final class Messages {
     }
     private StreamingInputCallResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -3539,10 +3608,11 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
+        throw new RuntimeException(e.setUnfinishedMessage(this));
       } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e.getMessage()).setUnfinishedMessage(this);
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
       } finally {
         makeExtensionsImmutable();
       }
@@ -3557,21 +3627,6 @@ public final class Messages {
       return io.grpc.testing.integration.Messages.internal_static_grpc_testing_StreamingInputCallResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Messages.StreamingInputCallResponse.class, io.grpc.testing.integration.Messages.StreamingInputCallResponse.Builder.class);
-    }
-
-    public static final com.google.protobuf.Parser<StreamingInputCallResponse> PARSER =
-        new com.google.protobuf.AbstractParser<StreamingInputCallResponse>() {
-      public StreamingInputCallResponse parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        return new StreamingInputCallResponse(input, extensionRegistry);
-      }
-    };
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<StreamingInputCallResponse> getParserForType() {
-      return PARSER;
     }
 
     public static final int AGGREGATED_PAYLOAD_SIZE_FIELD_NUMBER = 1;
@@ -3599,7 +3654,6 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (aggregatedPayloadSize_ != 0) {
         output.writeInt32(1, aggregatedPayloadSize_);
       }
@@ -3673,12 +3727,17 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
-    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingInputCallResponse prototype) {
-      return newBuilder().mergeFrom(prototype);
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
     }
-    public Builder toBuilder() { return newBuilder(this); }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingInputCallResponse prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -3846,16 +3905,41 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.StreamingInputCallResponse)
-    private static final io.grpc.testing.integration.Messages.StreamingInputCallResponse defaultInstance;static {
-      defaultInstance = new io.grpc.testing.integration.Messages.StreamingInputCallResponse();
+    private static final io.grpc.testing.integration.Messages.StreamingInputCallResponse DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.StreamingInputCallResponse();
     }
 
     public static io.grpc.testing.integration.Messages.StreamingInputCallResponse getDefaultInstance() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
+    }
+
+    public static final com.google.protobuf.Parser<StreamingInputCallResponse> PARSER =
+        new com.google.protobuf.AbstractParser<StreamingInputCallResponse>() {
+      public StreamingInputCallResponse parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new StreamingInputCallResponse(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<StreamingInputCallResponse> getParserForType() {
+      return PARSER;
     }
 
     public io.grpc.testing.integration.Messages.StreamingInputCallResponse getDefaultInstanceForType() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
     }
 
   }
@@ -3911,8 +3995,7 @@ public final class Messages {
     }
     private ResponseParameters(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -3942,10 +4025,11 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
+        throw new RuntimeException(e.setUnfinishedMessage(this));
       } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e.getMessage()).setUnfinishedMessage(this);
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
       } finally {
         makeExtensionsImmutable();
       }
@@ -3960,21 +4044,6 @@ public final class Messages {
       return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ResponseParameters_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Messages.ResponseParameters.class, io.grpc.testing.integration.Messages.ResponseParameters.Builder.class);
-    }
-
-    public static final com.google.protobuf.Parser<ResponseParameters> PARSER =
-        new com.google.protobuf.AbstractParser<ResponseParameters>() {
-      public ResponseParameters parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        return new ResponseParameters(input, extensionRegistry);
-      }
-    };
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<ResponseParameters> getParserForType() {
-      return PARSER;
     }
 
     public static final int SIZE_FIELD_NUMBER = 1;
@@ -4017,7 +4086,6 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (size_ != 0) {
         output.writeInt32(1, size_);
       }
@@ -4098,12 +4166,17 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
-    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder(io.grpc.testing.integration.Messages.ResponseParameters prototype) {
-      return newBuilder().mergeFrom(prototype);
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
     }
-    public Builder toBuilder() { return newBuilder(this); }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.ResponseParameters prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -4321,16 +4394,41 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.ResponseParameters)
-    private static final io.grpc.testing.integration.Messages.ResponseParameters defaultInstance;static {
-      defaultInstance = new io.grpc.testing.integration.Messages.ResponseParameters();
+    private static final io.grpc.testing.integration.Messages.ResponseParameters DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.ResponseParameters();
     }
 
     public static io.grpc.testing.integration.Messages.ResponseParameters getDefaultInstance() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
+    }
+
+    public static final com.google.protobuf.Parser<ResponseParameters> PARSER =
+        new com.google.protobuf.AbstractParser<ResponseParameters>() {
+      public ResponseParameters parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new ResponseParameters(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<ResponseParameters> getParserForType() {
+      return PARSER;
     }
 
     public io.grpc.testing.integration.Messages.ResponseParameters getDefaultInstanceForType() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
     }
 
   }
@@ -4458,8 +4556,7 @@ public final class Messages {
     }
     private StreamingOutputCallRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -4506,10 +4603,11 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
+        throw new RuntimeException(e.setUnfinishedMessage(this));
       } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e.getMessage()).setUnfinishedMessage(this);
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
       } finally {
         if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
           responseParameters_ = java.util.Collections.unmodifiableList(responseParameters_);
@@ -4527,21 +4625,6 @@ public final class Messages {
       return io.grpc.testing.integration.Messages.internal_static_grpc_testing_StreamingOutputCallRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Messages.StreamingOutputCallRequest.class, io.grpc.testing.integration.Messages.StreamingOutputCallRequest.Builder.class);
-    }
-
-    public static final com.google.protobuf.Parser<StreamingOutputCallRequest> PARSER =
-        new com.google.protobuf.AbstractParser<StreamingOutputCallRequest>() {
-      public StreamingOutputCallRequest parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        return new StreamingOutputCallRequest(input, extensionRegistry);
-      }
-    };
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<StreamingOutputCallRequest> getParserForType() {
-      return PARSER;
     }
 
     private int bitField0_;
@@ -4675,7 +4758,6 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (responseType_ != io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE.getNumber()) {
         output.writeEnum(1, responseType_);
       }
@@ -4763,12 +4845,17 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
-    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingOutputCallRequest prototype) {
-      return newBuilder().mergeFrom(prototype);
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
     }
-    public Builder toBuilder() { return newBuilder(this); }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingOutputCallRequest prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -5502,16 +5589,41 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.StreamingOutputCallRequest)
-    private static final io.grpc.testing.integration.Messages.StreamingOutputCallRequest defaultInstance;static {
-      defaultInstance = new io.grpc.testing.integration.Messages.StreamingOutputCallRequest();
+    private static final io.grpc.testing.integration.Messages.StreamingOutputCallRequest DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.StreamingOutputCallRequest();
     }
 
     public static io.grpc.testing.integration.Messages.StreamingOutputCallRequest getDefaultInstance() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
+    }
+
+    public static final com.google.protobuf.Parser<StreamingOutputCallRequest> PARSER =
+        new com.google.protobuf.AbstractParser<StreamingOutputCallRequest>() {
+      public StreamingOutputCallRequest parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new StreamingOutputCallRequest(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<StreamingOutputCallRequest> getParserForType() {
+      return PARSER;
     }
 
     public io.grpc.testing.integration.Messages.StreamingOutputCallRequest getDefaultInstanceForType() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
     }
 
   }
@@ -5570,8 +5682,7 @@ public final class Messages {
     }
     private StreamingOutputCallResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -5604,10 +5715,11 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
+        throw new RuntimeException(e.setUnfinishedMessage(this));
       } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e.getMessage()).setUnfinishedMessage(this);
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
       } finally {
         makeExtensionsImmutable();
       }
@@ -5622,21 +5734,6 @@ public final class Messages {
       return io.grpc.testing.integration.Messages.internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Messages.StreamingOutputCallResponse.class, io.grpc.testing.integration.Messages.StreamingOutputCallResponse.Builder.class);
-    }
-
-    public static final com.google.protobuf.Parser<StreamingOutputCallResponse> PARSER =
-        new com.google.protobuf.AbstractParser<StreamingOutputCallResponse>() {
-      public StreamingOutputCallResponse parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        return new StreamingOutputCallResponse(input, extensionRegistry);
-      }
-    };
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<StreamingOutputCallResponse> getParserForType() {
-      return PARSER;
     }
 
     public static final int PAYLOAD_FIELD_NUMBER = 1;
@@ -5684,7 +5781,6 @@ public final class Messages {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (payload_ != null) {
         output.writeMessage(1, getPayload());
       }
@@ -5758,12 +5854,17 @@ public final class Messages {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
-    public static Builder newBuilder() { return new Builder(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingOutputCallResponse prototype) {
-      return newBuilder().mergeFrom(prototype);
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
     }
-    public Builder toBuilder() { return newBuilder(this); }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.StreamingOutputCallResponse prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
 
     @java.lang.Override
     protected Builder newBuilderForType(
@@ -6054,61 +6155,86 @@ public final class Messages {
     }
 
     // @@protoc_insertion_point(class_scope:grpc.testing.StreamingOutputCallResponse)
-    private static final io.grpc.testing.integration.Messages.StreamingOutputCallResponse defaultInstance;static {
-      defaultInstance = new io.grpc.testing.integration.Messages.StreamingOutputCallResponse();
+    private static final io.grpc.testing.integration.Messages.StreamingOutputCallResponse DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.StreamingOutputCallResponse();
     }
 
     public static io.grpc.testing.integration.Messages.StreamingOutputCallResponse getDefaultInstance() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
+    }
+
+    public static final com.google.protobuf.Parser<StreamingOutputCallResponse> PARSER =
+        new com.google.protobuf.AbstractParser<StreamingOutputCallResponse>() {
+      public StreamingOutputCallResponse parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new StreamingOutputCallResponse(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<StreamingOutputCallResponse> getParserForType() {
+      return PARSER;
     }
 
     public io.grpc.testing.integration.Messages.StreamingOutputCallResponse getDefaultInstanceForType() {
-      return defaultInstance;
+      return DEFAULT_INSTANCE;
     }
 
   }
 
-  private static final com.google.protobuf.Descriptors.Descriptor
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_Payload_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_Payload_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_SimpleRequest_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_SimpleRequest_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_SimpleResponse_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_SimpleResponse_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_SimpleContext_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_SimpleContext_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_StreamingInputCallRequest_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_StreamingInputCallRequest_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_StreamingInputCallResponse_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_StreamingInputCallResponse_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ResponseParameters_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ResponseParameters_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_StreamingOutputCallRequest_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_StreamingOutputCallRequest_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_StreamingOutputCallResponse_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable

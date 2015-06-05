@@ -33,8 +33,7 @@ public  final class Point extends
   }
   private Point(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-      throws com.google.protobuf.InvalidProtocolBufferException {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -64,10 +63,11 @@ public  final class Point extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw e.setUnfinishedMessage(this);
+      throw new RuntimeException(e.setUnfinishedMessage(this));
     } catch (java.io.IOException e) {
-      throw new com.google.protobuf.InvalidProtocolBufferException(
-          e.getMessage()).setUnfinishedMessage(this);
+      throw new RuntimeException(
+          new com.google.protobuf.InvalidProtocolBufferException(
+              e.getMessage()).setUnfinishedMessage(this));
     } finally {
       makeExtensionsImmutable();
     }
@@ -82,21 +82,6 @@ public  final class Point extends
     return io.grpc.examples.routeguide.RouteGuideProto.internal_static_routeguide_Point_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.examples.routeguide.Point.class, io.grpc.examples.routeguide.Point.Builder.class);
-  }
-
-  public static final com.google.protobuf.Parser<Point> PARSER =
-      new com.google.protobuf.AbstractParser<Point>() {
-    public Point parsePartialFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return new Point(input, extensionRegistry);
-    }
-  };
-
-  @java.lang.Override
-  public com.google.protobuf.Parser<Point> getParserForType() {
-    return PARSER;
   }
 
   public static final int LATITUDE_FIELD_NUMBER = 1;
@@ -129,7 +114,6 @@ public  final class Point extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    getSerializedSize();
     if (latitude_ != 0) {
       output.writeInt32(1, latitude_);
     }
@@ -210,12 +194,17 @@ public  final class Point extends
     return PARSER.parseFrom(input, extensionRegistry);
   }
 
-  public static Builder newBuilder() { return new Builder(); }
   public Builder newBuilderForType() { return newBuilder(); }
-  public static Builder newBuilder(io.grpc.examples.routeguide.Point prototype) {
-    return newBuilder().mergeFrom(prototype);
+  public static Builder newBuilder() {
+    return DEFAULT_INSTANCE.toBuilder();
   }
-  public Builder toBuilder() { return newBuilder(this); }
+  public static Builder newBuilder(io.grpc.examples.routeguide.Point prototype) {
+    return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+  }
+  public Builder toBuilder() {
+    return this == DEFAULT_INSTANCE
+        ? new Builder() : new Builder().mergeFrom(this);
+  }
 
   @java.lang.Override
   protected Builder newBuilderForType(
@@ -406,16 +395,41 @@ public  final class Point extends
   }
 
   // @@protoc_insertion_point(class_scope:routeguide.Point)
-  private static final io.grpc.examples.routeguide.Point defaultInstance;static {
-    defaultInstance = new io.grpc.examples.routeguide.Point();
+  private static final io.grpc.examples.routeguide.Point DEFAULT_INSTANCE;
+  static {
+    DEFAULT_INSTANCE = new io.grpc.examples.routeguide.Point();
   }
 
   public static io.grpc.examples.routeguide.Point getDefaultInstance() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
+  }
+
+  public static final com.google.protobuf.Parser<Point> PARSER =
+      new com.google.protobuf.AbstractParser<Point>() {
+    public Point parsePartialFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      try {
+        return new Point(input, extensionRegistry);
+      } catch (RuntimeException e) {
+        if (e.getCause() instanceof
+            com.google.protobuf.InvalidProtocolBufferException) {
+          throw (com.google.protobuf.InvalidProtocolBufferException)
+              e.getCause();
+        }
+        throw e;
+      }
+    }
+  };
+
+  @java.lang.Override
+  public com.google.protobuf.Parser<Point> getParserForType() {
+    return PARSER;
   }
 
   public io.grpc.examples.routeguide.Point getDefaultInstanceForType() {
-    return defaultInstance;
+    return DEFAULT_INSTANCE;
   }
 
 }
