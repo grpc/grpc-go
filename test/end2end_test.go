@@ -100,7 +100,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		grpc.SetTrailer(ctx, md)
 	}
 	// Simulate some service delay.
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(time.Second)
 	return &testpb.SimpleResponse{
 		Payload: newPayload(in.GetResponseType(), in.GetResponseSize()),
 	}, nil
@@ -516,11 +516,8 @@ func testRPCTimeout(t *testing.T, e env) {
 		ResponseSize: proto.Int32(int32(respSize)),
 		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
 	}
-	// Performs 100 RPCs with various timeout values so that
-	// the RPCs could timeout on different stages of their lifetime. This
-	// is the best-effort to cover various cases when an rpc gets cancelled.
-	for i := 1; i <= 100; i++ {
-		ctx, _ := context.WithTimeout(context.Background(), time.Duration(i)*time.Microsecond)
+	for i := -1; i <= 10; i++ {
+		ctx, _ := context.WithTimeout(context.Background(), time.Duration(i)*time.Millisecond)
 		reply, err := tc.UnaryCall(ctx, req)
 		if grpc.Code(err) != codes.DeadlineExceeded {
 			t.Fatalf(`TestService/UnaryCallv(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.DeadlineExceeded)
