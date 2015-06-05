@@ -32,7 +32,7 @@
  */
 
 /*
-Package log defines logging for grpc.
+Package grpclog defines logging for grpc.
 */
 package grpclog // import "google.golang.org/grpc/grpclog"
 
@@ -73,12 +73,12 @@ func Fatal(args ...interface{}) {
 	logger.Fatal(args...)
 }
 
-// Fatal is equivalent to Printf() followed by a call to os.Exit() with a non-zero exit code.
+// Fatalf is equivalent to Printf() followed by a call to os.Exit() with a non-zero exit code.
 func Fatalf(format string, args ...interface{}) {
 	logger.Fatalf(format, args...)
 }
 
-// Fatal is equivalent to Println() followed by a call to os.Exit()) with a non-zero exit code.
+// Fatalln is equivalent to Println() followed by a call to os.Exit()) with a non-zero exit code.
 func Fatalln(args ...interface{}) {
 	logger.Fatalln(args...)
 }
