@@ -128,8 +128,21 @@ gRPC source is cloned into ``/grpc-java``.
 $ docker run -it --rm=true grpc-java-deploy
 ```
 Note that the container will be deleted after you exit. Any changes you have
-made will be lost. If you want to keep the container, remove ``--rm=true`` from
-the command line.
+made (e.g., copied configuration files) will be lost. If you want to keep the
+container, remove ``--rm=true`` from the command line.
+
+You need to copy your OSSRH credentials and GnuPG keys to your docker container.
+Run ``ifconfig`` in the host, find the IP address of the ``docker0`` interface.
+Then in docker:
+```
+# scp -r <your-host-user>@<docker0-IP>:./.gnupg ~/
+# mkdir ~/.gradle
+# scp -r <your-host-user>@<docker0-IP>:./.gradle/gradle.properties ~/.gradle
+```
+
+Since ``$HOME`` is ``/root`` in the Docker container, remember to update
+``signing.secretKeyRingFile`` in the Docker copy of ``gradle.properties`` to
+point to ``/root/.gnupg/secring.gpg``
 
 #### Windows 64-bit with MSYS2
 
