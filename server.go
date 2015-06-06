@@ -50,6 +50,17 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
+var (
+	// LogUnaryServerRequests tells a Server to log all unary requests.
+	LogUnaryServerRequests ServerOption = func(o *options) {
+		o.logUnaryRequests = true
+	}
+	// LogUnaryServerResponses tells a Server to log all unary responses.
+	LogUnaryServerResponses ServerOption = func(o *options) {
+		o.logUnaryResponses = true
+	}
+)
+
 type methodHandler func(srv interface{}, ctx context.Context, codec Codec, buf []byte) (interface{}, error)
 
 // MethodDesc represents an RPC service's method specification.
@@ -72,6 +83,7 @@ type ServiceDesc struct {
 // the methods in this service.
 type service struct {
 	server interface{} // the server for service methods
+	name   string
 	md     map[string]*MethodDesc
 	sd     map[string]*StreamDesc
 }
@@ -89,6 +101,8 @@ type options struct {
 	creds                credentials.Credentials
 	codec                Codec
 	maxConcurrentStreams uint32
+	logUnaryRequests     bool
+	logUnaryResponses    bool
 }
 
 // A ServerOption sets options.
@@ -152,6 +166,7 @@ func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
 	}
 	srv := &service{
 		server: ss,
+		name:   sd.ServiceName,
 		md:     make(map[string]*MethodDesc),
 		sd:     make(map[string]*StreamDesc),
 	}
@@ -265,6 +280,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 			return
 		}
+		if s.opts.logUnaryRequests {
+			grpclog.Printf("grpc: service=%s method=%s request=%s", srv.name, md.MethodName, requestOrResponseString(req))
+		}
 		switch pf {
 		case compressionNone:
 			statusCode := codes.OK
@@ -300,6 +318,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 			}
 			t.WriteStatus(stream, statusCode, statusDesc)
+			if s.opts.logUnaryResponses {
+				grpclog.Printf("grpc: service=%s method=%s response=%s", srv.name, md.MethodName, requestOrResponseString(reply))
+			}
 		default:
 			panic(fmt.Sprintf("payload format to be supported: %d", pf))
 		}
@@ -417,4 +438,11 @@ func SetTrailer(ctx context.Context, md metadata.MD) error {
 		return fmt.Errorf("grpc: failed to fetch the stream from the context %v", ctx)
 	}
 	return stream.SetTrailer(md)
+}
+
+func requestOrResponseString(object interface{}) string {
+	if stringer, ok := object.(fmt.Stringer); ok {
+		return stringer.String()
+	}
+	return fmt.Sprintf("%+v", object)
 }
