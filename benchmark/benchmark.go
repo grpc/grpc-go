@@ -120,7 +120,7 @@ func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
 	}
 }
 
-// DoStreamingRoundTrip performs a round trip  for a single streaming rpc.
+// DoStreamingRoundTrip performs a round trip for a single streaming rpc.
 func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService_StreamingCallClient, reqSize, respSize int) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
@@ -129,10 +129,10 @@ func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+		grpclog.Fatalf("StreamingCall(_).Send: %v", err)
 	}
 	if _, err := stream.Recv(); err != nil {
-		grpclog.Fatal("%v.StreamingCall(_) = _, %v", tc, err)
+		grpclog.Fatalf("StreamingCall(_).Recv: %v", err)
 	}
 }
 

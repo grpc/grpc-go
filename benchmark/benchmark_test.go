@@ -62,11 +62,12 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	defer stopper()
 	conn := NewClientConn(target)
 	tc := testpb.NewTestServiceClient(conn)
+
+	// Warm up connection.
 	stream, err := tc.StreamingCall(context.Background())
 	if err != nil {
 		grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 	}
-	// Warm up connection.
 	for i := 0; i < 10; i++ {
 		streamCaller(tc, stream)
 	}
@@ -81,6 +82,10 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	// Distribute the b.N calls over maxConcurrentCalls workers.
 	for i := 0; i < maxConcurrentCalls; i++ {
 		go func() {
+			stream, err := tc.StreamingCall(context.Background())
+			if err != nil {
+				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+			}
 			for _ = range ch {
 				start := time.Now()
 				streamCaller(tc, stream)
