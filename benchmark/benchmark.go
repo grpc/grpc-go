@@ -92,10 +92,11 @@ func (s *testServer) StreamingCall(stream testpb.TestService_StreamingCallServer
 	}
 }
 
-// StartServer starts a gRPC server serving a benchmark service. It returns its
-// listen address and a function to stop the server.
-func StartServer() (string, func()) {
-	lis, err := net.Listen("tcp", ":0")
+// StartServer starts a gRPC server serving a benchmark service on the given
+// address, which may be something like "localhost:0". It returns its listen
+// address and a function to stop the server.
+func StartServer(addr string) (string, func()) {
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}

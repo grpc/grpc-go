@@ -15,7 +15,7 @@ import (
 func runUnary(b *testing.B, maxConcurrentCalls int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
-	target, stopper := StartServer()
+	target, stopper := StartServer("localhost:0")
 	defer stopper()
 	conn := NewClientConn(target)
 	tc := testpb.NewTestServiceClient(conn)
@@ -58,7 +58,7 @@ func runUnary(b *testing.B, maxConcurrentCalls int) {
 func runStream(b *testing.B, maxConcurrentCalls int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
-	target, stopper := StartServer()
+	target, stopper := StartServer("localhost:0")
 	defer stopper()
 	conn := NewClientConn(target)
 	tc := testpb.NewTestServiceClient(conn)
