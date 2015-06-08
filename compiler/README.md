@@ -51,6 +51,6 @@ repostiories.
 $ ../gradlew install
 ```
 
-## Pushing the codegen to Maven Central
-Please follow the instructions in ``DEPLOYING.md`` under the root directory for
-deploying the codegen to Maven Central.
+## Creating a release of GRPC Java
+Please follow the instructions in ``RELEASING.md`` under the root directory for
+details on how to create a new release.
