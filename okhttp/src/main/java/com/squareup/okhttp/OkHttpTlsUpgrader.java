@@ -33,8 +33,7 @@ package com.squareup.okhttp;
 
 import com.google.common.base.Preconditions;
 
-import com.squareup.okhttp.internal.Platform;
-import com.squareup.okhttp.internal.SelectedProtocolQuerier;
+import com.squareup.okhttp.internal.OkHttpProtocolNegotiator;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -68,31 +67,12 @@ public final class OkHttpTlsUpgrader {
     SSLSocket sslSocket = (SSLSocket) sslSocketFactory.createSocket(
         socket, host, port, true /* auto close */);
     spec.apply(sslSocket, false);
-    Platform platform = Platform.get();
     if (spec.supportsTlsExtensions()) {
-      platform.configureTlsExtensions(sslSocket, host, TLS_PROTOCOLS);
+      String negotiatedProtocol =
+          OkHttpProtocolNegotiator.negotiate(sslSocket, host, TLS_PROTOCOLS);
+      Preconditions.checkState(SUPPORTED_HTTP2_PROTOCOLS.contains(negotiatedProtocol),
+          "negotiated protocol %s is unsupported", negotiatedProtocol);
     }
-
-    // It's possible that the user provided SSLSocketFactory has already done the handshake
-    // when creates the SSLSocket.
-    String negotiatedProtocol = SelectedProtocolQuerier.getSelectedProtocol(sslSocket);
-    if (negotiatedProtocol == null) {
-      try {
-        // Force handshake.
-        sslSocket.startHandshake();
-
-        negotiatedProtocol = SelectedProtocolQuerier.getSelectedProtocol(sslSocket);
-        if (negotiatedProtocol == null) {
-          throw new RuntimeException("protocol negotiation failed");
-        }
-      } finally {
-        platform.afterHandshake(sslSocket);
-      }
-    }
-
-    Preconditions.checkState(SUPPORTED_HTTP2_PROTOCOLS.contains(negotiatedProtocol),
-        "negotiated protocol %s is unsupported", negotiatedProtocol);
-
     return sslSocket;
   }
 }
