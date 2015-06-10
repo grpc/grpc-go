@@ -64,7 +64,7 @@ public abstract class AbstractBenchmark {
    * Standard flow-control window sizes.
    */
   public enum FlowWindowSize {
-    SMALL(16383), MEDIUM(65535), LARGE(1048575), JUMBO(16777215);
+    SMALL(16383), MEDIUM(65535), LARGE(1048575), JUMBO(8388607);
 
     private final int bytes;
     FlowWindowSize(int bytes) {
@@ -140,7 +140,13 @@ public abstract class AbstractBenchmark {
 
     // Always use a different worker group from the client.
     serverBuilder.workerEventLoopGroup(new NioEventLoopGroup());
+
+    // Always set connection and stream window size to same value
     serverBuilder.connectionWindowSize(windowSize.bytes());
+    serverBuilder.streamWindowSize(windowSize.bytes());
+    channelBuilder.connectionWindowSize(windowSize.bytes());
+    channelBuilder.streamWindowSize(windowSize.bytes());
+
     channelBuilder.negotiationType(NegotiationType.PLAINTEXT);
     serverBuilder.maxConcurrentCallsPerConnection(maxConcurrentStreams);
 
