@@ -1,0 +1,98 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity"
+    android:orientation="vertical"
+    >
+
+  <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal"
+      >
+    <EditText
+        android:id="@+id/host_edit_text"
+        android:layout_weight="2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:hint="Enter Host"
+        />
+    <EditText
+        android:id="@+id/port_edit_text"
+        android:layout_weight="1"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:inputType="numberDecimal"
+        android:hint="Enter Port"
+        />
+  </LinearLayout>
+
+  <Button
+      android:id="@+id/empty_unary_button"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:onClick="startEmptyUnary"
+      android:text="Empty Unary"
+      />
+
+  <Button
+      android:id="@+id/large_unary_button"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:onClick="startLargeUnary"
+      android:text="Large Unary"
+      />
+
+  <Button
+      android:id="@+id/client_streaming_button"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:onClick="startClientStreaming"
+      android:text="Client Streaming"
+      />
+
+  <Button
+      android:id="@+id/server_streaming_button"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:onClick="startServerStreaming"
+      android:text="Server Streaming"
+      />
+
+  <Button
+      android:id="@+id/ping_pong_button"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:onClick="startPingPong"
+      android:text="Ping Pong"
+      />
+
+  <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:paddingTop="12dp"
+      android:paddingBottom="12dp"
+      android:textSize="16dp"
+      android:text="Response:"
+      />
+
+  <ScrollView
+      android:id="@+id/result_area"
+      android:layout_width="fill_parent"
+      android:layout_height="wrap_content"
+      android:scrollbars="vertical"
+      android:fillViewport="true"
+      >
+
+    <TextView
+        android:id="@+id/grpc_response_text"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:textSize="16dp"
+        android:layout_weight="1.0"
+        />
+
+  </ScrollView>
+
+</LinearLayout>
