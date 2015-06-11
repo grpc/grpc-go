@@ -47,8 +47,9 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-var EnableTracing = false
-
+func init(){
+	grpc.EnableTracing = false
+}
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
 	if size < 0 {
 		grpclog.Fatalf("Requested a response with invalid length %d", size)
