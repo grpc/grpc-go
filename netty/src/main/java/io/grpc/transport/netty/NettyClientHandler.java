@@ -58,6 +58,7 @@ import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameAdapter;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamVisitor;
 
@@ -80,6 +81,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private final Random random = new Random();
   private WriteQueue clientWriteQueue;
   private int connectionWindowSize;
+  private Http2Settings initialSettings = new Http2Settings();
   private Throwable connectionError;
   private Http2Ping ping;
   private Status goAwayStatus;
@@ -101,19 +103,11 @@ class NettyClientHandler extends Http2ConnectionHandler {
     this.ticker = ticker;
     Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
     this.connectionWindowSize = connectionWindowSize;
-    try {
-      decoder().flowController().initialWindowSize(streamWindowSize);
-    } catch (Http2Exception e) {
-      throw new RuntimeException(e);
-    }
 
     initListener();
 
     streamKey = connection.newKey();
 
-    // Disallow stream creation by the server.
-    connection.remote().maxActiveStreams(0);
-    connection.local().allowPushTo(false);
     nextStreamId = connection.local().nextStreamId();
     connection.addListener(new Http2ConnectionAdapter() {
       @Override
@@ -122,6 +116,13 @@ class NettyClientHandler extends Http2ConnectionHandler {
         goingAway();
       }
     });
+
+    // TODO(nmittler): this is a temporary hack as we currently have to send a 2nd SETTINGS
+    // frame. Once we upgrade to Netty 4.1.Beta6 we'll be able to pass in the initial SETTINGS
+    // to the super class constructor.
+    initialSettings.pushEnabled(false);
+    initialSettings.initialWindowSize(streamWindowSize);
+    initialSettings.maxConcurrentStreams(0);
   }
 
   @Nullable
@@ -134,19 +135,14 @@ class NettyClientHandler extends Http2ConnectionHandler {
     this.ctx = ctx;
     // Sends the connection preface if we haven't already.
     super.handlerAdded(ctx);
-
-    // Initialize the connection window if we haven't already.
-    initConnectionWindow();
+    sendInitialSettings();
   }
 
   @Override
   public void channelActive(ChannelHandlerContext ctx) throws Exception {
     // Sends connection preface if we haven't already.
     super.channelActive(ctx);
-
-    // Initialize the connection window if we haven't already.
-    initConnectionWindow();
-    ctx.flush();
+    sendInitialSettings();
   }
 
   /**
@@ -468,16 +464,35 @@ class NettyClientHandler extends Http2ConnectionHandler {
   }
 
   /**
-   * Initializes the connection window if we haven't already.
+   * Sends initial configuration of this endpoint to the remote endpoint.
    */
-  private void initConnectionWindow() throws Http2Exception {
-    if (connectionWindowSize > 0 && ctx.channel().isActive()) {
+  private void sendInitialSettings() throws Http2Exception {
+    if (!ctx.channel().isActive()) {
+      return;
+    }
+    boolean needToFlush = false;
+
+    // Send the initial settings for this endpoint.
+    if (initialSettings != null) {
+      needToFlush = true;
+      encoder().writeSettings(ctx, initialSettings, ctx.newPromise());
+      initialSettings = null;
+    }
+
+    // Send the initial connection window if different than the default.
+    if (connectionWindowSize > 0) {
+      needToFlush = true;
       Http2Stream connectionStream = connection().connectionStream();
       int currentSize = connection().local().flowController().windowSize(connectionStream);
       int delta = connectionWindowSize - currentSize;
       decoder().flowController().incrementWindowSize(ctx, connectionStream, delta);
       connectionWindowSize = -1;
     }
+
+    if (needToFlush) {
+      ctx.flush();
+    }
+
   }
 
   private static class LazyFrameListener extends Http2FrameAdapter {

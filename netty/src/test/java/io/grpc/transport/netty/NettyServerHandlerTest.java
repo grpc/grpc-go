@@ -98,6 +98,7 @@ import org.mockito.stubbing.Answer;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.List;
 
 /** Unit tests for {@link NettyServerHandler}. */
 @RunWith(JUnit4.class)
@@ -314,11 +315,11 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     // Simulate activation of the handler to force writing of the initial settings
     handler.handlerAdded(ctx);
     ArgumentCaptor<Http2Settings> captor = ArgumentCaptor.forClass(Http2Settings.class);
-    verify(frameWriter).writeSettings(
+    verify(frameWriter, times(2)).writeSettings(
         any(ChannelHandlerContext.class), captor.capture(), any(ChannelPromise.class));
 
-    Http2Settings settings = captor.getValue();
-    assertEquals(maxConcurrentStreams, settings.maxConcurrentStreams().intValue());
+    List<Http2Settings> settings = captor.getAllValues();
+    assertEquals(maxConcurrentStreams, settings.get(1).maxConcurrentStreams().intValue());
   }
 
   @Test
