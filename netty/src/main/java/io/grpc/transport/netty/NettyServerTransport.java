@@ -108,6 +108,13 @@ class NettyServerTransport implements ServerTransport {
     }
   }
 
+  /**
+   * For testing purposes only.
+   */
+  Channel channel() {
+    return channel;
+  }
+
   private void notifyTerminated(Throwable t) {
     if (t != null) {
       log.log(Level.SEVERE, "Transport failed", t);
