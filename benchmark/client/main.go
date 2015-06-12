@@ -21,6 +21,7 @@ var (
 	server            = flag.String("server", "", "The server address")
 	maxConcurrentRPCs = flag.Int("max_concurrent_rpcs", 1, "The max number of concurrent RPCs")
 	duration          = flag.Int("duration", math.MaxInt32, "The duration in seconds to run the benchmark client")
+	trace             = flag.Bool("trace", true, "Whether tracing is on")
 	rpcType           = flag.Int("rpc_type", 0,
 		`Configure different client rpc type. Valid options are:
 		   0 : unary call;
@@ -43,7 +44,6 @@ func buildConnection() (s *stats.Stats, conn *grpc.ClientConn, tc testpb.TestSer
 }
 
 func closeLoopUnary() {
-
 	s, conn, tc := buildConnection()
 
 	for i := 0; i < 100; i++ {
@@ -138,9 +138,10 @@ func closeLoopStream() {
 	conn.Close()
 	grpclog.Println(s.String())
 }
+
 func main() {
 	flag.Parse()
-
+	grpc.EnableTracing = *trace
 	go func() {
 		lis, err := net.Listen("tcp", ":0")
 		if err != nil {
