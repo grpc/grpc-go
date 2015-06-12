@@ -38,7 +38,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"reflect"
 	"strings"
 	"sync"
 
@@ -144,11 +143,6 @@ func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
 	// Does some sanity checks.
 	if _, ok := s.m[sd.ServiceName]; ok {
 		grpclog.Fatalf("grpc: Server.RegisterService found duplicate service registration for %q", sd.ServiceName)
-	}
-	ht := reflect.TypeOf(sd.HandlerType).Elem()
-	st := reflect.TypeOf(ss)
-	if !st.Implements(ht) {
-		grpclog.Fatalf("grpc: Server.RegisterService found the handler of type %v that does not satisfy %v", st, ht)
 	}
 	srv := &service{
 		server: ss,
