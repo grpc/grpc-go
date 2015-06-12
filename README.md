@@ -15,16 +15,16 @@ Download [the JAR][]. Or for Maven, add to your `pom.xml`:
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-all</artifactId>
-  <version>0.7.0</version>
+  <version>0.7.1</version>
 </dependency>
 ```
 
 Or for Gradle, add to your dependencies:
 ```gradle
-compile 'io.grpc:grpc-all:0.7.0'
+compile 'io.grpc:grpc-all:0.7.1'
 ```
 
-[the JAR]: https://search.maven.org/remote_content?g=io.grpc&a=grpc-all&v=0.7.0
+[the JAR]: https://search.maven.org/remote_content?g=io.grpc&a=grpc-all&v=0.7.1
 
 Development snapshots are available in [Sonatypes's snapshot
 repository](https://oss.sonatype.org/content/repositories/snapshots/).
@@ -48,7 +48,7 @@ For protobuf-based codegen integrated with the Maven build system, you can use
       <configuration>
         <protocArtifact>com.google.protobuf:protoc:3.0.0-alpha-3:exe:${os.detected.classifier}</protocArtifact>
         <pluginId>grpc-java</pluginId>
-        <pluginArtifact>io.grpc:protoc-gen-grpc-java:0.7.0:exe:${os.detected.classifier}</pluginArtifact>
+        <pluginArtifact>io.grpc:protoc-gen-grpc-java:0.7.1:exe:${os.detected.classifier}</pluginArtifact>
       </configuration>
       <executions>
         <execution>
@@ -90,7 +90,7 @@ sourceSets {
 }
 
 protocDep = "com.google.protobuf:protoc:3.0.0-alpha-3"
-protobufNativeCodeGenPluginDeps = ["grpc:io.grpc:protoc-gen-grpc-java:0.7.0"]
+protobufNativeCodeGenPluginDeps = ["grpc:io.grpc:protoc-gen-grpc-java:0.7.1"]
 ```
 
 [protobuf-gradle-plugin]: https://github.com/google/protobuf-gradle-plugin
