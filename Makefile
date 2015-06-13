@@ -6,8 +6,6 @@
 	updatetestdeps \
 	build \
 	proto \
-	lint \
-	pretest \
 	test \
 	testrace \
 	clean \
@@ -39,18 +37,10 @@ proto:
 		protoc -I $$(dirname $$file) --go_out=plugins=grpc:$$(dirname $$file) $$file; \
 	done
 
-lint: testdeps
-	go get -v github.com/golang/lint/golint
-	for file in $$(git ls-files '*.go' | grep -v '\.pb\.go$$' | grep -v '_string\.go$$'); do \
-		golint $$file; \
-	done
-
-pretest: lint
-
-test: pretest
+test: testdeps
 	go test -v -cpu 1,4 google.golang.org/grpc/...
 
-testrace: pretest
+testrace: testdeps
 	go test -v -race -cpu 1,4 google.golang.org/grpc/...
 
 clean:
