@@ -6,7 +6,6 @@
 	updatetestdeps \
 	build \
 	proto \
-	pretest \
 	test \
 	testrace \
 	clean \
@@ -38,12 +37,10 @@ proto:
 		protoc -I $$(dirname $$file) --go_out=plugins=grpc:$$(dirname $$file) $$file; \
 	done
 
-pretest:
-
-test: pretest
+test: testdeps
 	go test -v -cpu 1,4 google.golang.org/grpc/...
 
-testrace: pretest
+testrace: testdeps
 	go test -v -race -cpu 1,4 google.golang.org/grpc/...
 
 clean:
