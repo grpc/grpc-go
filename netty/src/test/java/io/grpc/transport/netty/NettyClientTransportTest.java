@@ -92,7 +92,7 @@ public class NettyClientTransportTest {
   private NioEventLoopGroup group;
   private InetSocketAddress address;
   private NettyServer server;
-  private TestServerListener serverListener = new TestServerListener();
+  private EchoServerListener serverListener = new EchoServerListener();
 
   @Before
   public void setup() throws Exception {
@@ -120,11 +120,12 @@ public class NettyClientTransportTest {
    */
   @Test
   public void creatingMultipleTlsTransportsShouldSucceed() throws Exception {
-    startServer(Integer.MAX_VALUE);
+    startServer();
 
     // Create a couple client transports.
+    ProtocolNegotiator negotiator = newNegotiator();
     for (int index = 0; index < 2; ++index) {
-      NettyClientTransport transport = newTransport();
+      NettyClientTransport transport = newTransport(negotiator);
       transport.start(clientTransportListener);
     }
 
@@ -145,7 +146,7 @@ public class NettyClientTransportTest {
     // Only allow a single stream active at a time.
     startServer(1);
 
-    NettyClientTransport transport = newTransport();
+    NettyClientTransport transport = newTransport(newNegotiator());
     transport.start(clientTransportListener);
 
     // Send a dummy RPC in order to ensure that the updated SETTINGS_MAX_CONCURRENT_STREAMS
@@ -172,17 +173,22 @@ public class NettyClientTransportTest {
     }
   }
 
-  private NettyClientTransport newTransport() throws IOException {
-    // Create the protocol negotiator.
+  private ProtocolNegotiator newNegotiator() throws IOException {
     File clientCert = TestUtils.loadCert("ca.pem");
     SslContext clientContext = GrpcSslContexts.forClient().trustManager(clientCert)
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
-    ProtocolNegotiator negotiator = ProtocolNegotiators.tls(clientContext, address);
+    return ProtocolNegotiators.tls(clientContext, address);
+  }
 
+  private NettyClientTransport newTransport(ProtocolNegotiator negotiator) {
     NettyClientTransport transport = new NettyClientTransport(address, NioSocketChannel.class,
             group, negotiator, DEFAULT_WINDOW_SIZE, DEFAULT_WINDOW_SIZE);
     transports.add(transport);
     return transport;
+  }
+
+  private void startServer() throws IOException {
+    startServer(100);
   }
 
   private void startServer(int maxStreamsPerConnection) throws IOException {
@@ -206,7 +212,11 @@ public class NettyClientTransportTest {
     final TestClientStreamListener listener = new TestClientStreamListener();
 
     Rpc(NettyClientTransport transport) {
-      stream = transport.newStream(METHOD, new Metadata.Headers(), listener);
+      this(transport, new Metadata.Headers());
+    }
+
+    Rpc(NettyClientTransport transport, Metadata.Headers headers) {
+      stream = transport.newStream(METHOD, headers, listener);
       stream.request(1);
       stream.writeMessage(new ByteArrayInputStream(MESSAGE.getBytes()));
       stream.flush();
@@ -255,7 +265,7 @@ public class NettyClientTransportTest {
     }
   }
 
-  private static class TestServerListener implements ServerListener {
+  private static class EchoServerListener implements ServerListener {
     final List<NettyServerTransport> transports = new ArrayList<NettyServerTransport>();
 
     @Override
