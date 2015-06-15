@@ -280,8 +280,8 @@ func listTestEnv() []env {
 	if runtime.GOOS == "windows" {
 		return []env{env{"tcp", nil, ""}, env{"tcp", nil, "tls"}}
 	}
-	//return []env{env{"tcp", nil, ""}, env{"tcp", nil, "tls"}, env{"unix", unixDialer, ""}, env{"unix", unixDialer, "tls"}}
-	return []env{env{"unix", unixDialer, ""}}
+	return []env{env{"tcp", nil, ""}, env{"tcp", nil, "tls"}, env{"unix", unixDialer, ""}, env{"unix", unixDialer, "tls"}}
+	//return []env{env{"unix", unixDialer, ""}}
 }
 
 func setUp(healthCheck bool, maxStream uint32, e env) (s *grpc.Server, cc *grpc.ClientConn) {
