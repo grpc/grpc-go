@@ -53,6 +53,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+	"google.golang.org/grpc/health"
 )
 
 var (
@@ -304,7 +305,8 @@ func setUp(healthCheck bool, maxStream uint32, e env) (s *grpc.Server, cc *grpc.
 	}
 	s = grpc.NewServer(sopts...)
 	if healthCheck {
-		grpc.Enable(s)
+
+		health.RegisterHealthCheckServer(s,&health.HealthServer{})
 	}
 	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
@@ -367,8 +369,10 @@ func TestHealthCheckOnSucceed(t *testing.T) {
 func testHealthCheckOnSucceed(t *testing.T, e env) {
 	s, cc := setUp(true, math.MaxUint32, e)
 	defer tearDown(s, cc)
-	in := new(grpc.HealthCheckRequest)
-	if err := grpc.Check(1*time.Second, cc, in); err != nil {
+	in := new(health.HealthCheckRequest)
+	out := new(health.HealthCheckResponse)
+	//hc := health.NewHealthCheckMessage()
+	if err := health.HealthCheck(1*time.Second, cc, in, out); err != nil {
 		t.Fatalf("HealthCheck(_)=_, %v, want <nil>", err)
 	}
 }
@@ -382,8 +386,10 @@ func TestHealthCheckOnFailure(t *testing.T) {
 func testHealthCheckOnFailure(t *testing.T, e env) {
 	s, cc := setUp(true, math.MaxUint32, e)
 	defer tearDown(s, cc)
-	in := new(grpc.HealthCheckRequest)
-	if err := grpc.Check(0*time.Second, cc, in); err != grpc.Errorf(codes.DeadlineExceeded, "context deadline exceeded") {
+	in := new(health.HealthCheckRequest)
+	out := new(health.HealthCheckResponse)
+	//hc := health.NewHealthCheckMessage()
+	if err := health.HealthCheck(0*time.Second, cc, in, out); err != grpc.Errorf(codes.DeadlineExceeded, "context deadline exceeded") {
 		t.Fatalf("HealthCheck(_)=_, %v, want <DeadlineExcced>", err)
 	}
 }
@@ -397,9 +403,11 @@ func TestHealthCheckOff(t *testing.T) {
 func testHealthCheckOff(t *testing.T, e env) {
 	s, cc := setUp(false, math.MaxUint32, e)
 	defer tearDown(s, cc)
-	in := new(grpc.HealthCheckRequest)
-	err := grpc.Check(1 * time.Second, cc, in)
-	if err != grpc.Errorf(codes.Unimplemented, "unknown service grpc.HealthCheck") {
+	in := new(health.HealthCheckRequest)
+	out := new(health.HealthCheckResponse)
+	//hc :=health.NewHealthCheckMessage()
+	err := health.HealthCheck(1 * time.Second, cc, in, out)
+	if err != grpc.Errorf(codes.Unimplemented, "unknown service health.HealthCheck") {
 		t.Fatalf("HealthCheck(_)=_, %v, want <unimplemented>", err)
 	}
 }
