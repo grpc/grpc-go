@@ -48,6 +48,8 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
+import io.netty.handler.ssl.OpenSslContext;
+import io.netty.handler.ssl.OpenSslEngine;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
@@ -78,6 +80,16 @@ public final class ProtocolNegotiators {
    */
   public static ChannelHandler serverTls(SSLEngine sslEngine) {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
+
+    // If we're using Jetty ALPN, verify that it is configured properly.
+    if (!(sslEngine instanceof OpenSslEngine)) {
+      try {
+        JettyAlpnVerifier.verifyJettyAlpn();
+      } catch (JettyAlpnVerifier.NotFoundException e) {
+        throw new IllegalArgumentException(e);
+      }
+    }
+
     return new SslHandler(sslEngine, false);
   }
 
@@ -90,6 +102,15 @@ public final class ProtocolNegotiators {
                                        final InetSocketAddress inetAddress) {
     Preconditions.checkNotNull(sslContext, "sslContext");
     Preconditions.checkNotNull(inetAddress, "inetAddress");
+
+    // If we're using Jetty ALPN, verify that it is configured properly.
+    if (!(sslContext instanceof OpenSslContext)) {
+      try {
+        JettyAlpnVerifier.verifyJettyAlpn();
+      } catch (JettyAlpnVerifier.NotFoundException e) {
+        throw new IllegalArgumentException(e);
+      }
+    }
 
     return new ProtocolNegotiator() {
       @Override
