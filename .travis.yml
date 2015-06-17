@@ -4,13 +4,13 @@ language: java
 
 env:
   global:
-    - LDFLAGS=-L/tmp/proto3-a2/lib
-    - CXXFLAGS=-I/tmp/proto3-a2/include
-    - LD_LIBRARY_PATH=/tmp/proto3-a2/lib
-    - PATH=/tmp/proto3-a2/bin:$PATH
+    - LDFLAGS=-L/tmp/proto3-a3/lib
+    - CXXFLAGS=-I/tmp/proto3-a3/include
+    - LD_LIBRARY_PATH=/tmp/proto3-a3/lib
+    - PATH=/tmp/proto3-a3/bin:$PATH
 
 before_install:
-  - buildscripts/make_dependencies.sh # build protoc into /tmp/proto3-a2
+  - buildscripts/make_dependencies.sh # build protoc into /tmp/proto3-a3
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
 
@@ -28,7 +28,7 @@ notifications:
 
 cache:
   directories:
-    - /tmp/proto3-a2
+    - /tmp/proto3-a3
     - $HOME/.m2/repository/io/netty
     - $HOME/.gradle/caches/modules-2
     - $HOME/.gradle/wrapper
