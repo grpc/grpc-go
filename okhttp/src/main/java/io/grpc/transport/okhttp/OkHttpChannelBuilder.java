@@ -34,8 +34,10 @@ package io.grpc.transport.okhttp;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import com.squareup.okhttp.CipherSuite;
 import com.squareup.okhttp.ConnectionSpec;
 
+import com.squareup.okhttp.TlsVersion;
 import io.grpc.AbstractChannelBuilder;
 import io.grpc.SharedResourceHolder;
 import io.grpc.SharedResourceHolder.Resource;
@@ -64,6 +66,22 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
         }
       };
 
+  public static final ConnectionSpec DEFAULT_CONNECTION_SPEC =
+      new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
+          .cipherSuites(
+              // The following items should be sync with Netty's Http2SecurityUtil.CIPHERS.
+              CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+              CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+              CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+              CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+              CipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
+              CipherSuite.TLS_DHE_DSS_WITH_AES_128_GCM_SHA256,
+              CipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+              CipherSuite.TLS_DHE_DSS_WITH_AES_256_GCM_SHA384)
+          .tlsVersions(TlsVersion.TLS_1_2)
+          .supportsTlsExtensions(true)
+          .build();
+
   /** Creates a new builder for the given server host and port. */
   public static OkHttpChannelBuilder forAddress(String host, int port) {
     return new OkHttpChannelBuilder(new InetSocketAddress(host, port), host);
@@ -73,7 +91,7 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
   private ExecutorService transportExecutor;
   private String host;
   private SSLSocketFactory sslSocketFactory;
-  private ConnectionSpec connectionSpec;
+  private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
 
   private OkHttpChannelBuilder(InetSocketAddress serverAddress, String host) {
     this.serverAddress = Preconditions.checkNotNull(serverAddress, "serverAddress");
@@ -114,9 +132,9 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
    * For secure connection, provides a ConnectionSpec to specify Cipher suite and
    * TLS versions.
    *
-   * <p>By default OkHttpClientTransport.DEFAULT_CONNECTION_SPEC will be used.
+   * <p>By default DEFAULT_CONNECTION_SPEC will be used.
    */
-  public OkHttpChannelBuilder setConnectionSpec(ConnectionSpec connectionSpec) {
+  public OkHttpChannelBuilder connectionSpec(ConnectionSpec connectionSpec) {
     this.connectionSpec = connectionSpec;
     return this;
   }

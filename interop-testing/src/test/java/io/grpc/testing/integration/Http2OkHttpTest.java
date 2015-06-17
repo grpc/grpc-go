@@ -39,7 +39,6 @@ import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
-import io.grpc.transport.okhttp.OkHttpClientTransport;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import org.junit.AfterClass;
@@ -78,7 +77,7 @@ public class Http2OkHttpTest extends AbstractTransportTest {
   @Override
   protected ChannelImpl createChannel() {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", serverPort)
-        .setConnectionSpec(new ConnectionSpec.Builder(OkHttpClientTransport.DEFAULT_CONNECTION_SPEC)
+        .connectionSpec(new ConnectionSpec.Builder(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC)
             .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
             .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))
             .build())

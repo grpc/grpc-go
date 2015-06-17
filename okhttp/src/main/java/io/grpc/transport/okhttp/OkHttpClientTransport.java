@@ -39,10 +39,8 @@ import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
 import com.google.common.util.concurrent.SettableFuture;
 
-import com.squareup.okhttp.CipherSuite;
 import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.OkHttpTlsUpgrader;
-import com.squareup.okhttp.TlsVersion;
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
 import com.squareup.okhttp.internal.spdy.Header;
@@ -91,23 +89,7 @@ import javax.net.ssl.SSLSocketFactory;
 /**
  * A okhttp-based {@link ClientTransport} implementation.
  */
-public class OkHttpClientTransport implements ClientTransport {
-  public static final ConnectionSpec DEFAULT_CONNECTION_SPEC =
-      new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
-      .cipherSuites(
-          // The following items should be sync with Netty's Http2SecurityUtil.CIPHERS.
-          CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-          CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-          CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-          CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-          CipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
-          CipherSuite.TLS_DHE_DSS_WITH_AES_128_GCM_SHA256,
-          CipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
-          CipherSuite.TLS_DHE_DSS_WITH_AES_256_GCM_SHA384)
-      .tlsVersions(TlsVersion.TLS_1_2)
-      .supportsTlsExtensions(true)
-      .build();
-
+class OkHttpClientTransport implements ClientTransport {
   /** The default initial window size in HTTP/2 is 64 KiB for the stream and connection. */
   @VisibleForTesting
   static final int DEFAULT_INITIAL_WINDOW_SIZE = 64 * 1024;
@@ -178,10 +160,10 @@ public class OkHttpClientTransport implements ClientTransport {
   private int maxConcurrentStreams = Integer.MAX_VALUE;
   @GuardedBy("lock")
   private LinkedList<PendingStream> pendingStreams = new LinkedList<PendingStream>();
-  private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
+  private final ConnectionSpec connectionSpec;
 
   OkHttpClientTransport(InetSocketAddress address, String authorityHost, Executor executor,
-      @Nullable SSLSocketFactory sslSocketFactory, @Nullable ConnectionSpec connectionSpec) {
+      @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec) {
     this.address = Preconditions.checkNotNull(address);
     this.authorityHost = authorityHost;
     defaultAuthority = authorityHost + ":" + address.getPort();
@@ -190,9 +172,7 @@ public class OkHttpClientTransport implements ClientTransport {
     // use it. We start clients at 3 to avoid conflicting with HTTP negotiation.
     nextStreamId = 3;
     this.sslSocketFactory = sslSocketFactory;
-    if (connectionSpec != null) {
-      this.connectionSpec = connectionSpec;
-    }
+    this.connectionSpec = Preconditions.checkNotNull(connectionSpec);
     this.ticker = Ticker.systemTicker();
   }
 
@@ -221,6 +201,7 @@ public class OkHttpClientTransport implements ClientTransport {
     this.outboundFlow = new OutboundFlowController(this, frameWriter);
     this.nextStreamId = nextStreamId;
     this.ticker = ticker;
+    this.connectionSpec = null;
   }
 
   @Override
