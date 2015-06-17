@@ -91,6 +91,7 @@ class Utils {
   public static Metadata.Headers convertHeaders(Http2Headers http2Headers) {
     Metadata.Headers headers = new Metadata.Headers(convertHeadersToArray(http2Headers));
     if (http2Headers.authority() != null) {
+      // toString() here is safe since it doesn't use the default Charset.
       headers.setAuthority(http2Headers.authority().toString());
     }
     if (http2Headers.path() != null) {

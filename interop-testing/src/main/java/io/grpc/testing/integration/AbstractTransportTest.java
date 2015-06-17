@@ -93,6 +93,8 @@ public abstract class AbstractTransportTest {
 
   public static final Metadata.Key<Messages.SimpleContext> METADATA_KEY =
       ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
+  private static final AtomicReference<Metadata.Headers> requestHeadersCapture =
+      new AtomicReference<Metadata.Headers>();
   private static ScheduledExecutorService testServiceExecutor;
   private static ServerImpl server;
   private static int OPERATION_TIMEOUT = 5000;
@@ -102,6 +104,7 @@ public abstract class AbstractTransportTest {
 
     builder.addService(ServerInterceptors.intercept(
         TestServiceGrpc.bindService(new TestServiceImpl(testServiceExecutor)),
+        TestUtils.recordRequestHeadersInterceptor(requestHeadersCapture),
         TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)));
     try {
       server = builder.build().start();
@@ -127,6 +130,7 @@ public abstract class AbstractTransportTest {
     channel = createChannel();
     blockingStub = TestServiceGrpc.newBlockingStub(channel);
     asyncStub = TestServiceGrpc.newStub(channel);
+    requestHeadersCapture.set(null);
   }
 
   /** Clean up. */
@@ -570,6 +574,16 @@ public abstract class AbstractTransportTest {
     // Assert that our side channel object is echoed back in both headers and trailers
     Assert.assertEquals(contextValue, headersCapture.get().get(METADATA_KEY));
     Assert.assertEquals(contextValue, trailersCapture.get().get(METADATA_KEY));
+  }
+
+  @Test(timeout = 10000)
+  public void sendsTimeoutHeader() {
+    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
+        .configureNewStub()
+        .setTimeout(572, TimeUnit.MILLISECONDS)
+        .build();
+    stub.emptyCall(Empty.getDefaultInstance());
+    Assert.assertEquals(572000L, (long) requestHeadersCapture.get().get(ChannelImpl.TIMEOUT_KEY));
   }
 
 

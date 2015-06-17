@@ -145,6 +145,28 @@ public class MetadataTest {
     roundTripInteger(0x87654321);
   }
 
+  @Test
+  public void timeoutTest() {
+    ChannelImpl.TimeoutMarshaller marshaller =
+        new ChannelImpl.TimeoutMarshaller();
+    assertEquals("1000u", marshaller.toAsciiString(1000L));
+    assertEquals(1000L, (long) marshaller.parseAsciiString("1000u"));
+
+    assertEquals("100000m", marshaller.toAsciiString(100000000L));
+    assertEquals(100000000L, (long) marshaller.parseAsciiString("100000m"));
+
+    assertEquals("100000S", marshaller.toAsciiString(100000000000L));
+    assertEquals(100000000000L, (long) marshaller.parseAsciiString("100000S"));
+
+    // 1,666,667 * 60 has 9 digits
+    assertEquals("1666666M", marshaller.toAsciiString(100000000000000L));
+    assertEquals(60000000000000L, (long) marshaller.parseAsciiString("1000000M"));
+
+    // 1,666,667 * 60 has 9 digits
+    assertEquals("1666666H", marshaller.toAsciiString(6000000000000000L));
+    assertEquals(3600000000000000L, (long) marshaller.parseAsciiString("1000000H"));
+  }
+
   private void roundTripInteger(Integer i) {
     assertEquals(i, Metadata.INTEGER_MARSHALLER.parseAsciiString(
         Metadata.INTEGER_MARSHALLER.toAsciiString(i)));

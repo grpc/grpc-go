@@ -69,6 +69,11 @@ public final class HttpUtil {
   public static final String TE_TRAILERS = "trailers";
 
   /**
+   * The Timeout header name.
+   */
+  public static final String TIMEOUT = "grpc-timeout";
+
+  /**
    * Maps HTTP error response status codes to transport codes.
    */
   public static Status httpStatusToGrpcStatus(int httpStatusCode) {
