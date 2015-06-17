@@ -306,7 +306,6 @@ func setUp(healthCheck bool, maxStream uint32, e env) (s *grpc.Server, cc *grpc.
 	}
 	s = grpc.NewServer(sopts...)
 	if healthCheck {
-
 		healthpb.RegisterHealthCheckServer(s, &health.HealthServer{})
 	}
 	testpb.RegisterTestServiceServer(s, &testServer{})
@@ -361,13 +360,13 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	cc.Close()
 }
 
-func TestHealthCheckOnSucceed(t *testing.T) {
+func TestHealthCheckOnSuccess(t *testing.T) {
 	for _, e := range listTestEnv() {
-		testHealthCheckOnSucceed(t, e)
+		testHealthCheckOnSuccess(t, e)
 	}
 }
 
-func testHealthCheckOnSucceed(t *testing.T, e env) {
+func testHealthCheckOnSuccess(t *testing.T, e env) {
 	s, cc := setUp(true, math.MaxUint32, e)
 	defer tearDown(s, cc)
 	if err := health.HealthCheck(1*time.Second, cc); err != nil {
@@ -385,7 +384,7 @@ func testHealthCheckOnFailure(t *testing.T, e env) {
 	s, cc := setUp(true, math.MaxUint32, e)
 	defer tearDown(s, cc)
 	if err := health.HealthCheck(0*time.Second, cc); err != grpc.Errorf(codes.DeadlineExceeded, "context deadline exceeded") {
-		t.Fatalf("HealthCheck(_)=_, %v, want <DeadlineExcced>", err)
+		t.Fatalf("HealthCheck(_)=_, %v, want error code %d", err, codes.DeadlineExceeded)
 	}
 }
 
@@ -400,7 +399,7 @@ func testHealthCheckOff(t *testing.T, e env) {
 	defer tearDown(s, cc)
 	err := health.HealthCheck(1*time.Second, cc)
 	if err != grpc.Errorf(codes.Unimplemented, "unknown service grpc.health.HealthCheck") {
-		t.Fatalf("HealthCheck(_)=_, %v, want <unimplemented>", err)
+		t.Fatalf("HealthCheck(_)=_, %v, want error code %d", err, codes.DeadlineExceeded)
 	}
 }
 
