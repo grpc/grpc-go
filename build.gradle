@@ -30,7 +30,8 @@ subprojects {
 
 
     [compileJava, compileTestJava].each() {
-        it.options.compilerArgs += ["-Xlint:unchecked", "-Xlint:deprecation", "-Xlint:-options"]
+        it.options.compilerArgs += ["-Xlint:unchecked", "-Xlint:deprecation", "-Xlint:-options",
+            "-Xlint:rawtypes"]
         it.options.encoding = "UTF-8"
     }
 
