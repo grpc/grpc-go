@@ -164,7 +164,6 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 		err = toRPCErr(err)
 	}()
-
 	out, err := encode(cs.codec, m, compressionNone)
 	if err != nil {
 		return transport.StreamErrorf(codes.Internal, "grpc: %v", err)
