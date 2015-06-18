@@ -36,10 +36,8 @@ package grpc
 import (
 	"errors"
 	"io"
-	"time"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
@@ -96,7 +94,6 @@ type ClientStream interface {
 // by generated code.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
 	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
-	var trInfo traceInfo
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
 		Method: method,
@@ -105,36 +102,26 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if err != nil {
 		return nil, toRPCErr(err)
 	}
-	if EnableTracing {
-		trInfo.tr = trace.New("Sent."+methodFamily(desc.StreamName), desc.StreamName)
-		trInfo.firstLine.client = true
-		if deadline, ok := ctx.Deadline(); ok {
-			trInfo.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		trInfo.tr.LazyLog(&trInfo.firstLine, false)
-	}
 	s, err := t.NewStream(ctx, callHdr)
 	if err != nil {
 		return nil, toRPCErr(err)
 	}
 	return &clientStream{
-		t:         t,
-		s:         s,
-		p:         &parser{s: s},
-		desc:      desc,
-		codec:     cc.dopts.codec,
-		traceInfo: trInfo,
+		t:     t,
+		s:     s,
+		p:     &parser{s: s},
+		desc:  desc,
+		codec: cc.dopts.codec,
 	}, nil
 }
 
 // clientStream implements a client side Stream.
 type clientStream struct {
-	t         transport.ClientTransport
-	s         *transport.Stream
-	p         *parser
-	desc      *StreamDesc
-	codec     Codec
-	traceInfo traceInfo
+	t     transport.ClientTransport
+	s     *transport.Stream
+	p     *parser
+	desc  *StreamDesc
+	codec Codec
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -165,7 +152,6 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 		err = toRPCErr(err)
 	}()
-
 	out, err := encode(cs.codec, m, compressionNone)
 	if err != nil {
 		return transport.StreamErrorf(codes.Internal, "grpc: %v", err)
@@ -186,17 +172,10 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 		}
 		if err == io.EOF {
-			if EnableTracing {
-				defer cs.traceInfo.tr.Finish()
-			}
 			if cs.s.StatusCode() == codes.OK {
 				return nil
 			}
 			return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
-		}
-		if EnableTracing {
-			cs.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-			cs.traceInfo.tr.SetError()
 		}
 		return toRPCErr(err)
 	}
@@ -204,19 +183,11 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		cs.t.CloseStream(cs.s, err)
 	}
 	if err == io.EOF {
-		if EnableTracing {
-			cs.traceInfo.tr.Finish()
-		}
-
 		if cs.s.StatusCode() == codes.OK {
 			// Returns io.EOF to indicate the end of the stream.
 			return
 		}
 		return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
-	}
-	if EnableTracing {
-		cs.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-		cs.traceInfo.tr.SetError()
 	}
 	return toRPCErr(err)
 }
