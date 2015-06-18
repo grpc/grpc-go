@@ -31,7 +31,6 @@
 
 package io.grpc;
 
-import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -44,8 +43,6 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-
-import com.google.common.io.ByteStreams;
 
 import io.grpc.transport.ServerListener;
 import io.grpc.transport.ServerStream;
@@ -62,7 +59,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.BrokenBarrierException;
@@ -75,8 +71,8 @@ import java.util.concurrent.atomic.AtomicReference;
 /** Unit tests for {@link ServerImpl}. */
 @RunWith(JUnit4.class)
 public class ServerImplTest {
-  private static final IntegerMarshaller INTEGER_MARSHALLER = new IntegerMarshaller();
-  private static final StringMarshaller STRING_MARSHALLER = new StringMarshaller();
+  private static final IntegerMarshaller INTEGER_MARSHALLER = IntegerMarshaller.INSTANCE;
+  private static final StringMarshaller STRING_MARSHALLER = StringMarshaller.INSTANCE;
 
   private ExecutorService executor = Executors.newSingleThreadExecutor();
   private MutableHandlerRegistry registry = new MutableHandlerRegistryImpl();
@@ -298,34 +294,6 @@ public class ServerImplTest {
     @Override
     public void shutdown() {
       listener.transportTerminated();
-    }
-  }
-
-  private static class StringMarshaller implements Marshaller<String> {
-    @Override
-    public InputStream stream(String value) {
-      return new ByteArrayInputStream(value.getBytes(UTF_8));
-    }
-
-    @Override
-    public String parse(InputStream stream) {
-      try {
-        return new String(ByteStreams.toByteArray(stream), UTF_8);
-      } catch (IOException ex) {
-        throw new RuntimeException(ex);
-      }
-    }
-  }
-
-  private static class IntegerMarshaller implements Marshaller<Integer> {
-    @Override
-    public InputStream stream(Integer value) {
-      return STRING_MARSHALLER.stream(value.toString());
-    }
-
-    @Override
-    public Integer parse(InputStream stream) {
-      return Integer.valueOf(STRING_MARSHALLER.parse(stream));
     }
   }
 }

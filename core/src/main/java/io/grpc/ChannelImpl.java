@@ -192,8 +192,17 @@ public final class ChannelImpl extends Channel {
    *
    * @see ClientTransport#ping(PingCallback, Executor)
    */
-  public void ping(PingCallback callback, Executor executor) {
-    obtainActiveTransport().ping(callback, executor);
+  public void ping(final PingCallback callback, final Executor executor) {
+    try {
+      obtainActiveTransport().ping(callback, executor);
+    } catch (final RuntimeException ex) {
+      executor.execute(new Runnable() {
+        @Override
+        public void run() {
+          callback.pingFailed(ex);
+        }
+      });
+    }
   }
 
   /*
@@ -300,13 +309,12 @@ public final class ChannelImpl extends Channel {
         transport = obtainActiveTransport();
       } catch (RuntimeException ex) {
         stream = new NoopClientStream();
-        listener.closed(Status.INTERNAL.withDescription("Failed starting transport").withCause(ex),
-            new Metadata.Trailers());
+        listener.closed(Status.fromThrowable(ex), new Metadata.Trailers());
         return;
       }
       if (transport == null) {
         stream = new NoopClientStream();
-        listener.closed(Status.CANCELLED.withDescription("Channel is shutdown"),
+        listener.closed(Status.UNAVAILABLE.withDescription("Channel is shutdown"),
             new Metadata.Trailers());
         return;
       }

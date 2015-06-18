@@ -337,7 +337,8 @@ class OkHttpClientTransport implements ClientTransport {
       } catch (IOException e) {
         // TODO(jhump): should we instead notify the listener of shutdown+terminated?
         // (and probably do all of this work asynchronously instead of in calling thread)
-        throw new RuntimeException(e);
+        throw Status.UNAVAILABLE.withDescription("Failed connecting").withCause(e)
+            .asRuntimeException();
       }
       Variant variant = new Http2();
       frameReader = variant.newReader(source, true);
