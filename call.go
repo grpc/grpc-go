@@ -102,9 +102,6 @@ type callInfo struct {
 	traceInfo traceInfo // in trace.go
 }
 
-// EnableTracing controls whether to trace RPCs using the golang.org/x/net/trace package.
-// This should only be set before any RPCs are sent or received by this program.
-var EnableTracing = true
 
 // Invoke is called by the generated code. It sends the RPC request on the
 // wire and returns after response is received.
