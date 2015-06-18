@@ -102,7 +102,6 @@ type callInfo struct {
 	traceInfo traceInfo // in trace.go
 }
 
-
 // Invoke is called by the generated code. It sends the RPC request on the
 // wire and returns after response is received.
 func Invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (err error) {

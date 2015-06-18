@@ -96,7 +96,6 @@ type ClientStream interface {
 // by generated code.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
 	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
-	var trInfo traceInfo
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
 		Method: method,
@@ -105,26 +104,26 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if err != nil {
 		return nil, toRPCErr(err)
 	}
-	if EnableTracing {
-		trInfo.tr = trace.New("Sent."+methodFamily(desc.StreamName), desc.StreamName)
-		trInfo.firstLine.client = true
-		if deadline, ok := ctx.Deadline(); ok {
-			trInfo.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		trInfo.tr.LazyLog(&trInfo.firstLine, false)
-	}
 	s, err := t.NewStream(ctx, callHdr)
 	if err != nil {
 		return nil, toRPCErr(err)
 	}
-	return &clientStream{
-		t:         t,
-		s:         s,
-		p:         &parser{s: s},
-		desc:      desc,
-		codec:     cc.dopts.codec,
-		traceInfo: trInfo,
-	}, nil
+	cs := &clientStream{
+		t:     t,
+		s:     s,
+		p:     &parser{s: s},
+		desc:  desc,
+		codec: cc.dopts.codec,
+	}
+	if EnableTracing {
+		cs.traceInfo.tr = trace.New("Sent."+methodFamily(desc.StreamName), desc.StreamName)
+		cs.traceInfo.firstLine.client = true
+		if deadline, ok := ctx.Deadline(); ok {
+			cs.traceInfo.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		cs.traceInfo.tr.LazyLog(&cs.traceInfo.firstLine, false)
+	}
+	return cs, nil
 }
 
 // clientStream implements a client side Stream.
@@ -175,6 +174,16 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	err = recv(cs.p, cs.codec, m)
+	defer func() {
+		// err != nil indicates the termination of the stream.
+		if EnableTracing && err != nil {
+			cs.traceInfo.tr.Finish()
+			if err != io.EOF {
+				cs.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+				cs.traceInfo.tr.SetError()
+			}
+		}
+	}()
 	if err == nil {
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
@@ -186,17 +195,10 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 		}
 		if err == io.EOF {
-			if EnableTracing {
-				defer cs.traceInfo.tr.Finish()
-			}
 			if cs.s.StatusCode() == codes.OK {
 				return nil
 			}
 			return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
-		}
-		if EnableTracing {
-			cs.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-			cs.traceInfo.tr.SetError()
 		}
 		return toRPCErr(err)
 	}
@@ -204,19 +206,11 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		cs.t.CloseStream(cs.s, err)
 	}
 	if err == io.EOF {
-		if EnableTracing {
-			cs.traceInfo.tr.Finish()
-		}
-
 		if cs.s.StatusCode() == codes.OK {
 			// Returns io.EOF to indicate the end of the stream.
 			return
 		}
 		return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
-	}
-	if EnableTracing {
-		cs.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-		cs.traceInfo.tr.SetError()
 	}
 	return toRPCErr(err)
 }
