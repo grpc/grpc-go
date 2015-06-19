@@ -58,9 +58,12 @@ public class ClientAuthInterceptor implements ClientInterceptor {
 
   private Metadata.Headers cached;
   private Map<String, List<String>> lastMetadata;
+  // TODO(louiscryan): refresh token asynchronously with this executor.
+  private Executor executor;
 
   public ClientAuthInterceptor(Credentials credentials, Executor executor) {
     this.credentials = Preconditions.checkNotNull(credentials);
+    this.executor = Preconditions.checkNotNull(executor);
   }
 
   @Override
@@ -74,7 +77,7 @@ public class ClientAuthInterceptor implements ClientInterceptor {
           throws Exception {
         Metadata.Headers cachedSaved;
         synchronized (ClientAuthInterceptor.this) {
-          // TODO(lryan): This is icky but the current auth library stores the same
+          // TODO(louiscryan): This is icky but the current auth library stores the same
           // metadata map until the next refresh cycle. This will be fixed once
           // https://github.com/google/google-auth-library-java/issues/3
           // is resolved.
