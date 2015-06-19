@@ -36,8 +36,10 @@ package grpc
 import (
 	"errors"
 	"io"
+	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
@@ -98,6 +100,18 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		Host:   cc.authority,
 		Method: method,
 	}
+	cs := &clientStream{
+		desc:  desc,
+		codec: cc.dopts.codec,
+	}
+	if EnableTracing {
+		cs.traceInfo.tr = trace.New("Sent."+methodFamily(desc.StreamName), desc.StreamName)
+		cs.traceInfo.firstLine.client = true
+		if deadline, ok := ctx.Deadline(); ok {
+			cs.traceInfo.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		cs.traceInfo.tr.LazyLog(&cs.traceInfo.firstLine, false)
+	}
 	t, _, err := cc.wait(ctx, 0)
 	if err != nil {
 		return nil, toRPCErr(err)
@@ -106,22 +120,20 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if err != nil {
 		return nil, toRPCErr(err)
 	}
-	return &clientStream{
-		t:     t,
-		s:     s,
-		p:     &parser{s: s},
-		desc:  desc,
-		codec: cc.dopts.codec,
-	}, nil
+	cs.t = t
+	cs.s = s
+	cs.p = &parser{s: s}
+	return cs, nil
 }
 
 // clientStream implements a client side Stream.
 type clientStream struct {
-	t     transport.ClientTransport
-	s     *transport.Stream
-	p     *parser
-	desc  *StreamDesc
-	codec Codec
+	t         transport.ClientTransport
+	s         *transport.Stream
+	p         *parser
+	desc      *StreamDesc
+	codec     Codec
+	traceInfo traceInfo
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -161,6 +173,16 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	err = recv(cs.p, cs.codec, m)
+	defer func() {
+		// err != nil indicates the termination of the stream.
+		if EnableTracing && err != nil {
+			if err != io.EOF {
+				cs.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+				cs.traceInfo.tr.SetError()
+			}
+			cs.traceInfo.tr.Finish()
+		}
+	}()
 	if err == nil {
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
