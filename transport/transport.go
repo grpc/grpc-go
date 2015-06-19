@@ -165,6 +165,8 @@ type Stream struct {
 	id uint32
 	// nil for client side Stream.
 	st ServerTransport
+	// nil for server side Stream.
+	ct ClientTransport
 	// ctx is the associated context of the stream.
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -225,6 +227,12 @@ func (s *Stream) Trailer() metadata.MD {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.trailer.Copy()
+}
+
+// ClientTransport returns the underlying ClientTransport for the stream.
+// The server side stream always returns nil.
+func (s *Stream) ClientTransport() ClientTransport {
+	return s.ct
 }
 
 // ServerTransport returns the underlying ServerTransport for the stream.
