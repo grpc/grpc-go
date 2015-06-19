@@ -100,18 +100,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		Host:   cc.authority,
 		Method: method,
 	}
-	t, _, err := cc.wait(ctx, 0)
-	if err != nil {
-		return nil, toRPCErr(err)
-	}
-	s, err := t.NewStream(ctx, callHdr)
-	if err != nil {
-		return nil, toRPCErr(err)
-	}
 	cs := &clientStream{
-		t:     t,
-		s:     s,
-		p:     &parser{s: s},
 		desc:  desc,
 		codec: cc.dopts.codec,
 	}
@@ -123,6 +112,17 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 		cs.traceInfo.tr.LazyLog(&cs.traceInfo.firstLine, false)
 	}
+	t, _, err := cc.wait(ctx, 0)
+	if err != nil {
+		return nil, toRPCErr(err)
+	}
+	s, err := t.NewStream(ctx, callHdr)
+	if err != nil {
+		return nil, toRPCErr(err)
+	}
+	cs.t = t
+	cs.s = s
+	cs.p = &parser{s: s}
 	return cs, nil
 }
 
@@ -176,11 +176,11 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
 		// err != nil indicates the termination of the stream.
 		if EnableTracing && err != nil {
-			cs.traceInfo.tr.Finish()
 			if err != io.EOF {
 				cs.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 				cs.traceInfo.tr.SetError()
 			}
+			cs.traceInfo.tr.Finish()
 		}
 	}()
 	if err == nil {
