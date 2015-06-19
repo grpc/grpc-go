@@ -34,9 +34,7 @@ package io.grpc.stub;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.AbstractFuture;
-import com.google.common.util.concurrent.ExecutionError;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.UncheckedExecutionException;
 
 import io.grpc.ClientCall;
 import io.grpc.Metadata;
@@ -95,10 +93,7 @@ public class ClientCalls {
    *
    * @throws RuntimeException if {@code get} is interrupted
    * @throws CancellationException if {@code get} throws a {@code CancellationException}
-   * @throws UncheckedExecutionException if {@code get} throws an {@code ExecutionException} with an
-   *     {@code Exception} as its cause
-   * @throws ExecutionError if {@code get} throws an {@code ExecutionException} with an {@code
-   *     Error} as its cause
+   * @throws StatusRuntimeException if {@code get} throws an {@code ExecutionException}
    */
   private static <V> V getUnchecked(Future<V> future) {
     try {
@@ -107,16 +102,7 @@ public class ClientCalls {
       Thread.currentThread().interrupt();
       throw new RuntimeException(e);
     } catch (ExecutionException e) {
-      if (e.getCause() == null) {
-        // Strange...
-        throw new UncheckedExecutionException(e);
-      } else {
-        if (e.getCause() instanceof Error) {
-          throw new ExecutionError((Error) e.getCause());
-        } else {
-          throw new UncheckedExecutionException(e.getCause());
-        }
-      }
+      throw Status.fromThrowable(e).asRuntimeException();
     }
   }
 
@@ -318,7 +304,7 @@ public class ClientCalls {
           // No value received so mark the future as an error
           responseFuture.setException(
               Status.INTERNAL.withDescription("No value received for unary call")
-                  .asRuntimeException().fillInStackTrace());
+                  .asRuntimeException());
         }
         responseFuture.set(value);
       } else {
