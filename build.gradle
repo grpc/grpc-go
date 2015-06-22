@@ -56,47 +56,52 @@ subprojects {
         protobufVersion = '3.0.0-alpha-3.1'
 
         configureProtoCompilation = {
-          String generatedSourcePath = 'src/generated'
+          String generatedSourcePath = "${projectDir}/src/generated"
           if (rootProject.childProjects.containsKey('grpc-compiler')) {
             // Only when the codegen is built along with the project, will we be able to recompile
             // the proto files.
             project.apply plugin: 'com.google.protobuf'
-            project.protobufCodeGenPlugins = ["grpc:$javaPluginPath"]
-            if (project.hasProperty('protoc')) {
-              project.protocPath = project.protoc
-            } else {
-              project.protocDep = "com.google.protobuf:protoc:${protobufVersion}"
-            }
-            project.generatedFileDir = "${projectDir}/src/generated"
-            task deleteGeneratedSource << {
-              project.delete project.fileTree(dir: generatedSourcePath)
-            }
-            project.afterEvaluate {
-              generateProto.dependsOn ':grpc-compiler:java_pluginExecutable'
-              // Delete the generated sources first, so that we can be alerted if they are not re-compiled.
-              generateProto.dependsOn deleteGeneratedSource
-              // Recompile protos when the codegen has been changed
-              generateProto.inputs.file javaPluginPath
-              // Recompile protos when build.gradle has been changed, because
-              // it's possible the version of protoc has been changed.
-              generateProto.inputs.file "${rootProject.projectDir}/build.gradle"
-            }
-
-            project.sourceSets {
-              main {
-                proto {
-                  plugins {
-                    grpc { }
+            project.protobuf {
+              protoc {
+                if (project.hasProperty('protoc')) {
+                  path = project.protoc
+                } else {
+                  artifact = "com.google.protobuf:protoc:${protobufVersion}"
+                }
+              }
+              plugins {
+                grpc {
+                  path = javaPluginPath
+                }
+              }
+              generateProtoTasks {
+                all().each { task ->
+                  task.dependsOn ':grpc-compiler:java_pluginExecutable'
+                  // Delete the generated sources first, so that we can be alerted if they are not re-compiled.
+                  task.dependsOn deleteGeneratedSource
+                  // Recompile protos when the codegen has been changed
+                  task.inputs.file javaPluginPath
+                  // Recompile protos when build.gradle has been changed, because
+                  // it's possible the version of protoc has been changed.
+                  task.inputs.file "${rootProject.projectDir}/build.gradle"
+                  task.plugins {
+                    grpc {}
                   }
                 }
               }
+              generatedFilesBaseDir = generatedSourcePath
+            }
+
+            task deleteGeneratedSource << {
+              project.delete project.fileTree(dir: generatedSourcePath)
             }
           } else {
             // Otherwise, we just use the checked-in generated code.
             project.sourceSets {
               main {
                 java {
-                  srcDir "${generatedSourcePath}/main"
+                  srcDir "${generatedSourcePath}/main/java"
+                  srcDir "${generatedSourcePath}/main/grpc"
                 }
               }
             }
@@ -125,7 +130,7 @@ subprojects {
                 okhttp: 'com.squareup.okhttp:okhttp:2.4.0',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufVersion}",
-                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.4.1',
+                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.5.0',
 
                 netty: 'io.netty:netty-codec-http2:4.1.0.Beta5',
                 netty_tcnative: 'io.netty:netty-tcnative:1.1.33.Fork2' + tcnative_suffix,

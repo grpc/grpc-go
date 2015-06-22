@@ -85,23 +85,39 @@ dependencies {
 }
 
 sourceSets {
-  test {
-    proto {
-      plugins {
-        grpc { }
-      }
-    }
-  }
   testNano {
     proto {
       setSrcDirs(['src/test/proto'])
-      builtins {
+    }
+  }
+}
+
+protobuf {
+  protoc {
+    if (project.hasProperty('protoc')) {
+      path = project.protoc
+    } else {
+      artifact = "com.google.protobuf:protoc:${protobufVersion}"
+    }
+  }
+  plugins {
+    grpc {
+      path = javaPluginPath
+    }
+  }
+  generateProtoTasks {
+    all()*.dependsOn 'java_pluginExecutable'
+    ofSourceSet('test')*.plugins {
+      grpc {}
+    }
+    ofSourceSet('testNano').each { task ->
+      task.builtins {
         remove java
         javanano {
           option 'ignore_services=true'
         }
       }
-      plugins {
+      task.plugins {
         grpc {
           option 'nano=true'
         }
@@ -187,17 +203,6 @@ artifacts {
   }
 }
 
-if (project.hasProperty('protoc')) {
-  project.protocPath = project.protoc
-} else {
-  project.protocDep = "com.google.protobuf:protoc:${protobufVersion}"
-}
-protobufCodeGenPlugins = ["grpc:$javaPluginPath"]
-
-project.afterEvaluate {
-  [generateTestProto, generateTestNanoProto]*.dependsOn 'java_pluginExecutable'
-}
-
 test.dependsOn('testGolden', 'testNanoGolden')
 
 def configureTestTask(Task task, String suffix) {
@@ -209,7 +214,7 @@ def configureTestTask(Task task, String suffix) {
   }
   // File isn't found on Windows if last slash is forward-slash
   def slash = System.getProperty("file.separator")
-  task.args "$buildDir/generated-sources/test${suffix}/io/grpc/testing/integration" + slash + "TestServiceGrpc.java",
+  task.args "$buildDir/generated/source/proto/test${suffix}/grpc/io/grpc/testing/integration${slash}TestServiceGrpc.java",
        "$projectDir/src/test/golden/TestService${suffix}.java.txt"
 }
 
