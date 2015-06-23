@@ -31,9 +31,14 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.SocketAddress;
+import java.net.SocketException;
+import java.net.UnknownHostException;
+import java.util.Enumeration;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -92,6 +97,61 @@ public abstract class AbstractBenchmark {
     NIO, LOCAL;
   }
 
+  private static final InetAddress BENCHMARK_ADDR;
+
+  /**
+   * Resolve the address bound to the benchmark interface. Currently we assume it's a
+   * child interface of the loopback interface with the term 'benchmark' in its name.
+   *
+   * <p>>This allows traffic shaping to be applied to an IP address and to have the benchmarks
+   * detect it's presence and use it. E.g for Linux we can apply netem to a specific IP to
+   * do traffic shaping, bind that IP to the loopback adapter and then apply a label to that
+   * binding so that it appears as a child interface.
+   *
+   * <pre>
+   * sudo tc qdisc del dev lo root
+   * sudo tc qdisc add dev lo root handle 1: prio
+   * sudo tc qdisc add dev lo parent 1:1 handle 2: netem delay 0.1ms rate 10gbit
+   * sudo tc filter add dev lo parent 1:0 protocol ip prio 1  \
+   *            u32 match ip dst 127.127.127.127 flowid 2:1
+   * sudo ip addr add dev lo 127.127.127.127/32 label lo:benchmark
+   * </pre>
+   */
+  static {
+    InetAddress tmp = null;
+    try {
+      Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
+      outer: while (networkInterfaces.hasMoreElements()) {
+        NetworkInterface networkInterface = networkInterfaces.nextElement();
+        if (!networkInterface.isLoopback()) {
+          continue;
+        }
+        Enumeration<NetworkInterface> subInterfaces = networkInterface.getSubInterfaces();
+        while (subInterfaces.hasMoreElements()) {
+          NetworkInterface subLoopback = subInterfaces.nextElement();
+          if (subLoopback.getDisplayName().contains("benchmark")) {
+            tmp = subLoopback.getInetAddresses().nextElement();
+            System.out.println("\nResolved benchmark address to " + tmp + " on "
+                + subLoopback.getDisplayName() + "\n\n");
+            break outer;
+          }
+        }
+      }
+    } catch (SocketException se) {
+      System.out.println("\nWARNING: Error trying to resolve benchmark interface \n" +  se);
+    }
+    if (tmp == null) {
+      try {
+        System.out.println(
+            "\nWARNING: Unable to resolve benchmark interface, defaulting to localhost");
+        tmp = InetAddress.getLocalHost();
+      } catch (UnknownHostException uhe) {
+        throw new RuntimeException(uhe);
+      }
+    }
+    BENCHMARK_ADDR = tmp;
+  }
+
 
   protected ServerImpl server;
   protected ByteBuf request;
@@ -124,9 +184,9 @@ public abstract class AbstractBenchmark {
       channelBuilder = NettyChannelBuilder.forAddress(address);
       channelBuilder.channelType(LocalChannel.class);
     } else {
-      // Pick a port using an ephemeral socket.
       ServerSocket sock = new ServerSocket();
-      sock.bind(new InetSocketAddress("localhost", 0));
+      // Pick a port using an ephemeral socket.
+      sock.bind(new InetSocketAddress(BENCHMARK_ADDR, 0));
       SocketAddress address = sock.getLocalSocketAddress();
       sock.close();
       serverBuilder = NettyServerBuilder.forAddress(address);
