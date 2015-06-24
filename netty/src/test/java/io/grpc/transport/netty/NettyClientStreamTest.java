@@ -238,7 +238,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     verify(writeQueue).enqueue(any(CancelStreamCommand.class), eq(true));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
-    assertEquals(Status.INTERNAL.getCode(), captor.getValue().getCode());
+    assertEquals(Status.UNKNOWN.getCode(), captor.getValue().getCode());
     assertTrue(stream.isClosed());
 
   }
