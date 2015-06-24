@@ -48,7 +48,9 @@ public abstract class AbstractBenchmark {
    * Standard payload sizes.
    */
   public enum PayloadSize {
-    SMALL(10), MEDIUM(1024), LARGE(65536), JUMBO(16777216);
+    // Max out at 1MB to avoid creating payloads larger than Netty's buffer pool can handle
+    // by default
+    SMALL(10), MEDIUM(1024), LARGE(65536), JUMBO(1048576);
 
     private final int bytes;
     PayloadSize(int bytes) {
