@@ -34,13 +34,13 @@ You will see a `PASS` if the test succeeds.
 
 To compile a proto file and generate Java interfaces out of the service definitions:
 ```
-$ protoc --plugin=protoc-gen-java_rpc=build/binaries/java_pluginExecutable/protoc-gen-grpc-java \
-  --java_rpc_out="$OUTPUT_FILE" --proto_path="$DIR_OF_PROTO_FILE" "$PROTO_FILE"
+$ protoc --plugin=protoc-gen-grpc-java=build/binaries/java_pluginExecutable/protoc-gen-grpc-java \
+  --grpc-java_out="$OUTPUT_FILE" --proto_path="$DIR_OF_PROTO_FILE" "$PROTO_FILE"
 ```
 To generate Java interfaces with protobuf nano:
 ```
-$ protoc --plugin=protoc-gen-java_rpc=build/binaries/java_pluginExecutable/protoc-gen-grpc-java \
-  --java_rpc_out=nano=true:"$OUTPUT_FILE" --proto_path="$DIR_OF_PROTO_FILE" "$PROTO_FILE"
+$ protoc --plugin=protoc-gen-grpc-java=build/binaries/java_pluginExecutable/protoc-gen-grpc-java \
+  --grpc-java_out=nano=true:"$OUTPUT_FILE" --proto_path="$DIR_OF_PROTO_FILE" "$PROTO_FILE"
 ```
 
 ## Installing the codegen to Maven local repository
