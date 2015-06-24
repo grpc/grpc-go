@@ -33,14 +33,12 @@ package io.grpc.testing.integration;
 
 import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.TlsVersion;
-
 import io.grpc.ChannelImpl;
 import io.grpc.testing.TestUtils;
 import io.grpc.transport.netty.GrpcSslContexts;
 import io.grpc.transport.netty.NettyServerBuilder;
 import io.grpc.transport.okhttp.OkHttpChannelBuilder;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
-
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
@@ -83,8 +81,8 @@ public class Http2OkHttpTest extends AbstractTransportTest {
             .build())
         .overrideHostForAuthority(TestUtils.TEST_SERVER_HOST);
     try {
-      builder.sslSocketFactory(TestUtils.getSslSocketFactoryForCertainCert(
-              TestUtils.loadCert("ca.pem")));
+      builder.sslSocketFactory(TestUtils.newSslSocketFactoryForCa(
+          TestUtils.loadCert("ca.pem")));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
