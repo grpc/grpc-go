@@ -181,7 +181,7 @@ public final class ProtocolNegotiators {
    * write to a {@link Channel} before we are allowed to write to it officially i.e.
    * before it's active or the TLS Handshake is complete.
    */
-  private abstract static class AbstractBufferingHandler extends ChannelDuplexHandler {
+  public abstract static class AbstractBufferingHandler extends ChannelDuplexHandler {
 
     private ChannelHandler[] handlers;
     private Queue<ChannelWrite> bufferedWrites = new ArrayDeque<ChannelWrite>();
