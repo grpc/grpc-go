@@ -105,7 +105,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		codec: cc.dopts.codec,
 	}
 	if EnableTracing {
-		cs.traceInfo.tr = trace.New("Sent."+methodFamily(desc.StreamName), desc.StreamName)
+		cs.traceInfo.tr = trace.New("Sent."+methodFamily(method), method)
 		cs.traceInfo.firstLine.client = true
 		if deadline, ok := ctx.Deadline(); ok {
 			cs.traceInfo.firstLine.deadline = deadline.Sub(time.Now())
