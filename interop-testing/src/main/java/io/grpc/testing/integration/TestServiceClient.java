@@ -262,7 +262,7 @@ public class TestServiceClient {
         if (useTls) {
           try {
             SSLSocketFactory factory = useTestCa
-                ? TestUtils.getSslSocketFactoryForCertainCert(TestUtils.loadCert("ca.pem"))
+                ? TestUtils.newSslSocketFactoryForCa(TestUtils.loadCert("ca.pem"))
                 : (SSLSocketFactory) SSLSocketFactory.getDefault();
             builder.sslSocketFactory(factory);
           } catch (Exception e) {
