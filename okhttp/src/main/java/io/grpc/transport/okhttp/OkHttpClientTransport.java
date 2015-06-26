@@ -52,7 +52,7 @@ import com.squareup.okhttp.internal.spdy.Variant;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.MethodType;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.transport.ClientStreamListener;
@@ -248,7 +248,7 @@ class OkHttpClientTransport implements ClientTransport {
     OkHttpClientStream clientStream =
         OkHttpClientStream.newStream(listener, frameWriter, this, outboundFlow, method.getType());
 
-    String defaultPath = "/" + method.getName();
+    String defaultPath = "/" + method.getFullMethodName();
     List<Header> requestHeaders =
         Headers.createRequestHeaders(headers, defaultPath, defaultAuthority);
 

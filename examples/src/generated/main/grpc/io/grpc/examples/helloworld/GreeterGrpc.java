@@ -1,6 +1,5 @@
 package io.grpc.examples.helloworld;
 
-import static io.grpc.stub.ClientCalls.createMethodDescriptor;
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
@@ -8,19 +7,20 @@ import static io.grpc.stub.ClientCalls.duplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.unaryFutureCall;
-import static io.grpc.stub.ServerCalls.createMethodDefinition;
 import static io.grpc.stub.ServerCalls.asyncUnaryRequestCall;
 import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;
 
 @javax.annotation.Generated("by gRPC proto compiler")
 public class GreeterGrpc {
 
-  private static final io.grpc.stub.Method<io.grpc.examples.helloworld.HelloRequest,
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.examples.helloworld.HelloRequest,
       io.grpc.examples.helloworld.HelloResponse> METHOD_SAY_HELLO =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.UNARY, "SayHello",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloResponse.parser()));
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.UNARY,
+          "helloworld.Greeter", "SayHello",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloRequest.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloResponse.PARSER));
 
   public static GreeterStub newStub(io.grpc.Channel channel) {
     return new GreeterStub(channel, CONFIG);
@@ -36,7 +36,8 @@ public class GreeterGrpc {
     return new GreeterFutureStub(channel, CONFIG);
   }
 
-  public static final GreeterServiceDescriptor CONFIG =
+  // The default service descriptor
+  private static final GreeterServiceDescriptor CONFIG =
       new GreeterServiceDescriptor();
 
   @javax.annotation.concurrent.Immutable
@@ -46,8 +47,7 @@ public class GreeterGrpc {
         io.grpc.examples.helloworld.HelloResponse> sayHello;
 
     private GreeterServiceDescriptor() {
-      sayHello = createMethodDescriptor(
-          "helloworld.Greeter", METHOD_SAY_HELLO);
+      sayHello = METHOD_SAY_HELLO;
     }
 
     @SuppressWarnings("unchecked")
@@ -55,7 +55,7 @@ public class GreeterGrpc {
         java.util.Map<java.lang.String, io.grpc.MethodDescriptor<?, ?>> methodMap) {
       sayHello = (io.grpc.MethodDescriptor<io.grpc.examples.helloworld.HelloRequest,
           io.grpc.examples.helloworld.HelloResponse>) methodMap.get(
-          CONFIG.sayHello.getName());
+          CONFIG.sayHello.getFullMethodName());
     }
 
     @java.lang.Override
@@ -177,7 +177,7 @@ public class GreeterGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final Greeter serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder("helloworld.Greeter")
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_SAY_HELLO,
           asyncUnaryRequestCall(
             new io.grpc.stub.ServerCalls.UnaryRequestMethod<

@@ -1,6 +1,5 @@
 package io.grpc.testing;
 
-import static io.grpc.stub.ClientCalls.createMethodDescriptor;
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
@@ -8,25 +7,28 @@ import static io.grpc.stub.ClientCalls.duplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.unaryFutureCall;
-import static io.grpc.stub.ServerCalls.createMethodDefinition;
 import static io.grpc.stub.ServerCalls.asyncUnaryRequestCall;
 import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;
 
 @javax.annotation.Generated("by gRPC proto compiler")
 public class WorkerGrpc {
 
-  private static final io.grpc.stub.Method<io.grpc.testing.ClientArgs,
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.ClientArgs,
       io.grpc.testing.ClientStatus> METHOD_RUN_TEST =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.DUPLEX_STREAMING, "RunTest",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientArgs.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientStatus.parser()));
-  private static final io.grpc.stub.Method<io.grpc.testing.ServerArgs,
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.DUPLEX_STREAMING,
+          "grpc.testing.Worker", "RunTest",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientArgs.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientStatus.PARSER));
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.ServerArgs,
       io.grpc.testing.ServerStatus> METHOD_RUN_SERVER =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.DUPLEX_STREAMING, "RunServer",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerArgs.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerStatus.parser()));
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.DUPLEX_STREAMING,
+          "grpc.testing.Worker", "RunServer",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerArgs.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerStatus.PARSER));
 
   public static WorkerStub newStub(io.grpc.Channel channel) {
     return new WorkerStub(channel, CONFIG);
@@ -42,7 +44,8 @@ public class WorkerGrpc {
     return new WorkerFutureStub(channel, CONFIG);
   }
 
-  public static final WorkerServiceDescriptor CONFIG =
+  // The default service descriptor
+  private static final WorkerServiceDescriptor CONFIG =
       new WorkerServiceDescriptor();
 
   @javax.annotation.concurrent.Immutable
@@ -54,10 +57,8 @@ public class WorkerGrpc {
         io.grpc.testing.ServerStatus> runServer;
 
     private WorkerServiceDescriptor() {
-      runTest = createMethodDescriptor(
-          "grpc.testing.Worker", METHOD_RUN_TEST);
-      runServer = createMethodDescriptor(
-          "grpc.testing.Worker", METHOD_RUN_SERVER);
+      runTest = METHOD_RUN_TEST;
+      runServer = METHOD_RUN_SERVER;
     }
 
     @SuppressWarnings("unchecked")
@@ -65,10 +66,10 @@ public class WorkerGrpc {
         java.util.Map<java.lang.String, io.grpc.MethodDescriptor<?, ?>> methodMap) {
       runTest = (io.grpc.MethodDescriptor<io.grpc.testing.ClientArgs,
           io.grpc.testing.ClientStatus>) methodMap.get(
-          CONFIG.runTest.getName());
+          CONFIG.runTest.getFullMethodName());
       runServer = (io.grpc.MethodDescriptor<io.grpc.testing.ServerArgs,
           io.grpc.testing.ServerStatus>) methodMap.get(
-          CONFIG.runServer.getName());
+          CONFIG.runServer.getFullMethodName());
     }
 
     @java.lang.Override
@@ -183,7 +184,7 @@ public class WorkerGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final Worker serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder("grpc.testing.Worker")
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_RUN_TEST,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<
@@ -195,7 +196,7 @@ public class WorkerGrpc {
                 return serviceImpl.runTest(responseObserver);
               }
             })))
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_RUN_SERVER,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<

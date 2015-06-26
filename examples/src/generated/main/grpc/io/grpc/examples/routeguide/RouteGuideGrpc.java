@@ -1,6 +1,5 @@
 package io.grpc.examples.routeguide;
 
-import static io.grpc.stub.ClientCalls.createMethodDescriptor;
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
@@ -8,37 +7,44 @@ import static io.grpc.stub.ClientCalls.duplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.unaryFutureCall;
-import static io.grpc.stub.ServerCalls.createMethodDefinition;
 import static io.grpc.stub.ServerCalls.asyncUnaryRequestCall;
 import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;
 
 @javax.annotation.Generated("by gRPC proto compiler")
 public class RouteGuideGrpc {
 
-  private static final io.grpc.stub.Method<io.grpc.examples.routeguide.Point,
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Point,
       io.grpc.examples.routeguide.Feature> METHOD_GET_FEATURE =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.UNARY, "GetFeature",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.parser()));
-  private static final io.grpc.stub.Method<io.grpc.examples.routeguide.Rectangle,
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.UNARY,
+          "routeguide.RouteGuide", "GetFeature",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.PARSER));
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Rectangle,
       io.grpc.examples.routeguide.Feature> METHOD_LIST_FEATURES =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.SERVER_STREAMING, "ListFeatures",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Rectangle.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.parser()));
-  private static final io.grpc.stub.Method<io.grpc.examples.routeguide.Point,
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING,
+          "routeguide.RouteGuide", "ListFeatures",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Rectangle.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.PARSER));
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Point,
       io.grpc.examples.routeguide.RouteSummary> METHOD_RECORD_ROUTE =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.CLIENT_STREAMING, "RecordRoute",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteSummary.parser()));
-  private static final io.grpc.stub.Method<io.grpc.examples.routeguide.RouteNote,
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING,
+          "routeguide.RouteGuide", "RecordRoute",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteSummary.PARSER));
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.RouteNote,
       io.grpc.examples.routeguide.RouteNote> METHOD_ROUTE_CHAT =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.DUPLEX_STREAMING, "RouteChat",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.parser()));
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.DUPLEX_STREAMING,
+          "routeguide.RouteGuide", "RouteChat",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.PARSER));
 
   public static RouteGuideStub newStub(io.grpc.Channel channel) {
     return new RouteGuideStub(channel, CONFIG);
@@ -54,7 +60,8 @@ public class RouteGuideGrpc {
     return new RouteGuideFutureStub(channel, CONFIG);
   }
 
-  public static final RouteGuideServiceDescriptor CONFIG =
+  // The default service descriptor
+  private static final RouteGuideServiceDescriptor CONFIG =
       new RouteGuideServiceDescriptor();
 
   @javax.annotation.concurrent.Immutable
@@ -70,14 +77,10 @@ public class RouteGuideGrpc {
         io.grpc.examples.routeguide.RouteNote> routeChat;
 
     private RouteGuideServiceDescriptor() {
-      getFeature = createMethodDescriptor(
-          "routeguide.RouteGuide", METHOD_GET_FEATURE);
-      listFeatures = createMethodDescriptor(
-          "routeguide.RouteGuide", METHOD_LIST_FEATURES);
-      recordRoute = createMethodDescriptor(
-          "routeguide.RouteGuide", METHOD_RECORD_ROUTE);
-      routeChat = createMethodDescriptor(
-          "routeguide.RouteGuide", METHOD_ROUTE_CHAT);
+      getFeature = METHOD_GET_FEATURE;
+      listFeatures = METHOD_LIST_FEATURES;
+      recordRoute = METHOD_RECORD_ROUTE;
+      routeChat = METHOD_ROUTE_CHAT;
     }
 
     @SuppressWarnings("unchecked")
@@ -85,16 +88,16 @@ public class RouteGuideGrpc {
         java.util.Map<java.lang.String, io.grpc.MethodDescriptor<?, ?>> methodMap) {
       getFeature = (io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Point,
           io.grpc.examples.routeguide.Feature>) methodMap.get(
-          CONFIG.getFeature.getName());
+          CONFIG.getFeature.getFullMethodName());
       listFeatures = (io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Rectangle,
           io.grpc.examples.routeguide.Feature>) methodMap.get(
-          CONFIG.listFeatures.getName());
+          CONFIG.listFeatures.getFullMethodName());
       recordRoute = (io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Point,
           io.grpc.examples.routeguide.RouteSummary>) methodMap.get(
-          CONFIG.recordRoute.getName());
+          CONFIG.recordRoute.getFullMethodName());
       routeChat = (io.grpc.MethodDescriptor<io.grpc.examples.routeguide.RouteNote,
           io.grpc.examples.routeguide.RouteNote>) methodMap.get(
-          CONFIG.routeChat.getName());
+          CONFIG.routeChat.getFullMethodName());
     }
 
     @java.lang.Override
@@ -259,7 +262,7 @@ public class RouteGuideGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final RouteGuide serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder("routeguide.RouteGuide")
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_GET_FEATURE,
           asyncUnaryRequestCall(
             new io.grpc.stub.ServerCalls.UnaryRequestMethod<
@@ -272,7 +275,7 @@ public class RouteGuideGrpc {
                 serviceImpl.getFeature(request, responseObserver);
               }
             })))
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_LIST_FEATURES,
           asyncUnaryRequestCall(
             new io.grpc.stub.ServerCalls.UnaryRequestMethod<
@@ -285,7 +288,7 @@ public class RouteGuideGrpc {
                 serviceImpl.listFeatures(request, responseObserver);
               }
             })))
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_RECORD_ROUTE,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<
@@ -297,7 +300,7 @@ public class RouteGuideGrpc {
                 return serviceImpl.recordRoute(responseObserver);
               }
             })))
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_ROUTE_CHAT,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<

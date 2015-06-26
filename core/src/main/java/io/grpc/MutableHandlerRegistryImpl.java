@@ -62,18 +62,15 @@ public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
   @Override
   @Nullable
   public Method lookupMethod(String methodName) {
-    int index = methodName.lastIndexOf("/");
-    if (index < 2 || methodName.charAt(0) != '/') {
-      // Since the string is expected to be in the form /<serviceName>/<methodName>, the index
-      // position of the last "/" must be >= 2 in order to make room for the initial "/" and at
-      // least 1 character for the service name.
+    String serviceName = MethodDescriptor.extractFullServiceName(methodName);
+    if (serviceName == null) {
       return null;
     }
-    ServerServiceDefinition service = services.get(methodName.substring(1, index));
+    ServerServiceDefinition service = services.get(serviceName);
     if (service == null) {
       return null;
     }
-    ServerMethodDefinition<?, ?> method = service.getMethod(methodName.substring(index + 1));
+    ServerMethodDefinition<?, ?> method = service.getMethod(methodName);
     if (method == null) {
       return null;
     }

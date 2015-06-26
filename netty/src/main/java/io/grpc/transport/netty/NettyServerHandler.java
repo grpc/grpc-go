@@ -42,7 +42,6 @@ import com.google.common.base.Preconditions;
 import io.grpc.Status;
 import io.grpc.transport.ServerStreamListener;
 import io.grpc.transport.ServerTransportListener;
-import io.grpc.transport.TransportFrameUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -303,12 +302,13 @@ class NettyServerHandler extends Http2ConnectionHandler {
           "Method '%s' is not supported", headers.method());
     }
     checkHeader(streamId, headers, CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
-    String methodName = TransportFrameUtil.getFullMethodNameFromPath(headers.path().toString());
-    if (methodName == null) {
+    // Remove the leading slash of the path and get the fully qualified method name
+    ByteString path = headers.path();
+    if (path.byteAt(0) != '/') {
       throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
-          "Malformatted path: %s", headers.path());
+          "Malformatted path: %s", path);
     }
-    return methodName;
+    return path.toString(1, path.length());
   }
 
   private static void checkHeader(int streamId, Http2Headers headers,

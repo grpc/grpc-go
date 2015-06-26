@@ -41,8 +41,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.logging.Logger;
 
-import javax.annotation.Nullable;
-
 /**
  * Utility functions for transport layer framing.
  *
@@ -55,20 +53,6 @@ public final class TransportFrameUtil {
 
   private static final byte[] binaryHeaderSuffixBytes =
       Metadata.BINARY_HEADER_SUFFIX.getBytes(US_ASCII);
-
-  // TODO(louiscryan): This needs proper namespacing support, this is currently just a hack
-  /**
-   * Converts the path from the HTTP request to the fully qualified method name.
-   *
-   * @return the fully qualified method name. {@code null} if the path is malformatted.
-   */
-  @Nullable
-  public static String getFullMethodNameFromPath(String path) {
-    if (!path.startsWith("/")) {
-      return null;
-    }
-    return path;
-  }
 
   /**
    * Transform the given headers to a format where only spec-compliant ASCII characters are allowed.

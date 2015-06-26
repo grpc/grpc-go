@@ -67,7 +67,7 @@ import com.squareup.okhttp.internal.spdy.Settings;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.MethodType;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.transport.ClientStreamListener;
@@ -145,7 +145,7 @@ public class OkHttpClientTransportTest {
     clientTransport.start(transportListener);
     frameHandler = clientTransport.getHandler();
     streams = clientTransport.getStreams();
-    when(method.getName()).thenReturn("fakemethod");
+    when(method.getFullMethodName()).thenReturn("fakemethod");
     when(method.getType()).thenReturn(MethodType.UNARY);
     when(frameWriter.maxDataLength()).thenReturn(Integer.MAX_VALUE);
   }

@@ -38,7 +38,7 @@ import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.Header;
 
 import io.grpc.Metadata;
-import io.grpc.MethodType;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.Http2ClientStream;

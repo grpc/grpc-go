@@ -43,7 +43,6 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Marshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.MethodType;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.testing.TestUtils;
@@ -244,7 +243,7 @@ public class NettyClientTransportTest {
   private static class Rpc {
     static final String MESSAGE = "hello";
     static final MethodDescriptor<String, String> METHOD = MethodDescriptor.create(
-            MethodType.UNARY, "/testService/test", StringMarshaller.INSTANCE,
+            MethodDescriptor.MethodType.UNARY, "/testService/test", StringMarshaller.INSTANCE,
             StringMarshaller.INSTANCE);
 
     final ClientStream stream;

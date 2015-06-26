@@ -34,7 +34,6 @@ package io.grpc.stub;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
-import io.grpc.ServerMethodDefinition;
 import io.grpc.Status;
 
 /**
@@ -44,15 +43,6 @@ import io.grpc.Status;
 public class ServerCalls {
 
   private ServerCalls() {
-  }
-
-  /**
-   * Attaches the handler to a method and gets a {@code ServerMethodDefinition}.
-   */
-  public static <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> createMethodDefinition(
-      Method<ReqT, RespT> method, ServerCallHandler<ReqT, RespT> handler) {
-    return ServerMethodDefinition.create(method.getName(), method.getRequestMarshaller(),
-        method.getResponseMarshaller(), handler);
   }
 
   /**

@@ -41,6 +41,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
 
 import io.grpc.Metadata.Headers;
+import io.grpc.MethodDescriptor.MethodType;
 
 import org.junit.After;
 import org.junit.Before;
@@ -68,7 +69,10 @@ public class ServerInterceptorsTest {
   private String methodName = "/someRandom.Name";
   @Mock private ServerCall<Integer> call;
   private ServerServiceDefinition serviceDefinition = ServerServiceDefinition.builder("basic")
-      .addMethod("flow", requestMarshaller, responseMarshaller, handler).build();
+      .addMethod(
+          MethodDescriptor.create(
+            MethodType.UNKNOWN, "basic", "flow", requestMarshaller, responseMarshaller),
+          handler).build();
   private Headers headers = new Headers();
 
   /** Set up for test. */
@@ -134,16 +138,20 @@ public class ServerInterceptorsTest {
     @SuppressWarnings("unchecked")
     ServerCallHandler<String, Integer> handler2 = mock(ServerCallHandler.class);
     serviceDefinition = ServerServiceDefinition.builder("basic")
-        .addMethod("flow", requestMarshaller, responseMarshaller, handler)
-        .addMethod("flow2", requestMarshaller, responseMarshaller, handler2).build();
+        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic", "flow",
+              requestMarshaller, responseMarshaller), handler)
+        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic", "flow2",
+              requestMarshaller, responseMarshaller), handler2).build();
     ServerServiceDefinition intercepted = ServerInterceptors.intercept(
         serviceDefinition, Arrays.<ServerInterceptor>asList(new NoopInterceptor()));
-    getMethod(intercepted, "flow").getServerCallHandler().startCall(methodName, call, headers);
+    getMethod(intercepted, "basic/flow").getServerCallHandler().startCall(
+        methodName, call, headers);
     verify(handler).startCall(methodName, call, headers);
     verifyNoMoreInteractions(handler);
     verifyZeroInteractions(handler2);
 
-    getMethod(intercepted, "flow2").getServerCallHandler().startCall(methodName, call, headers);
+    getMethod(intercepted, "basic/flow2").getServerCallHandler().startCall(
+        methodName, call, headers);
     verify(handler2).startCall(methodName, call, headers);
     verifyNoMoreInteractions(handler);
     verifyNoMoreInteractions(handler2);
@@ -192,7 +200,8 @@ public class ServerInterceptorsTest {
           }
         };
     ServerServiceDefinition serviceDefinition = ServerServiceDefinition.builder("basic")
-        .addMethod("flow", requestMarshaller, responseMarshaller, handler).build();
+        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic", "flow",
+              requestMarshaller, responseMarshaller), handler).build();
     ServerServiceDefinition intercepted = ServerInterceptors.intercept(
         serviceDefinition, Arrays.asList(interceptor1, interceptor2));
     assertSame(listener,

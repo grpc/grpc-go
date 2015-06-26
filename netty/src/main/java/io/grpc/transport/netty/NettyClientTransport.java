@@ -133,7 +133,7 @@ class NettyClientTransport implements ClientTransport {
     final NettyClientStream stream = new NettyClientStream(listener, channel, handler);
 
     // Convert the headers into Netty HTTP/2 headers.
-    AsciiString defaultPath = new AsciiString("/" + method.getName());
+    AsciiString defaultPath = new AsciiString("/" + method.getFullMethodName());
     Http2Headers http2Headers = Utils.convertClientHeaders(headers, negotiationHandler.scheme(),
         defaultPath, authority);
 

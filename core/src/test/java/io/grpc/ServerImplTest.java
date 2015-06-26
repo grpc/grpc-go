@@ -44,6 +44,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.transport.ServerListener;
 import io.grpc.transport.ServerStream;
 import io.grpc.transport.ServerStreamListener;
@@ -163,26 +164,28 @@ public class ServerImplTest {
     final AtomicReference<ServerCall<Integer>> callReference
         = new AtomicReference<ServerCall<Integer>>();
     registry.addService(ServerServiceDefinition.builder("Waiter")
-        .addMethod("serve", STRING_MARSHALLER, INTEGER_MARSHALLER,
-          new ServerCallHandler<String, Integer>() {
-            @Override
-            public ServerCall.Listener<String> startCall(String fullMethodName,
-                ServerCall<Integer> call, Metadata.Headers headers) {
-              assertEquals("/Waiter/serve", fullMethodName);
-              assertNotNull(call);
-              assertNotNull(headers);
-              assertEquals(0, headers.get(metadataKey).intValue());
-              callReference.set(call);
-              return callListener;
-            }
-          }).build());
+        .addMethod(
+            MethodDescriptor.create(
+                MethodType.UNKNOWN, "Waiter", "serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
+            new ServerCallHandler<String, Integer>() {
+              @Override
+              public ServerCall.Listener<String> startCall(String fullMethodName,
+                  ServerCall<Integer> call, Metadata.Headers headers) {
+                assertEquals("Waiter/serve", fullMethodName);
+                assertNotNull(call);
+                assertNotNull(headers);
+                assertEquals(0, headers.get(metadataKey).intValue());
+                callReference.set(call);
+                return callListener;
+              }
+            }).build());
     ServerTransportListener transportListener
         = transportServer.registerNewServerTransport(new SimpleServerTransport());
 
     Metadata.Headers headers = new Metadata.Headers();
     headers.put(metadataKey, 0);
     ServerStreamListener streamListener
-        = transportListener.streamCreated(stream, "/Waiter/serve", headers);
+        = transportListener.streamCreated(stream, "Waiter/serve", headers);
     assertNotNull(streamListener);
 
     executeBarrier(executor).await();
@@ -227,19 +230,21 @@ public class ServerImplTest {
     CyclicBarrier barrier = executeBarrier(executor);
     final Status status = Status.ABORTED.withDescription("Oh, no!");
     registry.addService(ServerServiceDefinition.builder("Waiter")
-        .addMethod("serve", STRING_MARSHALLER, INTEGER_MARSHALLER,
-          new ServerCallHandler<String, Integer>() {
-            @Override
-            public ServerCall.Listener<String> startCall(String fullMethodName,
-                ServerCall<Integer> call, Metadata.Headers headers) {
-              throw status.asRuntimeException();
-            }
-          }).build());
+        .addMethod(
+            MethodDescriptor.create(MethodType.UNKNOWN, "Waiter", "serve",
+              STRING_MARSHALLER, INTEGER_MARSHALLER),
+            new ServerCallHandler<String, Integer>() {
+              @Override
+              public ServerCall.Listener<String> startCall(String fullMethodName,
+                  ServerCall<Integer> call, Metadata.Headers headers) {
+                throw status.asRuntimeException();
+              }
+            }).build());
     ServerTransportListener transportListener
         = transportServer.registerNewServerTransport(new SimpleServerTransport());
 
     ServerStreamListener streamListener
-        = transportListener.streamCreated(stream, "/Waiter/serve", new Metadata.Headers());
+        = transportListener.streamCreated(stream, "Waiter/serve", new Metadata.Headers());
     assertNotNull(streamListener);
     verifyNoMoreInteractions(stream);
 

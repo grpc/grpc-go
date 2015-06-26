@@ -35,6 +35,7 @@ import com.google.common.base.Preconditions;
 
 import java.io.InputStream;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
 /**
@@ -49,23 +50,98 @@ import javax.annotation.concurrent.Immutable;
 public class MethodDescriptor<RequestT, ResponseT> {
 
   private final MethodType type;
-  private final String name;
+  private final String fullMethodName;
   private final Marshaller<RequestT> requestMarshaller;
   private final Marshaller<ResponseT> responseMarshaller;
 
+  /**
+   * The call type of a method.
+   */
+  public enum MethodType {
+    /**
+     * One request message followed by one response message.
+     */
+    UNARY,
+
+    /**
+     * Zero or more request messages followed by one response message.
+     */
+    CLIENT_STREAMING,
+
+    /**
+     * One request message followed by zero or more response messages.
+     */
+    SERVER_STREAMING,
+
+    /**
+     * Zero or more request and response messages arbitrarily interleaved in time.
+     */
+    DUPLEX_STREAMING,
+
+    /**
+     * Cardinality and temporal relationships are not known. Implementations should not make
+     * buffering assumptions and should largely treat the same as {@link #DUPLEX_STREAMING}.
+     */
+    UNKNOWN;
+
+    /**
+     * Returns {@code true} if the client will immediately send one request message to the server
+     * after calling {@link ClientCall#start(io.grpc.ClientCall.Listener, io.grpc.Metadata.Headers)}
+     * and then immediately half-close the stream by calling {@link io.grpc.ClientCall#halfClose()}.
+     */
+    public final boolean clientSendsOneMessage() {
+      return this == UNARY || this == SERVER_STREAMING;
+    }
+
+    /**
+     * Returns {@code true} if the server will immediately send one response message to the client
+     * upon receipt of {@link io.grpc.ServerCall.Listener#onHalfClose()} and then immediately
+     * close the stream by calling {@link ServerCall#close(Status, io.grpc.Metadata.Trailers)}.
+     */
+    public final boolean serverSendsOneMessage() {
+      return this == UNARY || this == CLIENT_STREAMING;
+    }
+  }
+
+  /**
+   * Creates a new {@code MethodDescriptor}.
+   *
+   * @param type the call type of this method
+   * @param fullServiceName the fully qualified service name
+   * @param methodName the short-form method name
+   * @param requestMarshaller the marshaller used to encode and decode requests
+   * @param responseMarshaller the marshaller used to encode and decode responses
+   */
   public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> create(
-      MethodType type, String name,
+      MethodType type, String fullServiceName, String methodName,
       Marshaller<RequestT> requestMarshaller,
       Marshaller<ResponseT> responseMarshaller) {
     return new MethodDescriptor<RequestT, ResponseT>(
-        type, name, requestMarshaller, responseMarshaller);
+        type, generateFullMethodName(fullServiceName, methodName), requestMarshaller,
+        responseMarshaller);
   }
 
-  private MethodDescriptor(MethodType type, String name,
+  /**
+   * Creates a new {@code MethodDescriptor}.
+   *
+   * @param type the call type of this method
+   * @param fullMethodName the fully qualified name of this method
+   * @param requestMarshaller the marshaller used to encode and decode requests
+   * @param responseMarshaller the marshaller used to encode and decode responses
+   */
+  public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> create(
+      MethodType type, String fullMethodName,
+      Marshaller<RequestT> requestMarshaller,
+      Marshaller<ResponseT> responseMarshaller) {
+    return new MethodDescriptor<RequestT, ResponseT>(
+        type, fullMethodName, requestMarshaller, responseMarshaller);
+  }
+
+  private MethodDescriptor(MethodType type, String fullMethodName,
                            Marshaller<RequestT> requestMarshaller,
                            Marshaller<ResponseT> responseMarshaller) {
     this.type = Preconditions.checkNotNull(type);
-    this.name = name;
+    this.fullMethodName = fullMethodName;
     this.requestMarshaller = requestMarshaller;
     this.responseMarshaller = responseMarshaller;
   }
@@ -80,8 +156,8 @@ public class MethodDescriptor<RequestT, ResponseT> {
   /**
    * The fully qualified name of the method.
    */
-  public String getName() {
-    return name;
+  public String getFullMethodName() {
+    return fullMethodName;
   }
 
   /**
@@ -102,5 +178,49 @@ public class MethodDescriptor<RequestT, ResponseT> {
    */
   public InputStream streamRequest(RequestT requestMessage) {
     return requestMarshaller.stream(requestMessage);
+  }
+
+  /**
+   * Parse an incoming request message.
+   *
+   * @param input the serialized message as a byte stream.
+   * @return a parsed instance of the message.
+   */
+  public RequestT parseRequest(InputStream input) {
+    return requestMarshaller.parse(input);
+  }
+
+  /**
+   * Serialize an outgoing response message.
+   *
+   * @param response the response message to serialize.
+   * @return the serialized message as a byte stream.
+   */
+  public InputStream streamResponse(ResponseT response) {
+    return responseMarshaller.stream(response);
+  }
+
+  /**
+   * Generate the fully qualified method name.
+   *
+   * @param fullServiceName the fully qualified service name that is prefixed with the package name
+   * @param methodName the short method name
+   */
+  public static String generateFullMethodName(String fullServiceName, String methodName) {
+    return fullServiceName + "/" + methodName;
+  }
+
+  /**
+   * Extract the fully qualified service name out of a fully qualified method name. May return
+   * {@code null} if the input is malformed, but you cannot rely on it for the validity of the
+   * input.
+   */
+  @Nullable
+  public static String extractFullServiceName(String fullMethodName) {
+    int index = fullMethodName.lastIndexOf("/");
+    if (index == -1) {
+      return null;
+    }
+    return fullMethodName.substring(0, index);
   }
 }

@@ -1,6 +1,5 @@
 package io.grpc.testing.integration;
 
-import static io.grpc.stub.ClientCalls.createMethodDescriptor;
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
@@ -8,49 +7,60 @@ import static io.grpc.stub.ClientCalls.duplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.unaryFutureCall;
-import static io.grpc.stub.ServerCalls.createMethodDefinition;
 import static io.grpc.stub.ServerCalls.asyncUnaryRequestCall;
 import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;
 
 @javax.annotation.Generated("by gRPC proto compiler")
 public class TestServiceGrpc {
 
-  private static final io.grpc.stub.Method<com.google.protobuf.EmptyProtos.Empty,
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> METHOD_EMPTY_CALL =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.UNARY, "EmptyCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.parser()));
-  private static final io.grpc.stub.Method<io.grpc.testing.integration.Messages.SimpleRequest,
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.UNARY,
+          "grpc.testing.TestService", "EmptyCall",
+          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.PARSER));
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
       io.grpc.testing.integration.Messages.SimpleResponse> METHOD_UNARY_CALL =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.UNARY, "UnaryCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.SimpleRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.SimpleResponse.parser()));
-  private static final io.grpc.stub.Method<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.UNARY,
+          "grpc.testing.TestService", "UnaryCall",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.SimpleRequest.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.SimpleResponse.PARSER));
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> METHOD_STREAMING_OUTPUT_CALL =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.SERVER_STREAMING, "StreamingOutputCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.parser()));
-  private static final io.grpc.stub.Method<io.grpc.testing.integration.Messages.StreamingInputCallRequest,
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING,
+          "grpc.testing.TestService", "StreamingOutputCall",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.PARSER));
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingInputCallRequest,
       io.grpc.testing.integration.Messages.StreamingInputCallResponse> METHOD_STREAMING_INPUT_CALL =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.CLIENT_STREAMING, "StreamingInputCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingInputCallRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingInputCallResponse.parser()));
-  private static final io.grpc.stub.Method<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING,
+          "grpc.testing.TestService", "StreamingInputCall",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingInputCallRequest.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingInputCallResponse.PARSER));
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> METHOD_FULL_DUPLEX_CALL =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.DUPLEX_STREAMING, "FullDuplexCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.parser()));
-  private static final io.grpc.stub.Method<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.DUPLEX_STREAMING,
+          "grpc.testing.TestService", "FullDuplexCall",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.PARSER));
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> METHOD_HALF_DUPLEX_CALL =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.DUPLEX_STREAMING, "HalfDuplexCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.parser()));
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.DUPLEX_STREAMING,
+          "grpc.testing.TestService", "HalfDuplexCall",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.PARSER));
 
   public static TestServiceStub newStub(io.grpc.Channel channel) {
     return new TestServiceStub(channel, CONFIG);
@@ -66,7 +76,8 @@ public class TestServiceGrpc {
     return new TestServiceFutureStub(channel, CONFIG);
   }
 
-  public static final TestServiceServiceDescriptor CONFIG =
+  // The default service descriptor
+  private static final TestServiceServiceDescriptor CONFIG =
       new TestServiceServiceDescriptor();
 
   @javax.annotation.concurrent.Immutable
@@ -86,18 +97,12 @@ public class TestServiceGrpc {
         io.grpc.testing.integration.Messages.StreamingOutputCallResponse> halfDuplexCall;
 
     private TestServiceServiceDescriptor() {
-      emptyCall = createMethodDescriptor(
-          "grpc.testing.TestService", METHOD_EMPTY_CALL);
-      unaryCall = createMethodDescriptor(
-          "grpc.testing.TestService", METHOD_UNARY_CALL);
-      streamingOutputCall = createMethodDescriptor(
-          "grpc.testing.TestService", METHOD_STREAMING_OUTPUT_CALL);
-      streamingInputCall = createMethodDescriptor(
-          "grpc.testing.TestService", METHOD_STREAMING_INPUT_CALL);
-      fullDuplexCall = createMethodDescriptor(
-          "grpc.testing.TestService", METHOD_FULL_DUPLEX_CALL);
-      halfDuplexCall = createMethodDescriptor(
-          "grpc.testing.TestService", METHOD_HALF_DUPLEX_CALL);
+      emptyCall = METHOD_EMPTY_CALL;
+      unaryCall = METHOD_UNARY_CALL;
+      streamingOutputCall = METHOD_STREAMING_OUTPUT_CALL;
+      streamingInputCall = METHOD_STREAMING_INPUT_CALL;
+      fullDuplexCall = METHOD_FULL_DUPLEX_CALL;
+      halfDuplexCall = METHOD_HALF_DUPLEX_CALL;
     }
 
     @SuppressWarnings("unchecked")
@@ -105,22 +110,22 @@ public class TestServiceGrpc {
         java.util.Map<java.lang.String, io.grpc.MethodDescriptor<?, ?>> methodMap) {
       emptyCall = (io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
           com.google.protobuf.EmptyProtos.Empty>) methodMap.get(
-          CONFIG.emptyCall.getName());
+          CONFIG.emptyCall.getFullMethodName());
       unaryCall = (io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
           io.grpc.testing.integration.Messages.SimpleResponse>) methodMap.get(
-          CONFIG.unaryCall.getName());
+          CONFIG.unaryCall.getFullMethodName());
       streamingOutputCall = (io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
           io.grpc.testing.integration.Messages.StreamingOutputCallResponse>) methodMap.get(
-          CONFIG.streamingOutputCall.getName());
+          CONFIG.streamingOutputCall.getFullMethodName());
       streamingInputCall = (io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingInputCallRequest,
           io.grpc.testing.integration.Messages.StreamingInputCallResponse>) methodMap.get(
-          CONFIG.streamingInputCall.getName());
+          CONFIG.streamingInputCall.getFullMethodName());
       fullDuplexCall = (io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
           io.grpc.testing.integration.Messages.StreamingOutputCallResponse>) methodMap.get(
-          CONFIG.fullDuplexCall.getName());
+          CONFIG.fullDuplexCall.getFullMethodName());
       halfDuplexCall = (io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
           io.grpc.testing.integration.Messages.StreamingOutputCallResponse>) methodMap.get(
-          CONFIG.halfDuplexCall.getName());
+          CONFIG.halfDuplexCall.getFullMethodName());
     }
 
     @java.lang.Override
@@ -325,7 +330,7 @@ public class TestServiceGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder("grpc.testing.TestService")
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_EMPTY_CALL,
           asyncUnaryRequestCall(
             new io.grpc.stub.ServerCalls.UnaryRequestMethod<
@@ -338,7 +343,7 @@ public class TestServiceGrpc {
                 serviceImpl.emptyCall(request, responseObserver);
               }
             })))
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_UNARY_CALL,
           asyncUnaryRequestCall(
             new io.grpc.stub.ServerCalls.UnaryRequestMethod<
@@ -351,7 +356,7 @@ public class TestServiceGrpc {
                 serviceImpl.unaryCall(request, responseObserver);
               }
             })))
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_STREAMING_OUTPUT_CALL,
           asyncUnaryRequestCall(
             new io.grpc.stub.ServerCalls.UnaryRequestMethod<
@@ -364,7 +369,7 @@ public class TestServiceGrpc {
                 serviceImpl.streamingOutputCall(request, responseObserver);
               }
             })))
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_STREAMING_INPUT_CALL,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<
@@ -376,7 +381,7 @@ public class TestServiceGrpc {
                 return serviceImpl.streamingInputCall(responseObserver);
               }
             })))
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_FULL_DUPLEX_CALL,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<
@@ -388,7 +393,7 @@ public class TestServiceGrpc {
                 return serviceImpl.fullDuplexCall(responseObserver);
               }
             })))
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_HALF_DUPLEX_CALL,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<

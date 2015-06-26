@@ -62,6 +62,7 @@ static inline string MessageFullJavaName(const Descriptor* desc) {
 static void PrintMethodFields(
     const ServiceDescriptor* service, map<string, string>* vars, Printer* p,
     bool generate_nano) {
+  (*vars)["service_name"] = service->name();
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
     (*vars)["method_name"] = method->name();
@@ -84,16 +85,19 @@ static void PrintMethodFields(
       }
     }
 
+    p->Print("// Static method descriptors that strictly reflect the proto.\n");
+
     if (generate_nano) {
       // TODO(zsurocking): we're creating two Parsers for each method right now.
       // We could instead create static Parsers and reuse them if some methods
       // share the same request or response messages.
       p->Print(
           *vars,
-          "private static final $Method$<$input_type$,\n"
+          "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ =\n"
-          "    $Method$.create(\n"
-          "        $MethodType$.$method_type$, \"$method_name$\",\n"
+          "    $MethodDescriptor$.create(\n"
+          "        $MethodType$.$method_type$,\n"
+          "        \"$Package$$service_name$\", \"$method_name$\",\n"
           "        $NanoUtils$.<$input_type$>marshaller(\n"
           "            new io.grpc.protobuf.nano.Parser<$input_type$>() {\n"
           "                @Override\n"
@@ -113,12 +117,13 @@ static void PrintMethodFields(
     } else {
       p->Print(
           *vars,
-          "private static final $Method$<$input_type$,\n"
+          "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ =\n"
-          "    $Method$.create(\n"
-          "        $MethodType$.$method_type$, \"$method_name$\",\n"
-          "        $ProtoUtils$.marshaller($input_type$.parser()),\n"
-          "        $ProtoUtils$.marshaller($output_type$.parser()));\n");
+          "    $MethodDescriptor$.create(\n"
+          "        $MethodType$.$method_type$,\n"
+          "        \"$Package$$service_name$\", \"$method_name$\",\n"
+          "        $ProtoUtils$.marshaller($input_type$.PARSER),\n"
+          "        $ProtoUtils$.marshaller($output_type$.PARSER));\n");
     }
   }
   p->Print("\n");
@@ -158,8 +163,7 @@ static void PrintServiceDescriptor(
     (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
     (*vars)["lower_method_name"] = LowerMethodName(method);
     p->Print(*vars,
-             "$lower_method_name$ = createMethodDescriptor(\n"
-             "    \"$Package$$service_name$\", $method_field_name$);\n");
+             "$lower_method_name$ = $method_field_name$;\n");
   }
   p->Outdent();
   p->Print("}\n");
@@ -181,7 +185,7 @@ static void PrintServiceDescriptor(
         *vars,
         "$lower_method_name$ = ($MethodDescriptor$<$input_type$,\n"
         "    $output_type$>) methodMap.get(\n"
-        "    CONFIG.$lower_method_name$.getName());\n");
+        "    CONFIG.$lower_method_name$.getFullMethodName());\n");
   }
   p->Outdent();
   p->Print("}\n\n");
@@ -517,7 +521,7 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
       (*vars)["invocation_class"] =
           "io.grpc.stub.ServerCalls.UnaryRequestMethod";
     }
-    p->Print(*vars, ".addMethod(createMethodDefinition(\n");
+    p->Print(*vars, ".addMethod($ServerMethodDefinition$.create(\n");
     p->Indent();
     p->Indent();
     p->Print(
@@ -609,9 +613,10 @@ static void PrintService(const ServiceDescriptor* service,
   p->Outdent();
   p->Print("}\n\n");
 
+  p->Print("// The default service descriptor\n");
   p->Print(
       *vars,
-      "public static final $service_name$ServiceDescriptor CONFIG =\n"
+      "private static final $service_name$ServiceDescriptor CONFIG =\n"
       "    new $service_name$ServiceDescriptor();\n\n");
   PrintServiceDescriptor(service, vars, p);
   PrintStub(service, vars, p, ASYNC_INTERFACE);
@@ -628,8 +633,6 @@ static void PrintService(const ServiceDescriptor* service,
 void PrintImports(Printer* p, bool generate_nano) {
   p->Print(
       "import static "
-      "io.grpc.stub.ClientCalls.createMethodDescriptor;\n"
-      "import static "
       "io.grpc.stub.ClientCalls.asyncUnaryCall;\n"
       "import static "
       "io.grpc.stub.ClientCalls.asyncServerStreamingCall;\n"
@@ -643,8 +646,6 @@ void PrintImports(Printer* p, bool generate_nano) {
       "io.grpc.stub.ClientCalls.blockingServerStreamingCall;\n"
       "import static "
       "io.grpc.stub.ClientCalls.unaryFutureCall;\n"
-      "import static "
-      "io.grpc.stub.ServerCalls.createMethodDefinition;\n"
       "import static "
       "io.grpc.stub.ServerCalls.asyncUnaryRequestCall;\n"
       "import static "
@@ -664,11 +665,12 @@ void GenerateService(const ServiceDescriptor* service,
   vars["Override"] = "java.lang.Override";
   vars["Channel"] = "io.grpc.Channel";
   vars["CallOptions"] = "io.grpc.CallOptions";
-  vars["MethodType"] = "io.grpc.MethodType";
+  vars["MethodType"] = "io.grpc.MethodDescriptor.MethodType";
+  vars["ServerMethodDefinition"] =
+      "io.grpc.ServerMethodDefinition";
   vars["ServerServiceDefinition"] =
       "io.grpc.ServerServiceDefinition";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";
-  vars["Method"] = "io.grpc.stub.Method";
   vars["AbstractServiceDescriptor"] =
       "io.grpc.stub.AbstractServiceDescriptor";
   vars["ImmutableList"] = "com.google.common.collect.ImmutableList";

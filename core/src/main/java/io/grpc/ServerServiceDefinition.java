@@ -64,6 +64,11 @@ public final class ServerServiceDefinition {
     return methods;
   }
 
+  /**
+   * Look up a method by its fuly qualified name.
+   *
+   * @param name the fully qualified name without leading slash. E.g., "com.foo.Foo/Bar"
+   */
   public ServerMethodDefinition<?, ?> getMethod(String name) {
     return methodLookup.get(name);
   }
@@ -83,26 +88,30 @@ public final class ServerServiceDefinition {
     /**
      * Add a method to be supported by the service.
      *
-     * @param name simple name of the method, without the service prefix
-     * @param requestMarshaller marshaller for deserializing incoming requests
-     * @param responseMarshaller marshaller for serializing outgoing responses
+     * @param method the {@link MethodDescriptor} of this method.
      * @param handler handler for incoming calls
      */
-    public <ReqT, RespT> Builder addMethod(String name, Marshaller<ReqT> requestMarshaller,
-        Marshaller<RespT> responseMarshaller, ServerCallHandler<ReqT, RespT> handler) {
+    public <ReqT, RespT> Builder addMethod(
+        MethodDescriptor<ReqT, RespT> method, ServerCallHandler<ReqT, RespT> handler) {
+      // TODO(zhangkun83): since the handler map uses fully qualified names as keys, we should
+      // consider removing ServerServiceDefinition to and let the registry to have a big map of
+      // handlers.
+      Preconditions.checkArgument(
+          serviceName.equals(MethodDescriptor.extractFullServiceName(method.getFullMethodName())),
+          "Service name mismatch. Expected service name: '%s'. Actual method name: '%s'.",
+          this.serviceName, method.getFullMethodName());
+
       return addMethod(new ServerMethodDefinition<ReqT, RespT>(
-          Preconditions.checkNotNull(name, "name must not be null"),
-          Preconditions.checkNotNull(requestMarshaller, "requestMarshaller must not be null"),
-          Preconditions.checkNotNull(responseMarshaller, "responseMarshaller must not be null"),
+          Preconditions.checkNotNull(method, "method must not be null"),
           Preconditions.checkNotNull(handler, "handler must not be null")));
     }
 
     /** Add a method to be supported by the service. */
     public <ReqT, RespT> Builder addMethod(ServerMethodDefinition<ReqT, RespT> def) {
-      if (methodLookup.containsKey(def.getName())) {
+      if (methodLookup.containsKey(def.getMethodDescriptor().getFullMethodName())) {
         throw new IllegalStateException("Method by same name already registered");
       }
-      methodLookup.put(def.getName(), def);
+      methodLookup.put(def.getMethodDescriptor().getFullMethodName(), def);
       methods.add(def);
       return this;
     }

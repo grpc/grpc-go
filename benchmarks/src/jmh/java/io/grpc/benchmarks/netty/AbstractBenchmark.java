@@ -10,7 +10,7 @@ import io.grpc.KnownLength;
 import io.grpc.Marshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.MethodType;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerImpl;
@@ -222,24 +222,22 @@ public abstract class AbstractBenchmark {
 
     // Simple method that sends and receives NettyByteBuf
     unaryMethod = MethodDescriptor.create(MethodType.UNARY,
-        "benchmark/unary",
+        "benchmark", "unary",
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
     pingPongMethod = MethodDescriptor.create(MethodType.DUPLEX_STREAMING,
-        "benchmark/pingPong",
+        "benchmark", "pingPong",
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
     flowControlledStreaming = MethodDescriptor.create(MethodType.DUPLEX_STREAMING,
-        "benchmark/flowControlledStreaming",
+        "benchmark", "flowControlledStreaming",
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
 
     // Server implementation of unary & streaming methods
     serverBuilder.addService(
         ServerServiceDefinition.builder("benchmark")
-            .addMethod("unary",
-                new ByteBufOutputMarshaller(),
-                new ByteBufOutputMarshaller(),
+            .addMethod(unaryMethod,
                 new ServerCallHandler<ByteBuf, ByteBuf>() {
                   @Override
                   public ServerCall.Listener<ByteBuf> startCall(String fullMethodName,
@@ -270,9 +268,7 @@ public abstract class AbstractBenchmark {
                     };
                   }
                 })
-            .addMethod("pingPong",
-                new ByteBufOutputMarshaller(),
-                new ByteBufOutputMarshaller(),
+            .addMethod(pingPongMethod,
                 new ServerCallHandler<ByteBuf, ByteBuf>() {
                   @Override
                   public ServerCall.Listener<ByteBuf> startCall(String fullMethodName,
@@ -305,9 +301,7 @@ public abstract class AbstractBenchmark {
                     };
                   }
                 })
-            .addMethod("flowControlledStreaming",
-                new ByteBufOutputMarshaller(),
-                new ByteBufOutputMarshaller(),
+            .addMethod(flowControlledStreaming,
                 new ServerCallHandler<ByteBuf, ByteBuf>() {
                   @Override
                   public ServerCall.Listener<ByteBuf> startCall(String fullMethodName,

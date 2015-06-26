@@ -283,7 +283,8 @@ public final class ServerImpl extends Server {
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Metadata.Headers headers) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
-      final ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(stream, methodDef);
+      final ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
+          stream, methodDef.getMethodDescriptor());
       ServerCall.Listener<ReqT> listener
           = methodDef.getServerCallHandler().startCall(fullMethodName, call, headers);
       if (listener == null) {
@@ -404,12 +405,12 @@ public final class ServerImpl extends Server {
 
   private class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
     private final ServerStream stream;
-    private final ServerMethodDefinition<ReqT, RespT> methodDef;
+    private final MethodDescriptor<ReqT, RespT> method;
     private volatile boolean cancelled;
 
-    public ServerCallImpl(ServerStream stream, ServerMethodDefinition<ReqT, RespT> methodDef) {
+    public ServerCallImpl(ServerStream stream, MethodDescriptor<ReqT, RespT> method) {
       this.stream = stream;
-      this.methodDef = methodDef;
+      this.method = method;
     }
 
     @Override
@@ -425,7 +426,7 @@ public final class ServerImpl extends Server {
     @Override
     public void sendPayload(RespT payload) {
       try {
-        InputStream message = methodDef.streamResponse(payload);
+        InputStream message = method.streamResponse(payload);
         stream.writeMessage(message);
         stream.flush();
       } catch (Throwable t) {
@@ -471,7 +472,7 @@ public final class ServerImpl extends Server {
             return;
           }
 
-          listener.onPayload(methodDef.parseRequest(message));
+          listener.onPayload(method.parseRequest(message));
         } finally {
           try {
             message.close();

@@ -69,7 +69,7 @@ import java.util.concurrent.Executors;
 @RunWith(JUnit4.class)
 public class ChannelImplTest {
   private MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-      MethodType.UNKNOWN, "/service/method",
+      MethodDescriptor.MethodType.UNKNOWN, "/service/method",
       new StringMarshaller(), new IntegerMarshaller());
   private ExecutorService executor = Executors.newSingleThreadExecutor();
 

@@ -31,6 +31,7 @@
 
 package io.grpc.benchmarks.netty;
 
+import io.grpc.MethodDescriptor;
 import io.grpc.MutableHandlerRegistryImpl;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
@@ -82,8 +83,10 @@ public class HandlerRegistryBenchmark {
       ServerServiceDefinition.Builder serviceBuilder = ServerServiceDefinition.builder(serviceName);
       for (int methodIndex = 0; methodIndex < methodCountPerService; ++methodIndex) {
         String methodName = randomString();
-        serviceBuilder.addMethod(ServerMethodDefinition.create(methodName, null, null, null));
-        fullMethodNames.add("/" + serviceName + "/" + methodName);
+        MethodDescriptor<?, ?> methodDescriptor = MethodDescriptor.create(
+            MethodDescriptor.MethodType.UNKNOWN, serviceName, methodName, null, null);
+        serviceBuilder.addMethod(ServerMethodDefinition.create(methodDescriptor, null));
+        fullMethodNames.add(methodDescriptor.getFullMethodName());
       }
       registry.addService(serviceBuilder.build());
     }

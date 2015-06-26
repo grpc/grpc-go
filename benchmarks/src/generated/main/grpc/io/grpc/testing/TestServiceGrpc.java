@@ -1,6 +1,5 @@
 package io.grpc.testing;
 
-import static io.grpc.stub.ClientCalls.createMethodDescriptor;
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
@@ -8,25 +7,28 @@ import static io.grpc.stub.ClientCalls.duplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.unaryFutureCall;
-import static io.grpc.stub.ServerCalls.createMethodDefinition;
 import static io.grpc.stub.ServerCalls.asyncUnaryRequestCall;
 import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;
 
 @javax.annotation.Generated("by gRPC proto compiler")
 public class TestServiceGrpc {
 
-  private static final io.grpc.stub.Method<io.grpc.testing.SimpleRequest,
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
       io.grpc.testing.SimpleResponse> METHOD_UNARY_CALL =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.UNARY, "UnaryCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.parser()));
-  private static final io.grpc.stub.Method<io.grpc.testing.SimpleRequest,
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.UNARY,
+          "grpc.testing.TestService", "UnaryCall",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.PARSER));
+  // Static method descriptors that strictly reflect the proto.
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
       io.grpc.testing.SimpleResponse> METHOD_STREAMING_CALL =
-      io.grpc.stub.Method.create(
-          io.grpc.MethodType.DUPLEX_STREAMING, "StreamingCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.parser()));
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.DUPLEX_STREAMING,
+          "grpc.testing.TestService", "StreamingCall",
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.PARSER),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.PARSER));
 
   public static TestServiceStub newStub(io.grpc.Channel channel) {
     return new TestServiceStub(channel, CONFIG);
@@ -42,7 +44,8 @@ public class TestServiceGrpc {
     return new TestServiceFutureStub(channel, CONFIG);
   }
 
-  public static final TestServiceServiceDescriptor CONFIG =
+  // The default service descriptor
+  private static final TestServiceServiceDescriptor CONFIG =
       new TestServiceServiceDescriptor();
 
   @javax.annotation.concurrent.Immutable
@@ -54,10 +57,8 @@ public class TestServiceGrpc {
         io.grpc.testing.SimpleResponse> streamingCall;
 
     private TestServiceServiceDescriptor() {
-      unaryCall = createMethodDescriptor(
-          "grpc.testing.TestService", METHOD_UNARY_CALL);
-      streamingCall = createMethodDescriptor(
-          "grpc.testing.TestService", METHOD_STREAMING_CALL);
+      unaryCall = METHOD_UNARY_CALL;
+      streamingCall = METHOD_STREAMING_CALL;
     }
 
     @SuppressWarnings("unchecked")
@@ -65,10 +66,10 @@ public class TestServiceGrpc {
         java.util.Map<java.lang.String, io.grpc.MethodDescriptor<?, ?>> methodMap) {
       unaryCall = (io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
           io.grpc.testing.SimpleResponse>) methodMap.get(
-          CONFIG.unaryCall.getName());
+          CONFIG.unaryCall.getFullMethodName());
       streamingCall = (io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
           io.grpc.testing.SimpleResponse>) methodMap.get(
-          CONFIG.streamingCall.getName());
+          CONFIG.streamingCall.getFullMethodName());
     }
 
     @java.lang.Override
@@ -201,7 +202,7 @@ public class TestServiceGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder("grpc.testing.TestService")
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_UNARY_CALL,
           asyncUnaryRequestCall(
             new io.grpc.stub.ServerCalls.UnaryRequestMethod<
@@ -214,7 +215,7 @@ public class TestServiceGrpc {
                 serviceImpl.unaryCall(request, responseObserver);
               }
             })))
-      .addMethod(createMethodDefinition(
+      .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_STREAMING_CALL,
           asyncStreamingRequestCall(
             new io.grpc.stub.ServerCalls.StreamingRequestMethod<

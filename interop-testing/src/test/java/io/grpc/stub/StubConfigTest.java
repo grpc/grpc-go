@@ -101,11 +101,11 @@ public class StubConfigTest {
     CallOptions options1 = stub.getCallOptions();
     SimpleRequest request = SimpleRequest.getDefaultInstance();
     stub.unaryCall(request, responseObserver);
-    verify(channel).newCall(same(TestServiceGrpc.CONFIG.unaryCall), same(options1));
+    verify(channel).newCall(same(TestServiceGrpc.METHOD_UNARY_CALL), same(options1));
     stub = stub.configureNewStub().setDeadlineNanoTime(2L).build();
     CallOptions options2 = stub.getCallOptions();
     assertNotSame(options1, options2);
     stub.unaryCall(request, responseObserver);
-    verify(channel).newCall(same(TestServiceGrpc.CONFIG.unaryCall), same(options2));
+    verify(channel).newCall(same(TestServiceGrpc.METHOD_UNARY_CALL), same(options2));
   }
 }

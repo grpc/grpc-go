@@ -38,7 +38,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.ClientCall;
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 
 import java.util.Iterator;
@@ -56,20 +55,6 @@ import javax.annotation.Nullable;
  * that the runtime can vary behavior without requiring regeneration of the stub.
  */
 public class ClientCalls {
-
-  /**
-   * Creates a {@link MethodDescriptor} for a given method.
-   *
-   * @param fullServiceName fully qualified service name
-   * @param method carries all invariants of the method
-   */
-  public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> createMethodDescriptor(
-      String fullServiceName, Method<RequestT, ResponseT> method) {
-    // TODO(zhangkun83): if timeout is not defined in proto file, use a default timeout here.
-    // If timeout is defined in proto file, Method should carry the timeout.
-    return MethodDescriptor.create(method.getType(), fullServiceName + "/" + method.getName(),
-        method.getRequestMarshaller(), method.getResponseMarshaller());
-  }
 
   /**
    * Executes a unary call and returns a {@link ListenableFuture} to the response.
