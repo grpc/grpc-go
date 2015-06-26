@@ -69,7 +69,7 @@ public final class OkHttpTlsUpgrader {
     spec.apply(sslSocket, false);
     if (spec.supportsTlsExtensions()) {
       String negotiatedProtocol =
-          OkHttpProtocolNegotiator.negotiate(sslSocket, host, TLS_PROTOCOLS);
+          OkHttpProtocolNegotiator.get().negotiate(sslSocket, host, TLS_PROTOCOLS);
       Preconditions.checkState(SUPPORTED_HTTP2_PROTOCOLS.contains(negotiatedProtocol),
           "negotiated protocol %s is unsupported", negotiatedProtocol);
     }
