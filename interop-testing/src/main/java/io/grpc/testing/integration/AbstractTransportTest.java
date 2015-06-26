@@ -49,6 +49,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 
 import io.grpc.AbstractServerBuilder;
+import io.grpc.CallOptions;
 import io.grpc.ChannelImpl;
 import io.grpc.ClientCall;
 import io.grpc.Metadata;
@@ -70,6 +71,7 @@ import io.grpc.testing.integration.Messages.StreamingInputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingInputCallResponse;
 import io.grpc.testing.integration.Messages.StreamingOutputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingOutputCallResponse;
+
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -440,7 +442,7 @@ public abstract class AbstractTransportTest {
 
     final ArrayBlockingQueue<Object> queue = new ArrayBlockingQueue<Object>(10);
     ClientCall<StreamingOutputCallRequest, StreamingOutputCallResponse> call =
-        channel.newCall(TestServiceGrpc.CONFIG.streamingOutputCall);
+        channel.newCall(TestServiceGrpc.CONFIG.streamingOutputCall, CallOptions.DEFAULT);
     call.start(new ClientCall.Listener<StreamingOutputCallResponse>() {
       @Override
       public void onHeaders(Metadata.Headers headers) {}
@@ -578,14 +580,20 @@ public abstract class AbstractTransportTest {
 
   @Test(timeout = 10000)
   public void sendsTimeoutHeader() {
+    long configuredTimeoutMinutes = 100;
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
         .configureNewStub()
-        .setTimeout(572, TimeUnit.MILLISECONDS)
+        .setDeadlineAfter(configuredTimeoutMinutes, TimeUnit.MINUTES)
         .build();
     stub.emptyCall(Empty.getDefaultInstance());
-    Assert.assertEquals(572000L, (long) requestHeadersCapture.get().get(ChannelImpl.TIMEOUT_KEY));
+    long transferredTimeoutMinutes = TimeUnit.MICROSECONDS.toMinutes(
+        requestHeadersCapture.get().get(ChannelImpl.TIMEOUT_KEY));
+    Assert.assertTrue(
+        "configuredTimeoutMinutes=" + configuredTimeoutMinutes
+        + ", transferredTimeoutMinutes=" + transferredTimeoutMinutes,
+        configuredTimeoutMinutes - transferredTimeoutMinutes >= 0
+        && configuredTimeoutMinutes - transferredTimeoutMinutes <= 1);
   }
-
 
   protected int unaryPayloadLength() {
     // 10MiB.

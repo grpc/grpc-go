@@ -34,7 +34,6 @@ package io.grpc;
 import com.google.common.base.Preconditions;
 
 import java.io.InputStream;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -53,23 +52,20 @@ public class MethodDescriptor<RequestT, ResponseT> {
   private final String name;
   private final Marshaller<RequestT> requestMarshaller;
   private final Marshaller<ResponseT> responseMarshaller;
-  private final long timeoutMicros;
 
   public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> create(
-      MethodType type, String name, long timeout, TimeUnit timeoutUnit,
+      MethodType type, String name,
       Marshaller<RequestT> requestMarshaller,
       Marshaller<ResponseT> responseMarshaller) {
     return new MethodDescriptor<RequestT, ResponseT>(
-        type, name, timeoutUnit.toMicros(timeout), requestMarshaller, responseMarshaller);
+        type, name, requestMarshaller, responseMarshaller);
   }
 
-  private MethodDescriptor(MethodType type, String name, long timeoutMicros,
+  private MethodDescriptor(MethodType type, String name,
                            Marshaller<RequestT> requestMarshaller,
                            Marshaller<ResponseT> responseMarshaller) {
     this.type = Preconditions.checkNotNull(type);
     this.name = name;
-    Preconditions.checkArgument(timeoutMicros > 0);
-    this.timeoutMicros = timeoutMicros;
     this.requestMarshaller = requestMarshaller;
     this.responseMarshaller = responseMarshaller;
   }
@@ -86,13 +82,6 @@ public class MethodDescriptor<RequestT, ResponseT> {
    */
   public String getName() {
     return name;
-  }
-
-  /**
-   * Timeout for the operation in microseconds.
-   */
-  public long getTimeout() {
-    return timeoutMicros;
   }
 
   /**
@@ -113,17 +102,5 @@ public class MethodDescriptor<RequestT, ResponseT> {
    */
   public InputStream streamRequest(RequestT requestMessage) {
     return requestMarshaller.stream(requestMessage);
-  }
-
-  /**
-   * Create a new descriptor with a different timeout.
-   *
-   * @param timeout to set on cloned descriptor.
-   * @param unit of time for {@code timeout}.
-   * @return a cloned instance with the specified timeout set.
-   */
-  public MethodDescriptor<RequestT, ResponseT> withTimeout(long timeout, TimeUnit unit) {
-    return new MethodDescriptor<RequestT, ResponseT>(type, name, unit.toMicros(timeout),
-        requestMarshaller, responseMarshaller);
   }
 }

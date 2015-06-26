@@ -113,24 +113,31 @@ public class TestServiceGrpc {
       super(channel, config);
     }
 
+    private TestServiceStub(io.grpc.Channel channel,
+        TestServiceServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      super(channel, config, callOptions);
+    }
+
     @java.lang.Override
     protected TestServiceStub build(io.grpc.Channel channel,
-        TestServiceServiceDescriptor config) {
-      return new TestServiceStub(channel, config);
+        TestServiceServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      return new TestServiceStub(channel, config, callOptions);
     }
 
     @java.lang.Override
     public void unaryCall(io.grpc.testing.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
       asyncUnaryCall(
-          channel.newCall(config.unaryCall), request, responseObserver);
+          channel.newCall(config.unaryCall, callOptions), request, responseObserver);
     }
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.testing.SimpleRequest> streamingCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
       return duplexStreamingCall(
-          channel.newCall(config.streamingCall), responseObserver);
+          channel.newCall(config.streamingCall, callOptions), responseObserver);
     }
   }
 
@@ -142,16 +149,23 @@ public class TestServiceGrpc {
       super(channel, config);
     }
 
+    private TestServiceBlockingStub(io.grpc.Channel channel,
+        TestServiceServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      super(channel, config, callOptions);
+    }
+
     @java.lang.Override
     protected TestServiceBlockingStub build(io.grpc.Channel channel,
-        TestServiceServiceDescriptor config) {
-      return new TestServiceBlockingStub(channel, config);
+        TestServiceServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      return new TestServiceBlockingStub(channel, config, callOptions);
     }
 
     @java.lang.Override
     public io.grpc.testing.SimpleResponse unaryCall(io.grpc.testing.SimpleRequest request) {
       return blockingUnaryCall(
-          channel.newCall(config.unaryCall), request);
+          channel.newCall(config.unaryCall, callOptions), request);
     }
   }
 
@@ -163,17 +177,24 @@ public class TestServiceGrpc {
       super(channel, config);
     }
 
+    private TestServiceFutureStub(io.grpc.Channel channel,
+        TestServiceServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      super(channel, config, callOptions);
+    }
+
     @java.lang.Override
     protected TestServiceFutureStub build(io.grpc.Channel channel,
-        TestServiceServiceDescriptor config) {
-      return new TestServiceFutureStub(channel, config);
+        TestServiceServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      return new TestServiceFutureStub(channel, config, callOptions);
     }
 
     @java.lang.Override
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.SimpleResponse> unaryCall(
         io.grpc.testing.SimpleRequest request) {
       return unaryFutureCall(
-          channel.newCall(config.unaryCall), request);
+          channel.newCall(config.unaryCall, callOptions), request);
     }
   }
 

@@ -47,7 +47,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
@@ -69,7 +68,7 @@ public class ClientCalls {
     // TODO(zhangkun83): if timeout is not defined in proto file, use a default timeout here.
     // If timeout is defined in proto file, Method should carry the timeout.
     return MethodDescriptor.create(method.getType(), fullServiceName + "/" + method.getName(),
-        364, TimeUnit.DAYS, method.getRequestMarshaller(), method.getResponseMarshaller());
+        method.getRequestMarshaller(), method.getResponseMarshaller());
   }
 
   /**

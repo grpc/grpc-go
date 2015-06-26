@@ -87,8 +87,9 @@ public class ClientInterceptors {
     }
 
     @Override
-    public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
-      return new ProcessInterceptorChannel(channel, interceptors).newCall(method);
+    public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(
+        MethodDescriptor<ReqT, RespT> method, CallOptions callOptions) {
+      return new ProcessInterceptorChannel(channel, interceptors).newCall(method, callOptions);
     }
   }
 
@@ -102,15 +103,18 @@ public class ClientInterceptors {
     }
 
     @Override
-    public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
+    public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(
+        MethodDescriptor<ReqT, RespT> method, CallOptions callOptions) {
       if (interceptors != null && interceptors.hasNext()) {
-        return interceptors.next().interceptCall(method, this);
+        return interceptors.next().interceptCall(method, callOptions, this);
       } else {
         Preconditions.checkState(interceptors != null,
             "The channel has already been called. "
             + "Some interceptor must have called on \"next\" twice.");
         interceptors = null;
-        return channel.newCall(method);
+        return channel.newCall(
+            Preconditions.checkNotNull(method, "method"),
+            Preconditions.checkNotNull(callOptions, "callOptions"));
       }
     }
   }

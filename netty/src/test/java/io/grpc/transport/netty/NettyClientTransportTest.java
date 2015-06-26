@@ -205,7 +205,7 @@ public class NettyClientTransportTest {
   private static class Rpc {
     static final String MESSAGE = "hello";
     static final MethodDescriptor<String, String> METHOD = MethodDescriptor.create(
-            MethodType.UNARY, "/testService/test", 10, TimeUnit.SECONDS, StringMarshaller.INSTANCE,
+            MethodType.UNARY, "/testService/test", StringMarshaller.INSTANCE,
             StringMarshaller.INSTANCE);
 
     final ClientStream stream;

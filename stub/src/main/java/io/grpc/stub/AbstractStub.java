@@ -31,17 +31,16 @@
 
 package io.grpc.stub;
 
-import com.google.common.collect.Maps;
-
+import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
-import io.grpc.MethodDescriptor;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
+import javax.annotation.Nullable;
 
 /**
  * Common base type for stub implementations.
@@ -56,16 +55,29 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
     C extends AbstractServiceDescriptor<C>> {
   protected final Channel channel;
   protected final C config;
+  protected final CallOptions callOptions;
 
   /**
-   * Constructor for use by subclasses.
+   * Constructor for use by subclasses, with the default {@code CallOptions}.
    *
    * @param channel the channel that this stub will use to do communications
    * @param config defines the RPC methods of the stub
    */
   protected AbstractStub(Channel channel, C config) {
+    this(channel, config, CallOptions.DEFAULT);
+  }
+
+  /**
+   * Constructor for use by subclasses, with the default {@code CallOptions}.
+   *
+   * @param channel the channel that this stub will use to do communications
+   * @param config defines the RPC methods of the stub
+   * @param callOptions the runtime call options to be applied to every call on this stub
+   */
+  protected AbstractStub(Channel channel, C config, CallOptions callOptions) {
     this.channel = channel;
     this.config = config;
+    this.callOptions = callOptions;
   }
 
   protected C getServiceDescriptor() {
@@ -87,37 +99,54 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
   }
 
   /**
+   * The {@code CallOptions} of the stub.
+   */
+  public CallOptions getCallOptions() {
+    return callOptions;
+  }
+
+  /**
    * Returns a new stub with the given channel for the provided method configurations.
    *
    * @param channel the channel that this stub will use to do communications
    * @param config defines the RPC methods of the stub
+   * @param callOptions the runtime call options to be applied to every call on this stub
    */
-  protected abstract S build(Channel channel, C config);
+  protected abstract S build(Channel channel, C config, CallOptions callOptions);
 
   /**
    * Utility class for (re) configuring the operations in a stub.
    */
   public class StubConfigBuilder {
 
-    private final Map<String, MethodDescriptor<?, ?>> methodMap;
     private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
+    private CallOptions callOptions = AbstractStub.this.callOptions;
     private Channel stubChannel;
 
     private StubConfigBuilder() {
       this.stubChannel = AbstractStub.this.channel;
-      methodMap = Maps.newHashMapWithExpectedSize(config.methods().size());
-      for (MethodDescriptor<?, ?> method : AbstractStub.this.config.methods()) {
-        methodMap.put(method.getName(), method);
-      }
     }
 
     /**
-     * Sets a timeout for all methods in the stub.
+     * Sets an absolute deadline in nanoseconds in the clock as per {@link System#nanoTime()}.
+     *
+     * <p>This is mostly used for propagating an existing deadline. {@link #setDeadlineAfter} is the
+     * recommended way of setting a new deadline,
+     *
+     * @param deadlineNanoTime nanoseconds in the clock as per {@link System#nanoTime()}
      */
-    public StubConfigBuilder setTimeout(long timeout, TimeUnit unit) {
-      for (Map.Entry<String, MethodDescriptor<?, ?>> entry : methodMap.entrySet()) {
-        entry.setValue(entry.getValue().withTimeout(timeout, unit));
-      }
+    public StubConfigBuilder setDeadlineNanoTime(@Nullable Long deadlineNanoTime) {
+      callOptions = callOptions.withDeadlineNanoTime(deadlineNanoTime);
+      return this;
+    }
+
+    /**
+     * Sets a deadline that is after the given {@code duration} from now.
+     *
+     * @see CallOptions#withDeadlineAfter
+     */
+    public StubConfigBuilder setDeadlineAfter(long duration, TimeUnit unit) {
+      callOptions = callOptions.withDeadlineAfter(duration, unit);
       return this;
     }
 
@@ -142,7 +171,7 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
      */
     public S build() {
       return AbstractStub.this.build(ClientInterceptors.intercept(stubChannel, interceptors),
-          config.build(methodMap));
+          config, callOptions);
     }
   }
 }

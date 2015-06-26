@@ -209,8 +209,9 @@ public final class ChannelImpl extends Channel {
    * Creates a new outgoing call on the channel.
    */
   @Override
-  public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
-    return new CallImpl<ReqT, RespT>(method, new SerializingExecutor(executor));
+  public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(
+      MethodDescriptor<ReqT, RespT> method, CallOptions callOptions) {
+    return new CallImpl<ReqT, RespT>(method, new SerializingExecutor(executor), callOptions);
   }
 
   private ClientTransport obtainActiveTransport() {
@@ -291,13 +292,16 @@ public final class ChannelImpl extends Channel {
     private final MethodDescriptor<ReqT, RespT> method;
     private final SerializingExecutor callExecutor;
     private final boolean unaryRequest;
+    private final CallOptions callOptions;
     private ClientStream stream;
 
-    public CallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor) {
+    public CallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor,
+        CallOptions callOptions) {
       this.method = method;
       this.callExecutor = executor;
       this.unaryRequest = method.getType() == MethodType.UNARY
           || method.getType() == MethodType.SERVER_STREAMING;
+      this.callOptions = callOptions;
     }
 
     @Override
@@ -308,24 +312,34 @@ public final class ChannelImpl extends Channel {
       try {
         transport = obtainActiveTransport();
       } catch (RuntimeException ex) {
-        stream = new NoopClientStream();
-        listener.closed(Status.fromThrowable(ex), new Metadata.Trailers());
+        closeCallPrematurely(listener, Status.fromThrowable(ex));
         return;
       }
       if (transport == null) {
-        stream = new NoopClientStream();
-        listener.closed(Status.UNAVAILABLE.withDescription("Channel is shutdown"),
-            new Metadata.Trailers());
+        closeCallPrematurely(listener, Status.UNAVAILABLE.withDescription("Channel is shutdown"));
         return;
       }
-      completeHeaders(headers);
+
+      // Fill out timeout on the headers
+      headers.removeAll(TIMEOUT_KEY);
+      // Convert the deadline to timeout. Timeout is more favorable than deadline on the wire
+      // because timeout tolerates the clock difference between machines.
+      Long deadlineNanoTime = callOptions.getDeadlineNanoTime();
+      if (deadlineNanoTime != null) {
+        long timeoutMicros = TimeUnit.NANOSECONDS.toMicros(deadlineNanoTime - System.nanoTime());
+        if (timeoutMicros <= 0) {
+          closeCallPrematurely(listener, Status.DEADLINE_EXCEEDED);
+          return;
+        }
+        headers.put(TIMEOUT_KEY, timeoutMicros);
+      }
+
       try {
         stream = transport.newStream(method, headers, listener);
       } catch (IllegalStateException ex) {
         // We can race with the transport and end up trying to use a terminated transport.
         // TODO(ejona86): Improve the API to remove the possibility of the race.
-        stream = new NoopClientStream();
-        listener.closed(Status.fromThrowable(ex), new Metadata.Trailers());
+        closeCallPrematurely(listener, Status.fromThrowable(ex));
         return;
       }
     }
@@ -378,12 +392,12 @@ public final class ChannelImpl extends Channel {
     }
 
     /**
-     * Set missing properties on the headers. The given headers will be mutated.
-     * @param headers the headers to complete
+     * Close the call before the stream is created.
      */
-    private void completeHeaders(Metadata.Headers headers) {
-      headers.removeAll(TIMEOUT_KEY);
-      headers.put(TIMEOUT_KEY, method.getTimeout());
+    private void closeCallPrematurely(ClientStreamListener listener, Status status) {
+      Preconditions.checkState(stream == null, "Stream already created");
+      stream = new NoopClientStream();
+      listener.closed(status, new Metadata.Trailers());
     }
 
     private class ClientStreamListenerImpl implements ClientStreamListener {

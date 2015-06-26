@@ -108,24 +108,31 @@ public class WorkerGrpc {
       super(channel, config);
     }
 
+    private WorkerStub(io.grpc.Channel channel,
+        WorkerServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      super(channel, config, callOptions);
+    }
+
     @java.lang.Override
     protected WorkerStub build(io.grpc.Channel channel,
-        WorkerServiceDescriptor config) {
-      return new WorkerStub(channel, config);
+        WorkerServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      return new WorkerStub(channel, config, callOptions);
     }
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.testing.ClientArgs> runTest(
         io.grpc.stub.StreamObserver<io.grpc.testing.ClientStatus> responseObserver) {
       return duplexStreamingCall(
-          channel.newCall(config.runTest), responseObserver);
+          channel.newCall(config.runTest, callOptions), responseObserver);
     }
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.testing.ServerArgs> runServer(
         io.grpc.stub.StreamObserver<io.grpc.testing.ServerStatus> responseObserver) {
       return duplexStreamingCall(
-          channel.newCall(config.runServer), responseObserver);
+          channel.newCall(config.runServer, callOptions), responseObserver);
     }
   }
 
@@ -137,10 +144,17 @@ public class WorkerGrpc {
       super(channel, config);
     }
 
+    private WorkerBlockingStub(io.grpc.Channel channel,
+        WorkerServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      super(channel, config, callOptions);
+    }
+
     @java.lang.Override
     protected WorkerBlockingStub build(io.grpc.Channel channel,
-        WorkerServiceDescriptor config) {
-      return new WorkerBlockingStub(channel, config);
+        WorkerServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      return new WorkerBlockingStub(channel, config, callOptions);
     }
   }
 
@@ -152,10 +166,17 @@ public class WorkerGrpc {
       super(channel, config);
     }
 
+    private WorkerFutureStub(io.grpc.Channel channel,
+        WorkerServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      super(channel, config, callOptions);
+    }
+
     @java.lang.Override
     protected WorkerFutureStub build(io.grpc.Channel channel,
-        WorkerServiceDescriptor config) {
-      return new WorkerFutureStub(channel, config);
+        WorkerServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      return new WorkerFutureStub(channel, config, callOptions);
     }
   }
 

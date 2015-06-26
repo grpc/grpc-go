@@ -96,17 +96,24 @@ public class GreeterGrpc {
       super(channel, config);
     }
 
+    private GreeterStub(io.grpc.Channel channel,
+        GreeterServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      super(channel, config, callOptions);
+    }
+
     @java.lang.Override
     protected GreeterStub build(io.grpc.Channel channel,
-        GreeterServiceDescriptor config) {
-      return new GreeterStub(channel, config);
+        GreeterServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      return new GreeterStub(channel, config, callOptions);
     }
 
     @java.lang.Override
     public void sayHello(io.grpc.examples.helloworld.HelloRequest request,
         io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloResponse> responseObserver) {
       asyncUnaryCall(
-          channel.newCall(config.sayHello), request, responseObserver);
+          channel.newCall(config.sayHello, callOptions), request, responseObserver);
     }
   }
 
@@ -118,16 +125,23 @@ public class GreeterGrpc {
       super(channel, config);
     }
 
+    private GreeterBlockingStub(io.grpc.Channel channel,
+        GreeterServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      super(channel, config, callOptions);
+    }
+
     @java.lang.Override
     protected GreeterBlockingStub build(io.grpc.Channel channel,
-        GreeterServiceDescriptor config) {
-      return new GreeterBlockingStub(channel, config);
+        GreeterServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      return new GreeterBlockingStub(channel, config, callOptions);
     }
 
     @java.lang.Override
     public io.grpc.examples.helloworld.HelloResponse sayHello(io.grpc.examples.helloworld.HelloRequest request) {
       return blockingUnaryCall(
-          channel.newCall(config.sayHello), request);
+          channel.newCall(config.sayHello, callOptions), request);
     }
   }
 
@@ -139,17 +153,24 @@ public class GreeterGrpc {
       super(channel, config);
     }
 
+    private GreeterFutureStub(io.grpc.Channel channel,
+        GreeterServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      super(channel, config, callOptions);
+    }
+
     @java.lang.Override
     protected GreeterFutureStub build(io.grpc.Channel channel,
-        GreeterServiceDescriptor config) {
-      return new GreeterFutureStub(channel, config);
+        GreeterServiceDescriptor config,
+        io.grpc.CallOptions callOptions) {
+      return new GreeterFutureStub(channel, config, callOptions);
     }
 
     @java.lang.Override
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.examples.helloworld.HelloResponse> sayHello(
         io.grpc.examples.helloworld.HelloRequest request) {
       return unaryFutureCall(
-          channel.newCall(config.sayHello), request);
+          channel.newCall(config.sayHello, callOptions), request);
     }
   }
 

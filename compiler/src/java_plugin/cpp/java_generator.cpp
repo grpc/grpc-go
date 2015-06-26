@@ -328,13 +328,23 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
     p->Print("}\n\n");
     p->Print(
         *vars,
+        "private $impl_name$($Channel$ channel,\n"
+        "    $service_name$ServiceDescriptor config,\n"
+        "    $CallOptions$ callOptions) {\n");
+    p->Indent();
+    p->Print("super(channel, config, callOptions);\n");
+    p->Outdent();
+    p->Print("}\n\n");
+    p->Print(
+        *vars,
         "@$Override$\n"
         "protected $impl_name$ build($Channel$ channel,\n"
-        "    $service_name$ServiceDescriptor config) {\n");
+        "    $service_name$ServiceDescriptor config,\n"
+        "    $CallOptions$ callOptions) {\n");
     p->Indent();
     p->Print(
         *vars,
-        "return new $impl_name$(channel, config);\n");
+        "return new $impl_name$(channel, config, callOptions);\n");
     p->Outdent();
     p->Print("}\n");
   }
@@ -430,7 +440,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
           p->Print(
               *vars,
               "return $calls_method$(\n"
-              "    channel.newCall(config.$lower_method_name$), $params$);\n");
+              "    channel.newCall(config.$lower_method_name$, callOptions), $params$);\n");
           break;
         case ASYNC_CALL:
           if (server_streaming) {
@@ -454,7 +464,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
           p->Print(
               *vars,
               "$last_line_prefix$$calls_method$(\n"
-              "    channel.newCall(config.$lower_method_name$), $params$);\n");
+              "    channel.newCall(config.$lower_method_name$, callOptions), $params$);\n");
           break;
         case FUTURE_CALL:
           CHECK(!client_streaming && !server_streaming)
@@ -465,7 +475,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
           p->Print(
               *vars,
               "return $calls_method$(\n"
-              "    channel.newCall(config.$lower_method_name$), request);\n");
+              "    channel.newCall(config.$lower_method_name$, callOptions), request);\n");
           break;
       }
       p->Outdent();
@@ -653,6 +663,7 @@ void GenerateService(const ServiceDescriptor* service,
   vars["String"] = "java.lang.String";
   vars["Override"] = "java.lang.Override";
   vars["Channel"] = "io.grpc.Channel";
+  vars["CallOptions"] = "io.grpc.CallOptions";
   vars["MethodType"] = "io.grpc.MethodType";
   vars["ServerServiceDefinition"] =
       "io.grpc.ServerServiceDefinition";

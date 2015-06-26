@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,35 +31,28 @@
 
 package io.grpc;
 
-import javax.annotation.concurrent.ThreadSafe;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
-/**
- * Interface for intercepting outgoing calls before they are dispatched by a {@link Channel}.
- *
- * <p>Implementers use this mechanism to add cross-cutting behavior to {@link Channel} and
- * stub implementations. Common examples of such behavior include:
- * <ul>
- * <li>Adding credentials to header metadata</li>
- * <li>Logging and monitoring call behavior</li>
- * <li>Request and response rewriting</li>
- * </ul>
- */
-@ThreadSafe
-public interface ClientInterceptor {
-  /**
-   * Intercept {@link ClientCall} creation by the {@code next} {@link Channel}.
-   *
-   * <p>Many variations of interception are possible. Complex implementations may return a wrapper
-   * around the result of {@code next.newCall()}, whereas a simpler implementation may just modify
-   * the header metadata prior to returning the result of {@code next.newCall()}.
-   *
-   * @param method the remote method to be called.
-   * @param callOptions the runtime options to be applied to this call.
-   * @param next the channel which is being intercepted.
-   * @return the call object for the remote operation, never {@code null}.
-   */
-  <RequestT, ResponseT> ClientCall<RequestT, ResponseT> interceptCall(
-      MethodDescriptor<RequestT, ResponseT> method,
-      CallOptions callOptions,
-      Channel next);
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+/** Unit tests for {@link CallOptions}. */
+@RunWith(JUnit4.class)
+public class CallOptionsTest {
+  @Test
+  public void defaultsAreAllNull() {
+    assertNull(CallOptions.DEFAULT.getDeadlineNanoTime());
+  }
+
+  @Test
+  public void mutation() {
+    CallOptions options1 = CallOptions.DEFAULT.withDeadlineNanoTime(10L);
+    assertNull(CallOptions.DEFAULT.getDeadlineNanoTime());
+    assertEquals(10L, (long) options1.getDeadlineNanoTime());
+    CallOptions options2 = options1.withDeadlineNanoTime(null);
+    assertEquals(10L, (long) options1.getDeadlineNanoTime());
+    assertNull(options2.getDeadlineNanoTime());
+  }
 }

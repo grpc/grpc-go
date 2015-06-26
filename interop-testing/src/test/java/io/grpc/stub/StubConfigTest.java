@@ -32,17 +32,29 @@
 package io.grpc.stub;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.same;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.MethodDescriptor;
+import io.grpc.stub.StreamObserver;
+import io.grpc.testing.integration.Messages.SimpleRequest;
+import io.grpc.testing.integration.Messages.SimpleResponse;
 import io.grpc.testing.integration.TestServiceGrpc;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.concurrent.TimeUnit;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 /**
  * Tests for stub reconfiguration.
@@ -50,30 +62,50 @@ import java.util.concurrent.TimeUnit;
 @RunWith(JUnit4.class)
 public class StubConfigTest {
 
-  @Test(timeout = 10000)
-  public void testConfigureTimeout() {
-    // Create a default stub
-    TestServiceGrpc.TestServiceBlockingStub stub =
-        TestServiceGrpc.newBlockingStub(new FakeChannel());
-    assertEquals(TimeUnit.DAYS.toMicros(364),
-        stub.getServiceDescriptor().fullDuplexCall.getTimeout());
-    // Reconfigure it
-    stub = stub.configureNewStub()
-        .setTimeout(2, TimeUnit.SECONDS)
-        .build();
-    // New altered config
-    assertEquals(TimeUnit.SECONDS.toMicros(2),
-        stub.getServiceDescriptor().fullDuplexCall.getTimeout());
-    // Default config unchanged
-    assertEquals(TimeUnit.DAYS.toMicros(364),
-        TestServiceGrpc.CONFIG.fullDuplexCall.getTimeout());
+  @Mock
+  private Channel channel;
+
+  @Mock
+  private StreamObserver<SimpleResponse> responseObserver;
+
+  @Mock
+  private ClientCall<SimpleRequest, SimpleResponse> call;
+
+  /**
+   * Sets up mocks.
+   */
+  @Before public void setUp() {
+    MockitoAnnotations.initMocks(this);
+    when(channel.newCall(
+      Mockito.<MethodDescriptor<SimpleRequest, SimpleResponse>>any(), any(CallOptions.class)))
+      .thenReturn(call);
   }
 
+  @Test
+  public void testConfigureDeadline() {
+    // Create a default stub
+    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel);
+    assertNull(stub.getCallOptions().getDeadlineNanoTime());
+    // Reconfigure it
+    TestServiceGrpc.TestServiceBlockingStub reconfiguredStub =
+        stub.configureNewStub().setDeadlineNanoTime(2L).build();
+    // New altered config
+    assertEquals(2L, (long) reconfiguredStub.getCallOptions().getDeadlineNanoTime());
+    // Default config unchanged
+    assertNull(stub.getCallOptions().getDeadlineNanoTime());
+  }
 
-  private static class FakeChannel extends Channel {
-    @Override
-    public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
-      return null;
-    }
+  @Test
+  public void testStubCallOptionsPopulatedToNewCall() {
+    TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
+    CallOptions options1 = stub.getCallOptions();
+    SimpleRequest request = SimpleRequest.getDefaultInstance();
+    stub.unaryCall(request, responseObserver);
+    verify(channel).newCall(same(TestServiceGrpc.CONFIG.unaryCall), same(options1));
+    stub = stub.configureNewStub().setDeadlineNanoTime(2L).build();
+    CallOptions options2 = stub.getCallOptions();
+    assertNotSame(options1, options2);
+    stub.unaryCall(request, responseObserver);
+    verify(channel).newCall(same(TestServiceGrpc.CONFIG.unaryCall), same(options2));
   }
 }

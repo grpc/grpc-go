@@ -83,7 +83,9 @@ public class ClientInterceptorsTest {
    */
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
-    when(channel.newCall(Mockito.<MethodDescriptor<String, Integer>>any())).thenReturn(call);
+    when(channel.newCall(
+        Mockito.<MethodDescriptor<String, Integer>>any(), any(CallOptions.class)))
+        .thenReturn(call);
 
     // Emulate the precondition checks in ChannelImpl.CallImpl
     Answer<Void> checkStartCalled = new Answer<Void>() {
@@ -123,15 +125,17 @@ public class ClientInterceptorsTest {
   public void channelAndInterceptorCalled() {
     ClientInterceptor interceptor = spy(new NoopInterceptor());
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
+    CallOptions callOptions = CallOptions.DEFAULT;
     // First call
-    assertSame(call, intercepted.newCall(method));
-    verify(channel).newCall(same(method));
-    verify(interceptor).interceptCall(same(method), Mockito.<Channel>any());
+    assertSame(call, intercepted.newCall(method, callOptions));
+    verify(channel).newCall(same(method), same(callOptions));
+    verify(interceptor).interceptCall(same(method), same(callOptions), Mockito.<Channel>any());
     verifyNoMoreInteractions(channel, interceptor);
     // Second call
-    assertSame(call, intercepted.newCall(method));
-    verify(channel, times(2)).newCall(same(method));
-    verify(interceptor, times(2)).interceptCall(same(method), Mockito.<Channel>any());
+    assertSame(call, intercepted.newCall(method, callOptions));
+    verify(channel, times(2)).newCall(same(method), same(callOptions));
+    verify(interceptor, times(2))
+        .interceptCall(same(method), same(callOptions), Mockito.<Channel>any());
     verifyNoMoreInteractions(channel, interceptor);
   }
 
@@ -141,13 +145,14 @@ public class ClientInterceptorsTest {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
           Channel next) {
-        next.newCall(method);
-        return next.newCall(method);
+        next.newCall(method, callOptions);
+        return next.newCall(method, callOptions);
       }
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
-    intercepted.newCall(method);
+    intercepted.newCall(method, CallOptions.DEFAULT);
   }
 
   @Test
@@ -156,7 +161,8 @@ public class ClientInterceptorsTest {
     channel = new Channel() {
       @SuppressWarnings("unchecked")
       @Override
-      public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method) {
+      public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(
+          MethodDescriptor<ReqT, RespT> method, CallOptions callOptions) {
         order.add("channel");
         return (ClientCall<ReqT, RespT>) call;
       }
@@ -165,23 +171,46 @@ public class ClientInterceptorsTest {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
           Channel next) {
         order.add("i1");
-        return next.newCall(method);
+        return next.newCall(method, callOptions);
       }
     };
     ClientInterceptor interceptor2 = new ClientInterceptor() {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
           Channel next) {
         order.add("i2");
-        return next.newCall(method);
+        return next.newCall(method, callOptions);
       }
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor1, interceptor2);
-    assertSame(call, intercepted.newCall(method));
+    assertSame(call, intercepted.newCall(method, CallOptions.DEFAULT));
     assertEquals(Arrays.asList("i1", "i2", "channel"), order);
+  }
+
+  @Test
+  public void callOptions() {
+    final CallOptions initialCallOptions = CallOptions.DEFAULT.withDeadlineNanoTime(100L);
+    final CallOptions newCallOptions = initialCallOptions.withDeadlineNanoTime(300L);
+    assertNotSame(initialCallOptions, newCallOptions);
+    ClientInterceptor interceptor = spy(new ClientInterceptor() {
+      @Override
+      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+          MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
+          Channel next) {
+        return next.newCall(method, newCallOptions);
+      }
+    });
+    Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
+    intercepted.newCall(method, initialCallOptions);
+    verify(interceptor).interceptCall(
+        same(method), same(initialCallOptions), Mockito.<Channel>any());
+    verify(channel).newCall(same(method), same(newCallOptions));
   }
 
   @Test
@@ -191,8 +220,9 @@ public class ClientInterceptorsTest {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
           Channel next) {
-        ClientCall<ReqT, RespT> call = next.newCall(method);
+        ClientCall<ReqT, RespT> call = next.newCall(method, callOptions);
         return new SimpleForwardingClientCall<ReqT, RespT>(call) {
           @Override
           public void start(ClientCall.Listener<RespT> responseListener, Metadata.Headers headers) {
@@ -205,7 +235,7 @@ public class ClientInterceptorsTest {
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
     @SuppressWarnings("unchecked")
     ClientCall.Listener<Integer> listener = mock(ClientCall.Listener.class);
-    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method);
+    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     // start() on the intercepted call will eventually reach the call created by the real channel
     interceptedCall.start(listener, new Metadata.Headers());
     ArgumentCaptor<Metadata.Headers> captor = ArgumentCaptor.forClass(Metadata.Headers.class);
@@ -222,8 +252,9 @@ public class ClientInterceptorsTest {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
           Channel next) {
-        ClientCall<ReqT, RespT> call = next.newCall(method);
+        ClientCall<ReqT, RespT> call = next.newCall(method, callOptions);
         return new SimpleForwardingClientCall<ReqT, RespT>(call) {
           @Override
           public void start(ClientCall.Listener<RespT> responseListener, Metadata.Headers headers) {
@@ -241,7 +272,7 @@ public class ClientInterceptorsTest {
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
     @SuppressWarnings("unchecked")
     ClientCall.Listener<Integer> listener = mock(ClientCall.Listener.class);
-    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method);
+    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     interceptedCall.start(listener, new Metadata.Headers());
     // Capture the underlying call listener that will receive headers from the transport.
     ArgumentCaptor<ClientCall.Listener<Integer>> captor = ArgumentCaptor.forClass(null);
@@ -258,13 +289,14 @@ public class ClientInterceptorsTest {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
           Channel next) {
-        ClientCall<ReqT, RespT> call = next.newCall(method);
+        ClientCall<ReqT, RespT> call = next.newCall(method, callOptions);
         return new SimpleForwardingClientCall<ReqT, RespT>(call) { };
       }
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
-    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method);
+    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     assertNotSame(call, interceptedCall);
     @SuppressWarnings("unchecked")
     ClientCall.Listener<Integer> listener = mock(ClientCall.Listener.class);
@@ -286,8 +318,9 @@ public class ClientInterceptorsTest {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
           Channel next) {
-        ClientCall<ReqT, RespT> call = next.newCall(method);
+        ClientCall<ReqT, RespT> call = next.newCall(method, callOptions);
         return new CheckedForwardingClientCall<ReqT, RespT>(call) {
           @Override
           protected void checkedStart(ClientCall.Listener<RespT> responseListener,
@@ -303,7 +336,7 @@ public class ClientInterceptorsTest {
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
     @SuppressWarnings("unchecked")
     ClientCall.Listener<Integer> listener = mock(ClientCall.Listener.class);
-    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method);
+    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     assertNotSame(call, interceptedCall);
     interceptedCall.start(listener, new Metadata.Headers());
     interceptedCall.sendPayload("request");
@@ -318,8 +351,8 @@ public class ClientInterceptorsTest {
   private static class NoopInterceptor implements ClientInterceptor {
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-        Channel next) {
-      return next.newCall(method);
+        CallOptions callOptions, Channel next) {
+      return next.newCall(method, callOptions);
     }
   }
 

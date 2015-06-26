@@ -31,6 +31,7 @@
 
 package io.grpc.stub;
 
+import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
@@ -73,8 +74,9 @@ public class MetadataUtils {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
           Channel next) {
-        return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method)) {
+        return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
           @Override
           public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
             headers.merge(extraHeaders);
@@ -116,8 +118,9 @@ public class MetadataUtils {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
           MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
           Channel next) {
-        return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method)) {
+        return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
           @Override
           public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
             headersCapture.set(null);

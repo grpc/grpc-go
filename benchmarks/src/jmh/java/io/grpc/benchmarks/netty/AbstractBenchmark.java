@@ -2,6 +2,7 @@ package io.grpc.benchmarks.netty;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
+import io.grpc.CallOptions;
 import io.grpc.ChannelImpl;
 import io.grpc.ClientCall;
 import io.grpc.DeferredInputStream;
@@ -96,6 +97,8 @@ public abstract class AbstractBenchmark {
   public enum ChannelType {
     NIO, LOCAL;
   }
+
+  private static final CallOptions CALL_OPTIONS = CallOptions.DEFAULT;
 
   private static final InetAddress BENCHMARK_ADDR;
 
@@ -222,20 +225,14 @@ public abstract class AbstractBenchmark {
     // Simple method that sends and receives NettyByteBuf
     unaryMethod = MethodDescriptor.create(MethodType.UNARY,
         "benchmark/unary",
-        5,
-        TimeUnit.SECONDS,
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
     pingPongMethod = MethodDescriptor.create(MethodType.DUPLEX_STREAMING,
         "benchmark/pingPong",
-        5,
-        TimeUnit.SECONDS,
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
     flowControlledStreaming = MethodDescriptor.create(MethodType.DUPLEX_STREAMING,
         "benchmark/flowControlledStreaming",
-        5,
-        TimeUnit.SECONDS,
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
 
@@ -394,7 +391,8 @@ public abstract class AbstractBenchmark {
           public void onCompleted() {
             if (!done.get()) {
               ByteBuf slice = request.slice();
-              ClientCalls.asyncUnaryCall(channel.newCall(unaryMethod), slice, this);
+              ClientCalls.asyncUnaryCall(
+                  channel.newCall(unaryMethod, CALL_OPTIONS), slice, this);
             }
           }
         };
@@ -414,7 +412,8 @@ public abstract class AbstractBenchmark {
                                      final long counterDelta) {
     for (final ChannelImpl channel : channels) {
       for (int i = 0; i < callsPerChannel; i++) {
-        final ClientCall<ByteBuf, ByteBuf> streamingCall = channel.newCall(pingPongMethod);
+        final ClientCall<ByteBuf, ByteBuf> streamingCall =
+            channel.newCall(pingPongMethod, CALL_OPTIONS);
         final AtomicReference<StreamObserver<ByteBuf>> requestObserverRef =
             new AtomicReference<StreamObserver<ByteBuf>>();
         StreamObserver<ByteBuf> requestObserver = ClientCalls.duplexStreamingCall(streamingCall,
@@ -457,7 +456,8 @@ public abstract class AbstractBenchmark {
                                                    final long counterDelta) {
     for (final ChannelImpl channel : channels) {
       for (int i = 0; i < callsPerChannel; i++) {
-        final ClientCall<ByteBuf, ByteBuf> streamingCall = channel.newCall(flowControlledStreaming);
+        final ClientCall<ByteBuf, ByteBuf> streamingCall =
+            channel.newCall(flowControlledStreaming, CALL_OPTIONS);
         final AtomicReference<StreamObserver<ByteBuf>> requestObserverRef =
             new AtomicReference<StreamObserver<ByteBuf>>();
         StreamObserver<ByteBuf> requestObserver = ClientCalls.duplexStreamingCall(streamingCall,
