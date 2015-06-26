@@ -33,6 +33,7 @@ package io.grpc;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
@@ -62,8 +63,11 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Unit tests for {@link ChannelImpl}. */
 @RunWith(JUnit4.class)
@@ -94,7 +98,8 @@ public class ChannelImplTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    channel = new ChannelImpl(mockTransportFactory, executor, null);
+    channel = new ChannelImpl(mockTransportFactory, executor, null,
+        Collections.<ClientInterceptor>emptyList());
     when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport);
   }
 
@@ -282,5 +287,22 @@ public class ChannelImplTest {
     verifyNoMoreInteractions(mockTransport3);
     verifyNoMoreInteractions(mockStream2);
     verifyNoMoreInteractions(mockStream3);
+  }
+
+  @Test
+  public void interceptor() {
+    final AtomicLong atomic = new AtomicLong();
+    ClientInterceptor interceptor = new ClientInterceptor() {
+      @Override
+      public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> interceptCall(
+          MethodDescriptor<RequestT, ResponseT> method, CallOptions callOptions,
+          Channel next) {
+        atomic.set(1);
+        return next.newCall(method, callOptions);
+      }
+    };
+    channel = new ChannelImpl(mockTransportFactory, executor, null, Arrays.asList(interceptor));
+    assertNotNull(channel.newCall(method, CallOptions.DEFAULT));
+    assertEquals(1, atomic.get());
   }
 }

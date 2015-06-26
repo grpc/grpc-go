@@ -46,6 +46,7 @@ import io.grpc.transport.HttpUtil;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -94,6 +95,11 @@ public final class ChannelImpl extends Channel {
    */
   private ScheduledExecutorService deadlineCancellationExecutor;
   /**
+   * We delegate to this channel, so that we can have interceptors as necessary. If there aren't
+   * any interceptors this will just be {@link RealChannel}.
+   */
+  private final Channel interceptorChannel;
+  /**
    * All transports that are not stopped. At the very least {@link #activeTransport} will be
    * present, but previously used transports that still have streams or are stopping may also be
    * present.
@@ -112,10 +118,11 @@ public final class ChannelImpl extends Channel {
   private Runnable terminationRunnable;
 
   ChannelImpl(ClientTransportFactory transportFactory, ExecutorService executor,
-                     @Nullable String userAgent) {
+      @Nullable String userAgent, List<ClientInterceptor> interceptors) {
     this.transportFactory = transportFactory;
     this.executor = executor;
     this.userAgent = userAgent;
+    this.interceptorChannel = ClientInterceptors.intercept(new RealChannel(), interceptors);
     deadlineCancellationExecutor = SharedResourceHolder.get(TIMER_SERVICE);
   }
 
@@ -227,9 +234,9 @@ public final class ChannelImpl extends Channel {
    * Creates a new outgoing call on the channel.
    */
   @Override
-  public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(
-      MethodDescriptor<ReqT, RespT> method, CallOptions callOptions) {
-    return new CallImpl<ReqT, RespT>(method, new SerializingExecutor(executor), callOptions);
+  public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
+      CallOptions callOptions) {
+    return interceptorChannel.newCall(method, callOptions);
   }
 
   private ClientTransport obtainActiveTransport() {
@@ -264,6 +271,14 @@ public final class ChannelImpl extends Channel {
         activeTransport = newActiveTransport;
       }
       return newActiveTransport;
+    }
+  }
+
+  private class RealChannel extends Channel {
+    @Override
+    public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
+        CallOptions callOptions) {
+      return new CallImpl<ReqT, RespT>(method, new SerializingExecutor(executor), callOptions);
     }
   }
 

@@ -37,6 +37,9 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.grpc.SharedResourceHolder.Resource;
 import io.grpc.transport.ClientTransportFactory;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -70,6 +73,7 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
 
   @Nullable
   private ExecutorService userExecutor;
+  private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
 
   @Nullable
   private String userAgent;
@@ -83,10 +87,34 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
    * <p>The channel won't take ownership of the given executor. It's caller's responsibility to
    * shut down the executor when it's desired.
    */
-  @SuppressWarnings("unchecked")
   public final BuilderT executor(ExecutorService executor) {
     userExecutor = executor;
-    return (BuilderT) this;
+    return thisT();
+  }
+
+  /**
+   * Adds interceptors that will be called before the channel performs its real work. This is
+   * functionally equivalent to using {@link ClientInterceptors#intercept(Channel, List)}, but while
+   * still having access to the original {@code ChannelImpl}.
+   */
+  public final BuilderT intercept(List<ClientInterceptor> interceptors) {
+    this.interceptors.addAll(interceptors);
+    return thisT();
+  }
+
+  /**
+   * Adds interceptors that will be called before the channel performs its real work. This is
+   * functionally equivalent to using {@link ClientInterceptors#intercept(Channel,
+   * ClientInterceptor...)}, but while still having access to the original {@code ChannelImpl}.
+   */
+  public final BuilderT intercept(ClientInterceptor... interceptors) {
+    return intercept(Arrays.asList(interceptors));
+  }
+
+  private BuilderT thisT() {
+    @SuppressWarnings("unchecked")
+    BuilderT thisT = (BuilderT) this;
+    return thisT;
   }
 
   /**
@@ -116,7 +144,8 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
     }
 
     final ChannelEssentials essentials = buildEssentials();
-    ChannelImpl channel = new ChannelImpl(essentials.transportFactory, executor, userAgent);
+    ChannelImpl channel = new ChannelImpl(essentials.transportFactory, executor, userAgent,
+        interceptors);
     channel.setTerminationRunnable(new Runnable() {
       @Override
       public void run() {
