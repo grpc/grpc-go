@@ -67,7 +67,6 @@ import okio.ByteString;
 import okio.Okio;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -128,7 +127,8 @@ class OkHttpClientTransport implements ClientTransport {
     ERROR_CODE_TO_STATUS = Collections.unmodifiableMap(errorToStatus);
   }
 
-  private final InetSocketAddress address;
+  private final String host;
+  private final int port;
   private final String authorityHost;
   private final String defaultAuthority;
   private final Random random = new Random();
@@ -162,11 +162,12 @@ class OkHttpClientTransport implements ClientTransport {
   private LinkedList<PendingStream> pendingStreams = new LinkedList<PendingStream>();
   private final ConnectionSpec connectionSpec;
 
-  OkHttpClientTransport(InetSocketAddress address, String authorityHost, Executor executor,
+  OkHttpClientTransport(String host, int port, String authorityHost, Executor executor,
       @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec) {
-    this.address = Preconditions.checkNotNull(address);
+    this.host = Preconditions.checkNotNull(host);
+    this.port = port;
     this.authorityHost = authorityHost;
-    defaultAuthority = authorityHost + ":" + address.getPort();
+    defaultAuthority = authorityHost + ":" + port;
     this.executor = Preconditions.checkNotNull(executor);
     // Client initiated streams are odd, server initiated ones are even. Server should not need to
     // use it. We start clients at 3 to avoid conflicting with HTTP negotiation.
@@ -191,7 +192,8 @@ class OkHttpClientTransport implements ClientTransport {
   @VisibleForTesting
   OkHttpClientTransport(Executor executor, FrameReader frameReader, AsyncFrameWriter frameWriter,
       int nextStreamId, Socket socket, Ticker ticker) {
-    address = null;
+    host = null;
+    port = 0;
     authorityHost = null;
     defaultAuthority = "notarealauthority:80";
     this.executor = Preconditions.checkNotNull(executor);
@@ -318,18 +320,14 @@ class OkHttpClientTransport implements ClientTransport {
   public void start(Listener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");
     // We set host to null for test.
-    if (address != null) {
+    if (host != null) {
       BufferedSource source;
       BufferedSink sink;
       try {
-        if (address.isUnresolved()) {
-          socket = new Socket(address.getHostName(), address.getPort());
-        } else {
-          socket = new Socket(address.getAddress(), address.getPort());
-        }
+        socket = new Socket(host, port);
         if (sslSocketFactory != null) {
           socket = OkHttpTlsUpgrader.upgrade(
-              sslSocketFactory, socket, authorityHost, address.getPort(), connectionSpec);
+              sslSocketFactory, socket, authorityHost, port, connectionSpec);
         }
         socket.setTcpNoDelay(true);
         source = Okio.buffer(Okio.source(socket));
