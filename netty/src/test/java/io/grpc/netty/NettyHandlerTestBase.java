@@ -32,7 +32,6 @@
 package io.grpc.netty;
 
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
@@ -47,12 +46,14 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.channel.DefaultChannelPromise;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2FrameListener;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
+import io.netty.util.concurrent.ImmediateEventExecutor;
 
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -75,12 +76,6 @@ public abstract class NettyHandlerTestBase {
   protected ChannelHandlerContext ctx;
 
   @Mock
-  protected ChannelFuture future;
-
-  @Mock
-  protected ChannelPromise promise;
-
-  @Mock
   protected ChannelFuture succeededFuture;
 
   @Mock
@@ -95,7 +90,7 @@ public abstract class NettyHandlerTestBase {
 
   protected final ByteBuf headersFrame(int streamId, Http2Headers headers) {
     ChannelHandlerContext ctx = newContext();
-    frameWriter.writeHeaders(ctx, streamId, headers, 0, false, promise);
+    frameWriter.writeHeaders(ctx, streamId, headers, 0, false, newPromise());
     return captureWrite(ctx);
   }
 
@@ -129,7 +124,7 @@ public abstract class NettyHandlerTestBase {
   }
 
   protected final ChannelPromise newPromise() {
-    return Mockito.mock(ChannelPromise.class);
+    return new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE);
   }
 
   protected final ByteBuf captureWrite(ChannelHandlerContext ctx) {
@@ -145,19 +140,21 @@ public abstract class NettyHandlerTestBase {
 
   protected final void mockContext() {
     Mockito.reset(ctx);
-    Mockito.reset(promise);
 
     when(ctx.alloc()).thenReturn(UnpooledByteBufAllocator.DEFAULT);
     when(ctx.channel()).thenReturn(channel);
-    when(ctx.write(any())).thenReturn(future);
-    when(ctx.write(any(), eq(promise))).thenReturn(future);
-    when(ctx.writeAndFlush(any())).thenReturn(future);
-    when(ctx.writeAndFlush(any(), eq(promise))).thenReturn(future);
-    when(ctx.newPromise()).thenReturn(promise);
     when(ctx.newSucceededFuture()).thenReturn(succeededFuture);
     when(ctx.executor()).thenReturn(eventLoop);
     when(channel.eventLoop()).thenReturn(eventLoop);
-    when(channel.newPromise()).thenReturn(promise);
+
+    Answer<ChannelPromise> newPromiseAnswer = new Answer<ChannelPromise>() {
+      @Override
+      public ChannelPromise answer(InvocationOnMock invocation) throws Throwable {
+        return newPromise();
+      }
+    };
+    doAnswer(newPromiseAnswer).when(channel).newPromise();
+    doAnswer(newPromiseAnswer).when(ctx).newPromise();
 
     when(eventLoop.inEventLoop()).thenAnswer(new Answer<Boolean>() {
       @Override
@@ -182,19 +179,25 @@ public abstract class NettyHandlerTestBase {
       }
     }).when(eventLoop).execute(any(Runnable.class));
 
-    // Make all writes complete immediately.
-    doAnswer(new Answer<ChannelFuture>() {
+    Answer<ChannelFuture> writeOneArgAnswer = new Answer<ChannelFuture>() {
+      @Override
+      public ChannelFuture answer(InvocationOnMock in) throws Throwable {
+        return ctx.writeAndFlush(in.getArguments()[0], newPromise());
+      }
+    };
+    Answer<ChannelFuture> writeTwoArgAnswer = new Answer<ChannelFuture>() {
       @Override
       public ChannelFuture answer(InvocationOnMock in) throws Throwable {
         ChannelPromise promise = (ChannelPromise) in.getArguments()[1];
-        promise.setSuccess();
+        promise.trySuccess();
         return promise;
       }
-    }).when(ctx).write(any(), any(ChannelPromise.class));
-  }
-
-  protected final void mockFuture(boolean succeeded) {
-    mockFuture(future, succeeded);
+    };
+    // Make all writes complete immediately.
+    doAnswer(writeTwoArgAnswer).when(ctx).write(any(), any(ChannelPromise.class));
+    doAnswer(writeTwoArgAnswer).when(ctx).writeAndFlush(any(), any(ChannelPromise.class));
+    doAnswer(writeOneArgAnswer).when(ctx).write(any());
+    doAnswer(writeOneArgAnswer).when(ctx).writeAndFlush(any());
   }
 
   protected final void mockFuture(final ChannelFuture future, boolean succeeded) {

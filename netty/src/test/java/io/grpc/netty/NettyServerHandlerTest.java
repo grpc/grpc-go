@@ -42,6 +42,7 @@ import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
 import static io.netty.handler.codec.http2.Http2Exception.connectionError;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -68,6 +69,7 @@ import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.DefaultChannelPromise;
@@ -133,21 +135,21 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     when(channel.isActive()).thenReturn(true);
     mockContext();
-    mockFuture(true);
     // Delegate writes on the channel to the handler
-    doAnswer(new Answer<Object>() {
+    doAnswer(new Answer<ChannelFuture>() {
       @Override
-      public Object answer(InvocationOnMock invocation) throws Throwable {
+      public ChannelFuture answer(InvocationOnMock invocation) throws Throwable {
+        ChannelPromise promise = newPromise();
         handler.write(ctx, invocation.getArguments()[0], promise);
-        return future;
+        return promise;
       }
     }).when(channel).write(any());
-    doAnswer(new Answer<Object>() {
+    doAnswer(new Answer<ChannelFuture>() {
       @Override
-      public Object answer(InvocationOnMock invocation) throws Throwable {
-        handler.write(ctx, invocation.getArguments()[0],
-            (ChannelPromise) invocation.getArguments()[1]);
-        return future;
+      public ChannelFuture answer(InvocationOnMock invocation) throws Throwable {
+        ChannelPromise promise = (ChannelPromise) invocation.getArguments()[1];
+        handler.write(ctx, invocation.getArguments()[0], promise);
+        return promise;
       }
     }).when(channel).write(any(), any(ChannelPromise.class));
 
@@ -166,7 +168,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     // Reset the context to clear any interactions resulting from the HTTP/2
     // connection preface handshake.
     mockContext();
-    mockFuture(promise, true);
   }
 
   @Test
@@ -175,8 +176,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     ByteBuf content = Unpooled.copiedBuffer(CONTENT);
 
     // Send a frame and verify that it was written.
-    writeQueue.enqueue(new SendGrpcFrameCommand(stream, content, false), true);
-    verify(promise, never()).setFailure(any(Throwable.class));
+    ChannelFuture future = writeQueue.enqueue(
+            new SendGrpcFrameCommand(stream, content, false), true);
+    assertTrue(future.isSuccess());
     ByteBuf bufWritten = captureWrite(ctx);
     verify(channel, times(1)).flush();
     int startIndex = bufWritten.readerIndex() + Http2CodecUtil.FRAME_HEADER_LENGTH;
@@ -282,7 +284,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
   @Test
   public void closeShouldCloseChannel() throws Exception {
-    handler.close(ctx, promise);
+    handler.close(ctx, newPromise());
 
     // Verify the expected GO_AWAY frame was written.
     ByteBuf expected = goAwayFrame(0, (int) Http2Error.NO_ERROR.code(), Unpooled.EMPTY_BUFFER);
@@ -290,7 +292,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     assertEquals(expected, actual);
 
     // Verify that the context was closed.
-    verify(ctx).close(promise);
+    verify(ctx).close(any(ChannelPromise.class));
   }
 
   @Test
@@ -305,7 +307,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     when(channel.isActive()).thenReturn(true);
     mockContext();
-    mockFuture(true);
 
     when(frameWriter.writeSettings(
         any(ChannelHandlerContext.class), any(Http2Settings.class), any(ChannelPromise.class)))
