@@ -717,6 +717,10 @@ public  final class ServerArgs extends
     }
   };
 
+  public static com.google.protobuf.Parser<ServerArgs> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<ServerArgs> getParserForType() {
     return PARSER;

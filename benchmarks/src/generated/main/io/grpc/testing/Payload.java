@@ -482,6 +482,10 @@ public  final class Payload extends
     }
   };
 
+  public static com.google.protobuf.Parser<Payload> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<Payload> getParserForType() {
     return PARSER;

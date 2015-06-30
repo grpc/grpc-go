@@ -423,6 +423,10 @@ public  final class Point extends
     }
   };
 
+  public static com.google.protobuf.Parser<Point> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<Point> getParserForType() {
     return PARSER;

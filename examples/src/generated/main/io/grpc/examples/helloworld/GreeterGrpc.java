@@ -19,8 +19,8 @@ public class GreeterGrpc {
       io.grpc.examples.helloworld.HelloResponse> METHOD_SAY_HELLO =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.UNARY, "SayHello",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloRequest.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloResponse.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloRequest.parser()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloResponse.parser()));
 
   public static GreeterStub newStub(io.grpc.Channel channel) {
     return new GreeterStub(channel, CONFIG);

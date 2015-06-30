@@ -684,6 +684,10 @@ public  final class RouteNote extends
     }
   };
 
+  public static com.google.protobuf.Parser<RouteNote> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<RouteNote> getParserForType() {
     return PARSER;

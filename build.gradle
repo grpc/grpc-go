@@ -43,7 +43,7 @@ subprojects {
         protocPluginBaseName = 'protoc-gen-grpc-java'
         javaPluginPath = "$rootDir/compiler/build/binaries/java_pluginExecutable/$protocPluginBaseName$exeSuffix"
 
-        protobufVersion = '3.0.0-alpha-3'
+        protobufVersion = '3.0.0-alpha-3.1'
 
         configureProtoCompilation = {
           String generatedSourcePath = 'src/generated'

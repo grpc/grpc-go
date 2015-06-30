@@ -324,6 +324,10 @@ public final class EmptyProtos {
       }
     };
 
+    public static com.google.protobuf.Parser<Empty> parser() {
+      return PARSER;
+    }
+
     @java.lang.Override
     public com.google.protobuf.Parser<Empty> getParserForType() {
       return PARSER;

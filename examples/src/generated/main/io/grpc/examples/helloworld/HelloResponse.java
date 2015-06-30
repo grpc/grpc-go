@@ -436,6 +436,10 @@ public  final class HelloResponse extends
     }
   };
 
+  public static com.google.protobuf.Parser<HelloResponse> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<HelloResponse> getParserForType() {
     return PARSER;

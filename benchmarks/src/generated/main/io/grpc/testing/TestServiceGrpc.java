@@ -19,14 +19,14 @@ public class TestServiceGrpc {
       io.grpc.testing.SimpleResponse> METHOD_UNARY_CALL =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.UNARY, "UnaryCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.parser()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.parser()));
   private static final io.grpc.stub.Method<io.grpc.testing.SimpleRequest,
       io.grpc.testing.SimpleResponse> METHOD_STREAMING_CALL =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.DUPLEX_STREAMING, "StreamingCall",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.parser()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.parser()));
 
   public static TestServiceStub newStub(io.grpc.Channel channel) {
     return new TestServiceStub(channel, CONFIG);

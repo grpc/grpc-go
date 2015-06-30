@@ -308,6 +308,10 @@ public  final class Mark extends
     }
   };
 
+  public static com.google.protobuf.Parser<Mark> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<Mark> getParserForType() {
     return PARSER;

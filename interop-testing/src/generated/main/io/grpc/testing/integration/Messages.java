@@ -654,6 +654,10 @@ public final class Messages {
       }
     };
 
+    public static com.google.protobuf.Parser<Payload> parser() {
+      return PARSER;
+    }
+
     @java.lang.Override
     public com.google.protobuf.Parser<Payload> getParserForType() {
       return PARSER;
@@ -1596,6 +1600,10 @@ public final class Messages {
       }
     };
 
+    public static com.google.protobuf.Parser<SimpleRequest> parser() {
+      return PARSER;
+    }
+
     @java.lang.Override
     public com.google.protobuf.Parser<SimpleRequest> getParserForType() {
       return PARSER;
@@ -2517,6 +2525,10 @@ public final class Messages {
       }
     };
 
+    public static com.google.protobuf.Parser<SimpleResponse> parser() {
+      return PARSER;
+    }
+
     @java.lang.Override
     public com.google.protobuf.Parser<SimpleResponse> getParserForType() {
       return PARSER;
@@ -2966,6 +2978,10 @@ public final class Messages {
         }
       }
     };
+
+    public static com.google.protobuf.Parser<SimpleContext> parser() {
+      return PARSER;
+    }
 
     @java.lang.Override
     public com.google.protobuf.Parser<SimpleContext> getParserForType() {
@@ -3533,6 +3549,10 @@ public final class Messages {
       }
     };
 
+    public static com.google.protobuf.Parser<StreamingInputCallRequest> parser() {
+      return PARSER;
+    }
+
     @java.lang.Override
     public com.google.protobuf.Parser<StreamingInputCallRequest> getParserForType() {
       return PARSER;
@@ -3932,6 +3952,10 @@ public final class Messages {
         }
       }
     };
+
+    public static com.google.protobuf.Parser<StreamingInputCallResponse> parser() {
+      return PARSER;
+    }
 
     @java.lang.Override
     public com.google.protobuf.Parser<StreamingInputCallResponse> getParserForType() {
@@ -4421,6 +4445,10 @@ public final class Messages {
         }
       }
     };
+
+    public static com.google.protobuf.Parser<ResponseParameters> parser() {
+      return PARSER;
+    }
 
     @java.lang.Override
     public com.google.protobuf.Parser<ResponseParameters> getParserForType() {
@@ -5617,6 +5645,10 @@ public final class Messages {
       }
     };
 
+    public static com.google.protobuf.Parser<StreamingOutputCallRequest> parser() {
+      return PARSER;
+    }
+
     @java.lang.Override
     public com.google.protobuf.Parser<StreamingOutputCallRequest> getParserForType() {
       return PARSER;
@@ -6182,6 +6214,10 @@ public final class Messages {
         }
       }
     };
+
+    public static com.google.protobuf.Parser<StreamingOutputCallResponse> parser() {
+      return PARSER;
+    }
 
     @java.lang.Override
     public com.google.protobuf.Parser<StreamingOutputCallResponse> getParserForType() {

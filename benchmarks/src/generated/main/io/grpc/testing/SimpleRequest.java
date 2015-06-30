@@ -710,6 +710,10 @@ public  final class SimpleRequest extends
     }
   };
 
+  public static com.google.protobuf.Parser<SimpleRequest> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<SimpleRequest> getParserForType() {
     return PARSER;

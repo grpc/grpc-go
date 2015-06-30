@@ -729,6 +729,10 @@ public  final class HistogramData extends
     }
   };
 
+  public static com.google.protobuf.Parser<HistogramData> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<HistogramData> getParserForType() {
     return PARSER;

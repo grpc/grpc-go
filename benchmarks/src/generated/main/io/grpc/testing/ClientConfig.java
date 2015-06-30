@@ -916,6 +916,10 @@ public  final class ClientConfig extends
     }
   };
 
+  public static com.google.protobuf.Parser<ClientConfig> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<ClientConfig> getParserForType() {
     return PARSER;

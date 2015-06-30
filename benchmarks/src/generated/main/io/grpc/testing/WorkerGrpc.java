@@ -19,14 +19,14 @@ public class WorkerGrpc {
       io.grpc.testing.ClientStatus> METHOD_RUN_TEST =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.DUPLEX_STREAMING, "RunTest",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientArgs.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientStatus.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientArgs.parser()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientStatus.parser()));
   private static final io.grpc.stub.Method<io.grpc.testing.ServerArgs,
       io.grpc.testing.ServerStatus> METHOD_RUN_SERVER =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.DUPLEX_STREAMING, "RunServer",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerArgs.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerStatus.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerArgs.parser()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerStatus.parser()));
 
   public static WorkerStub newStub(io.grpc.Channel channel) {
     return new WorkerStub(channel, CONFIG);

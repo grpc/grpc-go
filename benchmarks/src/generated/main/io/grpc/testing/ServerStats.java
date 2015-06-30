@@ -511,6 +511,10 @@ public  final class ServerStats extends
     }
   };
 
+  public static com.google.protobuf.Parser<ServerStats> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<ServerStats> getParserForType() {
     return PARSER;

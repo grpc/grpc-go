@@ -19,26 +19,26 @@ public class RouteGuideGrpc {
       io.grpc.examples.routeguide.Feature> METHOD_GET_FEATURE =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.UNARY, "GetFeature",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.parser()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.parser()));
   private static final io.grpc.stub.Method<io.grpc.examples.routeguide.Rectangle,
       io.grpc.examples.routeguide.Feature> METHOD_LIST_FEATURES =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.SERVER_STREAMING, "ListFeatures",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Rectangle.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Rectangle.parser()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.parser()));
   private static final io.grpc.stub.Method<io.grpc.examples.routeguide.Point,
       io.grpc.examples.routeguide.RouteSummary> METHOD_RECORD_ROUTE =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.CLIENT_STREAMING, "RecordRoute",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteSummary.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.parser()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteSummary.parser()));
   private static final io.grpc.stub.Method<io.grpc.examples.routeguide.RouteNote,
       io.grpc.examples.routeguide.RouteNote> METHOD_ROUTE_CHAT =
       io.grpc.stub.Method.create(
           io.grpc.MethodType.DUPLEX_STREAMING, "RouteChat",
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.PARSER),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.PARSER));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.parser()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.parser()));
 
   public static RouteGuideStub newStub(io.grpc.Channel channel) {
     return new RouteGuideStub(channel, CONFIG);

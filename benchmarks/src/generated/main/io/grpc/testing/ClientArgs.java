@@ -717,6 +717,10 @@ public  final class ClientArgs extends
     }
   };
 
+  public static com.google.protobuf.Parser<ClientArgs> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<ClientArgs> getParserForType() {
     return PARSER;

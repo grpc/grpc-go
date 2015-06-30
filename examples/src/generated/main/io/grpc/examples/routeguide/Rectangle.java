@@ -751,6 +751,10 @@ public  final class Rectangle extends
     }
   };
 
+  public static com.google.protobuf.Parser<Rectangle> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<Rectangle> getParserForType() {
     return PARSER;

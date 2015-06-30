@@ -473,6 +473,10 @@ public  final class SimpleResponse extends
     }
   };
 
+  public static com.google.protobuf.Parser<SimpleResponse> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<SimpleResponse> getParserForType() {
     return PARSER;

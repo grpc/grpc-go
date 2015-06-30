@@ -371,6 +371,10 @@ public  final class StatsRequest extends
     }
   };
 
+  public static com.google.protobuf.Parser<StatsRequest> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<StatsRequest> getParserForType() {
     return PARSER;

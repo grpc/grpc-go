@@ -1,7 +1,7 @@
 FROM protoc-artifacts:latest
 
 RUN scl enable devtoolset-1.1 'bash -c "cd /protobuf && \
-    git checkout v3.0.0-alpha-3 && \
+    git checkout v3.0.0-alpha-3.1 && \
     ./autogen.sh && \
     CXXFLAGS=-m32 ./configure --disable-shared --prefix=/protobuf-32 && \
     make clean && make && make install"'

@@ -635,6 +635,10 @@ public  final class ClientStats extends
     }
   };
 
+  public static com.google.protobuf.Parser<ClientStats> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<ClientStats> getParserForType() {
     return PARSER;

@@ -686,6 +686,10 @@ public  final class Feature extends
     }
   };
 
+  public static com.google.protobuf.Parser<Feature> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<Feature> getParserForType() {
     return PARSER;

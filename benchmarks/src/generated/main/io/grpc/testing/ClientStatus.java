@@ -473,6 +473,10 @@ public  final class ClientStatus extends
     }
   };
 
+  public static com.google.protobuf.Parser<ClientStatus> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<ClientStatus> getParserForType() {
     return PARSER;

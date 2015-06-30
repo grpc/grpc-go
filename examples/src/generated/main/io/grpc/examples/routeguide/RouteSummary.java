@@ -595,6 +595,10 @@ public  final class RouteSummary extends
     }
   };
 
+  public static com.google.protobuf.Parser<RouteSummary> parser() {
+    return PARSER;
+  }
+
   @java.lang.Override
   public com.google.protobuf.Parser<RouteSummary> getParserForType() {
     return PARSER;
