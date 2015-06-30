@@ -67,16 +67,14 @@ class NettyServerTransport implements ServerTransport {
   private final int maxStreams;
   private ServerTransportListener listener;
   private boolean terminated;
-  private int connectionWindowSize;
-  private int streamWindowSize;
+  private int flowControlWindow;
 
   NettyServerTransport(Channel channel, @Nullable SslContext sslContext, int maxStreams,
-                       int connectionWindowSize, int streamWindowSize) {
+                       int flowControlWindow) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
     this.sslContext = sslContext;
     this.maxStreams = maxStreams;
-    this.connectionWindowSize = connectionWindowSize;
-    this.streamWindowSize = streamWindowSize;
+    this.flowControlWindow = flowControlWindow;
   }
 
   public void start(ServerTransportListener listener) {
@@ -137,6 +135,6 @@ class NettyServerTransport implements ServerTransport {
         new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
 
     return new NettyServerHandler(transportListener, connection, frameReader, frameWriter,
-        maxStreams, connectionWindowSize, streamWindowSize);
+        maxStreams, flowControlWindow);
   }
 }

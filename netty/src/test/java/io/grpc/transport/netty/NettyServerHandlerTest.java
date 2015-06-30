@@ -301,7 +301,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     Http2Connection connection = new DefaultHttp2Connection(true);
     handler =
         new NettyServerHandler(transportListener, connection, new DefaultHttp2FrameReader(),
-            frameWriter, maxConcurrentStreams, DEFAULT_WINDOW_SIZE, DEFAULT_WINDOW_SIZE);
+            frameWriter, maxConcurrentStreams, DEFAULT_WINDOW_SIZE);
 
     when(channel.isActive()).thenReturn(true);
     mockContext();
@@ -324,15 +324,15 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
   @Test
   public void connectionWindowShouldBeOverridden() throws Exception {
-    int connectionWindow = 1048576; // 1MiB
-    handler = newHandler(transportListener, connectionWindow, DEFAULT_WINDOW_SIZE);
+    int flowControlWindow = 1048576; // 1MiB
+    handler = newHandler(transportListener, flowControlWindow);
     handler.handlerAdded(ctx);
     Http2Stream connectionStream = handler.connection().connectionStream();
     Http2FlowController localFlowController = handler.connection().local().flowController();
     int actualInitialWindowSize = localFlowController.initialWindowSize(connectionStream);
     int actualWindowSize = localFlowController.windowSize(connectionStream);
-    assertEquals(connectionWindow, actualWindowSize);
-    assertEquals(connectionWindow, actualInitialWindowSize);
+    assertEquals(flowControlWindow, actualWindowSize);
+    assertEquals(flowControlWindow, actualInitialWindowSize);
   }
 
   private void createStream() throws Exception {
@@ -388,16 +388,15 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
   }
 
   private static NettyServerHandler newHandler(ServerTransportListener transportListener,
-                                               int connectionWindowSize,
-                                               int streamWindowSize) {
+                                               int flowControlWindow) {
     Http2Connection connection = new DefaultHttp2Connection(true);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
     return new NettyServerHandler(transportListener, connection, frameReader, frameWriter,
-        Integer.MAX_VALUE, connectionWindowSize, streamWindowSize);
+        Integer.MAX_VALUE, flowControlWindow);
   }
 
   private static NettyServerHandler newHandler(ServerTransportListener transportListener) {
-    return newHandler(transportListener, DEFAULT_WINDOW_SIZE, DEFAULT_WINDOW_SIZE);
+    return newHandler(transportListener, DEFAULT_WINDOW_SIZE);
   }
 }

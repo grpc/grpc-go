@@ -82,8 +82,7 @@ class NettyClientTransport implements ClientTransport {
   private final ProtocolNegotiator.Handler negotiationHandler;
   private final NettyClientHandler handler;
   private final AsciiString authority;
-  private final int connectionWindowSize;
-  private final int streamWindowSize;
+  private final int flowControlWindow;
   // We should not send on the channel until negotiation completes. This is a hard requirement
   // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
   private Channel channel;
@@ -97,13 +96,12 @@ class NettyClientTransport implements ClientTransport {
 
   NettyClientTransport(SocketAddress address, Class<? extends Channel> channelType,
                        EventLoopGroup group, ProtocolNegotiator negotiator,
-                       int connectionWindowSize, int streamWindowSize) {
+                       int flowControlWindow) {
     Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
-    this.connectionWindowSize = connectionWindowSize;
-    this.streamWindowSize = streamWindowSize;
+    this.flowControlWindow = flowControlWindow;
 
     if (address instanceof InetSocketAddress) {
       InetSocketAddress inetAddress = (InetSocketAddress) address;
@@ -232,7 +230,6 @@ class NettyClientTransport implements ClientTransport {
 
     BufferingHttp2ConnectionEncoder encoder = new BufferingHttp2ConnectionEncoder(
             new DefaultHttp2ConnectionEncoder(connection, frameWriter));
-    return new NettyClientHandler(encoder, connection, frameReader, connectionWindowSize,
-        streamWindowSize);
+    return new NettyClientHandler(encoder, connection, frameReader, flowControlWindow);
   }
 }

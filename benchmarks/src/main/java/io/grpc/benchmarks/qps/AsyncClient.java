@@ -34,14 +34,13 @@ package io.grpc.benchmarks.qps;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.ADDRESS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CHANNELS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CLIENT_PAYLOAD;
-import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CONNECTION_WINDOW;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.DIRECTEXECUTOR;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.DURATION;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.FLOW_CONTROL_WINDOW;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.OUTSTANDING_RPCS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.SAVE_HISTOGRAM;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.SERVER_PAYLOAD;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.STREAMING_RPCS;
-import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.STREAM_WINDOW;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TESTCA;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TLS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TRANSPORT;
@@ -327,7 +326,7 @@ public class AsyncClient {
     ClientConfiguration.Builder configBuilder = ClientConfiguration.newBuilder(
         ADDRESS, CHANNELS, OUTSTANDING_RPCS, CLIENT_PAYLOAD, SERVER_PAYLOAD,
         TLS, TESTCA, TRANSPORT, DURATION, WARMUP_DURATION, DIRECTEXECUTOR,
-        SAVE_HISTOGRAM, STREAMING_RPCS, CONNECTION_WINDOW, STREAM_WINDOW);
+        SAVE_HISTOGRAM, STREAMING_RPCS, FLOW_CONTROL_WINDOW);
     ClientConfiguration config;
     try {
       config = configBuilder.build(args);

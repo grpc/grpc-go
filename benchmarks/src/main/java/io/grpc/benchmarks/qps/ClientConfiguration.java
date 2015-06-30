@@ -66,8 +66,7 @@ class ClientConfiguration implements Configuration {
   int outstandingRpcsPerChannel = 10;
   int serverPayload;
   int clientPayload;
-  int connectionWindow = NettyChannelBuilder.DEFAULT_CONNECTION_WINDOW_SIZE;
-  int streamWindow = NettyChannelBuilder.DEFAULT_STREAM_WINDOW_SIZE;
+  int flowControlWindow = NettyChannelBuilder.DEFAULT_FLOW_CONTROL_WINDOW;
   // seconds
   int duration = 60;
   // seconds
@@ -271,18 +270,11 @@ class ClientConfiguration implements Configuration {
         config.rpcType = STREAMING;
       }
     },
-    CONNECTION_WINDOW("BYTES", "The HTTP/2 connection flow control window.",
-        "" + DEFAULT.connectionWindow) {
+    FLOW_CONTROL_WINDOW("BYTES", "The HTTP/2 flow control window.",
+        "" + DEFAULT.flowControlWindow) {
       @Override
       protected void setClientValue(ClientConfiguration config, String value) {
-        config.connectionWindow = parseInt(value);
-      }
-    },
-    STREAM_WINDOW("BYTES", "The HTTP/2 per-stream flow control window.",
-        "" + DEFAULT.streamWindow) {
-      @Override
-      protected void setClientValue(ClientConfiguration config, String value) {
-        config.streamWindow = parseInt(value);
+        config.flowControlWindow = parseInt(value);
       }
     },
     TARGET_QPS("INT", "Average number of QPS to shoot for.", "" + DEFAULT.targetQps, true) {

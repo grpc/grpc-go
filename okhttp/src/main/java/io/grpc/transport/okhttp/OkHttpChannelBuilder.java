@@ -36,8 +36,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import com.squareup.okhttp.CipherSuite;
 import com.squareup.okhttp.ConnectionSpec;
-
 import com.squareup.okhttp.TlsVersion;
+
 import io.grpc.AbstractChannelBuilder;
 import io.grpc.SharedResourceHolder;
 import io.grpc.SharedResourceHolder.Resource;

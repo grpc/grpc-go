@@ -37,10 +37,10 @@ import io.grpc.AbstractChannelBuilder;
 import io.grpc.SharedResourceHolder;
 import io.grpc.transport.ClientTransport;
 import io.grpc.transport.ClientTransportFactory;
+
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
@@ -52,16 +52,14 @@ import javax.net.ssl.SSLException;
  * A builder to help simplify construction of channels using the Netty transport.
  */
 public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChannelBuilder> {
-  public static final int DEFAULT_CONNECTION_WINDOW_SIZE = 1048576; // 1MiB
-  public static final int DEFAULT_STREAM_WINDOW_SIZE = Http2CodecUtil.DEFAULT_WINDOW_SIZE;
+  public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
   private final SocketAddress serverAddress;
   private NegotiationType negotiationType = NegotiationType.TLS;
   private Class<? extends Channel> channelType = NioSocketChannel.class;
   private EventLoopGroup userEventLoopGroup;
   private SslContext sslContext;
-  private int connectionWindowSize = DEFAULT_CONNECTION_WINDOW_SIZE;
-  private int streamWindowSize = DEFAULT_STREAM_WINDOW_SIZE;
+  private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
 
   /**
    * Creates a new builder with the given server address.
@@ -123,22 +121,12 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   }
 
   /**
-   * Sets the HTTP/2 connection flow control window. If not called, the default value
-   * is {@link #DEFAULT_CONNECTION_WINDOW_SIZE}).
+   * Sets the flow control window in bytes. If not called, the default value
+   * is {@link #DEFAULT_FLOW_CONTROL_WINDOW}).
    */
-  public NettyChannelBuilder connectionWindowSize(int connectionWindowSize) {
-    Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
-    this.connectionWindowSize = connectionWindowSize;
-    return this;
-  }
-
-  /**
-   * Sets the HTTP/2 per-stream flow control window. If not called, the default value
-   * is {@link #DEFAULT_STREAM_WINDOW_SIZE}).
-   */
-  public NettyChannelBuilder streamWindowSize(int streamWindowSize) {
-    Preconditions.checkArgument(streamWindowSize > 0, "streamWindowSize must be positive");
-    this.streamWindowSize = streamWindowSize;
+  public NettyChannelBuilder flowControlWindow(int flowControlWindow) {
+    Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
+    this.flowControlWindow = flowControlWindow;
     return this;
   }
 
@@ -148,8 +136,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
         ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP) : userEventLoopGroup;
     final NegotiationType negotiationType = this.negotiationType;
     final Class<? extends Channel> channelType = this.channelType;
-    final int connectionWindowSize = this.connectionWindowSize;
-    final int streamWindowSize = this.streamWindowSize;
+    final int flowControlWindow = this.flowControlWindow;
     final ProtocolNegotiator negotiator;
     switch (negotiationType) {
       case PLAINTEXT:
@@ -179,7 +166,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
       @Override
       public ClientTransport newClientTransport() {
         return new NettyClientTransport(serverAddress, channelType, group,
-            negotiator, connectionWindowSize, streamWindowSize);
+            negotiator, flowControlWindow);
       }
     };
     Runnable terminationRunnable = null;

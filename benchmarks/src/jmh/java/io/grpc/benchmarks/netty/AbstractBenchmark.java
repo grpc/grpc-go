@@ -207,10 +207,8 @@ public abstract class AbstractBenchmark {
     serverBuilder.workerEventLoopGroup(new NioEventLoopGroup());
 
     // Always set connection and stream window size to same value
-    serverBuilder.connectionWindowSize(windowSize.bytes());
-    serverBuilder.streamWindowSize(windowSize.bytes());
-    channelBuilder.connectionWindowSize(windowSize.bytes());
-    channelBuilder.streamWindowSize(windowSize.bytes());
+    serverBuilder.flowControlWindow(windowSize.bytes());
+    channelBuilder.flowControlWindow(windowSize.bytes());
 
     channelBuilder.negotiationType(NegotiationType.PLAINTEXT);
     serverBuilder.maxConcurrentCallsPerConnection(maxConcurrentStreams);

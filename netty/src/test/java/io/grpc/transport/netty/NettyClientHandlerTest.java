@@ -67,6 +67,7 @@ import io.grpc.Status.Code;
 import io.grpc.StatusException;
 import io.grpc.transport.ClientTransport;
 import io.grpc.transport.ClientTransport.PingCallback;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -129,7 +130,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
     frameWriter = new DefaultHttp2FrameWriter();
     frameReader = new DefaultHttp2FrameReader();
-    handler = newHandler(DEFAULT_WINDOW_SIZE, DEFAULT_WINDOW_SIZE);
+    handler = newHandler(DEFAULT_WINDOW_SIZE);
     content = Unpooled.copiedBuffer("hello world", UTF_8);
 
     when(channel.isActive()).thenReturn(true);
@@ -314,7 +315,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     assertTrue(promise.isDone());
     assertFalse(promise.isSuccess());
     verify(stream).transportReportStatus(any(Status.class), eq(false),
-        notNull(Metadata.Trailers.class));
+            notNull(Metadata.Trailers.class));
   }
 
   @Test
@@ -323,13 +324,13 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
     // Read a GOAWAY that indicates our stream was never processed by the server.
     handler.channelRead(ctx,
-        goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
+            goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(stream).transportReportStatus(captor.capture(), eq(false),
-        notNull(Metadata.Trailers.class));
+            notNull(Metadata.Trailers.class));
     assertEquals(Status.CANCELLED.getCode(), captor.getValue().getCode());
     assertEquals("HTTP/2 error code: CANCEL\nthis is a test",
-        captor.getValue().getDescription());
+            captor.getValue().getDescription());
   }
 
   @Test
@@ -358,7 +359,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     when(stream.id()).thenReturn(3);
     writeQueue.enqueue(new CancelStreamCommand(stream), true);
     verify(stream).transportReportStatus(eq(Status.CANCELLED), eq(true),
-        any(Metadata.Trailers.class));
+            any(Metadata.Trailers.class));
   }
 
   @Test
@@ -379,14 +380,14 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     InOrder inOrder = inOrder(stream);
     inOrder.verify(stream, calls(1)).transportReportStatus(captor.capture(), eq(false),
-        notNull(Metadata.Trailers.class));
+            notNull(Metadata.Trailers.class));
     assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
   }
 
   @Test
   public void connectionWindowShouldBeOverridden() throws Exception {
     int connectionWindow = 1048576; // 1MiB
-    handler = newHandler(connectionWindow, DEFAULT_WINDOW_SIZE);
+    handler = newHandler(connectionWindow);
     handler.handlerAdded(ctx);
     Http2Stream connectionStream = handler.connection().connectionStream();
     Http2FlowController localFlowController = handler.connection().local().flowController();
@@ -534,7 +535,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     mockContext();
   }
 
-  private NettyClientHandler newHandler(int connectionWindowSize, int streamWindowSize) {
+  private NettyClientHandler newHandler(int connectionWindowSize) {
     Http2Connection connection = new DefaultHttp2Connection(false);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
@@ -546,8 +547,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
         return nanoTime;
       }
     };
-    return new NettyClientHandler(encoder, connection, frameReader, connectionWindowSize,
-        streamWindowSize, ticker);
+    return new NettyClientHandler(encoder, connection, frameReader, connectionWindowSize, ticker);
   }
 
   private AsciiString as(String string) {

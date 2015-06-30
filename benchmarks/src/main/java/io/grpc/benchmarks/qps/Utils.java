@@ -176,8 +176,7 @@ final class Utils {
         .negotiationType(negotiationType)
         .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null)
         .sslContext(context)
-        .connectionWindowSize(config.connectionWindow)
-        .streamWindowSize(config.streamWindow)
+        .flowControlWindow(config.flowControlWindow)
         .build();
   }
 

@@ -34,11 +34,10 @@ package io.grpc.benchmarks.qps;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.ADDRESS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CLIENT_PAYLOAD;
-import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CONNECTION_WINDOW;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.DURATION;
+import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.FLOW_CONTROL_WINDOW;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.SAVE_HISTOGRAM;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.SERVER_PAYLOAD;
-import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.STREAM_WINDOW;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TARGET_QPS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TESTCA;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TLS;
@@ -86,7 +85,7 @@ public class OpenLoopClient {
   public static void main(String... args) throws Exception {
     ClientConfiguration.Builder configBuilder = ClientConfiguration.newBuilder(
         ADDRESS, TARGET_QPS, CLIENT_PAYLOAD, SERVER_PAYLOAD, TLS,
-        TESTCA, TRANSPORT, DURATION, SAVE_HISTOGRAM, CONNECTION_WINDOW, STREAM_WINDOW);
+        TESTCA, TRANSPORT, DURATION, SAVE_HISTOGRAM, FLOW_CONTROL_WINDOW);
     ClientConfiguration config;
     try {
       config = configBuilder.build(args);

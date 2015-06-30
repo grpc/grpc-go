@@ -83,7 +83,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
   private Throwable connectionError;
   private ChannelHandlerContext ctx;
   private boolean teWarningLogged;
-  private int connectionWindowSize;
+  private int flowControlWindow;
   private Http2Settings initialSettings = new Http2Settings();
   private WriteQueue serverWriteQueue;
 
@@ -92,11 +92,10 @@ class NettyServerHandler extends Http2ConnectionHandler {
       Http2FrameReader frameReader,
       Http2FrameWriter frameWriter,
       int maxStreams,
-      int connectionWindowSize,
-      int streamWindowSize) {
+      int flowControlWindow) {
     super(connection, frameReader, frameWriter, new LazyFrameListener());
-    Preconditions.checkArgument(connectionWindowSize > 0, "connectionWindowSize must be positive");
-    this.connectionWindowSize = connectionWindowSize;
+    Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
+    this.flowControlWindow = flowControlWindow;
 
     streamKey = connection.newKey();
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
@@ -105,7 +104,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
     // TODO(nmittler): this is a temporary hack as we currently have to send a 2nd SETTINGS
     // frame. Once we upgrade to Netty 4.1.Beta6 we'll be able to pass in the initial SETTINGS
     // to the super class constructor.
-    initialSettings.initialWindowSize(streamWindowSize);
+    initialSettings.initialWindowSize(flowControlWindow);
     initialSettings.maxConcurrentStreams(maxStreams);
   }
 
@@ -351,13 +350,13 @@ class NettyServerHandler extends Http2ConnectionHandler {
     }
 
     // Send the initial connection window if different than the default.
-    if (connectionWindowSize > 0) {
+    if (flowControlWindow > 0) {
       needToFlush = true;
       Http2Stream connectionStream = connection().connectionStream();
       int currentSize = connection().local().flowController().windowSize(connectionStream);
-      int delta = connectionWindowSize - currentSize;
+      int delta = flowControlWindow - currentSize;
       decoder().flowController().incrementWindowSize(ctx, connectionStream, delta);
-      connectionWindowSize = -1;
+      flowControlWindow = -1;
     }
 
     if (needToFlush) {

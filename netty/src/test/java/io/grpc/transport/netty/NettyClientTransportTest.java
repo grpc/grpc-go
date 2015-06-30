@@ -182,7 +182,7 @@ public class NettyClientTransportTest {
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator) {
     NettyClientTransport transport = new NettyClientTransport(address, NioSocketChannel.class,
-            group, negotiator, DEFAULT_WINDOW_SIZE, DEFAULT_WINDOW_SIZE);
+            group, negotiator, DEFAULT_WINDOW_SIZE);
     transports.add(transport);
     return transport;
   }
@@ -198,7 +198,7 @@ public class NettyClientTransportTest {
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
     server = new NettyServer(address, NioServerSocketChannel.class,
             group, group, serverContext, maxStreamsPerConnection,
-            DEFAULT_WINDOW_SIZE, DEFAULT_WINDOW_SIZE);
+            DEFAULT_WINDOW_SIZE);
     server.start(serverListener);
   }
 

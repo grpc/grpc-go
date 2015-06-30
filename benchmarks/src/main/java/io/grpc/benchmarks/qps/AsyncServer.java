@@ -168,8 +168,7 @@ public class AsyncServer {
         .addService(TestServiceGrpc.bindService(new TestServiceImpl()))
         .sslContext(sslContext)
         .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null)
-        .connectionWindowSize(config.connectionWindow)
-        .streamWindowSize(config.streamWindow)
+        .flowControlWindow(config.flowControlWindow)
         .build();
   }
 

@@ -57,8 +57,7 @@ class ServerConfiguration implements Configuration {
   boolean tls;
   boolean directExecutor;
   SocketAddress address;
-  int connectionWindow = NettyChannelBuilder.DEFAULT_CONNECTION_WINDOW_SIZE;
-  int streamWindow = NettyChannelBuilder.DEFAULT_STREAM_WINDOW_SIZE;
+  int flowControlWindow = NettyChannelBuilder.DEFAULT_FLOW_CONTROL_WINDOW;
 
   private ServerConfiguration() {
   }
@@ -186,18 +185,11 @@ class ServerConfiguration implements Configuration {
         config.directExecutor = parseBoolean(value);
       }
     },
-    CONNECTION_WINDOW("BYTES", "The HTTP/2 connection flow control window.",
-        "" + DEFAULT.connectionWindow) {
+    FLOW_CONTROL_WINDOW("BYTES", "The HTTP/2 flow control window.",
+        "" + DEFAULT.flowControlWindow) {
       @Override
       protected void setServerValue(ServerConfiguration config, String value) {
-        config.connectionWindow = parseInt(value);
-      }
-    },
-    STREAM_WINDOW("BYTES", "The HTTP/2 per-stream flow control window.",
-        "" + DEFAULT.streamWindow) {
-      @Override
-      protected void setServerValue(ServerConfiguration config, String value) {
-        config.streamWindow = parseInt(value);
+        config.flowControlWindow = parseInt(value);
       }
     };
 

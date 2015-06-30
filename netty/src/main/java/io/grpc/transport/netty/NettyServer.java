@@ -69,27 +69,25 @@ public class NettyServer implements Server {
   private final int maxStreamsPerConnection;
   private ServerListener listener;
   private Channel channel;
-  private int connectionWindowSize;
-  private int streamWindowSize;
+  private int flowControlWindow;
 
   NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
       EventLoopGroup bossGroup, EventLoopGroup workerGroup, int maxStreamsPerConnection,
-      int connectionWindowSize, int streamWindowSize) {
+      int flowControlWindow) {
     this(address, channelType, bossGroup, workerGroup, null, maxStreamsPerConnection,
-         connectionWindowSize, streamWindowSize);
+            flowControlWindow);
   }
 
   NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
       EventLoopGroup bossGroup, EventLoopGroup workerGroup, @Nullable SslContext sslContext,
-      int maxStreamsPerConnection, int connectionWindowSize, int streamWindowSize) {
+      int maxStreamsPerConnection, int flowControlWindow) {
     this.address = address;
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
     this.bossGroup = Preconditions.checkNotNull(bossGroup, "bossGroup");
     this.workerGroup = Preconditions.checkNotNull(workerGroup, "workerGroup");
     this.sslContext = sslContext;
     this.maxStreamsPerConnection = maxStreamsPerConnection;
-    this.connectionWindowSize = connectionWindowSize;
-    this.streamWindowSize = streamWindowSize;
+    this.flowControlWindow = flowControlWindow;
   }
 
   @Override
@@ -106,8 +104,7 @@ public class NettyServer implements Server {
       @Override
       public void initChannel(Channel ch) throws Exception {
         NettyServerTransport transport
-            = new NettyServerTransport(ch, sslContext, maxStreamsPerConnection,
-                                       connectionWindowSize, streamWindowSize);
+            = new NettyServerTransport(ch, sslContext, maxStreamsPerConnection, flowControlWindow);
         transport.start(listener.transportCreated(transport));
       }
     });
