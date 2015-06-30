@@ -35,6 +35,8 @@ import com.squareup.okhttp.Protocol;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.security.Provider;
+import java.security.Security;
 import java.util.List;
 
 import javax.net.ssl.SSLSocket;
@@ -112,12 +114,57 @@ public class OkHttpProtocolNegotiator {
     // byte[] getAlpnSelectedProtocol()
     private static final OptionalMethod<Socket> GET_ALPN_SELECTED_PROTOCOL =
         new OptionalMethod<Socket>(byte[].class, "getAlpnSelectedProtocol");
-    // setAlpnSelectedProtocol(byte[])
+    // setAlpnProtocol(byte[])
     private static final OptionalMethod<Socket> SET_ALPN_PROTOCOLS =
         new OptionalMethod<Socket>(null, "setAlpnProtocols", byte[].class);
     // byte[] getNpnSelectedProtocol()
     private static final OptionalMethod<Socket> GET_NPN_SELECTED_PROTOCOL =
         new OptionalMethod<Socket>(byte[].class, "getNpnSelectedProtocol");
+    // setNpnProtocol(byte[])
+    private static final OptionalMethod<Socket> SET_NPN_PROTOCOLS =
+        new OptionalMethod<Socket>(null, "setNpnProtocols", byte[].class);
+
+    private enum TlsExtensionType {
+      ALPN_AND_NPN,
+      NPN,
+    }
+
+    private static TlsExtensionType tlsExtensionType;
+
+    static {
+      // Decide which TLS Extension (APLN and NPN) we will use, follow the rules:
+      // 1. If Google Play Services Security Provider is installed, use both
+      // 2. If on Android 5.0 or later, use both, else
+      // 3. If on Android 4.1 or later, use NPN, else
+      // 4. Fail.
+      // TODO(madongfly): Logging.
+
+      // Check if Google Play Services Security Provider is installed.
+      Provider provider = Security.getProvider("GmsCore_OpenSSL");
+      if (provider != null) {
+        tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
+      }
+
+      // Check if on Android 5.0 or later.
+      if (tlsExtensionType == null) {
+        try {
+          Class.forName("android.net.Network"); // Arbitrary class added in Android 5.0.
+          tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
+        } catch (ClassNotFoundException ignored) {
+          // making checkstyle happy.
+        }
+      }
+
+      // Check if on Android 4.1 or later.
+      if (tlsExtensionType == null) {
+        try {
+          Class.forName("android.app.ActivityOptions"); // Arbitrary class added in Android 4.1.
+          tlsExtensionType = TlsExtensionType.NPN;
+        } catch (ClassNotFoundException ignored) {
+          // making checkstyle happy.
+        }
+      }
+    }
 
     @Override
     public String negotiate(SSLSocket sslSocket, String hostname, List<Protocol> protocols)
@@ -144,16 +191,22 @@ public class OkHttpProtocolNegotiator {
         SET_HOSTNAME.invokeOptionalWithoutCheckedException(sslSocket, hostname);
       }
 
-      // Enable ALPN.
-      if (SET_ALPN_PROTOCOLS.isSupported(sslSocket)) {
-        Object[] parameters = {Platform.concatLengthPrefixed(protocols)};
+      Object[] parameters = {Platform.concatLengthPrefixed(protocols)};
+      if (tlsExtensionType == TlsExtensionType.ALPN_AND_NPN) {
         SET_ALPN_PROTOCOLS.invokeWithoutCheckedException(sslSocket, parameters);
+      }
+
+      if (tlsExtensionType != null) {
+        SET_NPN_PROTOCOLS.invokeWithoutCheckedException(sslSocket, parameters);
+      } else {
+        throw new RuntimeException("We can not do TLS handshake on this Android version, please"
+            + " install the Google Play Services Dynamic Security Provider to use TLS");
       }
     }
 
     @Override
     public String getSelectedProtocol(SSLSocket socket) {
-      if (GET_ALPN_SELECTED_PROTOCOL.isSupported(socket)) {
+      if (tlsExtensionType == TlsExtensionType.ALPN_AND_NPN) {
         try {
           byte[] alpnResult =
               (byte[]) GET_ALPN_SELECTED_PROTOCOL.invokeWithoutCheckedException(socket);
@@ -166,7 +219,7 @@ public class OkHttpProtocolNegotiator {
         }
       }
 
-      if (GET_NPN_SELECTED_PROTOCOL.isSupported(socket)) {
+      if (tlsExtensionType != null) {
         try {
           byte[] npnResult =
               (byte[]) GET_NPN_SELECTED_PROTOCOL.invokeWithoutCheckedException(socket);
