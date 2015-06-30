@@ -327,7 +327,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     if (testCa == null) {
       return (SSLSocketFactory) SSLSocketFactory.getDefault();
     }
-    KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+    KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
     ks.load(null);
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
     X509Certificate cert = (X509Certificate) cf.generateCertificate(testCa);

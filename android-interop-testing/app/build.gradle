@@ -6,7 +6,7 @@ android {
 
     defaultConfig {
         applicationId "io.grpc.android.integrationtest"
-        minSdkVersion 18
+        minSdkVersion 9
         targetSdkVersion 22
         versionCode 1
         versionName "1.0"
