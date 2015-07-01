@@ -43,7 +43,6 @@ import io.grpc.SharedResourceHolder;
 import io.grpc.SharedResourceHolder.Resource;
 import io.grpc.transport.ClientTransportFactory;
 
-import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -84,18 +83,20 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
 
   /** Creates a new builder for the given server host and port. */
   public static OkHttpChannelBuilder forAddress(String host, int port) {
-    return new OkHttpChannelBuilder(new InetSocketAddress(host, port), host);
+    return new OkHttpChannelBuilder(host, port);
   }
 
-  private final InetSocketAddress serverAddress;
   private ExecutorService transportExecutor;
-  private String host;
+  private final String host;
+  private final int port;
+  private String authorityHost;
   private SSLSocketFactory sslSocketFactory;
   private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
 
-  private OkHttpChannelBuilder(InetSocketAddress serverAddress, String host) {
-    this.serverAddress = Preconditions.checkNotNull(serverAddress, "serverAddress");
-    this.host = host;
+  private OkHttpChannelBuilder(String host, int port) {
+    this.host = Preconditions.checkNotNull(host);
+    this.port = port;
+    this.authorityHost = host;
   }
 
   /**
@@ -116,7 +117,7 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
    * <p>Should only used by tests.
    */
   public OkHttpChannelBuilder overrideHostForAuthority(String host) {
-    this.host = host;
+    this.authorityHost = host;
     return this;
   }
 
@@ -144,7 +145,7 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
     final ExecutorService executor = (transportExecutor == null)
         ? SharedResourceHolder.get(DEFAULT_TRANSPORT_THREAD_POOL) : transportExecutor;
     ClientTransportFactory transportFactory = new OkHttpClientTransportFactory(
-        serverAddress, host, executor, sslSocketFactory, connectionSpec);
+        host, port, authorityHost, executor, sslSocketFactory, connectionSpec);
     Runnable terminationRunnable = null;
     // We shut down the executor only if we created it.
     if (transportExecutor == null) {

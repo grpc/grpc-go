@@ -38,7 +38,6 @@ import com.squareup.okhttp.ConnectionSpec;
 import io.grpc.transport.ClientTransport;
 import io.grpc.transport.ClientTransportFactory;
 
-import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutorService;
 
 import javax.net.ssl.SSLSocketFactory;
@@ -47,15 +46,17 @@ import javax.net.ssl.SSLSocketFactory;
  * Factory that manufactures instances of {@link OkHttpClientTransport}.
  */
 class OkHttpClientTransportFactory implements ClientTransportFactory {
-  private final InetSocketAddress address;
+  private final String host;
+  private final int port;
   private final ExecutorService executor;
   private final String authorityHost;
   private final SSLSocketFactory sslSocketFactory;
   private final ConnectionSpec connectionSpec;
 
-  public OkHttpClientTransportFactory(InetSocketAddress address, String authorityHost,
+  public OkHttpClientTransportFactory(String host, int port, String authorityHost,
       ExecutorService executor, SSLSocketFactory factory, ConnectionSpec connectionSpec) {
-    this.address = Preconditions.checkNotNull(address, "address");
+    this.host = Preconditions.checkNotNull(host, "host");
+    this.port = port;
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.authorityHost = Preconditions.checkNotNull(authorityHost, "authorityHost");
     this.sslSocketFactory = factory;
@@ -65,7 +66,7 @@ class OkHttpClientTransportFactory implements ClientTransportFactory {
   @Override
   public ClientTransport newClientTransport() {
     return new OkHttpClientTransport(
-        address, authorityHost, executor, sslSocketFactory, connectionSpec);
+        host, port, authorityHost, executor, sslSocketFactory, connectionSpec);
   }
 
 }
