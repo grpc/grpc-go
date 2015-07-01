@@ -33,6 +33,7 @@ package io.grpc.android.integrationtest;
 
 import com.google.protobuf.nano.MessageNano;
 
+import android.net.SSLCertificateSocketFactory;
 import android.os.AsyncTask;
 import android.support.annotation.Nullable;
 import android.util.Log;
@@ -47,6 +48,7 @@ import junit.framework.Assert;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.reflect.Method;
 import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -79,6 +81,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
       @Nullable String serverHostOverride,
       boolean useTls,
       @Nullable InputStream testCa,
+      @Nullable String androidSocketFactoryTls,
       TestListener listener) {
     this.testCase = testCase;
     this.listener = listener;
@@ -90,7 +93,13 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     }
     if (useTls) {
       try {
-        channelBuilder.sslSocketFactory(getSslSocketFactory(testCa));
+        SSLSocketFactory factory;
+        if (androidSocketFactoryTls != null) {
+          factory = getSslCertificateSocketFactory(testCa, androidSocketFactoryTls);
+        } else {
+          factory = getSslSocketFactory(testCa);
+        }
+        channelBuilder.sslSocketFactory(factory);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -327,6 +336,39 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     if (testCa == null) {
       return (SSLSocketFactory) SSLSocketFactory.getDefault();
     }
+
+    SSLContext context = SSLContext.getInstance("TLS");
+    context.init(null, getTrustManagers(testCa) , null);
+    return context.getSocketFactory();
+  }
+
+  private SSLCertificateSocketFactory getSslCertificateSocketFactory(
+      @Nullable InputStream testCa, String androidSocketFatoryTls) throws Exception {
+    SSLCertificateSocketFactory factory = (SSLCertificateSocketFactory)
+        SSLCertificateSocketFactory.getDefault(5000 /* Timeout in ms*/);
+    // Use HTTP/2.0
+    byte[] h2 = "h2".getBytes();
+    byte[][] protocols = new byte[][]{h2};
+    if (androidSocketFatoryTls.equals("alpn")) {
+      Method setAlpnProtocols =
+          factory.getClass().getDeclaredMethod("setAlpnProtocols", byte[][].class);
+      setAlpnProtocols.invoke(factory, new Object[] { protocols });
+    } else if (androidSocketFatoryTls.equals("npn")) {
+      Method setNpnProtocols =
+          factory.getClass().getDeclaredMethod("setNpnProtocols", byte[][].class);
+      setNpnProtocols.invoke(factory, new Object[]{protocols});
+    } else {
+      throw new RuntimeException("Unknown protocol: " + androidSocketFatoryTls);
+    }
+
+    if (testCa != null) {
+      factory.setTrustManagers(getTrustManagers(testCa));
+    }
+
+    return factory;
+  }
+
+  private TrustManager[] getTrustManagers(InputStream testCa) throws Exception {
     KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
     ks.load(null);
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -337,9 +379,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     TrustManagerFactory trustManagerFactory =
         TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
     trustManagerFactory.init(ks);
-    SSLContext context = SSLContext.getInstance("TLS");
-    context.init(null, trustManagerFactory.getTrustManagers() , null);
-    return context.getSocketFactory();
+    return trustManagerFactory.getTrustManagers();
   }
 
   public interface TestListener {

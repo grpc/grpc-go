@@ -52,6 +52,7 @@ public class TesterInstrumentation extends Instrumentation {
   private String serverHostOverride;
   private boolean useTls;
   private boolean useTestCa;
+  private String androidSocketFactoryTls;
 
   @Override
   public void onCreate(Bundle args) {
@@ -63,6 +64,7 @@ public class TesterInstrumentation extends Instrumentation {
     serverHostOverride = args.getString("server_host_override", null);
     useTls = Boolean.parseBoolean(args.getString("use_tls", "true"));
     useTestCa = Boolean.parseBoolean(args.getString("use_test_ca", "false"));
+    androidSocketFactoryTls = args.getString("android_socket_factory_tls", null);
 
     InputStream testCa = null;
     if (useTestCa) {
@@ -84,6 +86,7 @@ public class TesterInstrumentation extends Instrumentation {
     }
 
     new InteropTester(testCase, host, port, serverHostOverride, useTls, testCa,
+        androidSocketFactoryTls,
         new InteropTester.TestListener() {
           @Override
           public void onPreTest() {
@@ -99,6 +102,7 @@ public class TesterInstrumentation extends Instrumentation {
               finish(1, bundle);
             }
           }
-        }).execute();
+        }
+    ).execute();
   }
 }

@@ -112,7 +112,7 @@ public class TesterActivity extends AppCompatActivity
 
     // TODO (madongfly) support server_host_override, useTls and useTestCa in the App UI.
     new InteropTester(testCase, host, port, "foo.test.google.fr", true,
-        getResources().openRawResource(R.raw.ca),
+        getResources().openRawResource(R.raw.ca), null,
         new InteropTester.TestListener() {
       @Override public void onPreTest() {
         resultText.setText("Testing...");
