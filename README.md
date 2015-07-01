@@ -32,6 +32,23 @@ repository](https://oss.sonatype.org/content/repositories/snapshots/).
 For protobuf-based codegen integrated with the Maven build system, you can use
 [maven-protoc-plugin][]:
 ```xml
+<pluginRepositories>
+  <pluginRepository>
+    <releases>
+      <updatePolicy>never</updatePolicy>
+    </releases>
+    <snapshots>
+      <enabled>false</enabled>
+    </snapshots>
+    <id>central</id>
+    <name>Central Repository</name>
+    <url>https://repo.maven.apache.org/maven2</url>
+  </pluginRepository>
+  <pluginRepository>
+    <id>protoc-plugin</id>
+    <url>https://dl.bintray.com/sergei-ivanov/maven/</url>
+  </pluginRepository>
+</pluginRepositories>
 <build>
   <extensions>
     <extension>
