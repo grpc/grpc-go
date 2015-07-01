@@ -118,7 +118,6 @@ public class OkHttpProtocolNegotiator {
     // byte[] getNpnSelectedProtocol()
     private static final OptionalMethod<Socket> GET_NPN_SELECTED_PROTOCOL =
         new OptionalMethod<Socket>(byte[].class, "getNpnSelectedProtocol");
-    private static boolean android;
 
     @Override
     public String negotiate(SSLSocket sslSocket, String hostname, List<Protocol> protocols)

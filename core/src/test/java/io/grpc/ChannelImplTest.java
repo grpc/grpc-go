@@ -215,7 +215,6 @@ public class ChannelImplTest {
         return null;
       }
     }).when(mockTransport2).start(any(ClientTransport.Listener.class));
-    Exception ex = new IllegalStateException("Transport shutdown");
     when(mockTransport2.newStream(same(method), same(headers2), any(ClientStreamListener.class)))
         .thenReturn(mockStream2);
     call.start(mockCallListener2, headers2);
