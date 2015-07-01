@@ -447,7 +447,7 @@ class OkHttpClientTransport implements ClientTransport {
    *
    * @param streamId the Id of the stream.
    * @param status the final status of this stream, null means no need to report.
-   * @Param errorCode reset the stream with this ErrorCode if not null.
+   * @param errorCode reset the stream with this ErrorCode if not null.
    */
   void finishStream(int streamId, @Nullable Status status, @Nullable ErrorCode errorCode) {
     OkHttpClientStream stream;
