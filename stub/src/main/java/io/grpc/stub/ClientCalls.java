@@ -370,8 +370,8 @@ public class ClientCalls {
         Thread.interrupted();
         throw new RuntimeException(ie);
       }
-      if (last instanceof Throwable) {
-        throw Throwables.propagate((Throwable) last);
+      if (last instanceof Status) {
+        throw ((Status) last).asRuntimeException();
       }
       return last != this;
     }
@@ -415,7 +415,7 @@ public class ClientCalls {
         if (status.isOk()) {
           buffer.add(BlockingResponseStream.this);
         } else {
-          buffer.add(status.asRuntimeException());
+          buffer.add(status);
         }
         done = true;
       }
