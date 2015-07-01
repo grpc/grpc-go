@@ -147,7 +147,7 @@ public class OkHttpProtocolNegotiator {
 
       // Enable ALPN.
       if (SET_ALPN_PROTOCOLS.isSupported(sslSocket)) {
-        Object[] parameters = {PLATFORM.concatLengthPrefixed(protocols)};
+        Object[] parameters = {Platform.concatLengthPrefixed(protocols)};
         SET_ALPN_PROTOCOLS.invokeWithoutCheckedException(sslSocket, parameters);
       }
     }
