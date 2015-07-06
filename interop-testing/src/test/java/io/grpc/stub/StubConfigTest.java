@@ -55,7 +55,7 @@ public class StubConfigTest {
     // Create a default stub
     TestServiceGrpc.TestServiceBlockingStub stub =
         TestServiceGrpc.newBlockingStub(new FakeChannel());
-    assertEquals(TimeUnit.DAYS.toMicros(10 * 365),
+    assertEquals(TimeUnit.DAYS.toMicros(364),
         stub.getServiceDescriptor().fullDuplexCall.getTimeout());
     // Reconfigure it
     stub = stub.configureNewStub()
@@ -65,7 +65,7 @@ public class StubConfigTest {
     assertEquals(TimeUnit.SECONDS.toMicros(2),
         stub.getServiceDescriptor().fullDuplexCall.getTimeout());
     // Default config unchanged
-    assertEquals(TimeUnit.DAYS.toMicros(10 * 365),
+    assertEquals(TimeUnit.DAYS.toMicros(364),
         TestServiceGrpc.CONFIG.fullDuplexCall.getTimeout());
   }
 

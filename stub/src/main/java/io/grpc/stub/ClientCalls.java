@@ -69,7 +69,7 @@ public class ClientCalls {
     // TODO(zhangkun83): if timeout is not defined in proto file, use a default timeout here.
     // If timeout is defined in proto file, Method should carry the timeout.
     return MethodDescriptor.create(method.getType(), fullServiceName + "/" + method.getName(),
-        10 * 365, TimeUnit.DAYS, method.getRequestMarshaller(), method.getResponseMarshaller());
+        364, TimeUnit.DAYS, method.getRequestMarshaller(), method.getResponseMarshaller());
   }
 
   /**
