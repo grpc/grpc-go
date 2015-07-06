@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'com.google.protobuf'
 
 android {
     compileSdkVersion 22
@@ -19,6 +20,35 @@ android {
     }
 }
 
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.0.0-alpha-2'
+    }
+    plugins {
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:0.8.0-SNAPSHOT'
+        }
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                javanano {
+                    // Options added to --javanano_out
+                    option 'ignore_services=true'
+                }
+            }
+
+            task.plugins {
+                grpc {
+                    // Options added to --grpc_out
+                    option 'nano=true'
+                }
+            }
+        }
+    }
+}
+
+
 dependencies {
     compile 'com.android.support:appcompat-v7:22.1.1'
     compile 'com.google.android.gms:play-services-base:7.3.0'
@@ -31,4 +61,5 @@ dependencies {
     compile 'io.grpc:grpc-protobuf-nano:0.8.0-SNAPSHOT'
     compile 'io.grpc:grpc-okhttp:0.8.0-SNAPSHOT'
     compile 'io.grpc:grpc-stub:0.8.0-SNAPSHOT'
+    compile 'javax.annotation:javax.annotation-api:1.2'
 }

@@ -31,6 +31,7 @@
 
 package io.grpc.android.integrationtest;
 
+import com.google.protobuf.EmptyProtos;
 import com.google.protobuf.nano.MessageNano;
 
 import android.net.SSLCertificateSocketFactory;
