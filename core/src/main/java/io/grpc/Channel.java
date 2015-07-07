@@ -53,7 +53,7 @@ public abstract class Channel {
    *
    * @param methodDescriptor describes the name and parameter types of the operation to call.
    * @return a {@link ClientCall} bound to the specified method.
-   * @deprecated use {@link newCall(MethodDescriptor, CallOptions)}
+   * @deprecated use {@link #newCall(MethodDescriptor, CallOptions)}
    *
    */
   @Deprecated
