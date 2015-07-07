@@ -31,6 +31,8 @@
 
 package io.grpc.testing;
 
+import com.google.common.base.Throwables;
+
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
@@ -59,6 +61,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLContext;
@@ -128,6 +131,35 @@ public class TestUtils {
            ServerCallHandler<ReqT, RespT> next) {
         headersCapture.set(requestHeaders);
         return next.startCall(method, call, requestHeaders);
+      }
+    };
+  }
+
+  /**
+   * Delay each payload by the given number of milliseconds. Useful for simulating slow server
+   * responses.
+   * @param delayMillis the delay applied to each payload, in milliseconds.
+   */
+  public static ServerInterceptor delayServerResponseInterceptor(final AtomicLong delayMillis) {
+    return new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(String method,
+          ServerCall<RespT> call,
+          Metadata.Headers headers,
+          ServerCallHandler<ReqT, RespT> next) {
+        return next.startCall(method, new SimpleForwardingServerCall<RespT>(call) {
+          @Override
+          public void sendPayload(RespT payload) {
+            if (delayMillis.get() != 0) {
+              try {
+                Thread.sleep(delayMillis.get());
+              } catch (InterruptedException e) {
+                Throwables.propagate(e);
+              }
+            }
+            super.sendPayload(payload);
+          }
+        }, headers);
       }
     };
   }

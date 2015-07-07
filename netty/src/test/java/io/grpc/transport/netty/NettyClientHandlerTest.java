@@ -181,7 +181,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     verify(stream).id(eq(3));
     when(stream.id()).thenReturn(3);
     // Cancel the stream.
-    writeQueue.enqueue(new CancelStreamCommand(stream), true);
+    writeQueue.enqueue(new CancelStreamCommand(stream, Status.CANCELLED), true);
 
     assertTrue(createPromise.isSuccess());
     verify(stream).transportReportStatus(eq(Status.CANCELLED), eq(true),
@@ -216,7 +216,18 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   public void cancelShouldSucceed() throws Exception {
     createStream();
     verify(channel, times(1)).flush();
-    writeQueue.enqueue(new CancelStreamCommand(stream), true);
+    writeQueue.enqueue(new CancelStreamCommand(stream, Status.CANCELLED), true);
+
+    ByteBuf expected = rstStreamFrame(3, (int) Http2Error.CANCEL.code());
+    verify(ctx).write(eq(expected), eq(promise));
+    verify(channel, times(2)).flush();
+  }
+
+  @Test
+  public void cancelDeadlineExceededShouldSucceed() throws Exception {
+    createStream();
+    verify(channel, times(1)).flush();
+    writeQueue.enqueue(new CancelStreamCommand(stream, Status.DEADLINE_EXCEEDED), true);
 
     ByteBuf expected = rstStreamFrame(3, (int) Http2Error.CANCEL.code());
     verify(ctx).write(eq(expected), eq(promise));
@@ -233,7 +244,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     verify(stream).id(idCaptor.capture());
     when(stream.id()).thenReturn(idCaptor.getValue());
     ChannelPromise cancelPromise = mock(ChannelPromise.class);
-    writeQueue.enqueue(new CancelStreamCommand(stream), cancelPromise, true);
+    writeQueue.enqueue(new CancelStreamCommand(stream, Status.CANCELLED), cancelPromise, true);
     verify(cancelPromise).setSuccess();
     verify(channel, times(2)).flush();
     verifyNoMoreInteractions(ctx);
@@ -248,14 +259,29 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
   public void cancelTwiceShouldSucceed() throws Exception {
     createStream();
 
-    writeQueue.enqueue(new CancelStreamCommand(stream), promise, true);
+    writeQueue.enqueue(new CancelStreamCommand(stream, Status.CANCELLED), promise, true);
 
     ByteBuf expected = rstStreamFrame(3, (int) Http2Error.CANCEL.code());
     verify(ctx).write(eq(expected), any(ChannelPromise.class));
 
     promise = mock(ChannelPromise.class);
 
-    writeQueue.enqueue(new CancelStreamCommand(stream), promise, true);
+    writeQueue.enqueue(new CancelStreamCommand(stream, Status.CANCELLED), promise, true);
+    verify(promise).setSuccess();
+  }
+
+  @Test
+  public void cancelTwiceDifferentReasons() throws Exception {
+    createStream();
+
+    writeQueue.enqueue(new CancelStreamCommand(stream, Status.DEADLINE_EXCEEDED), promise, true);
+
+    ByteBuf expected = rstStreamFrame(3, (int) Http2Error.CANCEL.code());
+    verify(ctx).write(eq(expected), any(ChannelPromise.class));
+
+    promise = mock(ChannelPromise.class);
+
+    writeQueue.enqueue(new CancelStreamCommand(stream, Status.CANCELLED), promise, true);
     verify(promise).setSuccess();
   }
 
@@ -357,7 +383,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     writeQueue.enqueue(new CreateStreamCommand(grpcHeaders, stream), true);
     verify(stream).id(3);
     when(stream.id()).thenReturn(3);
-    writeQueue.enqueue(new CancelStreamCommand(stream), true);
+    writeQueue.enqueue(new CancelStreamCommand(stream, Status.CANCELLED), true);
     verify(stream).transportReportStatus(eq(Status.CANCELLED), eq(true),
             any(Metadata.Trailers.class));
   }

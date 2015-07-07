@@ -42,6 +42,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -102,14 +103,28 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   public void cancelShouldSendCommand() {
     // Set stream id to indicate it has been created
     stream().id(STREAM_ID);
-    stream().cancel();
-    verify(writeQueue).enqueue(any(CancelStreamCommand.class), eq(true));
+    stream().cancel(Status.CANCELLED);
+    ArgumentCaptor<CancelStreamCommand> commandCaptor =
+        ArgumentCaptor.forClass(CancelStreamCommand.class);
+    verify(writeQueue).enqueue(commandCaptor.capture(), eq(true));
+    assertEquals(commandCaptor.getValue().reason(), Status.CANCELLED);
+  }
+
+  @Test
+  public void deadlineExceededCancelShouldSendCommand() {
+    // Set stream id to indicate it has been created
+    stream().id(STREAM_ID);
+    stream().cancel(Status.DEADLINE_EXCEEDED);
+    ArgumentCaptor<CancelStreamCommand> commandCaptor =
+        ArgumentCaptor.forClass(CancelStreamCommand.class);
+    verify(writeQueue).enqueue(commandCaptor.capture(), eq(true));
+    assertEquals(commandCaptor.getValue().reason(), Status.DEADLINE_EXCEEDED);
   }
 
   @Test
   public void cancelShouldStillSendCommandIfStreamNotCreatedToCancelCreation() {
-    stream().cancel();
-    verify(writeQueue).enqueue(any(CancelStreamCommand.class), eq(true));
+    stream().cancel(Status.CANCELLED);
+    verify(writeQueue).enqueue(isA(CancelStreamCommand.class), eq(true));
   }
 
   @Test
@@ -340,7 +355,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
   @Override
   protected void closeStream() {
-    stream().cancel();
+    stream().cancel(Status.CANCELLED);
   }
 
   private ByteBuf simpleGrpcFrame() {

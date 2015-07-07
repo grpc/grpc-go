@@ -48,6 +48,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
@@ -66,7 +70,7 @@ public final class ChannelImpl extends Channel {
 
     @Override public void flush() {}
 
-    @Override public void cancel() {}
+    @Override public void cancel(Status reason) {}
 
     @Override public void halfClose() {}
 
@@ -85,6 +89,10 @@ public final class ChannelImpl extends Channel {
   private final ExecutorService executor;
   private final String userAgent;
 
+  /**
+   * Executor that runs deadline timers for requests.
+   */
+  private ScheduledExecutorService deadlineCancellationExecutor;
   /**
    * All transports that are not stopped. At the very least {@link #activeTransport} will be
    * present, but previously used transports that still have streams or are stopping may also be
@@ -108,6 +116,7 @@ public final class ChannelImpl extends Channel {
     this.transportFactory = transportFactory;
     this.executor = executor;
     this.userAgent = userAgent;
+    deadlineCancellationExecutor = SharedResourceHolder.get(TIMER_SERVICE);
   }
 
   /** Hack to allow executors to auto-shutdown. Not for general use. */
@@ -125,6 +134,9 @@ public final class ChannelImpl extends Channel {
       return this;
     }
     shutdown = true;
+    // After shutdown there are no new calls, so no new cancellation tasks are needed
+    deadlineCancellationExecutor =
+        SharedResourceHolder.release(TIMER_SERVICE, deadlineCancellationExecutor);
     if (activeTransport != null) {
       activeTransport.shutdown();
       activeTransport = null;
@@ -300,6 +312,7 @@ public final class ChannelImpl extends Channel {
     private final boolean unaryRequest;
     private final CallOptions callOptions;
     private ClientStream stream;
+    private volatile ScheduledFuture<?> deadlineCancellationFuture;
 
     public CallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor,
         CallOptions callOptions) {
@@ -331,8 +344,9 @@ public final class ChannelImpl extends Channel {
       // Convert the deadline to timeout. Timeout is more favorable than deadline on the wire
       // because timeout tolerates the clock difference between machines.
       Long deadlineNanoTime = callOptions.getDeadlineNanoTime();
+      long timeoutMicros = 0;
       if (deadlineNanoTime != null) {
-        long timeoutMicros = TimeUnit.NANOSECONDS.toMicros(deadlineNanoTime - System.nanoTime());
+        timeoutMicros = TimeUnit.NANOSECONDS.toMicros(deadlineNanoTime - System.nanoTime());
         if (timeoutMicros <= 0) {
           closeCallPrematurely(listener, Status.DEADLINE_EXCEEDED);
           return;
@@ -353,6 +367,10 @@ public final class ChannelImpl extends Channel {
         // TODO(ejona86): Improve the API to remove the possibility of the race.
         closeCallPrematurely(listener, Status.fromThrowable(ex));
       }
+      // Start the deadline timer after stream creation because it will close the stream
+      if (deadlineNanoTime != null) {
+        deadlineCancellationFuture = startDeadlineTimer(timeoutMicros);
+      }
     }
 
     @Override
@@ -366,7 +384,7 @@ public final class ChannelImpl extends Channel {
       // Cancel is called in exception handling cases, so it may be the case that the
       // stream was never successfully created.
       if (stream != null) {
-        stream.cancel();
+        stream.cancel(Status.CANCELLED);
       }
     }
 
@@ -409,6 +427,15 @@ public final class ChannelImpl extends Channel {
       Preconditions.checkState(stream == null, "Stream already created");
       stream = new NoopClientStream();
       listener.closed(status, new Metadata.Trailers());
+    }
+
+    private ScheduledFuture<?> startDeadlineTimer(long timeoutMicros) {
+      return deadlineCancellationExecutor.schedule(new Runnable() {
+        @Override
+        public void run() {
+          stream.cancel(Status.DEADLINE_EXCEEDED);
+        }
+      }, timeoutMicros, TimeUnit.MICROSECONDS);
     }
 
     private class ClientStreamListenerImpl implements ClientStreamListener {
@@ -468,6 +495,11 @@ public final class ChannelImpl extends Channel {
           @Override
           public void run() {
             closed = true;
+            // manually optimize the volatile read
+            ScheduledFuture<?> future = deadlineCancellationFuture;
+            if (future != null) {
+              future.cancel(false);
+            }
             observer.onClose(status, trailers);
           }
         });
@@ -561,4 +593,24 @@ public final class ChannelImpl extends Channel {
       return Long.parseLong(valuePart) * factor;
     }
   }
+
+  private static final SharedResourceHolder.Resource<ScheduledExecutorService> TIMER_SERVICE =
+      new SharedResourceHolder.Resource<ScheduledExecutorService>() {
+        @Override
+        public ScheduledExecutorService create() {
+          return Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable r) {
+              Thread thread = new Thread(r);
+              thread.setDaemon(true);
+              return thread;
+            }
+          });
+        }
+
+        @Override
+        public void close(ScheduledExecutorService instance) {
+          instance.shutdown();
+        }
+      };
 }

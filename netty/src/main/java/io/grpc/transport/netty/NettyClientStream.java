@@ -35,6 +35,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 
+import io.grpc.Status;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.Http2ClientStream;
 import io.grpc.transport.WritableBuffer;
@@ -118,9 +119,9 @@ class NettyClientStream extends Http2ClientStream {
   }
 
   @Override
-  protected void sendCancel() {
+  protected void sendCancel(Status reason) {
     // Send the cancel command to the handler.
-    writeQueue.enqueue(new CancelStreamCommand(this), true);
+    writeQueue.enqueue(new CancelStreamCommand(this, reason), true);
   }
 
   @Override

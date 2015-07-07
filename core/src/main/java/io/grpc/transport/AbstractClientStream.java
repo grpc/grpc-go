@@ -31,6 +31,9 @@
 
 package io.grpc.transport;
 
+import static io.grpc.Status.Code.CANCELLED;
+import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
+
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
@@ -38,6 +41,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 
 import java.io.InputStream;
+import java.util.EnumSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -153,7 +157,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   @Override
   protected final void deframeFailed(Throwable cause) {
     log.log(Level.WARNING, "Exception processing message", cause);
-    cancel();
+    cancel(Status.CANCELLED);
   }
 
   /**
@@ -278,9 +282,11 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * Cancel the stream. Called by the application layer, never called by the transport.
    */
   @Override
-  public void cancel() {
+  public void cancel(Status reason) {
+    Preconditions.checkArgument(EnumSet.of(CANCELLED, DEADLINE_EXCEEDED).contains(reason.getCode()),
+        "Invalid cancellation reason");
     outboundPhase(Phase.STATUS);
-    sendCancel();
+    sendCancel(reason);
     dispose();
   }
 
@@ -289,7 +295,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * Can be called by either the application or transport layers. This method is safe to be called
    * at any time and multiple times.
    */
-  protected abstract void sendCancel();
+  protected abstract void sendCancel(Status reason);
 
   // We support Guava 14
   @SuppressWarnings("deprecation")

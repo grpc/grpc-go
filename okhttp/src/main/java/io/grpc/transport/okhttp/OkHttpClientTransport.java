@@ -270,10 +270,10 @@ class OkHttpClientTransport implements ClientTransport {
       } catch (InterruptedException e) {
         // Restore the interrupt.
         Thread.currentThread().interrupt();
-        clientStream.cancel();
+        clientStream.cancel(Status.CANCELLED);
         throw new RuntimeException(e);
       } catch (ExecutionException e) {
-        clientStream.cancel();
+        clientStream.cancel(Status.CANCELLED);
         throw new RuntimeException(e.getCause() != null ? e.getCause() : e);
       }
     }
@@ -457,7 +457,8 @@ class OkHttpClientTransport implements ClientTransport {
         frameWriter.rstStream(streamId, ErrorCode.CANCEL);
       }
       if (status != null) {
-        boolean isCancelled = status.getCode() == Code.CANCELLED;
+        boolean isCancelled = (status.getCode() == Code.CANCELLED
+            || status.getCode() == Code.DEADLINE_EXCEEDED);
         stream.transportReportStatus(status, isCancelled, new Metadata.Trailers());
       }
       if (!startPendingStreams()) {

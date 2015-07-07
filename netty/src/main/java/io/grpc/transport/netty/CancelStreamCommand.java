@@ -31,19 +31,35 @@
 
 package io.grpc.transport.netty;
 
+import static io.grpc.Status.Code.CANCELLED;
+import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
+
 import com.google.common.base.Preconditions;
+
+import io.grpc.Status;
+
+import java.util.EnumSet;
 
 /**
  * Command sent from a Netty client stream to the handler to cancel the stream.
  */
 class CancelStreamCommand {
   private final NettyClientStream stream;
+  private final Status reason;
 
-  CancelStreamCommand(NettyClientStream stream) {
+  CancelStreamCommand(NettyClientStream stream, Status reason) {
     this.stream = Preconditions.checkNotNull(stream, "stream");
+    Preconditions.checkNotNull(reason);
+    Preconditions.checkArgument(EnumSet.of(CANCELLED, DEADLINE_EXCEEDED).contains(reason.getCode()),
+        "Invalid cancellation reason");
+    this.reason = reason;
   }
 
   NettyClientStream stream() {
     return stream;
+  }
+
+  Status reason() {
+    return reason;
   }
 }

@@ -209,8 +209,8 @@ class OkHttpClientStream extends Http2ClientStream {
   }
 
   @Override
-  protected void sendCancel() {
-    transport.finishStream(id(), Status.CANCELLED, ErrorCode.CANCEL);
+  protected void sendCancel(Status reason) {
+    transport.finishStream(id(), reason, ErrorCode.CANCEL);
   }
 
   @Override

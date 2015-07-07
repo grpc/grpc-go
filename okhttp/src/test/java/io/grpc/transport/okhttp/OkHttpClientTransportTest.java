@@ -268,7 +268,7 @@ public class OkHttpClientTransportTest {
     clientTransport.newStream(method, new Metadata.Headers(), listener);
     OkHttpClientStream stream = streams.get(3);
     assertNotNull(stream);
-    stream.cancel();
+    stream.cancel(Status.CANCELLED);
     verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
     listener.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
@@ -286,7 +286,7 @@ public class OkHttpClientTransportTest {
             new Header(Header.TARGET_PATH, "/fakemethod"),
             userAgentHeader, CONTENT_TYPE_HEADER, TE_HEADER);
     verify(frameWriter).synStream(eq(false), eq(false), eq(3), eq(0), eq(expectedHeaders));
-    streams.get(3).cancel();
+    streams.get(3).cancel(Status.CANCELLED);
   }
 
   @Test
@@ -303,7 +303,18 @@ public class OkHttpClientTransportTest {
                     HttpUtil.getGrpcUserAgent("okhttp", userAgent)),
             CONTENT_TYPE_HEADER, TE_HEADER);
     verify(frameWriter).synStream(eq(false), eq(false), eq(3), eq(0), eq(expectedHeaders));
-    streams.get(3).cancel();
+    streams.get(3).cancel(Status.CANCELLED);
+  }
+
+  @Test
+  public void cancelStreamForDeadlineExceeded() throws Exception {
+    MockStreamListener listener = new MockStreamListener();
+    clientTransport.newStream(method, new Metadata.Headers(), listener);
+    OkHttpClientStream stream = streams.get(3);
+    assertNotNull(stream);
+    stream.cancel(Status.DEADLINE_EXCEEDED);
+    verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
+    listener.waitUntilStreamClosed();
   }
 
   @Test
@@ -320,7 +331,7 @@ public class OkHttpClientTransportTest {
     verify(frameWriter).data(eq(false), eq(3), captor.capture(), eq(12 + HEADER_LENGTH));
     Buffer sentFrame = captor.getValue();
     assertEquals(createMessageFrame(message), sentFrame);
-    stream.cancel();
+    stream.cancel(Status.CANCELLED);
   }
 
   @Test
@@ -364,13 +375,13 @@ public class OkHttpClientTransportTest {
     verify(frameWriter).windowUpdate(eq(5), eq((long) 2 * messageFrameLength));
     verify(frameWriter).windowUpdate(eq(0), eq((long) 2 * messageFrameLength));
 
-    stream1.cancel();
+    stream1.cancel(Status.CANCELLED);
     verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
     listener1.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
         listener1.status.getCode());
 
-    stream2.cancel();
+    stream2.cancel(Status.CANCELLED);
     verify(frameWriter).rstStream(eq(5), eq(ErrorCode.CANCEL));
     listener2.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
@@ -394,7 +405,7 @@ public class OkHttpClientTransportTest {
     // We return the bytes for the stream window as we read the message.
     verify(frameWriter).windowUpdate(eq(3), eq(messageFrameLength));
 
-    stream.cancel();
+    stream.cancel(Status.CANCELLED);
     verify(frameWriter).rstStream(eq(3), eq(ErrorCode.CANCEL));
     listener.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
@@ -429,7 +440,7 @@ public class OkHttpClientTransportTest {
     verify(frameWriter).data(
         eq(false), eq(3), any(Buffer.class), eq(messageLength + HEADER_LENGTH - partiallySentSize));
 
-    stream.cancel();
+    stream.cancel(Status.CANCELLED);
     listener.waitUntilStreamClosed();
   }
 
@@ -468,7 +479,7 @@ public class OkHttpClientTransportTest {
     frameHandler.windowUpdate(3, HEADER_LENGTH + 20);
     verify(frameWriter).data(eq(false), eq(3), any(Buffer.class), eq(HEADER_LENGTH + 20));
 
-    stream.cancel();
+    stream.cancel(Status.CANCELLED);
     listener.waitUntilStreamClosed();
   }
 
@@ -486,8 +497,8 @@ public class OkHttpClientTransportTest {
     assertEquals(2, streams.size());
     verify(transportListener).transportShutdown();
 
-    stream1.cancel();
-    stream2.cancel();
+    stream1.cancel(Status.CANCELLED);
+    stream2.cancel(Status.CANCELLED);
     listener1.waitUntilStreamClosed();
     listener2.waitUntilStreamClosed();
     assertEquals(0, streams.size());
@@ -563,7 +574,7 @@ public class OkHttpClientTransportTest {
 
     assertNewStreamFail(transport);
 
-    streams.get(startId).cancel();
+    streams.get(startId).cancel(Status.CANCELLED);
     listener1.waitUntilStreamClosed();
     verify(writer).rstStream(eq(startId), eq(ErrorCode.CANCEL));
     verify(transportListener).transportShutdown();
@@ -592,14 +603,14 @@ public class OkHttpClientTransportTest {
     assertEquals(3, (int) stream1.id());
 
     // Finish the first stream
-    stream1.cancel();
+    stream1.cancel(Status.CANCELLED);
     assertTrue("newStream() call is still blocking",
         newStreamReturn.await(TIME_OUT_MS, TimeUnit.MILLISECONDS));
     assertEquals(1, streams.size());
     assertEquals(0, clientTransport.getPendingStreamSize());
     OkHttpClientStream stream2 = streams.get(5);
     assertNotNull(stream2);
-    stream2.cancel();
+    stream2.cancel(Status.CANCELLED);
   }
 
   @Test
@@ -693,7 +704,7 @@ public class OkHttpClientTransportTest {
 
     // Now finish stream1, stream2 should be started and exhaust the id,
     // so stream3 should be failed.
-    stream1.cancel();
+    stream1.cancel(Status.CANCELLED);
     assertTrue("newStream() call for stream2 is still blocking",
         newStreamReturn2.await(TIME_OUT_MS, TimeUnit.MILLISECONDS));
     assertTrue("newStream() call for stream3 is still blocking",
@@ -705,7 +716,7 @@ public class OkHttpClientTransportTest {
     assertEquals(1, streams.size());
     OkHttpClientStream stream2 = streams.get(startId + 2);
     assertNotNull(stream2);
-    stream2.cancel();
+    stream2.cancel(Status.CANCELLED);
   }
 
   @Test
@@ -762,7 +773,7 @@ public class OkHttpClientTransportTest {
     } else {
       verify(frameWriter, times(0)).flush();
     }
-    stream.cancel();
+    stream.cancel(Status.CANCELLED);
   }
 
   @Test
@@ -819,7 +830,7 @@ public class OkHttpClientTransportTest {
   public void receiveDataForUnknownStreamUpdateConnectionWindow() throws Exception {
     MockStreamListener listener = new MockStreamListener();
     OkHttpClientStream stream = clientTransport.newStream(method, new Metadata.Headers(), listener);
-    stream.cancel();
+    stream.cancel(Status.CANCELLED);
 
     Buffer buffer = createMessageFrame(
         new byte[OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1]);
@@ -841,7 +852,7 @@ public class OkHttpClientTransportTest {
   public void receiveWindowUpdateForUnknownStream() throws Exception {
     MockStreamListener listener = new MockStreamListener();
     OkHttpClientStream stream = clientTransport.newStream(method, new Metadata.Headers(), listener);
-    stream.cancel();
+    stream.cancel(Status.CANCELLED);
     // This should be ignored.
     frameHandler.windowUpdate(3, 73);
     listener.waitUntilStreamClosed();
@@ -859,7 +870,7 @@ public class OkHttpClientTransportTest {
         method,new Metadata.Headers(), listener);
     assertTrue(stream.isReady());
     assertTrue(listener.isOnReadyCalled());
-    stream.cancel();
+    stream.cancel(Status.CANCELLED);
     assertFalse(stream.isReady());
   }
 
@@ -915,7 +926,7 @@ public class OkHttpClientTransportTest {
     stream.setOnReadyThreshold(HEADER_LENGTH + messageLength + 1);
     assertTrue(listener.isOnReadyCalled());
 
-    stream.cancel();
+    stream.cancel(Status.CANCELLED);
   }
 
   @Test
