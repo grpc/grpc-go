@@ -444,12 +444,12 @@ public abstract class Metadata {
         return false;
       }
       Key<?> key = (Key<?>) o;
-      return !(name != null ? !name.equals(key.name) : key.name != null);
+      return name.equals(key.name);
     }
 
     @Override
     public int hashCode() {
-      return name != null ? name.hashCode() : 0;
+      return name.hashCode();
     }
 
     @Override
