@@ -44,13 +44,13 @@ import javax.annotation.Nullable;
 public final class HttpUtil {
 
   /**
-   * {@link Metadata.Key} for the Content-Type request/response header.
+   * {@link io.grpc.Metadata.Key} for the Content-Type request/response header.
    */
   public static final Metadata.Key<String> CONTENT_TYPE_KEY =
           Metadata.Key.of("content-type", Metadata.ASCII_STRING_MARSHALLER);
 
   /**
-   * {@link Metadata.Key} for the Content-Type request/response header.
+   * {@link io.grpc.Metadata.Key} for the Content-Type request/response header.
    */
   public static final Metadata.Key<String> USER_AGENT_KEY =
           Metadata.Key.of("user-agent", Metadata.ASCII_STRING_MARSHALLER);

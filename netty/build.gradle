@@ -13,4 +13,4 @@ test {
     jvmArgs "-Xbootclasspath/p:" + configurations.alpnboot.asPath
 }
 
-javadoc.options.links 'https://netty.io/4.1/api/'
+javadoc.options.links 'http://netty.io/4.1/api/'
