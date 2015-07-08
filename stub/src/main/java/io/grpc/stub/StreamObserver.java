@@ -60,9 +60,9 @@ public interface StreamObserver<V>  {
   /**
    * Receives a terminating error from the stream.
    *
-   * <p>May only be called once and is never called after {@link #onCompleted()}. In particular if
-   * an exception is thrown by an implementation of {@code onError} no further calls to any
-   * method are allowed.
+   * <p>May only be called once and if called it must be the last method called. In particular if an
+   * exception is thrown by an implementation of {@code onError} no further calls to any method are
+   * allowed.
    *
    * @param t the error occurred on the stream
    */
@@ -71,9 +71,9 @@ public interface StreamObserver<V>  {
   /**
    * Receives a notification of successful stream completion.
    *
-   * <p>May only be called once and is never called after {@link #onError(Throwable)}. In particular
-   * if an exception is thrown by an implementation of {@code onCompleted} no further calls to
-   * any method are allowed.
+   * <p>May only be called once and if called it must be the last method called. In particular if an
+   * exception is thrown by an implementation of {@code onCompleted} no further calls to any method
+   * are allowed.
    */
   public void onCompleted();
 }

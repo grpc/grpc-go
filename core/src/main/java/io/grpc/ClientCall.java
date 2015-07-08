@@ -80,10 +80,13 @@ public abstract class ClientCall<RequestT, ResponseT> {
     public abstract void onPayload(T payload);
 
     /**
-     * The ClientCall has been closed. No further sending or receiving can occur. If {@code status}
-     * is not equal to {@link Status#OK}, then the call failed. An additional block of trailer
-     * metadata may be received at the end of the call from the server. An empty {@link Metadata}
-     * object is passed if no trailers are received.
+     * The ClientCall has been closed. Any additional calls to the {@code ClientCall} will not be
+     * processed by the server. No further receiving will occur and no further notifications will be
+     * made.
+     *
+     * <p>If {@code status} is not equal to {@link Status#OK}, then the call failed. An additional
+     * block of trailer metadata may be received at the end of the call from the server. An empty
+     * {@link Metadata} object is passed if no trailers are received.
      *
      * @param status the result of the remote call.
      * @param trailers metadata provided at call completion.
