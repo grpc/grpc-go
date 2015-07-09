@@ -31,10 +31,9 @@
 
 package io.grpc.stub;
 
-import com.google.common.collect.ImmutableList;
-
 import io.grpc.MethodDescriptor;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
@@ -45,9 +44,9 @@ import java.util.Map;
 public abstract class AbstractServiceDescriptor<T extends AbstractServiceDescriptor<?>> {
 
   /**
-   * Returns the list of operations defined in the stub configuration.
+   * Returns an immutable collection of methods defined in the stub configuration.
    */
-  public abstract ImmutableList<MethodDescriptor<?, ?>> methods();
+  public abstract Collection<MethodDescriptor<?, ?>> methods();
 
   /**
    * Returns a new stub configuration for the provided method configurations.

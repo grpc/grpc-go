@@ -204,7 +204,7 @@ static void PrintServiceDescriptor(
   p->Print(
       *vars,
       "@$Override$\n"
-      "public $ImmutableList$<$MethodDescriptor$<?, ?>> methods() {\n");
+      "public $Collection$<$MethodDescriptor$<?, ?>> methods() {\n");
   p->Indent();
   p->Print(
       *vars,
@@ -674,6 +674,7 @@ void GenerateService(const ServiceDescriptor* service,
   vars["AbstractServiceDescriptor"] =
       "io.grpc.stub.AbstractServiceDescriptor";
   vars["ImmutableList"] = "com.google.common.collect.ImmutableList";
+  vars["Collection"] = "java.util.Collection";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
   vars["ProtoUtils"] = "io.grpc.protobuf.ProtoUtils";
   vars["NanoUtils"] = "io.grpc.protobuf.nano.NanoUtils";

@@ -65,7 +65,7 @@ public class GreeterGrpc {
     }
 
     @java.lang.Override
-    public com.google.common.collect.ImmutableList<io.grpc.MethodDescriptor<?, ?>> methods() {
+    public java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods() {
       return com.google.common.collect.ImmutableList.<io.grpc.MethodDescriptor<?, ?>>of(
           sayHello);
     }
