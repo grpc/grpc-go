@@ -31,14 +31,14 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
-
-import com.google.common.base.Preconditions;
 
 import io.grpc.HandlerRegistry.Method;
 import io.grpc.MethodDescriptor.MethodType;
@@ -65,7 +65,8 @@ public class MutableHandlerRegistryImplTest {
               requestMarshaller, responseMarshaller),
           handler).build();
   @SuppressWarnings("rawtypes")
-  private ServerMethodDefinition flowMethodDefinition = basicServiceDefinition.getMethods().get(0);
+  private ServerMethodDefinition flowMethodDefinition = 
+      getOnlyElement(basicServiceDefinition.getMethods());
   private ServerServiceDefinition multiServiceDefinition = ServerServiceDefinition.builder("multi")
       .addMethod(
           MethodDescriptor.create(MethodType.UNKNOWN, "multi", "couple",
@@ -77,10 +78,10 @@ public class MutableHandlerRegistryImplTest {
           handler).build();
   @SuppressWarnings("rawtypes")
   private ServerMethodDefinition coupleMethodDefinition =
-      Preconditions.checkNotNull(multiServiceDefinition.getMethod("multi/couple"));
+      checkNotNull(multiServiceDefinition.getMethod("multi/couple"));
   @SuppressWarnings("rawtypes")
   private ServerMethodDefinition fewMethodDefinition =
-      Preconditions.checkNotNull(multiServiceDefinition.getMethod("multi/few"));
+      checkNotNull(multiServiceDefinition.getMethod("multi/few"));
 
   /** Final checks for all tests. */
   @After
@@ -143,7 +144,7 @@ public class MutableHandlerRegistryImplTest {
         .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic", "another",
               requestMarshaller, responseMarshaller), handler).build();
     ServerMethodDefinition<?, ?> anotherMethodDefinition =
-        replaceServiceDefinition.getMethods().get(0);
+        replaceServiceDefinition.getMethod("basic/another");
     assertSame(basicServiceDefinition, registry.addService(replaceServiceDefinition));
 
     assertNull(registry.lookupMethod("basic/flow"));

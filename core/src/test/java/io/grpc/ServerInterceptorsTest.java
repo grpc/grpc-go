@@ -31,6 +31,7 @@
 
 package io.grpc;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.same;
@@ -243,7 +244,7 @@ public class ServerInterceptorsTest {
     if (serviceDef.getMethods().size() != 1) {
       throw new AssertionError("Not exactly one method present");
     }
-    return (ServerMethodDefinition<String, Integer>) serviceDef.getMethods().get(0);
+    return (ServerMethodDefinition<String, Integer>) getOnlyElement(serviceDef.getMethods());
   }
 
   @SuppressWarnings("unchecked")

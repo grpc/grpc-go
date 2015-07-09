@@ -31,10 +31,13 @@
 
 package io.grpc;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+
 import com.google.common.collect.ImmutableMap;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,14 +48,12 @@ public final class ServerServiceDefinition {
   }
 
   private final String name;
-  private final ImmutableList<ServerMethodDefinition<?, ?>> methods;
-  private final ImmutableMap<String, ServerMethodDefinition<?, ?>> methodLookup;
+  private final ImmutableMap<String, ServerMethodDefinition<?, ?>> methods;
 
-  private ServerServiceDefinition(String name, ImmutableList<ServerMethodDefinition<?, ?>> methods,
-      Map<String, ServerMethodDefinition<?, ?>> methodLookup) {
-    this.name = name;
-    this.methods = methods;
-    this.methodLookup = ImmutableMap.copyOf(methodLookup);
+  private ServerServiceDefinition(
+      String name, Map<String, ServerMethodDefinition<?, ?>> methods) {
+    this.name = checkNotNull(name);
+    this.methods = ImmutableMap.copyOf(methods);
   }
 
   /** Simple name of the service. It is not an absolute path. */
@@ -60,8 +61,8 @@ public final class ServerServiceDefinition {
     return name;
   }
 
-  public ImmutableList<ServerMethodDefinition<?, ?>> getMethods() {
-    return methods;
+  public Collection<ServerMethodDefinition<?, ?>> getMethods() {
+    return methods.values();
   }
 
   /**
@@ -70,16 +71,14 @@ public final class ServerServiceDefinition {
    * @param name the fully qualified name without leading slash. E.g., "com.foo.Foo/Bar"
    */
   public ServerMethodDefinition<?, ?> getMethod(String name) {
-    return methodLookup.get(name);
+    return methods.get(name);
   }
 
   /** Builder for constructing Service instances. */
   public static final class Builder {
     private final String serviceName;
-    private final ImmutableList.Builder<ServerMethodDefinition<?, ?>> methods
-        = ImmutableList.builder();
-    private final Map<String, ServerMethodDefinition<?, ?>> methodLookup
-        = new HashMap<String, ServerMethodDefinition<?, ?>>();
+    private final Map<String, ServerMethodDefinition<?, ?>> methods = 
+        new HashMap<String, ServerMethodDefinition<?, ?>>();
 
     private Builder(String serviceName) {
       this.serviceName = serviceName;
@@ -96,29 +95,27 @@ public final class ServerServiceDefinition {
       // TODO(zhangkun83): since the handler map uses fully qualified names as keys, we should
       // consider removing ServerServiceDefinition to and let the registry to have a big map of
       // handlers.
-      Preconditions.checkArgument(
+      checkArgument(
           serviceName.equals(MethodDescriptor.extractFullServiceName(method.getFullMethodName())),
           "Service name mismatch. Expected service name: '%s'. Actual method name: '%s'.",
           this.serviceName, method.getFullMethodName());
 
       return addMethod(new ServerMethodDefinition<ReqT, RespT>(
-          Preconditions.checkNotNull(method, "method must not be null"),
-          Preconditions.checkNotNull(handler, "handler must not be null")));
+          checkNotNull(method, "method must not be null"),
+          checkNotNull(handler, "handler must not be null")));
     }
 
     /** Add a method to be supported by the service. */
     public <ReqT, RespT> Builder addMethod(ServerMethodDefinition<ReqT, RespT> def) {
-      if (methodLookup.containsKey(def.getMethodDescriptor().getFullMethodName())) {
-        throw new IllegalStateException("Method by same name already registered");
-      }
-      methodLookup.put(def.getMethodDescriptor().getFullMethodName(), def);
-      methods.add(def);
+      String name = def.getMethodDescriptor().getFullMethodName();
+      checkState(!methods.containsKey(name), "Method by same name already registered: %s", name);
+      methods.put(name, def);
       return this;
     }
 
     /** Construct new ServerServiceDefinition. */
     public ServerServiceDefinition build() {
-      return new ServerServiceDefinition(serviceName, methods.build(), methodLookup);
+      return new ServerServiceDefinition(serviceName, methods);
     }
   }
 }
