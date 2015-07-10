@@ -112,7 +112,8 @@ class ClientConfiguration implements Configuration {
               "Transport " + config.transport.name().toLowerCase() + " does not support TLS.");
         }
 
-        if (config.testca && config.address instanceof InetSocketAddress) {
+        if (config.transport != Transport.OK_HTTP
+            && config.testca && config.address instanceof InetSocketAddress) {
           // Override the socket address with the host from the testca.
           InetSocketAddress address = (InetSocketAddress) config.address;
           config.address = TestUtils.testServerAddress(address.getHostName(),
@@ -146,7 +147,7 @@ class ClientConfiguration implements Configuration {
         + "http://netty.io/wiki/forked-tomcat-native.html. Only supported on Linux.", INET),
     NETTY_UNIX_DOMAIN_SOCKET(false, "The Netty Unix Domain Socket transport. This currently "
         + "does not support TLS.", UDS),
-    OK_HTTP(false, "The OkHttp transport. This currently does not support TLS.", INET);
+    OK_HTTP(true, "The OkHttp transport.", INET);
 
     final boolean tlsSupported;
     final String description;

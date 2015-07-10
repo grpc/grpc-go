@@ -62,6 +62,8 @@ import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
+import javax.net.ssl.SSLSocketFactory;
+
 /**
  * Utility methods to support benchmarking classes.
  */
@@ -129,10 +131,24 @@ final class Utils {
   static Channel newClientChannel(ClientConfiguration config) throws IOException {
     if (config.transport == ClientConfiguration.Transport.OK_HTTP) {
       InetSocketAddress addr = (InetSocketAddress) config.address;
-      return OkHttpChannelBuilder
+      OkHttpChannelBuilder builder = OkHttpChannelBuilder
           .forAddress(addr.getHostName(), addr.getPort())
-          .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null)
-          .build();
+          .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null);
+      if (config.tls) {
+        SSLSocketFactory factory;
+        if (config.testca) {
+          builder.overrideHostForAuthority(TestUtils.TEST_SERVER_HOST);
+          try {
+            factory = TestUtils.newSslSocketFactoryForCa(TestUtils.loadCert("ca.pem"));
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+        } else {
+          factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+        }
+        builder.sslSocketFactory(factory);
+      }
+      return builder.build();
     }
 
     // It's a Netty transport.
