@@ -34,6 +34,7 @@ package io.grpc.transport.netty;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.grpc.Metadata;
+import io.grpc.Status;
 import io.grpc.transport.AbstractServerStream;
 import io.grpc.transport.WritableBuffer;
 import io.netty.buffer.ByteBuf;
@@ -120,5 +121,10 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   protected void returnProcessedBytes(int processedBytes) {
     handler.returnProcessedBytes(http2Stream, processedBytes);
     writeQueue.scheduleFlush();
+  }
+
+  @Override
+  public void cancel(Status status) {
+    // TODO(carl-mastrangelo): implement this
   }
 }

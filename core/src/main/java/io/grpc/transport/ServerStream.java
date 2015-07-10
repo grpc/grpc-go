@@ -41,8 +41,8 @@ public interface ServerStream extends Stream {
 
   /**
    * Writes custom metadata as headers on the response stream sent to the client. This method may
-   * only be called once and cannot be called after calls to {@code Stream#writePayload}
-   * or {@code #close}.
+   * only be called once and cannot be called after calls to {@link Stream#writeMessage}
+   * or {@link #close}.
    *
    * @param headers to send to client.
    */
@@ -57,4 +57,10 @@ public interface ServerStream extends Stream {
    * @param trailers an additional block of metadata to pass to the client on stream closure.
    */
   void close(Status status, Metadata.Trailers trailers);
+
+
+  /**
+   * Tears down the stream, typically in the event of a timeout.
+   */
+  public void cancel(Status status);
 }

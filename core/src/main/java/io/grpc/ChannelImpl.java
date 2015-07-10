@@ -306,7 +306,7 @@ public final class ChannelImpl extends Channel {
     }
   }
 
-  private class CallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
+  private final class CallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     private final MethodDescriptor<ReqT, RespT> method;
     private final SerializingExecutor callExecutor;
     private final boolean unaryRequest;
@@ -314,7 +314,7 @@ public final class ChannelImpl extends Channel {
     private ClientStream stream;
     private volatile ScheduledFuture<?> deadlineCancellationFuture;
 
-    public CallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor,
+    private CallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor,
         CallOptions callOptions) {
       this.method = method;
       this.callExecutor = executor;
@@ -403,6 +403,7 @@ public final class ChannelImpl extends Channel {
         stream.writeMessage(payloadIs);
         failed = false;
       } finally {
+        // TODO(notcarl): Find out if payloadIs needs to be closed.
         if (failed) {
           cancel();
         }

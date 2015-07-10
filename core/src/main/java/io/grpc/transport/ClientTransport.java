@@ -63,7 +63,7 @@ public interface ClientTransport {
                          ClientStreamListener listener);
 
   /**
-   * Starts transport. Implementations must not call {@code listener} until after {@code start()}
+   * Starts transport. Implementations must not call {@code listener} until after {@link #start}
    * returns.
    *
    * @param listener non-{@code null} listener of transport events
@@ -81,7 +81,7 @@ public interface ClientTransport {
 
   /**
    * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
-   * fail (once {@link Listener#transportShutdown()} callback called).
+   * fail (once {@link Listener#transportShutdown} callback called).
    */
   void shutdown();
 

@@ -42,7 +42,6 @@ import com.google.common.collect.Lists;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -204,9 +203,9 @@ public abstract class Metadata {
     Preconditions.checkState(serializable, "Can't serialize raw metadata");
     byte[][] serialized = new byte[store.size() * 2][];
     int i = 0;
-    for (Map.Entry<String, MetadataEntry> entry : store.entries()) {
-      serialized[i++] = entry.getValue().key.asciiName();
-      serialized[i++] = entry.getValue().getSerialized();
+    for (MetadataEntry entry : store.values()) {
+      serialized[i++] = entry.key.asciiName();
+      serialized[i++] = entry.getSerialized();
     }
     return serialized;
   }
