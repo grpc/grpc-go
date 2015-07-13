@@ -567,6 +567,7 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 	if f.IsAck() {
 		return
 	}
+	t.framer.writeSettingsAck(true)
 	f.ForeachSetting(func(s http2.Setting) error {
 		if v, ok := f.Value(s.ID); ok {
 			switch s.ID {
@@ -600,7 +601,6 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 		}
 		return nil
 	})
-	t.controlBuf.put(&settings{ack: true})
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
@@ -742,6 +742,7 @@ func (t *http2Client) controller() {
 					t.framer.writeWindowUpdate(true, i.streamID, i.increment)
 				case *settings:
 					if i.ack {
+						// TODO(zhaoq): This is no longer being used.
 						t.framer.writeSettingsAck(true)
 					} else {
 						t.framer.writeSettings(true, i.setting...)

@@ -367,6 +367,7 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 	if f.IsAck() {
 		return
 	}
+	t.framer.writeSettingsAck(true)
 	f.ForeachSetting(func(s http2.Setting) error {
 		if v, ok := f.Value(http2.SettingInitialWindowSize); ok {
 			t.mu.Lock()
@@ -378,7 +379,6 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 		}
 		return nil
 	})
-	t.controlBuf.put(&settings{ack: true})
 }
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
@@ -598,6 +598,7 @@ func (t *http2Server) controller() {
 					t.framer.writeWindowUpdate(true, i.streamID, i.increment)
 				case *settings:
 					if i.ack {
+						// TODO(zhaoq): This is no longer being used.
 						t.framer.writeSettingsAck(true)
 					} else {
 						t.framer.writeSettings(true, i.setting...)
