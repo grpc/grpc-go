@@ -591,10 +591,9 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 				}
 			case http2.SettingInitialWindowSize:
 				t.mu.Lock()
-				delta := int(v - t.streamSendQuota)
 				for _, s := range t.activeStreams {
 					// Adjust the sending quota for each s.
-					s.sendQuotaPool.reset(delta)
+					s.sendQuotaPool.reset(int(v - t.streamSendQuota))
 				}
 				t.streamSendQuota = v
 				t.mu.Unlock()

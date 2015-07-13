@@ -372,9 +372,8 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 		if v, ok := f.Value(http2.SettingInitialWindowSize); ok {
 			t.mu.Lock()
 			defer t.mu.Unlock()
-			delta := int(v - t.streamSendQuota)
 			for _, s := range t.activeStreams {
-				s.sendQuotaPool.reset(delta)
+				s.sendQuotaPool.reset(int(v - t.streamSendQuota))
 			}
 			t.streamSendQuota = v
 		}
