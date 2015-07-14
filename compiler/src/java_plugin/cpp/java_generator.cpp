@@ -512,14 +512,27 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
     (*vars)["input_type"] = MessageFullJavaName(method->input_type());
     (*vars)["output_type"] = MessageFullJavaName(method->output_type());
     bool client_streaming = method->client_streaming();
+    bool server_streaming = method->server_streaming();
     if (client_streaming) {
-      (*vars)["calls_method"] = "asyncStreamingRequestCall";
-      (*vars)["invocation_class"] =
-          "io.grpc.stub.ServerCalls.StreamingRequestMethod";
+      if (server_streaming) {
+        (*vars)["calls_method"] = "asyncDuplexStreamingCall";
+        (*vars)["invocation_class"] =
+            "io.grpc.stub.ServerCalls.DuplexStreamingMethod";
+      } else {
+        (*vars)["calls_method"] = "asyncClientStreamingCall";
+        (*vars)["invocation_class"] =
+            "io.grpc.stub.ServerCalls.ClientStreamingMethod";
+      }
     } else {
-      (*vars)["calls_method"] = "asyncUnaryRequestCall";
-      (*vars)["invocation_class"] =
-          "io.grpc.stub.ServerCalls.UnaryRequestMethod";
+      if (server_streaming) {
+        (*vars)["calls_method"] = "asyncServerStreamingCall";
+        (*vars)["invocation_class"] =
+            "io.grpc.stub.ServerCalls.ServerStreamingMethod";
+      } else {
+        (*vars)["calls_method"] = "asyncUnaryCall";
+        (*vars)["invocation_class"] =
+            "io.grpc.stub.ServerCalls.UnaryMethod";
+      }
     }
     p->Print(*vars, ".addMethod($ServerMethodDefinition$.create(\n");
     p->Indent();
@@ -647,9 +660,13 @@ void PrintImports(Printer* p, bool generate_nano) {
       "import static "
       "io.grpc.stub.ClientCalls.unaryFutureCall;\n"
       "import static "
-      "io.grpc.stub.ServerCalls.asyncUnaryRequestCall;\n"
+      "io.grpc.stub.ServerCalls.asyncUnaryCall;\n"
       "import static "
-      "io.grpc.stub.ServerCalls.asyncStreamingRequestCall;\n\n");
+      "io.grpc.stub.ServerCalls.asyncServerStreamingCall;\n"
+      "import static "
+      "io.grpc.stub.ServerCalls.asyncClientStreamingCall;\n"
+      "import static "
+      "io.grpc.stub.ServerCalls.asyncDuplexStreamingCall;\n\n");
   if (generate_nano) {
     p->Print("import java.io.IOException;\n\n");
   }

@@ -46,18 +46,87 @@ public class ServerCalls {
   }
 
   /**
+   * Creates a {@code ServerCallHandler} for a unary call method of the service.
+   *
+   * @param method an adaptor to the actual method on the service implementation.
+   */
+  public static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncUnaryCall(
+      final UnaryMethod<ReqT, RespT> method) {
+    return asyncUnaryRequestCall(method);
+  }
+
+  /**
+   * Creates a {@code ServerCallHandler} for a server streaming method of the service.
+   *
+   * @param method an adaptor to the actual method on the service implementation.
+   */
+  public static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncServerStreamingCall(
+      final ServerStreamingMethod<ReqT, RespT> method) {
+    return asyncUnaryRequestCall(method);
+  }
+
+  /**
+   * Creates a {@code ServerCallHandler} for a client streaming method of the service.
+   *
+   * @param method an adaptor to the actual method on the service implementation.
+   */
+  public static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncClientStreamingCall(
+      final ClientStreamingMethod<ReqT, RespT> method) {
+    return asyncStreamingRequestCall(method);
+  }
+
+  /**
+   * Creates a {@code ServerCallHandler} for a duplex streaming method of the service.
+   *
+   * @param method an adaptor to the actual method on the service implementation.
+   */
+  public static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncDuplexStreamingCall(
+      final DuplexStreamingMethod<ReqT, RespT> method) {
+    return asyncStreamingRequestCall(method);
+  }
+
+  /**
+   * Adaptor to a unary call method.
+   */
+  public static interface UnaryMethod<ReqT, RespT> extends UnaryRequestMethod<ReqT, RespT> {
+  }
+
+  /**
+   * Adaptor to a server streaming method.
+   */
+  public static interface ServerStreamingMethod<ReqT, RespT>
+      extends UnaryRequestMethod<ReqT, RespT> {
+  }
+
+  /**
+   * Adaptor to a client streaming method.
+   */
+  public static interface ClientStreamingMethod<ReqT, RespT>
+      extends StreamingRequestMethod<ReqT, RespT> {
+  }
+
+  /**
+   * Adaptor to a bi-directional streaming method.
+   */
+  public static interface DuplexStreamingMethod<ReqT, RespT>
+      extends StreamingRequestMethod<ReqT, RespT> {
+  }
+
+  /**
    * Creates a {@code ServerCallHandler} for a unary request call method of the service.
    *
    * @param method an adaptor to the actual method on the service implementation.
    */
-  public static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncUnaryRequestCall(
+  private static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncUnaryRequestCall(
       final UnaryRequestMethod<ReqT, RespT> method) {
     return new ServerCallHandler<ReqT, RespT>() {
       @Override
       public ServerCall.Listener<ReqT> startCall(
           String fullMethodName, final ServerCall<RespT> call, Metadata.Headers headers) {
         final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
-        call.request(1);
+        // We expect only 1 request, but we ask for 2 requests here so that if a misbehaving client
+        // sends more than 1 requests, we will catch it in onPayload() and emit INVALID_ARGUMENT.
+        call.request(2);
         return new EmptyServerCallListener<ReqT>() {
           ReqT request;
           @Override
@@ -66,9 +135,6 @@ public class ServerCalls {
               // We delay calling method.invoke() until onHalfClose(), because application may call
               // close(OK) inside invoke(), while close(OK) is not allowed before onHalfClose().
               this.request = request;
-
-              // Request delivery of the next inbound message.
-              call.request(1);
             } else {
               call.close(
                   Status.INVALID_ARGUMENT.withDescription(
@@ -101,7 +167,7 @@ public class ServerCalls {
    *
    * @param method an adaptor to the actual method on the service implementation.
    */
-  public static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncStreamingRequestCall(
+  private static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncStreamingRequestCall(
       final StreamingRequestMethod<ReqT, RespT> method) {
     return new ServerCallHandler<ReqT, RespT>() {
       @Override
@@ -139,17 +205,11 @@ public class ServerCalls {
     };
   }
 
-  /**
-   * Adaptor to a unary call or server streaming method.
-   */
-  public static interface UnaryRequestMethod<ReqT, RespT> {
+  private static interface UnaryRequestMethod<ReqT, RespT> {
     void invoke(ReqT request, StreamObserver<RespT> responseObserver);
   }
 
-  /**
-   * Adaptor to a client stremaing or bi-directional stremaing method.
-   */
-  public static interface StreamingRequestMethod<ReqT, RespT> {
+  private static interface StreamingRequestMethod<ReqT, RespT> {
     StreamObserver<ReqT> invoke(StreamObserver<RespT> responseObserver);
   }
 

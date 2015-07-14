@@ -7,8 +7,10 @@ import static io.grpc.stub.ClientCalls.duplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.unaryFutureCall;
-import static io.grpc.stub.ServerCalls.asyncUnaryRequestCall;
-import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;
+import static io.grpc.stub.ServerCalls.asyncUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncDuplexStreamingCall;
 
 @javax.annotation.Generated("by gRPC proto compiler")
 public class RouteGuideGrpc {
@@ -264,8 +266,8 @@ public class RouteGuideGrpc {
     return io.grpc.ServerServiceDefinition.builder("routeguide.RouteGuide")
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_GET_FEATURE,
-          asyncUnaryRequestCall(
-            new io.grpc.stub.ServerCalls.UnaryRequestMethod<
+          asyncUnaryCall(
+            new io.grpc.stub.ServerCalls.UnaryMethod<
                 io.grpc.examples.routeguide.Point,
                 io.grpc.examples.routeguide.Feature>() {
               @java.lang.Override
@@ -277,8 +279,8 @@ public class RouteGuideGrpc {
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_LIST_FEATURES,
-          asyncUnaryRequestCall(
-            new io.grpc.stub.ServerCalls.UnaryRequestMethod<
+          asyncServerStreamingCall(
+            new io.grpc.stub.ServerCalls.ServerStreamingMethod<
                 io.grpc.examples.routeguide.Rectangle,
                 io.grpc.examples.routeguide.Feature>() {
               @java.lang.Override
@@ -290,8 +292,8 @@ public class RouteGuideGrpc {
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_RECORD_ROUTE,
-          asyncStreamingRequestCall(
-            new io.grpc.stub.ServerCalls.StreamingRequestMethod<
+          asyncClientStreamingCall(
+            new io.grpc.stub.ServerCalls.ClientStreamingMethod<
                 io.grpc.examples.routeguide.Point,
                 io.grpc.examples.routeguide.RouteSummary>() {
               @java.lang.Override
@@ -302,8 +304,8 @@ public class RouteGuideGrpc {
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_ROUTE_CHAT,
-          asyncStreamingRequestCall(
-            new io.grpc.stub.ServerCalls.StreamingRequestMethod<
+          asyncDuplexStreamingCall(
+            new io.grpc.stub.ServerCalls.DuplexStreamingMethod<
                 io.grpc.examples.routeguide.RouteNote,
                 io.grpc.examples.routeguide.RouteNote>() {
               @java.lang.Override

@@ -7,8 +7,10 @@ import static io.grpc.stub.ClientCalls.duplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.unaryFutureCall;
-import static io.grpc.stub.ServerCalls.asyncUnaryRequestCall;
-import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;
+import static io.grpc.stub.ServerCalls.asyncUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncDuplexStreamingCall;
 
 @javax.annotation.Generated("by gRPC proto compiler")
 public class TestServiceGrpc {
@@ -332,8 +334,8 @@ public class TestServiceGrpc {
     return io.grpc.ServerServiceDefinition.builder("grpc.testing.TestService")
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_EMPTY_CALL,
-          asyncUnaryRequestCall(
-            new io.grpc.stub.ServerCalls.UnaryRequestMethod<
+          asyncUnaryCall(
+            new io.grpc.stub.ServerCalls.UnaryMethod<
                 com.google.protobuf.EmptyProtos.Empty,
                 com.google.protobuf.EmptyProtos.Empty>() {
               @java.lang.Override
@@ -345,8 +347,8 @@ public class TestServiceGrpc {
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_UNARY_CALL,
-          asyncUnaryRequestCall(
-            new io.grpc.stub.ServerCalls.UnaryRequestMethod<
+          asyncUnaryCall(
+            new io.grpc.stub.ServerCalls.UnaryMethod<
                 io.grpc.testing.integration.Messages.SimpleRequest,
                 io.grpc.testing.integration.Messages.SimpleResponse>() {
               @java.lang.Override
@@ -358,8 +360,8 @@ public class TestServiceGrpc {
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_STREAMING_OUTPUT_CALL,
-          asyncUnaryRequestCall(
-            new io.grpc.stub.ServerCalls.UnaryRequestMethod<
+          asyncServerStreamingCall(
+            new io.grpc.stub.ServerCalls.ServerStreamingMethod<
                 io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
                 io.grpc.testing.integration.Messages.StreamingOutputCallResponse>() {
               @java.lang.Override
@@ -371,8 +373,8 @@ public class TestServiceGrpc {
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_STREAMING_INPUT_CALL,
-          asyncStreamingRequestCall(
-            new io.grpc.stub.ServerCalls.StreamingRequestMethod<
+          asyncClientStreamingCall(
+            new io.grpc.stub.ServerCalls.ClientStreamingMethod<
                 io.grpc.testing.integration.Messages.StreamingInputCallRequest,
                 io.grpc.testing.integration.Messages.StreamingInputCallResponse>() {
               @java.lang.Override
@@ -383,8 +385,8 @@ public class TestServiceGrpc {
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_FULL_DUPLEX_CALL,
-          asyncStreamingRequestCall(
-            new io.grpc.stub.ServerCalls.StreamingRequestMethod<
+          asyncDuplexStreamingCall(
+            new io.grpc.stub.ServerCalls.DuplexStreamingMethod<
                 io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
                 io.grpc.testing.integration.Messages.StreamingOutputCallResponse>() {
               @java.lang.Override
@@ -395,8 +397,8 @@ public class TestServiceGrpc {
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_HALF_DUPLEX_CALL,
-          asyncStreamingRequestCall(
-            new io.grpc.stub.ServerCalls.StreamingRequestMethod<
+          asyncDuplexStreamingCall(
+            new io.grpc.stub.ServerCalls.DuplexStreamingMethod<
                 io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
                 io.grpc.testing.integration.Messages.StreamingOutputCallResponse>() {
               @java.lang.Override

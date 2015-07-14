@@ -7,8 +7,10 @@ import static io.grpc.stub.ClientCalls.duplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.unaryFutureCall;
-import static io.grpc.stub.ServerCalls.asyncUnaryRequestCall;
-import static io.grpc.stub.ServerCalls.asyncStreamingRequestCall;
+import static io.grpc.stub.ServerCalls.asyncUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncDuplexStreamingCall;
 
 @javax.annotation.Generated("by gRPC proto compiler")
 public class GreeterGrpc {
@@ -179,8 +181,8 @@ public class GreeterGrpc {
     return io.grpc.ServerServiceDefinition.builder("helloworld.Greeter")
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_SAY_HELLO,
-          asyncUnaryRequestCall(
-            new io.grpc.stub.ServerCalls.UnaryRequestMethod<
+          asyncUnaryCall(
+            new io.grpc.stub.ServerCalls.UnaryMethod<
                 io.grpc.examples.helloworld.HelloRequest,
                 io.grpc.examples.helloworld.HelloResponse>() {
               @java.lang.Override
