@@ -31,6 +31,7 @@
 
 package io.grpc.transport.okhttp;
 
+import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.SettableFuture;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
@@ -45,20 +46,26 @@ import okio.Buffer;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 
 class AsyncFrameWriter implements FrameWriter {
-  private final FrameWriter frameWriter;
-  private final Executor executor;
+  private FrameWriter frameWriter;
+  // Although writes are thread-safe, we serialize them to prevent consuming many Threads that are
+  // just waiting on each other.
+  private final SerializingExecutor executor;
   private final OkHttpClientTransport transport;
 
-  public AsyncFrameWriter(FrameWriter frameWriter, OkHttpClientTransport transport,
-      Executor executor) {
-    this.frameWriter = frameWriter;
+  public AsyncFrameWriter(OkHttpClientTransport transport, SerializingExecutor executor) {
     this.transport = transport;
-    // Although writes are thread-safe, we serialize them to prevent consuming many Threads that are
-    // just waiting on each other.
-    this.executor = new SerializingExecutor(executor);
+    this.executor = executor;
+  }
+
+  /**
+   * Set the real frameWriter, should only be called by thread of executor.
+   */
+  void setFrameWriter(FrameWriter frameWriter) {
+    Preconditions.checkState(this.frameWriter == null,
+        "AsyncFrameWriter's setFrameWriter() should only be called once.");
+    this.frameWriter = frameWriter;
   }
 
   @Override
@@ -206,7 +213,9 @@ class AsyncFrameWriter implements FrameWriter {
       @Override
       public void run() {
         try {
-          frameWriter.close();
+          if (frameWriter != null) {
+            frameWriter.close();
+          }
         } catch (IOException e) {
           closeFuture.setException(e);
         } finally {
@@ -228,6 +237,9 @@ class AsyncFrameWriter implements FrameWriter {
     @Override
     public final void run() {
       try {
+        if (frameWriter == null) {
+          throw new IOException("Unable to perform write due to unavailable frameWriter.");
+        }
         doRun();
       } catch (IOException ex) {
         transport.onIoException(ex);
@@ -240,6 +252,7 @@ class AsyncFrameWriter implements FrameWriter {
 
   @Override
   public int maxDataLength() {
-    return frameWriter.maxDataLength();
+    return frameWriter == null ? 0x4000 /* 16384, the minimum required by the HTTP/2 spec */
+        : frameWriter.maxDataLength();
   }
 }
