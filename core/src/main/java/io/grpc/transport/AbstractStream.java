@@ -31,11 +31,11 @@
 
 package io.grpc.transport;
 
-import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
 
 import java.io.InputStream;
 
@@ -44,6 +44,8 @@ import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Abstract base class for {@link Stream} implementations.
+ *
+ * @param <IdT> type of the unique identifier of this stream.
  */
 public abstract class AbstractStream<IdT> implements Stream {
   /**
@@ -84,12 +86,6 @@ public abstract class AbstractStream<IdT> implements Stream {
    */
   private int numSentBytesQueued;
 
-  /**
-   * Indicates whether the listener is currently eligible for notification of
-   * {@link StreamListener#onReady()}.
-   */
-  @GuardedBy("onReadyLock")
-  private boolean shouldNotifyOnReady = true;
   /**
    * Indicates the stream has been created on the connection. This implies that the stream is no
    * longer limited by MAX_CONCURRENT_STREAMS.
@@ -133,6 +129,11 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   /**
+   * Override this method to provide a stream listener.
+   */
+  protected abstract StreamListener listener();
+
+  /**
    * Returns the internal ID for this stream. Note that ID can be {@code null} for client streams
    * as the transport may defer creating the stream to the remote side until it has a payload or
    * metadata to send.
@@ -145,34 +146,14 @@ public abstract class AbstractStream<IdT> implements Stream {
    * will be called. Defaults to {@link #DEFAULT_ONREADY_THRESHOLD}.
    */
   public int getOnReadyThreshold() {
-    return onReadyThreshold;
-  }
-
-  /**
-   * Sets the number of queued bytes for a given stream, below which
-   * {@link StreamListener#onReady()} will be called. If not called, defaults to
-   * {@link #DEFAULT_ONREADY_THRESHOLD}.
-   *
-   * <p>This must be called from the transport thread, since a listener may be called back directly.
-   */
-  public void setOnReadyThreshold(int onReadyThreshold) {
-    checkArgument(onReadyThreshold > 0, "onReadyThreshold must be > 0");
-    boolean doNotify;
     synchronized (onReadyLock) {
-      if (this.onReadyThreshold <= numSentBytesQueued && onReadyThreshold > numSentBytesQueued) {
-        shouldNotifyOnReady = true;
-      }
-      this.onReadyThreshold = onReadyThreshold;
-      doNotify = needToNotifyOnReady();
-    }
-    if (doNotify) {
-      listener().onReady();
+      return onReadyThreshold;
     }
   }
 
   @Override
   public void writeMessage(InputStream message) {
-    Preconditions.checkNotNull(message, "message");
+    checkNotNull(message);
     outboundPhase(Phase.MESSAGE);
     if (!framer.isClosed()) {
       framer.writePayload(message);
@@ -190,9 +171,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   public final boolean isReady() {
     if (listener() != null && outboundPhase() != Phase.STATUS) {
       synchronized (onReadyLock) {
-        if (allocated && numSentBytesQueued < onReadyThreshold) {
-          return true;
-        }
+        return allocated && numSentBytesQueued < onReadyThreshold;
       }
     }
     return false;
@@ -220,11 +199,6 @@ public abstract class AbstractStream<IdT> implements Stream {
   public void dispose() {
     framer.dispose();
   }
-
-  /**
-   * Gets the listener to this stream.
-   */
-  protected abstract StreamListener listener();
 
   /**
    * Sends an outbound frame to the remote end point.
@@ -312,18 +286,13 @@ public abstract class AbstractStream<IdT> implements Stream {
    * StreamListener#onReady()} handler if appropriate. This must be called from the transport
    * thread, since the listener may be called back directly.
    */
-  protected void onStreamAllocated() {
-    boolean doNotify;
+  protected final void onStreamAllocated() {
+    checkState(listener() != null);
     synchronized (onReadyLock) {
-      if (allocated) {
-        throw new IllegalStateException("Already allocated");
-      }
+      checkState(!allocated, "Already allocated");
       allocated = true;
-      doNotify = needToNotifyOnReady();
     }
-    if (doNotify) {
-      listener().onReady();
-    }
+    notifyIfReady();
   }
 
   /**
@@ -335,9 +304,6 @@ public abstract class AbstractStream<IdT> implements Stream {
   protected final void onSendingBytes(int numBytes) {
     synchronized (onReadyLock) {
       numSentBytesQueued += numBytes;
-      if (!isReady()) {
-        shouldNotifyOnReady = true;
-      }
     }
   }
 
@@ -351,28 +317,25 @@ public abstract class AbstractStream<IdT> implements Stream {
   protected final void onSentBytes(int numBytes) {
     boolean doNotify;
     synchronized (onReadyLock) {
+      boolean belowThresholdBefore = numSentBytesQueued < onReadyThreshold;
       numSentBytesQueued -= numBytes;
-      doNotify = needToNotifyOnReady();
+      boolean belowThresholdAfter = numSentBytesQueued < onReadyThreshold;
+      doNotify = !belowThresholdBefore && belowThresholdAfter;
+    }
+    if (doNotify) {
+      notifyIfReady();
+    }
+  }
+
+  @VisibleForTesting
+  final void notifyIfReady() {
+    boolean doNotify = false;
+    synchronized (onReadyLock) {
+      doNotify = isReady();
     }
     if (doNotify) {
       listener().onReady();
     }
-  }
-
-  /**
-   * Determines whether or not we need to call the {@link StreamListener#onReady()} handler now.
-   * Calling this method has the side-effect of unsetting {@link #shouldNotifyOnReady} so the
-   * handler should always be invoked immediately after calling this method.
-   */
-  @GuardedBy("onReadyLock")
-  private boolean needToNotifyOnReady() {
-    if (shouldNotifyOnReady && isReady()) {
-      // Returning true here counts as a call to the onReady callback, so
-      // unset the flag.
-      shouldNotifyOnReady = false;
-      return true;
-    }
-    return false;
   }
 
   final Phase inboundPhase() {
@@ -405,7 +368,8 @@ public abstract class AbstractStream<IdT> implements Stream {
     return tmp;
   }
 
-  private Phase verifyNextPhase(Phase currentPhase, Phase nextPhase) {
+  @VisibleForTesting
+  Phase verifyNextPhase(Phase currentPhase, Phase nextPhase) {
     if (nextPhase.ordinal() < currentPhase.ordinal()) {
       throw new IllegalStateException(
           String.format("Cannot transition phase from %s to %s", currentPhase, nextPhase));
@@ -449,6 +413,5 @@ public abstract class AbstractStream<IdT> implements Stream {
         .add("id", id())
         .add("inboundPhase", inboundPhase().name())
         .add("outboundPhase", outboundPhase().name());
-
   }
 }
