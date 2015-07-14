@@ -57,6 +57,7 @@ public class Http2NettyTest extends AbstractTransportTest {
   public static void startServer() {
     try {
       startStaticServer(NettyServerBuilder.forPort(serverPort)
+          .flowControlWindow(65 * 1024)
           .sslContext(GrpcSslContexts
               .forServer(TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key"))
               .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)

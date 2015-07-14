@@ -56,6 +56,7 @@ public class Http2NettyLocalChannelTest extends AbstractTransportTest {
     startStaticServer(
         NettyServerBuilder
             .forAddress(new LocalAddress("in-process-1"))
+            .flowControlWindow(65 * 1024)
             .channelType(LocalServerChannel.class));
   }
 

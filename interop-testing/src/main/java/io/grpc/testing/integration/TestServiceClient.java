@@ -250,6 +250,7 @@ public class TestServiceClient {
           }
         }
         return NettyChannelBuilder.forAddress(new InetSocketAddress(address, serverPort))
+            .flowControlWindow(65 * 1024)
             .negotiationType(useTls ? NegotiationType.TLS : NegotiationType.PLAINTEXT)
             .sslContext(sslContext)
             .build();
