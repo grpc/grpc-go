@@ -211,7 +211,7 @@ public class OkHttpClientTransportTest {
   public void receivedHeadersForInvalidStreamShouldKillConnection() throws Exception {
     // Empty headers block without correct content type or status
     frameHandler.headers(false, false, 3, 0, new ArrayList<Header>(),
-            HeadersMode.HTTP_20_HEADERS);
+        HeadersMode.HTTP_20_HEADERS);
     verify(frameWriter).goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
     verify(transportListener).transportShutdown();
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
@@ -347,7 +347,7 @@ public class OkHttpClientTransportTest {
     frameHandler.headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
     frameHandler.headers(false, false, 5, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
 
-    int messageLength = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 4;
+    int messageLength = Utils.DEFAULT_WINDOW_SIZE / 4;
     byte[] fakeMessage = new byte[messageLength];
 
     // Stream 1 receives a message
@@ -394,7 +394,7 @@ public class OkHttpClientTransportTest {
     clientTransport.newStream(method, new Metadata.Headers(), listener).request(1);
     OkHttpClientStream stream = streams.get(3);
 
-    int messageLength = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1;
+    int messageLength = Utils.DEFAULT_WINDOW_SIZE / 2 + 1;
     byte[] fakeMessage = new byte[messageLength];
 
     frameHandler.headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
@@ -726,7 +726,7 @@ public class OkHttpClientTransportTest {
 
     frameHandler.headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
 
-    int messageLength = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE + 1;
+    int messageLength = Utils.DEFAULT_WINDOW_SIZE + 1;
     byte[] fakeMessage = new byte[messageLength];
     Buffer buffer = createMessageFrame(fakeMessage);
     int messageFrameLength = (int) buffer.size();
@@ -833,13 +833,13 @@ public class OkHttpClientTransportTest {
     stream.cancel(Status.CANCELLED);
 
     Buffer buffer = createMessageFrame(
-        new byte[OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1]);
+        new byte[Utils.DEFAULT_WINDOW_SIZE / 2 + 1]);
     frameHandler.data(false, 3, buffer, (int) buffer.size());
     // Should still update the connection window even stream 3 is gone.
     verify(frameWriter).windowUpdate(0,
-        HEADER_LENGTH + OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1);
+        HEADER_LENGTH + Utils.DEFAULT_WINDOW_SIZE / 2 + 1);
     buffer = createMessageFrame(
-        new byte[OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2 + 1]);
+        new byte[Utils.DEFAULT_WINDOW_SIZE / 2 + 1]);
 
     // This should kill the connection, since we never created stream 5.
     frameHandler.data(false, 5, buffer, (int) buffer.size());

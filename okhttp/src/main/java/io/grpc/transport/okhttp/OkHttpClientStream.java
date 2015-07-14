@@ -56,8 +56,7 @@ import javax.annotation.concurrent.GuardedBy;
  */
 class OkHttpClientStream extends Http2ClientStream {
 
-  private static int WINDOW_UPDATE_THRESHOLD =
-      OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE / 2;
+  private static int WINDOW_UPDATE_THRESHOLD = Utils.DEFAULT_WINDOW_SIZE / 2;
 
   private static final Buffer EMPTY_BUFFER = new Buffer();
 
@@ -75,9 +74,9 @@ class OkHttpClientStream extends Http2ClientStream {
   }
 
   @GuardedBy("lock")
-  private int window = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE;
+  private int window = Utils.DEFAULT_WINDOW_SIZE;
   @GuardedBy("lock")
-  private int processedWindow = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE;
+  private int processedWindow = Utils.DEFAULT_WINDOW_SIZE;
   private final AsyncFrameWriter frameWriter;
   private final OutboundFlowController outboundFlow;
   private final OkHttpClientTransport transport;
@@ -192,7 +191,7 @@ class OkHttpClientStream extends Http2ClientStream {
     synchronized (lock) {
       processedWindow -= processedBytes;
       if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
-        int delta = OkHttpClientTransport.DEFAULT_INITIAL_WINDOW_SIZE - processedWindow;
+        int delta = Utils.DEFAULT_WINDOW_SIZE - processedWindow;
         window += delta;
         processedWindow += delta;
         frameWriter.windowUpdate(id(), delta);

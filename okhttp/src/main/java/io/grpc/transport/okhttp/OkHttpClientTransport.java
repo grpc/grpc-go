@@ -89,10 +89,6 @@ import javax.net.ssl.SSLSocketFactory;
  * A okhttp-based {@link ClientTransport} implementation.
  */
 class OkHttpClientTransport implements ClientTransport {
-  /** The default initial window size in HTTP/2 is 64 KiB for the stream and connection. */
-  @VisibleForTesting
-  static final int DEFAULT_INITIAL_WINDOW_SIZE = 64 * 1024;
-
   private static final Map<ErrorCode, Status> ERROR_CODE_TO_STATUS;
   private static final Logger log = Logger.getLogger(OkHttpClientTransport.class.getName());
 
@@ -585,7 +581,7 @@ class OkHttpClientTransport implements ClientTransport {
 
       // connection window update
       connectionUnacknowledgedBytesRead += length;
-      if (connectionUnacknowledgedBytesRead >= DEFAULT_INITIAL_WINDOW_SIZE / 2) {
+      if (connectionUnacknowledgedBytesRead >= Utils.DEFAULT_WINDOW_SIZE / 2) {
         frameWriter.windowUpdate(0, connectionUnacknowledgedBytesRead);
         connectionUnacknowledgedBytesRead = 0;
       }
