@@ -122,8 +122,8 @@ static void PrintMethodFields(
           "    $MethodDescriptor$.create(\n"
           "        $MethodType$.$method_type$,\n"
           "        \"$Package$$service_name$\", \"$method_name$\",\n"
-          "        $ProtoUtils$.marshaller($input_type$.PARSER),\n"
-          "        $ProtoUtils$.marshaller($output_type$.PARSER));\n");
+          "        $ProtoUtils$.marshaller($input_type$.parser()),\n"
+          "        $ProtoUtils$.marshaller($output_type$.parser()));\n");
     }
   }
   p->Print("\n");
