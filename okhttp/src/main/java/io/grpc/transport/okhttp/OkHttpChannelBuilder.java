@@ -92,6 +92,7 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
   private String authorityHost;
   private SSLSocketFactory sslSocketFactory;
   private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
+  private NegotiationType negotiationType = NegotiationType.TLS;
 
   private OkHttpChannelBuilder(String host, int port) {
     this.host = Preconditions.checkNotNull(host);
@@ -122,10 +123,25 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
   }
 
   /**
-   * Provides a SSLSocketFactory to establish a secure connection.
+   * Sets the negotiation type for the HTTP/2 connection.
+   *
+   * <p>Default: <code>TLS</code>
+   */
+  public OkHttpChannelBuilder negotiationType(NegotiationType type) {
+    negotiationType = Preconditions.checkNotNull(type);
+    return this;
+  }
+
+  /**
+   * Provides a SSLSocketFactory to replace the default SSLSocketFactory used for TLS.
+   *
+   * <p>By default, when TLS is enabled, <code>SSLSocketFactory.getDefault()</code> will be used.
+   *
+   * <p>{@link NegotiationType#TLS} will be applied by calling this method.
    */
   public OkHttpChannelBuilder sslSocketFactory(SSLSocketFactory factory) {
     this.sslSocketFactory = factory;
+    negotiationType(NegotiationType.TLS);
     return this;
   }
 
@@ -144,8 +160,21 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
   protected ChannelEssentials buildEssentials() {
     final ExecutorService executor = (transportExecutor == null)
         ? SharedResourceHolder.get(DEFAULT_TRANSPORT_THREAD_POOL) : transportExecutor;
+    SSLSocketFactory socketFactory;
+    switch (negotiationType) {
+      case TLS:
+        socketFactory = sslSocketFactory == null
+            ? (SSLSocketFactory) SSLSocketFactory.getDefault() : sslSocketFactory;
+        break;
+      case PLAINTEXT:
+        socketFactory = null;
+        break;
+      default:
+        throw new RuntimeException("Unknown negotiation type: " + negotiationType);
+    }
+
     ClientTransportFactory transportFactory = new OkHttpClientTransportFactory(
-        host, port, authorityHost, executor, sslSocketFactory, connectionSpec);
+        host, port, authorityHost, executor, socketFactory, connectionSpec);
     Runnable terminationRunnable = null;
     // We shut down the executor only if we created it.
     if (transportExecutor == null) {
