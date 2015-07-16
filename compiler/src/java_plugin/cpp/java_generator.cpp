@@ -475,7 +475,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
               << "Future interface doesn't support streaming. "
               << "client_streaming=" << client_streaming << ", "
               << "server_streaming=" << server_streaming;
-          (*vars)["calls_method"] = "unaryFutureCall";
+          (*vars)["calls_method"] = "futureUnaryCall";
           p->Print(
               *vars,
               "return $calls_method$(\n"
@@ -658,7 +658,7 @@ void PrintImports(Printer* p, bool generate_nano) {
       "import static "
       "io.grpc.stub.ClientCalls.blockingServerStreamingCall;\n"
       "import static "
-      "io.grpc.stub.ClientCalls.unaryFutureCall;\n"
+      "io.grpc.stub.ClientCalls.futureUnaryCall;\n"
       "import static "
       "io.grpc.stub.ServerCalls.asyncUnaryCall;\n"
       "import static "

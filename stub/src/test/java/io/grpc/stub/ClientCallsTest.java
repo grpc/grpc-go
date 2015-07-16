@@ -67,7 +67,7 @@ public class ClientCallsTest {
 
   @Test public void unaryFutureCallSuccess() throws Exception {
     Integer req = 2;
-    ListenableFuture<String> future = ClientCalls.unaryFutureCall(call, req);
+    ListenableFuture<String> future = ClientCalls.futureUnaryCall(call, req);
     ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.Headers.class));
     ClientCall.Listener<String> listener = listenerCaptor.getValue();
@@ -80,7 +80,7 @@ public class ClientCallsTest {
 
   @Test public void unaryFutureCallFailed() throws Exception {
     Integer req = 2;
-    ListenableFuture<String> future = ClientCalls.unaryFutureCall(call, req);
+    ListenableFuture<String> future = ClientCalls.futureUnaryCall(call, req);
     ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.Headers.class));
     ClientCall.Listener<String> listener = listenerCaptor.getValue();
@@ -96,7 +96,7 @@ public class ClientCallsTest {
 
   @Test public void unaryFutureCallCancelled() throws Exception {
     Integer req = 2;
-    ListenableFuture<String> future = ClientCalls.unaryFutureCall(call, req);
+    ListenableFuture<String> future = ClientCalls.futureUnaryCall(call, req);
     ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.Headers.class));
     ClientCall.Listener<String> listener = listenerCaptor.getValue();

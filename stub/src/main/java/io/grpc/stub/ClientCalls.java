@@ -101,7 +101,7 @@ public class ClientCalls {
    */
   public static <ReqT, RespT> RespT blockingUnaryCall(ClientCall<ReqT, RespT> call, ReqT param) {
     try {
-      return getUnchecked(unaryFutureCall(call, param));
+      return getUnchecked(futureUnaryCall(call, param));
     } catch (Throwable t) {
       call.cancel();
       throw Throwables.propagate(t);
@@ -126,7 +126,7 @@ public class ClientCalls {
    *
    * @return a future for the single response message.
    */
-  public static <ReqT, RespT> ListenableFuture<RespT> unaryFutureCall(
+  public static <ReqT, RespT> ListenableFuture<RespT> futureUnaryCall(
       ClientCall<ReqT, RespT> call,
       ReqT param) {
     GrpcFuture<RespT> responseFuture = new GrpcFuture<RespT>(call);

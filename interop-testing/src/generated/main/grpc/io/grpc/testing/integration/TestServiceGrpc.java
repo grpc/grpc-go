@@ -6,7 +6,7 @@ import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncDuplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
-import static io.grpc.stub.ClientCalls.unaryFutureCall;
+import static io.grpc.stub.ClientCalls.futureUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
@@ -317,14 +317,14 @@ public class TestServiceGrpc {
     @java.lang.Override
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> emptyCall(
         com.google.protobuf.EmptyProtos.Empty request) {
-      return unaryFutureCall(
+      return futureUnaryCall(
           channel.newCall(config.emptyCall, callOptions), request);
     }
 
     @java.lang.Override
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.SimpleResponse> unaryCall(
         io.grpc.testing.integration.Messages.SimpleRequest request) {
-      return unaryFutureCall(
+      return futureUnaryCall(
           channel.newCall(config.unaryCall, callOptions), request);
     }
   }

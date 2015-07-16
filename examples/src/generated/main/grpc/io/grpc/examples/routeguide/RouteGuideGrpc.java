@@ -6,7 +6,7 @@ import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncDuplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
-import static io.grpc.stub.ClientCalls.unaryFutureCall;
+import static io.grpc.stub.ClientCalls.futureUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
@@ -256,7 +256,7 @@ public class RouteGuideGrpc {
     @java.lang.Override
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.examples.routeguide.Feature> getFeature(
         io.grpc.examples.routeguide.Point request) {
-      return unaryFutureCall(
+      return futureUnaryCall(
           channel.newCall(config.getFeature, callOptions), request);
     }
   }
