@@ -57,6 +57,71 @@ import javax.annotation.Nullable;
 public class ClientCalls {
 
   /**
+   * Executes a unary call with a response {@link StreamObserver}.
+   */
+  public static <ReqT, RespT> void asyncUnaryCall(
+      ClientCall<ReqT, RespT> call,
+      ReqT param,
+      StreamObserver<RespT> observer) {
+    asyncUnaryRequestCall(call, param, observer, false);
+  }
+
+  /**
+   * Executes a server-streaming call with a response {@link StreamObserver}.
+   */
+  public static <ReqT, RespT> void asyncServerStreamingCall(
+      ClientCall<ReqT, RespT> call,
+      ReqT param,
+      StreamObserver<RespT> responseObserver) {
+    asyncUnaryRequestCall(call, param, responseObserver, true);
+  }
+
+  /**
+   * Executes a client-streaming call returning a {@link StreamObserver} for the request messages.
+   * @return request stream observer.
+   */
+  public static <ReqT, RespT> StreamObserver<ReqT> asyncClientStreamingCall(
+      ClientCall<ReqT, RespT> call,
+      StreamObserver<RespT> responseObserver) {
+    return asyncStreamingRequestCall(call, responseObserver, false);
+  }
+
+  /**
+   * Executes a duplex-streaming call.
+   * @return request stream observer.
+   */
+  public static <ReqT, RespT> StreamObserver<ReqT> asyncDuplexStreamingCall(
+      ClientCall<ReqT, RespT> call, StreamObserver<RespT> responseObserver) {
+    return asyncStreamingRequestCall(call, responseObserver, true);
+  }
+
+  /**
+   * Executes a unary call and blocks on the response.
+   * @return the single response message.
+   */
+  public static <ReqT, RespT> RespT blockingUnaryCall(ClientCall<ReqT, RespT> call, ReqT param) {
+    try {
+      return getUnchecked(unaryFutureCall(call, param));
+    } catch (Throwable t) {
+      call.cancel();
+      throw Throwables.propagate(t);
+    }
+  }
+
+  /**
+   * Executes a server-streaming call returning a blocking {@link Iterator} over the
+   * response stream.
+   * @return an iterator over the response stream.
+   */
+  // TODO(louiscryan): Not clear if we want to use this idiom for 'simple' stubs.
+  public static <ReqT, RespT> Iterator<RespT> blockingServerStreamingCall(
+      ClientCall<ReqT, RespT> call, ReqT param) {
+    BlockingResponseStream<RespT> result = new BlockingResponseStream<RespT>(call);
+    asyncUnaryRequestCall(call, param, result.listener());
+    return result;
+  }
+
+  /**
    * Executes a unary call and returns a {@link ListenableFuture} to the response.
    *
    * @return a future for the single response message.
@@ -65,7 +130,7 @@ public class ClientCalls {
       ClientCall<ReqT, RespT> call,
       ReqT param) {
     GrpcFuture<RespT> responseFuture = new GrpcFuture<RespT>(call);
-    asyncServerStreamingCall(call, param, new UnaryStreamToFuture<RespT>(responseFuture));
+    asyncUnaryRequestCall(call, param, new UnaryStreamToFuture<RespT>(responseFuture));
     return responseFuture;
   }
 
@@ -90,54 +155,14 @@ public class ClientCalls {
     }
   }
 
-  /**
-   * Executes a unary call and blocks on the response.
-   * @return the single response message.
-   */
-  public static <ReqT, RespT> RespT blockingUnaryCall(ClientCall<ReqT, RespT> call, ReqT param) {
-    try {
-      return getUnchecked(unaryFutureCall(call, param));
-    } catch (Throwable t) {
-      call.cancel();
-      throw Throwables.propagate(t);
-    }
+  private static <ReqT, RespT> void asyncUnaryRequestCall(
+      ClientCall<ReqT, RespT> call, ReqT param, StreamObserver<RespT> responseObserver,
+      boolean streamingResponse) {
+    asyncUnaryRequestCall(call, param,
+        new StreamObserverToCallListenerAdapter<RespT>(call, responseObserver, streamingResponse));
   }
 
-  /**
-   * Executes a unary call with a response {@link StreamObserver}.
-   */
-  public static <ReqT, RespT> void asyncUnaryCall(
-      ClientCall<ReqT, RespT> call,
-      ReqT param,
-      StreamObserver<RespT> observer) {
-    asyncServerStreamingCall(call, param, observer);
-  }
-
-  /**
-   * Executes a server-streaming call returning a blocking {@link Iterator} over the
-   * response stream.
-   * @return an iterator over the response stream.
-   */
-  // TODO(louiscryan): Not clear if we want to use this idiom for 'simple' stubs.
-  public static <ReqT, RespT> Iterator<RespT> blockingServerStreamingCall(
-      ClientCall<ReqT, RespT> call, ReqT param) {
-    BlockingResponseStream<RespT> result = new BlockingResponseStream<RespT>(call);
-    asyncServerStreamingCall(call, param, result.listener());
-    return result;
-  }
-
-  /**
-   * Executes a server-streaming call with a response {@link StreamObserver}.
-   */
-  public static <ReqT, RespT> void asyncServerStreamingCall(
-      ClientCall<ReqT, RespT> call,
-      ReqT param,
-      StreamObserver<RespT> responseObserver) {
-    asyncServerStreamingCall(call, param,
-        new StreamObserverToCallListenerAdapter<RespT>(call, responseObserver));
-  }
-
-  private static <ReqT, RespT> void asyncServerStreamingCall(
+  private static <ReqT, RespT> void asyncUnaryRequestCall(
       ClientCall<ReqT, RespT> call,
       ReqT param,
       ClientCall.Listener<RespT> responseListener) {
@@ -152,50 +177,11 @@ public class ClientCalls {
     }
   }
 
-  /**
-   * Executes a client-streaming call with a blocking {@link Iterator} of request messages.
-   * @return the single response value.
-   */
-  public static <ReqT, RespT> RespT blockingClientStreamingCall(
-      ClientCall<ReqT, RespT> call,
-      Iterator<ReqT> clientStream) {
-    GrpcFuture<RespT> responseFuture = new GrpcFuture<RespT>(call);
-    call.start(new UnaryStreamToFuture<RespT>(responseFuture), new Metadata.Headers());
-    try {
-      while (clientStream.hasNext()) {
-        call.sendPayload(clientStream.next());
-      }
-      call.halfClose();
-    } catch (Throwable t) {
-      call.cancel();
-      throw Throwables.propagate(t);
-    }
-    try {
-      return getUnchecked(responseFuture);
-    } catch (Throwable t) {
-      call.cancel();
-      throw Throwables.propagate(t);
-    }
-  }
-
-  /**
-   * Executes a client-streaming call returning a {@link StreamObserver} for the request messages.
-   * @return request stream observer.
-   */
-  public static <ReqT, RespT> StreamObserver<ReqT> asyncClientStreamingCall(
-      ClientCall<ReqT, RespT> call,
-      StreamObserver<RespT> responseObserver) {
-    return duplexStreamingCall(call, responseObserver);
-  }
-
-  /**
-   * Executes a duplex-streaming call.
-   * @return request stream observer.
-   */
-  public static <ReqT, RespT> StreamObserver<ReqT> duplexStreamingCall(ClientCall<ReqT, RespT> call,
-      StreamObserver<RespT> responseObserver) {
-    call.start(new StreamObserverToCallListenerAdapter<RespT>(call, responseObserver),
-        new Metadata.Headers());
+  private static <ReqT, RespT> StreamObserver<ReqT> asyncStreamingRequestCall(
+      ClientCall<ReqT, RespT> call, StreamObserver<RespT> responseObserver,
+      boolean streamingResponse) {
+    call.start(new StreamObserverToCallListenerAdapter<RespT>(
+        call, responseObserver, streamingResponse), new Metadata.Headers());
     call.request(1);
     return new CallToStreamObserverAdapter<ReqT>(call);
   }
@@ -228,11 +214,13 @@ public class ClientCalls {
       extends ClientCall.Listener<RespT> {
     private final ClientCall<?, RespT> call;
     private final StreamObserver<RespT> observer;
+    private final boolean streamingResponse;
 
     public StreamObserverToCallListenerAdapter(
-        ClientCall<?, RespT> call, StreamObserver<RespT> observer) {
+        ClientCall<?, RespT> call, StreamObserver<RespT> observer, boolean streamingResponse) {
       this.call = call;
       this.observer = observer;
+      this.streamingResponse = streamingResponse;
     }
 
     @Override
@@ -243,8 +231,10 @@ public class ClientCalls {
     public void onPayload(RespT payload) {
       observer.onValue(payload);
 
-      // Request delivery of the next inbound message.
-      call.request(1);
+      if (streamingResponse) {
+        // Request delivery of the next inbound message.
+        call.request(1);
+      }
     }
 
     @Override

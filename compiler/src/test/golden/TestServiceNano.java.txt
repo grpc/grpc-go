@@ -3,7 +3,7 @@ package io.grpc.testing.integration;
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
-import static io.grpc.stub.ClientCalls.duplexStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncDuplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.unaryFutureCall;
@@ -272,14 +272,14 @@ public class TestServiceGrpc {
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> fullDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver) {
-      return duplexStreamingCall(
+      return asyncDuplexStreamingCall(
           channel.newCall(config.fullDuplexCall, callOptions), responseObserver);
     }
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> halfDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver) {
-      return duplexStreamingCall(
+      return asyncDuplexStreamingCall(
           channel.newCall(config.halfDuplexCall, callOptions), responseObserver);
     }
   }

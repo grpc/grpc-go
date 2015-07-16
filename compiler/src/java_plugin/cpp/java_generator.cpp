@@ -449,7 +449,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
         case ASYNC_CALL:
           if (server_streaming) {
             if (client_streaming) {
-              (*vars)["calls_method"] = "duplexStreamingCall";
+              (*vars)["calls_method"] = "asyncDuplexStreamingCall";
               (*vars)["params"] = "responseObserver";
             } else {
               (*vars)["calls_method"] = "asyncServerStreamingCall";
@@ -652,7 +652,7 @@ void PrintImports(Printer* p, bool generate_nano) {
       "import static "
       "io.grpc.stub.ClientCalls.asyncClientStreamingCall;\n"
       "import static "
-      "io.grpc.stub.ClientCalls.duplexStreamingCall;\n"
+      "io.grpc.stub.ClientCalls.asyncDuplexStreamingCall;\n"
       "import static "
       "io.grpc.stub.ClientCalls.blockingUnaryCall;\n"
       "import static "

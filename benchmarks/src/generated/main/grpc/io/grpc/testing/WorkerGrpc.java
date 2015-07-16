@@ -3,7 +3,7 @@ package io.grpc.testing;
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
-import static io.grpc.stub.ClientCalls.duplexStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncDuplexStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.unaryFutureCall;
@@ -127,14 +127,14 @@ public class WorkerGrpc {
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.testing.ClientArgs> runTest(
         io.grpc.stub.StreamObserver<io.grpc.testing.ClientStatus> responseObserver) {
-      return duplexStreamingCall(
+      return asyncDuplexStreamingCall(
           channel.newCall(config.runTest, callOptions), responseObserver);
     }
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.testing.ServerArgs> runServer(
         io.grpc.stub.StreamObserver<io.grpc.testing.ServerStatus> responseObserver) {
-      return duplexStreamingCall(
+      return asyncDuplexStreamingCall(
           channel.newCall(config.runServer, callOptions), responseObserver);
     }
   }

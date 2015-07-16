@@ -408,7 +408,8 @@ public abstract class AbstractBenchmark {
             channel.newCall(pingPongMethod, CALL_OPTIONS);
         final AtomicReference<StreamObserver<ByteBuf>> requestObserverRef =
             new AtomicReference<StreamObserver<ByteBuf>>();
-        StreamObserver<ByteBuf> requestObserver = ClientCalls.duplexStreamingCall(streamingCall,
+        StreamObserver<ByteBuf> requestObserver = ClientCalls.asyncDuplexStreamingCall(
+            streamingCall,
             new StreamObserver<ByteBuf>() {
               @Override
               public void onValue(ByteBuf value) {
@@ -452,7 +453,8 @@ public abstract class AbstractBenchmark {
             channel.newCall(flowControlledStreaming, CALL_OPTIONS);
         final AtomicReference<StreamObserver<ByteBuf>> requestObserverRef =
             new AtomicReference<StreamObserver<ByteBuf>>();
-        StreamObserver<ByteBuf> requestObserver = ClientCalls.duplexStreamingCall(streamingCall,
+        StreamObserver<ByteBuf> requestObserver = ClientCalls.asyncDuplexStreamingCall(
+            streamingCall,
             new StreamObserver<ByteBuf>() {
               @Override
               public void onValue(ByteBuf value) {
