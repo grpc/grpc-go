@@ -167,7 +167,9 @@ public class ClientCalls {
       ReqT param,
       ClientCall.Listener<RespT> responseListener) {
     call.start(responseListener, new Metadata.Headers());
-    call.request(1);
+    // Initially ask for two responses from flow-control so that if a misbehaving server sends more
+    // than one responses, we can catch it.
+    call.request(2);
     try {
       call.sendPayload(param);
       call.halfClose();
@@ -182,7 +184,9 @@ public class ClientCalls {
       boolean streamingResponse) {
     call.start(new StreamObserverToCallListenerAdapter<RespT>(
         call, responseObserver, streamingResponse), new Metadata.Headers());
-    call.request(1);
+    // Initially ask for two responses from flow-control so that if a misbehaving server sends more
+    // than one responses, we can catch it.
+    call.request(2);
     return new CallToStreamObserverAdapter<ReqT>(call);
   }
 
@@ -215,6 +219,7 @@ public class ClientCalls {
     private final ClientCall<?, RespT> call;
     private final StreamObserver<RespT> observer;
     private final boolean streamingResponse;
+    private boolean firstResponseReceived;
 
     public StreamObserverToCallListenerAdapter(
         ClientCall<?, RespT> call, StreamObserver<RespT> observer, boolean streamingResponse) {
@@ -229,6 +234,12 @@ public class ClientCalls {
 
     @Override
     public void onPayload(RespT payload) {
+      if (firstResponseReceived && !streamingResponse) {
+        throw Status.INTERNAL
+            .withDescription("More than one responses received for unary or client-streaming call")
+            .asRuntimeException();
+      }
+      firstResponseReceived = true;
       observer.onValue(payload);
 
       if (streamingResponse) {
