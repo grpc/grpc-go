@@ -52,11 +52,26 @@ public class ProtoUtils {
     return new Marshaller<T>() {
       @Override
       public InputStream stream(T value) {
-        return new ProtoInputStream(value);
+        return new ProtoInputStream(value, parser);
       }
 
       @Override
       public T parse(InputStream stream) {
+        if (stream instanceof ProtoInputStream) {
+          ProtoInputStream protoStream = (ProtoInputStream) stream;
+          // Optimization for in-memory transport. Returning provided object is safe since protobufs
+          // are immutable.
+          //
+          // However, we can't assume the types match, so we have to verify the parser matches.
+          // Today the parser is always the same for a given proto, but that isn't guaranteed. Even
+          // if not, using the same MethodDescriptor would ensure the parser matches and permit us
+          // to enable this optimization.
+          if (protoStream.parser() == parser) {
+            @SuppressWarnings("unchecked")
+            T message = (T) ((ProtoInputStream) stream).message();
+            return message;
+          }
+        }
         try {
           return parser.parseFrom(stream);
         } catch (InvalidProtocolBufferException ipbe) {

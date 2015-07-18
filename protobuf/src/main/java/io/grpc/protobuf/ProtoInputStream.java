@@ -34,6 +34,7 @@ package io.grpc.protobuf;
 import com.google.common.io.ByteStreams;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.MessageLite;
+import com.google.protobuf.Parser;
 
 import io.grpc.Drainable;
 import io.grpc.KnownLength;
@@ -48,16 +49,18 @@ import javax.annotation.Nullable;
 /**
  * An {@link InputStream} backed by a protobuf.
  */
-public class ProtoInputStream extends InputStream implements Drainable, KnownLength {
+class ProtoInputStream extends InputStream implements Drainable, KnownLength {
 
   // ProtoInputStream is first initialized with a *message*. *partial* is initially null.
   // Once there has been a read operation on this stream, *message* is serialized to *partial* and
   // set to null.
   @Nullable private MessageLite message;
+  private final Parser<?> parser;
   @Nullable private ByteArrayInputStream partial;
 
-  public ProtoInputStream(MessageLite message) {
+  public ProtoInputStream(MessageLite message, Parser<?> parser) {
     this.message = message;
+    this.parser = parser;
   }
 
   @Override
@@ -124,5 +127,16 @@ public class ProtoInputStream extends InputStream implements Drainable, KnownLen
       return partial.available();
     }
     return 0;
+  }
+
+  MessageLite message() {
+    if (message == null) {
+      throw new IllegalStateException("message not available");
+    }
+    return message;
+  }
+
+  Parser<?> parser() {
+    return parser;
   }
 }
