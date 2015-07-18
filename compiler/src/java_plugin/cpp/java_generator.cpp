@@ -62,6 +62,7 @@ static inline string MessageFullJavaName(const Descriptor* desc) {
 static void PrintMethodFields(
     const ServiceDescriptor* service, map<string, string>* vars, Printer* p,
     bool generate_nano) {
+  p->Print("// Static method descriptors that strictly reflect the proto.\n");
   (*vars)["service_name"] = service->name();
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
@@ -84,8 +85,6 @@ static void PrintMethodFields(
         (*vars)["method_type"] = "UNARY";
       }
     }
-
-    p->Print("// Static method descriptors that strictly reflect the proto.\n");
 
     if (generate_nano) {
       // TODO(zsurocking): we're creating two Parsers for each method right now.
@@ -127,105 +126,6 @@ static void PrintMethodFields(
     }
   }
   p->Print("\n");
-}
-
-static void PrintServiceDescriptor(
-    const ServiceDescriptor* service, map<string, string>* vars, Printer* p) {
-  (*vars)["service_name"] = service->name();
-  p->Print(
-      *vars,
-      "@$Immutable$\n");
-  p->Print(
-      *vars,
-      "public static class $service_name$ServiceDescriptor extends\n"
-      "    $AbstractServiceDescriptor$<$service_name$ServiceDescriptor> {\n");
-  p->Indent();
-
-  // Service descriptor fields
-  for (int i = 0; i < service->method_count(); ++i) {
-    const MethodDescriptor* method = service->method(i);
-    (*vars)["input_type"] = MessageFullJavaName(method->input_type());
-    (*vars)["output_type"] = MessageFullJavaName(method->output_type());
-    (*vars)["lower_method_name"] = LowerMethodName(method);
-    p->Print(
-        *vars,
-        "public final $MethodDescriptor$<$input_type$,\n"
-        "    $output_type$> $lower_method_name$;\n");
-  }
-
-  // The default constructor
-  p->Print(
-      *vars,
-      "\nprivate $service_name$ServiceDescriptor() {\n");
-  p->Indent();
-  for (int i = 0; i < service->method_count(); ++i) {
-    const MethodDescriptor* method = service->method(i);
-    (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
-    (*vars)["lower_method_name"] = LowerMethodName(method);
-    p->Print(*vars,
-             "$lower_method_name$ = $method_field_name$;\n");
-  }
-  p->Outdent();
-  p->Print("}\n");
-
-  // The reconfiguring constructor
-  p->Print(
-      *vars,
-      "\n@SuppressWarnings(\"unchecked\")\n"
-      "private $service_name$ServiceDescriptor(\n"
-      "    $Map$<$String$, $MethodDescriptor$<?, ?>> methodMap) {\n");
-  p->Indent();
-  for (int i = 0; i < service->method_count(); ++i) {
-    const MethodDescriptor* method = service->method(i);
-    (*vars)["input_type"] = MessageFullJavaName(method->input_type());
-    (*vars)["output_type"] = MessageFullJavaName(method->output_type());
-    (*vars)["lower_method_name"] = LowerMethodName(method);
-    (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
-    p->Print(
-        *vars,
-        "$lower_method_name$ = ($MethodDescriptor$<$input_type$,\n"
-        "    $output_type$>) methodMap.get(\n"
-        "    CONFIG.$lower_method_name$.getFullMethodName());\n");
-  }
-  p->Outdent();
-  p->Print("}\n\n");
-
-  p->Print(
-      *vars,
-      "@$Override$\nprotected $service_name$ServiceDescriptor build(\n"
-      "    $Map$<$String$, $MethodDescriptor$<?, ?>> methodMap) {\n");
-  p->Indent();
-  p->Print(
-      *vars,
-      "return new $service_name$ServiceDescriptor(methodMap);\n");
-  p->Outdent();
-  p->Print("}\n\n");
-
-  p->Print(
-      *vars,
-      "@$Override$\n"
-      "public $Collection$<$MethodDescriptor$<?, ?>> methods() {\n");
-  p->Indent();
-  p->Print(
-      *vars,
-      "return $ImmutableList$.<$MethodDescriptor$<?, ?>>of(\n");
-  p->Indent();
-  p->Indent();
-  for (int i = 0; i < service->method_count(); ++i) {
-    p->Print(MixedLower(service->method(i)->name()).c_str());
-    if (i < service->method_count() - 1) {
-      p->Print(",\n");
-    } else {
-      p->Print(");\n");
-    }
-  }
-  p->Outdent();
-  p->Outdent();
-  p->Outdent();
-  p->Print("}\n");
-
-  p->Outdent();
-  p->Print("}\n\n");
 }
 
 enum StubType {
@@ -314,8 +214,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
   } else {
     p->Print(
         *vars,
-        "public static class $impl_name$ extends\n"
-        "    $AbstractStub$<$impl_name$, $service_name$ServiceDescriptor>\n"
+        "public static class $impl_name$ extends $AbstractStub$<$impl_name$>\n"
         "    implements $interface_name$ {\n");
   }
   p->Indent();
@@ -324,31 +223,28 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
   if (impl) {
     p->Print(
         *vars,
-        "private $impl_name$($Channel$ channel,\n"
-        "    $service_name$ServiceDescriptor config) {\n");
+        "private $impl_name$($Channel$ channel) {\n");
     p->Indent();
-    p->Print("super(channel, config);\n");
+    p->Print("super(channel);\n");
     p->Outdent();
     p->Print("}\n\n");
     p->Print(
         *vars,
         "private $impl_name$($Channel$ channel,\n"
-        "    $service_name$ServiceDescriptor config,\n"
         "    $CallOptions$ callOptions) {\n");
     p->Indent();
-    p->Print("super(channel, config, callOptions);\n");
+    p->Print("super(channel, callOptions);\n");
     p->Outdent();
     p->Print("}\n\n");
     p->Print(
         *vars,
         "@$Override$\n"
         "protected $impl_name$ build($Channel$ channel,\n"
-        "    $service_name$ServiceDescriptor config,\n"
         "    $CallOptions$ callOptions) {\n");
     p->Indent();
     p->Print(
         *vars,
-        "return new $impl_name$(channel, config, callOptions);\n");
+        "return new $impl_name$(channel, callOptions);\n");
     p->Outdent();
     p->Print("}\n");
   }
@@ -359,6 +255,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
     (*vars)["input_type"] = MessageFullJavaName(method->input_type());
     (*vars)["output_type"] = MessageFullJavaName(method->output_type());
     (*vars)["lower_method_name"] = LowerMethodName(method);
+    (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
     bool client_streaming = method->client_streaming();
     bool server_streaming = method->server_streaming();
 
@@ -444,7 +341,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
           p->Print(
               *vars,
               "return $calls_method$(\n"
-              "    channel.newCall(config.$lower_method_name$, callOptions), $params$);\n");
+              "    channel.newCall($method_field_name$, callOptions), $params$);\n");
           break;
         case ASYNC_CALL:
           if (server_streaming) {
@@ -468,7 +365,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
           p->Print(
               *vars,
               "$last_line_prefix$$calls_method$(\n"
-              "    channel.newCall(config.$lower_method_name$, callOptions), $params$);\n");
+              "    channel.newCall($method_field_name$, callOptions), $params$);\n");
           break;
         case FUTURE_CALL:
           CHECK(!client_streaming && !server_streaming)
@@ -479,7 +376,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
           p->Print(
               *vars,
               "return $calls_method$(\n"
-              "    channel.newCall(config.$lower_method_name$, callOptions), request);\n");
+              "    channel.newCall($method_field_name$, callOptions), request);\n");
           break;
       }
       p->Outdent();
@@ -602,7 +499,7 @@ static void PrintService(const ServiceDescriptor* service,
   p->Indent();
   p->Print(
       *vars,
-      "return new $service_name$Stub(channel, CONFIG);\n");
+      "return new $service_name$Stub(channel);\n");
   p->Outdent();
   p->Print("}\n\n");
   p->Print(
@@ -612,7 +509,7 @@ static void PrintService(const ServiceDescriptor* service,
   p->Indent();
   p->Print(
       *vars,
-      "return new $service_name$BlockingStub(channel, CONFIG);\n");
+      "return new $service_name$BlockingStub(channel);\n");
   p->Outdent();
   p->Print("}\n\n");
   p->Print(
@@ -622,16 +519,10 @@ static void PrintService(const ServiceDescriptor* service,
   p->Indent();
   p->Print(
       *vars,
-      "return new $service_name$FutureStub(channel, CONFIG);\n");
+      "return new $service_name$FutureStub(channel);\n");
   p->Outdent();
   p->Print("}\n\n");
 
-  p->Print("// The default service descriptor\n");
-  p->Print(
-      *vars,
-      "private static final $service_name$ServiceDescriptor CONFIG =\n"
-      "    new $service_name$ServiceDescriptor();\n\n");
-  PrintServiceDescriptor(service, vars, p);
   PrintStub(service, vars, p, ASYNC_INTERFACE);
   PrintStub(service, vars, p, BLOCKING_CLIENT_INTERFACE);
   PrintStub(service, vars, p, FUTURE_CLIENT_INTERFACE);
@@ -688,8 +579,6 @@ void GenerateService(const ServiceDescriptor* service,
   vars["ServerServiceDefinition"] =
       "io.grpc.ServerServiceDefinition";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";
-  vars["AbstractServiceDescriptor"] =
-      "io.grpc.stub.AbstractServiceDescriptor";
   vars["ImmutableList"] = "com.google.common.collect.ImmutableList";
   vars["Collection"] = "java.util.Collection";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";

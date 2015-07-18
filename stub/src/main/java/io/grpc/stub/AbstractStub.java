@@ -49,39 +49,29 @@ import javax.annotation.Nullable;
  * reconfiguration, e.g., attaching interceptors to the stub.
  *
  * @param <S> the concrete type of this stub.
- * @param <C> the service descriptor type
  */
-public abstract class AbstractStub<S extends AbstractStub<?, ?>,
-    C extends AbstractServiceDescriptor<C>> {
+public abstract class AbstractStub<S extends AbstractStub<?>> {
   protected final Channel channel;
-  protected final C config;
   protected final CallOptions callOptions;
 
   /**
    * Constructor for use by subclasses, with the default {@code CallOptions}.
    *
    * @param channel the channel that this stub will use to do communications
-   * @param config defines the RPC methods of the stub
    */
-  protected AbstractStub(Channel channel, C config) {
-    this(channel, config, CallOptions.DEFAULT);
+  protected AbstractStub(Channel channel) {
+    this(channel, CallOptions.DEFAULT);
   }
 
   /**
    * Constructor for use by subclasses, with the default {@code CallOptions}.
    *
    * @param channel the channel that this stub will use to do communications
-   * @param config defines the RPC methods of the stub
    * @param callOptions the runtime call options to be applied to every call on this stub
    */
-  protected AbstractStub(Channel channel, C config, CallOptions callOptions) {
+  protected AbstractStub(Channel channel, CallOptions callOptions) {
     this.channel = channel;
-    this.config = config;
     this.callOptions = callOptions;
-  }
-
-  protected C getServiceDescriptor() {
-    return config;
   }
 
   /**
@@ -109,10 +99,9 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
    * Returns a new stub with the given channel for the provided method configurations.
    *
    * @param channel the channel that this stub will use to do communications
-   * @param config defines the RPC methods of the stub
    * @param callOptions the runtime call options to be applied to every call on this stub
    */
-  protected abstract S build(Channel channel, C config, CallOptions callOptions);
+  protected abstract S build(Channel channel, CallOptions callOptions);
 
   /**
    * Utility class for (re) configuring the operations in a stub.
@@ -170,8 +159,8 @@ public abstract class AbstractStub<S extends AbstractStub<?, ?>,
      * Create a new stub with the configurations made on this builder.
      */
     public S build() {
-      return AbstractStub.this.build(ClientInterceptors.intercept(stubChannel, interceptors),
-          config, callOptions);
+      return AbstractStub.this.build(
+          ClientInterceptors.intercept(stubChannel, interceptors), callOptions);
     }
   }
 }
