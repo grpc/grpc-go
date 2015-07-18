@@ -131,8 +131,8 @@ public final class ServerImpl extends Server {
     if (shutdown) {
       return this;
     }
-    transportServer.shutdown();
     shutdown = true;
+    transportServer.shutdown();
     timeoutService.shutdown();
     return this;
   }
