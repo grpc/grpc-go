@@ -119,7 +119,8 @@ public abstract class ServerCall<ResponseT> {
    * or {@code #close}.
    *
    * @param headers metadata to send prior to any response body.
-   * @throws IllegalStateException if {@code close} has been called or a payload has been sent.
+   * @throws IllegalStateException if {@code close} has been called, a payload has been sent, or
+   *     headers have already been sent
    */
   public abstract void sendHeaders(Metadata.Headers headers);
 

@@ -313,6 +313,8 @@ public final class ChannelImpl extends Channel {
     private final CallOptions callOptions;
     private ClientStream stream;
     private volatile ScheduledFuture<?> deadlineCancellationFuture;
+    private boolean cancelCalled;
+    private boolean halfCloseCalled;
 
     private CallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor,
         CallOptions callOptions) {
@@ -381,6 +383,7 @@ public final class ChannelImpl extends Channel {
 
     @Override
     public void cancel() {
+      cancelCalled = true;
       // Cancel is called in exception handling cases, so it may be the case that the
       // stream was never successfully created.
       if (stream != null) {
@@ -391,12 +394,17 @@ public final class ChannelImpl extends Channel {
     @Override
     public void halfClose() {
       Preconditions.checkState(stream != null, "Not started");
+      Preconditions.checkState(!cancelCalled, "call was cancelled");
+      Preconditions.checkState(!halfCloseCalled, "call already half-closed");
+      halfCloseCalled = true;
       stream.halfClose();
     }
 
     @Override
     public void sendPayload(ReqT payload) {
       Preconditions.checkState(stream != null, "Not started");
+      Preconditions.checkState(!cancelCalled, "call was cancelled");
+      Preconditions.checkState(!halfCloseCalled, "call was half-closed");
       boolean failed = true;
       try {
         InputStream payloadIs = method.streamRequest(payload);
