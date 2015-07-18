@@ -172,7 +172,7 @@ public class AsyncServer {
         .build();
   }
 
-  private static class TestServiceImpl implements TestServiceGrpc.TestService {
+  public static class TestServiceImpl implements TestServiceGrpc.TestService {
 
     @Override
     public void unaryCall(SimpleRequest request, StreamObserver<SimpleResponse> responseObserver) {
