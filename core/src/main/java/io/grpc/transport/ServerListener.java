@@ -32,8 +32,8 @@
 package io.grpc.transport;
 
 /**
- * A listener to a server for transport creation events. Notifications must occur from the transport
- * thread.
+ * A listener to a server for transport creation events. The listener need not be thread-safe, so
+ * notifications must be properly synchronized externally.
  */
 public interface ServerListener {
 
@@ -46,7 +46,7 @@ public interface ServerListener {
   ServerTransportListener transportCreated(ServerTransport transport);
 
   /**
-   * The server is shutting down. No new transports will be processed, but existing streams may
+   * The server is shutting down. No new transports will be processed, but existing transports may
    * continue. Shutdown is only caused by a call to {@link Server#shutdown()}. All resources have
    * been released.
    */

@@ -36,7 +36,7 @@ import java.io.InputStream;
 /**
  * A single stream of communication between two end-points within a transport.
  *
- * <p>An implementation doesn't need to be thread-safe.
+ * <p>An implementation doesn't need to be thread-safe. All methods are expected to execute quickly.
  */
 public interface Stream {
   /**

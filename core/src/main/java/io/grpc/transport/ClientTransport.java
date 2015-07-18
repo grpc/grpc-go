@@ -36,10 +36,17 @@ import io.grpc.MethodDescriptor;
 
 import java.util.concurrent.Executor;
 
+import javax.annotation.concurrent.ThreadSafe;
+
 /**
  * The client-side transport encapsulating a single connection to a remote server. Allows creation
- * of new {@link Stream} instances for communication with the server.
+ * of new {@link Stream} instances for communication with the server. All methods on the transport
+ * and its listener are expected to execute quickly.
+ *
+ * <p>{@link #start} must be the first method call to this interface and return before calling other
+ * methods.
  */
+@ThreadSafe
 public interface ClientTransport {
 
   /**
@@ -63,8 +70,11 @@ public interface ClientTransport {
                          ClientStreamListener listener);
 
   /**
-   * Starts transport. Implementations must not call {@code listener} until after {@link #start}
-   * returns.
+   * Starts transport. This method may only be called once.
+   *
+   * <p>Implementations must not call {@code listener} from within {@link #start}. This method
+   * should not throw any exceptions. If there is an error, implementations are expected to notify
+   * listener on a separate thread.
    *
    * @param listener non-{@code null} listener of transport events
    */
@@ -81,12 +91,14 @@ public interface ClientTransport {
 
   /**
    * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
-   * fail (once {@link Listener#transportShutdown} callback called).
+   * fail (once {@link Listener#transportShutdown} callback called). This method may only be called
+   * once.
    */
   void shutdown();
 
   /**
-   * Receives notifications for the transport life-cycle events.
+   * Receives notifications for the transport life-cycle events. Implementation does not need to be
+   * thread-safe, so notifications must be properly sychronized externally.
    */
   interface Listener {
     /**
@@ -102,7 +114,8 @@ public interface ClientTransport {
   }
 
   /**
-   * A callback that is invoked when the acknowledgement to a {@link #ping} is received.
+   * A callback that is invoked when the acknowledgement to a {@link #ping} is received. Exactly one
+   * of the two methods should be called per {@link #ping}.
    */
   interface PingCallback {
 

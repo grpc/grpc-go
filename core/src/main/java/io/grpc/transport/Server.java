@@ -33,10 +33,13 @@ package io.grpc.transport;
 
 import java.io.IOException;
 
+import javax.annotation.concurrent.ThreadSafe;
+
 /**
- * A server accepts new incomming connections. This is would commonly encapsulate a bound socket
- * that {@code accept(}}s new connections.
+ * An object that accepts new incoming connections. This would commonly encapsulate a bound socket
+ * that {@code accept()}s new connections.
  */
+@ThreadSafe
 public interface Server {
   /**
    * Starts transport. Implementations must not call {@code listener} until after {@code start()}
@@ -50,7 +53,8 @@ public interface Server {
 
   /**
    * Initiates an orderly shutdown of the server. Existing transports continue, but new transports
-   * will not be created (once {@link ServerListener#serverShutdown()} callback called).
+   * will not be created (once {@link ServerListener#serverShutdown()} callback is called). This
+   * method may only be called once.
    */
   void shutdown();
 }

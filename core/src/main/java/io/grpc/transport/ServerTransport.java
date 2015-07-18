@@ -36,7 +36,7 @@ public interface ServerTransport {
   /**
    * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
    * eventually begin failing. New streams "eventually" begin failing because shutdown may need to
-   * be processed on a separate thread.
+   * be processed on a separate thread. May only be called once.
    */
   void shutdown();
 }

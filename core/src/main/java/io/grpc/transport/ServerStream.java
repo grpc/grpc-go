@@ -36,6 +36,8 @@ import io.grpc.Status;
 
 /**
  * Extension of {@link Stream} to support server-side termination semantics.
+ *
+ * <p>An implementation doesn't need to be thread-safe. All methods are expected to execute quickly.
  */
 public interface ServerStream extends Stream {
 
@@ -60,7 +62,8 @@ public interface ServerStream extends Stream {
 
 
   /**
-   * Tears down the stream, typically in the event of a timeout.
+   * Tears down the stream, typically in the event of a timeout. This method may be called multiple
+   * times and from any thread.
    */
   public void cancel(Status status);
 }

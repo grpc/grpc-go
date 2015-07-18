@@ -115,8 +115,7 @@ public abstract class ServerCall<ResponseT> {
 
   /**
    * Send response header metadata prior to sending a response payload. This method may
-   * only be called once and cannot be called after calls to {@code Stream#sendPayload}
-   * or {@code #close}.
+   * only be called once and cannot be called after calls to {@link #sendPayload} or {@link #close}.
    *
    * @param headers metadata to send prior to any response body.
    * @throws IllegalStateException if {@code close} has been called, a payload has been sent, or

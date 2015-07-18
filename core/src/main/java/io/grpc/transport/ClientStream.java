@@ -35,6 +35,8 @@ import io.grpc.Status;
 
 /**
  * Extension of {@link Stream} to support client-side termination semantics.
+ *
+ * <p>An implementation doesn't need to be thread-safe. All methods are expected to execute quickly.
  */
 public interface ClientStream extends Stream {
 
@@ -51,7 +53,7 @@ public interface ClientStream extends Stream {
   /**
    * Closes the local side of this stream and flushes any remaining messages. After this is called,
    * no further messages may be sent on this stream, but additional messages may be received until
-   * the remote end-point is closed.
+   * the remote end-point is closed. This method may only be called once.
    */
   void halfClose();
 }
