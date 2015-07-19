@@ -102,7 +102,6 @@ public abstract class Metadata {
   // Use LinkedHashMap for consistent ordering for tests.
   private final Map<String, List<MetadataEntry>> store =
       new LinkedHashMap<String, List<MetadataEntry>>();
-  private final boolean serializable;
 
   /**
    * Constructor called by the transport layer when it receives binary metadata.
@@ -113,15 +112,12 @@ public abstract class Metadata {
       String name = new String(binaryValues[i], US_ASCII);
       storeAdd(name, new MetadataEntry(name.endsWith(BINARY_HEADER_SUFFIX), binaryValues[++i]));
     }
-    this.serializable = false;
   }
 
   /**
    * Constructor called by the application layer when it wants to send metadata.
    */
-  private Metadata() {
-    this.serializable = true;
-  }
+  private Metadata() {}
 
   private void storeAdd(String name, MetadataEntry value) {
     List<MetadataEntry> values = store.get(name);
@@ -226,15 +222,6 @@ public abstract class Metadata {
   }
 
   /**
-   * Can this metadata be serialized. Metadata constructed from raw binary or ascii values
-   * cannot be serialized without merging it into a serializable instance using
-   * {@link #merge(Metadata, java.util.Set)}
-   */
-  public boolean isSerializable() {
-    return serializable;
-  }
-
-  /**
    * Serialize all the metadata entries.
    *
    * <p>It produces serialized names and values interleaved. result[i*2] are names, while
@@ -248,13 +235,18 @@ public abstract class Metadata {
    * <p>This method is intended for transport use only.
    */
   public byte[][] serialize() {
-    Preconditions.checkState(serializable, "Can't serialize raw metadata");
     // One *2 for keys+values, one *2 to prevent resizing if a single key has multiple values
     List<byte[]> serialized = new ArrayList<byte[]>(store.size() * 2 * 2);
-    for (List<MetadataEntry> values : store.values()) {
-      for (int i = 0; i < values.size(); i++) {
-        MetadataEntry entry = values.get(i);
-        serialized.add(entry.key.asciiName());
+    for (Map.Entry<String, List<MetadataEntry>> keyEntry : store.entrySet()) {
+      for (int i = 0; i < keyEntry.getValue().size(); i++) {
+        MetadataEntry entry = keyEntry.getValue().get(i);
+        byte[] asciiName;
+        if (entry.key != null) {
+          asciiName = entry.key.asciiName();
+        } else {
+          asciiName = keyEntry.getKey().getBytes(US_ASCII);
+        }
+        serialized.add(asciiName);
         serialized.add(entry.getSerialized());
       }
     }
@@ -263,24 +255,14 @@ public abstract class Metadata {
 
   /**
    * Perform a simple merge of two sets of metadata.
-   * <p>
-   * Note that we can't merge non-serializable metadata into serializable.
-   * </p>
    */
   public void merge(Metadata other) {
     Preconditions.checkNotNull(other);
-    if (this.serializable) {
-      if (!other.serializable) {
-        throw new IllegalArgumentException(
-            "Cannot merge non-serializable metadata into serializable metadata without keys");
-      }
-    }
-    for (List<MetadataEntry> values : other.store.values()) {
-      for (int i = 0; i < values.size(); i++) {
-        MetadataEntry entry = values.get(i);
+    for (Map.Entry<String, List<MetadataEntry>> keyEntry : other.store.entrySet()) {
+      for (int i = 0; i < keyEntry.getValue().size(); i++) {
         // Must copy the MetadataEntries since they are mutated. If the two Metadata objects are
         // used from different threads it would cause thread-safety issues.
-        storeAdd(entry.key.name(), new MetadataEntry(entry));
+        storeAdd(keyEntry.getKey(), new MetadataEntry(keyEntry.getValue().get(i)));
       }
     }
   }
@@ -288,15 +270,17 @@ public abstract class Metadata {
   /**
    * Merge values for the given set of keys into this set of metadata.
    */
-  @SuppressWarnings({"rawtypes", "unchecked"})
   public void merge(Metadata other, Set<Key<?>> keys) {
     Preconditions.checkNotNull(other);
     for (Key<?> key : keys) {
-      if (other.containsKey(key)) {
-        Iterable<?> values = other.getAll(key);
-        for (Object value : values) {
-          put((Key) key, value);
-        }
+      List<MetadataEntry> values = other.store.get(key.name);
+      if (values == null) {
+        continue;
+      }
+      for (int i = 0; i < values.size(); i++) {
+        // Must copy the MetadataEntries since they are mutated. If the two Metadata objects are
+        // used from different threads it would cause thread-safety issues.
+        storeAdd(key.name, new MetadataEntry(values.get(i)));
       }
     }
   }

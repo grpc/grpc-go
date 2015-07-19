@@ -134,17 +134,24 @@ public class MetadataTest {
     assertSame(lance, raw.get(KEY));
   }
 
-  @Test(expected = IllegalStateException.class)
-  public void testFailSerializeRaw() {
+  @Test
+  public void testSerializeRaw() {
     Metadata.Headers raw = new Metadata.Headers(KEY.asciiName(), LANCE_BYTES);
-    raw.serialize();
+    byte[][] serialized = raw.serialize();
+    assertArrayEquals(serialized[0], KEY.asciiName());
+    assertArrayEquals(serialized[1], LANCE_BYTES);
   }
 
-  @Test(expected = IllegalArgumentException.class)
-  public void testFailMergeRawIntoSerializable() {
+  @Test
+  public void testMergeByteConstructed() {
     Metadata.Headers raw = new Metadata.Headers(KEY.asciiName(), LANCE_BYTES);
     Metadata.Headers serializable = new Metadata.Headers();
     serializable.merge(raw);
+
+    byte[][] serialized = serializable.serialize();
+    assertArrayEquals(serialized[0], KEY.asciiName());
+    assertArrayEquals(serialized[1], LANCE_BYTES);
+    assertEquals(new Fish(LANCE), serializable.get(KEY));
   }
 
   @Test
