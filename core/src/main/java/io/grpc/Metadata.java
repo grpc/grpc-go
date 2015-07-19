@@ -36,13 +36,13 @@ import static com.google.common.base.Charsets.US_ASCII;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.LinkedListMultimap;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Lists;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -98,7 +98,10 @@ public abstract class Metadata {
     }
   };
 
-  private final ListMultimap<String, MetadataEntry> store;
+  /** All value lists can be added to. No value list may be empty. */
+  // Use LinkedHashMap for consistent ordering for tests.
+  private final Map<String, List<MetadataEntry>> store =
+      new LinkedHashMap<String, List<MetadataEntry>>();
   private final boolean serializable;
 
   /**
@@ -106,10 +109,9 @@ public abstract class Metadata {
    */
   // TODO(louiscryan): Convert to use ByteString so we can cache transformations
   private Metadata(byte[]... binaryValues) {
-    store = LinkedListMultimap.create();
     for (int i = 0; i < binaryValues.length; i++) {
       String name = new String(binaryValues[i], US_ASCII);
-      store.put(name, new MetadataEntry(name.endsWith(BINARY_HEADER_SUFFIX), binaryValues[++i]));
+      storeAdd(name, new MetadataEntry(name.endsWith(BINARY_HEADER_SUFFIX), binaryValues[++i]));
     }
     this.serializable = false;
   }
@@ -118,8 +120,16 @@ public abstract class Metadata {
    * Constructor called by the application layer when it wants to send metadata.
    */
   private Metadata() {
-    store = LinkedListMultimap.create();
     this.serializable = true;
+  }
+
+  private void storeAdd(String name, MetadataEntry value) {
+    List<MetadataEntry> values = store.get(name);
+    if (values == null) {
+      values = new ArrayList<MetadataEntry>();
+      store.put(name, values);
+    }
+    values.add(value);
   }
 
   /**
@@ -134,16 +144,18 @@ public abstract class Metadata {
    * @return the parsed metadata entry or null if there are none.
    */
   public <T> T get(Key<T> key) {
-    if (containsKey(key)) {
-      MetadataEntry metadataEntry = Iterables.getLast(store.get(key.name()));
-      return metadataEntry.getParsed(key);
+    List<MetadataEntry> values = store.get(key.name());
+    if (values == null) {
+      return null;
     }
-    return null;
+    MetadataEntry metadataEntry = values.get(values.size() - 1);
+    return metadataEntry.getParsed(key);
   }
 
   /**
    * Returns all the metadata entries named 'name', in the order they were received,
-   * parsed as T or null if there are none.
+   * parsed as T or null if there are none. The iterator is not guaranteed to be "live." It may or
+   * may not be accurate if Metadata is mutated.
    */
   public <T> Iterable<T> getAll(final Key<T> key) {
     if (containsKey(key)) {
@@ -159,22 +171,53 @@ public abstract class Metadata {
     return null;
   }
 
+  /**
+   * Adds the {@code key, value} pair. If {@code key} already has values, {@code value} is added to
+   * the end. Duplicate values for the same key are permitted.
+   *
+   * @throws NullPointerException if key or value is null
+   */
   public <T> void put(Key<T> key, T value) {
-    store.put(key.name(), new MetadataEntry(key, value));
+    Preconditions.checkNotNull(key, "key");
+    Preconditions.checkNotNull(value, "value");
+    storeAdd(key.name(), new MetadataEntry(key, value));
   }
 
   /**
-   * Remove a specific value.
+   * Removes the first occurence of value for key.
+   *
+   * @param key key for value
+   * @param value value
+   * @return {@code true} if {@code value} removed; {@code false} if {@code value} was not present
+   * @throws NullPointerException if {@code key} or {@code value} is null
    */
   public <T> boolean remove(Key<T> key, T value) {
-    return store.remove(key.name(), value);
+    Preconditions.checkNotNull(key, "key");
+    Preconditions.checkNotNull(value, "value");
+    List<MetadataEntry> values = store.get(key.name());
+    if (values == null) {
+      return false;
+    }
+    for (int i = 0; i < values.size(); i++) {
+      MetadataEntry entry = values.get(i);
+      if (!value.equals(entry.getParsed(key))) {
+        continue;
+      }
+      values.remove(i);
+      return true;
+    }
+    return false;
   }
 
   /**
-   * Remove all values for the given key.
+   * Remove all values for the given key. If there were no values, {@code null} is returned.
    */
-  public <T> List<T> removeAll(final Key<T> key) {
-    return Lists.transform(store.removeAll(key.name()), new Function<MetadataEntry, T>() {
+  public <T> Iterable<T> removeAll(final Key<T> key) {
+    List<MetadataEntry> values = store.remove(key.name());
+    if (values == null) {
+      return null;
+    }
+    return Iterables.transform(values, new Function<MetadataEntry, T>() {
       @Override
       public T apply(MetadataEntry metadataEntry) {
         return metadataEntry.getParsed(key);
@@ -206,13 +249,16 @@ public abstract class Metadata {
    */
   public byte[][] serialize() {
     Preconditions.checkState(serializable, "Can't serialize raw metadata");
-    byte[][] serialized = new byte[store.size() * 2][];
-    int i = 0;
-    for (MetadataEntry entry : store.values()) {
-      serialized[i++] = entry.key.asciiName();
-      serialized[i++] = entry.getSerialized();
+    // One *2 for keys+values, one *2 to prevent resizing if a single key has multiple values
+    List<byte[]> serialized = new ArrayList<byte[]>(store.size() * 2 * 2);
+    for (List<MetadataEntry> values : store.values()) {
+      for (int i = 0; i < values.size(); i++) {
+        MetadataEntry entry = values.get(i);
+        serialized.add(entry.key.asciiName());
+        serialized.add(entry.getSerialized());
+      }
     }
-    return serialized;
+    return serialized.toArray(new byte[serialized.size()][]);
   }
 
   /**
@@ -229,10 +275,13 @@ public abstract class Metadata {
             "Cannot merge non-serializable metadata into serializable metadata without keys");
       }
     }
-    for (MetadataEntry entry : other.store.values()) {
-      // Must copy the MetadataEntries since they are mutated. If the two Metadata objects are used
-      // from different threads it would cause thread-safety issues.
-      store.put(entry.key.name(), new MetadataEntry(entry));
+    for (List<MetadataEntry> values : other.store.values()) {
+      for (int i = 0; i < values.size(); i++) {
+        MetadataEntry entry = values.get(i);
+        // Must copy the MetadataEntries since they are mutated. If the two Metadata objects are
+        // used from different threads it would cause thread-safety issues.
+        storeAdd(entry.key.name(), new MetadataEntry(entry));
+      }
     }
   }
 

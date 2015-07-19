@@ -39,10 +39,13 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.collect.Lists;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Locale;
 
@@ -68,6 +71,38 @@ public class MetadataTest {
   private static final String LANCE = "lance";
   private static final byte[] LANCE_BYTES = LANCE.getBytes(US_ASCII);
   private static final Metadata.Key<Fish> KEY = Metadata.Key.of("test-bin", FISH_MARSHALLER);
+
+  @Test
+  public void testMutations() {
+    Fish lance = new Fish(LANCE);
+    Fish cat = new Fish("cat");
+    Metadata.Headers metadata = new Metadata.Headers();
+
+    assertEquals(null, metadata.get(KEY));
+    metadata.put(KEY, lance);
+    assertEquals(Arrays.asList(lance), Lists.newArrayList(metadata.getAll(KEY)));
+    assertEquals(lance, metadata.get(KEY));
+    metadata.put(KEY, lance);
+    assertEquals(Arrays.asList(lance, lance), Lists.newArrayList(metadata.getAll(KEY)));
+    assertTrue(metadata.remove(KEY, lance));
+    assertEquals(Arrays.asList(lance), Lists.newArrayList(metadata.getAll(KEY)));
+
+    assertFalse(metadata.remove(KEY, cat));
+    metadata.put(KEY, cat);
+    assertEquals(cat, metadata.get(KEY));
+    metadata.put(KEY, lance);
+    assertEquals(Arrays.asList(lance, cat, lance), Lists.newArrayList(metadata.getAll(KEY)));
+    assertEquals(lance, metadata.get(KEY));
+    assertTrue(metadata.remove(KEY, lance));
+    assertEquals(Arrays.asList(cat, lance), Lists.newArrayList(metadata.getAll(KEY)));
+    metadata.put(KEY, lance);
+    assertTrue(metadata.remove(KEY, cat));
+    assertEquals(Arrays.asList(lance, lance), Lists.newArrayList(metadata.getAll(KEY)));
+
+    assertEquals(Arrays.asList(lance, lance), Lists.newArrayList(metadata.removeAll(KEY)));
+    assertEquals(null, metadata.getAll(KEY));
+    assertEquals(null, metadata.get(KEY));
+  }
 
   @Test
   public void testWriteParsed() {
