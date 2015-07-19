@@ -199,6 +199,10 @@ public abstract class Metadata {
    *
    * <p>Names are ASCII string bytes. If the name ends with "-bin", the value can be raw binary.
    * Otherwise, the value must be printable ASCII characters or space.
+   *
+   * <p>The returned byte arrays <em>must not</em> be modified.
+   *
+   * <p>This method is intended for transport use only.
    */
   public byte[][] serialize() {
     Preconditions.checkState(serializable, "Can't serialize raw metadata");
@@ -261,6 +265,8 @@ public abstract class Metadata {
 
     /**
      * Called by the transport layer to create headers from their binary serialized values.
+     *
+     * <p>This method does not copy the provided byte arrays. The byte arrays must not be mutated.
      */
     public Headers(byte[]... headers) {
       super(headers);
@@ -339,6 +345,8 @@ public abstract class Metadata {
   public static class Trailers extends Metadata {
     /**
      * Called by the transport layer to create trailers from their binary serialized values.
+     *
+     * <p>This method does not copy the provided byte arrays. The byte arrays must not be mutated.
      */
     public Trailers(byte[]... headers) {
       super(headers);
@@ -434,6 +442,13 @@ public abstract class Metadata {
       return name;
     }
 
+    /**
+     * Get the name as bytes using ASCII-encoding.
+     *
+     * <p>The returned byte arrays <em>must not</em> be modified.
+     *
+     * <p>This method is intended for transport use only.
+     */
     // TODO (louiscryan): Migrate to ByteString
     public byte[] asciiName() {
       return asciiName;
