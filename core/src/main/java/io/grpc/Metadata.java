@@ -225,7 +225,11 @@ public abstract class Metadata {
             "Cannot merge non-serializable metadata into serializable metadata without keys");
       }
     }
-    store.putAll(other.store);
+    for (MetadataEntry entry : other.store.values()) {
+      // Must copy the MetadataEntries since they are mutated. If the two Metadata objects are used
+      // from different threads it would cause thread-safety issues.
+      store.put(entry.key.name(), new MetadataEntry(entry));
+    }
   }
 
   /**
@@ -544,6 +548,16 @@ public abstract class Metadata {
       Preconditions.checkNotNull(serialized);
       this.serializedBinary = serialized;
       this.isBinary = isBinary;
+    }
+
+    /**
+     * Copy constructor.
+     */
+    private MetadataEntry(MetadataEntry entry) {
+      this.parsed = entry.parsed;
+      this.key = entry.key;
+      this.isBinary = entry.isBinary;
+      this.serializedBinary = entry.serializedBinary;
     }
 
     @SuppressWarnings("unchecked")
