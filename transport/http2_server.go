@@ -367,18 +367,13 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 	if f.IsAck() {
 		return
 	}
+	var ss []http2.Setting
 	f.ForeachSetting(func(s http2.Setting) error {
-		if v, ok := f.Value(http2.SettingInitialWindowSize); ok {
-			t.mu.Lock()
-			defer t.mu.Unlock()
-			for _, s := range t.activeStreams {
-				s.sendQuotaPool.reset(int(v - t.streamSendQuota))
-			}
-			t.streamSendQuota = v
-		}
+		ss = append(ss, s)
 		return nil
 	})
-	t.controlBuf.put(&settings{ack: true})
+	// The settings will be applied once the ack is sent.
+	t.controlBuf.put(&settings{ack: true, settings: ss})
 }
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
@@ -584,6 +579,20 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 
 }
 
+func (t *http2Server) applySettings(ss []http2.Setting) {
+	for _, s := range ss {
+		if s.ID == http2.SettingInitialWindowSize {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+			for _, stream := range t.activeStreams {
+				stream.sendQuotaPool.reset(int(s.Val - t.streamSendQuota))
+			}
+			t.streamSendQuota = s.Val
+		}
+
+	}
+}
+
 // controller running in a separate goroutine takes charge of sending control
 // frames (e.g., window update, reset stream, setting, etc.) to the server.
 func (t *http2Server) controller() {
@@ -599,8 +608,9 @@ func (t *http2Server) controller() {
 				case *settings:
 					if i.ack {
 						t.framer.writeSettingsAck(true)
+						t.applySettings(i.settings)
 					} else {
-						t.framer.writeSettings(true, i.setting...)
+						t.framer.writeSettings(true, i.settings...)
 					}
 				case *resetStream:
 					t.framer.writeRSTStream(true, i.streamID, i.code)
