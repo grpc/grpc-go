@@ -35,33 +35,33 @@ import com.google.common.io.ByteStreams;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.MessageLite;
 
-import io.grpc.DeferredInputStream;
+import io.grpc.Drainable;
 import io.grpc.KnownLength;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 
 import javax.annotation.Nullable;
 
 /**
- * Implementation of {@link io.grpc.DeferredInputStream} backed by a protobuf.
+ * An {@link InputStream} backed by a protobuf.
  */
-public class DeferredProtoInputStream extends DeferredInputStream<MessageLite>
-    implements KnownLength {
+public class ProtoInputStream extends InputStream implements Drainable, KnownLength {
 
-  // DeferredProtoInputStream is first initialized with a *message*. *partial* is initially null.
+  // ProtoInputStream is first initialized with a *message*. *partial* is initially null.
   // Once there has been a read operation on this stream, *message* is serialized to *partial* and
   // set to null.
   @Nullable private MessageLite message;
   @Nullable private ByteArrayInputStream partial;
 
-  public DeferredProtoInputStream(MessageLite message) {
+  public ProtoInputStream(MessageLite message) {
     this.message = message;
   }
 
   @Override
-  public int flushTo(OutputStream target) throws IOException {
+  public int drainTo(OutputStream target) throws IOException {
     int written;
     if (message != null) {
       written = message.getSerializedSize();

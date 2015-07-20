@@ -36,7 +36,7 @@ import static java.lang.Math.min;
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteStreams;
 
-import io.grpc.DeferredInputStream;
+import io.grpc.Drainable;
 import io.grpc.KnownLength;
 
 import java.io.ByteArrayInputStream;
@@ -218,8 +218,8 @@ public class MessageFramer {
   @SuppressWarnings("rawtypes")
   private static long writeToOutputStream(InputStream message, OutputStream outputStream)
       throws IOException {
-    if (message instanceof DeferredInputStream) {
-      return ((DeferredInputStream) message).flushTo(outputStream);
+    if (message instanceof Drainable) {
+      return ((Drainable) message).drainTo(outputStream);
     } else {
       // This makes an unnecessary copy of the bytes when bytebuf supports array(). However, we
       // expect performance-critical code to support flushTo().

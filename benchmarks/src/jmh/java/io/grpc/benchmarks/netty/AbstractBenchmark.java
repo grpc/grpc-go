@@ -5,7 +5,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.CallOptions;
 import io.grpc.ChannelImpl;
 import io.grpc.ClientCall;
-import io.grpc.DeferredInputStream;
+import io.grpc.Drainable;
 import io.grpc.KnownLength;
 import io.grpc.Marshaller;
 import io.grpc.Metadata;
@@ -504,7 +504,7 @@ public abstract class AbstractBenchmark {
 
     @Override
     public InputStream stream(ByteBuf value) {
-      return new DeferredByteBufInputStream(value);
+      return new ByteBufInputStream(value);
     }
 
     @Override
@@ -521,19 +521,19 @@ public abstract class AbstractBenchmark {
   }
 
   /**
-   * Implementation of {@link io.grpc.DeferredInputStream} for {@link io.netty.buffer.ByteBuf}.
+   * A {@link Drainable} {@code InputStream} that reads an {@link io.netty.buffer.ByteBuf}.
    */
-  private static class DeferredByteBufInputStream extends DeferredInputStream<ByteBuf>
-      implements KnownLength {
+  private static class ByteBufInputStream extends InputStream
+      implements Drainable, KnownLength {
 
     private ByteBuf buf;
 
-    private DeferredByteBufInputStream(ByteBuf buf) {
+    private ByteBufInputStream(ByteBuf buf) {
       this.buf = buf;
     }
 
     @Override
-    public int flushTo(OutputStream target) throws IOException {
+    public int drainTo(OutputStream target) throws IOException {
       int readbableBytes = buf.readableBytes();
       buf.readBytes(target, readbableBytes);
       buf = null;

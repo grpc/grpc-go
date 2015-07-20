@@ -53,7 +53,7 @@ public class NanoUtils {
     return new Marshaller<T>() {
       @Override
       public InputStream stream(T value) {
-        return new DeferredNanoProtoInputStream(value);
+        return new NanoProtoInputStream(value);
       }
 
       @Override

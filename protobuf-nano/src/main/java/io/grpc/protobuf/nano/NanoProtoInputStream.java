@@ -31,33 +31,29 @@
 
 package io.grpc.protobuf.nano;
 
-import com.google.common.io.ByteStreams;
 import com.google.protobuf.nano.CodedOutputByteBufferNano;
 import com.google.protobuf.nano.MessageNano;
 
-import io.grpc.DeferredInputStream;
 import io.grpc.KnownLength;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.OutputStream;
+import java.io.InputStream;
 
 import javax.annotation.Nullable;
 
 /**
- * Implementation of {@link DeferredInputStream} backed by a nano proto.
+ * An {@link InputStream} backed by a nano proto.
  */
-public class DeferredNanoProtoInputStream extends DeferredInputStream<MessageNano>
-    implements KnownLength {
+public class NanoProtoInputStream extends InputStream implements KnownLength {
 
-  // DeferredNanoProtoInputStream is first initialized with a *message*. *partial* is initially
-  // null.
+  // NanoProtoInputStream is first initialized with a *message*. *partial* is initially null.
   // Once there has been a read operation on this stream, *message* is serialized to *partial* and
   // set to null.
   @Nullable private MessageNano message;
   @Nullable private ByteArrayInputStream partial;
 
-  public DeferredNanoProtoInputStream(MessageNano message) {
+  public NanoProtoInputStream(MessageNano message) {
     this.message = message;
   }
 
@@ -66,22 +62,6 @@ public class DeferredNanoProtoInputStream extends DeferredInputStream<MessageNan
       partial = new ByteArrayInputStream(MessageNano.toByteArray(message));
       message = null;
     }
-  }
-
-  @Override
-  public int flushTo(OutputStream target) throws IOException {
-    // TODO(simonma): flushTo is an optimization of DeferredInputStream, for the implementations
-    // that can write data directly to OutputStream, if we don't support flushTo (by not extending
-    // DeferredInputStream), the caller will use ByteStreams.copy anyway. So consider extends
-    // InputStream directly or make a real optimization here (like save the byte[] and use it for a
-    // single target.write()).
-    int written = 0;
-    toPartial();
-    if (partial != null) {
-      written = (int) ByteStreams.copy(partial, target);
-      partial = null;
-    }
-    return written;
   }
 
   @Override

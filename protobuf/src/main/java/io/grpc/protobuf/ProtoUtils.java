@@ -52,7 +52,7 @@ public class ProtoUtils {
     return new Marshaller<T>() {
       @Override
       public InputStream stream(T value) {
-        return new DeferredProtoInputStream(value);
+        return new ProtoInputStream(value);
       }
 
       @Override

@@ -32,21 +32,24 @@
 package io.grpc;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * Extension to {@link InputStream} to allow for deferred production of data. Allows for
- * zero-copy conversions when the goal is to copy the contents of a resource to a
- * stream or buffer.
+ * Extension to an {@link java.io.InputStream} or alike by adding a method that transfers all
+ * content to an {@link OutputStream}.
+ *
+ * <p>This can be used for optimizing for the case where the content of the input stream will be
+ * written to an {@link OutputStream} eventually. Instead of copying the content to a byte array
+ * through {@code read()}, then writing the the {@code OutputStream}, the implementation can write
+ * the content directly to the {@code OutputStream}.
  */
-public abstract class DeferredInputStream<T> extends InputStream {
+public interface Drainable {
 
   /**
-   * Produce the entire contents of this stream to the specified target.
+   * Transfers the entire contents of this stream to the specified target.
    *
    * @param target to write to.
    * @return number of bytes written.
    */
-  public abstract int flushTo(OutputStream target) throws IOException;
+  int drainTo(OutputStream target) throws IOException;
 }
