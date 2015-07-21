@@ -42,6 +42,7 @@ import com.google.common.collect.Lists;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -421,7 +422,7 @@ public abstract class Metadata {
     private final byte[] asciiName;
 
     private Key(String name) {
-      this.name = Preconditions.checkNotNull(name, "name").toLowerCase().intern();
+      this.name = Preconditions.checkNotNull(name, "name").toLowerCase(Locale.ROOT).intern();
       this.asciiName = this.name.getBytes(US_ASCII);
     }
 

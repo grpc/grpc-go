@@ -44,6 +44,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.util.Iterator;
+import java.util.Locale;
 
 /**
  * Tests for {@link Metadata}.
@@ -167,6 +168,38 @@ public class MetadataTest {
     t = new Metadata.Trailers("test".getBytes(US_ASCII), "ascii".getBytes(US_ASCII),
         "test-bin".getBytes(US_ASCII), "binary".getBytes(US_ASCII));
     assertEquals("Trailers({test=[ascii], test-bin=[[98, 105, 110, 97, 114, 121]]})", t.toString());
+  }
+
+  @Test
+  public void testKeyCaseHandling() {
+    Locale originalLocale = Locale.getDefault();
+    Locale.setDefault(new Locale("tr", "TR"));
+    try {
+      // In Turkish, both I and i (which are in ASCII) change into non-ASCII characters when their
+      // case is changed as ı and İ, respectively.
+      assertEquals("İ", "i".toUpperCase());
+      assertEquals("ı", "I".toLowerCase());
+
+      Metadata.Key<String> keyTitleCase
+          = Metadata.Key.of("If-Modified-Since", Metadata.ASCII_STRING_MARSHALLER);
+      Metadata.Key<String> keyLowerCase
+          = Metadata.Key.of("if-modified-since", Metadata.ASCII_STRING_MARSHALLER);
+      Metadata.Key<String> keyUpperCase
+          = Metadata.Key.of("IF-MODIFIED-SINCE", Metadata.ASCII_STRING_MARSHALLER);
+
+      Metadata metadata = new Metadata.Headers();
+      metadata.put(keyTitleCase, "plain string");
+      assertEquals("plain string", metadata.get(keyTitleCase));
+      assertEquals("plain string", metadata.get(keyLowerCase));
+      assertEquals("plain string", metadata.get(keyUpperCase));
+
+      byte[][] bytes = metadata.serialize();
+      assertEquals(2, bytes.length);
+      assertArrayEquals("if-modified-since".getBytes(US_ASCII), bytes[0]);
+      assertArrayEquals("plain string".getBytes(US_ASCII), bytes[1]);
+    } finally {
+      Locale.setDefault(originalLocale);
+    }
   }
 
   private static class Fish {
