@@ -573,7 +573,7 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 		return nil
 	})
 	// The settings will be applied once the ack is sent.
-	t.controlBuf.put(&settings{ack: true, settings: ss})
+	t.controlBuf.put(&settings{ack: true, ss: ss})
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
@@ -749,9 +749,9 @@ func (t *http2Client) controller() {
 				case *settings:
 					if i.ack {
 						t.framer.writeSettingsAck(true)
-						t.applySettings(i.settings)
+						t.applySettings(i.ss)
 					} else {
-						t.framer.writeSettings(true, i.settings...)
+						t.framer.writeSettings(true, i.ss...)
 					}
 				case *resetStream:
 					t.framer.writeRSTStream(true, i.streamID, i.code)
