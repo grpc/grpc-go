@@ -378,7 +378,6 @@ func TestHealthCheckOnSuccess(t *testing.T) {
 }
 
 func testHealthCheckOnSuccess(t *testing.T, e env) {
-
 	hs := &health.HealthServer{
 		StatusMap: make(map[string]int32),
 	}
@@ -397,7 +396,6 @@ func TestHealthCheckOnFailure(t *testing.T) {
 }
 
 func testHealthCheckOnFailure(t *testing.T, e env) {
-
 	hs := &health.HealthServer{
 		StatusMap: make(map[string]int32),
 	}
