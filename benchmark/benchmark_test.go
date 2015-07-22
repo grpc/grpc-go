@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc"
+	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
 )
