@@ -139,7 +139,7 @@ public class ClientInterceptorsTest {
     verifyNoMoreInteractions(channel, interceptor);
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void callNextTwice() {
     ClientInterceptor interceptor = new ClientInterceptor() {
       @Override
@@ -147,12 +147,15 @@ public class ClientInterceptorsTest {
           MethodDescriptor<ReqT, RespT> method,
           CallOptions callOptions,
           Channel next) {
-        next.newCall(method, callOptions);
+        // Calling next twice is permitted, although should only rarely be useful.
+        assertSame(call, next.newCall(method, callOptions));
         return next.newCall(method, callOptions);
       }
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
-    intercepted.newCall(method, CallOptions.DEFAULT);
+    assertSame(call, intercepted.newCall(method, CallOptions.DEFAULT));
+    verify(channel, times(2)).newCall(same(method), same(CallOptions.DEFAULT));
+    verifyNoMoreInteractions(channel);
   }
 
   @Test
@@ -189,7 +192,7 @@ public class ClientInterceptorsTest {
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor1, interceptor2);
     assertSame(call, intercepted.newCall(method, CallOptions.DEFAULT));
-    assertEquals(Arrays.asList("i1", "i2", "channel"), order);
+    assertEquals(Arrays.asList("i2", "i1", "channel"), order);
   }
 
   @Test

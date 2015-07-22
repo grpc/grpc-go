@@ -32,13 +32,11 @@
 package io.grpc;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.ForwardingServerCallListener.SimpleForwardingServerCallListener;
 
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -50,7 +48,8 @@ public class ServerInterceptors {
 
   /**
    * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call
-   * {@code interceptors} before calling the pre-existing {@code ServerCallHandler}.
+   * {@code interceptors} before calling the pre-existing {@code ServerCallHandler}. The last
+   * interceptor will have its {@link ServerInterceptor#interceptCall} called first.
    *
    * @param serviceDef the service definition for which to intercept all its methods.
    * @param interceptors array of interceptors to apply to the service.
@@ -63,7 +62,8 @@ public class ServerInterceptors {
 
   /**
    * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call
-   * {@code interceptors} before calling the pre-existing {@code ServerCallHandler}.
+   * {@code interceptors} before calling the pre-existing {@code ServerCallHandler}. The last
+   * interceptor will have its {@link ServerInterceptor#interceptCall} called first.
    *
    * @param serviceDef the service definition for which to intercept all its methods.
    * @param interceptors list of interceptors to apply to the service.
@@ -72,14 +72,13 @@ public class ServerInterceptors {
   public static ServerServiceDefinition intercept(ServerServiceDefinition serviceDef,
       List<ServerInterceptor> interceptors) {
     Preconditions.checkNotNull(serviceDef);
-    List<ServerInterceptor> immutableInterceptors = ImmutableList.copyOf(interceptors);
-    if (immutableInterceptors.isEmpty()) {
+    if (interceptors.isEmpty()) {
       return serviceDef;
     }
     ServerServiceDefinition.Builder serviceDefBuilder
         = ServerServiceDefinition.builder(serviceDef.getName());
     for (ServerMethodDefinition<?, ?> method : serviceDef.getMethods()) {
-      wrapAndAddMethod(serviceDefBuilder, method, immutableInterceptors);
+      wrapAndAddMethod(serviceDefBuilder, method, interceptors);
     }
     return serviceDefBuilder.build();
   }
@@ -87,62 +86,32 @@ public class ServerInterceptors {
   private static <ReqT, RespT> void wrapAndAddMethod(
       ServerServiceDefinition.Builder serviceDefBuilder, ServerMethodDefinition<ReqT, RespT> method,
       List<ServerInterceptor> interceptors) {
-    ServerCallHandler<ReqT, RespT> callHandler
-        = InterceptCallHandler.create(interceptors, method.getServerCallHandler());
+    ServerCallHandler<ReqT, RespT> callHandler = method.getServerCallHandler();
+    for (ServerInterceptor interceptor : interceptors) {
+      callHandler = InterceptCallHandler.create(interceptor, callHandler);
+    }
     serviceDefBuilder.addMethod(method.withServerCallHandler(callHandler));
   }
 
   private static class InterceptCallHandler<ReqT, RespT> implements ServerCallHandler<ReqT, RespT> {
     public static <ReqT, RespT> InterceptCallHandler<ReqT, RespT> create(
-        List<ServerInterceptor> interceptors, ServerCallHandler<ReqT, RespT> callHandler) {
-      return new InterceptCallHandler<ReqT, RespT>(interceptors, callHandler);
+        ServerInterceptor interceptor, ServerCallHandler<ReqT, RespT> callHandler) {
+      return new InterceptCallHandler<ReqT, RespT>(interceptor, callHandler);
     }
 
-    private final List<ServerInterceptor> interceptors;
+    private final ServerInterceptor interceptor;
     private final ServerCallHandler<ReqT, RespT> callHandler;
 
-    private InterceptCallHandler(List<ServerInterceptor> interceptors,
+    private InterceptCallHandler(ServerInterceptor interceptor,
         ServerCallHandler<ReqT, RespT> callHandler) {
-      this.interceptors = interceptors;
+      this.interceptor = Preconditions.checkNotNull(interceptor, "interceptor");
       this.callHandler = callHandler;
     }
 
     @Override
     public ServerCall.Listener<ReqT> startCall(String method, ServerCall<RespT> call,
         Metadata.Headers headers) {
-      return ProcessInterceptorsCallHandler.create(interceptors.iterator(), callHandler)
-          .startCall(method, call, headers);
-    }
-  }
-
-  private static class ProcessInterceptorsCallHandler<ReqT, RespT>
-      implements ServerCallHandler<ReqT, RespT> {
-    public static <ReqT, RespT> ProcessInterceptorsCallHandler<ReqT, RespT> create(
-        Iterator<ServerInterceptor> interceptors, ServerCallHandler<ReqT, RespT> callHandler) {
-      return new ProcessInterceptorsCallHandler<ReqT, RespT>(interceptors, callHandler);
-    }
-
-    private Iterator<ServerInterceptor> interceptors;
-    private final ServerCallHandler<ReqT, RespT> callHandler;
-
-    private ProcessInterceptorsCallHandler(Iterator<ServerInterceptor> interceptors,
-        ServerCallHandler<ReqT, RespT> callHandler) {
-      this.interceptors = interceptors;
-      this.callHandler = callHandler;
-    }
-
-    @Override
-    public ServerCall.Listener<ReqT> startCall(String method, ServerCall<RespT> call,
-        Metadata.Headers headers) {
-      if (interceptors != null && interceptors.hasNext()) {
-        return interceptors.next().interceptCall(method, call, headers, this);
-      } else {
-        Preconditions.checkState(interceptors != null,
-            "The call handler has already been called. "
-            + "Some interceptor must have called on \"next\" twice.");
-        interceptors = null;
-        return callHandler.startCall(method, call, headers);
-      }
+      return interceptor.interceptCall(method, call, headers, callHandler);
     }
   }
 

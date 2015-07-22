@@ -32,13 +32,11 @@
 package io.grpc;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -51,7 +49,8 @@ public class ClientInterceptors {
 
   /**
    * Create a new {@link Channel} that will call {@code interceptors} before starting a call on the
-   * given channel.
+   * given channel. The last interceptor will have its {@link ClientInterceptor#interceptCall}
+   * called first.
    *
    * @param channel the underlying channel to intercept.
    * @param interceptors array of interceptors to bind to {@code channel}.
@@ -63,7 +62,8 @@ public class ClientInterceptors {
 
   /**
    * Create a new {@link Channel} that will call {@code interceptors} before starting a call on the
-   * given channel.
+   * given channel. The last interceptor will have its {@link ClientInterceptor#interceptCall}
+   * called first.
    *
    * @param channel the underlying channel to intercept.
    * @param interceptors a list of interceptors to bind to {@code channel}.
@@ -71,51 +71,25 @@ public class ClientInterceptors {
    */
   public static Channel intercept(Channel channel, List<ClientInterceptor> interceptors) {
     Preconditions.checkNotNull(channel);
-    if (interceptors.isEmpty()) {
-      return channel;
+    for (ClientInterceptor interceptor : interceptors) {
+      channel = new InterceptorChannel(channel, interceptor);
     }
-    return new InterceptorChannel(channel, interceptors);
+    return channel;
   }
 
   private static class InterceptorChannel extends Channel {
     private final Channel channel;
-    private final Iterable<ClientInterceptor> interceptors;
+    private final ClientInterceptor interceptor;
 
-    private InterceptorChannel(Channel channel, List<ClientInterceptor> interceptors) {
+    private InterceptorChannel(Channel channel, ClientInterceptor interceptor) {
       this.channel = channel;
-      this.interceptors = ImmutableList.copyOf(interceptors);
+      this.interceptor = Preconditions.checkNotNull(interceptor, "interceptor");
     }
 
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(
         MethodDescriptor<ReqT, RespT> method, CallOptions callOptions) {
-      return new ProcessInterceptorChannel(channel, interceptors).newCall(method, callOptions);
-    }
-  }
-
-  private static class ProcessInterceptorChannel extends Channel {
-    private final Channel channel;
-    private Iterator<ClientInterceptor> interceptors;
-
-    private ProcessInterceptorChannel(Channel channel, Iterable<ClientInterceptor> interceptors) {
-      this.channel = channel;
-      this.interceptors = interceptors.iterator();
-    }
-
-    @Override
-    public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(
-        MethodDescriptor<ReqT, RespT> method, CallOptions callOptions) {
-      if (interceptors != null && interceptors.hasNext()) {
-        return interceptors.next().interceptCall(method, callOptions, this);
-      } else {
-        Preconditions.checkState(interceptors != null,
-            "The channel has already been called. "
-            + "Some interceptor must have called on \"next\" twice.");
-        interceptors = null;
-        return channel.newCall(
-            Preconditions.checkNotNull(method, "method"),
-            Preconditions.checkNotNull(callOptions, "callOptions"));
-      }
+      return interceptor.interceptCall(method, callOptions, channel);
     }
   }
 

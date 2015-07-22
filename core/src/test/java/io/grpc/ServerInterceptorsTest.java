@@ -158,19 +158,23 @@ public class ServerInterceptorsTest {
     verifyNoMoreInteractions(handler2);
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void callNextTwice() {
     ServerInterceptor interceptor = new ServerInterceptor() {
       @Override
       public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(String method,
           ServerCall<RespT> call, Headers headers, ServerCallHandler<ReqT, RespT> next) {
-        next.startCall(method, call, headers);
+        // Calling next twice is permitted, although should only rarely be useful.
+        assertSame(listener, next.startCall(method, call, headers));
         return next.startCall(method, call, headers);
       }
     };
     ServerServiceDefinition intercepted = ServerInterceptors.intercept(serviceDefinition,
         interceptor);
-    getSoleMethod(intercepted).getServerCallHandler().startCall(methodName, call, headers);
+    assertSame(listener,
+        getSoleMethod(intercepted).getServerCallHandler().startCall(methodName, call, headers));
+    verify(handler, times(2)).startCall(same(methodName), same(call), same(headers));
+    verifyNoMoreInteractions(handler);
   }
 
   @Test
@@ -207,7 +211,7 @@ public class ServerInterceptorsTest {
         serviceDefinition, Arrays.asList(interceptor1, interceptor2));
     assertSame(listener,
         getSoleMethod(intercepted).getServerCallHandler().startCall(methodName, call, headers));
-    assertEquals(Arrays.asList("i1", "i2", "handler"), order);
+    assertEquals(Arrays.asList("i2", "i1", "handler"), order);
   }
 
   @Test
