@@ -63,7 +63,12 @@ For protobuf-based codegen integrated with the Maven build system, you can use
       <artifactId>maven-protoc-plugin</artifactId>
       <version>0.4.2</version>
       <configuration>
-        <protocArtifact>com.google.protobuf:protoc:3.0.0-alpha-3.1:exe:${os.detected.classifier}</protocArtifact>
+        <!--
+          The version of protoc must match protobuf-java. If you don't depend on
+          protobuf-java directly, you will be transitively depending on the
+          protobuf-java version that grpc depends on.
+        -->
+        <protocArtifact>com.google.protobuf:protoc:3.0.0-alpha-2:exe:${os.detected.classifier}</protocArtifact>
         <pluginId>grpc-java</pluginId>
         <pluginArtifact>io.grpc:protoc-gen-grpc-java:0.7.1:exe:${os.detected.classifier}</pluginArtifact>
       </configuration>
@@ -85,6 +90,7 @@ For protobuf-based codegen integrated with the Maven build system, you can use
 For protobuf-based codegen integrated with the Gradle build system, you can use
 [protobuf-gradle-plugin][]:
 ```gradle
+apply plugin: 'java'
 apply plugin: 'com.google.protobuf'
 
 buildscript {
@@ -92,22 +98,28 @@ buildscript {
     mavenCentral()
   }
   dependencies {
-    classpath 'com.google.protobuf:protobuf-gradle-plugin:0.4.1'
+    classpath 'com.google.protobuf:protobuf-gradle-plugin:0.5.0'
   }
 }
 
-sourceSets {
-  main {
-    proto {
-      plugins {
-        grpc { }
-      }
+protobuf {
+  protoc {
+    // The version of protoc must match protobuf-java. If you don't depend on
+    // protobuf-java directly, you will be transitively depending on the
+    // protobuf-java version that grpc depends on.
+    artifact = "com.google.protobuf:protoc:3.0.0-alpha-2"
+  }
+  plugins {
+    grpc {
+      artifact = 'io.grpc:protoc-gen-grpc-java:0.7.1'
+    }
+  }
+  generateProtoTasks {
+    all()*.plugins {
+      grpc {}
     }
   }
 }
-
-protocDep = "com.google.protobuf:protoc:3.0.0-alpha-3.1"
-protobufNativeCodeGenPluginDeps = ["grpc:io.grpc:protoc-gen-grpc-java:0.7.1"]
 ```
 
 [protobuf-gradle-plugin]: https://github.com/google/protobuf-gradle-plugin
