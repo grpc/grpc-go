@@ -588,9 +588,7 @@ public abstract class AbstractTransportTest {
   public void sendsTimeoutHeader() {
     long configuredTimeoutMinutes = 100;
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
-        .configureNewStub()
-        .setDeadlineAfter(configuredTimeoutMinutes, TimeUnit.MINUTES)
-        .build();
+        .withDeadlineAfter(configuredTimeoutMinutes, TimeUnit.MINUTES);
     stub.emptyCall(Empty.getDefaultInstance());
     long transferredTimeoutMinutes = TimeUnit.MICROSECONDS.toMinutes(
         requestHeadersCapture.get().get(ChannelImpl.TIMEOUT_KEY));
@@ -607,9 +605,8 @@ public abstract class AbstractTransportTest {
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
     TestServiceGrpc.newBlockingStub(channel)
-        .configureNewStub()
-        .setDeadlineAfter(50, TimeUnit.MILLISECONDS)
-        .build().emptyCall(Empty.getDefaultInstance());
+        .withDeadlineAfter(50, TimeUnit.MILLISECONDS)
+        .emptyCall(Empty.getDefaultInstance());
   }
 
   @Test(timeout = 10000)
@@ -618,9 +615,7 @@ public abstract class AbstractTransportTest {
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
-        .configureNewStub()
-        .setDeadlineAfter(10, TimeUnit.MILLISECONDS)
-        .build();
+        .withDeadlineAfter(10, TimeUnit.MILLISECONDS);
     try {
       stub.emptyCall(Empty.getDefaultInstance());
       fail("Expected deadline to be exceeded");
@@ -647,9 +642,8 @@ public abstract class AbstractTransportTest {
         .build();
     StreamRecorder<StreamingOutputCallResponse> recorder = StreamRecorder.create();
     TestServiceGrpc.newStub(channel)
-        .configureNewStub()
-        .setDeadlineAfter(30, TimeUnit.MILLISECONDS)
-        .build().streamingOutputCall(request, recorder);
+        .withDeadlineAfter(30, TimeUnit.MILLISECONDS)
+        .streamingOutputCall(request, recorder);
     recorder.awaitCompletion();
     assertEquals(Status.DEADLINE_EXCEEDED, Status.fromThrowable(recorder.getError()));
     assertNotEquals(0, recorder.getValues().size());
@@ -723,9 +717,8 @@ public abstract class AbstractTransportTest {
     GoogleCredentials credentials =
         (ServiceAccountCredentials) GoogleCredentials.fromStream(credentialsStream);
     credentials = credentials.createScoped(Arrays.<String>asList(authScope));
-    TestServiceGrpc.TestServiceBlockingStub stub = blockingStub.configureNewStub()
-        .addInterceptor(new ClientAuthInterceptor(credentials, testServiceExecutor))
-        .build();
+    TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
+        .withInterceptors(new ClientAuthInterceptor(credentials, testServiceExecutor));
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setFillUsername(true)
         .setFillOauthScope(true)
@@ -756,9 +749,8 @@ public abstract class AbstractTransportTest {
   /** Sends a large unary rpc with compute engine credentials. */
   public void computeEngineCreds(String serviceAccount, String oauthScope) throws Exception {
     ComputeEngineCredentials credentials = new ComputeEngineCredentials();
-    TestServiceGrpc.TestServiceBlockingStub stub = blockingStub.configureNewStub()
-        .addInterceptor(new ClientAuthInterceptor(credentials, testServiceExecutor))
-        .build();
+    TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
+        .withInterceptors(new ClientAuthInterceptor(credentials, testServiceExecutor));
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setFillUsername(true)
         .setFillOauthScope(true)

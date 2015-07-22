@@ -36,8 +36,6 @@ import io.grpc.Channel;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
@@ -75,13 +73,6 @@ public abstract class AbstractStub<S extends AbstractStub<?>> {
   }
 
   /**
-   * Creates a builder for reconfiguring the stub.
-   */
-  public StubConfigBuilder configureNewStub() {
-    return new StubConfigBuilder();
-  }
-
-  /**
    * The underlying channel of the stub.
    */
   public Channel getChannel() {
@@ -104,63 +95,38 @@ public abstract class AbstractStub<S extends AbstractStub<?>> {
   protected abstract S build(Channel channel, CallOptions callOptions);
 
   /**
-   * Utility class for (re) configuring the operations in a stub.
+   * Returns a new stub with an absolute deadline in nanoseconds in the clock as per {@link
+   * System#nanoTime()}.
+   *
+   * <p>This is mostly used for propagating an existing deadline. {@link #withDeadlineAfter} is the
+   * recommended way of setting a new deadline,
+   *
+   * @param deadlineNanoTime nanoseconds in the clock as per {@link System#nanoTime()}
    */
-  public class StubConfigBuilder {
+  public final S withDeadlineNanoTime(@Nullable Long deadlineNanoTime) {
+    return build(channel, callOptions.withDeadlineNanoTime(deadlineNanoTime));
+  }
 
-    private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
-    private CallOptions callOptions = AbstractStub.this.callOptions;
-    private Channel stubChannel;
+  /**
+   * Returns a new stub with a deadline that is after the given {@code duration} from now.
+   *
+   * @see CallOptions#withDeadlineAfter
+   */
+  public final S withDeadlineAfter(long duration, TimeUnit unit) {
+    return build(channel, callOptions.withDeadlineAfter(duration, unit));
+  }
 
-    private StubConfigBuilder() {
-      this.stubChannel = AbstractStub.this.channel;
-    }
+  /**
+   * Returns a new stub that uses the given channel.
+   */
+  public final S withChannel(Channel newChannel) {
+    return build(newChannel, callOptions);
+  }
 
-    /**
-     * Sets an absolute deadline in nanoseconds in the clock as per {@link System#nanoTime()}.
-     *
-     * <p>This is mostly used for propagating an existing deadline. {@link #setDeadlineAfter} is the
-     * recommended way of setting a new deadline,
-     *
-     * @param deadlineNanoTime nanoseconds in the clock as per {@link System#nanoTime()}
-     */
-    public StubConfigBuilder setDeadlineNanoTime(@Nullable Long deadlineNanoTime) {
-      callOptions = callOptions.withDeadlineNanoTime(deadlineNanoTime);
-      return this;
-    }
-
-    /**
-     * Sets a deadline that is after the given {@code duration} from now.
-     *
-     * @see CallOptions#withDeadlineAfter
-     */
-    public StubConfigBuilder setDeadlineAfter(long duration, TimeUnit unit) {
-      callOptions = callOptions.withDeadlineAfter(duration, unit);
-      return this;
-    }
-
-    /**
-     * Set the channel to be used by the stub.
-     */
-    public StubConfigBuilder setChannel(Channel channel) {
-      this.stubChannel = channel;
-      return this;
-    }
-
-    /**
-     * Adds a client interceptor to be attached to the channel of the reconfigured stub.
-     */
-    public StubConfigBuilder addInterceptor(ClientInterceptor interceptor) {
-      interceptors.add(interceptor);
-      return this;
-    }
-
-    /**
-     * Create a new stub with the configurations made on this builder.
-     */
-    public S build() {
-      return AbstractStub.this.build(
-          ClientInterceptors.intercept(stubChannel, interceptors), callOptions);
-    }
+  /**
+   * Returns a new stub that has the given interceptors attached to the underlying channel.
+   */
+  public final S withInterceptors(ClientInterceptor... interceptors) {
+    return build(ClientInterceptors.intercept(channel, interceptors), callOptions);
   }
 }

@@ -59,8 +59,7 @@ public class MetadataUtils {
   public static <T extends AbstractStub> T attachHeaders(
       T stub,
       final Metadata.Headers extraHeaders) {
-    return (T) stub.configureNewStub().addInterceptor(
-        newAttachHeadersInterceptor(extraHeaders)).build();
+    return (T) stub.withInterceptors(newAttachHeadersInterceptor(extraHeaders));
   }
 
   /**
@@ -100,8 +99,8 @@ public class MetadataUtils {
       T stub,
       AtomicReference<Metadata.Headers> headersCapture,
       AtomicReference<Metadata.Trailers> trailersCapture) {
-    return (T) stub.configureNewStub().addInterceptor(
-        newCaptureMetadataInterceptor(headersCapture, trailersCapture)).build();
+    return (T) stub.withInterceptors(
+        newCaptureMetadataInterceptor(headersCapture, trailersCapture));
   }
 
   /**

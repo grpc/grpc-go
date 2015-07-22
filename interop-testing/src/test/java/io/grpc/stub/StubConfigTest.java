@@ -87,8 +87,7 @@ public class StubConfigTest {
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel);
     assertNull(stub.getCallOptions().getDeadlineNanoTime());
     // Reconfigure it
-    TestServiceGrpc.TestServiceBlockingStub reconfiguredStub =
-        stub.configureNewStub().setDeadlineNanoTime(2L).build();
+    TestServiceGrpc.TestServiceBlockingStub reconfiguredStub = stub.withDeadlineNanoTime(2L);
     // New altered config
     assertEquals(2L, (long) reconfiguredStub.getCallOptions().getDeadlineNanoTime());
     // Default config unchanged
@@ -102,7 +101,7 @@ public class StubConfigTest {
     SimpleRequest request = SimpleRequest.getDefaultInstance();
     stub.unaryCall(request, responseObserver);
     verify(channel).newCall(same(TestServiceGrpc.METHOD_UNARY_CALL), same(options1));
-    stub = stub.configureNewStub().setDeadlineNanoTime(2L).build();
+    stub = stub.withDeadlineNanoTime(2L);
     CallOptions options2 = stub.getCallOptions();
     assertNotSame(options1, options2);
     stub.unaryCall(request, responseObserver);
