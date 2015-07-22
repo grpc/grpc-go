@@ -3,6 +3,8 @@
 package health
 
 import (
+	"sync"
+
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -11,13 +13,19 @@ import (
 
 type HealthServer struct {
 	// StatusMap stores the serving status of a service
-	StatusMap map[string]int32
+	statusMap map[string]int32
+}
+
+func NewHealthServer() *HealthServer {
+	return &HealthServer{
+		statusMap: make(map[string]int32),
+	}
 }
 
 func (s *HealthServer) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (out *healthpb.HealthCheckResponse, err error) {
 	service := in.Host + ":" + in.Service
 	out = new(healthpb.HealthCheckResponse)
-	status, ok := s.StatusMap[service]
+	status, ok := s.statusMap[service]
 	out.Status = healthpb.HealthCheckResponse_ServingStatus(status)
 	if !ok {
 		err = grpc.Errorf(codes.NotFound, "unknown service")
@@ -31,5 +39,8 @@ func (s *HealthServer) Check(ctx context.Context, in *healthpb.HealthCheckReques
 // or insert a new service entry into the statusMap
 func (s *HealthServer) SetServingStatus(host string, service string, status int32) {
 	service = host + ":" + service
-	s.StatusMap[service] = status
+	var mu sync.Mutex
+	mu.Lock()
+	s.statusMap[service] = status
+	mu.Unlock()
 }

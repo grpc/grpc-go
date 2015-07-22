@@ -378,9 +378,7 @@ func TestHealthCheckOnSuccess(t *testing.T) {
 }
 
 func testHealthCheckOnSuccess(t *testing.T, e env) {
-	hs := &health.HealthServer{
-		StatusMap: make(map[string]int32),
-	}
+	hs := health.NewHealthServer()
 	hs.SetServingStatus("", "grpc.health.v1alpha.HealthCheck", 1)
 	s, cc := setUp(hs, math.MaxUint32, e)
 	defer tearDown(s, cc)
@@ -396,9 +394,7 @@ func TestHealthCheckOnFailure(t *testing.T) {
 }
 
 func testHealthCheckOnFailure(t *testing.T, e env) {
-	hs := &health.HealthServer{
-		StatusMap: make(map[string]int32),
-	}
+	hs := health.NewHealthServer()
 	hs.SetServingStatus("", "grpc.health.v1alpha.HealthCheck", 1)
 	s, cc := setUp(hs, math.MaxUint32, e)
 	defer tearDown(s, cc)
@@ -428,9 +424,7 @@ func TestHealthCheckNotFound(t *testing.T) {
 }
 
 func testHealthCheckNotFound(t *testing.T, e env) {
-	hs := &health.HealthServer{
-		StatusMap: make(map[string]int32),
-	}
+	hs := health.NewHealthServer()
 	s, cc := setUp(hs, math.MaxUint32, e)
 	defer tearDown(s, cc)
 	if _, err := healthCheck(1*time.Second, cc, "unregister_service"); err != grpc.Errorf(codes.NotFound, "unknown service") {
@@ -445,9 +439,7 @@ func TestHealthCheckServing(t *testing.T) {
 }
 
 func testHealthCheckServing(t *testing.T, e env) {
-	hs := &health.HealthServer{
-		StatusMap: make(map[string]int32),
-	}
+	hs := health.NewHealthServer()
 	hs.SetServingStatus("", "grpc.health.v1alpha.HealthCheck", 1)
 	s, cc := setUp(hs, math.MaxUint32, e)
 	defer tearDown(s, cc)
@@ -467,9 +459,7 @@ func TestHealthCheckNotServing(t *testing.T) {
 }
 
 func testHealthCheckNotServing(t *testing.T, e env) {
-	hs := &health.HealthServer{
-		StatusMap: make(map[string]int32),
-	}
+	hs := health.NewHealthServer()
 	hs.SetServingStatus("", "grpc.health.v1alpha.HealthCheck", 2)
 	s, cc := setUp(hs, math.MaxUint32, e)
 	defer tearDown(s, cc)
