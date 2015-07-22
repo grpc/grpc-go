@@ -520,6 +520,42 @@ public class Context {
   }
 
   /**
+   * Wrap an {@link Executor} so that it executes with this context as the {@link #current} context.
+   * It is generally expected that {@link #propagate(Executor)} would be used more commonly than
+   * this method.
+   *
+   * @see #propagate(Executor)
+   */
+  public Executor wrap(final Executor e) {
+    class WrappingExecutor implements Executor {
+      @Override
+      public void execute(Runnable r) {
+        e.execute(wrap(r));
+      }
+    }
+
+    return new WrappingExecutor();
+  }
+
+  /**
+   * Create an executor that propagates the {@link #current} context when {@link Executor#execute}
+   * is called to the {@link #current} context of the {@code Runnable} scheduled. <em>Note that this
+   * is a static method.</em>
+   *
+   * @see #wrap(Executor)
+   */
+  public static Executor propagate(final Executor e) {
+    class PropagatingExecutor implements Executor {
+      @Override
+      public void execute(Runnable r) {
+        e.execute(Context.current().wrap(r));
+      }
+    }
+
+    return new PropagatingExecutor();
+  }
+
+  /**
    * Lookup the value for a key in the context inheritance chain.
    */
   private Object lookup(Key<?> key) {

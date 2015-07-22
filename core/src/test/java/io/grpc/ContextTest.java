@@ -51,6 +51,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.io.Closeable;
+import java.util.ArrayDeque;
+import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
@@ -511,6 +513,32 @@ public class ContextTest {
   }
 
   @Test
+  public void propagatingExecutor() throws Exception {
+    QueuedExecutor queuedExecutor = new QueuedExecutor();
+    Executor executor = Context.propagate(queuedExecutor);
+    Context base = Context.current().withValue(PET, "cat");
+    base.attach();
+    try {
+      executor.execute(runner);
+    } finally {
+      base.detach();
+    }
+    assertEquals(1, queuedExecutor.runnables.size());
+    queuedExecutor.runnables.remove().run();
+    assertSame(base, observed);
+  }
+
+  @Test
+  public void wrapExecutor() throws Exception {
+    Context base = Context.current().withValue(PET, "cat");
+    QueuedExecutor queuedExecutor = new QueuedExecutor();
+    base.wrap(queuedExecutor).execute(runner);
+    assertEquals(1, queuedExecutor.runnables.size());
+    queuedExecutor.runnables.remove().run();
+    assertSame(base, observed);
+  }
+
+  @Test
   public void typicalTryFinallyHandling() throws Exception {
     Context base = Context.current().withValue(COLOR, "blue");
     base.attach();
@@ -698,5 +726,14 @@ public class ContextTest {
     assertFalse(PET.equals(null));
 
     assertEquals(PET.hashCode(), Context.key("pet").hashCode());
+  }
+
+  private static class QueuedExecutor implements Executor {
+    private final Queue<Runnable> runnables = new ArrayDeque<Runnable>();
+
+    @Override
+    public void execute(Runnable r) {
+      runnables.add(r);
+    }
   }
 }
