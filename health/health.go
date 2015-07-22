@@ -7,22 +7,39 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	healthpb "google.golang.org/grpc/health/grpc_health"
+	"google.golang.org/grpc/codes"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1alpha"
 )
 
 // HealthCheck is the client side function to health-check a server
-func HealthCheck(t time.Duration, cc *grpc.ClientConn) error {
+func HealthCheck(t time.Duration, cc *grpc.ClientConn, service_name string) (*healthpb.HealthCheckResponse, error) {
 	ctx, _ := context.WithTimeout(context.Background(), t)
 	hc := healthpb.NewHealthCheckClient(cc)
 	req := new(healthpb.HealthCheckRequest)
-	_, err := hc.Check(ctx, req)
-	return err
+	req.Host = ""
+	req.Service = service_name
+	out, err := hc.Check(ctx, req)
+	return out, err
 }
 
 type HealthServer struct {
+	StatusMap map[string]int32
 }
 
-func (s *HealthServer) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
-	out := new(healthpb.HealthCheckResponse)
-	return out, nil
+func (s *HealthServer) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (out *healthpb.HealthCheckResponse, err error) {
+	service := ":" + in.Service
+	out = new(healthpb.HealthCheckResponse)
+	status, ok := s.StatusMap[service]
+	out.Status = healthpb.HealthCheckResponse_ServingStatus(status)
+	if !ok {
+		err = grpc.Errorf(codes.NotFound, "unknown service")
+	} else {
+		err = nil
+	}
+	return out, err
+}
+
+func (s *HealthServer) SetServingStatus(service string, status int32) {
+	service = ":" + service
+	s.StatusMap[service] = status
 }
