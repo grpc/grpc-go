@@ -31,6 +31,8 @@
 
 package io.grpc.transport;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.base.Preconditions;
 
 import io.grpc.Metadata;
@@ -68,7 +70,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    * thread.
    */
   public final void setListener(ServerStreamListener listener) {
-    this.listener = Preconditions.checkNotNull(listener, "listener");
+    this.listener = checkNotNull(listener);
 
     // Now that the stream has actually been initialized, call the listener's onReady callback if
     // appropriate.
@@ -77,7 +79,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
 
   @Override
   protected ServerStreamListener listener() {
-    return this.listener;
+    return listener;
   }
 
   @Override

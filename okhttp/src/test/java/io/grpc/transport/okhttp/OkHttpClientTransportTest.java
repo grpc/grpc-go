@@ -72,6 +72,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.StatusException;
+import io.grpc.transport.AbstractStream;
 import io.grpc.transport.ClientStreamListener;
 import io.grpc.transport.ClientTransport;
 import io.grpc.transport.HttpUtil;
@@ -926,12 +927,12 @@ public class OkHttpClientTransportTest {
   @Test
   public void notifyOnReady() throws Exception {
     initTransport();
-    final int messageLength = 15;
+    // exactly one byte below the threshold
+    int messageLength = AbstractStream.DEFAULT_ONREADY_THRESHOLD - HEADER_LENGTH - 1;
     setInitialWindowSize(0);
     MockStreamListener listener = new MockStreamListener();
     OkHttpClientStream stream = clientTransport.newStream(
-        method,new Metadata.Headers(), listener);
-    stream.setOnReadyThreshold(HEADER_LENGTH + 20);
+        method, new Metadata.Headers(), listener);
     assertTrue(stream.isReady());
     // Be notified at the beginning.
     assertTrue(listener.isOnReadyCalled());
@@ -962,18 +963,6 @@ public class OkHttpClientTransportTest {
     frameHandler().windowUpdate(0, HEADER_LENGTH + messageLength);
     frameHandler().windowUpdate(3, HEADER_LENGTH + messageLength);
     assertTrue(stream.isReady());
-    assertTrue(listener.isOnReadyCalled());
-
-    // Now the first message is still in the queue, and it's size is smaller than the threshold.
-    // Increase the threshold should have no affection.
-    stream.setOnReadyThreshold(messageLength * 10);
-    assertFalse(listener.isOnReadyCalled());
-    // Decrease the threshold should have no affection too.
-    stream.setOnReadyThreshold(HEADER_LENGTH);
-    assertFalse(listener.isOnReadyCalled());
-    // But now increase the threshold to larger than the queued message size, onReady should be
-    // triggered.
-    stream.setOnReadyThreshold(HEADER_LENGTH + messageLength + 1);
     assertTrue(listener.isOnReadyCalled());
 
     stream.cancel(Status.CANCELLED);
