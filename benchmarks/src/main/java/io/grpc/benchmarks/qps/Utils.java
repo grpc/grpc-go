@@ -134,6 +134,8 @@ final class Utils {
       OkHttpChannelBuilder builder = OkHttpChannelBuilder
           .forAddress(addr.getHostName(), addr.getPort())
           .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null);
+      builder.negotiationType(config.tls ? io.grpc.transport.okhttp.NegotiationType.TLS
+          : io.grpc.transport.okhttp.NegotiationType.PLAINTEXT);
       if (config.tls) {
         SSLSocketFactory factory;
         if (config.testca) {
