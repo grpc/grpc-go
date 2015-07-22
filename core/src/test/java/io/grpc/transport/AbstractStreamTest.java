@@ -41,9 +41,7 @@ import com.google.common.collect.Multimap;
 import io.grpc.transport.AbstractStream.Phase;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
@@ -55,8 +53,6 @@ import javax.annotation.Nullable;
 
 @RunWith(JUnit4.class)
 public class AbstractStreamTest {
-  @Rule public final ExpectedException thrown = ExpectedException.none();
-
   @Mock private StreamListener streamListener;
 
   @Before
