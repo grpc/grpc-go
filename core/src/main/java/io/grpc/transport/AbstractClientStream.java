@@ -168,7 +168,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   protected void inboundTrailersReceived(Metadata.Trailers trailers, Status status) {
     Preconditions.checkNotNull(trailers, "trailers");
     if (inboundPhase() == Phase.STATUS) {
-      log.log(Level.INFO, "Received trailers on closed stream {0}\n {1}\n {3}",
+      log.log(Level.INFO, "Received trailers on closed stream {0}\n {1}\n {2}",
           new Object[]{id(), status, trailers});
     }
     // Stash the status & trailers so they can be delivered by the deframer calls
@@ -281,7 +281,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * Cancel the stream. Called by the application layer, never called by the transport.
    */
   @Override
-  public void cancel(Status reason) {
+  public final void cancel(Status reason) {
     Preconditions.checkArgument(EnumSet.of(CANCELLED, DEADLINE_EXCEEDED).contains(reason.getCode()),
         "Invalid cancellation reason");
     outboundPhase(Phase.STATUS);
