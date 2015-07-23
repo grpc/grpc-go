@@ -156,8 +156,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
 
   @Override
   protected final void deframeFailed(Throwable cause) {
-    log.log(Level.WARNING, "Exception processing message", cause);
-    cancel(Status.CANCELLED);
+    cancel(Status.INTERNAL.withDescription("Exception deframing message").withCause(cause));
   }
 
   /**
