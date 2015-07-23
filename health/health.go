@@ -27,13 +27,12 @@ func (s *HealthServer) Check(ctx context.Context, in *healthpb.HealthCheckReques
 	service := in.Host + ":" + in.Service
 	out = new(healthpb.HealthCheckResponse)
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if status, ok := s.statusMap[service]; ok {
-		s.mu.Unlock()
 		return &healthpb.HealthCheckResponse{
 			Status: healthpb.HealthCheckResponse_ServingStatus(status),
 		}, nil
 	}
-	s.mu.Unlock()
 	return nil, grpc.Errorf(codes.NotFound, "unknown service")
 }
 
