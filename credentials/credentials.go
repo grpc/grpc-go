@@ -201,12 +201,12 @@ func NewServerTLSFromFile(certFile, keyFile string) (TransportAuthenticator, err
 }
 
 // TokenSource supplies credentials from an oauth2.TokenSource.
-type TokenSource struct {
+type tokenSource struct {
 	oauth2.TokenSource
 }
 
 // GetRequestMetadata gets the request metadata as a map from a TokenSource.
-func (ts TokenSource) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+func (ts tokenSource) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
 	token, err := ts.Token()
 	if err != nil {
 		return nil, err
@@ -221,7 +221,7 @@ func (ts TokenSource) GetRequestMetadata(ctx context.Context) (map[string]string
 // if your program is running on a GCE instance.
 // TODO(dsymonds): Deprecate and remove this.
 func NewComputeEngine() Credentials {
-	return TokenSource{google.ComputeTokenSource("")}
+	return tokenSource{google.ComputeTokenSource("")}
 }
 
 // serviceAccount represents credentials via JWT signing key.
@@ -266,5 +266,5 @@ func NewApplicationDefault(ctx context.Context, scope ...string) (Credentials, e
 	if err != nil {
 		return nil, err
 	}
-	return TokenSource{t}, nil
+	return tokenSource{t}, nil
 }
