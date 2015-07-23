@@ -44,6 +44,8 @@ import java.util.logging.Logger;
 
 /**
  * Abstract base class for {@link ServerStream} implementations.
+ *
+ * @param <IdT> the type of the stream identifier
  */
 public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
     implements ServerStream {
@@ -89,7 +91,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
-  public void writeHeaders(Metadata.Headers headers) {
+  public final void writeHeaders(Metadata.Headers headers) {
     Preconditions.checkNotNull(headers, "headers");
     outboundPhase(Phase.HEADERS);
     headersSent = true;

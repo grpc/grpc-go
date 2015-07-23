@@ -52,11 +52,11 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   private final Channel channel;
   private final NettyServerHandler handler;
   private final Http2Stream http2Stream;
-  private WriteQueue writeQueue;
+  private final WriteQueue writeQueue;
 
   NettyServerStream(Channel channel, Http2Stream http2Stream, NettyServerHandler handler) {
     super(new NettyWritableBufferAllocator(channel.alloc()));
-    writeQueue = handler.getWriteQueue();
+    this.writeQueue = handler.getWriteQueue();
     this.channel = checkNotNull(channel, "channel");
     this.http2Stream = checkNotNull(http2Stream, "http2Stream");
     this.handler = checkNotNull(handler, "handler");
