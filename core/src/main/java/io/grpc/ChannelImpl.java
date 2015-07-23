@@ -33,17 +33,13 @@ package io.grpc;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 
-import io.grpc.MethodDescriptor.MethodType;
-import io.grpc.transport.ClientStream;
-import io.grpc.transport.ClientStreamListener;
+import io.grpc.ClientCallImpl.ClientTransportProvider;
 import io.grpc.transport.ClientTransport;
 import io.grpc.transport.ClientTransport.PingCallback;
 import io.grpc.transport.ClientTransportFactory;
 import io.grpc.transport.HttpUtil;
 
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -51,7 +47,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -63,29 +58,7 @@ import javax.annotation.concurrent.ThreadSafe;
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
 public final class ChannelImpl extends Channel {
-
   private static final Logger log = Logger.getLogger(ChannelImpl.class.getName());
-
-  private static class NoopClientStream implements ClientStream {
-    @Override public void writeMessage(InputStream message) {}
-
-    @Override public void flush() {}
-
-    @Override public void cancel(Status reason) {}
-
-    @Override public void halfClose() {}
-
-    @Override public void request(int numMessages) {}
-
-    /**
-     * Always returns {@code false}, since this is only used when the startup of the {@link
-     * ClientCall} fails (i.e. the {@link ClientCall} is closed).
-     */
-    @Override public boolean isReady() {
-      return false;
-    }
-  }
-
   private final ClientTransportFactory transportFactory;
   private final ExecutorService executor;
   private final String userAgent;
@@ -116,6 +89,13 @@ public final class ChannelImpl extends Channel {
   @GuardedBy("this")
   private boolean terminated;
   private Runnable terminationRunnable;
+
+  private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
+    @Override
+    public ClientTransport get() {
+      return obtainActiveTransport();
+    }
+  };
 
   ChannelImpl(ClientTransportFactory transportFactory, ExecutorService executor,
       @Nullable String userAgent, List<ClientInterceptor> interceptors) {
@@ -278,7 +258,13 @@ public final class ChannelImpl extends Channel {
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
         CallOptions callOptions) {
-      return new CallImpl<ReqT, RespT>(method, new SerializingExecutor(executor), callOptions);
+      return new ClientCallImpl<ReqT, RespT>(
+          method,
+          new SerializingExecutor(executor),
+          callOptions,
+          transportProvider,
+          deadlineCancellationExecutor)
+              .setUserAgent(userAgent);
     }
   }
 
@@ -317,241 +303,6 @@ public final class ChannelImpl extends Channel {
             terminationRunnable.run();
           }
         }
-      }
-    }
-  }
-
-  private final class CallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
-    private final MethodDescriptor<ReqT, RespT> method;
-    private final SerializingExecutor callExecutor;
-    private final boolean unaryRequest;
-    private final CallOptions callOptions;
-    private ClientStream stream;
-    private volatile ScheduledFuture<?> deadlineCancellationFuture;
-    private boolean cancelCalled;
-    private boolean halfCloseCalled;
-
-    private CallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor,
-        CallOptions callOptions) {
-      this.method = method;
-      this.callExecutor = executor;
-      this.unaryRequest = method.getType() == MethodType.UNARY
-          || method.getType() == MethodType.SERVER_STREAMING;
-      this.callOptions = callOptions;
-    }
-
-    @Override
-    public void start(Listener<RespT> observer, Metadata.Headers headers) {
-      Preconditions.checkState(stream == null, "Already started");
-      Long deadlineNanoTime = callOptions.getDeadlineNanoTime();
-      ClientStreamListener listener = new ClientStreamListenerImpl(observer, deadlineNanoTime);
-      ClientTransport transport;
-      try {
-        transport = obtainActiveTransport();
-      } catch (RuntimeException ex) {
-        closeCallPrematurely(listener, Status.fromThrowable(ex));
-        return;
-      }
-      if (transport == null) {
-        closeCallPrematurely(listener, Status.UNAVAILABLE.withDescription("Channel is shutdown"));
-        return;
-      }
-
-      // Fill out timeout on the headers
-      headers.removeAll(TIMEOUT_KEY);
-      // Convert the deadline to timeout. Timeout is more favorable than deadline on the wire
-      // because timeout tolerates the clock difference between machines.
-      long timeoutMicros = 0;
-      if (deadlineNanoTime != null) {
-        timeoutMicros = TimeUnit.NANOSECONDS.toMicros(deadlineNanoTime - System.nanoTime());
-        if (timeoutMicros <= 0) {
-          closeCallPrematurely(listener, Status.DEADLINE_EXCEEDED);
-          return;
-        }
-        headers.put(TIMEOUT_KEY, timeoutMicros);
-      }
-
-      // Fill out the User-Agent header.
-      headers.removeAll(HttpUtil.USER_AGENT_KEY);
-      if (userAgent != null) {
-        headers.put(HttpUtil.USER_AGENT_KEY, userAgent);
-      }
-
-      try {
-        stream = transport.newStream(method, headers, listener);
-      } catch (IllegalStateException ex) {
-        // We can race with the transport and end up trying to use a terminated transport.
-        // TODO(ejona86): Improve the API to remove the possibility of the race.
-        closeCallPrematurely(listener, Status.fromThrowable(ex));
-      }
-      // Start the deadline timer after stream creation because it will close the stream
-      if (deadlineNanoTime != null) {
-        deadlineCancellationFuture = startDeadlineTimer(timeoutMicros);
-      }
-    }
-
-    @Override
-    public void request(int numMessages) {
-      Preconditions.checkState(stream != null, "Not started");
-      stream.request(numMessages);
-    }
-
-    @Override
-    public void cancel() {
-      cancelCalled = true;
-      // Cancel is called in exception handling cases, so it may be the case that the
-      // stream was never successfully created.
-      if (stream != null) {
-        stream.cancel(Status.CANCELLED);
-      }
-    }
-
-    @Override
-    public void halfClose() {
-      Preconditions.checkState(stream != null, "Not started");
-      Preconditions.checkState(!cancelCalled, "call was cancelled");
-      Preconditions.checkState(!halfCloseCalled, "call already half-closed");
-      halfCloseCalled = true;
-      stream.halfClose();
-    }
-
-    @Override
-    public void sendPayload(ReqT payload) {
-      Preconditions.checkState(stream != null, "Not started");
-      Preconditions.checkState(!cancelCalled, "call was cancelled");
-      Preconditions.checkState(!halfCloseCalled, "call was half-closed");
-      boolean failed = true;
-      try {
-        InputStream payloadIs = method.streamRequest(payload);
-        stream.writeMessage(payloadIs);
-        failed = false;
-      } finally {
-        // TODO(notcarl): Find out if payloadIs needs to be closed.
-        if (failed) {
-          cancel();
-        }
-      }
-      // For unary requests, we don't flush since we know that halfClose should be coming soon. This
-      // allows us to piggy-back the END_STREAM=true on the last payload frame without opening the
-      // possibility of broken applications forgetting to call halfClose without noticing.
-      if (!unaryRequest) {
-        stream.flush();
-      }
-    }
-
-    @Override
-    public boolean isReady() {
-      return stream.isReady();
-    }
-
-    /**
-     * Close the call before the stream is created.
-     */
-    private void closeCallPrematurely(ClientStreamListener listener, Status status) {
-      Preconditions.checkState(stream == null, "Stream already created");
-      stream = new NoopClientStream();
-      listener.closed(status, new Metadata.Trailers());
-    }
-
-    private ScheduledFuture<?> startDeadlineTimer(long timeoutMicros) {
-      return deadlineCancellationExecutor.schedule(new Runnable() {
-        @Override
-        public void run() {
-          stream.cancel(Status.DEADLINE_EXCEEDED);
-        }
-      }, timeoutMicros, TimeUnit.MICROSECONDS);
-    }
-
-    private class ClientStreamListenerImpl implements ClientStreamListener {
-      private final Listener<RespT> observer;
-      private final Long deadlineNanoTime;
-      private boolean closed;
-
-      public ClientStreamListenerImpl(Listener<RespT> observer, Long deadlineNanoTime) {
-        Preconditions.checkNotNull(observer);
-        this.observer = observer;
-        this.deadlineNanoTime = deadlineNanoTime;
-      }
-
-      @Override
-      public void headersRead(final Metadata.Headers headers) {
-        callExecutor.execute(new Runnable() {
-          @Override
-          public void run() {
-            try {
-              if (closed) {
-                return;
-              }
-
-              observer.onHeaders(headers);
-            } catch (Throwable t) {
-              cancel();
-              throw Throwables.propagate(t);
-            }
-          }
-        });
-      }
-
-      @Override
-      public void messageRead(final InputStream message) {
-        callExecutor.execute(new Runnable() {
-          @Override
-          public void run() {
-            try {
-              if (closed) {
-                return;
-              }
-
-              try {
-                observer.onPayload(method.parseResponse(message));
-              } finally {
-                message.close();
-              }
-            } catch (Throwable t) {
-              cancel();
-              throw Throwables.propagate(t);
-            }
-          }
-        });
-      }
-
-      @Override
-      public void closed(Status status, Metadata.Trailers trailers) {
-        if (status.getCode() == Status.Code.CANCELLED && deadlineNanoTime != null) {
-          // When the server's deadline expires, it can only reset the stream with CANCEL and no
-          // description. Since our timer may be delayed in firing, we double-check the deadline and
-          // turn the failure into the likely more helpful DEADLINE_EXCEEDED status. This is always
-          // safe, but we avoid wasting resources getting the nanoTime() when unnecessary.
-          if (deadlineNanoTime <= System.nanoTime()) {
-            status = Status.DEADLINE_EXCEEDED;
-            // Replace trailers to prevent mixing sources of status and trailers.
-            trailers = new Metadata.Trailers();
-          }
-        }
-        final Status savedStatus = status;
-        final Metadata.Trailers savedTrailers = trailers;
-        callExecutor.execute(new Runnable() {
-          @Override
-          public void run() {
-            closed = true;
-            // manually optimize the volatile read
-            ScheduledFuture<?> future = deadlineCancellationFuture;
-            if (future != null) {
-              future.cancel(false);
-            }
-            observer.onClose(savedStatus, savedTrailers);
-          }
-        });
-      }
-
-      @Override
-      public void onReady() {
-        callExecutor.execute(new Runnable() {
-          @Override
-          public void run() {
-            observer.onReady();
-          }
-        });
       }
     }
   }
