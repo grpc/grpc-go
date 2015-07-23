@@ -524,7 +524,7 @@ public class Context {
   /**
    * Lookup the value for a key in the context inheritance chain.
    */
-  private Object lookup(Key key) {
+  private Object lookup(Key<?> key) {
     for (int i = 0; i < keyValueEntries.length; i++) {
       if (key.equals(keyValueEntries[i][0])) {
         return keyValueEntries[i][1];
@@ -733,7 +733,7 @@ public class Context {
         return false;
       }
 
-      Key key = (Key) o;
+      Key<?> key = (Key<?>) o;
 
       return key.name.equals(this.name);
     }
