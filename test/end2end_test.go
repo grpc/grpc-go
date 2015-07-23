@@ -93,17 +93,6 @@ func newPayload(t testpb.PayloadType, size int32) *testpb.Payload {
 	}
 }
 
-func healthCheck(t time.Duration, cc *grpc.ClientConn, serviceName string) (*healthpb.HealthCheckResponse, error) {
-	ctx, _ := context.WithTimeout(context.Background(), t)
-	hc := healthpb.NewHealthCheckClient(cc)
-	req := &healthpb.HealthCheckRequest{
-		Host:    "",
-		Service: serviceName,
-	}
-	out, err := hc.Check(ctx, req)
-	return out, err
-}
-
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	md, ok := metadata.FromContext(ctx)
 	if ok {
@@ -371,6 +360,17 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	cc.Close()
 }
 
+func healthCheck(t time.Duration, cc *grpc.ClientConn, serviceName string) (*healthpb.HealthCheckResponse, error) {
+	ctx, _ := context.WithTimeout(context.Background(), t)
+	hc := healthpb.NewHealthCheckClient(cc)
+	req := &healthpb.HealthCheckRequest{
+		Host:    "",
+		Service: serviceName,
+	}
+	out, err := hc.Check(ctx, req)
+	return out, err
+}
+
 func TestHealthCheckOnSuccess(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testHealthCheckOnSuccess(t, e)
@@ -417,32 +417,20 @@ func testHealthCheckOff(t *testing.T, e env) {
 	}
 }
 
-func TestHealthCheckNotFound(t *testing.T) {
+func TestHealthCheckServingStatus(t *testing.T) {
 	for _, e := range listTestEnv() {
-		testHealthCheckNotFound(t, e)
+		testHealthCheckServingStatus(t, e)
 	}
 }
 
-func testHealthCheckNotFound(t *testing.T, e env) {
+func testHealthCheckServingStatus(t *testing.T, e env) {
 	hs := health.NewHealthServer()
 	s, cc := setUp(hs, math.MaxUint32, e)
 	defer tearDown(s, cc)
-	if _, err := healthCheck(1*time.Second, cc, "unregister_service"); err != grpc.Errorf(codes.NotFound, "unknown service") {
+	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck"); err != grpc.Errorf(codes.NotFound, "unknown service") {
 		t.Fatalf("TestHealthCheck(_)=_, %v, want error code %d", err, codes.NotFound)
 	}
-}
-
-func TestHealthCheckServing(t *testing.T) {
-	for _, e := range listTestEnv() {
-		testHealthCheckServing(t, e)
-	}
-}
-
-func testHealthCheckServing(t *testing.T, e env) {
-	hs := health.NewHealthServer()
 	hs.SetServingStatus("", "grpc.health.v1alpha.HealthCheck", 1)
-	s, cc := setUp(hs, math.MaxUint32, e)
-	defer tearDown(s, cc)
 	out, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck")
 	if err != nil {
 		t.Fatalf("TestHealthCheck(_)=_, %v, want _,<nil>", err)
@@ -450,26 +438,15 @@ func testHealthCheckServing(t *testing.T, e env) {
 	if out.Status != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("Got the serving status %v, want SERVING", out.Status)
 	}
-}
-
-func TestHealthCheckNotServing(t *testing.T) {
-	for _, e := range listTestEnv() {
-		testHealthCheckNotServing(t, e)
-	}
-}
-
-func testHealthCheckNotServing(t *testing.T, e env) {
-	hs := health.NewHealthServer()
 	hs.SetServingStatus("", "grpc.health.v1alpha.HealthCheck", 2)
-	s, cc := setUp(hs, math.MaxUint32, e)
-	defer tearDown(s, cc)
-	out, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck")
+	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck")
 	if err != nil {
 		t.Fatalf("TestHealthCheck(_)=_, %v, want _,<nil>", err)
 	}
 	if out.Status != healthpb.HealthCheckResponse_NOT_SERVING {
 		t.Fatalf("Got the serving status %v, want NOT_SERVING ")
 	}
+
 }
 
 func TestEmptyUnary(t *testing.T) {

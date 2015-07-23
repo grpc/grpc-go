@@ -12,8 +12,9 @@ import (
 )
 
 type HealthServer struct {
-	// StatusMap stores the serving status of a service
+	// statusMap stores the serving status of the services this HealthServer monitors
 	statusMap map[string]int32
+	mu        sync.Mutex
 }
 
 func NewHealthServer() *HealthServer {
@@ -25,22 +26,22 @@ func NewHealthServer() *HealthServer {
 func (s *HealthServer) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (out *healthpb.HealthCheckResponse, err error) {
 	service := in.Host + ":" + in.Service
 	out = new(healthpb.HealthCheckResponse)
-	status, ok := s.statusMap[service]
-	out.Status = healthpb.HealthCheckResponse_ServingStatus(status)
-	if !ok {
-		err = grpc.Errorf(codes.NotFound, "unknown service")
-	} else {
-		err = nil
+	s.mu.Lock()
+	if status, ok := s.statusMap[service]; ok {
+		s.mu.Unlock()
+		return &healthpb.HealthCheckResponse{
+			Status: healthpb.HealthCheckResponse_ServingStatus(status),
+		}, nil
 	}
-	return out, err
+	s.mu.Unlock()
+	return nil, grpc.Errorf(codes.NotFound, "unknown service")
 }
 
 // SetServingStatus is called when need to reset the serving status of a service
 // or insert a new service entry into the statusMap
 func (s *HealthServer) SetServingStatus(host string, service string, status int32) {
 	service = host + ":" + service
-	var mu sync.Mutex
-	mu.Lock()
+	s.mu.Lock()
 	s.statusMap[service] = status
-	mu.Unlock()
+	s.mu.Unlock()
 }
