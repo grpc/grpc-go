@@ -383,7 +383,7 @@ func testHealthCheckOnSuccess(t *testing.T, e env) {
 	s, cc := setUp(hs, math.MaxUint32, e)
 	defer tearDown(s, cc)
 	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck"); err != nil {
-		t.Fatalf("HealthCheck/Check(,_)= _, %v, want <nil>", err)
+		t.Fatalf("HealthCheck/Check(_,_)= _, %v, want _, <nil>", err)
 	}
 }
 
@@ -399,7 +399,7 @@ func testHealthCheckOnFailure(t *testing.T, e env) {
 	s, cc := setUp(hs, math.MaxUint32, e)
 	defer tearDown(s, cc)
 	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1alpha.HealthCheck"); err != grpc.Errorf(codes.DeadlineExceeded, "context deadline exceeded") {
-		t.Fatalf("HealthCheck/Check(,_)= _, %v, want error code %d", err, codes.DeadlineExceeded)
+		t.Fatalf("HealthCheck/Check(_,_)= _, %v, want _, error code %d", err, codes.DeadlineExceeded)
 	}
 }
 
@@ -413,7 +413,7 @@ func testHealthCheckOff(t *testing.T, e env) {
 	s, cc := setUp(nil, math.MaxUint32, e)
 	defer tearDown(s, cc)
 	if _, err := healthCheck(1*time.Second, cc, ""); err != grpc.Errorf(codes.Unimplemented, "unknown service grpc.health.v1alpha.HealthCheck") {
-		t.Fatalf("HealthCheck/Check(,_) = _, %v, want error code %d", err, codes.Unimplemented)
+		t.Fatalf("HealthCheck/Check(_,_) = _, %v, want _, error code %d", err, codes.Unimplemented)
 	}
 }
 
@@ -428,12 +428,12 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 	s, cc := setUp(hs, math.MaxUint32, e)
 	defer tearDown(s, cc)
 	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck"); err != grpc.Errorf(codes.NotFound, "unknown service") {
-		t.Fatalf("HealthCheck/Check(,_)= _, %v, want error code %d", err, codes.NotFound)
+		t.Fatalf("HealthCheck/Check(_,_)= _, %v, want _, error code %d", err, codes.NotFound)
 	}
 	hs.SetServingStatus("", "grpc.health.v1alpha.HealthCheck", int32(healthpb.HealthCheckResponse_SERVING))
 	out, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck")
 	if err != nil {
-		t.Fatalf("HealthCheck/Check(,_)= _, %v, want _,<nil>", err)
+		t.Fatalf("HealthCheck/Check(_,_)= _, %v, want _, <nil>", err)
 	}
 	if out.Status != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("Got the serving status %v, want SERVING", out.Status)
@@ -441,7 +441,7 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 	hs.SetServingStatus("", "grpc.health.v1alpha.HealthCheck", int32(healthpb.HealthCheckResponse_NOT_SERVING))
 	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck")
 	if err != nil {
-		t.Fatalf("HealthCheck/Check(,_)= _, %v, want _,<nil>", err)
+		t.Fatalf("HealthCheck/Check(,_)= _, %v, want _, <nil>", err)
 	}
 	if out.Status != healthpb.HealthCheckResponse_NOT_SERVING {
 		t.Fatalf("Got the serving status %v, want NOT_SERVING ")
