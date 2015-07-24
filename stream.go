@@ -191,19 +191,6 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
-	if cs.tracing {
-		cs.mu.Lock()
-		if cs.traceInfo.tr != nil {
-			if cs.traceInfo.tr != nil {
-				p := &payload{
-					sent: false,
-					msg:  m,
-				}
-				cs.traceInfo.tr.LazyLog(p, true)
-			}
-		}
-		cs.mu.Unlock()
-	}
 	err = recv(cs.p, cs.codec, m)
 	defer func() {
 		// err != nil indicates the termination of the stream.
@@ -212,6 +199,19 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		}
 	}()
 	if err == nil {
+		if cs.tracing {
+			cs.mu.Lock()
+			if cs.traceInfo.tr != nil {
+				if cs.traceInfo.tr != nil {
+					p := &payload{
+						sent: false,
+						msg:  m,
+					}
+					cs.traceInfo.tr.LazyLog(p, true)
+				}
+			}
+			cs.mu.Unlock()
+		}
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
 		}
