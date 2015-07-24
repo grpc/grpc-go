@@ -3,7 +3,7 @@
 // DO NOT EDIT!
 
 /*
-Package grpc_health is a generated protocol buffer package.
+Package grpc_health_v1alpha is a generated protocol buffer package.
 
 It is generated from these files:
 	health.proto
@@ -12,7 +12,7 @@ It has these top-level messages:
 	HealthCheckRequest
 	HealthCheckResponse
 */
-package grpc_health
+package grpc_health_v1alpha
 
 import proto "github.com/golang/protobuf/proto"
 
@@ -28,7 +28,32 @@ var _ grpc.ClientConn
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 
+type HealthCheckResponse_ServingStatus int32
+
+const (
+	HealthCheckResponse_UNKNOWN     HealthCheckResponse_ServingStatus = 0
+	HealthCheckResponse_SERVING     HealthCheckResponse_ServingStatus = 1
+	HealthCheckResponse_NOT_SERVING HealthCheckResponse_ServingStatus = 2
+)
+
+var HealthCheckResponse_ServingStatus_name = map[int32]string{
+	0: "UNKNOWN",
+	1: "SERVING",
+	2: "NOT_SERVING",
+}
+var HealthCheckResponse_ServingStatus_value = map[string]int32{
+	"UNKNOWN":     0,
+	"SERVING":     1,
+	"NOT_SERVING": 2,
+}
+
+func (x HealthCheckResponse_ServingStatus) String() string {
+	return proto.EnumName(HealthCheckResponse_ServingStatus_name, int32(x))
+}
+
 type HealthCheckRequest struct {
+	Host    string `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
+	Service string `protobuf:"bytes,2,opt,name=service" json:"service,omitempty"`
 }
 
 func (m *HealthCheckRequest) Reset()         { *m = HealthCheckRequest{} }
@@ -36,6 +61,7 @@ func (m *HealthCheckRequest) String() string { return proto.CompactTextString(m)
 func (*HealthCheckRequest) ProtoMessage()    {}
 
 type HealthCheckResponse struct {
+	Status HealthCheckResponse_ServingStatus `protobuf:"varint,1,opt,name=status,enum=grpc.health.v1alpha.HealthCheckResponse_ServingStatus" json:"status,omitempty"`
 }
 
 func (m *HealthCheckResponse) Reset()         { *m = HealthCheckResponse{} }
@@ -43,6 +69,7 @@ func (m *HealthCheckResponse) String() string { return proto.CompactTextString(m
 func (*HealthCheckResponse) ProtoMessage()    {}
 
 func init() {
+	proto.RegisterEnum("grpc.health.v1alpha.HealthCheckResponse_ServingStatus", HealthCheckResponse_ServingStatus_name, HealthCheckResponse_ServingStatus_value)
 }
 
 // Client API for HealthCheck service
@@ -61,7 +88,7 @@ func NewHealthCheckClient(cc *grpc.ClientConn) HealthCheckClient {
 
 func (c *healthCheckClient) Check(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
 	out := new(HealthCheckResponse)
-	err := grpc.Invoke(ctx, "/grpc.health.HealthCheck/Check", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/grpc.health.v1alpha.HealthCheck/Check", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +118,7 @@ func _HealthCheck_Check_Handler(srv interface{}, ctx context.Context, codec grpc
 }
 
 var _HealthCheck_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.health.HealthCheck",
+	ServiceName: "grpc.health.v1alpha.HealthCheck",
 	HandlerType: (*HealthCheckServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
