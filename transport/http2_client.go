@@ -53,10 +53,10 @@ import (
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
-	target string   // server name/addr
+	target    string // server name/addr
 	userAgent string
-	conn   net.Conn // underlying communication channel
-	nextID uint32   // the next stream ID to be used
+	conn      net.Conn // underlying communication channel
+	nextID    uint32   // the next stream ID to be used
 
 	// writableChan synchronizes write access to the transport.
 	// A writer acquires the write lock by sending a value on writableChan
@@ -165,9 +165,9 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
-		target: addr,
+		target:    addr,
 		userAgent: ua,
-		conn:   conn,
+		conn:      conn,
 		// The client initiated stream id is odd starting from 1.
 		nextID:          1,
 		writableChan:    make(chan int, 1),
