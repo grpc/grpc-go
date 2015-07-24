@@ -542,6 +542,17 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	data := make([]byte, size)
 	copy(data, f.Data())
 	s.write(recvMsg{data: data})
+
+	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
+		s.mu.Lock()
+		if (s.state == streamWriteDone) {
+			s.state = streamDone
+		} else {
+			s.state = streamReadDone
+		}
+		s.mu.Unlock()
+		s.write(recvMsg{err: io.EOF})
+	}
 }
 
 func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
