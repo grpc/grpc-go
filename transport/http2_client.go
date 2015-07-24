@@ -53,9 +53,10 @@ import (
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
-	target string   // server name/addr
-	conn   net.Conn // underlying communication channel
-	nextID uint32   // the next stream ID to be used
+	target    string // server name/addr
+	userAgent string
+	conn      net.Conn // underlying communication channel
+	nextID    uint32   // the next stream ID to be used
 
 	// writableChan synchronizes write access to the transport.
 	// A writer acquires the write lock by sending a value on writableChan
@@ -158,10 +159,15 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 			return nil, ConnectionErrorf("transport: %v", err)
 		}
 	}
+	ua := primaryUA
+	if opts.UserAgent != "" {
+		ua += " " + opts.UserAgent
+	}
 	var buf bytes.Buffer
 	t := &http2Client{
-		target: addr,
-		conn:   conn,
+		target:    addr,
+		userAgent: ua,
+		conn:      conn,
 		// The client initiated stream id is odd starting from 1.
 		nextID:          1,
 		writableChan:    make(chan int, 1),
@@ -273,7 +279,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":path", Value: callHdr.Method})
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+	t.hEnc.WriteField(hpack.HeaderField{Name: "user-agent", Value: t.userAgent})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "te", Value: "trailers"})
+
 	if timeout > 0 {
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: timeoutEncode(timeout)})
 	}
