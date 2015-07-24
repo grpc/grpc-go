@@ -50,6 +50,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 
 import org.HdrHistogram.Histogram;
@@ -153,14 +154,21 @@ final class Utils {
     }
 
     // It's a Netty transport.
-    SslContext context = null;
+    SslContext sslContext = null;
     NegotiationType negotiationType = config.tls ? NegotiationType.TLS : NegotiationType.PLAINTEXT;
     if (config.tls && config.testca) {
       File cert = TestUtils.loadCert("ca.pem");
-      boolean useJdkSsl = config.transport == ClientConfiguration.Transport.NETTY_NIO;
-      context = GrpcSslContexts.forClient().trustManager(cert)
-          .sslProvider(useJdkSsl ? SslProvider.JDK : SslProvider.OPENSSL)
-          .build();
+      SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient().trustManager(cert);
+      if (config.transport == ClientConfiguration.Transport.NETTY_NIO) {
+        sslContextBuilder = GrpcSslContexts.configure(sslContextBuilder, SslProvider.JDK);
+      } else {
+        // Native transport with OpenSSL
+        sslContextBuilder = GrpcSslContexts.configure(sslContextBuilder, SslProvider.OPENSSL);
+      }
+      if (config.useDefaultCiphers) {
+        sslContextBuilder.ciphers(null);
+      }
+      sslContext = sslContextBuilder.build();
     }
     final EventLoopGroup group;
     final Class<? extends io.netty.channel.Channel> channelType;
@@ -192,7 +200,7 @@ final class Utils {
         .channelType(channelType)
         .negotiationType(negotiationType)
         .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null)
-        .sslContext(context)
+        .sslContext(sslContext)
         .flowControlWindow(config.flowControlWindow)
         .build();
   }

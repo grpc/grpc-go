@@ -145,7 +145,7 @@ subprojects {
         // on the Java version.
         def alpnboot_version = '8.1.2.v20141202'
         if (JavaVersion.current().ordinal() < JavaVersion.VERSION_1_8.ordinal()) {
-            alpnboot_version = '7.1.2.v20141202'
+            alpnboot_version = '7.1.3.v20150130'
         }
 
         alpnboot_package_name = 'org.mortbay.jetty.alpn:alpn-boot:' + alpnboot_version

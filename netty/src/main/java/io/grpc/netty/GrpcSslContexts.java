@@ -31,12 +31,14 @@
 
 package io.grpc.netty;
 
+import io.grpc.internal.ExperimentalApi;
 import io.netty.handler.codec.http2.Http2SecurityUtil;
 import io.netty.handler.ssl.ApplicationProtocolConfig;
 import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import java.io.File;
@@ -47,11 +49,25 @@ import java.io.File;
 public class GrpcSslContexts {
   private GrpcSslContexts() {}
 
-  private static ApplicationProtocolConfig DEFAULT_APN = new ApplicationProtocolConfig(
-          Protocol.ALPN,
-          SelectorFailureBehavior.FATAL_ALERT,
-          SelectedListenerFailureBehavior.FATAL_ALERT,
-          "h2");
+  private static String[] HTTP2_VERSIONS = {"h2"};
+
+  private static ApplicationProtocolConfig ALPN = new ApplicationProtocolConfig(
+      Protocol.ALPN,
+      SelectorFailureBehavior.FATAL_ALERT,
+      SelectedListenerFailureBehavior.FATAL_ALERT,
+      HTTP2_VERSIONS);
+
+  private static ApplicationProtocolConfig NPN = new ApplicationProtocolConfig(
+      Protocol.NPN,
+      SelectorFailureBehavior.FATAL_ALERT,
+      SelectedListenerFailureBehavior.FATAL_ALERT,
+      HTTP2_VERSIONS);
+
+  private static ApplicationProtocolConfig NPN_AND_ALPN = new ApplicationProtocolConfig(
+      Protocol.NPN_AND_ALPN,
+      SelectorFailureBehavior.FATAL_ALERT,
+      SelectedListenerFailureBehavior.FATAL_ALERT,
+      HTTP2_VERSIONS);
 
   /**
    * Creates a SslContextBuilder with ciphers and APN appropriate for gRPC.
@@ -89,7 +105,59 @@ public class GrpcSslContexts {
    * an application requires particular settings it should override the options set here.
    */
   public static SslContextBuilder configure(SslContextBuilder builder) {
-    return builder.ciphers(Http2SecurityUtil.CIPHERS, SupportedCipherSuiteFilter.INSTANCE)
-        .applicationProtocolConfig(DEFAULT_APN);
+    return configure(builder, defaultSslProvider());
+  }
+
+  /**
+   * Set ciphers and APN appropriate for gRPC. Precisely what is set is permitted to change, so if
+   * an application requires particular settings it should override the options set here.
+   */
+  @ExperimentalApi
+  public static SslContextBuilder configure(SslContextBuilder builder, SslProvider provider) {
+    return builder.sslProvider(provider)
+                  .ciphers(Http2SecurityUtil.CIPHERS, SupportedCipherSuiteFilter.INSTANCE)
+                  .applicationProtocolConfig(selectApplicationProtocolConfig(provider));
+  }
+
+  /**
+   * Returns OpenSSL if available, otherwise returns the JDK provider.
+   */
+  private static SslProvider defaultSslProvider() {
+    return SslProvider.JDK;
+    // TODO(nmittler): use this once we support OpenSSL.
+    // return OpenSsl.isAvailable() ? SslProvider.OPENSSL : SslProvider.JDK;
+  }
+
+  /**
+   * Attempts to select the best {@link ApplicationProtocolConfig} for the given
+   * {@link SslProvider}.
+   */
+  private static ApplicationProtocolConfig selectApplicationProtocolConfig(SslProvider provider) {
+    switch (provider) {
+      case JDK: {
+        if (JettyTlsUtil.isJettyAlpnConfigured()) {
+          return ALPN;
+        }
+        if (JettyTlsUtil.isJettyNpnConfigured()) {
+          return NPN;
+        }
+        throw new IllegalArgumentException("Jetty ALPN/NPN has not been properly configured.");
+      }
+      case OPENSSL: {
+        throw new IllegalArgumentException("OpenSSL is not currently supported.");
+        // TODO(nmittler): use this once we support OpenSSL.
+        /*if (!OpenSsl.isAvailable()) {
+          throw new IllegalArgumentException("OpenSSL is not installed on the system.");
+        }
+
+        if (OpenSsl.isAlpnSupported()) {
+          return NPN_AND_ALPN;
+        } else {
+          return NPN;
+        }*/
+      }
+      default:
+        throw new IllegalArgumentException("Unsupported provider: " + provider);
+    }
   }
 }

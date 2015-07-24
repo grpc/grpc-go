@@ -60,6 +60,7 @@ class ClientConfiguration implements Configuration {
   Transport transport = Transport.NETTY_NIO;
   boolean tls;
   boolean testca;
+  boolean useDefaultCiphers;
   boolean directExecutor;
   SocketAddress address;
   int channels = 4;
@@ -231,6 +232,13 @@ class ClientConfiguration implements Configuration {
       @Override
       protected void setClientValue(ClientConfiguration config, String value) {
         config.testca = parseBoolean(value);
+      }
+    },
+    USE_DEFAULT_CIPHERS("", "Use the default JDK ciphers for TLS (Used to support Java 7).",
+            "" + DEFAULT.useDefaultCiphers) {
+      @Override
+      protected void setClientValue(ClientConfiguration config, String value) {
+        config.useDefaultCiphers = parseBoolean(value);
       }
     },
     TRANSPORT("STR", Transport.getDescriptionString(), DEFAULT.transport.name().toLowerCase()) {

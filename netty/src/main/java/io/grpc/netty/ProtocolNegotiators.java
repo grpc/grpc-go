@@ -48,7 +48,6 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.ssl.OpenSslContext;
-import io.netty.handler.ssl.OpenSslEngine;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
@@ -74,15 +73,6 @@ public final class ProtocolNegotiators {
   public static ChannelHandler serverTls(SSLEngine sslEngine) {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
 
-    // If we're using Jetty ALPN, verify that it is configured properly.
-    if (!(sslEngine instanceof OpenSslEngine)) {
-      try {
-        JettyAlpnVerifier.verifyJettyAlpn();
-      } catch (JettyAlpnVerifier.NotFoundException e) {
-        throw new IllegalArgumentException(e);
-      }
-    }
-
     return new SslHandler(sslEngine, false);
   }
 
@@ -96,24 +86,23 @@ public final class ProtocolNegotiators {
     Preconditions.checkNotNull(sslContext, "sslContext");
     Preconditions.checkNotNull(inetAddress, "inetAddress");
 
-    // If we're using Jetty ALPN, verify that it is configured properly.
-    if (!(sslContext instanceof OpenSslContext)) {
-      try {
-        JettyAlpnVerifier.verifyJettyAlpn();
-      } catch (JettyAlpnVerifier.NotFoundException e) {
-        throw new IllegalArgumentException(e);
-      }
-    }
-
     return new ProtocolNegotiator() {
       @Override
       public Handler newHandler(Http2ConnectionHandler handler) {
         ChannelHandler sslBootstrap = new ChannelHandlerAdapter() {
           @Override
           public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-            // TODO(nmittler): Unsupported for OpenSSL in Netty < 4.1.Beta6.
-            SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(),
-                    inetAddress.getHostName(), inetAddress.getPort());
+            final SSLEngine sslEngine;
+            if (sslContext instanceof OpenSslContext) {
+              // TODO(nmittler): Unsupported for OpenSSL in Netty < 4.1.Beta6.
+              // Until we upgrade Netty, uncomment the line below when testing with OpenSSL.
+              //sslEngine = sslContext.newEngine(ctx.alloc());
+              sslEngine = sslContext.newEngine(ctx.alloc(),
+                  inetAddress.getHostName(), inetAddress.getPort());
+            } else {
+              sslEngine = sslContext.newEngine(ctx.alloc(),
+                  inetAddress.getHostName(), inetAddress.getPort());
+            }
             SSLParameters sslParams = new SSLParameters();
             sslParams.setEndpointIdentificationAlgorithm("HTTPS");
             sslEngine.setSSLParameters(sslParams);
