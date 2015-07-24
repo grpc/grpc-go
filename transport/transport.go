@@ -286,6 +286,43 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 	return
 }
 
+// readClosed changes s.state to record that the read direction is
+// closed.  This happens in response to END_STREAM flags in header,
+// continuation, or data frames.
+//
+// This means that the stream will become fully closed if the write direction
+// is already closed, or half-closed otherwise.
+func (s *Stream) readClosed() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.state != streamDone {
+		if s.state == streamWriteDone {
+			s.state = streamDone
+		} else {
+			s.state = streamReadDone
+		}
+	}
+}
+
+// writeClosed changes s.state to record that the write direction is closed.
+// This happens when the last data frame is sent.
+//
+// This means that the stream will become fully closed if the read direction is
+// already closed, or half-closed otherwise.
+func (s *Stream) writeClosed() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.state != streamDone {
+		if s.state == streamReadDone {
+			s.state = streamDone
+		} else {
+			s.state = streamWriteDone
+		}
+	}
+}
+
 type key int
 
 // The key to save transport.Stream in the context.

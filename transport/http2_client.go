@@ -473,15 +473,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 	if !opts.Last {
 		return nil
 	}
-	s.mu.Lock()
-	if s.state != streamDone {
-		if s.state == streamReadDone {
-			s.state = streamDone
-		} else {
-			s.state = streamWriteDone
-		}
-	}
-	s.mu.Unlock()
+	s.writeClosed()
 	return nil
 }
 
@@ -542,6 +534,11 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	data := make([]byte, size)
 	copy(data, f.Data())
 	s.write(recvMsg{data: data})
+
+	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
+		s.readClosed()
+		s.write(recvMsg{err: io.EOF})
+	}
 }
 
 func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
