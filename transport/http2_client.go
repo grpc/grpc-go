@@ -543,6 +543,8 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	copy(data, f.Data())
 	s.write(recvMsg{data: data})
 
+	// The server has closed the stream without sending trailers.  Record that
+	// the read direction is closed, and set the status appropriately.
 	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
 		s.mu.Lock()
 		if (s.state == streamWriteDone) {
@@ -550,6 +552,8 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		} else {
 			s.state = streamReadDone
 		}
+		s.statusCode = codes.Internal
+		s.statusDesc = "server closed the stream without sending trailers"
 		s.mu.Unlock()
 		s.write(recvMsg{err: io.EOF})
 	}
