@@ -441,7 +441,7 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 	hs.SetServingStatus("", "grpc.health.v1alpha.HealthCheck", int32(healthpb.HealthCheckResponse_NOT_SERVING))
 	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck")
 	if err != nil {
-		t.Fatalf("HealthCheck/Check(, _) = _, %v, want _, <nil>", err)
+		t.Fatalf("HealthCheck/Check(_, _) = _, %v, want _, <nil>", err)
 	}
 	if out.Status != healthpb.HealthCheckResponse_NOT_SERVING {
 		t.Fatalf("Got the serving status %v, want NOT_SERVING ")
