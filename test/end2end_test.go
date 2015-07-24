@@ -444,7 +444,7 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 		t.Fatalf("HealthCheck/Check(_, _) = _, %v, want _, <nil>", err)
 	}
 	if out.Status != healthpb.HealthCheckResponse_NOT_SERVING {
-		t.Fatalf("Got the serving status %v, want NOT_SERVING ")
+		t.Fatalf("Got the serving status %v, want NOT_SERVING", out.Status)
 	}
 
 }
