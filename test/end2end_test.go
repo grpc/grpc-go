@@ -894,23 +894,32 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	s, cc := setUp(nil, 1, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
-	// Perform a unary RPC to make sure the new settings were propagated to the client.
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", tc, err)
-	}
-	// Initiate the 1st stream
-	if _, err := tc.StreamingInputCall(context.Background()); err != nil {
-		t.Fatalf("%v.StreamingInputCall(_) = %v, want <nil>", tc, err)
-	}
-	var wg sync.WaitGroup
-	wg.Add(1)
+	done := make(chan struct{})
+	ch := make(chan int)
 	go func() {
-		defer wg.Done()
-		// The 2nd stream should block until its deadline exceeds.
-		ctx, _ := context.WithTimeout(context.Background(), time.Second)
-		if _, err := tc.StreamingInputCall(ctx); grpc.Code(err) != codes.DeadlineExceeded {
-			t.Errorf("%v.StreamingInputCall(%v) = _, %v, want error code %d", tc, ctx, err, codes.DeadlineExceeded)
+		for {
+			select {
+			case <-time.After(5 * time.Millisecond):
+				ch <- 0
+			case <-time.After(5 * time.Second):
+				close(done)
+				return
+			}
 		}
 	}()
-	wg.Wait()
+	// Loop until a stream creation hangs due to the new max stream setting.
+	for {
+		select {
+		case <-ch:
+			ctx, _ := context.WithTimeout(context.Background(), time.Second)
+			if _, err := tc.StreamingInputCall(ctx); err != nil {
+				if grpc.Code(err) == codes.DeadlineExceeded {
+					return
+				}
+				t.Fatalf("%v.StreamingInputCall(_) = %v, want <nil>", tc, err)
+			}
+		case <-done:
+			t.Fatalf("Client has not received the max stream setting in 5 seconds.")
+		}
+	}
 }
