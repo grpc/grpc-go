@@ -367,8 +367,7 @@ func healthCheck(t time.Duration, cc *grpc.ClientConn, serviceName string) (*hea
 		Host:    "",
 		Service: serviceName,
 	}
-	out, err := hc.Check(ctx, req)
-	return out, err
+	return hc.Check(ctx, req)
 }
 
 func TestHealthCheckOnSuccess(t *testing.T) {
