@@ -166,7 +166,11 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if cs.tracing {
 		cs.mu.Lock()
 		if cs.traceInfo.tr != nil {
-			cs.traceInfo.tr.LazyLog(&fmtStringer{"sent: %v", []interface{}{payload{m}}}, true)
+			p := &payload{
+				sent: true,
+				msg:  m,
+			}
+			cs.traceInfo.tr.LazyLog(p, true)
 		}
 		cs.mu.Unlock()
 	}
@@ -190,7 +194,13 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	if cs.tracing {
 		cs.mu.Lock()
 		if cs.traceInfo.tr != nil {
-			cs.traceInfo.tr.LazyLog(&fmtStringer{"received: %v", []interface{}{payload{m}}}, true)
+			if cs.traceInfo.tr != nil {
+				p := &payload{
+					sent: false,
+					msg:  m,
+				}
+				cs.traceInfo.tr.LazyLog(p, true)
+			}
 		}
 		cs.mu.Unlock()
 	}

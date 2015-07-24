@@ -93,12 +93,17 @@ func (f *firstLine) String() string {
 
 // payload represents an RPC request or response payload.
 type payload struct {
-	m interface{} // e.g. a proto.Message
+	sent bool        // whether this is a request or response
+	msg  interface{} // e.g. a proto.Message
 	// TODO(dsymonds): add stringifying info to codec, and limit how much we hold here?
 }
 
 func (p payload) String() string {
-	return fmt.Sprint(p.m)
+	if p.sent {
+		return fmt.Sprintf("sent: %v", p.msg)
+	} else {
+		return fmt.Sprintf("recv: %v", p.msg)
+	}
 }
 
 type fmtStringer struct {
