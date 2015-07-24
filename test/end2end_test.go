@@ -72,11 +72,10 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 	if md, ok := metadata.FromContext(ctx); ok {
 		// For testing purpose, returns an error if there is attached metadata other than
 		// the user agent set by the client application.
-		if ua, isOK := md["user-agent"]; isOK {
-			grpc.SendHeader(ctx, metadata.Pairs("ua", ua))
-		} else {
+		if _, ok := md["user-agent"]; !ok {
 			return nil, grpc.Errorf(codes.DataLoss, "got extra metadata")
 		}
+		grpc.SendHeader(ctx, metadata.Pairs("ua", md["user-agent"]))
 	}
 	return new(testpb.Empty), nil
 }
