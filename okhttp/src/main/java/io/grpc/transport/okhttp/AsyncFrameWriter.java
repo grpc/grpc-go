@@ -32,7 +32,6 @@
 package io.grpc.transport.okhttp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.SettableFuture;
 
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameWriter;
@@ -44,11 +43,15 @@ import io.grpc.SerializingExecutor;
 import okio.Buffer;
 
 import java.io.IOException;
+import java.net.Socket;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 class AsyncFrameWriter implements FrameWriter {
+  private static final Logger log = Logger.getLogger(OkHttpClientTransport.class.getName());
   private FrameWriter frameWriter;
+  private Socket socket;
   // Although writes are thread-safe, we serialize them to prevent consuming many Threads that are
   // just waiting on each other.
   private final SerializingExecutor executor;
@@ -60,12 +63,16 @@ class AsyncFrameWriter implements FrameWriter {
   }
 
   /**
-   * Set the real frameWriter, should only be called by thread of executor.
+   * Set the real frameWriter and the corresponding underlying socket, the socket is needed for
+   * closing.
+   *
+   * <p>should only be called by thread of executor.
    */
-  void setFrameWriter(FrameWriter frameWriter) {
+  void becomeConnected(FrameWriter frameWriter, Socket socket) {
     Preconditions.checkState(this.frameWriter == null,
         "AsyncFrameWriter's setFrameWriter() should only be called once.");
-    this.frameWriter = frameWriter;
+    this.frameWriter = Preconditions.checkNotNull(frameWriter);
+    this.socket = Preconditions.checkNotNull(socket);
   }
 
   @Override
@@ -207,30 +214,19 @@ class AsyncFrameWriter implements FrameWriter {
 
   @Override
   public void close() {
-    // Wait for the frameWriter to close.
-    final SettableFuture<?> closeFuture = SettableFuture.create();
     executor.execute(new Runnable() {
       @Override
       public void run() {
-        try {
-          if (frameWriter != null) {
+        if (frameWriter != null) {
+          try {
             frameWriter.close();
+            socket.close();
+          } catch (IOException e) {
+            log.log(Level.WARNING, "Failed closing connection", e);
           }
-        } catch (IOException e) {
-          closeFuture.setException(e);
-        } finally {
-          closeFuture.set(null);
         }
       }
     });
-    try {
-      closeFuture.get();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new RuntimeException(e);
-    } catch (ExecutionException e) {
-      throw new RuntimeException(e);
-    }
   }
 
   private abstract class WriteRunnable implements Runnable {

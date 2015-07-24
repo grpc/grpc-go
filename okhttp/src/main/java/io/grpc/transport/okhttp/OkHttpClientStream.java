@@ -37,7 +37,6 @@ import static com.google.common.base.Preconditions.checkState;
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.Header;
 
-import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.transport.ClientStreamListener;
@@ -69,8 +68,8 @@ class OkHttpClientStream extends Http2ClientStream {
                                       AsyncFrameWriter frameWriter,
                                       OkHttpClientTransport transport,
                                       OutboundFlowController outboundFlow,
-                                      MethodType type) {
-    return new OkHttpClientStream(listener, frameWriter, transport, outboundFlow, type);
+                                      MethodType type, Object lock) {
+    return new OkHttpClientStream(listener, frameWriter, transport, outboundFlow, type, lock);
   }
 
   @GuardedBy("lock")
@@ -80,7 +79,7 @@ class OkHttpClientStream extends Http2ClientStream {
   private final AsyncFrameWriter frameWriter;
   private final OutboundFlowController outboundFlow;
   private final OkHttpClientTransport transport;
-  private final Object lock = new Object();
+  private final Object lock;
   private Object outboundFlowState;
   private volatile Integer id;
 
@@ -88,12 +87,14 @@ class OkHttpClientStream extends Http2ClientStream {
                              AsyncFrameWriter frameWriter,
                              OkHttpClientTransport transport,
                              OutboundFlowController outboundFlow,
-                             MethodType type) {
+                             MethodType type,
+                             Object lock) {
     super(new OkHttpWritableBufferAllocator(), listener);
     this.frameWriter = frameWriter;
     this.transport = transport;
     this.outboundFlow = outboundFlow;
     this.type = type;
+    this.lock = lock;
   }
 
   /**
@@ -139,33 +140,30 @@ class OkHttpClientStream extends Http2ClientStream {
     onSentBytes(numBytes);
   }
 
+  /**
+   * Must be called with holding the transport lock.
+   */
   public void transportHeadersReceived(List<Header> headers, boolean endOfStream) {
-    synchronized (lock) {
-      if (endOfStream) {
-        transportTrailersReceived(Utils.convertTrailers(headers));
-      } else {
-        transportHeadersReceived(Utils.convertHeaders(headers));
-      }
+    if (endOfStream) {
+      transportTrailersReceived(Utils.convertTrailers(headers));
+    } else {
+      transportHeadersReceived(Utils.convertHeaders(headers));
     }
   }
 
   /**
-   * We synchronized on "lock" for delivering frames and updating window size, because
-   * the {@link #request(int)} call can be called in other thread for delivering frames.
+   * Must be called with holding the transport lock.
    */
   public void transportDataReceived(okio.Buffer frame, boolean endOfStream) {
-    synchronized (lock) {
-      long length = frame.size();
-      window -= length;
-      if (window < 0) {
-        frameWriter.rstStream(id(), ErrorCode.FLOW_CONTROL_ERROR);
-        Status status = Status.INTERNAL.withDescription(
-            "Received data size exceeded our receiving window size");
-        transport.finishStream(id(), status, null);
-        return;
-      }
-      super.transportDataReceived(new OkHttpReadableBuffer(frame), endOfStream);
+    long length = frame.size();
+    window -= length;
+    if (window < 0) {
+      frameWriter.rstStream(id(), ErrorCode.FLOW_CONTROL_ERROR);
+      transport.finishStream(id(), Status.INTERNAL.withDescription(
+          "Received data size exceeded our receiving window size"), null);
+      return;
     }
+    super.transportDataReceived(new OkHttpReadableBuffer(frame), endOfStream);
   }
 
   @Override
@@ -196,14 +194,6 @@ class OkHttpClientStream extends Http2ClientStream {
         processedWindow += delta;
         frameWriter.windowUpdate(id(), delta);
       }
-    }
-  }
-
-  @Override
-  public void transportReportStatus(Status newStatus, boolean stopDelivery,
-      Metadata.Trailers trailers) {
-    synchronized (lock) {
-      super.transportReportStatus(newStatus, stopDelivery, trailers);
     }
   }
 

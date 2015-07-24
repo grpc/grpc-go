@@ -195,7 +195,7 @@ public class OkHttpClientTransportTest {
     assertEquals("Protocol error\n" + NETWORK_ISSUE_MESSAGE, listener1.status.getDescription());
     assertEquals(Status.INTERNAL.getCode(), listener2.status.getCode());
     assertEquals("Protocol error\n" + NETWORK_ISSUE_MESSAGE, listener2.status.getDescription());
-    verify(transportListener).transportShutdown();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown();
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 

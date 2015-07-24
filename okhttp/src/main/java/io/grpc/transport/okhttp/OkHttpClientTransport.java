@@ -70,7 +70,6 @@ import okio.Okio;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -93,6 +92,7 @@ import javax.net.ssl.SSLSocketFactory;
 class OkHttpClientTransport implements ClientTransport {
   private static final Map<ErrorCode, Status> ERROR_CODE_TO_STATUS;
   private static final Logger log = Logger.getLogger(OkHttpClientTransport.class.getName());
+  private static final OkHttpClientStream[] EMPTY_STREAM_ARRAY = new OkHttpClientStream[0];
 
   static {
     Map<ErrorCode, Status> errorToStatus = new HashMap<ErrorCode, Status>();
@@ -138,8 +138,9 @@ class OkHttpClientTransport implements ClientTransport {
   private final Object lock = new Object();
   @GuardedBy("lock")
   private int nextStreamId;
+  @GuardedBy("lock")
   private final Map<Integer, OkHttpClientStream> streams =
-      Collections.synchronizedMap(new HashMap<Integer, OkHttpClientStream>());
+      new HashMap<Integer, OkHttpClientStream>();
   private final Executor executor;
   // Wrap on executor, to guarantee some operations be executed serially.
   private final SerializingExecutor serializingExecutor;
@@ -245,8 +246,8 @@ class OkHttpClientTransport implements ClientTransport {
     Preconditions.checkNotNull(headers, "headers");
     Preconditions.checkNotNull(listener, "listener");
 
-    OkHttpClientStream clientStream =
-        OkHttpClientStream.newStream(listener, frameWriter, this, outboundFlow, method.getType());
+    OkHttpClientStream clientStream = OkHttpClientStream.newStream(
+            listener, frameWriter, this, outboundFlow, method.getType(), lock);
 
     String defaultPath = "/" + method.getFullMethodName();
     List<Header> requestHeaders =
@@ -332,7 +333,7 @@ class OkHttpClientTransport implements ClientTransport {
           clientFrameHandler = new ClientFrameHandler(testFrameReader);
           executor.execute(clientFrameHandler);
           connectedCallback.run();
-          frameWriter.setFrameWriter(testFrameWriter);
+          frameWriter.becomeConnected(testFrameWriter, socket);
           return;
         }
         BufferedSource source;
@@ -369,7 +370,7 @@ class OkHttpClientTransport implements ClientTransport {
 
         Variant variant = new Http2();
         rawFrameWriter = variant.newWriter(sink, true);
-        frameWriter.setFrameWriter(rawFrameWriter);
+        frameWriter.becomeConnected(rawFrameWriter, socket);
 
         try {
           // Do these with the raw FrameWriter, so that they will be done in this thread,
@@ -390,25 +391,35 @@ class OkHttpClientTransport implements ClientTransport {
 
   @Override
   public void shutdown() {
-    boolean normalClose;
     synchronized (lock) {
-      normalClose = !goAway;
+      if (goAway) {
+        return;
+      }
     }
-    if (normalClose) {
-      // Send GOAWAY with lastGoodStreamId of 0, since we don't expect any server-initiated streams.
-      // The GOAWAY is part of graceful shutdown.
-      frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
 
-      onGoAway(Integer.MAX_VALUE, Status.UNAVAILABLE.withDescription("Transport stopped"));
-    }
-    stopIfNecessary();
+    // Send GOAWAY with lastGoodStreamId of 0, since we don't expect any server-initiated streams.
+    // The GOAWAY is part of graceful shutdown.
+    frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
+
+    onGoAway(Integer.MAX_VALUE, Status.UNAVAILABLE.withDescription("Transport stopped"));
   }
+
+  /**
+   * Gets all active streams as an array.
+   */
+  OkHttpClientStream[] getActiveStreams() {
+    synchronized (lock) {
+      return streams.values().toArray(EMPTY_STREAM_ARRAY);
+    }
+  }
+
 
   @VisibleForTesting
   ClientFrameHandler getHandler() {
     return clientFrameHandler;
   }
 
+  @VisibleForTesting
   Map<Integer, OkHttpClientStream> getStreams() {
     return streams;
   }
@@ -438,37 +449,32 @@ class OkHttpClientTransport implements ClientTransport {
 
   private void onGoAway(int lastKnownStreamId, Status status) {
     boolean notifyShutdown;
-    ArrayList<OkHttpClientStream> goAwayStreams = new ArrayList<OkHttpClientStream>();
-    List<PendingStream> pendingStreamsCopy;
     synchronized (lock) {
       notifyShutdown = !goAway;
       goAway = true;
       goAwayStatus = status;
-      synchronized (streams) {
-        Iterator<Map.Entry<Integer, OkHttpClientStream>> it = streams.entrySet().iterator();
-        while (it.hasNext()) {
-          Map.Entry<Integer, OkHttpClientStream> entry = it.next();
-          if (entry.getKey() > lastKnownStreamId) {
-            goAwayStreams.add(entry.getValue());
-            it.remove();
-          }
+      Iterator<Map.Entry<Integer, OkHttpClientStream>> it = streams.entrySet().iterator();
+      while (it.hasNext()) {
+        Map.Entry<Integer, OkHttpClientStream> entry = it.next();
+        if (entry.getKey() > lastKnownStreamId) {
+          it.remove();
+          entry.getValue().transportReportStatus(status, false, new Metadata.Trailers());
         }
       }
-      pendingStreamsCopy = pendingStreams;
-      pendingStreams = new LinkedList<PendingStream>();
+
+      for (PendingStream stream : pendingStreams) {
+        stream.clientStream.transportReportStatus(status, true, new Metadata.Trailers());
+        stream.createdFuture.set(null);
+      }
+      pendingStreams.clear();
     }
 
     if (notifyShutdown) {
+      // TODO(madongfly): Another thread may called stopIfNecessary() and closed the socket, so that
+      // the reading thread calls listener.transportTerminated() and race with this call.
       listener.transportShutdown();
     }
-    for (OkHttpClientStream stream : goAwayStreams) {
-      stream.transportReportStatus(status, false, new Metadata.Trailers());
-    }
-    for (PendingStream stream : pendingStreamsCopy) {
-      stream.clientStream.transportReportStatus(
-          status, true, new Metadata.Trailers());
-      stream.createdFuture.set(null);
-    }
+
     stopIfNecessary();
   }
 
@@ -486,19 +492,20 @@ class OkHttpClientTransport implements ClientTransport {
    * @param errorCode reset the stream with this ErrorCode if not null.
    */
   void finishStream(int streamId, @Nullable Status status, @Nullable ErrorCode errorCode) {
-    OkHttpClientStream stream;
-    stream = streams.remove(streamId);
-    if (stream != null) {
-      if (errorCode != null) {
-        frameWriter.rstStream(streamId, ErrorCode.CANCEL);
-      }
-      if (status != null) {
-        boolean isCancelled = (status.getCode() == Code.CANCELLED
-            || status.getCode() == Code.DEADLINE_EXCEEDED);
-        stream.transportReportStatus(status, isCancelled, new Metadata.Trailers());
-      }
-      if (!startPendingStreams()) {
-        stopIfNecessary();
+    synchronized (lock) {
+      OkHttpClientStream stream = streams.remove(streamId);
+      if (stream != null) {
+        if (errorCode != null) {
+          frameWriter.rstStream(streamId, ErrorCode.CANCEL);
+        }
+        if (status != null) {
+          boolean isCancelled = (status.getCode() == Code.CANCELLED
+              || status.getCode() == Code.DEADLINE_EXCEEDED);
+          stream.transportReportStatus(status, isCancelled, new Metadata.Trailers());
+        }
+        if (!startPendingStreams()) {
+          stopIfNecessary();
+        }
       }
     }
   }
@@ -507,38 +514,20 @@ class OkHttpClientTransport implements ClientTransport {
    * When the transport is in goAway states, we should stop it once all active streams finish.
    */
   void stopIfNecessary() {
-    boolean shouldStop;
-    Http2Ping outstandingPing = null;
-    boolean socketConnected;
     synchronized (lock) {
-      shouldStop = (goAway && streams.size() == 0);
-      if (shouldStop) {
-        if (stopped) {
-          // We've already stopped, don't stop again.
-          shouldStop = false;
-        } else {
+      if (goAway && streams.size() == 0) {
+        if (!stopped) {
           stopped = true;
-          outstandingPing = ping;
-          ping = null;
+          // We will close the underlying socket in the writing thread to break out the reader
+          // thread, which will close the frameReader and notify the listener.
+          frameWriter.close();
+
+          if (ping != null) {
+            ping.failed(getPingFailure());
+            ping = null;
+          }
         }
       }
-      socketConnected = socket != null;
-    }
-    if (shouldStop) {
-      // Wait for the frame writer to close.
-      frameWriter.close();
-      if (socketConnected) {
-        // Close the socket to break out the reader thread, which will close the
-        // frameReader and notify the listener.
-        try {
-          socket.close();
-        } catch (IOException e) {
-          log.log(Level.WARNING, "Failed closing socket", e);
-        }
-      }
-    }
-    if (outstandingPing != null) {
-      outstandingPing.failed(getPingFailure());
     }
   }
 
@@ -555,6 +544,12 @@ class OkHttpClientTransport implements ClientTransport {
   boolean mayHaveCreatedStream(int streamId) {
     synchronized (lock) {
       return streamId < nextStreamId && (streamId & 1) == 1;
+    }
+  }
+
+  OkHttpClientStream getStream(int streamId) {
+    synchronized (lock) {
+      return streams.get(streamId);
     }
   }
 
@@ -607,8 +602,7 @@ class OkHttpClientTransport implements ClientTransport {
     @Override
     public void data(boolean inFinished, int streamId, BufferedSource in, int length)
         throws IOException {
-      final OkHttpClientStream stream;
-      stream = streams.get(streamId);
+      OkHttpClientStream stream = getStream(streamId);
       if (stream == null) {
         if (mayHaveCreatedStream(streamId)) {
           frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
@@ -622,7 +616,9 @@ class OkHttpClientTransport implements ClientTransport {
 
         Buffer buf = new Buffer();
         buf.write(in.buffer(), length);
-        stream.transportDataReceived(buf, inFinished);
+        synchronized (lock) {
+          stream.transportDataReceived(buf, inFinished);
+        }
       }
 
       // connection window update
@@ -643,18 +639,23 @@ class OkHttpClientTransport implements ClientTransport {
         int associatedStreamId,
         List<Header> headerBlock,
         HeadersMode headersMode) {
-      OkHttpClientStream stream;
-      stream = streams.get(streamId);
-      if (stream == null) {
-        if (mayHaveCreatedStream(streamId)) {
-          frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
+      boolean unknownStream = false;
+      synchronized (lock) {
+        OkHttpClientStream stream = streams.get(streamId);
+        if (stream == null) {
+          if (mayHaveCreatedStream(streamId)) {
+            frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
+          } else {
+            unknownStream = true;
+          }
         } else {
-          // We don't expect any server-initiated streams.
-          onError(ErrorCode.PROTOCOL_ERROR, "Received header for unknown stream: " + streamId);
+          stream.transportHeadersReceived(headerBlock, inFinished);
         }
-        return;
       }
-      stream.transportHeadersReceived(headerBlock, inFinished);
+      if (unknownStream) {
+        // We don't expect any server-initiated streams.
+        onError(ErrorCode.PROTOCOL_ERROR, "Received header for unknown stream: " + streamId);
+      }
     }
 
     @Override
@@ -748,7 +749,7 @@ class OkHttpClientTransport implements ClientTransport {
         return;
       }
 
-      OkHttpClientStream stream = streams.get(streamId);
+      OkHttpClientStream stream = getStream(streamId);
       if (stream != null) {
         outboundFlow.windowUpdate(stream, (int) delta);
       } else if (!mayHaveCreatedStream(streamId)) {

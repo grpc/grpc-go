@@ -54,7 +54,6 @@ import javax.annotation.Nullable;
  * streams.
  */
 class OutboundFlowController {
-  private static final OkHttpClientStream[] EMPTY_STREAM_ARRAY = new OkHttpClientStream[0];
   private final OkHttpClientTransport transport;
   private final FrameWriter frameWriter;
   private int initialWindowSize = DEFAULT_WINDOW_SIZE;
@@ -72,7 +71,7 @@ class OutboundFlowController {
 
     int delta = newWindowSize - initialWindowSize;
     initialWindowSize = newWindowSize;
-    for (OkHttpClientStream stream : getActiveStreams()) {
+    for (OkHttpClientStream stream : transport.getActiveStreams()) {
       OutboundFlowState state = (OutboundFlowState) stream.getOutboundFlowState();
       if (state == null) {
         // Create the OutboundFlowState with the new window size.
@@ -116,7 +115,7 @@ class OutboundFlowController {
       throw new IllegalArgumentException("Invalid streamId: " + streamId);
     }
 
-    OkHttpClientStream stream = transport.getStreams().get(streamId);
+    OkHttpClientStream stream = transport.getStream(streamId);
     if (stream == null) {
       // This is possible for a stream that has received end-of-stream from server (but hasn't sent
       // end-of-stream), and was removed from the transport stream map.
@@ -174,17 +173,10 @@ class OutboundFlowController {
   }
 
   /**
-   * Gets all active streams as an array.
-   */
-  private OkHttpClientStream[] getActiveStreams() {
-    return transport.getStreams().values().toArray(EMPTY_STREAM_ARRAY);
-  }
-
-  /**
    * Writes as much data for all the streams as possible given the current flow control windows.
    */
   private void writeStreams() {
-    OkHttpClientStream[] streams = getActiveStreams();
+    OkHttpClientStream[] streams = transport.getActiveStreams();
     int connectionWindow = connectionState.window();
     for (int numStreams = streams.length; numStreams > 0 && connectionWindow > 0;) {
       int nextNumStreams = 0;
@@ -210,7 +202,7 @@ class OutboundFlowController {
 
     // Now take one last pass through all of the streams and write any allocated bytes.
     WriteStatus writeStatus = new WriteStatus();
-    for (OkHttpClientStream stream : getActiveStreams()) {
+    for (OkHttpClientStream stream : transport.getActiveStreams()) {
       OutboundFlowState state = state(stream);
       state.writeBytes(state.allocatedBytes(), writeStatus);
       state.clearAllocatedBytes();
