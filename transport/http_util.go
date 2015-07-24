@@ -39,6 +39,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -50,6 +51,8 @@ import (
 )
 
 const (
+	// The primary user agent
+	primaryUA = "grpc-go/0.7"
 	// http2MaxFrameLen specifies the max length of a HTTP2 frame.
 	http2MaxFrameLen = 16384 // 16KB frame
 	// http://http2.github.io/http2-spec/#SettingValues
@@ -128,8 +131,7 @@ func isReservedHeader(hdr string) bool {
 		"grpc-message",
 		"grpc-status",
 		"grpc-timeout",
-		"te",
-		"user-agent":
+		"te":
 		return true
 	default:
 		return false
@@ -161,6 +163,15 @@ func newHPACKDecoder() *hpackDecoder {
 			d.state.method = f.Value
 		default:
 			if !isReservedHeader(f.Name) {
+				if f.Name == "user-agent" {
+					str := strings.Split(f.Value, " ")
+					if len(str) <= 1 {
+						// There is no application user agent string being set.
+						return
+					}
+					// Extract the application user agent string.
+					f.Value = str[1]
+				}
 				if d.state.mdata == nil {
 					d.state.mdata = make(map[string]string)
 				}

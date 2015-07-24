@@ -114,9 +114,14 @@ func WithDialer(f func(addr string, timeout time.Duration) (net.Conn, error)) Di
 	}
 }
 
+// WithUserAgent returns a DialOption that specifies a user agent string for all the RPCs.
+func WithUserAgent(s string) DialOption {
+	return func(o *dialOptions) {
+		o.copts.UserAgent = s
+	}
+}
+
 // Dial creates a client connection the given target.
-// TODO(zhaoq): Have an option to make Dial return immediately without waiting
-// for connection to complete.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	if target == "" {
 		return nil, ErrUnspecTarget
