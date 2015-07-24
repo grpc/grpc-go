@@ -320,9 +320,14 @@ func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32) (Serv
 
 // ConnectOptions covers all relevant options for dialing a server.
 type ConnectOptions struct {
-	Dialer      func(string, time.Duration) (net.Conn, error)
+	// UserAgent is the application user agent.
+	UserAgent string
+	// Dialer specifies how to dial a network address.
+	Dialer func(string, time.Duration) (net.Conn, error)
+	// AuthOptions stores the credentials required to setup a client connection and/or issue RPCs.
 	AuthOptions []credentials.Credentials
-	Timeout     time.Duration
+	// Timeout specifies the timeout for dialing a client connection.
+	Timeout time.Duration
 }
 
 // NewClientTransport establishes the transport with the required ConnectOptions
