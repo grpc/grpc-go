@@ -161,7 +161,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	}
 	ua := primaryUA
 	if opts.UserAgent != "" {
-		ua += " " + opts.UserAgent
+		ua = opts.UserAgent + " " + ua
 	}
 	var buf bytes.Buffer
 	t := &http2Client{

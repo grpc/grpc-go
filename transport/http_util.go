@@ -170,7 +170,7 @@ func newHPACKDecoder() *hpackDecoder {
 						return
 					}
 					// Extract the application user agent string.
-					f.Value = str[1]
+					f.Value = str[0]
 				}
 				if d.state.mdata == nil {
 					d.state.mdata = make(map[string]string)
