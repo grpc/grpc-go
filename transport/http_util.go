@@ -164,13 +164,13 @@ func newHPACKDecoder() *hpackDecoder {
 		default:
 			if !isReservedHeader(f.Name) {
 				if f.Name == "user-agent" {
-					str := strings.Split(f.Value, " ")
-					if len(str) <= 1 {
+					ind := strings.LastIndex(f.Value, " ")
+					if ind == -1 {
 						// There is no application user agent string being set.
 						return
 					}
 					// Extract the application user agent string.
-					f.Value = str[0]
+					f.Value = f.Value[:ind]
 				}
 				if d.state.mdata == nil {
 					d.state.mdata = make(map[string]string)
