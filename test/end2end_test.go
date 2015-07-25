@@ -62,7 +62,7 @@ var (
 		"key1": "value1",
 		"key2": "value2",
 	}
-	testAppUA = "myApp/1.0"
+	testAppUA = "myApp1/1.0 myApp2/0.9"
 )
 
 type testServer struct {
