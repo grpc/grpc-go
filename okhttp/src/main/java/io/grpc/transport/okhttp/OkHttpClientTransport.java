@@ -413,15 +413,9 @@ class OkHttpClientTransport implements ClientTransport {
     }
   }
 
-
   @VisibleForTesting
   ClientFrameHandler getHandler() {
     return clientFrameHandler;
-  }
-
-  @VisibleForTesting
-  Map<Integer, OkHttpClientStream> getStreams() {
-    return streams;
   }
 
   @VisibleForTesting

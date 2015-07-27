@@ -143,6 +143,7 @@ class OkHttpClientStream extends Http2ClientStream {
   /**
    * Must be called with holding the transport lock.
    */
+  @GuardedBy("lock")
   public void transportHeadersReceived(List<Header> headers, boolean endOfStream) {
     if (endOfStream) {
       transportTrailersReceived(Utils.convertTrailers(headers));
@@ -154,6 +155,7 @@ class OkHttpClientStream extends Http2ClientStream {
   /**
    * Must be called with holding the transport lock.
    */
+  @GuardedBy("lock")
   public void transportDataReceived(okio.Buffer frame, boolean endOfStream) {
     long length = frame.size();
     window -= length;
