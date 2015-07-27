@@ -121,7 +121,7 @@ class NettyClientStream extends Http2ClientStream {
   @Override
   protected void sendCancel(Status reason) {
     // Send the cancel command to the handler.
-    writeQueue.enqueue(new CancelStreamCommand(this, reason), true);
+    writeQueue.enqueue(new CancelClientStreamCommand(this, reason), true);
   }
 
   @Override

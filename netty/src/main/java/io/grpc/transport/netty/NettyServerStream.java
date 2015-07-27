@@ -125,6 +125,6 @@ class NettyServerStream extends AbstractServerStream<Integer> {
 
   @Override
   public void cancel(Status status) {
-    // TODO(carl-mastrangelo): implement this
+    writeQueue.enqueue(new CancelServerStreamCommand(this, status), true);
   }
 }

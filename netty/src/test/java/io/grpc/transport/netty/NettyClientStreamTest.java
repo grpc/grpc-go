@@ -104,8 +104,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     // Set stream id to indicate it has been created
     stream().id(STREAM_ID);
     stream().cancel(Status.CANCELLED);
-    ArgumentCaptor<CancelStreamCommand> commandCaptor =
-        ArgumentCaptor.forClass(CancelStreamCommand.class);
+    ArgumentCaptor<CancelClientStreamCommand> commandCaptor =
+        ArgumentCaptor.forClass(CancelClientStreamCommand.class);
     verify(writeQueue).enqueue(commandCaptor.capture(), eq(true));
     assertEquals(commandCaptor.getValue().reason(), Status.CANCELLED);
   }
@@ -115,8 +115,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     // Set stream id to indicate it has been created
     stream().id(STREAM_ID);
     stream().cancel(Status.DEADLINE_EXCEEDED);
-    ArgumentCaptor<CancelStreamCommand> commandCaptor =
-        ArgumentCaptor.forClass(CancelStreamCommand.class);
+    ArgumentCaptor<CancelClientStreamCommand> commandCaptor =
+        ArgumentCaptor.forClass(CancelClientStreamCommand.class);
     verify(writeQueue).enqueue(commandCaptor.capture(), eq(true));
     assertEquals(commandCaptor.getValue().reason(), Status.DEADLINE_EXCEEDED);
   }
@@ -124,7 +124,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void cancelShouldStillSendCommandIfStreamNotCreatedToCancelCreation() {
     stream().cancel(Status.CANCELLED);
-    verify(writeQueue).enqueue(isA(CancelStreamCommand.class), eq(true));
+    verify(writeQueue).enqueue(isA(CancelClientStreamCommand.class), eq(true));
   }
 
   @Test
@@ -244,13 +244,13 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
     // We are now waiting for 100 bytes of error context on the stream, cancel has not yet been
     // sent
-    verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
+    verify(channel, never()).writeAndFlush(any(CancelClientStreamCommand.class));
     stream().transportDataReceived(Unpooled.buffer(100).writeZero(100), false);
-    verify(channel, never()).writeAndFlush(any(CancelStreamCommand.class));
+    verify(channel, never()).writeAndFlush(any(CancelClientStreamCommand.class));
     stream().transportDataReceived(Unpooled.buffer(1000).writeZero(1000), false);
 
     // Now verify that cancel is sent and an error is reported to the listener
-    verify(writeQueue).enqueue(any(CancelStreamCommand.class), eq(true));
+    verify(writeQueue).enqueue(any(CancelClientStreamCommand.class), eq(true));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
     assertEquals(Status.UNKNOWN.getCode(), captor.getValue().getCode());

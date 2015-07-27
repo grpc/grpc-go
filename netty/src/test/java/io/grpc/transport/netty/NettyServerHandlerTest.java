@@ -335,6 +335,15 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     assertEquals(flowControlWindow, actualInitialWindowSize);
   }
 
+  @Test
+  public void cancelShouldSendRstStream() throws Exception {
+    createStream();
+    writeQueue.enqueue(new CancelServerStreamCommand(stream, Status.DEADLINE_EXCEEDED), true);
+    ByteBuf expected = rstStreamFrame(stream.id(), (int) Http2Error.CANCEL.code());
+    ByteBuf actual = captureWrite(ctx);
+    assertEquals(expected, actual);
+  }
+
   private void createStream() throws Exception {
     Http2Headers headers = new DefaultHttp2Headers()
         .method(HTTP_METHOD)

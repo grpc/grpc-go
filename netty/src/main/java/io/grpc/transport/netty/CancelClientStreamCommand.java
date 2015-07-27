@@ -43,11 +43,11 @@ import java.util.EnumSet;
 /**
  * Command sent from a Netty client stream to the handler to cancel the stream.
  */
-class CancelStreamCommand {
+class CancelClientStreamCommand {
   private final NettyClientStream stream;
   private final Status reason;
 
-  CancelStreamCommand(NettyClientStream stream, Status reason) {
+  CancelClientStreamCommand(NettyClientStream stream, Status reason) {
     this.stream = Preconditions.checkNotNull(stream, "stream");
     Preconditions.checkNotNull(reason);
     Preconditions.checkArgument(EnumSet.of(CANCELLED, DEADLINE_EXCEEDED).contains(reason.getCode()),

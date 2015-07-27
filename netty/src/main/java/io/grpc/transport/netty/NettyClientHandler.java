@@ -160,8 +160,8 @@ class NettyClientHandler extends Http2ConnectionHandler {
       createStream((CreateStreamCommand) msg, promise);
     } else if (msg instanceof SendGrpcFrameCommand) {
       sendGrpcFrame(ctx, (SendGrpcFrameCommand) msg, promise);
-    } else if (msg instanceof CancelStreamCommand) {
-      cancelStream(ctx, (CancelStreamCommand) msg, promise);
+    } else if (msg instanceof CancelClientStreamCommand) {
+      cancelStream(ctx, (CancelClientStreamCommand) msg, promise);
     } else if (msg instanceof RequestMessagesCommand) {
       ((RequestMessagesCommand) msg).requestMessages();
     } else if (msg instanceof SendPingCommand) {
@@ -322,7 +322,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   /**
    * Cancels this stream.
    */
-  private void cancelStream(ChannelHandlerContext ctx, CancelStreamCommand cmd,
+  private void cancelStream(ChannelHandlerContext ctx, CancelClientStreamCommand cmd,
       ChannelPromise promise) {
     NettyClientStream stream = cmd.stream();
     stream.transportReportStatus(cmd.reason(), true, new Metadata.Trailers());

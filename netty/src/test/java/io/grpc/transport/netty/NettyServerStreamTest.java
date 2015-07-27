@@ -234,6 +234,14 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
         true);
   }
 
+  @Test
+  public void cancelStreamShouldSucceed() {
+    stream().cancel(Status.DEADLINE_EXCEEDED);
+    verify(writeQueue).enqueue(
+        new CancelServerStreamCommand(stream(), Status.DEADLINE_EXCEEDED),
+        true);
+  }
+
   @Override
   protected NettyServerStream createStream() {
     when(handler.getWriteQueue()).thenReturn(writeQueue);

@@ -234,6 +234,8 @@ class NettyServerHandler extends Http2ConnectionHandler {
       sendResponseHeaders(ctx, (SendResponseHeadersCommand) msg, promise);
     } else if (msg instanceof RequestMessagesCommand) {
       ((RequestMessagesCommand) msg).requestMessages();
+    } else if (msg instanceof CancelServerStreamCommand) {
+      cancelStream(ctx, (CancelServerStreamCommand) msg, promise);
     } else {
       AssertionError e =
           new AssertionError("Write called for unexpected type: " + msg.getClass().getName());
@@ -285,6 +287,12 @@ class NettyServerHandler extends Http2ConnectionHandler {
       closeStreamWhenDone(promise, cmd.streamId());
     }
     encoder().writeHeaders(ctx, cmd.streamId(), cmd.headers(), 0, cmd.endOfStream(), promise);
+  }
+
+  private void cancelStream(ChannelHandlerContext ctx, CancelServerStreamCommand cmd,
+      ChannelPromise promise) {
+    cmd.stream().abortStream(cmd.reason(), false);
+    encoder().writeRstStream(ctx, cmd.stream().id(), Http2Error.CANCEL.code(), promise);
   }
 
   private Http2Stream requireHttp2Stream(int streamId) {
