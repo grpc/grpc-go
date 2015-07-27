@@ -35,7 +35,6 @@ import static io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE;
 import static io.grpc.testing.integration.Util.assertEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -88,7 +87,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -100,7 +98,6 @@ public abstract class AbstractTransportTest {
       ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
   private static final AtomicReference<Metadata.Headers> requestHeadersCapture =
       new AtomicReference<Metadata.Headers>();
-  private static final AtomicLong serverDelayMillis = new AtomicLong(0);
   private static ScheduledExecutorService testServiceExecutor;
   private static ServerImpl server;
   private static int OPERATION_TIMEOUT = 5000;
@@ -110,7 +107,6 @@ public abstract class AbstractTransportTest {
 
     builder.addService(ServerInterceptors.intercept(
         TestServiceGrpc.bindService(new TestServiceImpl(testServiceExecutor)),
-        TestUtils.delayServerResponseInterceptor(serverDelayMillis),
         TestUtils.recordRequestHeadersInterceptor(requestHeadersCapture),
         TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)));
     try {
@@ -138,7 +134,6 @@ public abstract class AbstractTransportTest {
     blockingStub = TestServiceGrpc.newBlockingStub(channel);
     asyncStub = TestServiceGrpc.newStub(channel);
     requestHeadersCapture.set(null);
-    serverDelayMillis.set(0);
   }
 
   /** Clean up. */
@@ -601,23 +596,27 @@ public abstract class AbstractTransportTest {
 
   @Test
   public void deadlineNotExceeded() {
-    serverDelayMillis.set(0);
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
     TestServiceGrpc.newBlockingStub(channel)
         .withDeadlineAfter(50, TimeUnit.MILLISECONDS)
-        .emptyCall(Empty.getDefaultInstance());
+        .streamingOutputCall(StreamingOutputCallRequest.newBuilder()
+            .addResponseParameters(ResponseParameters.newBuilder()
+                .setIntervalUs(0))
+                .build()).next();
   }
 
   @Test(timeout = 10000)
   public void deadlineExceeded() {
-    serverDelayMillis.set(20);
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
         .withDeadlineAfter(10, TimeUnit.MILLISECONDS);
     try {
-      stub.emptyCall(Empty.getDefaultInstance());
+      stub.streamingOutputCall(StreamingOutputCallRequest.newBuilder()
+           .addResponseParameters(ResponseParameters.newBuilder()
+               .setIntervalUs(20000))
+               .build()).next();
       fail("Expected deadline to be exceeded");
     } catch (Throwable t) {
       assertEquals(Status.DEADLINE_EXCEEDED, Status.fromThrowable(t));
@@ -626,19 +625,17 @@ public abstract class AbstractTransportTest {
 
   @Test(timeout = 10000)
   public void deadlineExceededServerStreaming() throws Exception {
-    serverDelayMillis.set(10); // applied to every message
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
+    ResponseParameters.Builder responseParameters = ResponseParameters.newBuilder()
+        .setSize(1)
+        .setIntervalUs(10000);
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .setResponseType(PayloadType.COMPRESSABLE)
-        .addResponseParameters(ResponseParameters.newBuilder()
-            .setSize(1))
-        .addResponseParameters(ResponseParameters.newBuilder()
-            .setSize(1))
-        .addResponseParameters(ResponseParameters.newBuilder()
-            .setSize(1))
-        .addResponseParameters(ResponseParameters.newBuilder()
-            .setSize(1))
+        .addResponseParameters(responseParameters)
+        .addResponseParameters(responseParameters)
+        .addResponseParameters(responseParameters)
+        .addResponseParameters(responseParameters)
         .build();
     StreamRecorder<StreamingOutputCallResponse> recorder = StreamRecorder.create();
     TestServiceGrpc.newStub(channel)
@@ -646,7 +643,6 @@ public abstract class AbstractTransportTest {
         .streamingOutputCall(request, recorder);
     recorder.awaitCompletion();
     assertEquals(Status.DEADLINE_EXCEEDED, Status.fromThrowable(recorder.getError()));
-    assertNotEquals(0, recorder.getValues().size());
   }
 
   protected int unaryPayloadLength() {
