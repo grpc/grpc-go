@@ -80,6 +80,7 @@ public final class ServerImpl extends Server {
   private Runnable terminationRunnable;
   /** Service encapsulating something similar to an accept() socket. */
   private final io.grpc.transport.Server transportServer;
+  private final Object lock = new Object();
   private boolean transportServerTerminated;
   /** {@code transportServer} and services encapsulating something similar to a TCP connection. */
   private final Collection<ServerTransport> transports = new HashSet<ServerTransport>();
@@ -103,8 +104,10 @@ public final class ServerImpl extends Server {
 
   /** Hack to allow executors to auto-shutdown. Not for general use. */
   // TODO(ejona86): Replace with a real API.
-  synchronized void setTerminationRunnable(Runnable runnable) {
-    this.terminationRunnable = runnable;
+  void setTerminationRunnable(Runnable runnable) {
+    synchronized (lock) {
+      this.terminationRunnable = runnable;
+    }
   }
 
   /**
@@ -114,27 +117,31 @@ public final class ServerImpl extends Server {
    * @throws IllegalStateException if already started
    * @throws IOException if unable to bind
    */
-  public synchronized ServerImpl start() throws IOException {
-    if (started) {
-      throw new IllegalStateException("Already started");
+  public ServerImpl start() throws IOException {
+    synchronized (lock) {
+      if (started) {
+        throw new IllegalStateException("Already started");
+      }
+      // Start and wait for any port to actually be bound.
+      transportServer.start(new ServerListenerImpl());
+      started = true;
+      return this;
     }
-    // Start and wait for any port to actually be bound.
-    transportServer.start(new ServerListenerImpl());
-    started = true;
-    return this;
   }
 
   /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are rejected.
    */
-  public synchronized ServerImpl shutdown() {
-    if (shutdown) {
+  public ServerImpl shutdown() {
+    synchronized (lock) {
+      if (shutdown) {
+        return this;
+      }
+      shutdown = true;
+      transportServer.shutdown();
+      timeoutService.shutdown();
       return this;
     }
-    shutdown = true;
-    transportServer.shutdown();
-    timeoutService.shutdown();
-    return this;
   }
 
   /**
@@ -145,9 +152,11 @@ public final class ServerImpl extends Server {
    * <p>NOT YET IMPLEMENTED. This method currently behaves identically to shutdown().
    */
   // TODO(ejona86): cancel preexisting calls.
-  public synchronized ServerImpl shutdownNow() {
-    shutdown();
-    return this;
+  public ServerImpl shutdownNow() {
+    synchronized (lock) {
+      shutdown();
+      return this;
+    }
   }
 
   /**
@@ -157,8 +166,10 @@ public final class ServerImpl extends Server {
    * @see #shutdown()
    * @see #isTerminated()
    */
-  public synchronized boolean isShutdown() {
-    return shutdown;
+  public boolean isShutdown() {
+    synchronized (lock) {
+      return shutdown;
+    }
   }
 
   /**
@@ -166,22 +177,25 @@ public final class ServerImpl extends Server {
    *
    * @return whether the server is terminated, as would be done by {@link #isTerminated()}.
    */
-  public synchronized boolean awaitTerminated(long timeout, TimeUnit unit)
-      throws InterruptedException {
-    long timeoutNanos = unit.toNanos(timeout);
-    long endTimeNanos = System.nanoTime() + timeoutNanos;
-    while (!terminated && (timeoutNanos = endTimeNanos - System.nanoTime()) > 0) {
-      TimeUnit.NANOSECONDS.timedWait(this, timeoutNanos);
+  public boolean awaitTerminated(long timeout, TimeUnit unit) throws InterruptedException {
+    synchronized (lock) {
+      long timeoutNanos = unit.toNanos(timeout);
+      long endTimeNanos = System.nanoTime() + timeoutNanos;
+      while (!terminated && (timeoutNanos = endTimeNanos - System.nanoTime()) > 0) {
+        TimeUnit.NANOSECONDS.timedWait(lock, timeoutNanos);
+      }
+      return terminated;
     }
-    return terminated;
   }
 
   /**
    * Waits for the server to become terminated.
    */
-  public synchronized void awaitTerminated() throws InterruptedException {
-    while (!terminated) {
-      wait();
+  public void awaitTerminated() throws InterruptedException {
+    synchronized (lock) {
+      while (!terminated) {
+        lock.wait();
+      }
     }
   }
 
@@ -191,8 +205,10 @@ public final class ServerImpl extends Server {
    *
    * @see #isShutdown()
    */
-  public synchronized boolean isTerminated() {
-    return terminated;
+  public boolean isTerminated() {
+    synchronized (lock) {
+      return terminated;
+    }
   }
 
   /**
@@ -201,23 +217,28 @@ public final class ServerImpl extends Server {
    *
    * @param transport service to remove
    */
-  private synchronized void transportClosed(ServerTransport transport) {
-    if (!transports.remove(transport)) {
-      throw new AssertionError("Transport already removed");
+  private void transportClosed(ServerTransport transport) {
+    synchronized (lock) {
+      if (!transports.remove(transport)) {
+        throw new AssertionError("Transport already removed");
+      }
+      checkForTermination();
     }
-    checkForTermination();
   }
 
   /** Notify of complete shutdown if necessary. */
-  private synchronized void checkForTermination() {
-    if (shutdown && transports.isEmpty() && transportServerTerminated) {
-      if (terminated) {
-        throw new AssertionError("Server already terminated");
-      }
-      terminated = true;
-      notifyAll();
-      if (terminationRunnable != null) {
-        terminationRunnable.run();
+  private void checkForTermination() {
+    synchronized (lock) {
+      if (shutdown && transports.isEmpty() && transportServerTerminated) {
+        if (terminated) {
+          throw new AssertionError("Server already terminated");
+        }
+        terminated = true;
+        // TODO(carl-mastrangelo): move this outside the synchronized block.
+        lock.notifyAll();
+        if (terminationRunnable != null) {
+          terminationRunnable.run();
+        }
       }
     }
   }
@@ -225,7 +246,7 @@ public final class ServerImpl extends Server {
   private class ServerListenerImpl implements ServerListener {
     @Override
     public ServerTransportListener transportCreated(ServerTransport transport) {
-      synchronized (ServerImpl.this) {
+      synchronized (lock) {
         transports.add(transport);
       }
       return new ServerTransportListenerImpl(transport);
@@ -233,7 +254,7 @@ public final class ServerImpl extends Server {
 
     @Override
     public void serverShutdown() {
-      synchronized (ServerImpl.this) {
+      synchronized (lock) {
         // transports collection can be modified during shutdown(), even if we hold the lock, due
         // to reentrancy.
         for (ServerTransport transport : new ArrayList<ServerTransport>(transports)) {
