@@ -558,7 +558,9 @@ class OkHttpClientTransport implements ClientTransport {
    */
   @VisibleForTesting
   static Status toGrpcStatus(ErrorCode code) {
-    return ERROR_CODE_TO_STATUS.get(code);
+    Status status = ERROR_CODE_TO_STATUS.get(code);
+    return status != null ? status : Status.UNKNOWN.withDescription(
+        "Unknown http2 error code: " + code.httpCode);
   }
 
   /**
