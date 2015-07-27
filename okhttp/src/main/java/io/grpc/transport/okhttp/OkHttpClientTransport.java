@@ -96,17 +96,10 @@ class OkHttpClientTransport implements ClientTransport {
 
   static {
     Map<ErrorCode, Status> errorToStatus = new HashMap<ErrorCode, Status>();
-    errorToStatus.put(ErrorCode.NO_ERROR, Status.OK);
+    errorToStatus.put(ErrorCode.NO_ERROR,
+        Status.INTERNAL.withDescription("No error: A GRPC status of OK should have been sent"));
     errorToStatus.put(ErrorCode.PROTOCOL_ERROR,
         Status.INTERNAL.withDescription("Protocol error"));
-    errorToStatus.put(ErrorCode.INVALID_STREAM,
-        Status.INTERNAL.withDescription("Invalid stream"));
-    errorToStatus.put(ErrorCode.UNSUPPORTED_VERSION,
-        Status.INTERNAL.withDescription("Unsupported version"));
-    errorToStatus.put(ErrorCode.STREAM_IN_USE,
-        Status.INTERNAL.withDescription("Stream in use"));
-    errorToStatus.put(ErrorCode.STREAM_ALREADY_CLOSED,
-        Status.INTERNAL.withDescription("Stream already closed"));
     errorToStatus.put(ErrorCode.INTERNAL_ERROR,
         Status.INTERNAL.withDescription("Internal error"));
     errorToStatus.put(ErrorCode.FLOW_CONTROL_ERROR,
@@ -116,12 +109,17 @@ class OkHttpClientTransport implements ClientTransport {
     errorToStatus.put(ErrorCode.FRAME_TOO_LARGE,
         Status.INTERNAL.withDescription("Frame too large"));
     errorToStatus.put(ErrorCode.REFUSED_STREAM,
-        Status.INTERNAL.withDescription("Refused stream"));
-    errorToStatus.put(ErrorCode.CANCEL, Status.CANCELLED.withDescription("Cancelled"));
+        Status.UNAVAILABLE.withDescription("Refused stream"));
+    errorToStatus.put(ErrorCode.CANCEL,
+        Status.CANCELLED.withDescription("Cancelled"));
     errorToStatus.put(ErrorCode.COMPRESSION_ERROR,
         Status.INTERNAL.withDescription("Compression error"));
-    errorToStatus.put(ErrorCode.INVALID_CREDENTIALS,
-        Status.PERMISSION_DENIED.withDescription("Invalid credentials"));
+    errorToStatus.put(ErrorCode.CONNECT_ERROR,
+        Status.INTERNAL.withDescription("Connect error"));
+    errorToStatus.put(ErrorCode.ENHANCE_YOUR_CALM,
+        Status.RESOURCE_EXHAUSTED.withDescription("Enhance your calm"));
+    errorToStatus.put(ErrorCode.INADEQUATE_SECURITY,
+        Status.PERMISSION_DENIED.withDescription("Inadequate security"));
     ERROR_CODE_TO_STATUS = Collections.unmodifiableMap(errorToStatus);
   }
 
