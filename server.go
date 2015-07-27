@@ -252,7 +252,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	var traceInfo traceInfo
 	if EnableTracing {
 		traceInfo.tr = trace.New("Recv."+methodFamily(srvn), srvn)
-		//	traceInfo.tr = trace.New("Recv."+methodFamily(md.MethodName), md.MethodName)
 		defer traceInfo.tr.Finish()
 		traceInfo.firstLine.client = false
 		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
