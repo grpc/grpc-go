@@ -242,7 +242,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		//
 		// TODO(zhaoq): There exist other options also such as only closing the
 		// faulty stream locally and remotely (Other streams can keep going). Find
-		// the optimal option..M
+		// the optimal option.
 		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
 	}
 	return t.Write(stream, p, opts)
