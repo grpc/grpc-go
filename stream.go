@@ -282,6 +282,9 @@ type serverStream struct {
 	codec      Codec
 	statusCode codes.Code
 	statusDesc string
+	tracing    bool
+	mu         sync.Mutex
+	traceInfo  traceInfo
 }
 
 func (ss *serverStream) Context() context.Context {
@@ -301,6 +304,13 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 }
 
 func (ss *serverStream) SendMsg(m interface{}) error {
+	if ss.tracing {
+		ss.mu.Lock()
+		if ss.traceInfo.tr != nil {
+			ss.traceInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+		}
+		ss.mu.Unlock()
+	}
 	out, err := encode(ss.codec, m, compressionNone)
 	if err != nil {
 		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
@@ -310,5 +320,14 @@ func (ss *serverStream) SendMsg(m interface{}) error {
 }
 
 func (ss *serverStream) RecvMsg(m interface{}) error {
+	defer func() {
+		if ss.tracing {
+			ss.mu.Lock()
+			if ss.traceInfo.tr != nil {
+				ss.traceInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
+			}
+			ss.mu.Unlock()
+		}
+	}()
 	return recv(ss.p, ss.codec, m)
 }
