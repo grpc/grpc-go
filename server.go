@@ -248,13 +248,13 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	return t.Write(stream, p, opts)
 }
 
-func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, srvn string) {
+func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc) {
 	var (
 		traceInfo traceInfo
 		err       error
 	)
 	if EnableTracing {
-		traceInfo.tr = trace.New("Recv."+methodFamily(srvn), srvn)
+		traceInfo.tr = trace.New("Recv."+methodFamily(stream.Method()), stream.Method())
 		defer traceInfo.tr.Finish()
 		traceInfo.firstLine.client = false
 		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
@@ -332,7 +332,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 }
 
-func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, srvn string) {
+func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc) {
 	ss := &serverStream{
 		t:       t,
 		s:       stream,
@@ -341,7 +341,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		tracing: EnableTracing,
 	}
 	if ss.tracing {
-		ss.traceInfo.tr = trace.New("Recv."+methodFamily(srvn), srvn)
+		ss.traceInfo.tr = trace.New("Recv."+methodFamily(stream.Method()), stream.Method())
 		ss.traceInfo.firstLine.client = false
 		ss.traceInfo.tr.LazyLog(&ss.traceInfo.firstLine, false)
 	}
@@ -365,7 +365,6 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream) {
 	sm := stream.Method()
-	srvn := sm
 	if sm != "" && sm[0] == '/' {
 		sm = sm[1:]
 	}
@@ -388,11 +387,11 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	// Unary RPC or Streaming RPC?
 	if md, ok := srv.md[method]; ok {
 
-		s.processUnaryRPC(t, stream, srv, md, srvn)
+		s.processUnaryRPC(t, stream, srv, md)
 		return
 	}
 	if sd, ok := srv.sd[method]; ok {
-		s.processStreamingRPC(t, stream, srv, sd, srvn)
+		s.processStreamingRPC(t, stream, srv, sd)
 		return
 	}
 	if err := t.WriteStatus(stream, codes.Unimplemented, fmt.Sprintf("unknown method %v", method)); err != nil {
