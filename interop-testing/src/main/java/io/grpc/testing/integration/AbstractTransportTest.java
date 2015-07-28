@@ -599,7 +599,7 @@ public abstract class AbstractTransportTest {
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
     TestServiceGrpc.newBlockingStub(channel)
-        .withDeadlineAfter(50, TimeUnit.MILLISECONDS)
+        .withDeadlineAfter(10, TimeUnit.SECONDS)
         .streamingOutputCall(StreamingOutputCallRequest.newBuilder()
             .addResponseParameters(ResponseParameters.newBuilder()
                 .setIntervalUs(0))
