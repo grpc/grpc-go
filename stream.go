@@ -307,14 +307,21 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	return
 }
 
-func (ss *serverStream) SendMsg(m interface{}) error {
-	if ss.tracing {
-		ss.mu.Lock()
-		if ss.traceInfo.tr != nil {
-			ss.traceInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+func (ss *serverStream) SendMsg(m interface{}) (err error) {
+	defer func() {
+		if ss.tracing {
+			ss.mu.Lock()
+			if ss.traceInfo.tr != nil {
+				if err == nil {
+					ss.traceInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+				} else {
+					ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+					ss.traceInfo.tr.SetError()
+				}
+			}
+			ss.mu.Unlock()
 		}
-		ss.mu.Unlock()
-	}
+	}()
 	out, err := encode(ss.codec, m, compressionNone)
 	if err != nil {
 		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
@@ -323,12 +330,17 @@ func (ss *serverStream) SendMsg(m interface{}) error {
 	return ss.t.Write(ss.s, out, &transport.Options{Last: false})
 }
 
-func (ss *serverStream) RecvMsg(m interface{}) error {
+func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
 		if ss.tracing {
 			ss.mu.Lock()
 			if ss.traceInfo.tr != nil {
-				ss.traceInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
+				if err == nil {
+					ss.traceInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
+				} else {
+					ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+					ss.traceInfo.tr.SetError()
+				}
 			}
 			ss.mu.Unlock()
 		}
