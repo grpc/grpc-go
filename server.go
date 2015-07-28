@@ -249,12 +249,21 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, srvn string) {
-	var traceInfo traceInfo
+	var (
+		traceInfo traceInfo
+		err       error
+	)
 	if EnableTracing {
 		traceInfo.tr = trace.New("Recv."+methodFamily(srvn), srvn)
 		defer traceInfo.tr.Finish()
 		traceInfo.firstLine.client = false
 		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
+		defer func() {
+			if err != nil {
+				traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+				traceInfo.tr.SetError()
+			}
+		}()
 	}
 	p := &parser{s: stream}
 	for {
@@ -276,7 +285,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 			return
 		}
-		if EnableTracing {
+		if traceInfo.tr != nil {
 			traceInfo.tr.LazyLog(&payload{sent: false, msg: req}, true)
 		}
 		switch pf {
@@ -314,7 +323,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 			}
 			t.WriteStatus(stream, statusCode, statusDesc)
-			if EnableTracing {
+			if traceInfo.tr != nil {
 				traceInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
 			}
 		default:

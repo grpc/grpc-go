@@ -163,7 +163,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			return toRPCErr(err)
 		}
-		if EnableTracing {
+		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
 		}
 		stream, err = sendRequest(ctx, cc.dopts.codec, callHdr, t, args, topts)
@@ -182,7 +182,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if _, ok := lastErr.(transport.ConnectionError); ok {
 			continue
 		}
-		if EnableTracing {
+		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: false, msg: reply}, true)
 		}
 		t.CloseStream(stream, lastErr)

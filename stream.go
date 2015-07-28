@@ -282,9 +282,13 @@ type serverStream struct {
 	codec      Codec
 	statusCode codes.Code
 	statusDesc string
-	tracing    bool
-	mu         sync.Mutex
-	traceInfo  traceInfo
+
+	tracing bool // set to EnableTracing when the serverStream is created.
+
+	mu sync.Mutex // protects traceInfo
+	// traceInfo.tr is set when the serverStream is created (if EnableTracing is true),
+	// and is set to nil when the serverStream's finish method is called.
+	traceInfo traceInfo
 }
 
 func (ss *serverStream) Context() context.Context {
