@@ -286,7 +286,8 @@ public final class ChannelImpl extends Channel {
     }
 
     @Override
-    public void transportShutdown() {
+    public void transportShutdown(Status s) {
+      // TODO(carl-mastrangelo): use this status to determine if and how to retry the connection.
       synchronized (lock) {
         if (activeTransport == transport) {
           activeTransport = null;
@@ -301,7 +302,8 @@ public final class ChannelImpl extends Channel {
           log.warning("transportTerminated called without previous transportShutdown");
           activeTransport = null;
         }
-        transportShutdown();
+        // TODO(notcarl): replace this with something more meaningful
+        transportShutdown(Status.UNKNOWN);
         transports.remove(transport);
         if (shutdown && transports.isEmpty()) {
           if (terminated) {

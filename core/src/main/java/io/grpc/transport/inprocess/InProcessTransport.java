@@ -82,11 +82,12 @@ class InProcessTransport implements ServerTransport, ClientTransport {
     }
     if (serverTransportListener == null) {
       shutdownStatus = Status.UNAVAILABLE.withDescription("Could not find server: " + name);
+      final Status localShutdownStatus = shutdownStatus;
       new Thread(new Runnable() {
         @Override
         public void run() {
           synchronized (InProcessTransport.this) {
-            notifyShutdown();
+            notifyShutdown(localShutdownStatus);
             notifyTerminated();
           }
         }
@@ -137,18 +138,18 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       return;
     }
     shutdownStatus = Status.UNAVAILABLE.withDescription("transport was requested to shut down");
-    notifyShutdown();
+    notifyShutdown(Status.OK.withDescription(shutdownStatus.getDescription()));
     if (streams.isEmpty()) {
       notifyTerminated();
     }
   }
 
-  private synchronized void notifyShutdown() {
+  private synchronized void notifyShutdown(Status s) {
     if (shutdown) {
       return;
     }
     shutdown = true;
-    clientTransportListener.transportShutdown();
+    clientTransportListener.transportShutdown(s);
   }
 
   private synchronized void notifyTerminated() {
@@ -409,18 +410,24 @@ class InProcessTransport implements ServerTransport, ClientTransport {
   }
 
   private static class NoopClientStream implements ClientStream {
+    @Override
     public void request(int numMessages) {}
 
+    @Override
     public void writeMessage(InputStream message) {}
 
+    @Override
     public void flush() {}
 
+    @Override
     public boolean isReady() {
       return false;
     }
 
+    @Override
     public void cancel(Status status) {}
 
+    @Override
     public void halfClose() {}
   }
 }

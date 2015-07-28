@@ -197,7 +197,7 @@ public class ChannelImplTest {
     assertSame(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
 
     // Finish shutdown
-    transportListener.transportShutdown();
+    transportListener.transportShutdown(Status.CANCELLED);
     assertFalse(channel.isTerminated());
     streamListener.closed(Status.CANCELLED, trailers);
     verify(mockCallListener, timeout(1000)).onClose(Status.CANCELLED, trailers);
@@ -239,7 +239,7 @@ public class ChannelImplTest {
       @Override
       public Void answer(InvocationOnMock invocation) {
         ClientTransport.Listener listener = (ClientTransport.Listener) invocation.getArguments()[0];
-        listener.transportShutdown();
+        listener.transportShutdown(Status.INTERNAL);
         listener.transportTerminated();
         return null;
       }
@@ -275,7 +275,7 @@ public class ChannelImplTest {
     assertTrue(channel.isShutdown());
     assertFalse(channel.isTerminated());
     verify(mockTransport3).shutdown();
-    transportListenerCaptor.getValue().transportShutdown();
+    transportListenerCaptor.getValue().transportShutdown(Status.CANCELLED);
     assertFalse(channel.isTerminated());
 
     transportListenerCaptor.getValue().transportTerminated();

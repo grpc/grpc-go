@@ -192,8 +192,10 @@ class NettyClientTransport implements ClientTransport {
   }
 
   private void notifyShutdown(Throwable t) {
+    Status s = Status.OK.withDescription("Transport is shutting down");
     if (t != null) {
       log.log(Level.SEVERE, "Transport failed", t);
+      s = Status.INTERNAL.withCause(t).withDescription("Transport failed");
     }
     boolean notifyShutdown;
     synchronized (this) {
@@ -203,7 +205,7 @@ class NettyClientTransport implements ClientTransport {
       }
     }
     if (notifyShutdown) {
-      listener.transportShutdown();
+      listener.transportShutdown(s);
     }
   }
 

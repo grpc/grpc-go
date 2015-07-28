@@ -33,6 +33,7 @@ package io.grpc.transport;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.Status;
 
 import java.util.concurrent.Executor;
 
@@ -103,9 +104,13 @@ public interface ClientTransport {
   interface Listener {
     /**
      * The transport is shutting down. No new streams will be processed, but existing streams may
-     * continue. Shutdown could have been caused by an error or normal operation.
+     * continue. Shutdown could have been caused by an error or normal operation.  It is possible
+     * that this method is called without {@link #shutdown} being called.  If the argument to this
+     * function is {@link Status#isOk}, it is safe to immediately reconnect.
+     *
+     * @param s the reason for the shutdown.
      */
-    void transportShutdown();
+    void transportShutdown(Status s);
 
     /**
      * The transport completed shutting down. All resources have been released.

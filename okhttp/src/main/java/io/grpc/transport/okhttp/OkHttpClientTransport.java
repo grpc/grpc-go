@@ -464,7 +464,7 @@ class OkHttpClientTransport implements ClientTransport {
     if (notifyShutdown) {
       // TODO(madongfly): Another thread may called stopIfNecessary() and closed the socket, so that
       // the reading thread calls listener.transportTerminated() and race with this call.
-      listener.transportShutdown();
+      listener.transportShutdown(status);
     }
 
     stopIfNecessary();

@@ -46,6 +46,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
@@ -192,7 +193,7 @@ public class OkHttpClientTransportTest {
     assertEquals("Protocol error\n" + NETWORK_ISSUE_MESSAGE, listener1.status.getDescription());
     assertEquals(Status.INTERNAL.getCode(), listener2.status.getCode());
     assertEquals("Protocol error\n" + NETWORK_ISSUE_MESSAGE, listener2.status.getDescription());
-    verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
@@ -228,7 +229,7 @@ public class OkHttpClientTransportTest {
         HeadersMode.HTTP_20_HEADERS);
     verify(frameWriter, timeout(TIME_OUT_MS))
         .goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
-    verify(transportListener).transportShutdown();
+    verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
@@ -238,7 +239,7 @@ public class OkHttpClientTransportTest {
     frameHandler().data(false, 3, createMessageFrame(new String(new char[1000])), 1000);
     verify(frameWriter, timeout(TIME_OUT_MS))
         .goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
-    verify(transportListener).transportShutdown();
+    verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
@@ -530,8 +531,9 @@ public class OkHttpClientTransportTest {
     assertEquals(2, activeStreamCount());
     clientTransport.shutdown();
     verify(frameWriter, timeout(TIME_OUT_MS)).goAway(eq(0), eq(ErrorCode.NO_ERROR), (byte[]) any());
+
     assertEquals(2, activeStreamCount());
-    verify(transportListener).transportShutdown();
+    verify(transportListener).transportShutdown(isA(Status.class));
 
     stream1.cancel(Status.CANCELLED);
     stream2.cancel(Status.CANCELLED);
@@ -557,7 +559,7 @@ public class OkHttpClientTransportTest {
     frameHandler().goAway(3, ErrorCode.CANCEL, null);
 
     // Transport should be in STOPPING state.
-    verify(transportListener).transportShutdown();
+    verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, never()).transportTerminated();
 
     // Stream 2 should be closed.
@@ -609,7 +611,7 @@ public class OkHttpClientTransportTest {
     getStream(startId).cancel(Status.CANCELLED);
     listener1.waitUntilStreamClosed();
     verify(frameWriter, timeout(TIME_OUT_MS)).rstStream(eq(startId), eq(ErrorCode.CANCEL));
-    verify(transportListener).transportShutdown();
+    verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
@@ -882,7 +884,7 @@ public class OkHttpClientTransportTest {
     frameHandler().data(false, 5, buffer, (int) buffer.size());
     verify(frameWriter, timeout(TIME_OUT_MS))
         .goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
-    verify(transportListener).transportShutdown();
+    verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
@@ -899,7 +901,7 @@ public class OkHttpClientTransportTest {
     frameHandler().windowUpdate(5, 73);
     verify(frameWriter, timeout(TIME_OUT_MS))
         .goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
-    verify(transportListener).transportShutdown();
+    verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
