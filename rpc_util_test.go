@@ -36,10 +36,8 @@ package grpc
 import (
 	"bytes"
 	"io"
-	"math"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -149,25 +147,6 @@ func TestContextErr(t *testing.T) {
 		err := transport.ContextErr(test.errIn)
 		if err != test.errOut {
 			t.Fatalf("ContextErr{%v} = %v \nwant %v", test.errIn, err, test.errOut)
-		}
-	}
-}
-
-func TestBackoff(t *testing.T) {
-	for _, test := range []struct {
-		retries   int
-		maxResult time.Duration
-	}{
-		{0, time.Second},
-		{1, time.Duration(1e9 * math.Pow(backoffFactor, 1))},
-		{2, time.Duration(1e9 * math.Pow(backoffFactor, 2))},
-		{3, time.Duration(1e9 * math.Pow(backoffFactor, 3))},
-		{4, time.Duration(1e9 * math.Pow(backoffFactor, 4))},
-		{int(math.Log2(float64(maxDelay)/float64(baseDelay))) + 1, maxDelay},
-	} {
-		delay := backoff(test.retries)
-		if delay < 0 || delay > test.maxResult {
-			t.Errorf("backoff(%d) = %v outside [0, %v]", test.retries, delay, test.maxResult)
 		}
 	}
 }

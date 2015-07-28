@@ -555,7 +555,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	// the read direction is closed, and set the status appropriately.
 	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
 		s.mu.Lock()
-		if (s.state == streamWriteDone) {
+		if s.state == streamWriteDone {
 			s.state = streamDone
 		} else {
 			s.state = streamReadDone
