@@ -203,9 +203,9 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	}
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
 	s := &Stream{
-		id:     t.nextID,
-		method: callHdr.Method,
-		buf:    newRecvBuffer(),
+		id:            t.nextID,
+		method:        callHdr.Method,
+		buf:           newRecvBuffer(),
 		fc:            fc,
 		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
 		headerChan:    make(chan struct{}),
