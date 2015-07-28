@@ -218,7 +218,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		if timeout < minConnectTimeout {
 			timeout = minConnectTimeout
 		}
-		if copts.Timeout > timeout {
+		if copts.Timeout == 0 || copts.Timeout > timeout {
 			copts.Timeout = timeout
 		}
 		connectTime := time.Now()
