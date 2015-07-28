@@ -196,17 +196,16 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	return t, nil
 }
 
-func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr, sq bool) *Stream {
+func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	fc := &inFlow{
 		limit: initialWindowSize,
 		conn:  t.fc,
 	}
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
 	s := &Stream{
-		id:            t.nextID,
-		method:        callHdr.Method,
-		buf:           newRecvBuffer(),
-		updateStreams: sq,
+		id:     t.nextID,
+		method: callHdr.Method,
+		buf:    newRecvBuffer(),
 		fc:            fc,
 		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
 		headerChan:    make(chan struct{}),
@@ -267,7 +266,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		return nil, err
 	}
 	t.mu.Lock()
-	s := t.newStream(ctx, callHdr, checkStreamsQuota)
+	s := t.newStream(ctx, callHdr)
 	t.activeStreams[s.id] = s
 	t.mu.Unlock()
 	// HPACK encodes various headers. Note that once WriteField(...) is
@@ -336,10 +335,14 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 // CloseStream clears the footprint of a stream when the stream is not needed any more.
 // This must not be executed in reader's goroutine.
 func (t *http2Client) CloseStream(s *Stream, err error) {
+	var updateStreams bool
 	t.mu.Lock()
+	if t.streamsQuota != nil {
+		updateStreams = true
+	}
 	delete(t.activeStreams, s.id)
 	t.mu.Unlock()
-	if s.updateStreams {
+	if updateStreams {
 		t.streamsQuota.add(1)
 	}
 	s.mu.Lock()
@@ -737,7 +740,7 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 			t.mu.Lock()
 			reset := t.streamsQuota != nil
 			if !reset {
-				t.streamsQuota = newQuotaPool(int(s.Val))
+				t.streamsQuota = newQuotaPool(int(s.Val) - len(t.activeStreams))
 			}
 			ms := t.maxStreams
 			t.maxStreams = int(s.Val)

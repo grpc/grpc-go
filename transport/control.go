@@ -105,7 +105,9 @@ type quotaPool struct {
 // newQuotaPool creates a quotaPool which has quota q available to consume.
 func newQuotaPool(q int) *quotaPool {
 	qb := &quotaPool{c: make(chan int, 1)}
-	qb.c <- q
+	if q > 0 {
+		qb.c <- q
+	}
 	return qb
 }
 
