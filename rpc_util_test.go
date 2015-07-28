@@ -36,10 +36,8 @@ package grpc
 import (
 	"bytes"
 	"io"
-	"math"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
