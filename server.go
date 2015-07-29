@@ -362,7 +362,6 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			ss.statusCode = convertCode(appErr)
 			ss.statusDesc = appErr.Error()
 		}
-		return nil
 	}
 	return t.WriteStatus(ss.s, ss.statusCode, ss.statusDesc)
 
