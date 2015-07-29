@@ -409,7 +409,7 @@ func TestMaxStreams(t *testing.T) {
 	// Close the pending stream so that the streams quota becomes available for the next new stream.
 	ct.CloseStream(s, nil)
 	select {
-	case i:=<-cc.streamsQuota.acquire():
+	case i := <-cc.streamsQuota.acquire():
 		if i != 1 {
 			t.Fatalf("streamsQuota.acquire() got %d quota, want 1.", i)
 		}
