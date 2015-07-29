@@ -282,6 +282,13 @@ type serverStream struct {
 	codec      Codec
 	statusCode codes.Code
 	statusDesc string
+
+	tracing bool // set to EnableTracing when the serverStream is created.
+
+	mu sync.Mutex // protects traceInfo
+	// traceInfo.tr is set when the serverStream is created (if EnableTracing is true),
+	// and is set to nil when the serverStream's finish method is called.
+	traceInfo traceInfo
 }
 
 func (ss *serverStream) Context() context.Context {
@@ -300,7 +307,20 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	return
 }
 
-func (ss *serverStream) SendMsg(m interface{}) error {
+func (ss *serverStream) SendMsg(m interface{}) (err error) {
+	defer func() {
+		if ss.tracing {
+			ss.mu.Lock()
+			if err == nil {
+				ss.traceInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+			} else {
+				ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+				ss.traceInfo.tr.SetError()
+			}
+
+			ss.mu.Unlock()
+		}
+	}()
 	out, err := encode(ss.codec, m, compressionNone)
 	if err != nil {
 		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
@@ -309,6 +329,18 @@ func (ss *serverStream) SendMsg(m interface{}) error {
 	return ss.t.Write(ss.s, out, &transport.Options{Last: false})
 }
 
-func (ss *serverStream) RecvMsg(m interface{}) error {
+func (ss *serverStream) RecvMsg(m interface{}) (err error) {
+	defer func() {
+		if ss.tracing {
+			ss.mu.Lock()
+			if err == nil {
+				ss.traceInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
+			} else if err != io.EOF {
+				ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+				ss.traceInfo.tr.SetError()
+			}
+			ss.mu.Unlock()
+		}
+	}()
 	return recv(ss.p, ss.codec, m)
 }
