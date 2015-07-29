@@ -364,7 +364,7 @@ func TestMaxStreams(t *testing.T) {
 	// Have a pending stream which takes all streams quota.
 	s, err := ct.NewStream(context.Background(), callHdr)
 	if err != nil {
-		t.Fatalf("failed to open stream: %v", err)
+		t.Fatalf("Failed to open stream: %v", err)
 	}
 	cc, ok := ct.(*http2Client)
 	if !ok {
@@ -418,7 +418,7 @@ func TestMaxStreams(t *testing.T) {
 		t.Fatalf("streamsQuota.acquire() is not readable.")
 	}
 	if _, err := ct.NewStream(context.Background(), callHdr); err != nil {
-		t.Fatalf("failed to open stream: %v", err)
+		t.Fatalf("Failed to open stream: %v", err)
 	}
 	ct.Close()
 	server.stop()
