@@ -826,9 +826,9 @@ func TestFailedServerStreaming(t *testing.T) {
 }
 
 func testFailedServerStreaming(t *testing.T, e env) {
-	_, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
-	//defer tearDown(s, cc)
+	defer tearDown(s, cc)
 	respParam := make([]*testpb.ResponseParameters, len(respSizes))
 	for i, s := range respSizes {
 		respParam[i] = &testpb.ResponseParameters{

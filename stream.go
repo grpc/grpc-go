@@ -44,8 +44,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
-
-	"google.golang.org/grpc/grpclog"
 )
 
 type streamHandler func(srv interface{}, stream ServerStream) error
@@ -189,9 +187,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
-	grpclog.Println("start recv")
 	err = recv(cs.p, cs.codec, m)
-	grpclog.Println("recv sth")
 	defer func() {
 		// err != nil indicates the termination of the stream.
 		if err != nil {
