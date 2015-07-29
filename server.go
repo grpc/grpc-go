@@ -256,7 +256,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		traceInfo.firstLine.client = false
 		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
 		defer func() {
-			if err != nil || err != io.EOF {
+			// We only log the first operation err and dosen't log the application error
+			if err != nil && err != io.EOF {
 				traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 				traceInfo.tr.SetError()
 			}
@@ -309,23 +310,22 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Delay: false,
 			}
 			if err := s.sendResponse(t, stream, reply, compressionNone, opts); err != nil {
-				if _, ok := err.(transport.ConnectionError); ok {
-					return err
-				}
-				if e, ok := err.(transport.StreamError); ok {
-					statusCode = e.Code
-					statusDesc = e.Desc
-					return err
-				} else {
+				switch err := err.(type) {
+				case transport.ConnectionError:
+					// Nothing to do here.
+				case transport.StreamError:
+					statusCode = err.Code
+					statusDesc = err.Desc
+				default:
 					statusCode = codes.Unknown
 					statusDesc = err.Error()
-					return err
 				}
+				return err
 			}
-			return t.WriteStatus(stream, statusCode, statusDesc)
 			if traceInfo.tr != nil {
 				traceInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
 			}
+			return t.WriteStatus(stream, statusCode, statusDesc)
 		default:
 			panic(fmt.Sprintf("payload format to be supported: %d", pf))
 		}
@@ -363,12 +363,11 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		if err, ok := appErr.(rpcError); ok {
 			ss.statusCode = err.code
 			ss.statusDesc = err.desc
-			return err
 		} else {
 			ss.statusCode = convertCode(appErr)
 			ss.statusDesc = appErr.Error()
-			return nil
 		}
+		return nil
 	}
 	return t.WriteStatus(ss.s, ss.statusCode, ss.statusDesc)
 

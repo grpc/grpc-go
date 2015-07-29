@@ -338,8 +338,10 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 				if err == nil {
 					ss.traceInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
 				} else {
-					ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-					ss.traceInfo.tr.SetError()
+					if err != io.EOF {
+						ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+						ss.traceInfo.tr.SetError()
+					}
 				}
 			}
 			ss.mu.Unlock()
