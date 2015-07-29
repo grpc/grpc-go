@@ -55,8 +55,6 @@ var (
 	// ErrClientConnTimeout indicates that the connection could not be
 	// established or re-established within the specified timeout.
 	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
-	// minimum time to give a connection to complete
-	minConnectTimeout = 20 * time.Second
 )
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
@@ -213,21 +211,9 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 				return ErrClientConnTimeout
 			}
 		}
-		sleepTime := backoff(retries)
-		timeout := sleepTime
-		if timeout < minConnectTimeout {
-			timeout = minConnectTimeout
-		}
-		if copts.Timeout == 0 || copts.Timeout > timeout {
-			copts.Timeout = timeout
-		}
-		connectTime := time.Now()
 		newTransport, err := transport.NewClientTransport(cc.target, &copts)
 		if err != nil {
-			sleepTime -= time.Since(connectTime)
-			if sleepTime < 0 {
-				sleepTime = 0
-			}
+			sleepTime := backoff(retries)
 			// Fail early before falling into sleep.
 			if cc.dopts.copts.Timeout > 0 && cc.dopts.copts.Timeout < sleepTime+time.Since(start) {
 				cc.Close()
