@@ -256,7 +256,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		traceInfo.firstLine.client = false
 		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
 		defer func() {
-			// The trace only log the first operation err and dosen't log the application error
 			if err != nil && err != io.EOF {
 				traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 				traceInfo.tr.SetError()
@@ -346,17 +345,13 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		ss.traceInfo.tr.LazyLog(&ss.traceInfo.firstLine, false)
 		defer func() {
 			ss.mu.Lock()
+			if err != nil {
+				ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+				ss.traceInfo.tr.SetError()
+			}
 			ss.traceInfo.tr.Finish()
 			ss.traceInfo.tr = nil
 			ss.mu.Unlock()
-		}()
-		defer func() {
-			if err != nil {
-				ss.mu.Lock()
-				ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-				ss.traceInfo.tr.SetError()
-				ss.mu.Unlock()
-			}
 		}()
 	}
 	if appErr := sd.Handler(srv.server, ss); appErr != nil {
@@ -396,7 +391,6 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	}
 	// Unary RPC or Streaming RPC?
 	if md, ok := srv.md[method]; ok {
-
 		s.processUnaryRPC(t, stream, srv, md)
 		return
 	}
