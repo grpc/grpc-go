@@ -46,6 +46,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/grpclog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
@@ -373,9 +374,9 @@ func main() {
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 		if *testCase == "compute_engine_creds" {
-			opts = append(opts, grpc.WithPerRPCCredentials(credentials.NewComputeEngine()))
+			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
 		} else if *testCase == "service_account_creds" {
-			jwtCreds, err := credentials.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
+			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
 			if err != nil {
 				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
 			}

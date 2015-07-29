@@ -47,9 +47,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-	"golang.org/x/oauth2/jwt"
 )
 
 var (
@@ -198,73 +195,4 @@ func NewServerTLSFromFile(certFile, keyFile string) (TransportAuthenticator, err
 		return nil, err
 	}
 	return NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}}), nil
-}
-
-// TokenSource supplies credentials from an oauth2.TokenSource.
-type TokenSource struct {
-	oauth2.TokenSource
-}
-
-// GetRequestMetadata gets the request metadata as a map from a TokenSource.
-func (ts TokenSource) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
-	token, err := ts.Token()
-	if err != nil {
-		return nil, err
-	}
-	return map[string]string{
-		"authorization": token.TokenType + " " + token.AccessToken,
-	}, nil
-}
-
-// NewComputeEngine constructs the credentials that fetches access tokens from
-// Google Compute Engine (GCE)'s metadata server. It is only valid to use this
-// if your program is running on a GCE instance.
-// TODO(dsymonds): Deprecate and remove this.
-func NewComputeEngine() Credentials {
-	return TokenSource{google.ComputeTokenSource("")}
-}
-
-// serviceAccount represents credentials via JWT signing key.
-type serviceAccount struct {
-	config *jwt.Config
-}
-
-func (s serviceAccount) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
-	token, err := s.config.TokenSource(ctx).Token()
-	if err != nil {
-		return nil, err
-	}
-	return map[string]string{
-		"authorization": token.TokenType + " " + token.AccessToken,
-	}, nil
-}
-
-// NewServiceAccountFromKey constructs the credentials using the JSON key slice
-// from a Google Developers service account.
-func NewServiceAccountFromKey(jsonKey []byte, scope ...string) (Credentials, error) {
-	config, err := google.JWTConfigFromJSON(jsonKey, scope...)
-	if err != nil {
-		return nil, err
-	}
-	return serviceAccount{config: config}, nil
-}
-
-// NewServiceAccountFromFile constructs the credentials using the JSON key file
-// of a Google Developers service account.
-func NewServiceAccountFromFile(keyFile string, scope ...string) (Credentials, error) {
-	jsonKey, err := ioutil.ReadFile(keyFile)
-	if err != nil {
-		return nil, fmt.Errorf("credentials: failed to read the service account key file: %v", err)
-	}
-	return NewServiceAccountFromKey(jsonKey, scope...)
-}
-
-// NewApplicationDefault returns "Application Default Credentials". For more
-// detail, see https://developers.google.com/accounts/docs/application-default-credentials.
-func NewApplicationDefault(ctx context.Context, scope ...string) (Credentials, error) {
-	t, err := google.DefaultTokenSource(ctx, scope...)
-	if err != nil {
-		return nil, err
-	}
-	return TokenSource{t}, nil
 }
