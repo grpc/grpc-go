@@ -355,6 +355,75 @@ func TestLargeMessageSuspension(t *testing.T) {
 	server.stop()
 }
 
+func TestMaxStreams(t *testing.T) {
+	server, ct := setUp(t, 0, 1, suspended)
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Large",
+	}
+	// Have a pending stream which takes all streams quota.
+	s, err := ct.NewStream(context.Background(), callHdr)
+	if err != nil {
+		t.Fatalf("Failed to open stream: %v", err)
+	}
+	cc, ok := ct.(*http2Client)
+	if !ok {
+		t.Fatalf("Failed to convert %v to *http2Client", ct)
+	}
+	done := make(chan struct{})
+	ch := make(chan int)
+	go func() {
+		for {
+			select {
+			case <-time.After(5 * time.Millisecond):
+				ch <- 0
+			case <-time.After(5 * time.Second):
+				close(done)
+				return
+			}
+		}
+	}()
+	for {
+		select {
+		case <-ch:
+		case <-done:
+			t.Fatalf("Client has not received the max stream setting in 5 seconds.")
+		}
+		cc.mu.Lock()
+		// cc.streamsQuota should be initialized once receiving the 1st setting frame from
+		// the server.
+		if cc.streamsQuota != nil {
+			cc.mu.Unlock()
+			select {
+			case <-cc.streamsQuota.acquire():
+				t.Fatalf("streamsQuota.acquire() becomes readable mistakenly.")
+			default:
+				if cc.streamsQuota.quota != 0 {
+					t.Fatalf("streamsQuota.quota got non-zero quota mistakenly.")
+				}
+			}
+			break
+		}
+		cc.mu.Unlock()
+	}
+	// Close the pending stream so that the streams quota becomes available for the next new stream.
+	ct.CloseStream(s, nil)
+	select {
+	case i := <-cc.streamsQuota.acquire():
+		if i != 1 {
+			t.Fatalf("streamsQuota.acquire() got %d quota, want 1.", i)
+		}
+		cc.streamsQuota.add(i)
+	default:
+		t.Fatalf("streamsQuota.acquire() is not readable.")
+	}
+	if _, err := ct.NewStream(context.Background(), callHdr); err != nil {
+		t.Fatalf("Failed to open stream: %v", err)
+	}
+	ct.Close()
+	server.stop()
+}
+
 func TestServerWithMisbehavedClient(t *testing.T) {
 	server, ct := setUp(t, 0, math.MaxUint32, suspended)
 	callHdr := &CallHdr{
