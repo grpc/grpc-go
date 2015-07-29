@@ -256,7 +256,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		traceInfo.firstLine.client = false
 		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
 		defer func() {
-			// We only log the first operation err and dosen't log the application error
+			// The trace only log the first operation err and dosen't log the application error
 			if err != nil && err != io.EOF {
 				traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 				traceInfo.tr.SetError()
