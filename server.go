@@ -345,7 +345,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		ss.traceInfo.tr.LazyLog(&ss.traceInfo.firstLine, false)
 		defer func() {
 			ss.mu.Lock()
-			if err != nil {
+			if err != nil && err != io.EOF {
 				ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 				ss.traceInfo.tr.SetError()
 			}
