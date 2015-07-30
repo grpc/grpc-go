@@ -177,7 +177,7 @@ const (
 	Ready
 	// TransientFailure indicates the ClientConn has seen a failure but expects to recover.
 	TransientFailure
-	// Shutdown indicates the CLientConn has stated shutting down.
+	// Shutdown indicates the ClientConn has stated shutting down.
 	Shutdown
 )
 
