@@ -69,7 +69,7 @@ var http2RSTErrConvTab = map[http2.ErrCode]codes.Code{
 	http2.ErrCodeNo:                 codes.Internal,
 	http2.ErrCodeProtocol:           codes.Internal,
 	http2.ErrCodeInternal:           codes.Internal,
-	http2.ErrCodeFlowControl:        codes.Internal,
+	http2.ErrCodeFlowControl:        codes.ResourceExhausted,
 	http2.ErrCodeSettingsTimeout:    codes.Internal,
 	http2.ErrCodeFrameSize:          codes.Internal,
 	http2.ErrCodeRefusedStream:      codes.Unavailable,
