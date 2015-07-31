@@ -282,19 +282,40 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 // Run in a goroutine to track the error in transport and create the
 // new transport if an error happens. It returns when the channel is closing.
 func (cc *ClientConn) transportMonitor() {
+	retries := 0
+	// To rate-limit reconnects, transportMonitor will not reconnect until
+	// nextRetry passes. As transportMonitor is called after initial connect,
+	// even the first reconnect should wait.
+	nextRetry := time.After(backoff(retries))
+
 	for {
 		select {
 		// shutdownChan is needed to detect the teardown when
 		// the ClientConn is idle (i.e., no RPC in flight).
 		case <-cc.shutdownChan:
 			return
+
+		case <-nextRetry:
+			// If nextRetry passes without the transport failing, the
+			// connection is assumed to be good and retries resets back to
+			// zero.
+			nextRetry = nil
+			retries = 0
+
 		case <-cc.transport.Error():
+			if nextRetry != nil {
+				// nextRetry has not passed yet, so wait and back-off.
+				<-nextRetry
+				retries += 1
+			}
+
 			if err := cc.resetTransport(true); err != nil {
 				// The ClientConn is closing.
 				grpclog.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
 				return
 			}
-			continue
+
+			nextRetry = time.After(backoff(retries))
 		}
 	}
 }
