@@ -241,14 +241,14 @@ public class ClientCalls {
     }
 
     @Override
-    public void onPayload(RespT payload) {
+    public void onMessage(RespT message) {
       if (firstResponseReceived && !streamingResponse) {
         throw Status.INTERNAL
             .withDescription("More than one responses received for unary or client-streaming call")
             .asRuntimeException();
       }
       firstResponseReceived = true;
-      observer.onValue(payload);
+      observer.onValue(message);
 
       if (streamingResponse) {
         // Request delivery of the next inbound message.
@@ -282,7 +282,7 @@ public class ClientCalls {
     }
 
     @Override
-    public void onPayload(RespT value) {
+    public void onMessage(RespT value) {
       if (this.value != null) {
         throw Status.INTERNAL.withDescription("More than one value received for unary call")
             .asRuntimeException();
@@ -397,7 +397,7 @@ public class ClientCalls {
       }
 
       @Override
-      public void onPayload(T value) {
+      public void onMessage(T value) {
         Preconditions.checkState(!done, "ClientCall already closed");
         buffer.add(value);
       }

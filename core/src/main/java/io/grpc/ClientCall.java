@@ -63,7 +63,7 @@ public abstract class ClientCall<RequestT, ResponseT> {
   public abstract static class Listener<T> {
 
     /**
-     * The response headers have been received. Headers always precede payloads.
+     * The response headers have been received. Headers always precede messages.
      * This method is always called, if no headers were received then an empty {@link Metadata}
      * is passed.
      *
@@ -75,9 +75,23 @@ public abstract class ClientCall<RequestT, ResponseT> {
      * A response payload has been received. May be called zero or more times depending on whether
      * the call response is empty, a single message or a stream of messages.
      *
-     * @param  payload returned by the server
+     * @param payload returned by the server
+     * @deprecated use {@link #onMessage}
      */
-    public abstract void onPayload(T payload);
+    @Deprecated
+    public void onPayload(T payload) {
+      throw new UnsupportedOperationException();
+    }
+
+    /**
+     * A response message has been received. May be called zero or more times depending on whether
+     * the call response is empty, a single message or a stream of messages.
+     *
+     * @param message returned by the server
+     */
+    public void onMessage(T message) {
+      onPayload(message);
+    }
 
     /**
      * The ClientCall has been closed. Any additional calls to the {@code ClientCall} will not be
@@ -113,7 +127,7 @@ public abstract class ClientCall<RequestT, ResponseT> {
 
   /**
    * Requests up to the given number of messages from the call to be delivered to
-   * {@link Listener#onPayload(Object)}. No additional messages will be delivered.
+   * {@link Listener#onMessage(Object)}. No additional messages will be delivered.
    *
    * <p>Message delivery is guaranteed to be sequential in the order received. In addition, the
    * listener methods will not be accessed concurrently. While it is not guaranteed that the same

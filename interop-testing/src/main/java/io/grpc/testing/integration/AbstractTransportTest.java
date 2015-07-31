@@ -449,8 +449,8 @@ public abstract class AbstractTransportTest {
       public void onHeaders(Metadata.Headers headers) {}
 
       @Override
-      public void onPayload(final StreamingOutputCallResponse payload) {
-        queue.add(payload);
+      public void onMessage(final StreamingOutputCallResponse message) {
+        queue.add(message);
       }
 
       @Override

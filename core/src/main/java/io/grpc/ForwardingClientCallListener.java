@@ -47,8 +47,8 @@ public abstract class ForwardingClientCallListener<RespT> extends ClientCall.Lis
   }
 
   @Override
-  public void onPayload(RespT payload) {
-    delegate().onPayload(payload);
+  public void onMessage(RespT message) {
+    delegate().onMessage(message);
   }
 
   @Override

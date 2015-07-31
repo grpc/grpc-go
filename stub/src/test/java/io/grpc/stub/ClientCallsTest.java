@@ -73,7 +73,7 @@ public class ClientCallsTest {
     ClientCall.Listener<String> listener = listenerCaptor.getValue();
     verify(call).sendPayload(req);
     verify(call).halfClose();
-    listener.onPayload("bar");
+    listener.onMessage("bar");
     listener.onClose(Status.OK, new Metadata.Trailers());
     assertEquals("bar", future.get());
   }
@@ -102,7 +102,7 @@ public class ClientCallsTest {
     ClientCall.Listener<String> listener = listenerCaptor.getValue();
     future.cancel(true);
     verify(call).cancel();
-    listener.onPayload("bar");
+    listener.onMessage("bar");
     listener.onClose(Status.OK, new Metadata.Trailers());
     try {
       future.get();

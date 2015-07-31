@@ -253,7 +253,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
             }
 
             try {
-              observer.onPayload(method.parseResponse(message));
+              observer.onMessage(method.parseResponse(message));
             } finally {
               message.close();
             }
