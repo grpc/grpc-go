@@ -711,7 +711,7 @@ public abstract class AbstractTransportTest {
       throws Exception {
     // cast to ServiceAccountCredentials to double-check the right type of object was created.
     GoogleCredentials credentials =
-        (ServiceAccountCredentials) GoogleCredentials.fromStream(credentialsStream);
+        ServiceAccountCredentials.class.cast(GoogleCredentials.fromStream(credentialsStream));
     credentials = credentials.createScoped(Arrays.<String>asList(authScope));
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
         .withInterceptors(new ClientAuthInterceptor(credentials, testServiceExecutor));
