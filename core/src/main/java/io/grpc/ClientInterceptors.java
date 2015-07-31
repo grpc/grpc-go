@@ -120,7 +120,7 @@ public class ClientInterceptors {
     public void halfClose() {}
 
     @Override
-    public void sendPayload(Object payload) {}
+    public void sendMessage(Object message) {}
 
     /**
      * Always returns {@code false}, since this is only used when the startup of the {@link

@@ -458,7 +458,7 @@ public abstract class AbstractTransportTest {
         queue.add(status);
       }
     }, new Metadata.Headers());
-    call.sendPayload(request);
+    call.sendMessage(request);
     call.halfClose();
 
     // Time how long it takes to get the first response.

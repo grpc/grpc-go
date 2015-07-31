@@ -98,7 +98,7 @@ public class ClientInterceptorsTest {
     };
     doAnswer(checkStartCalled).when(call).request(anyInt());
     doAnswer(checkStartCalled).when(call).halfClose();
-    doAnswer(checkStartCalled).when(call).sendPayload(Mockito.<String>any());
+    doAnswer(checkStartCalled).when(call).sendMessage(Mockito.<String>any());
   }
 
   @Test(expected = NullPointerException.class)
@@ -306,8 +306,8 @@ public class ClientInterceptorsTest {
     Metadata.Headers headers = new Metadata.Headers();
     interceptedCall.start(listener, headers);
     verify(call).start(same(listener), same(headers));
-    interceptedCall.sendPayload("request");
-    verify(call).sendPayload(eq("request"));
+    interceptedCall.sendMessage("request");
+    verify(call).sendMessage(eq("request"));
     interceptedCall.halfClose();
     verify(call).halfClose();
     interceptedCall.request(1);
@@ -342,7 +342,7 @@ public class ClientInterceptorsTest {
     ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     assertNotSame(call, interceptedCall);
     interceptedCall.start(listener, new Metadata.Headers());
-    interceptedCall.sendPayload("request");
+    interceptedCall.sendMessage("request");
     interceptedCall.halfClose();
     interceptedCall.request(1);
     verifyNoMoreInteractions(call);

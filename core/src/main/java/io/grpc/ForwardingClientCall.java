@@ -61,8 +61,8 @@ public abstract class ForwardingClientCall<ReqT, RespT> extends ClientCall<ReqT,
   }
 
   @Override
-  public void sendPayload(ReqT payload) {
-    delegate().sendPayload(payload);
+  public void sendMessage(ReqT message) {
+    delegate().sendMessage(message);
   }
 
   @Override

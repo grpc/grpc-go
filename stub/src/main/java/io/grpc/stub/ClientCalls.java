@@ -170,7 +170,7 @@ public class ClientCalls {
       boolean streamingResponse) {
     startCall(call, responseListener, streamingResponse);
     try {
-      call.sendPayload(param);
+      call.sendMessage(param);
       call.halfClose();
     } catch (Throwable t) {
       call.cancel();
@@ -207,7 +207,7 @@ public class ClientCalls {
 
     @Override
     public void onValue(T value) {
-      call.sendPayload(value);
+      call.sendMessage(value);
     }
 
     @Override

@@ -109,7 +109,7 @@ public abstract class ClientCall<RequestT, ResponseT> {
 
     /**
      * This indicates that the ClientCall is now capable of sending additional messages (via
-     * {@link #sendPayload}) without requiring excessive buffering internally. This event is
+     * {@link #sendMessage}) without requiring excessive buffering internally. This event is
      * just a suggestion and the application is free to ignore it, however doing so may
      * result in excessive buffering within the ClientCall.
      */
@@ -161,8 +161,23 @@ public abstract class ClientCall<RequestT, ResponseT> {
    *
    * @param payload message to be sent to the server.
    * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed
+   * @deprecated use {@link #sendMessage}
    */
-  public abstract void sendPayload(RequestT payload);
+  @Deprecated
+  public void sendPayload(RequestT payload) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Send a request message to the server. May be called zero or more times depending on how many
+   * messages the server is willing to accept for the operation.
+   *
+   * @param message message to be sent to the server.
+   * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed
+   */
+  public void sendMessage(RequestT message) {
+    sendPayload(message);
+  }
 
   /**
    * If {@code true}, indicates that the call is capable of sending additional messages

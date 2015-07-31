@@ -71,7 +71,7 @@ public class ClientCallsTest {
     ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.Headers.class));
     ClientCall.Listener<String> listener = listenerCaptor.getValue();
-    verify(call).sendPayload(req);
+    verify(call).sendMessage(req);
     verify(call).halfClose();
     listener.onMessage("bar");
     listener.onClose(Status.OK, new Metadata.Trailers());

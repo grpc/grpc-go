@@ -166,23 +166,23 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   }
 
   @Override
-  public void sendPayload(ReqT payload) {
+  public void sendMessage(ReqT message) {
     Preconditions.checkState(stream != null, "Not started");
     Preconditions.checkState(!cancelCalled, "call was cancelled");
     Preconditions.checkState(!halfCloseCalled, "call was half-closed");
     boolean failed = true;
     try {
-      InputStream payloadIs = method.streamRequest(payload);
-      stream.writeMessage(payloadIs);
+      InputStream messageIs = method.streamRequest(message);
+      stream.writeMessage(messageIs);
       failed = false;
     } finally {
-      // TODO(notcarl): Find out if payloadIs needs to be closed.
+      // TODO(notcarl): Find out if messageIs needs to be closed.
       if (failed) {
         cancel();
       }
     }
     // For unary requests, we don't flush since we know that halfClose should be coming soon. This
-    // allows us to piggy-back the END_STREAM=true on the last payload frame without opening the
+    // allows us to piggy-back the END_STREAM=true on the last message frame without opening the
     // possibility of broken applications forgetting to call halfClose without noticing.
     if (!unaryRequest) {
       stream.flush();
