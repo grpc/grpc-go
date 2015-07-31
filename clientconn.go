@@ -144,6 +144,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		// Set the default codec.
 		cc.dopts.codec = protoCodec{}
 	}
+	cc.stateCV = sync.NewCond(&cc.mu)
 	if cc.dopts.block {
 		if err := cc.resetTransport(false); err != nil {
 			cc.Close()
@@ -188,8 +189,9 @@ type ClientConn struct {
 	dopts        dialOptions
 	shutdownChan chan struct{}
 
-	mu    sync.Mutex
-	state ConnectivityState
+	mu      sync.Mutex
+	state   ConnectivityState
+	stateCV *sync.Cond
 	// ready is closed and becomes nil when a new transport is up or failed
 	// due to timeout.
 	ready chan struct{}
@@ -198,6 +200,40 @@ type ClientConn struct {
 	// under construction.
 	transportSeq int
 	transport    transport.ClientTransport
+}
+
+// State returns the connectivity state of the ClientConn
+func (cc *ClientConn) State() ConnectivityState {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	return cc.state
+}
+
+// WaitForStateChange returns true when the state changes to something other than the
+// sourceState and false if timeout fires.
+func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	if sourceState != cc.state {
+		return true
+	}
+	// Shutdown state is a sink -- once it is entered, no furhter state change could happen.
+	if sourceState == Shutdown {
+		return false
+	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-time.After(timeout):
+			cc.stateCV.Broadcast()
+		case <-done:
+		}
+	}()
+	for sourceState == cc.state {
+		cc.stateCV.Wait()
+	}
+	close(done)
+	return true
 }
 
 func (cc *ClientConn) resetTransport(closeTransport bool) error {
