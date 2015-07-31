@@ -289,6 +289,9 @@ func (cc *ClientConn) transportMonitor() {
 		case <-cc.shutdownChan:
 			return
 		case <-cc.transport.Error():
+			cc.mu.Lock()
+			cc.state = TransientFailure
+			cc.mu.Unlock()
 			if err := cc.resetTransport(true); err != nil {
 				// The ClientConn is closing.
 				grpclog.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
