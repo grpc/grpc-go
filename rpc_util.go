@@ -276,11 +276,11 @@ func convertCode(err error) codes.Code {
 
 const (
 	// how long to wait after the first failure before retrying
-	baseDelay = 1.0 * time.Second
+	baseDelay = 1170820393 * time.Nanosecond
 	// upper bound of backoff delay
 	maxDelay = 120 * time.Second
 	// backoff increases by this factor on each retry
-	backoffFactor = 1.6
+	backoffFactor = 1.618033989
 	// backoff is randomized downwards by this factor
 	backoffJitter = 0.2
 )
