@@ -286,6 +286,11 @@ public final class ChannelImpl extends Channel {
     }
 
     @Override
+    public void transportReady() {
+      // TODO(carl-mastrangelo): Implement this
+    }
+
+    @Override
     public void transportShutdown(Status s) {
       // TODO(carl-mastrangelo): use this status to determine if and how to retry the connection.
       synchronized (lock) {

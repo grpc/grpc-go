@@ -93,6 +93,14 @@ class InProcessTransport implements ServerTransport, ClientTransport {
         }
       }).start();
     }
+    new Thread(new Runnable() {
+      @Override
+      public void run() {
+        synchronized (InProcessTransport.this) {
+          clientTransportListener.transportReady();
+        }
+      }
+    }).start();
   }
 
   @Override

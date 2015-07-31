@@ -382,6 +382,9 @@ class OkHttpClientTransport implements ClientTransport {
         }
 
         clientFrameHandler = new ClientFrameHandler(variant.newReader(source, true));
+        synchronized (lock) {
+          OkHttpClientTransport.this.listener.transportReady();
+        }
         executor.execute(clientFrameHandler);
       }
     });

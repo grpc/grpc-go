@@ -73,9 +73,9 @@ public interface ClientTransport {
   /**
    * Starts transport. This method may only be called once.
    *
-   * <p>Implementations must not call {@code listener} from within {@link #start}. This method
-   * should not throw any exceptions. If there is an error, implementations are expected to notify
-   * listener on a separate thread.
+   * <p>Implementations must not call {@code listener} from within {@link #start}; implementations
+   * are expected to notify listener on a separate thread.  This method should not throw any
+   * exceptions.
    *
    * @param listener non-{@code null} listener of transport events
    */
@@ -116,6 +116,12 @@ public interface ClientTransport {
      * The transport completed shutting down. All resources have been released.
      */
     void transportTerminated();
+
+    /**
+     * The transport is ready to accept traffic, because the connection is established.  This is
+     * called at most once.
+     */
+    void transportReady();
   }
 
   /**
