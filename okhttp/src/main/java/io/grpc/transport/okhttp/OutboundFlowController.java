@@ -64,7 +64,10 @@ class OutboundFlowController {
     this.frameWriter = Preconditions.checkNotNull(frameWriter, "frameWriter");
   }
 
-  synchronized void initialOutboundWindowSize(int newWindowSize) {
+  /**
+   * Must be called with holding transport lock.
+   */
+  void initialOutboundWindowSize(int newWindowSize) {
     if (newWindowSize < 0) {
       throw new IllegalArgumentException("Invalid initial window size: " + newWindowSize);
     }
@@ -90,8 +93,10 @@ class OutboundFlowController {
 
   /**
    * Update the outbound window for given stream, or for the connection if stream is null.
+   *
+   * <p>Must be called with holding transport lock.
    */
-  synchronized void windowUpdate(@Nullable OkHttpClientStream stream, int delta) {
+  void windowUpdate(@Nullable OkHttpClientStream stream, int delta) {
     if (stream == null) {
       // Update the connection window and write any pending frames for all streams.
       connectionState.incrementStreamWindow(delta);
@@ -109,7 +114,10 @@ class OutboundFlowController {
     }
   }
 
-  synchronized void data(boolean outFinished, int streamId, Buffer source, boolean flush) {
+  /**
+   * Must be called with holding transport lock.
+   */
+  void data(boolean outFinished, int streamId, Buffer source, boolean flush) {
     Preconditions.checkNotNull(source, "source");
     if (streamId <= 0 || !transport.mayHaveCreatedStream(streamId)) {
       throw new IllegalArgumentException("Invalid streamId: " + streamId);

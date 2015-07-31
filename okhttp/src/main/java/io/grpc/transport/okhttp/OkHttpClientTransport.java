@@ -37,7 +37,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
-import com.google.common.util.concurrent.SettableFuture;
 
 import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.OkHttpTlsUpgrader;
@@ -77,7 +76,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -158,7 +156,7 @@ class OkHttpClientTransport implements ClientTransport {
   @GuardedBy("lock")
   private int maxConcurrentStreams = Integer.MAX_VALUE;
   @GuardedBy("lock")
-  private LinkedList<PendingStream> pendingStreams = new LinkedList<PendingStream>();
+  private LinkedList<OkHttpClientStream> pendingStreams = new LinkedList<OkHttpClientStream>();
   private final ConnectionSpec connectionSpec;
   private FrameWriter testFrameWriter;
   // Used by test only.
@@ -244,36 +242,18 @@ class OkHttpClientTransport implements ClientTransport {
     Preconditions.checkNotNull(headers, "headers");
     Preconditions.checkNotNull(listener, "listener");
 
-    OkHttpClientStream clientStream = OkHttpClientStream.newStream(
-            listener, frameWriter, this, outboundFlow, method.getType(), lock);
-
     String defaultPath = "/" + method.getFullMethodName();
-    List<Header> requestHeaders =
-        Headers.createRequestHeaders(headers, defaultPath, defaultAuthority);
+    OkHttpClientStream clientStream = OkHttpClientStream.newStream(
+        listener, frameWriter, this, outboundFlow, method.getType(), lock,
+        Headers.createRequestHeaders(headers, defaultPath, defaultAuthority));
 
-    SettableFuture<Void> pendingFuture = null;
     synchronized (lock) {
       if (goAway) {
         clientStream.transportReportStatus(goAwayStatus, true, new Metadata.Trailers());
       } else if (streams.size() >= maxConcurrentStreams) {
-        pendingFuture = SettableFuture.create();
-        pendingStreams.add(new PendingStream(clientStream, pendingFuture, requestHeaders));
+        pendingStreams.add(clientStream);
       } else {
-        startStream(clientStream, requestHeaders);
-      }
-    }
-
-    if (pendingFuture != null) {
-      try {
-        pendingFuture.get();
-      } catch (InterruptedException e) {
-        // Restore the interrupt.
-        Thread.currentThread().interrupt();
-        clientStream.cancel(Status.CANCELLED);
-        throw new RuntimeException(e);
-      } catch (ExecutionException e) {
-        clientStream.cancel(Status.CANCELLED);
-        throw new RuntimeException(e.getCause() != null ? e.getCause() : e);
+        startStream(clientStream);
       }
     }
 
@@ -281,11 +261,10 @@ class OkHttpClientTransport implements ClientTransport {
   }
 
   @GuardedBy("lock")
-  private void startStream(OkHttpClientStream stream, List<Header> requestHeaders) {
+  private void startStream(OkHttpClientStream stream) {
     Preconditions.checkState(stream.id() == null, "StreamId already assigned");
-    stream.id(nextStreamId);
-    streams.put(stream.id(), stream);
-    frameWriter.synStream(false, false, stream.id(), 0, requestHeaders);
+    streams.put(nextStreamId, stream);
+    stream.start(nextStreamId);
     stream.allocated();
     // For unary and server streaming, there will be a data frame soon, no need to flush the header.
     if (stream.getType() != MethodType.UNARY
@@ -306,9 +285,8 @@ class OkHttpClientTransport implements ClientTransport {
     boolean hasStreamStarted = false;
     synchronized (lock) {
       while (!pendingStreams.isEmpty() && streams.size() < maxConcurrentStreams) {
-        PendingStream pendingStream = pendingStreams.poll();
-        startStream(pendingStream.clientStream, pendingStream.requestHeaders);
-        pendingStream.createdFuture.set(null);
+        OkHttpClientStream stream = pendingStreams.poll();
+        startStream(stream);
         hasStreamStarted = true;
       }
     }
@@ -457,9 +435,8 @@ class OkHttpClientTransport implements ClientTransport {
         }
       }
 
-      for (PendingStream stream : pendingStreams) {
-        stream.clientStream.transportReportStatus(status, true, new Metadata.Trailers());
-        stream.createdFuture.set(null);
+      for (OkHttpClientStream stream : pendingStreams) {
+        stream.transportReportStatus(status, true, new Metadata.Trailers());
       }
       pendingStreams.clear();
     }
@@ -673,7 +650,9 @@ class OkHttpClientTransport implements ClientTransport {
       if (OkHttpSettingsUtil.isSet(settings, OkHttpSettingsUtil.INITIAL_WINDOW_SIZE)) {
         int initialWindowSize = OkHttpSettingsUtil.get(
             settings, OkHttpSettingsUtil.INITIAL_WINDOW_SIZE);
-        outboundFlow.initialOutboundWindowSize(initialWindowSize);
+        synchronized (lock) {
+          outboundFlow.initialOutboundWindowSize(initialWindowSize);
+        }
       }
 
       frameWriter.ackSettings(settings);
@@ -741,15 +720,21 @@ class OkHttpClientTransport implements ClientTransport {
         return;
       }
 
-      if (streamId == Utils.CONNECTION_STREAM_ID) {
-        outboundFlow.windowUpdate(null, (int) delta);
-        return;
-      }
+      boolean unknownStream = false;
+      synchronized (lock) {
+        if (streamId == Utils.CONNECTION_STREAM_ID) {
+          outboundFlow.windowUpdate(null, (int) delta);
+          return;
+        }
 
-      OkHttpClientStream stream = getStream(streamId);
-      if (stream != null) {
-        outboundFlow.windowUpdate(stream, (int) delta);
-      } else if (!mayHaveCreatedStream(streamId)) {
+        OkHttpClientStream stream = streams.get(streamId);
+        if (stream != null) {
+          outboundFlow.windowUpdate(stream, (int) delta);
+        } else if (!mayHaveCreatedStream(streamId)) {
+          unknownStream = true;
+        }
+      }
+      if (unknownStream) {
         onError(ErrorCode.PROTOCOL_ERROR,
             "Received window_update for unknown stream: " + streamId);
       }
@@ -765,19 +750,6 @@ class OkHttpClientTransport implements ClientTransport {
     public void alternateService(int streamId, String origin, ByteString protocol, String host,
         int port, long maxAge) {
       // TODO(madongfly): Deal with alternateService propagation
-    }
-  }
-
-  private static class PendingStream {
-    final OkHttpClientStream clientStream;
-    final SettableFuture<Void> createdFuture;
-    final List<Header> requestHeaders;
-
-    PendingStream(OkHttpClientStream clientStream,
-        SettableFuture<Void> createdFuture, List<Header> requestHeaders) {
-      this.clientStream = clientStream;
-      this.createdFuture = createdFuture;
-      this.requestHeaders = requestHeaders;
     }
   }
 }

@@ -45,7 +45,9 @@ import io.grpc.transport.WritableBuffer;
 
 import okio.Buffer;
 
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -65,11 +67,14 @@ class OkHttpClientStream extends Http2ClientStream {
    * Construct a new client stream.
    */
   static OkHttpClientStream newStream(ClientStreamListener listener,
-                                      AsyncFrameWriter frameWriter,
-                                      OkHttpClientTransport transport,
-                                      OutboundFlowController outboundFlow,
-                                      MethodType type, Object lock) {
-    return new OkHttpClientStream(listener, frameWriter, transport, outboundFlow, type, lock);
+      AsyncFrameWriter frameWriter,
+      OkHttpClientTransport transport,
+      OutboundFlowController outboundFlow,
+      MethodType type,
+      Object lock,
+      List<Header> requestHeaders) {
+    return new OkHttpClientStream(
+        listener, frameWriter, transport, outboundFlow, type, lock, requestHeaders);
   }
 
   @GuardedBy("lock")
@@ -82,19 +87,25 @@ class OkHttpClientStream extends Http2ClientStream {
   private final Object lock;
   private Object outboundFlowState;
   private volatile Integer id;
+  private List<Header> requestHeaders;
+  @GuardedBy("lock")
+  private Queue<PendingData> pendingData = new LinkedList<PendingData>();
+
 
   private OkHttpClientStream(ClientStreamListener listener,
-                             AsyncFrameWriter frameWriter,
-                             OkHttpClientTransport transport,
-                             OutboundFlowController outboundFlow,
-                             MethodType type,
-                             Object lock) {
+      AsyncFrameWriter frameWriter,
+      OkHttpClientTransport transport,
+      OutboundFlowController outboundFlow,
+      MethodType type,
+      Object lock,
+      List<Header> requestHeaders) {
     super(new OkHttpWritableBufferAllocator(), listener);
     this.frameWriter = frameWriter;
     this.transport = transport;
     this.outboundFlow = outboundFlow;
     this.type = type;
     this.lock = lock;
+    this.requestHeaders = requestHeaders;
   }
 
   /**
@@ -117,13 +128,21 @@ class OkHttpClientStream extends Http2ClientStream {
     return id;
   }
 
-  /**
-   * Set the internal ID for this stream.
-   */
-  public void id(Integer id) {
+  @GuardedBy("lock")
+  public void start(Integer id) {
     checkNotNull(id, "id");
     checkState(this.id == null, "Can only set id once");
     this.id = id;
+    frameWriter.synStream(false, false, id, 0, requestHeaders);
+    requestHeaders = null;
+
+    if (pendingData != null) {
+      while (!pendingData.isEmpty()) {
+        PendingData data = pendingData.poll();
+        outboundFlow.data(data.endOfStream, id, data.buffer, data.flush);
+      }
+      pendingData = null;
+    }
   }
 
   /**
@@ -170,7 +189,6 @@ class OkHttpClientStream extends Http2ClientStream {
 
   @Override
   protected void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-    checkState(id() != 0, "streamId should be set");
     Buffer buffer;
     if (frame == null) {
       buffer = EMPTY_BUFFER;
@@ -181,9 +199,18 @@ class OkHttpClientStream extends Http2ClientStream {
         onSendingBytes(size);
       }
     }
-    // If buffer > frameWriter.maxDataLength() the flow-controller will ensure that it is
-    // properly chunked.
-    outboundFlow.data(endOfStream, id(), buffer, flush);
+
+    synchronized (lock) {
+      if (pendingData != null) {
+        // Stream is pending start, queue the data.
+        pendingData.add(new PendingData(buffer, endOfStream, flush));
+      } else {
+        checkState(id() != 0, "streamId should be set");
+        // If buffer > frameWriter.maxDataLength() the flow-controller will ensure that it is
+        // properly chunked.
+        outboundFlow.data(endOfStream, id(), buffer, flush);
+      }
+    }
   }
 
   @Override
@@ -221,5 +248,17 @@ class OkHttpClientStream extends Http2ClientStream {
 
   Object getOutboundFlowState() {
     return outboundFlowState;
+  }
+
+  private static class PendingData {
+    Buffer buffer;
+    boolean endOfStream;
+    boolean flush;
+
+    PendingData(Buffer buffer, boolean endOfStream, boolean flush) {
+      this.buffer = buffer;
+      this.endOfStream = endOfStream;
+      this.flush = flush;
+    }
   }
 }
