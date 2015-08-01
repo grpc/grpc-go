@@ -35,6 +35,7 @@ package grpc
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -182,6 +183,23 @@ const (
 	Shutdown
 )
 
+func (s ConnectivityState) String() string {
+	switch s {
+	case Idle:
+		return "IDLE"
+	case Connecting:
+		return "CONNECTING"
+	case Ready:
+		return "READY"
+	case TransientFailure:
+		return "TRANSIENT_FAILURE"
+	case Shutdown:
+		return "SHUTDOWN"
+	default:
+		panic(fmt.Sprintf("unknown connectivity state: %d", s))
+	}
+}
+
 // ClientConn represents a client connection to an RPC service.
 type ClientConn struct {
 	target       string
@@ -212,27 +230,31 @@ func (cc *ClientConn) State() ConnectivityState {
 // WaitForStateChange returns true when the state changes to something other than the
 // sourceState and false if timeout fires.
 func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
+	start := time.Now()
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	if sourceState != cc.state {
 		return true
 	}
-	// Shutdown state is a sink -- once it is entered, no furhter state change could happen.
-	if sourceState == Shutdown {
-		return false
-	}
 	done := make(chan struct{})
+	expired := timeout <= time.Since(start)
 	go func() {
 		select {
-		case <-time.After(timeout):
+		case <-time.After(timeout-time.Since(start)):
+			cc.mu.Lock()
+			expired = true
 			cc.stateCV.Broadcast()
+			cc.mu.Unlock()
 		case <-done:
 		}
 	}()
+	defer close(done)
 	for sourceState == cc.state {
 		cc.stateCV.Wait()
+		if expired {
+			return false
+		}
 	}
-	close(done)
 	return true
 }
 
@@ -242,6 +264,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 	for {
 		cc.mu.Lock()
 		cc.state = Connecting
+		cc.stateCV.Broadcast()
 		t := cc.transport
 		ts := cc.transportSeq
 		// Avoid wait() picking up a dying transport unnecessarily.
@@ -280,6 +303,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		if err != nil {
 			cc.mu.Lock()
 			cc.state = TransientFailure
+			cc.stateCV.Broadcast()
 			cc.mu.Unlock()
 			sleepTime -= time.Since(connectTime)
 			if sleepTime < 0 {
@@ -304,6 +328,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			return ErrClientConnClosing
 		}
 		cc.state = Ready
+		cc.stateCV.Broadcast()
 		cc.transport = newTransport
 		cc.transportSeq = ts + 1
 		if cc.ready != nil {
@@ -327,6 +352,7 @@ func (cc *ClientConn) transportMonitor() {
 		case <-cc.transport.Error():
 			cc.mu.Lock()
 			cc.state = TransientFailure
+			cc.stateCV.Broadcast()
 			cc.mu.Unlock()
 			if err := cc.resetTransport(true); err != nil {
 				// The ClientConn is closing.
@@ -381,6 +407,7 @@ func (cc *ClientConn) Close() error {
 		return ErrClientConnClosing
 	}
 	cc.state = Shutdown
+	cc.stateCV.Broadcast()
 	if cc.ready != nil {
 		close(cc.ready)
 		cc.ready = nil
