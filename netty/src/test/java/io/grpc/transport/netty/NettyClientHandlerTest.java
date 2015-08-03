@@ -43,7 +43,6 @@ import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -512,21 +511,6 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     assertTrue(callback.failureCause instanceof StatusException);
     assertEquals(Status.Code.UNAVAILABLE,
         ((StatusException) callback.failureCause).getStatus().getCode());
-  }
-
-  @Test
-  public void ping_failsOnConnectionError() throws Exception {
-    when(channel.isOpen()).thenReturn(true);
-
-    PingCallbackImpl callback = new PingCallbackImpl();
-    sendPing(callback, MoreExecutors.directExecutor());
-    assertEquals(0, callback.invocationCount);
-
-    Status failureStatus = Status.INTERNAL.withDescription("forced failure");
-    handler.onConnectionError(ctx, failureStatus.asRuntimeException(), null);
-    // ping failed on connection error
-    assertEquals(1, callback.invocationCount);
-    assertSame(failureStatus, Status.fromThrowable(callback.failureCause));
   }
 
   private void sendPing(PingCallback callback, Executor executor) {
