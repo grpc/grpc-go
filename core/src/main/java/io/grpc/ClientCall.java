@@ -72,26 +72,12 @@ public abstract class ClientCall<RequestT, ResponseT> {
     public abstract void onHeaders(Metadata.Headers headers);
 
     /**
-     * A response payload has been received. May be called zero or more times depending on whether
-     * the call response is empty, a single message or a stream of messages.
-     *
-     * @param payload returned by the server
-     * @deprecated use {@link #onMessage}
-     */
-    @Deprecated
-    public void onPayload(T payload) {
-      throw new UnsupportedOperationException();
-    }
-
-    /**
      * A response message has been received. May be called zero or more times depending on whether
      * the call response is empty, a single message or a stream of messages.
      *
      * @param message returned by the server
      */
-    public void onMessage(T message) {
-      onPayload(message);
-    }
+    public abstract void onMessage(T message);
 
     /**
      * The ClientCall has been closed. Any additional calls to the {@code ClientCall} will not be
@@ -159,25 +145,10 @@ public abstract class ClientCall<RequestT, ResponseT> {
    * Send a request message to the server. May be called zero or more times depending on how many
    * messages the server is willing to accept for the operation.
    *
-   * @param payload message to be sent to the server.
-   * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed
-   * @deprecated use {@link #sendMessage}
-   */
-  @Deprecated
-  public void sendPayload(RequestT payload) {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Send a request message to the server. May be called zero or more times depending on how many
-   * messages the server is willing to accept for the operation.
-   *
    * @param message message to be sent to the server.
    * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed
    */
-  public void sendMessage(RequestT message) {
-    sendPayload(message);
-  }
+  public abstract void sendMessage(RequestT message);
 
   /**
    * If {@code true}, indicates that the call is capable of sending additional messages
