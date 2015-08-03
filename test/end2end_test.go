@@ -484,7 +484,7 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 	if ok := cc.WaitForStateChange(time.Second, grpc.Idle); !ok {
 		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Idle, ok)
 	}
-	if ok := cc.WaitForStateChange(10 * time.Second, grpc.Connecting); !ok {
+	if ok := cc.WaitForStateChange(10*time.Second, grpc.Connecting); !ok {
 		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Connecting, ok)
 	}
 	if cc.State() != grpc.Ready {
@@ -503,7 +503,7 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 		t.Fatalf("header[\"ua\"] = %q, %t, want %q, true", v, ok, testAppUA)
 	}
 	tearDown(s, cc)
-	if ok := cc.WaitForStateChange(5 * time.Second, grpc.Ready); !ok {
+	if ok := cc.WaitForStateChange(5*time.Second, grpc.Ready); !ok {
 		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Ready, ok)
 	}
 	if cc.State() != grpc.Shutdown {
