@@ -173,6 +173,20 @@ class NettyClientTransport implements ClientTransport {
     channel = b.connect(address).channel();
     // Start the write queue as soon as the channel is constructed
     handler.startWriteQueue(channel);
+    // This write will have no effect, yet it will only complete once the negotiationHandler
+    // flushes any pending writes.
+    channel.write(NettyClientHandler.NOOP_MESSAGE).addListener(new ChannelFutureListener() {
+      @Override
+      public void operationComplete(ChannelFuture future) throws Exception {
+        if (future.isSuccess()) {
+          listener.transportReady();
+        } else {
+          // Need to notify of this failure, because handler.connectionError() is not guaranteed to
+          // have seen this cause.
+          notifyTerminated(future.cause());
+        }
+      }
+    });
     // Handle transport shutdown when the channel is closed.
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override

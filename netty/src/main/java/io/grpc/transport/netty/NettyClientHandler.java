@@ -44,6 +44,7 @@ import io.grpc.transport.ClientTransport.PingCallback;
 import io.grpc.transport.Http2Ping;
 import io.grpc.transport.HttpUtil;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -75,6 +76,11 @@ import javax.annotation.Nullable;
  */
 class NettyClientHandler extends Http2ConnectionHandler {
   private static final Logger logger = Logger.getLogger(NettyClientHandler.class.getName());
+  /**
+   * A message that simply passes through the channel without any real processing. It is useful to
+   * check if buffers have been drained and test the health of the channel in a single operation.
+   */
+  static final Object NOOP_MESSAGE = new Object();
 
   private final Http2Connection.PropertyKey streamKey;
   private final Ticker ticker;
@@ -160,6 +166,8 @@ class NettyClientHandler extends Http2ConnectionHandler {
       ((RequestMessagesCommand) msg).requestMessages();
     } else if (msg instanceof SendPingCommand) {
       sendPingFrame(ctx, (SendPingCommand) msg, promise);
+    } else if (msg == NOOP_MESSAGE) {
+      ctx.write(Unpooled.EMPTY_BUFFER, promise);
     } else {
       throw new AssertionError("Write called for unexpected type: " + msg.getClass().getName());
     }
