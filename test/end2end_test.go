@@ -363,6 +363,9 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	if cc.State() != grpc.Ready {
 		t.Fatalf("cc.State() = %s, want %s", cc.State(), grpc.Ready)
 	}
+	if ok := cc.WaitForStateChange(time.Millisecond, grpc.Ready); ok {
+		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want false", grpc.Ready, ok)
+	}
 	s.Stop()
 	// Set -1 as the timeout to make sure if transportMonitor gets error
 	// notification in time the failure path of the 1st invoke of
@@ -372,7 +375,7 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 		t.Fatalf("TestService/EmptyCall(%v, _) = _, error %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
 	}
 	if ok := cc.WaitForStateChange(time.Second, grpc.Ready); !ok {
-		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Connecting, ok)
+		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Ready, ok)
 	}
 	state := cc.State()
 	if state != grpc.Connecting && state != grpc.TransientFailure {
