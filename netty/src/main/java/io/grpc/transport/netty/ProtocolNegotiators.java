@@ -60,8 +60,6 @@ import io.netty.util.concurrent.GenericFutureListener;
 import java.net.InetSocketAddress;
 import java.util.ArrayDeque;
 import java.util.Queue;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
@@ -70,8 +68,6 @@ import javax.net.ssl.SSLParameters;
  * Common {@link ProtocolNegotiator}s used by gRPC.
  */
 public final class ProtocolNegotiators {
-  private static final Logger log = Logger.getLogger(ProtocolNegotiators.class.getName());
-
   private ProtocolNegotiators() {
   }
 
@@ -187,6 +183,7 @@ public final class ProtocolNegotiators {
     private Queue<ChannelWrite> bufferedWrites = new ArrayDeque<ChannelWrite>();
     private boolean writing;
     private boolean flushRequested;
+    private Throwable failCause;
 
     /**
      * @param handlers the ChannelHandlers are added to the pipeline on channelRegistered and
@@ -233,7 +230,9 @@ public final class ProtocolNegotiators {
        *    the event loop thread. When this happens, we identify that this handler has been
        *    removed with "bufferedWrites == null".
        */
-      if (bufferedWrites == null) {
+      if (failCause != null) {
+        promise.setFailure(failCause);
+      } else if (bufferedWrites == null) {
         super.write(ctx, msg, promise);
       } else {
         bufferedWrites.add(new ChannelWrite(msg, promise));
@@ -262,6 +261,9 @@ public final class ProtocolNegotiators {
     }
 
     protected final void fail(ChannelHandlerContext ctx, Throwable cause) {
+      if (failCause == null) {
+        failCause = cause;
+      }
       if (bufferedWrites != null) {
         while (!bufferedWrites.isEmpty()) {
           ChannelWrite write = bufferedWrites.poll();
@@ -269,8 +271,6 @@ public final class ProtocolNegotiators {
         }
         bufferedWrites = null;
       }
-
-      log.log(Level.SEVERE, "Transport failed during protocol negotiation", cause);
 
       /**
        * In case something goes wrong ensure that the channel gets closed as the
