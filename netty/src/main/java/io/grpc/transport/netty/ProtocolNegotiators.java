@@ -35,7 +35,6 @@ import com.google.common.base.Preconditions;
 
 import io.grpc.Status;
 
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerAdapter;
@@ -54,8 +53,6 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.util.ByteString;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.GenericFutureListener;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayDeque;
@@ -91,8 +88,8 @@ public final class ProtocolNegotiators {
 
   /**
    * Returns a {@link ProtocolNegotiator} that ensures the pipeline is set up so that TLS will
-   * be negotiated, the {@code handler} is added and writes to the {@link Channel} may happen
-   * immediately, even before the TLS Handshake is complete.
+   * be negotiated, the {@code handler} is added and writes to the {@link io.netty.channel.Channel}
+   * may happen immediately, even before the TLS Handshake is complete.
    */
   public static ProtocolNegotiator tls(final SslContext sslContext,
                                        final InetSocketAddress inetAddress) {
@@ -120,16 +117,7 @@ public final class ProtocolNegotiators {
             SSLParameters sslParams = new SSLParameters();
             sslParams.setEndpointIdentificationAlgorithm("HTTPS");
             sslEngine.setSSLParameters(sslParams);
-
-            SslHandler sslHandler = new SslHandler(sslEngine, false);
-            sslHandler.handshakeFuture().addListener(new GenericFutureListener<Future<Channel>>() {
-              @Override
-              public void operationComplete(Future<Channel> future) throws Exception {
-                // If an error occurred during the handshake, throw it to the pipeline.
-                future.get();
-              }
-            });
-            ctx.pipeline().replace(this, null, sslHandler);
+            ctx.pipeline().replace(this, null, new SslHandler(sslEngine, false));
           }
         };
         return new BufferUntilTlsNegotiatedHandler(sslBootstrap, handler);
@@ -156,7 +144,8 @@ public final class ProtocolNegotiators {
 
   /**
    * Returns a {@link ChannelHandler} that ensures that the {@code handler} is added to the
-   * pipeline writes to the {@link Channel} may happen immediately, even before it is active.
+   * pipeline writes to the {@link io.netty.channel.Channel} may happen immediately, even before it
+   * is active.
    */
   public static ProtocolNegotiator plaintext() {
     return new ProtocolNegotiator() {
@@ -174,8 +163,8 @@ public final class ProtocolNegotiators {
   /**
    * Buffers all writes until either {@link #writeBufferedAndRemove(ChannelHandlerContext)} or
    * {@link #fail(ChannelHandlerContext, Throwable)} is called. This handler allows us to
-   * write to a {@link Channel} before we are allowed to write to it officially i.e.
-   * before it's active or the TLS Handshake is complete.
+   * write to a {@link io.netty.channel.Channel} before we are allowed to write to it officially
+   * i.e.  before it's active or the TLS Handshake is complete.
    */
   public abstract static class AbstractBufferingHandler extends ChannelDuplexHandler {
 
@@ -342,7 +331,7 @@ public final class ProtocolNegotiators {
   }
 
   /**
-   * Buffers all writes until the {@link Channel} is active.
+   * Buffers all writes until the {@link io.netty.channel.Channel} is active.
    */
   private static class BufferUntilChannelActiveHandler extends AbstractBufferingHandler
       implements ProtocolNegotiator.Handler {
