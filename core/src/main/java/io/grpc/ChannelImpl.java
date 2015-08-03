@@ -401,7 +401,7 @@ public final class ChannelImpl extends Channel {
     }
   }
 
-  private static final SharedResourceHolder.Resource<ScheduledExecutorService> TIMER_SERVICE =
+  static final SharedResourceHolder.Resource<ScheduledExecutorService> TIMER_SERVICE =
       new SharedResourceHolder.Resource<ScheduledExecutorService>() {
         @Override
         public ScheduledExecutorService create() {

@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import static io.grpc.ChannelImpl.TIMER_SERVICE;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.Futures;
@@ -47,7 +49,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -85,7 +86,7 @@ public final class ServerImpl extends Server {
   /** {@code transportServer} and services encapsulating something similar to a TCP connection. */
   private final Collection<ServerTransport> transports = new HashSet<ServerTransport>();
 
-  private final ScheduledExecutorService timeoutService;
+  private final ScheduledExecutorService timeoutService = SharedResourceHolder.get(TIMER_SERVICE);
 
   /**
    * Construct a server.
@@ -98,8 +99,6 @@ public final class ServerImpl extends Server {
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.registry = Preconditions.checkNotNull(registry, "registry");
     this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");
-    // TODO(carl-mastrangelo): replace this with the shared scheduler once PR #576 is merged.
-    this.timeoutService = Executors.newScheduledThreadPool(1);
   }
 
   /** Hack to allow executors to auto-shutdown. Not for general use. */
@@ -139,7 +138,7 @@ public final class ServerImpl extends Server {
       }
       shutdown = true;
       transportServer.shutdown();
-      timeoutService.shutdown();
+      SharedResourceHolder.release(TIMER_SERVICE, timeoutService);
       return this;
     }
   }
