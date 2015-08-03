@@ -241,16 +241,16 @@ func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState Conn
 		return false
 	}
 	done := make(chan struct{})
-	go func() {
+	go func(expired *bool) {
 		select {
 		case <-time.After(timeout-time.Since(start)):
 			cc.mu.Lock()
-			expired = true
+			*expired = true
 			cc.stateCV.Broadcast()
 			cc.mu.Unlock()
 		case <-done:
 		}
-	}()
+	}(&expired)
 	defer close(done)
 	for sourceState == cc.state {
 		cc.stateCV.Wait()
