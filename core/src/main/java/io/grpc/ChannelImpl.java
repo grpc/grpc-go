@@ -308,7 +308,7 @@ public final class ChannelImpl extends Channel {
           activeTransport = null;
         }
         // TODO(notcarl): replace this with something more meaningful
-        transportShutdown(Status.UNKNOWN);
+        transportShutdown(Status.UNKNOWN.withDescription("transport shutdown for unknown reason"));
         transports.remove(transport);
         if (shutdown && transports.isEmpty()) {
           if (terminated) {

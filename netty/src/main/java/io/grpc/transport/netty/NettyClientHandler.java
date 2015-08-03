@@ -205,11 +205,10 @@ class NettyClientHandler extends Http2ConnectionHandler {
   /**
    * Handler for an inbound HTTP/2 RST_STREAM frame, terminating a stream.
    */
-  private void onRstStreamRead(int streamId)
-      throws Http2Exception {
-    // TODO(nmittler): do something with errorCode?
+  private void onRstStreamRead(int streamId, long errorCode) throws Http2Exception {
     NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
-    stream.transportReportStatus(Status.UNKNOWN, false, new Metadata.Trailers());
+    Status status = HttpUtil.Http2Error.statusForCode((int) errorCode);
+    stream.transportReportStatus(status, false, new Metadata.Trailers());
   }
 
   @Override
@@ -524,7 +523,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     @Override
     public void onRstStreamRead(ChannelHandlerContext ctx, int streamId, long errorCode)
         throws Http2Exception {
-      handler.onRstStreamRead(streamId);
+      handler.onRstStreamRead(streamId, errorCode);
     }
 
     @Override public void onPingAckRead(ChannelHandlerContext ctx, ByteBuf data)
