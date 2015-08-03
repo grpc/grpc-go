@@ -31,6 +31,7 @@
 
 package io.grpc.transport.netty;
 
+import static io.netty.handler.codec.http2.Http2CodecUtil.getEmbeddedHttp2Exception;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -245,6 +246,17 @@ class NettyClientHandler extends Http2ConnectionHandler {
       // Close any open streams
       super.channelInactive(ctx);
     }
+  }
+
+  @Override
+  public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    if (getEmbeddedHttp2Exception(cause) == null) {
+      // Kill the connection instead of propagating the exceptionCaught(). Http2ConnectionHandler
+      // only handles Http2Exceptions and propagates everything else.
+      goAwayStatus(Status.fromThrowable(cause));
+      cause = new Http2Exception(Http2Error.INTERNAL_ERROR, null, cause);
+    }
+    super.exceptionCaught(ctx, cause);
   }
 
   @Override
