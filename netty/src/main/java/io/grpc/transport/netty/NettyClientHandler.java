@@ -88,7 +88,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private WriteQueue clientWriteQueue;
   private int flowControlWindow;
   private Http2Settings initialSettings = new Http2Settings();
-  private Throwable connectionError;
   private Http2Ping ping;
   private Status goAwayStatus;
   private ChannelHandlerContext ctx;
@@ -132,8 +131,8 @@ class NettyClientHandler extends Http2ConnectionHandler {
   }
 
   @Nullable
-  public Throwable connectionError() {
-    return connectionError;
+  public Status errorStatus() {
+    return goAwayStatus;
   }
 
   @Override
@@ -253,9 +252,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
       Http2Exception http2Ex) {
     logger.log(Level.FINE, "Caught a connection error", cause);
 
-    // Save the error.
-    connectionError = cause;
-    goAwayStatus(Status.fromThrowable(connectionError));
+    goAwayStatus(Status.fromThrowable(cause));
     cancelPing();
 
     super.onConnectionError(ctx, cause, http2Ex);
@@ -429,9 +426,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   }
 
   private Throwable getPingFailure() {
-    if (connectionError != null) {
-      return connectionError;
-    } else if (goAwayStatus != null) {
+    if (goAwayStatus != null) {
       return goAwayStatus.asException();
     } else {
       return Status.UNAVAILABLE.withDescription("Connection closed").asException();

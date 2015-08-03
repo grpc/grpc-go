@@ -522,11 +522,11 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     sendPing(callback, MoreExecutors.directExecutor());
     assertEquals(0, callback.invocationCount);
 
-    Throwable connectionError = new Throwable();
-    handler.onConnectionError(ctx, connectionError, null);
+    Status failureStatus = Status.INTERNAL.withDescription("forced failure");
+    handler.onConnectionError(ctx, failureStatus.asRuntimeException(), null);
     // ping failed on connection error
     assertEquals(1, callback.invocationCount);
-    assertSame(connectionError, callback.failureCause);
+    assertSame(failureStatus, Status.fromThrowable(callback.failureCause));
   }
 
   private void sendPing(PingCallback callback, Executor executor) {

@@ -65,8 +65,6 @@ import io.netty.util.AsciiString;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.concurrent.Executor;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import javax.annotation.concurrent.GuardedBy;
 
@@ -74,8 +72,6 @@ import javax.annotation.concurrent.GuardedBy;
  * A Netty-based {@link ClientTransport} implementation.
  */
 class NettyClientTransport implements ClientTransport {
-  private static final Logger log = Logger.getLogger(NettyClientTransport.class.getName());
-
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
@@ -183,7 +179,7 @@ class NettyClientTransport implements ClientTransport {
         } else {
           // Need to notify of this failure, because handler.connectionError() is not guaranteed to
           // have seen this cause.
-          notifyTerminated(future.cause());
+          notifyTerminated(Status.fromThrowable(future.cause()));
         }
       }
     });
@@ -191,26 +187,28 @@ class NettyClientTransport implements ClientTransport {
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
-        notifyTerminated(handler.connectionError());
+        Status status = handler.errorStatus();
+        if (status == null) {
+          // We really only expect this to happen if shutdown() was called, but in that case this
+          // status is ignored.
+          status = Status.INTERNAL.withDescription("Connection closed with unknown cause");
+        }
+        notifyTerminated(status);
       }
     });
   }
 
   @Override
   public void shutdown() {
-    notifyShutdown(null);
+    notifyShutdown(Status.OK.withDescription("Channel requested transport to shut down"));
     // Notifying of termination is automatically done when the channel closes.
     if (channel != null && channel.isOpen()) {
       channel.close();
     }
   }
 
-  private void notifyShutdown(Throwable t) {
-    Status s = Status.OK.withDescription("Transport is shutting down");
-    if (t != null) {
-      log.log(Level.SEVERE, "Transport failed", t);
-      s = Status.INTERNAL.withCause(t).withDescription("Transport failed");
-    }
+  private void notifyShutdown(Status status) {
+    Preconditions.checkNotNull(status, "status");
     boolean notifyShutdown;
     synchronized (this) {
       notifyShutdown = !shutdown;
@@ -219,12 +217,12 @@ class NettyClientTransport implements ClientTransport {
       }
     }
     if (notifyShutdown) {
-      listener.transportShutdown(s);
+      listener.transportShutdown(status);
     }
   }
 
-  private void notifyTerminated(Throwable t) {
-    notifyShutdown(t);
+  private void notifyTerminated(Status status) {
+    notifyShutdown(status);
     boolean notifyTerminated;
     synchronized (this) {
       notifyTerminated = !terminated;
