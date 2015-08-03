@@ -354,6 +354,18 @@ func TestTimeoutOnDeadServer(t *testing.T) {
 func testTimeoutOnDeadServer(t *testing.T, e env) {
 	s, cc := setUp(nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
+	if ok := cc.WaitForStateChange(time.Second, grpc.Idle); !ok {
+		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Idle, ok)
+	}
+	if ok := cc.WaitForStateChange(time.Second, grpc.Connecting); !ok {
+		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Connecting, ok)
+	}
+	if cc.State() != grpc.Ready {
+		t.Fatalf("cc.State() = %s, want %s", cc.State(), grpc.Ready)
+	}
+	if ok := cc.WaitForStateChange(time.Millisecond, grpc.Ready); ok {
+		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want false", grpc.Ready, ok)
+	}
 	s.Stop()
 	// Set -1 as the timeout to make sure if transportMonitor gets error
 	// notification in time the failure path of the 1st invoke of
@@ -361,6 +373,13 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	ctx, _ := context.WithTimeout(context.Background(), -1)
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(%v, _) = _, error %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
+	}
+	if ok := cc.WaitForStateChange(time.Second, grpc.Ready); !ok {
+		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Ready, ok)
+	}
+	state := cc.State()
+	if state != grpc.Connecting && state != grpc.TransientFailure {
+		t.Fatalf("cc.State() = %s, want %s or %s", state, grpc.Connecting, grpc.TransientFailure)
 	}
 	cc.Close()
 }
@@ -461,8 +480,20 @@ func TestEmptyUnaryWithUserAgent(t *testing.T) {
 
 func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 	s, cc := setUp(nil, math.MaxUint32, testAppUA, e)
+	// Wait until cc is connected.
+	if ok := cc.WaitForStateChange(time.Second, grpc.Idle); !ok {
+		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Idle, ok)
+	}
+	if ok := cc.WaitForStateChange(10*time.Second, grpc.Connecting); !ok {
+		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Connecting, ok)
+	}
+	if cc.State() != grpc.Ready {
+		t.Fatalf("cc.State() = %s, want %s", cc.State(), grpc.Ready)
+	}
+	if ok := cc.WaitForStateChange(time.Second, grpc.Ready); ok {
+		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want false", grpc.Ready, ok)
+	}
 	tc := testpb.NewTestServiceClient(cc)
-	defer tearDown(s, cc)
 	var header metadata.MD
 	reply, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Header(&header))
 	if err != nil || !proto.Equal(&testpb.Empty{}, reply) {
@@ -470,6 +501,13 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 	}
 	if v, ok := header["ua"]; !ok || v != testAppUA {
 		t.Fatalf("header[\"ua\"] = %q, %t, want %q, true", v, ok, testAppUA)
+	}
+	tearDown(s, cc)
+	if ok := cc.WaitForStateChange(5*time.Second, grpc.Ready); !ok {
+		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Ready, ok)
+	}
+	if cc.State() != grpc.Shutdown {
+		t.Fatalf("cc.State() = %s, want %s", cc.State(), grpc.Shutdown)
 	}
 }
 
