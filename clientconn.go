@@ -227,8 +227,8 @@ func (cc *ClientConn) State() ConnectivityState {
 	return cc.state
 }
 
-// WaitForStateChange returns true when the state changes to something other than the
-// sourceState and false if timeout fires.
+// WaitForStateChange blocks until the state changes to something other than the sourceState
+// or timeout fires. It returns false if timeout fires and true otherwise.
 func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
 	start := time.Now()
 	cc.mu.Lock()
