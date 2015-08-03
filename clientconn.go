@@ -238,6 +238,9 @@ func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState Conn
 	}
 	done := make(chan struct{})
 	expired := timeout <= time.Since(start)
+	if expired {
+		return false
+	}
 	go func() {
 		select {
 		case <-time.After(timeout-time.Since(start)):
