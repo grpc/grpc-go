@@ -65,6 +65,7 @@ import org.mockito.stubbing.Answer;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
@@ -304,5 +305,51 @@ public class ChannelImplTest {
     channel = new ChannelImpl(mockTransportFactory, executor, null, Arrays.asList(interceptor));
     assertNotNull(channel.newCall(method, CallOptions.DEFAULT));
     assertEquals(1, atomic.get());
+  }
+
+  @Test
+  public void testNoDeadlockOnShutdown() {
+    // Force creation of transport
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata.Headers());
+    call.cancel();
+
+    verify(mockTransport).start(transportListenerCaptor.capture());
+    final ClientTransport.Listener transportListener = transportListenerCaptor.getValue();
+    final Object lock = new Object();
+    final CyclicBarrier barrier = new CyclicBarrier(2);
+    new Thread() {
+      @Override
+      public void run() {
+        synchronized (lock) {
+          try {
+            barrier.await();
+          } catch (Exception ex) {
+            throw new AssertionError(ex);
+          }
+          // To deadlock, a lock would be needed for this call to proceed.
+          transportListener.transportShutdown(Status.CANCELLED);
+        }
+      }
+    }.start();
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        // To deadlock, a lock would need to be held while this method is in progress.
+        try {
+          barrier.await();
+        } catch (Exception ex) {
+          throw new AssertionError(ex);
+        }
+        // If deadlock is possible with this setup, this sychronization completes the loop because
+        // the transportShutdown needs a lock that Channel is holding while calling this method.
+        synchronized (lock) {
+        }
+        return null;
+      }
+    }).when(mockTransport).shutdown();
+    channel.shutdown();
+
+    transportListener.transportTerminated();
   }
 }

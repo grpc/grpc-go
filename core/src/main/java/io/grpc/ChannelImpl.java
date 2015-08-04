@@ -128,6 +128,7 @@ public final class ChannelImpl extends Channel {
    * cancelled.
    */
   public ChannelImpl shutdown() {
+    ClientTransport savedActiveTransport;
     synchronized (lock) {
       if (shutdown) {
         return this;
@@ -135,8 +136,8 @@ public final class ChannelImpl extends Channel {
       shutdown = true;
       // After shutdown there are no new calls, so no new cancellation tasks are needed
       scheduledExecutor = SharedResourceHolder.release(TIMER_SERVICE, scheduledExecutor);
-      if (activeTransport != null) {
-        activeTransport.shutdown();
+      savedActiveTransport = activeTransport;
+      if (savedActiveTransport != null) {
         activeTransport = null;
       } else if (transports.isEmpty()) {
         terminated = true;
@@ -145,8 +146,11 @@ public final class ChannelImpl extends Channel {
           terminationRunnable.run();
         }
       }
-      return this;
     }
+    if (savedActiveTransport != null) {
+      savedActiveTransport.shutdown();
+    }
+    return this;
   }
 
   /**
@@ -158,10 +162,8 @@ public final class ChannelImpl extends Channel {
    */
   // TODO(ejona86): cancel preexisting calls.
   public ChannelImpl shutdownNow() {
-    synchronized (lock) {
-      shutdown();
-      return this;
-    }
+    shutdown();
+    return this;
   }
 
   /**

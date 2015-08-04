@@ -137,10 +137,10 @@ public final class ServerImpl extends Server {
         return this;
       }
       shutdown = true;
-      transportServer.shutdown();
-      SharedResourceHolder.release(TIMER_SERVICE, timeoutService);
-      return this;
     }
+    transportServer.shutdown();
+    SharedResourceHolder.release(TIMER_SERVICE, timeoutService);
+    return this;
   }
 
   /**
@@ -152,10 +152,8 @@ public final class ServerImpl extends Server {
    */
   // TODO(ejona86): cancel preexisting calls.
   public ServerImpl shutdownNow() {
-    synchronized (lock) {
-      shutdown();
-      return this;
-    }
+    shutdown();
+    return this;
   }
 
   /**
@@ -253,12 +251,16 @@ public final class ServerImpl extends Server {
 
     @Override
     public void serverShutdown() {
+      ArrayList<ServerTransport> copiedTransports;
       synchronized (lock) {
         // transports collection can be modified during shutdown(), even if we hold the lock, due
         // to reentrancy.
-        for (ServerTransport transport : new ArrayList<ServerTransport>(transports)) {
-          transport.shutdown();
-        }
+        copiedTransports = new ArrayList<ServerTransport>(transports);
+      }
+      for (ServerTransport transport : copiedTransports) {
+        transport.shutdown();
+      }
+      synchronized (lock) {
         transportServerTerminated = true;
         checkForTermination();
       }

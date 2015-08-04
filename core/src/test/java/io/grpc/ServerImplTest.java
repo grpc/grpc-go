@@ -254,6 +254,86 @@ public class ServerImplTest {
     verifyNoMoreInteractions(stream);
   }
 
+  @Test
+  public void testNoDeadlockOnShutdown() throws Exception {
+    final Object lock = new Object();
+    final CyclicBarrier barrier = new CyclicBarrier(2);
+    class MaybeDeadlockingServer extends SimpleServer {
+      @Override
+      public void shutdown() {
+        // To deadlock, a lock would need to be held while this method is in progress.
+        try {
+          barrier.await();
+        } catch (Exception ex) {
+          throw new AssertionError(ex);
+        }
+        // If deadlock is possible with this setup, this sychronization completes the loop because
+        // the serverShutdown needs a lock that Server is holding while calling this method.
+        synchronized (lock) {
+        }
+      }
+    }
+
+    transportServer = new MaybeDeadlockingServer();
+    ServerImpl server = new ServerImpl(executor, registry, transportServer);
+    server.start();
+    new Thread() {
+      @Override
+      public void run() {
+        synchronized (lock) {
+          try {
+            barrier.await();
+          } catch (Exception ex) {
+            throw new AssertionError(ex);
+          }
+          // To deadlock, a lock would be needed for this call to proceed.
+          transportServer.listener.serverShutdown();
+        }
+      }
+    }.start();
+    server.shutdown();
+  }
+
+  @Test
+  public void testNoDeadlockOnTransportShutdown() throws Exception {
+    final Object lock = new Object();
+    final CyclicBarrier barrier = new CyclicBarrier(2);
+    class MaybeDeadlockingServerTransport extends SimpleServerTransport {
+      @Override
+      public void shutdown() {
+        // To deadlock, a lock would need to be held while this method is in progress.
+        try {
+          barrier.await();
+        } catch (Exception ex) {
+          throw new AssertionError(ex);
+        }
+        // If deadlock is possible with this setup, this sychronization completes the loop
+        // because the transportTerminated needs a lock that Server is holding while calling this
+        // method.
+        synchronized (lock) {
+        }
+      }
+    }
+
+    final ServerTransportListener transportListener
+        = transportServer.registerNewServerTransport(new MaybeDeadlockingServerTransport());
+    new Thread() {
+      @Override
+      public void run() {
+        synchronized (lock) {
+          try {
+            barrier.await();
+          } catch (Exception ex) {
+            throw new AssertionError(ex);
+          }
+          // To deadlock, a lock would be needed for this call to proceed.
+          transportListener.transportTerminated();
+        }
+      }
+    }.start();
+    server.shutdown();
+  }
+
   /**
    * Useful for plugging a single-threaded executor from processing tasks, or for waiting until a
    * single-threaded executor has processed queued tasks.
