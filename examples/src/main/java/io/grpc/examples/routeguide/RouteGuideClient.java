@@ -36,9 +36,9 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.ChannelImpl;
 import io.grpc.examples.routeguide.RouteGuideGrpc.RouteGuideBlockingStub;
 import io.grpc.examples.routeguide.RouteGuideGrpc.RouteGuideStub;
+import io.grpc.netty.NegotiationType;
+import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
-import io.grpc.transport.netty.NegotiationType;
-import io.grpc.transport.netty.NettyChannelBuilder;
 
 import java.util.Iterator;
 import java.util.List;

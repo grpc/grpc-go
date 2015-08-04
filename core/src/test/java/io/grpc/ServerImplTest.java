@@ -45,11 +45,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import io.grpc.MethodDescriptor.MethodType;
-import io.grpc.transport.ServerListener;
-import io.grpc.transport.ServerStream;
-import io.grpc.transport.ServerStreamListener;
-import io.grpc.transport.ServerTransport;
-import io.grpc.transport.ServerTransportListener;
+import io.grpc.internal.ServerListener;
+import io.grpc.internal.ServerStream;
+import io.grpc.internal.ServerStreamListener;
+import io.grpc.internal.ServerTransport;
+import io.grpc.internal.ServerTransportListener;
 
 import org.junit.After;
 import org.junit.Before;
@@ -373,7 +373,7 @@ public class ServerImplTest {
     return barrier;
   }
 
-  private static class SimpleServer implements io.grpc.transport.Server {
+  private static class SimpleServer implements io.grpc.internal.Server {
     ServerListener listener;
 
     @Override

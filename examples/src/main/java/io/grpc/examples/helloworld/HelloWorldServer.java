@@ -32,8 +32,8 @@
 package io.grpc.examples.helloworld;
 
 import io.grpc.ServerImpl;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
-import io.grpc.transport.netty.NettyServerBuilder;
 
 import java.util.logging.Logger;
 

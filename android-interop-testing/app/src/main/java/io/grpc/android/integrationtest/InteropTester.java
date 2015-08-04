@@ -44,7 +44,7 @@ import android.util.Log;
 import io.grpc.ChannelImpl;
 import io.grpc.stub.StreamObserver;
 import io.grpc.stub.StreamRecorder;
-import io.grpc.transport.okhttp.OkHttpChannelBuilder;
+import io.grpc.okhttp.OkHttpChannelBuilder;
 
 import junit.framework.Assert;
 

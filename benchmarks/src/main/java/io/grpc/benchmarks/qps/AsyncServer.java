@@ -36,6 +36,8 @@ import com.google.protobuf.ByteString;
 
 import io.grpc.ServerImpl;
 import io.grpc.Status;
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.Payload;
 import io.grpc.testing.PayloadType;
@@ -43,9 +45,6 @@ import io.grpc.testing.SimpleRequest;
 import io.grpc.testing.SimpleResponse;
 import io.grpc.testing.TestServiceGrpc;
 import io.grpc.testing.TestUtils;
-import io.grpc.transport.netty.GrpcSslContexts;
-import io.grpc.transport.netty.NettyServerBuilder;
-
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.nio.NioEventLoopGroup;

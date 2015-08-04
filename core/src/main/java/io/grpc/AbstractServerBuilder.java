@@ -35,6 +35,8 @@ import static io.grpc.AbstractChannelBuilder.DEFAULT_EXECUTOR;
 
 import com.google.common.base.Preconditions;
 
+import io.grpc.internal.SharedResourceHolder;
+
 import java.util.concurrent.ExecutorService;
 
 import javax.annotation.Nullable;
@@ -138,7 +140,7 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
    * The essentials required for creating a server.
    */
   protected static class ServerEssentials {
-    final io.grpc.transport.Server server;
+    final io.grpc.internal.Server server;
     @Nullable
     final Runnable terminationRunnable;
 
@@ -148,7 +150,7 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
      * @param server the created server uses this server to accept transports
      * @param terminationRunnable will be called at the server termination
      */
-    public ServerEssentials(io.grpc.transport.Server server,
+    public ServerEssentials(io.grpc.internal.Server server,
         @Nullable Runnable terminationRunnable) {
       this.server = Preconditions.checkNotNull(server, "server");
       this.terminationRunnable = terminationRunnable;

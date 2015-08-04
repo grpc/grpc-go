@@ -35,6 +35,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import io.grpc.internal.SharedResourceHolder;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -50,7 +52,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
-
 
 /**
  * A context propagation mechanism which carries deadlines, cancellation signals,

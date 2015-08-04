@@ -32,8 +32,8 @@
 package io.grpc.examples.helloworld;
 
 import io.grpc.ChannelImpl;
-import io.grpc.transport.netty.NegotiationType;
-import io.grpc.transport.netty.NettyChannelBuilder;
+import io.grpc.netty.NegotiationType;
+import io.grpc.netty.NettyChannelBuilder;
 
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;

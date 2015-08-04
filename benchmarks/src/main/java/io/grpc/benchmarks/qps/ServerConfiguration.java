@@ -36,8 +36,8 @@ import static io.grpc.benchmarks.qps.SocketAddressValidator.UDS;
 import static io.grpc.benchmarks.qps.Utils.parseBoolean;
 import static java.lang.Integer.parseInt;
 
+import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.testing.TestUtils;
-import io.grpc.transport.netty.NettyChannelBuilder;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;

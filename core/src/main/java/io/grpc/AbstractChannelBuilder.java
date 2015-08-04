@@ -34,8 +34,9 @@ package io.grpc;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import io.grpc.SharedResourceHolder.Resource;
-import io.grpc.transport.ClientTransportFactory;
+import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.SharedResourceHolder;
+import io.grpc.internal.SharedResourceHolder.Resource;
 
 import java.util.ArrayList;
 import java.util.Arrays;

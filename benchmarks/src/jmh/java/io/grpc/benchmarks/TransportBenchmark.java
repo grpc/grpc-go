@@ -41,16 +41,16 @@ import io.grpc.AbstractServerBuilder;
 import io.grpc.ChannelImpl;
 import io.grpc.ServerImpl;
 import io.grpc.benchmarks.qps.AsyncServer;
+import io.grpc.inprocess.InProcessChannelBuilder;
+import io.grpc.inprocess.InProcessServerBuilder;
+import io.grpc.netty.NegotiationType;
+import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.NettyServerBuilder;
+import io.grpc.okhttp.OkHttpChannelBuilder;
 import io.grpc.testing.Payload;
 import io.grpc.testing.SimpleRequest;
 import io.grpc.testing.SimpleResponse;
 import io.grpc.testing.TestServiceGrpc;
-import io.grpc.transport.inprocess.InProcessChannelBuilder;
-import io.grpc.transport.inprocess.InProcessServerBuilder;
-import io.grpc.transport.netty.NegotiationType;
-import io.grpc.transport.netty.NettyChannelBuilder;
-import io.grpc.transport.netty.NettyServerBuilder;
-import io.grpc.transport.okhttp.OkHttpChannelBuilder;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalServerChannel;
@@ -121,7 +121,7 @@ public class TransportBenchmark {
         InetSocketAddress address = new InetSocketAddress("localhost", port);
         serverBuilder = NettyServerBuilder.forAddress(address);
         channelBuilder = OkHttpChannelBuilder.forAddress("localhost", port)
-            .negotiationType(io.grpc.transport.okhttp.NegotiationType.PLAINTEXT);
+            .negotiationType(io.grpc.okhttp.NegotiationType.PLAINTEXT);
         break;
       }
       default:

@@ -37,11 +37,13 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.Futures;
 
-import io.grpc.transport.ServerListener;
-import io.grpc.transport.ServerStream;
-import io.grpc.transport.ServerStreamListener;
-import io.grpc.transport.ServerTransport;
-import io.grpc.transport.ServerTransportListener;
+import io.grpc.internal.SerializingExecutor;
+import io.grpc.internal.ServerListener;
+import io.grpc.internal.ServerStream;
+import io.grpc.internal.ServerStreamListener;
+import io.grpc.internal.ServerTransport;
+import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.SharedResourceHolder;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -80,7 +82,7 @@ public final class ServerImpl extends Server {
   private boolean terminated;
   private Runnable terminationRunnable;
   /** Service encapsulating something similar to an accept() socket. */
-  private final io.grpc.transport.Server transportServer;
+  private final io.grpc.internal.Server transportServer;
   private final Object lock = new Object();
   private boolean transportServerTerminated;
   /** {@code transportServer} and services encapsulating something similar to a TCP connection. */
@@ -95,7 +97,7 @@ public final class ServerImpl extends Server {
    * @param registry of methods to expose to remote clients.
    */
   public ServerImpl(Executor executor, HandlerRegistry registry,
-      io.grpc.transport.Server transportServer) {
+      io.grpc.internal.Server transportServer) {
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.registry = Preconditions.checkNotNull(registry, "registry");
     this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");

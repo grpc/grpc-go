@@ -32,8 +32,8 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ChannelImpl;
-import io.grpc.transport.inprocess.InProcessChannelBuilder;
-import io.grpc.transport.inprocess.InProcessServerBuilder;
+import io.grpc.inprocess.InProcessChannelBuilder;
+import io.grpc.inprocess.InProcessServerBuilder;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;

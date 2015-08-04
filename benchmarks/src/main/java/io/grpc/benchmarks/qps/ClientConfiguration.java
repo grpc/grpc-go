@@ -39,10 +39,10 @@ import static io.grpc.testing.RpcType.UNARY;
 import static java.lang.Integer.parseInt;
 import static java.util.Arrays.asList;
 
+import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.testing.PayloadType;
 import io.grpc.testing.RpcType;
 import io.grpc.testing.TestUtils;
-import io.grpc.transport.netty.NettyChannelBuilder;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;

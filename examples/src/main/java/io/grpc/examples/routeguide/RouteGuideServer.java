@@ -41,8 +41,8 @@ import static java.lang.Math.toRadians;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import io.grpc.ServerImpl;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
-import io.grpc.transport.netty.NettyServerBuilder;
 
 import java.io.IOException;
 import java.net.URL;

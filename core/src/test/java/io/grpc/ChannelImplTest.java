@@ -47,10 +47,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import io.grpc.transport.ClientStream;
-import io.grpc.transport.ClientStreamListener;
-import io.grpc.transport.ClientTransport;
-import io.grpc.transport.ClientTransportFactory;
+import io.grpc.internal.ClientStream;
+import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.ClientTransport;
+import io.grpc.internal.ClientTransportFactory;
 
 import org.junit.After;
 import org.junit.Before;

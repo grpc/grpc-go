@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.transport.netty;
+package io.grpc.netty;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;

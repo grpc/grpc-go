@@ -32,10 +32,10 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ChannelImpl;
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.testing.TestUtils;
-import io.grpc.transport.netty.GrpcSslContexts;
-import io.grpc.transport.netty.NettyChannelBuilder;
-import io.grpc.transport.netty.NettyServerBuilder;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import org.junit.AfterClass;

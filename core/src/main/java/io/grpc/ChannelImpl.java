@@ -36,12 +36,14 @@ import com.google.common.base.Preconditions;
 
 import io.grpc.ClientCallImpl.ClientTransportProvider;
 import io.grpc.Metadata.Headers;
-import io.grpc.transport.ClientStream;
-import io.grpc.transport.ClientStreamListener;
-import io.grpc.transport.ClientTransport;
-import io.grpc.transport.ClientTransport.PingCallback;
-import io.grpc.transport.ClientTransportFactory;
-import io.grpc.transport.HttpUtil;
+import io.grpc.internal.ClientStream;
+import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.ClientTransport;
+import io.grpc.internal.ClientTransport.PingCallback;
+import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.HttpUtil;
+import io.grpc.internal.SerializingExecutor;
+import io.grpc.internal.SharedResourceHolder;
 
 import java.util.ArrayList;
 import java.util.Collection;

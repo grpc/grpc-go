@@ -35,9 +35,9 @@ import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.ServerImpl;
 import io.grpc.ServerInterceptors;
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.testing.TestUtils;
-import io.grpc.transport.netty.GrpcSslContexts;
-import io.grpc.transport.netty.NettyServerBuilder;
 import io.netty.handler.ssl.SslContext;
 
 import java.util.concurrent.Executors;

@@ -34,11 +34,11 @@ package io.grpc.testing.integration;
 import com.google.common.io.Files;
 
 import io.grpc.ChannelImpl;
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NegotiationType;
+import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.okhttp.OkHttpChannelBuilder;
 import io.grpc.testing.TestUtils;
-import io.grpc.transport.netty.GrpcSslContexts;
-import io.grpc.transport.netty.NegotiationType;
-import io.grpc.transport.netty.NettyChannelBuilder;
-import io.grpc.transport.okhttp.OkHttpChannelBuilder;
 import io.netty.handler.ssl.SslContext;
 
 import java.io.File;

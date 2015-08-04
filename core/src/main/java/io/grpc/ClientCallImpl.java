@@ -37,10 +37,11 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 
 import io.grpc.MethodDescriptor.MethodType;
-import io.grpc.transport.ClientStream;
-import io.grpc.transport.ClientStreamListener;
-import io.grpc.transport.ClientTransport;
-import io.grpc.transport.HttpUtil;
+import io.grpc.internal.ClientStream;
+import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.ClientTransport;
+import io.grpc.internal.HttpUtil;
+import io.grpc.internal.SerializingExecutor;
 
 import java.io.InputStream;
 import java.util.concurrent.ScheduledExecutorService;
