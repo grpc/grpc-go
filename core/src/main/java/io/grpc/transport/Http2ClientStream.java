@@ -167,10 +167,8 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
     Integer httpStatus = metadata.get(HTTP2_STATUS);
     if (httpStatus != null) {
       Status status = HttpUtil.httpStatusToGrpcStatus(httpStatus);
-      if (!status.isOk()) {
-        status.augmentDescription("extracted status from HTTP :status " + httpStatus);
-      }
-      return status;
+      return status.isOk() ? status
+          : status.augmentDescription("extracted status from HTTP :status " + httpStatus);
     }
     return null;
   }
