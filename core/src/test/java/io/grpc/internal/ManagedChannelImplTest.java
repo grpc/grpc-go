@@ -88,6 +88,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
@@ -312,6 +313,37 @@ public class ManagedChannelImplTest {
     channel.shutdown();
 
     transportListener.transportTerminated();
+  }
+
+  @Test
+  public void callOptionsExecutor() {
+    Metadata headers = new Metadata();
+    ClientStream mockStream = mock(ClientStream.class);
+    when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
+
+    final List<Runnable> runnables = new ArrayList<Runnable>();
+    Executor executor = new Executor() {
+      @Override
+      public void execute(Runnable r) {
+        runnables.add(r);
+      }
+    };
+    ManagedChannel channel = createChannel(
+        new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    ClientCall<String, Integer> call =
+        channel.newCall(method, CallOptions.DEFAULT.withExecutor(executor));
+    call.start(mockCallListener, headers);
+    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
+    verify(mockStream).start(streamListenerCaptor.capture());
+    ClientStreamListener streamListener = streamListenerCaptor.getValue();
+    Metadata trailers = new Metadata();
+    streamListener.closed(Status.CANCELLED, trailers);
+    assertFalse(runnables.isEmpty());
+    verify(mockCallListener, never()).onClose(same(Status.CANCELLED), same(trailers));
+    for (Runnable r : runnables) {
+      r.run();
+    }
+    verify(mockCallListener).onClose(same(Status.CANCELLED), same(trailers));
   }
 
   @Test

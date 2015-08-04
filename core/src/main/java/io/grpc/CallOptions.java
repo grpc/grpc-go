@@ -33,6 +33,7 @@ package io.grpc;
 
 import com.google.common.base.MoreObjects;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
@@ -54,6 +55,7 @@ public final class CallOptions {
   // them outside of constructor. Otherwise the constructor will have a potentially long list of
   // unnamed arguments, which is undesirable.
   private Long deadlineNanoTime;
+  private Executor executor;
 
   @Nullable
   private String authority;
@@ -142,6 +144,21 @@ public final class CallOptions {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/67")
   public String getAuthority() {
     return authority;
+  }
+
+  /**
+   * Returns a new {@code CallOptions} with {@code executor} to be used instead of the default
+   * executor specified with {@link ManagedChannelBuilder#executor}.
+   */
+  public CallOptions withExecutor(Executor executor) {
+    CallOptions newOptions = new CallOptions(this);
+    newOptions.executor = executor;
+    return newOptions;
+  }
+
+  @Nullable
+  public Executor getExecutor() {
+    return executor;
   }
 
   private CallOptions() {

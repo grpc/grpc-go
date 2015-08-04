@@ -37,11 +37,13 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.base.Objects;
+import com.google.common.util.concurrent.MoreExecutors;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 /** Unit tests for {@link CallOptions}. */
@@ -60,6 +62,7 @@ public class CallOptionsTest {
     assertNull(CallOptions.DEFAULT.getDeadlineNanoTime());
     assertNull(CallOptions.DEFAULT.getAuthority());
     assertNull(CallOptions.DEFAULT.getRequestKey());
+    assertNull(CallOptions.DEFAULT.getExecutor());
   }
 
   @Test
@@ -87,6 +90,17 @@ public class CallOptionsTest {
     CallOptions options2 = options1.withDeadlineNanoTime(null);
     assertEquals(10L, (long) options1.getDeadlineNanoTime());
     assertNull(options2.getDeadlineNanoTime());
+  }
+
+  @Test
+  public void mutateExecutor() {
+    Executor executor = MoreExecutors.directExecutor();
+    CallOptions options1 = CallOptions.DEFAULT.withExecutor(executor);
+    assertNull(CallOptions.DEFAULT.getExecutor());
+    assertSame(executor, options1.getExecutor());
+    CallOptions options2 = options1.withExecutor(null);
+    assertSame(executor, options1.getExecutor());
+    assertNull(options2.getExecutor());
   }
 
   @Test

@@ -323,6 +323,10 @@ public final class ManagedChannelImpl extends ManagedChannel {
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
         CallOptions callOptions) {
+      Executor executor = callOptions.getExecutor();
+      if (executor == null) {
+        executor = ManagedChannelImpl.this.executor;
+      }
       return new ClientCallImpl<ReqT, RespT>(
           method,
           executor,
