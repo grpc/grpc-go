@@ -129,6 +129,7 @@ public class TransportBenchmark {
 
     if (direct) {
       serverBuilder.directExecutor();
+      // Because blocking stubs avoid the executor, this doesn't do much.
       channelBuilder.directExecutor();
     }
 

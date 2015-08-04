@@ -407,7 +407,7 @@ static void PrintStub(
           p->Print(
               *vars,
               "return $calls_method$(\n"
-              "    getChannel().newCall($method_field_name$, getCallOptions()), $params$);\n");
+              "    getChannel(), $method_field_name$, getCallOptions(), $params$);\n");
           break;
         case ASYNC_CALL:
           if (server_streaming) {

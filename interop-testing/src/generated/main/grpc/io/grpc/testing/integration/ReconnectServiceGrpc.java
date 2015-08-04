@@ -131,13 +131,13 @@ public class ReconnectServiceGrpc {
     @java.lang.Override
     public com.google.protobuf.EmptyProtos.Empty start(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          getChannel().newCall(METHOD_START, getCallOptions()), request);
+          getChannel(), METHOD_START, getCallOptions(), request);
     }
 
     @java.lang.Override
     public io.grpc.testing.integration.Messages.ReconnectInfo stop(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          getChannel().newCall(METHOD_STOP, getCallOptions()), request);
+          getChannel(), METHOD_STOP, getCallOptions(), request);
     }
   }
 

@@ -210,20 +210,20 @@ public class TestServiceGrpc {
     @java.lang.Override
     public com.google.protobuf.EmptyProtos.Empty emptyCall(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          getChannel().newCall(METHOD_EMPTY_CALL, getCallOptions()), request);
+          getChannel(), METHOD_EMPTY_CALL, getCallOptions(), request);
     }
 
     @java.lang.Override
     public io.grpc.testing.integration.Messages.SimpleResponse unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request) {
       return blockingUnaryCall(
-          getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request);
+          getChannel(), METHOD_UNARY_CALL, getCallOptions(), request);
     }
 
     @java.lang.Override
     public java.util.Iterator<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> streamingOutputCall(
         io.grpc.testing.integration.Messages.StreamingOutputCallRequest request) {
       return blockingServerStreamingCall(
-          getChannel().newCall(METHOD_STREAMING_OUTPUT_CALL, getCallOptions()), request);
+          getChannel(), METHOD_STREAMING_OUTPUT_CALL, getCallOptions(), request);
     }
   }
 

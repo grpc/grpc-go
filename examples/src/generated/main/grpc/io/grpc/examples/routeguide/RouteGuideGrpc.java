@@ -167,14 +167,14 @@ public class RouteGuideGrpc {
     @java.lang.Override
     public io.grpc.examples.routeguide.Feature getFeature(io.grpc.examples.routeguide.Point request) {
       return blockingUnaryCall(
-          getChannel().newCall(METHOD_GET_FEATURE, getCallOptions()), request);
+          getChannel(), METHOD_GET_FEATURE, getCallOptions(), request);
     }
 
     @java.lang.Override
     public java.util.Iterator<io.grpc.examples.routeguide.Feature> listFeatures(
         io.grpc.examples.routeguide.Rectangle request) {
       return blockingServerStreamingCall(
-          getChannel().newCall(METHOD_LIST_FEATURES, getCallOptions()), request);
+          getChannel(), METHOD_LIST_FEATURES, getCallOptions(), request);
     }
   }
 

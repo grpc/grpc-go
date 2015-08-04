@@ -126,7 +126,7 @@ public class TestServiceGrpc {
     @java.lang.Override
     public io.grpc.testing.SimpleResponse unaryCall(io.grpc.testing.SimpleRequest request) {
       return blockingUnaryCall(
-          getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request);
+          getChannel(), METHOD_UNARY_CALL, getCallOptions(), request);
     }
   }
 

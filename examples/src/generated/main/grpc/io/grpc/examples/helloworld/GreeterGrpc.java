@@ -107,7 +107,7 @@ public class GreeterGrpc {
     @java.lang.Override
     public io.grpc.examples.helloworld.HelloResponse sayHello(io.grpc.examples.helloworld.HelloRequest request) {
       return blockingUnaryCall(
-          getChannel().newCall(METHOD_SAY_HELLO, getCallOptions()), request);
+          getChannel(), METHOD_SAY_HELLO, getCallOptions(), request);
     }
   }
 

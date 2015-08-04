@@ -107,7 +107,7 @@ public class UnimplementedServiceGrpc {
     @java.lang.Override
     public com.google.protobuf.EmptyProtos.Empty unimplementedCall(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          getChannel().newCall(METHOD_UNIMPLEMENTED_CALL, getCallOptions()), request);
+          getChannel(), METHOD_UNIMPLEMENTED_CALL, getCallOptions(), request);
     }
   }
 
