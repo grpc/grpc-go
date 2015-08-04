@@ -34,8 +34,10 @@ package io.grpc.android.integrationtest;
 import com.google.protobuf.EmptyProtos;
 import com.google.protobuf.nano.MessageNano;
 
+import android.annotation.TargetApi;
 import android.net.SSLCertificateSocketFactory;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
@@ -49,6 +51,7 @@ import junit.framework.Assert;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.RuntimeException;
 import java.lang.reflect.Method;
 import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
@@ -343,8 +346,13 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     return context.getSocketFactory();
   }
 
+  @TargetApi(14)
   private SSLCertificateSocketFactory getSslCertificateSocketFactory(
       @Nullable InputStream testCa, String androidSocketFatoryTls) throws Exception {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH /* API level 14 */) {
+      throw new RuntimeException(
+          "android_socket_factory_tls doesn't work with API level less than 14.");
+    }
     SSLCertificateSocketFactory factory = (SSLCertificateSocketFactory)
         SSLCertificateSocketFactory.getDefault(5000 /* Timeout in ms*/);
     // Use HTTP/2.0
