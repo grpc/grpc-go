@@ -714,7 +714,8 @@ public abstract class AbstractTransportTest {
         ServiceAccountCredentials.class.cast(GoogleCredentials.fromStream(credentialsStream));
     credentials = credentials.createScoped(Arrays.<String>asList(authScope));
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
-        .withInterceptors(new ClientAuthInterceptor(credentials, testServiceExecutor));
+        .withInterceptors(new ClientAuthInterceptor(credentials,
+            Executors.newSingleThreadExecutor()));
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setFillUsername(true)
         .setFillOauthScope(true)
@@ -746,7 +747,8 @@ public abstract class AbstractTransportTest {
   public void computeEngineCreds(String serviceAccount, String oauthScope) throws Exception {
     ComputeEngineCredentials credentials = new ComputeEngineCredentials();
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
-        .withInterceptors(new ClientAuthInterceptor(credentials, testServiceExecutor));
+        .withInterceptors(new ClientAuthInterceptor(credentials,
+            Executors.newSingleThreadExecutor()));
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setFillUsername(true)
         .setFillOauthScope(true)
