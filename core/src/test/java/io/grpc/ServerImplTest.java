@@ -116,6 +116,20 @@ public class ServerImplTest {
   }
 
   @Test
+  public void stopImmediate() {
+    transportServer = new SimpleServer() {
+      @Override
+      public void shutdown() {
+        throw new AssertionError("Should not be called, because wasn't started");
+      }
+    };
+    ServerImpl server = new ServerImpl(executor, registry, transportServer);
+    server.shutdown();
+    assertTrue(server.isShutdown());
+    assertTrue(server.isTerminated());
+  }
+
+  @Test
   public void startStopImmediateWithChildTransport() throws IOException {
     ServerImpl server = new ServerImpl(executor, registry, transportServer);
     server.start();

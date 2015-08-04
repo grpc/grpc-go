@@ -132,13 +132,21 @@ public final class ServerImpl extends Server {
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are rejected.
    */
   public ServerImpl shutdown() {
+    boolean shutdownTransportServer;
     synchronized (lock) {
       if (shutdown) {
         return this;
       }
       shutdown = true;
+      shutdownTransportServer = started;
+      if (!shutdownTransportServer) {
+        transportServerTerminated = true;
+        checkForTermination();
+      }
     }
-    transportServer.shutdown();
+    if (shutdownTransportServer) {
+      transportServer.shutdown();
+    }
     SharedResourceHolder.release(TIMER_SERVICE, timeoutService);
     return this;
   }
