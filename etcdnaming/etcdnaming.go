@@ -63,6 +63,13 @@ func (b *recvBuffer) stop() {
 	b.mu.Unlock()
 }
 
+type NameResolver interface {
+	Get(target string) map[string]string
+	Watch(target string)
+	GetUpdate() *namePair
+	Stop()
+}
+
 type etcdNR struct {
 	cfg    etcdcl.Config
 	recv   *recvBuffer
