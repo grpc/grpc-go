@@ -51,15 +51,15 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class AbstractBenchmark {
 
   /**
-   * Standard payload sizes.
+   * Standard message sizes.
    */
-  public enum PayloadSize {
-    // Max out at 1MB to avoid creating payloads larger than Netty's buffer pool can handle
+  public enum MessageSize {
+    // Max out at 1MB to avoid creating messages larger than Netty's buffer pool can handle
     // by default
     SMALL(10), MEDIUM(1024), LARGE(65536), JUMBO(1048576);
 
     private final int bytes;
-    PayloadSize(int bytes) {
+    MessageSize(int bytes) {
       this.bytes = bytes;
     }
 
@@ -172,8 +172,8 @@ public abstract class AbstractBenchmark {
    */
   public void setup(ExecutorType clientExecutor,
                     ExecutorType serverExecutor,
-                    PayloadSize requestSize,
-                    PayloadSize responseSize,
+                    MessageSize requestSize,
+                    MessageSize responseSize,
                     FlowWindowSize windowSize,
                     ChannelType channelType,
                     int maxConcurrentStreams,
@@ -246,10 +246,10 @@ public abstract class AbstractBenchmark {
                     call.request(1);
                     return new ServerCall.Listener<ByteBuf>() {
                       @Override
-                      public void onPayload(ByteBuf payload) {
+                      public void onMessage(ByteBuf message) {
                         // no-op
-                        payload.release();
-                        call.sendPayload(response.slice());
+                        message.release();
+                        call.sendMessage(response.slice());
                       }
 
                       @Override
@@ -277,9 +277,9 @@ public abstract class AbstractBenchmark {
                     call.request(1);
                     return new ServerCall.Listener<ByteBuf>() {
                       @Override
-                      public void onPayload(ByteBuf payload) {
-                        payload.release();
-                        call.sendPayload(response.slice());
+                      public void onMessage(ByteBuf message) {
+                        message.release();
+                        call.sendMessage(response.slice());
                         // Request next message
                         call.request(1);
                       }
@@ -310,10 +310,10 @@ public abstract class AbstractBenchmark {
                     call.request(1);
                     return new ServerCall.Listener<ByteBuf>() {
                       @Override
-                      public void onPayload(ByteBuf payload) {
-                        payload.release();
+                      public void onMessage(ByteBuf message) {
+                        message.release();
                         while (call.isReady()) {
-                          call.sendPayload(response.slice());
+                          call.sendMessage(response.slice());
                         }
                         // Request next message
                         call.request(1);
@@ -337,7 +337,7 @@ public abstract class AbstractBenchmark {
                       @Override
                       public void onReady() {
                         while (call.isReady()) {
-                          call.sendPayload(response.slice());
+                          call.sendMessage(response.slice());
                         }
                       }
                     };
@@ -510,7 +510,7 @@ public abstract class AbstractBenchmark {
     @Override
     public ByteBuf parse(InputStream stream) {
       try {
-        // We don't do anything with the payload and it's already been read into buffers
+        // We don't do anything with the message and it's already been read into buffers
         // so just skip copying it.
         stream.skip(stream.available());
         return EMPTY_BYTE_BUF;

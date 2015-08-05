@@ -26,7 +26,7 @@ public class StreamingResponseBandwidthBenchmark extends AbstractBenchmark {
   public int maxConcurrentStreams = 1;
 
   @Param({"LARGE", "JUMBO"})
-  public PayloadSize responseSize = PayloadSize.JUMBO;
+  public MessageSize responseSize = MessageSize.JUMBO;
 
   @Param({"MEDIUM", "LARGE", "JUMBO"})
   public FlowWindowSize clientInboundFlowWindow = FlowWindowSize.MEDIUM;
@@ -59,7 +59,7 @@ public class StreamingResponseBandwidthBenchmark extends AbstractBenchmark {
   public void setup() throws Exception {
     super.setup(ExecutorType.DIRECT,
         ExecutorType.DIRECT,
-        PayloadSize.SMALL,
+        MessageSize.SMALL,
         responseSize,
         clientInboundFlowWindow,
         ChannelType.NIO,

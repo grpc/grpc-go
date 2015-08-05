@@ -85,8 +85,8 @@ public class UnaryCallQpsBenchmark extends AbstractBenchmark {
   public void setup() throws Exception {
     super.setup(ExecutorType.DIRECT,
         ExecutorType.DIRECT,
-        PayloadSize.SMALL,
-        PayloadSize.SMALL,
+        MessageSize.SMALL,
+        MessageSize.SMALL,
         FlowWindowSize.LARGE,
         ChannelType.NIO,
         maxConcurrentStreams,

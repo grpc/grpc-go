@@ -42,8 +42,8 @@ public abstract class ForwardingServerCallListener<ReqT> extends ServerCall.List
   protected abstract ServerCall.Listener<ReqT> delegate();
 
   @Override
-  public void onPayload(ReqT payload) {
-    delegate().onPayload(payload);
+  public void onMessage(ReqT message) {
+    delegate().onMessage(message);
   }
 
   @Override

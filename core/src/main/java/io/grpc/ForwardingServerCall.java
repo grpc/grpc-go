@@ -51,8 +51,8 @@ public abstract class ForwardingServerCall<RespT> extends ServerCall<RespT> {
   }
 
   @Override
-  public void sendPayload(RespT payload) {
-    delegate().sendPayload(payload);
+  public void sendMessage(RespT message) {
+    delegate().sendMessage(message);
   }
 
   @Override

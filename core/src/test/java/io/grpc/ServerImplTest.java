@@ -208,9 +208,9 @@ public class ServerImplTest {
 
     String order = "Lots of pizza, please";
     streamListener.messageRead(STRING_MARSHALLER.stream(order));
-    verify(callListener, timeout(2000)).onPayload(order);
+    verify(callListener, timeout(2000)).onMessage(order);
 
-    call.sendPayload(314);
+    call.sendMessage(314);
     ArgumentCaptor<InputStream> inputCaptor = ArgumentCaptor.forClass(InputStream.class);
     verify(stream).writeMessage(inputCaptor.capture());
     verify(stream).flush();
@@ -220,7 +220,7 @@ public class ServerImplTest {
     executeBarrier(executor).await();
     verify(callListener).onHalfClose();
 
-    call.sendPayload(50);
+    call.sendMessage(50);
     verify(stream, times(2)).writeMessage(inputCaptor.capture());
     verify(stream, times(2)).flush();
     assertEquals(50, INTEGER_MARSHALLER.parse(inputCaptor.getValue()).intValue());

@@ -472,7 +472,7 @@ public final class ServerImpl extends Server {
     private volatile boolean cancelled;
     private boolean sendHeadersCalled;
     private boolean closeCalled;
-    private boolean sendPayloadCalled;
+    private boolean sendMessageCalled;
 
     public ServerCallImpl(ServerStream stream, MethodDescriptor<ReqT, RespT> method) {
       this.stream = stream;
@@ -488,18 +488,18 @@ public final class ServerImpl extends Server {
     public void sendHeaders(Metadata.Headers headers) {
       Preconditions.checkState(!sendHeadersCalled, "sendHeaders has already been called");
       Preconditions.checkState(!closeCalled, "call is closed");
-      Preconditions.checkState(!sendPayloadCalled, "sendPayload has already been called");
+      Preconditions.checkState(!sendMessageCalled, "sendMessage has already been called");
       sendHeadersCalled = true;
       stream.writeHeaders(headers);
     }
 
     @Override
-    public void sendPayload(RespT payload) {
+    public void sendMessage(RespT message) {
       Preconditions.checkState(!closeCalled, "call is closed");
-      sendPayloadCalled = true;
+      sendMessageCalled = true;
       try {
-        InputStream message = method.streamResponse(payload);
-        stream.writeMessage(message);
+        InputStream resp = method.streamResponse(message);
+        stream.writeMessage(resp);
         stream.flush();
       } catch (Throwable t) {
         close(Status.fromThrowable(t), new Metadata.Trailers());
@@ -549,7 +549,7 @@ public final class ServerImpl extends Server {
             return;
           }
 
-          listener.onPayload(method.parseRequest(message));
+          listener.onMessage(method.parseRequest(message));
         } finally {
           try {
             message.close();

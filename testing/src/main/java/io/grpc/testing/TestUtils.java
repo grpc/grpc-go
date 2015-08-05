@@ -96,11 +96,11 @@ public class TestUtils {
               }
 
               @Override
-              public void sendPayload(RespT payload) {
+              public void sendMessage(RespT message) {
                 if (!sentHeaders) {
                   sendHeaders(new Metadata.Headers());
                 }
-                super.sendPayload(payload);
+                super.sendMessage(message);
               }
 
               @Override

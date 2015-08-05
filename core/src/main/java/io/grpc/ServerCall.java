@@ -38,10 +38,10 @@ package io.grpc;
  * requests and responses. This API is generally intended for use by generated handlers,
  * but applications may use it directly if they need to.
  *
- * <p>Headers must be sent before any payloads, which must be sent before closing.
+ * <p>Headers must be sent before any messages, which must be sent before closing.
  *
  * <p>No generic method for determining message receipt or providing acknowledgement is provided.
- * Applications are expected to utilize normal payload messages for such signals, as a response
+ * Applications are expected to utilize normal messages for such signals, as a response
  * naturally acknowledges its request.
  *
  * <p>Methods are guaranteed to be non-blocking. Implementations are not required to be thread-safe.
@@ -52,7 +52,7 @@ public abstract class ServerCall<ResponseT> {
   /**
    * Callbacks for consuming incoming RPC messages.
    *
-   * <p>Any contexts are guaranteed to arrive before any payloads, which are guaranteed before half
+   * <p>Any contexts are guaranteed to arrive before any messages, which are guaranteed before half
    * close, which is guaranteed before completion.
    *
    * <p>Implementations are free to block for extended periods of time. Implementations are not
@@ -66,9 +66,9 @@ public abstract class ServerCall<ResponseT> {
      * A request message has been received. For streaming calls, there may be zero or more request
      * messages.
      *
-     * @param payload a received request message.
+     * @param message a received request message.
      */
-    public abstract void onPayload(RequestT payload);
+    public abstract void onMessage(RequestT message);
 
     /**
      * The client completed all message sending. However, the call may still be cancelled.
@@ -94,7 +94,7 @@ public abstract class ServerCall<ResponseT> {
 
     /**
      * This indicates that the call is now capable of sending additional messages (via
-     * {@link #sendPayload}) without requiring excessive buffering internally. This event is
+     * {@link #sendMessage}) without requiring excessive buffering internally. This event is
      * just a suggestion and the application is free to ignore it, however doing so may
      * result in excessive buffering within the call.
      */
@@ -103,7 +103,7 @@ public abstract class ServerCall<ResponseT> {
 
   /**
    * Requests up to the given number of messages from the call to be delivered to
-   * {@link Listener#onPayload(Object)}. Once {@code numMessages} have been delivered
+   * {@link Listener#onMessage(Object)}. Once {@code numMessages} have been delivered
    * no further request messages will be delivered until more messages are requested by
    * calling this method again.
    *
@@ -114,23 +114,23 @@ public abstract class ServerCall<ResponseT> {
   public abstract void request(int numMessages);
 
   /**
-   * Send response header metadata prior to sending a response payload. This method may
-   * only be called once and cannot be called after calls to {@link #sendPayload} or {@link #close}.
+   * Send response header metadata prior to sending a response message. This method may
+   * only be called once and cannot be called after calls to {@link #sendMessage} or {@link #close}.
    *
    * @param headers metadata to send prior to any response body.
-   * @throws IllegalStateException if {@code close} has been called, a payload has been sent, or
+   * @throws IllegalStateException if {@code close} has been called, a message has been sent, or
    *     headers have already been sent
    */
   public abstract void sendHeaders(Metadata.Headers headers);
 
   /**
-   * Send a response message. Payload messages are the primary form of communication associated with
+   * Send a response message. Messages are the primary form of communication associated with
    * RPCs. Multiple response messages may exist for streaming calls.
    *
-   * @param payload response message.
+   * @param message response message.
    * @throws IllegalStateException if call is {@link #close}d
    */
-  public abstract void sendPayload(ResponseT payload);
+  public abstract void sendMessage(ResponseT message);
 
   /**
    * If {@code true}, indicates that the call is capable of sending additional messages

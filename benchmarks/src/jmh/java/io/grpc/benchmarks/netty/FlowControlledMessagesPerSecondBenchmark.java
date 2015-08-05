@@ -31,7 +31,7 @@ public class FlowControlledMessagesPerSecondBenchmark extends AbstractBenchmark 
   public ExecutorType clientExecutor = ExecutorType.DIRECT;
 
   @Param({"SMALL"})
-  public PayloadSize responseSize = PayloadSize.SMALL;
+  public MessageSize responseSize = MessageSize.SMALL;
 
   private static AtomicLong callCounter;
   private AtomicBoolean completed;
@@ -61,7 +61,7 @@ public class FlowControlledMessagesPerSecondBenchmark extends AbstractBenchmark 
   public void setup() throws Exception {
     super.setup(clientExecutor,
         ExecutorType.DIRECT,
-        PayloadSize.SMALL,
+        MessageSize.SMALL,
         responseSize,
         FlowWindowSize.MEDIUM,
         ChannelType.NIO,

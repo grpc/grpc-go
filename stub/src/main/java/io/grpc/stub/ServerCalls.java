@@ -125,12 +125,12 @@ public class ServerCalls {
           String fullMethodName, final ServerCall<RespT> call, Metadata.Headers headers) {
         final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
         // We expect only 1 request, but we ask for 2 requests here so that if a misbehaving client
-        // sends more than 1 requests, we will catch it in onPayload() and emit INVALID_ARGUMENT.
+        // sends more than 1 requests, we will catch it in onMessage() and emit INVALID_ARGUMENT.
         call.request(2);
         return new EmptyServerCallListener<ReqT>() {
           ReqT request;
           @Override
-          public void onPayload(ReqT request) {
+          public void onMessage(ReqT request) {
             if (this.request == null) {
               // We delay calling method.invoke() until onHalfClose(), because application may call
               // close(OK) inside invoke(), while close(OK) is not allowed before onHalfClose().
@@ -138,7 +138,7 @@ public class ServerCalls {
             } else {
               call.close(
                   Status.INVALID_ARGUMENT.withDescription(
-                      "More than one request payloads for unary call or server streaming call"),
+                      "More than one request messages for unary call or server streaming call"),
                   new Metadata.Trailers());
             }
           }
@@ -180,7 +180,7 @@ public class ServerCalls {
           boolean halfClosed = false;
 
           @Override
-          public void onPayload(ReqT request) {
+          public void onMessage(ReqT request) {
             requestObserver.onValue(request);
 
             // Request delivery of the next inbound message.
@@ -226,7 +226,7 @@ public class ServerCalls {
       if (cancelled) {
         throw Status.CANCELLED.asRuntimeException();
       }
-      call.sendPayload(response);
+      call.sendMessage(response);
 
       // Request delivery of the next inbound message.
       call.request(1);
@@ -249,7 +249,7 @@ public class ServerCalls {
 
   private static class EmptyServerCallListener<ReqT> extends ServerCall.Listener<ReqT> {
     @Override
-    public void onPayload(ReqT request) {
+    public void onMessage(ReqT request) {
     }
 
     @Override
