@@ -50,9 +50,7 @@ import javax.net.ssl.SSLSocketFactory;
  */
 public final class OkHttpTlsUpgrader {
 
-  // TODO(madongfly): We should only support "h2" at a right time.
-  private static final List<String> SUPPORTED_HTTP2_PROTOCOLS = Collections.unmodifiableList(
-      Arrays.asList("h2", "h2-14", "h2-15", "h2-16"));
+  private static final String HTTP2_PROTOCOL_NAME = "h2";
   private static final List<Protocol> TLS_PROTOCOLS =
       Collections.unmodifiableList(Arrays.<Protocol>asList(Protocol.HTTP_2));
 
@@ -70,8 +68,8 @@ public final class OkHttpTlsUpgrader {
     if (spec.supportsTlsExtensions()) {
       String negotiatedProtocol =
           OkHttpProtocolNegotiator.get().negotiate(sslSocket, host, TLS_PROTOCOLS);
-      Preconditions.checkState(SUPPORTED_HTTP2_PROTOCOLS.contains(negotiatedProtocol),
-          "negotiated protocol %s is unsupported", negotiatedProtocol);
+      Preconditions.checkState(HTTP2_PROTOCOL_NAME.equals(negotiatedProtocol),
+          "Only \"h2\" is supported, but negotiated protocol is %s", negotiatedProtocol);
     }
     return sslSocket;
   }

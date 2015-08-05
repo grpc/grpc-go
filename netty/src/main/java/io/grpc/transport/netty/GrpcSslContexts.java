@@ -51,11 +51,7 @@ public class GrpcSslContexts {
           Protocol.ALPN,
           SelectorFailureBehavior.FATAL_ALERT,
           SelectedListenerFailureBehavior.FATAL_ALERT,
-          "h2",
-          "h2-17",
-          "h2-16",
-          "h2-15",
-          "h2-14");
+          "h2");
 
   /**
    * Creates a SslContextBuilder with ciphers and APN appropriate for gRPC.
