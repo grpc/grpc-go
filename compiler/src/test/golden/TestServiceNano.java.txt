@@ -3,14 +3,14 @@ package io.grpc.testing.integration;
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
-import static io.grpc.stub.ClientCalls.asyncDuplexStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.futureUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
-import static io.grpc.stub.ServerCalls.asyncDuplexStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 
 import java.io.IOException;
 
@@ -76,10 +76,10 @@ public class TestServiceGrpc {
                   }
           }));
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Test.StreamingOutputCallRequest,
-      io.grpc.testing.integration.Test.StreamingOutputCallResponse> METHOD_FULL_DUPLEX_CALL =
+      io.grpc.testing.integration.Test.StreamingOutputCallResponse> METHOD_FULL_BIDI_CALL =
       io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.DUPLEX_STREAMING,
-          "grpc.testing.TestService", "FullDuplexCall",
+          io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
+          "grpc.testing.TestService", "FullBidiCall",
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.Test.StreamingOutputCallRequest>marshaller(
               new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.Test.StreamingOutputCallRequest>() {
                   @Override
@@ -95,10 +95,10 @@ public class TestServiceGrpc {
                   }
           }));
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Test.StreamingOutputCallRequest,
-      io.grpc.testing.integration.Test.StreamingOutputCallResponse> METHOD_HALF_DUPLEX_CALL =
+      io.grpc.testing.integration.Test.StreamingOutputCallResponse> METHOD_HALF_BIDI_CALL =
       io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.DUPLEX_STREAMING,
-          "grpc.testing.TestService", "HalfDuplexCall",
+          io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
+          "grpc.testing.TestService", "HalfBidiCall",
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.Test.StreamingOutputCallRequest>marshaller(
               new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.Test.StreamingOutputCallRequest>() {
                   @Override
@@ -139,10 +139,10 @@ public class TestServiceGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingInputCallRequest> streamingInputCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingInputCallResponse> responseObserver);
 
-    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> fullDuplexCall(
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> fullBidiCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver);
 
-    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> halfDuplexCall(
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> halfBidiCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver);
   }
 
@@ -199,17 +199,17 @@ public class TestServiceGrpc {
     }
 
     @java.lang.Override
-    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> fullDuplexCall(
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> fullBidiCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver) {
-      return asyncDuplexStreamingCall(
-          channel.newCall(METHOD_FULL_DUPLEX_CALL, callOptions), responseObserver);
+      return asyncBidiStreamingCall(
+          channel.newCall(METHOD_FULL_BIDI_CALL, callOptions), responseObserver);
     }
 
     @java.lang.Override
-    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> halfDuplexCall(
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> halfBidiCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver) {
-      return asyncDuplexStreamingCall(
-          channel.newCall(METHOD_HALF_DUPLEX_CALL, callOptions), responseObserver);
+      return asyncBidiStreamingCall(
+          channel.newCall(METHOD_HALF_BIDI_CALL, callOptions), responseObserver);
     }
   }
 
@@ -311,27 +311,27 @@ public class TestServiceGrpc {
               }
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_FULL_DUPLEX_CALL,
-          asyncDuplexStreamingCall(
-            new io.grpc.stub.ServerCalls.DuplexStreamingMethod<
+          METHOD_FULL_BIDI_CALL,
+          asyncBidiStreamingCall(
+            new io.grpc.stub.ServerCalls.BidiStreamingMethod<
                 io.grpc.testing.integration.Test.StreamingOutputCallRequest,
                 io.grpc.testing.integration.Test.StreamingOutputCallResponse>() {
               @java.lang.Override
               public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> invoke(
                   io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver) {
-                return serviceImpl.fullDuplexCall(responseObserver);
+                return serviceImpl.fullBidiCall(responseObserver);
               }
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_HALF_DUPLEX_CALL,
-          asyncDuplexStreamingCall(
-            new io.grpc.stub.ServerCalls.DuplexStreamingMethod<
+          METHOD_HALF_BIDI_CALL,
+          asyncBidiStreamingCall(
+            new io.grpc.stub.ServerCalls.BidiStreamingMethod<
                 io.grpc.testing.integration.Test.StreamingOutputCallRequest,
                 io.grpc.testing.integration.Test.StreamingOutputCallResponse>() {
               @java.lang.Override
               public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> invoke(
                   io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver) {
-                return serviceImpl.halfDuplexCall(responseObserver);
+                return serviceImpl.halfBidiCall(responseObserver);
               }
             }))).build();
   }

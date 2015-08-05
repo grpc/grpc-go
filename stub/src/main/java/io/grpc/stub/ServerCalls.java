@@ -76,12 +76,12 @@ public class ServerCalls {
   }
 
   /**
-   * Creates a {@code ServerCallHandler} for a duplex streaming method of the service.
+   * Creates a {@code ServerCallHandler} for a bidi streaming method of the service.
    *
    * @param method an adaptor to the actual method on the service implementation.
    */
-  public static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncDuplexStreamingCall(
-      final DuplexStreamingMethod<ReqT, RespT> method) {
+  public static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncBidiStreamingCall(
+      final BidiStreamingMethod<ReqT, RespT> method) {
     return asyncStreamingRequestCall(method);
   }
 
@@ -108,7 +108,7 @@ public class ServerCalls {
   /**
    * Adaptor to a bi-directional streaming method.
    */
-  public static interface DuplexStreamingMethod<ReqT, RespT>
+  public static interface BidiStreamingMethod<ReqT, RespT>
       extends StreamingRequestMethod<ReqT, RespT> {
   }
 

@@ -3,14 +3,14 @@ package io.grpc.examples.routeguide;
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
-import static io.grpc.stub.ClientCalls.asyncDuplexStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.futureUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
-import static io.grpc.stub.ServerCalls.asyncDuplexStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 
 @javax.annotation.Generated("by gRPC proto compiler")
 public class RouteGuideGrpc {
@@ -40,7 +40,7 @@ public class RouteGuideGrpc {
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.RouteNote,
       io.grpc.examples.routeguide.RouteNote> METHOD_ROUTE_CHAT =
       io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.DUPLEX_STREAMING,
+          io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
           "routeguide.RouteGuide", "RouteChat",
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.parser()));
@@ -129,7 +129,7 @@ public class RouteGuideGrpc {
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> routeChat(
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> responseObserver) {
-      return asyncDuplexStreamingCall(
+      return asyncBidiStreamingCall(
           channel.newCall(METHOD_ROUTE_CHAT, callOptions), responseObserver);
     }
   }
@@ -233,8 +233,8 @@ public class RouteGuideGrpc {
             })))
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_ROUTE_CHAT,
-          asyncDuplexStreamingCall(
-            new io.grpc.stub.ServerCalls.DuplexStreamingMethod<
+          asyncBidiStreamingCall(
+            new io.grpc.stub.ServerCalls.BidiStreamingMethod<
                 io.grpc.examples.routeguide.RouteNote,
                 io.grpc.examples.routeguide.RouteNote>() {
               @java.lang.Override

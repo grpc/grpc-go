@@ -87,10 +87,10 @@ public class ClientCalls {
   }
 
   /**
-   * Executes a duplex-streaming call.
+   * Executes a bidi-streaming call.
    * @return request stream observer.
    */
-  public static <ReqT, RespT> StreamObserver<ReqT> asyncDuplexStreamingCall(
+  public static <ReqT, RespT> StreamObserver<ReqT> asyncBidiStreamingCall(
       ClientCall<ReqT, RespT> call, StreamObserver<RespT> responseObserver) {
     return asyncStreamingRequestCall(call, responseObserver, true);
   }

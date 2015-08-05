@@ -750,7 +750,7 @@ public class OkHttpClientTransportTest {
 
   @Test
   public void duplexStreamingHeadersShouldNotBeFlushed() throws Exception {
-    when(method.getType()).thenReturn(MethodType.DUPLEX_STREAMING);
+    when(method.getType()).thenReturn(MethodType.BIDI_STREAMING);
     shouldHeadersBeFlushed(true);
   }
 

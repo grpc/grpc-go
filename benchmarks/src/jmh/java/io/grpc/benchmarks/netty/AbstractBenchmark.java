@@ -225,11 +225,11 @@ public abstract class AbstractBenchmark {
         "benchmark", "unary",
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
-    pingPongMethod = MethodDescriptor.create(MethodType.DUPLEX_STREAMING,
+    pingPongMethod = MethodDescriptor.create(MethodType.BIDI_STREAMING,
         "benchmark", "pingPong",
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
-    flowControlledStreaming = MethodDescriptor.create(MethodType.DUPLEX_STREAMING,
+    flowControlledStreaming = MethodDescriptor.create(MethodType.BIDI_STREAMING,
         "benchmark", "flowControlledStreaming",
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
@@ -408,7 +408,7 @@ public abstract class AbstractBenchmark {
             channel.newCall(pingPongMethod, CALL_OPTIONS);
         final AtomicReference<StreamObserver<ByteBuf>> requestObserverRef =
             new AtomicReference<StreamObserver<ByteBuf>>();
-        StreamObserver<ByteBuf> requestObserver = ClientCalls.asyncDuplexStreamingCall(
+        StreamObserver<ByteBuf> requestObserver = ClientCalls.asyncBidiStreamingCall(
             streamingCall,
             new StreamObserver<ByteBuf>() {
               @Override
@@ -453,7 +453,7 @@ public abstract class AbstractBenchmark {
             channel.newCall(flowControlledStreaming, CALL_OPTIONS);
         final AtomicReference<StreamObserver<ByteBuf>> requestObserverRef =
             new AtomicReference<StreamObserver<ByteBuf>>();
-        StreamObserver<ByteBuf> requestObserver = ClientCalls.asyncDuplexStreamingCall(
+        StreamObserver<ByteBuf> requestObserver = ClientCalls.asyncBidiStreamingCall(
             streamingCall,
             new StreamObserver<ByteBuf>() {
               @Override

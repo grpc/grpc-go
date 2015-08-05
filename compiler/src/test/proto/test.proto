@@ -40,14 +40,14 @@ service TestService {
 
   // A sequence of requests with each request served by the server immediately.
   // As one request could lead to multiple responses, this interface
-  // demonstrates the idea of full duplexing.
-  rpc FullDuplexCall(stream StreamingOutputCallRequest)
+  // demonstrates the idea of full bidirectionality.
+  rpc FullBidiCall(stream StreamingOutputCallRequest)
       returns (stream StreamingOutputCallResponse);
 
   // A sequence of requests followed by a sequence of responses.
   // The server buffers all the client requests and then serves them in order. A
   // stream of responses are returned to the client when the server starts with
   // first request.
-  rpc HalfDuplexCall(stream StreamingOutputCallRequest)
+  rpc HalfBidiCall(stream StreamingOutputCallRequest)
       returns (stream StreamingOutputCallResponse);
 }

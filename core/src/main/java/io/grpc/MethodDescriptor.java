@@ -76,11 +76,11 @@ public class MethodDescriptor<RequestT, ResponseT> {
     /**
      * Zero or more request and response messages arbitrarily interleaved in time.
      */
-    DUPLEX_STREAMING,
+    BIDI_STREAMING,
 
     /**
      * Cardinality and temporal relationships are not known. Implementations should not make
-     * buffering assumptions and should largely treat the same as {@link #DUPLEX_STREAMING}.
+     * buffering assumptions and should largely treat the same as {@link #BIDI_STREAMING}.
      */
     UNKNOWN;
 

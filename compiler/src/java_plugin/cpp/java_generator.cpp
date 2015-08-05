@@ -74,7 +74,7 @@ static void PrintMethodFields(
     bool server_streaming = method->server_streaming();
     if (client_streaming) {
       if (server_streaming) {
-        (*vars)["method_type"] = "DUPLEX_STREAMING";
+        (*vars)["method_type"] = "BIDI_STREAMING";
       } else {
         (*vars)["method_type"] = "CLIENT_STREAMING";
       }
@@ -299,7 +299,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
         break;
       case ASYNC_CALL:
         if (client_streaming) {
-          // Duplex streaming or client streaming
+          // Bidirectional streaming or client streaming
           p->Print(
               *vars,
               "$StreamObserver$<$input_type$> $lower_method_name$(\n"
@@ -346,7 +346,7 @@ static void PrintStub(const google::protobuf::ServiceDescriptor* service,
         case ASYNC_CALL:
           if (server_streaming) {
             if (client_streaming) {
-              (*vars)["calls_method"] = "asyncDuplexStreamingCall";
+              (*vars)["calls_method"] = "asyncBidiStreamingCall";
               (*vars)["params"] = "responseObserver";
             } else {
               (*vars)["calls_method"] = "asyncServerStreamingCall";
@@ -412,9 +412,9 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
     bool server_streaming = method->server_streaming();
     if (client_streaming) {
       if (server_streaming) {
-        (*vars)["calls_method"] = "asyncDuplexStreamingCall";
+        (*vars)["calls_method"] = "asyncBidiStreamingCall";
         (*vars)["invocation_class"] =
-            "io.grpc.stub.ServerCalls.DuplexStreamingMethod";
+            "io.grpc.stub.ServerCalls.BidiStreamingMethod";
       } else {
         (*vars)["calls_method"] = "asyncClientStreamingCall";
         (*vars)["invocation_class"] =
@@ -543,7 +543,7 @@ void PrintImports(Printer* p, bool generate_nano) {
       "import static "
       "io.grpc.stub.ClientCalls.asyncClientStreamingCall;\n"
       "import static "
-      "io.grpc.stub.ClientCalls.asyncDuplexStreamingCall;\n"
+      "io.grpc.stub.ClientCalls.asyncBidiStreamingCall;\n"
       "import static "
       "io.grpc.stub.ClientCalls.blockingUnaryCall;\n"
       "import static "
@@ -557,7 +557,7 @@ void PrintImports(Printer* p, bool generate_nano) {
       "import static "
       "io.grpc.stub.ServerCalls.asyncClientStreamingCall;\n"
       "import static "
-      "io.grpc.stub.ServerCalls.asyncDuplexStreamingCall;\n\n");
+      "io.grpc.stub.ServerCalls.asyncBidiStreamingCall;\n\n");
   if (generate_nano) {
     p->Print("import java.io.IOException;\n\n");
   }
