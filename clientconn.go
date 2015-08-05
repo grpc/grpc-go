@@ -71,6 +71,13 @@ type dialOptions struct {
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
+type NameResolver interface {
+	Get(target string) map[string]string
+	Watch(target string)
+	GetUpdate() (key string, val string)
+	Stop()
+}
+
 // WithCodec returns a DialOption which sets a codec for message marshaling and unmarshaling.
 func WithCodec(c Codec) DialOption {
 	return func(o *dialOptions) {

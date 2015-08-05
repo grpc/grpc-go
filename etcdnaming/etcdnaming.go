@@ -63,13 +63,6 @@ func (b *recvBuffer) stop() {
 	b.mu.Unlock()
 }
 
-type NameResolver interface {
-	Get(target string) map[string]string
-	Watch(target string)
-	GetUpdate() *namePair
-	Stop()
-}
-
 type etcdNR struct {
 	cfg    etcdcl.Config
 	recv   *recvBuffer
@@ -137,11 +130,11 @@ func (nr *etcdNR) Watch(target string) {
 	}
 }
 
-func (nr *etcdNR) GetUpdate() *namePair {
+func (nr *etcdNR) GetUpdate() (key string, val string) {
 	select {
 	case i := <-nr.recv.get():
 		nr.recv.load()
-		return i
+		return i.key, i.value
 	}
 }
 
