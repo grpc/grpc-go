@@ -120,7 +120,8 @@ public class TransportBenchmark {
         int port = pickUnusedPort();
         InetSocketAddress address = new InetSocketAddress("localhost", port);
         serverBuilder = NettyServerBuilder.forAddress(address);
-        channelBuilder = OkHttpChannelBuilder.forAddress("localhost", port);
+        channelBuilder = OkHttpChannelBuilder.forAddress("localhost", port)
+            .negotiationType(io.grpc.transport.okhttp.NegotiationType.PLAINTEXT);
         break;
       }
       default:
