@@ -33,9 +33,6 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
-import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
-
 import java.util.Arrays;
 import java.util.List;
 
@@ -90,19 +87,6 @@ public class ClientInterceptors {
     public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(
         MethodDescriptor<ReqT, RespT> method, CallOptions callOptions) {
       return interceptor.interceptCall(method, callOptions, channel);
-    }
-  }
-
-  /**
-   * A {@link ClientCall} which forwards all of it's methods to another {@link ClientCall}.
-   *
-   * @deprecated Use {@link SimpleForwardingClientCall}.
-   */
-  @Deprecated
-  public static class ForwardingClientCall<ReqT, RespT>
-      extends SimpleForwardingClientCall<ReqT, RespT> {
-    public ForwardingClientCall(ClientCall<ReqT, RespT> delegate) {
-      super(delegate);
     }
   }
 
@@ -182,20 +166,6 @@ public class ClientInterceptors {
         delegate = (ClientCall<ReqT, RespT>) NOOP_CALL;
         responseListener.onClose(Status.fromThrowable(e), new Metadata.Trailers());
       }
-    }
-  }
-
-  /**
-   * A {@link ClientCall.Listener} which forwards all of its methods to another
-   * {@link ClientCall.Listener}.
-   *
-   * @deprecated Use {@link SimpleForwardingClientCallListener}.
-   */
-  @Deprecated
-  public static class ForwardingListener<T> extends SimpleForwardingClientCallListener<T> {
-
-    public ForwardingListener(ClientCall.Listener<T> delegate) {
-      super(delegate);
     }
   }
 }
