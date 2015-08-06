@@ -33,6 +33,7 @@ package io.grpc.testing;
 
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
@@ -80,10 +81,11 @@ public class TestUtils {
     final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
     return new ServerInterceptor() {
       @Override
-      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(String method,
-           ServerCall<RespT> call,
-           final Metadata.Headers requestHeaders,
-           ServerCallHandler<ReqT, RespT> next) {
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          MethodDescriptor<ReqT, RespT> method,
+          ServerCall<RespT> call,
+          final Metadata.Headers requestHeaders,
+          ServerCallHandler<ReqT, RespT> next) {
         return next.startCall(method,
             new SimpleForwardingServerCall<RespT>(call) {
               boolean sentHeaders;
@@ -122,10 +124,11 @@ public class TestUtils {
       final AtomicReference<Metadata.Headers> headersCapture) {
     return new ServerInterceptor() {
       @Override
-      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(String method,
-           ServerCall<RespT> call,
-           Metadata.Headers requestHeaders,
-           ServerCallHandler<ReqT, RespT> next) {
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          MethodDescriptor<ReqT, RespT> method,
+          ServerCall<RespT> call,
+          Metadata.Headers requestHeaders,
+          ServerCallHandler<ReqT, RespT> next) {
         headersCapture.set(requestHeaders);
         return next.startCall(method, call, requestHeaders);
       }

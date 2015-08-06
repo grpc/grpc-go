@@ -240,9 +240,10 @@ public abstract class AbstractBenchmark {
             .addMethod(unaryMethod,
                 new ServerCallHandler<ByteBuf, ByteBuf>() {
                   @Override
-                  public ServerCall.Listener<ByteBuf> startCall(String fullMethodName,
-                                                                final ServerCall<ByteBuf> call,
-                                                                Metadata.Headers headers) {
+                  public ServerCall.Listener<ByteBuf> startCall(
+                      MethodDescriptor<ByteBuf, ByteBuf> method,
+                      final ServerCall<ByteBuf> call,
+                      Metadata.Headers headers) {
                     call.request(1);
                     return new ServerCall.Listener<ByteBuf>() {
                       @Override
@@ -271,9 +272,10 @@ public abstract class AbstractBenchmark {
             .addMethod(pingPongMethod,
                 new ServerCallHandler<ByteBuf, ByteBuf>() {
                   @Override
-                  public ServerCall.Listener<ByteBuf> startCall(String fullMethodName,
-                                                                final ServerCall<ByteBuf> call,
-                                                                Metadata.Headers headers) {
+                  public ServerCall.Listener<ByteBuf> startCall(
+                      MethodDescriptor<ByteBuf, ByteBuf> method,
+                      final ServerCall<ByteBuf> call,
+                      Metadata.Headers headers) {
                     call.request(1);
                     return new ServerCall.Listener<ByteBuf>() {
                       @Override
@@ -304,9 +306,10 @@ public abstract class AbstractBenchmark {
             .addMethod(flowControlledStreaming,
                 new ServerCallHandler<ByteBuf, ByteBuf>() {
                   @Override
-                  public ServerCall.Listener<ByteBuf> startCall(String fullMethodName,
-                                                                final ServerCall<ByteBuf> call,
-                                                                Metadata.Headers headers) {
+                  public ServerCall.Listener<ByteBuf> startCall(
+                      MethodDescriptor<ByteBuf, ByteBuf> method,
+                      final ServerCall<ByteBuf> call,
+                      Metadata.Headers headers) {
                     call.request(1);
                     return new ServerCall.Listener<ByteBuf>() {
                       @Override

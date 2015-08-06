@@ -348,8 +348,8 @@ public final class ServerImpl extends Server {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       final ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
           stream, methodDef.getMethodDescriptor());
-      ServerCall.Listener<ReqT> listener
-          = methodDef.getServerCallHandler().startCall(fullMethodName, call, headers);
+      ServerCall.Listener<ReqT> listener = methodDef.getServerCallHandler()
+          .startCall(methodDef.getMethodDescriptor(), call, headers);
       if (listener == null) {
         throw new NullPointerException(
             "startCall() returned a null listener for method " + fullMethodName);

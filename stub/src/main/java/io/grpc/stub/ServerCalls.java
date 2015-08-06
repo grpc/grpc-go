@@ -32,6 +32,7 @@
 package io.grpc.stub;
 
 import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.Status;
@@ -122,7 +123,9 @@ public class ServerCalls {
     return new ServerCallHandler<ReqT, RespT>() {
       @Override
       public ServerCall.Listener<ReqT> startCall(
-          String fullMethodName, final ServerCall<RespT> call, Metadata.Headers headers) {
+          MethodDescriptor<ReqT, RespT> methodDescriptor,
+          final ServerCall<RespT> call,
+          Metadata.Headers headers) {
         final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
         // We expect only 1 request, but we ask for 2 requests here so that if a misbehaving client
         // sends more than 1 requests, we will catch it in onMessage() and emit INVALID_ARGUMENT.
@@ -171,8 +174,10 @@ public class ServerCalls {
       final StreamingRequestMethod<ReqT, RespT> method) {
     return new ServerCallHandler<ReqT, RespT>() {
       @Override
-      public ServerCall.Listener<ReqT> startCall(String fullMethodName,
-          final ServerCall<RespT> call, Metadata.Headers headers) {
+      public ServerCall.Listener<ReqT> startCall(
+          MethodDescriptor<ReqT, RespT> methodDescriptor,
+          final ServerCall<RespT> call,
+          Metadata.Headers headers) {
         call.request(1);
         final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
         final StreamObserver<ReqT> requestObserver = method.invoke(responseObserver);

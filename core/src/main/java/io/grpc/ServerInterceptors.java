@@ -109,7 +109,9 @@ public class ServerInterceptors {
     }
 
     @Override
-    public ServerCall.Listener<ReqT> startCall(String method, ServerCall<RespT> call,
+    public ServerCall.Listener<ReqT> startCall(
+        MethodDescriptor<ReqT, RespT> method,
+        ServerCall<RespT> call,
         Metadata.Headers headers) {
       return interceptor.interceptCall(method, call, headers, callHandler);
     }

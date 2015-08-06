@@ -183,9 +183,11 @@ public class ServerImplTest {
                 MethodType.UNKNOWN, "Waiter", "serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
             new ServerCallHandler<String, Integer>() {
               @Override
-              public ServerCall.Listener<String> startCall(String fullMethodName,
-                  ServerCall<Integer> call, Metadata.Headers headers) {
-                assertEquals("Waiter/serve", fullMethodName);
+              public ServerCall.Listener<String> startCall(
+                  MethodDescriptor<String, Integer> method,
+                  ServerCall<Integer> call,
+                  Metadata.Headers headers) {
+                assertEquals("Waiter/serve", method.getFullMethodName());
                 assertNotNull(call);
                 assertNotNull(headers);
                 assertEquals(0, headers.get(metadataKey).intValue());
@@ -249,8 +251,10 @@ public class ServerImplTest {
               STRING_MARSHALLER, INTEGER_MARSHALLER),
             new ServerCallHandler<String, Integer>() {
               @Override
-              public ServerCall.Listener<String> startCall(String fullMethodName,
-                  ServerCall<Integer> call, Metadata.Headers headers) {
+              public ServerCall.Listener<String> startCall(
+                  MethodDescriptor<String, Integer> method,
+                  ServerCall<Integer> call,
+                  Metadata.Headers headers) {
                 throw status.asRuntimeException();
               }
             }).build());
