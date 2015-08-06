@@ -293,6 +293,14 @@ class OkHttpClientTransport implements ClientTransport {
     return hasStreamStarted;
   }
 
+  /**
+   * Removes given pending stream, used when a pending stream is cancelled.
+   */
+  @GuardedBy("lock")
+  void removePendingStream(OkHttpClientStream pendingStream) {
+    pendingStreams.remove(pendingStream);
+  }
+
   @Override
   public void start(Listener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");

@@ -642,6 +642,22 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
+  public void pendingStreamCancelled() throws Exception {
+    initTransport();
+    setMaxConcurrentStreams(0);
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream
+        = clientTransport.newStream(method, new Metadata.Headers(), listener);
+    waitForStreamPending(1);
+    stream.sendCancel(Status.CANCELLED);
+    // The second cancel should be an no-op.
+    stream.sendCancel(Status.UNKNOWN);
+    listener.waitUntilStreamClosed();
+    assertEquals(0, clientTransport.getPendingStreamSize());
+    assertEquals(Status.CANCELLED.getCode(), listener.status.getCode());
+  }
+
+  @Test
   public void pendingStreamFailedByGoAway() throws Exception {
     initTransport();
     setMaxConcurrentStreams(0);

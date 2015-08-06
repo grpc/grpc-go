@@ -37,6 +37,7 @@ import static com.google.common.base.Preconditions.checkState;
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.Header;
 
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.transport.ClientStreamListener;
@@ -90,6 +91,8 @@ class OkHttpClientStream extends Http2ClientStream {
   private List<Header> requestHeaders;
   @GuardedBy("lock")
   private Queue<PendingData> pendingData = new LinkedList<PendingData>();
+  @GuardedBy("lock")
+  private boolean cancelSent = false;
 
 
   private OkHttpClientStream(ClientStreamListener listener,
@@ -131,7 +134,7 @@ class OkHttpClientStream extends Http2ClientStream {
   @GuardedBy("lock")
   public void start(Integer id) {
     checkNotNull(id, "id");
-    checkState(this.id == null, "Can only set id once");
+    checkState(this.id == null, "the stream has been started with id %s", this.id);
     this.id = id;
     frameWriter.synStream(false, false, id, 0, requestHeaders);
     requestHeaders = null;
@@ -228,7 +231,25 @@ class OkHttpClientStream extends Http2ClientStream {
 
   @Override
   protected void sendCancel(Status reason) {
-    transport.finishStream(id(), reason, ErrorCode.CANCEL);
+    synchronized (lock) {
+      if (cancelSent) {
+        return;
+      }
+      cancelSent = true;
+      if (pendingData != null) {
+        // stream is pending.
+        transport.removePendingStream(this);
+        // release holding data, so they can be GCed or returned to pool earlier.
+        requestHeaders = null;
+        for (PendingData data : pendingData) {
+          data.buffer.clear();
+        }
+        pendingData = null;
+        transportReportStatus(reason, true, new Metadata.Trailers());
+      } else {
+        transport.finishStream(id(), reason, ErrorCode.CANCEL);
+      }
+    }
   }
 
   @Override
