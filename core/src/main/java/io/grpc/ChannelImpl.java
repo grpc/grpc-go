@@ -184,7 +184,7 @@ public final class ChannelImpl extends Channel {
    *
    * @return whether the channel is terminated, as would be done by {@link #isTerminated()}.
    */
-  public boolean awaitTerminated(long timeout, TimeUnit unit) throws InterruptedException {
+  public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
     synchronized (lock) {
       long timeoutNanos = unit.toNanos(timeout);
       long endTimeNanos = System.nanoTime() + timeoutNanos;

@@ -92,7 +92,7 @@ public class AsyncServer {
         try {
           System.out.println("QPS Server shutting down");
           server.shutdown();
-          server.awaitTerminated(5, TimeUnit.SECONDS);
+          server.awaitTermination(5, TimeUnit.SECONDS);
         } catch (Exception e) {
           e.printStackTrace();
         }

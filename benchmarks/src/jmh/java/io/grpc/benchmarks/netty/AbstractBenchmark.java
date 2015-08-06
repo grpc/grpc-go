@@ -488,7 +488,7 @@ public abstract class AbstractBenchmark {
     for (ChannelImpl channel : channels) {
       channel.shutdown();
     }
-    server.shutdown().awaitTerminated(5, TimeUnit.SECONDS);
+    server.shutdown().awaitTermination(5, TimeUnit.SECONDS);
   }
 
   /**

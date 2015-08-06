@@ -147,7 +147,7 @@ public class TestServiceServer {
 
   private void stop() throws Exception {
     server.shutdownNow();
-    if (!server.awaitTerminated(5, TimeUnit.SECONDS)) {
+    if (!server.awaitTermination(5, TimeUnit.SECONDS)) {
       System.err.println("Timed out waiting for server shutdown");
     }
     MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);

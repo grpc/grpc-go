@@ -68,7 +68,7 @@ public class CustomHeaderClient {
   }
 
   private void shutdown() throws InterruptedException {
-    originChannel.shutdown().awaitTerminated(5, TimeUnit.SECONDS);
+    originChannel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
   }
 
   /**

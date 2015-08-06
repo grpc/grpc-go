@@ -67,7 +67,7 @@ public class RouteGuideClient {
   }
 
   public void shutdown() throws InterruptedException {
-    channel.shutdown().awaitTerminated(5, TimeUnit.SECONDS);
+    channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
   }
 
   /**

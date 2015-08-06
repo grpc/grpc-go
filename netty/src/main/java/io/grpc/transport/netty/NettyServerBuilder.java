@@ -127,7 +127,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
    * For example, Netty's {@link EventLoopGroup}s use daemon threads by default
    * and thus an application with only daemon threads running besides the main thread will exit as
    * soon as the main thread completes.
-   * A simple solution to this problem is to call {@link io.grpc.ServerImpl#awaitTerminated()} to
+   * A simple solution to this problem is to call {@link io.grpc.ServerImpl#awaitTermination()} to
    * keep the main thread alive until the server has terminated.
    */
   public NettyServerBuilder bossEventLoopGroup(EventLoopGroup group) {
@@ -150,7 +150,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
    * For example, Netty's {@link EventLoopGroup}s use daemon threads by default
    * and thus an application with only daemon threads running besides the main thread will exit as
    * soon as the main thread completes.
-   * A simple solution to this problem is to call {@link io.grpc.ServerImpl#awaitTerminated()} to
+   * A simple solution to this problem is to call {@link io.grpc.ServerImpl#awaitTermination()} to
    * keep the main thread alive until the server has terminated.
    */
   public NettyServerBuilder workerEventLoopGroup(EventLoopGroup group) {

@@ -147,8 +147,8 @@ public class TransportBenchmark {
   public void tearDown() throws Exception {
     channel.shutdown();
     server.shutdown();
-    channel.awaitTerminated(1, TimeUnit.SECONDS);
-    server.awaitTerminated(1, TimeUnit.SECONDS);
+    channel.awaitTermination(1, TimeUnit.SECONDS);
+    server.awaitTermination(1, TimeUnit.SECONDS);
     if (!channel.isTerminated()) {
       throw new Exception("failed to shut down channel");
     }

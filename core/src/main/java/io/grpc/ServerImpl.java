@@ -182,7 +182,7 @@ public final class ServerImpl extends Server {
    *
    * @return whether the server is terminated, as would be done by {@link #isTerminated()}.
    */
-  public boolean awaitTerminated(long timeout, TimeUnit unit) throws InterruptedException {
+  public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
     synchronized (lock) {
       long timeoutNanos = unit.toNanos(timeout);
       long endTimeNanos = System.nanoTime() + timeoutNanos;
@@ -196,7 +196,7 @@ public final class ServerImpl extends Server {
   /**
    * Waits for the server to become terminated.
    */
-  public void awaitTerminated() throws InterruptedException {
+  public void awaitTermination() throws InterruptedException {
     synchronized (lock) {
       while (!terminated) {
         lock.wait();
