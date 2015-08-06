@@ -36,9 +36,17 @@ package io.grpc;
  *
  * @see StatusException
  */
-@SuppressWarnings("deprecation")
-public class StatusRuntimeException extends Status.OperationRuntimeException {
+public class StatusRuntimeException extends RuntimeException {
+
+  private static final long serialVersionUID = 1950934672280720624L;
+  private final Status status;
+
   public StatusRuntimeException(Status status) {
-    super(status);
+    super(Status.formatThrowableMessage(status), status.getCause());
+    this.status = status;
+  }
+
+  public Status getStatus() {
+    return status;
   }
 }

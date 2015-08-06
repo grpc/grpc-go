@@ -31,14 +31,23 @@
 
 package io.grpc;
 
+import static io.grpc.Status.formatThrowableMessage;
+
 /**
  * {@link Status} in Exception form, for propagating Status information via exceptions.
  *
  * @see StatusRuntimeException
  */
-@SuppressWarnings("deprecation")
-public class StatusException extends Status.OperationException {
+public class StatusException extends Exception {
+  private static final long serialVersionUID = -660954903976144640L;
+  private final Status status;
+
   public StatusException(Status status) {
-    super(status);
+    super(formatThrowableMessage(status), status.getCause());
+    this.status = status;
+  }
+
+  public Status getStatus() {
+    return status;
   }
 }

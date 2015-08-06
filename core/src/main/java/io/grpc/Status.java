@@ -324,17 +324,17 @@ public final class Status {
    */
   public static Status fromThrowable(Throwable t) {
     for (Throwable cause : Throwables.getCausalChain(t)) {
-      if (cause instanceof OperationException) {
-        return ((Status.OperationException) cause).getStatus();
-      } else if (cause instanceof  OperationRuntimeException) {
-        return ((Status.OperationRuntimeException) cause).getStatus();
+      if (cause instanceof StatusException) {
+        return ((StatusException) cause).getStatus();
+      } else if (cause instanceof StatusRuntimeException) {
+        return ((StatusRuntimeException) cause).getStatus();
       }
     }
     // Couldn't find a cause with a Status
     return UNKNOWN.withCause(t);
   }
 
-  private static String formatThrowableMessage(Status status) {
+  static String formatThrowableMessage(Status status) {
     if (status.description == null) {
       return status.code.toString();
     } else {
@@ -421,7 +421,7 @@ public final class Status {
   }
 
   /**
-   * Convert this {@link Status} to a {@link RuntimeException}. Use {@code #fromThrowable}
+   * Convert this {@link Status} to a {@link RuntimeException}. Use {@link #fromThrowable}
    * to recover this {@link Status} instance when the returned exception is in the causal chain.
    */
   public StatusRuntimeException asRuntimeException() {
@@ -429,7 +429,7 @@ public final class Status {
   }
 
   /**
-   * Convert this {@link Status} to an {@link Exception}. Use {@code #fromThrowable}
+   * Convert this {@link Status} to an {@link Exception}. Use {@link #fromThrowable}
    * to recover this {@link Status} instance when the returned exception is in the causal chain.
    */
   public StatusException asException() {
@@ -446,46 +446,6 @@ public final class Status {
         .add("description", description)
         .add("cause", cause)
         .toString();
-  }
-
-  /**
-   * Exception thrown by implementations while managing an operation.
-   *
-   * @deprecated Use {@link StatusException} instead
-   */
-  @Deprecated
-  public static class OperationException extends Exception {
-    private static final long serialVersionUID = -660954903976144640L;
-    private final Status status;
-
-    public OperationException(Status status) {
-      super(formatThrowableMessage(status), status.getCause());
-      this.status = status;
-    }
-
-    public Status getStatus() {
-      return status;
-    }
-  }
-
-  /**
-   * Runtime exception thrown by implementations while managing an operation.
-   *
-   * @deprecated Use {@link StatusRuntimeException} instead
-   */
-  @Deprecated
-  public static class OperationRuntimeException extends RuntimeException {
-    private static final long serialVersionUID = 1950934672280720624L;
-    private final Status status;
-
-    public OperationRuntimeException(Status status) {
-      super(formatThrowableMessage(status), status.getCause());
-      this.status = status;
-    }
-
-    public Status getStatus() {
-      return status;
-    }
   }
 
   private static class StatusCodeMarshaller implements Metadata.AsciiMarshaller<Status> {
