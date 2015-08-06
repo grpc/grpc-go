@@ -45,7 +45,7 @@ import javax.annotation.Nullable;
 /**
  * An {@link InputStream} backed by a nano proto.
  */
-public class NanoProtoInputStream extends InputStream implements KnownLength {
+class NanoProtoInputStream extends InputStream implements KnownLength {
 
   // NanoProtoInputStream is first initialized with a *message*. *partial* is initially null.
   // Once there has been a read operation on this stream, *message* is serialized to *partial* and
