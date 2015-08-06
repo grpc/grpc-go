@@ -33,6 +33,7 @@ package io.grpc;
 
 import static com.google.common.base.Charsets.US_ASCII;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
@@ -483,7 +484,8 @@ public abstract class Metadata {
      * <p>This method is intended for transport use only.
      */
     // TODO (louiscryan): Migrate to ByteString
-    public byte[] asciiName() {
+    @VisibleForTesting
+    byte[] asciiName() {
       return asciiName;
     }
 

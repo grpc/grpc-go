@@ -70,7 +70,7 @@ public final class ServerServiceDefinition {
    *
    * @param name the fully qualified name without leading slash. E.g., "com.foo.Foo/Bar"
    */
-  public ServerMethodDefinition<?, ?> getMethod(String name) {
+  ServerMethodDefinition<?, ?> getMethod(String name) {
     return methods.get(name);
   }
 
