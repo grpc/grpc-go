@@ -31,12 +31,20 @@
 
 package io.grpc;
 
+import java.io.IOException;
+
 /**
- * Tagging interface for objects who's precise serialized length is known before serialization
- * starts. In the case of {@link java.io.InputStream} calls to
- * {@link java.io.InputStream#available()} will return an accurate length. Common stream
- * implementations which conform to this contract while not implementing this interface will
- * also be recognized by the transport, e.g. {@link java.io.ByteArrayInputStream}.
+ * An {@link java.io.InputStream} or alike whose total number of bytes that can be read is known
+ * upfront.
+ *
+ * <p>Usually it's a {@link java.io.InputStream} that also implements this interface, in which case
+ * {@link java.io.InputStream#available()} has a stronger semantic by returning an accurate number
+ * instead of an estimation.
  */
 public interface KnownLength {
+  /**
+   * Returns the total number of bytes that can be read (or skipped over) from this object until all
+   * bytes have been read out.
+   */
+  int available() throws IOException;
 }
