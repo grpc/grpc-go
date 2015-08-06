@@ -72,9 +72,13 @@ type dialOptions struct {
 type DialOption func(*dialOptions)
 
 type NameResolver interface {
+	// Get returns the map of customized names and the corresponding ip/DNS addresses.
 	Get(target string) map[string]string
+	// Watch set a watcher on the target directory/key.
 	Watch(target string)
-	GetUpdate() (key string, val string)
+	// GetUpdate returns the key and value of the updated namePair of the target directory/key being watched.
+	GetUpdate() (string, string)
+	// Stop shut down the watcher.
 	Stop()
 }
 

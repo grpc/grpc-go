@@ -12,7 +12,7 @@ type namePair struct {
 	key, value string
 }
 
-// recvBuffer is an unbounded channel of item.
+// recvBuffer is an unbounded channel of *namePair.
 type recvBuffer struct {
 	c        chan *namePair
 	mu       sync.Mutex
@@ -30,25 +30,27 @@ func newRecvBuffer() *recvBuffer {
 func (b *recvBuffer) put(r *namePair) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.stopping {
+		return
+	}
 	b.backlog = append(b.backlog, r)
-	if !b.stopping {
-		select {
-		case b.c <- b.backlog[0]:
-			b.backlog = b.backlog[1:]
-		default:
-		}
+	select {
+	case b.c <- b.backlog[0]:
+		b.backlog = b.backlog[1:]
+	default:
 	}
 }
 
 func (b *recvBuffer) load() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if len(b.backlog) > 0 && !b.stopping {
-		select {
-		case b.c <- b.backlog[0]:
-			b.backlog = b.backlog[1:]
-		default:
-		}
+	if b.stopping || len(b.backlog) == 0 {
+		return
+	}
+	select {
+	case b.c <- b.backlog[0]:
+		b.backlog = b.backlog[1:]
+	default:
 	}
 }
 
@@ -64,20 +66,28 @@ func (b *recvBuffer) stop() {
 }
 
 type etcdNR struct {
-	cfg    etcdcl.Config
+	kAPI   etcdcl.KeysAPI
 	recv   *recvBuffer
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
 func NewETCDNR(cfg etcdcl.Config) *etcdNR {
+	c, err := etcdcl.New(cfg)
+	if err != nil {
+		panic(err)
+	}
+	kAPI := etcdcl.NewKeysAPI(c)
+	ctx, cancel := context.WithCancel(context.Background())
 	return &etcdNR{
-		cfg:  cfg,
-		recv: newRecvBuffer(),
-		ctx:  context.Background(),
+		kAPI:   kAPI,
+		recv:   newRecvBuffer(),
+		ctx:    ctx,
+		cancel: cancel,
 	}
 }
 
+// getNode can be called recursively to build the result key-value map
 func getNode(node *etcdcl.Node, res map[string]string) {
 	if !node.Dir {
 		res[node.Key] = node.Value
@@ -89,13 +99,7 @@ func getNode(node *etcdcl.Node, res map[string]string) {
 }
 
 func (nr *etcdNR) Get(target string) map[string]string {
-	cfg := nr.cfg
-	c, err := etcdcl.New(cfg)
-	if err != nil {
-		panic(err)
-	}
-	kAPI := etcdcl.NewKeysAPI(c)
-	resp, err := kAPI.Get(nr.ctx, target, &etcdcl.GetOptions{Recursive: true, Sort: true})
+	resp, err := nr.kAPI.Get(nr.ctx, target, &etcdcl.GetOptions{Recursive: true, Sort: true})
 	if err != nil {
 		fmt.Printf("non-nil error: %v", err)
 	}
@@ -106,13 +110,7 @@ func (nr *etcdNR) Get(target string) map[string]string {
 }
 
 func (nr *etcdNR) Watch(target string) {
-	cfg := nr.cfg
-	c, err := etcdcl.New(cfg)
-	if err != nil {
-		panic(err)
-	}
-	kAPI := etcdcl.NewKeysAPI(c)
-	watcher := kAPI.Watcher(target, &etcdcl.WatcherOptions{Recursive: true})
+	watcher := nr.kAPI.Watcher(target, &etcdcl.WatcherOptions{Recursive: true})
 	for {
 		ctx, cancel := context.WithCancel(nr.ctx)
 		nr.ctx = ctx
@@ -130,10 +128,11 @@ func (nr *etcdNR) Watch(target string) {
 	}
 }
 
-func (nr *etcdNR) GetUpdate() (key string, val string) {
+func (nr *etcdNR) GetUpdate() (string, string) {
 	select {
 	case i := <-nr.recv.get():
 		nr.recv.load()
+		// returns key and the corresponding value of the updated namePair
 		return i.key, i.value
 	}
 }
