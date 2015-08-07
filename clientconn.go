@@ -71,6 +71,7 @@ type dialOptions struct {
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
+// NameResolver defines the functions needed to resolve a customized names.
 type NameResolver interface {
 	// Get returns the map of customized names and the corresponding ip/DNS addresses.
 	Get(target string) map[string]string
