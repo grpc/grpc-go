@@ -72,7 +72,7 @@ type etcdNR struct {
 	cancel context.CancelFunc
 }
 
-// NewETCDNR creates a etcd nameResolver
+// NewETCDNR creates an etcd NameResolver
 func NewETCDNR(cfg etcdcl.Config) *etcdNR {
 	c, err := etcdcl.New(cfg)
 	if err != nil {
