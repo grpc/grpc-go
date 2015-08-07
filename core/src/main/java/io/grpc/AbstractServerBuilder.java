@@ -127,8 +127,16 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
     return server;
   }
 
+  /**
+   * Children of AbstractServerBuilder should override this method to provide transport specific
+   * information for the server.  This method is mean for Transport implementors and should not be
+   * used by normal users.
+   */
   protected abstract ServerEssentials buildEssentials();
 
+  /**
+   * The essentials required for creating a server.
+   */
   protected static class ServerEssentials {
     final io.grpc.transport.Server server;
     @Nullable
