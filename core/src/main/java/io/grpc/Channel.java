@@ -46,22 +46,6 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public abstract class Channel {
-
-  /**
-   * Create a {@link ClientCall} to the remote operation specified by the given
-   * {@link MethodDescriptor}, and with the default call options.
-   *
-   * @param methodDescriptor describes the name and parameter types of the operation to call.
-   * @return a {@link ClientCall} bound to the specified method.
-   * @deprecated use {@link #newCall(MethodDescriptor, CallOptions)}
-   *
-   */
-  @Deprecated
-  public final <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
-      MethodDescriptor<RequestT, ResponseT> methodDescriptor) {
-    return newCall(methodDescriptor, CallOptions.DEFAULT);
-  }
-
   /**
    * Create a {@link ClientCall} to the remote operation specified by the given
    * {@link MethodDescriptor}. The returned {@link ClientCall} does not trigger any remote
