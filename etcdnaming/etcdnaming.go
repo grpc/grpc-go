@@ -8,26 +8,26 @@ import (
 	"golang.org/x/net/context"
 )
 
-type namePair struct {
+type kv struct {
 	key, value string
 }
 
-// recvBuffer is an unbounded channel of *namePair.
+// recvBuffer is an unbounded channel of *kv.
 type recvBuffer struct {
-	c        chan *namePair
+	c        chan *kv
 	mu       sync.Mutex
 	stopping bool
-	backlog  []*namePair
+	backlog  []*kv
 }
 
 func newRecvBuffer() *recvBuffer {
 	b := &recvBuffer{
-		c: make(chan *namePair, 1),
+		c: make(chan *kv, 1),
 	}
 	return b
 }
 
-func (b *recvBuffer) put(r *namePair) {
+func (b *recvBuffer) put(r *kv) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.stopping {
@@ -54,7 +54,7 @@ func (b *recvBuffer) load() {
 	}
 }
 
-func (b *recvBuffer) get() <-chan *namePair {
+func (b *recvBuffer) get() <-chan *kv {
 	return b.c
 }
 
@@ -123,7 +123,7 @@ func (nr *etcdNR) Watch(target string) {
 		if resp.Node.Dir {
 			continue
 		}
-		entry := &namePair{key: resp.Node.Key, value: resp.Node.Value}
+		entry := &kv{key: resp.Node.Key, value: resp.Node.Value}
 		nr.recv.put(entry)
 	}
 }
@@ -131,8 +131,8 @@ func (nr *etcdNR) Watch(target string) {
 func (nr *etcdNR) GetUpdate() (string, string) {
 	select {
 	case i := <-nr.recv.get():
-		nr.recv.load()
-		// returns key and the corresponding value of the updated namePair
+		nr.recv.load()string
+		// returns key and the corresponding value of the updated kv
 		return i.key, i.value
 	}
 }
