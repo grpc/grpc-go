@@ -66,7 +66,7 @@ public class ClientInterceptors {
    * @param interceptors a list of interceptors to bind to {@code channel}.
    * @return a new channel instance with the interceptors applied.
    */
-  public static Channel intercept(Channel channel, List<ClientInterceptor> interceptors) {
+  public static Channel intercept(Channel channel, List<? extends ClientInterceptor> interceptors) {
     Preconditions.checkNotNull(channel);
     for (ClientInterceptor interceptor : interceptors) {
       channel = new InterceptorChannel(channel, interceptor);

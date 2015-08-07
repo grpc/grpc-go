@@ -70,7 +70,7 @@ public class ServerInterceptors {
    * @return a wrapped version of {@code serviceDef} with the interceptors applied.
    */
   public static ServerServiceDefinition intercept(ServerServiceDefinition serviceDef,
-      List<ServerInterceptor> interceptors) {
+      List<? extends ServerInterceptor> interceptors) {
     Preconditions.checkNotNull(serviceDef);
     if (interceptors.isEmpty()) {
       return serviceDef;
@@ -85,7 +85,7 @@ public class ServerInterceptors {
 
   private static <ReqT, RespT> void wrapAndAddMethod(
       ServerServiceDefinition.Builder serviceDefBuilder, ServerMethodDefinition<ReqT, RespT> method,
-      List<ServerInterceptor> interceptors) {
+      List<? extends ServerInterceptor> interceptors) {
     ServerCallHandler<ReqT, RespT> callHandler = method.getServerCallHandler();
     for (ServerInterceptor interceptor : interceptors) {
       callHandler = InterceptCallHandler.create(interceptor, callHandler);
