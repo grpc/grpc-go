@@ -3,6 +3,16 @@ description = "gRPC: All"
 // Make sure that no transitive dependencies are included.
 configurations.compile.transitive = false
 
+def subprojects = [
+  project(':grpc-auth'),
+  project(':grpc-core'),
+  project(':grpc-netty'),
+  project(':grpc-okhttp'),
+  project(':grpc-protobuf'),
+  project(':grpc-protobuf-nano'),
+  project(':grpc-stub'),
+]
+
 for (subproject in rootProject.subprojects) {
     if (subproject == project) {
         continue
@@ -11,13 +21,7 @@ for (subproject in rootProject.subprojects) {
 }
 
 dependencies {
-    compile project(':grpc-auth'),
-            project(':grpc-core'),
-            project(':grpc-netty'),
-            project(':grpc-okhttp'),
-            project(':grpc-protobuf'),
-            project(':grpc-protobuf-nano'),
-            project(':grpc-stub')
+    compile subprojects
 }
 
 // Create a fat jar containing only the direct dependencies
@@ -30,10 +34,10 @@ jar {
 }
 
 javadoc {
-    classpath = files(rootProject.subprojects.collect { subproject ->
+    classpath = files(subprojects.collect { subproject ->
         subproject.javadoc.classpath
     })
-    for (subproject in rootProject.subprojects) {
+    for (subproject in subprojects) {
         if (subproject == project) {
             continue;
         }
@@ -44,15 +48,15 @@ javadoc {
 
 task jacocoMerge(type: JacocoMerge) {
     destinationFile = file("${buildDir}/jacoco/test.exec")
-    executionData = files(rootProject.subprojects.jacocoTestReport.executionData)
-        .minus(files("${buildDir}/jacoco/test.exec"))
+    executionData = files(subprojects.jacocoTestReport.executionData)
+        .plus(project(':grpc-interop-testing').jacocoTestReport.executionData)
         .filter { f -> f.exists() }
 }
 
 jacocoTestReport {
     dependsOn(jacocoMerge)
 
-    additionalSourceDirs = files(rootProject.subprojects.sourceSets.main.allSource.srcDirs)
-    sourceDirectories = files(rootProject.subprojects.sourceSets.main.allSource.srcDirs)
-    classDirectories = files(rootProject.subprojects.sourceSets.main.output)
+    additionalSourceDirs = files(subprojects.sourceSets.main.allSource.srcDirs)
+    sourceDirectories = files(subprojects.sourceSets.main.allSource.srcDirs)
+    classDirectories = files(subprojects.sourceSets.main.output)
 }
