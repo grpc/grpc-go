@@ -69,8 +69,8 @@ var (
         client_streaming : request streaming with single response;
         server_streaming : single request with response streaming;
         ping_pong : full-duplex streaming;
-		empty_stream : full-duplex streaming with zero message;
-		timeout_on_sleeping_server: fullduplex streaming;
+        empty_stream : full-duplex streaming with zero message;
+        timeout_on_sleeping_server: fullduplex streaming;
         compute_engine_creds: large_unary with compute engine auth;
 	service_account_creds: large_unary with service account auth;
 	cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
