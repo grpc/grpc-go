@@ -72,6 +72,7 @@ type etcdNR struct {
 	cancel context.CancelFunc
 }
 
+// NewETCDNR creates a etcd nameResolver
 func NewETCDNR(cfg etcdcl.Config) *etcdNR {
 	c, err := etcdcl.New(cfg)
 	if err != nil {
@@ -87,7 +88,7 @@ func NewETCDNR(cfg etcdcl.Config) *etcdNR {
 	}
 }
 
-// getNode can be called recursively to build the result key-value map
+// getNode builds the resulting key-value map starting from node recursively
 func getNode(node *etcdcl.Node, res map[string]string) {
 	if !node.Dir {
 		res[node.Key] = node.Value
@@ -103,9 +104,8 @@ func (nr *etcdNR) Get(target string) map[string]string {
 	if err != nil {
 		fmt.Printf("non-nil error: %v", err)
 	}
-	node := resp.Node
 	res := make(map[string]string)
-	getNode(node, res)
+	getNode(resp.Node, res)
 	return res
 }
 
@@ -131,7 +131,7 @@ func (nr *etcdNR) Watch(target string) {
 func (nr *etcdNR) GetUpdate() (string, string) {
 	select {
 	case i := <-nr.recv.get():
-		nr.recv.load()string
+		nr.recv.load()
 		// returns key and the corresponding value of the updated kv
 		return i.key, i.value
 	}
