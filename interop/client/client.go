@@ -40,6 +40,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -68,6 +69,8 @@ var (
         client_streaming : request streaming with single response;
         server_streaming : single request with response streaming;
         ping_pong : full-duplex streaming;
+		empty_stream : full-duplex streaming with zero message;
+		timeout_on_sleeping_server: fullduplex streaming;
         compute_engine_creds: large_unary with compute engine auth;
 	service_account_creds: large_unary with service account auth;
 	cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
@@ -245,6 +248,40 @@ func doPingPong(tc testpb.TestServiceClient) {
 	grpclog.Println("Pingpong done")
 }
 
+func doEmptyStream(tc testpb.TestServiceClient) {
+	stream, err := tc.FullDuplexCall(context.Background())
+	if err != nil {
+		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		grpclog.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		grpclog.Fatalf("%v failed to complete the empty stream test: %v", stream, err)
+	}
+	grpclog.Println("Emptystream done")
+}
+
+func doTimeoutOnSleepingServer(tc testpb.TestServiceClient) {
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
+	}
+	pl := newPayload(testpb.PayloadType_COMPRESSABLE, 27182)
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		Payload:      pl,
+	}
+	if err := stream.Send(req); err != nil {
+		grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+	}
+	if _, err := stream.Recv(); grpc.Code(err) != codes.DeadlineExceeded {
+		grpclog.Fatalf("%v got the error %v, want error code: %d", stream, err, codes.DeadlineExceeded)
+	}
+	grpclog.Println("TimeoutOnSleepingServer done")
+}
+
 func doComputeEngineCreds(tc testpb.TestServiceClient) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
@@ -400,6 +437,10 @@ func main() {
 		doServerStreaming(tc)
 	case "ping_pong":
 		doPingPong(tc)
+	case "empty_stream":
+		doEmptyStream(tc)
+	case "timeout_on_sleeping_server":
+		doTimeoutOnSleepingServer(tc)
 	case "compute_engine_creds":
 		if !*useTLS {
 			grpclog.Fatalf("TLS is not enabled. TLS is required to execute compute_engine_creds test case.")
