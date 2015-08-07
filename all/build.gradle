@@ -44,6 +44,12 @@ jar {
     }
 }
 
+sourcesJar {
+    from {
+        subprojects.sourceSets.main.allSource
+    }
+}
+
 javadoc {
     classpath = files(subprojects.collect { subproject ->
         subproject.javadoc.classpath
