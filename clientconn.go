@@ -71,15 +71,15 @@ type dialOptions struct {
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
-// NameResolver defines the functions needed to resolve a customized names.
+// NameResolver dose name resolution and watches for the resolution changes.
 type NameResolver interface {
-	// Get returns the map of customized names and the corresponding ip/DNS addresses.
+	// Get gets a snapshot of the current name resolution results for target.
 	Get(target string) map[string]string
-	// Watch set a watcher on the target directory/key.
+	// Watch watches for the name resolution changes on target. It blocks until Stop() is invoked. The watch results are obtained via GetUpdate().
 	Watch(target string)
-	// GetUpdate returns the key and value of the updated namePair of the target directory/key being watched.
+	// GetUpdate returns a name resolution change when watch is triggered. It blocks until it observes a change. The caller needs to call it again to get the next change.
 	GetUpdate() (string, string)
-	// Stop shut down the watcher.
+	// Stop shuts down the NameResolver.
 	Stop()
 }
 

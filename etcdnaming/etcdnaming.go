@@ -2,10 +2,10 @@ package etcdnaming
 
 import (
 	"fmt"
-	"golang.org/x/net/context"
 	"sync"
 
 	etcdcl "github.com/coreos/etcd/client"
+	"golang.org/x/net/context"
 )
 
 type namePair struct {
