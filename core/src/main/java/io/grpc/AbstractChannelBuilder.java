@@ -180,5 +180,10 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
     }
   }
 
+  /**
+   * Children of AbstractChannelBuilder should override this method to provide transport specific
+   * information for the channel.  This method is mean for Transport implementors and should not be
+   * used by normal users.
+   */
   protected abstract ChannelEssentials buildEssentials();
 }
