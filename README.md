@@ -218,7 +218,7 @@ default. To override this default and use MinGW, add ``-PvcDisable=true``
 to your Gradle command line or add ``vcDisable=true`` to your
 ``<project-root>\gradle.properties``.
 
-### Notes for unsupported operating systems
+### Notes for Unsupported Operating Systems
 The build script pulls pre-compiled ``protoc`` from Maven Central by default.
 We have built ``protoc`` binaries for popular systems, but they may not work
 for your system. If ``protoc`` cannot be downloaded or would not run, you can
@@ -231,7 +231,7 @@ protoc=/path/to/protoc
 Navigating Around the Source
 ----------------------------
 
-Heres a quick readers guide to the code to help folks get started. At a high
+Here's a quick readers' guide to the code to help folks get started. At a high
 level there are three distinct layers to the library: __Stub__, __Channel__ &
 __Transport__.
 
@@ -273,7 +273,7 @@ applications to interact with it directly.
 
 ### Transport
 
-The Transport layer does the heavy lifting of putting & taking bytes off the
+The Transport layer does the heavy lifting of putting and taking bytes off the
 wire. The interfaces to it are abstract just enough to allow plugging in of
 different implementations. Transports are modeled as `Stream` factories. The
 variation in interface between a server Stream and a client Stream exists to
@@ -282,7 +282,7 @@ codify their differing semantics for cancellation and error reporting.
 Note the transport layer API is considered internal to gRPC and has weaker API
 guarantees than the core API under package `io.grpc`.
 
-gRPC comes with tree Transport implementations:
+gRPC comes with three Transport implementations:
 
 1. The [Netty-based](https://github.com/google/grpc-java/blob/master/netty)
    transport is the main transport implementation based on
@@ -290,9 +290,9 @@ gRPC comes with tree Transport implementations:
 2. The [OkHttp-based](https://github.com/google/grpc-java/blob/master/okhttp)
    transport is a lightweight transport based on
    [OkHttp](http://square.github.io/okhttp/). It is mainly for use on Android
-   and is for clinet only.
+   and is for client only.
 3. The
-   [inprocess](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/inprocess)
+   [inProcess](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/inprocess)
    transport is for when a server is in the same process as the client. It is
    useful for testing.
 
