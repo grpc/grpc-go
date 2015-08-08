@@ -17,6 +17,9 @@ before_install:
 before_script:
   - test -z "$(git status --porcelain)" || (git status && echo Error Working directory is not clean. Forget to commit generated files? && false)
 
+after_success:
+  - ./gradlew :grpc-all:coveralls
+
 jdk:
   - oraclejdk8
 

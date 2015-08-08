@@ -1,4 +1,15 @@
+apply plugin: 'com.github.kt3k.coveralls'
+
 description = "gRPC: All"
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.kt3k.gradle.plugin:coveralls-gradle-plugin:2.0.1'
+    }
+}
 
 // Make sure that no transitive dependencies are included.
 configurations.compile.transitive = false
@@ -55,8 +66,20 @@ task jacocoMerge(type: JacocoMerge) {
 
 jacocoTestReport {
     dependsOn(jacocoMerge)
+    reports {
+        xml.enabled = true
+        html.enabled = true
+    }
 
     additionalSourceDirs = files(subprojects.sourceSets.main.allSource.srcDirs)
     sourceDirectories = files(subprojects.sourceSets.main.allSource.srcDirs)
     classDirectories = files(subprojects.sourceSets.main.output)
+}
+
+coveralls {
+    sourceDirs = subprojects.sourceSets.main.allSource.srcDirs.flatten()
+}
+
+tasks.coveralls {
+    dependsOn(jacocoTestReport)
 }
