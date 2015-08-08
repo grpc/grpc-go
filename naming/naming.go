@@ -1,4 +1,4 @@
-package naming;
+package naming
 
 // Resolver dose name resolution and watches for the resolution changes.
 type Resolver interface {
@@ -11,4 +11,3 @@ type Resolver interface {
 	// Stop shuts down the NameResolver.
 	Stop()
 }
-

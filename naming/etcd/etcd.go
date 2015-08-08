@@ -107,10 +107,6 @@ func (nr *etcdNR) Get(target string) map[string]string {
 	}
 	res := make(map[string]string)
 	getNode(resp.Node, res)
-
-	for k,v := range res {
-		fmt.Println("key is :",k,"value is :",v)}
-
 	return res
 }
 
@@ -138,8 +134,8 @@ func (nr *etcdNR) GetUpdate() (string, string) {
 	case i := <-nr.recv.get():
 		nr.recv.load()
 		if i == nil {
-		return "",""
-	}
+			return "", ""
+		}
 		// returns key and the corresponding value of the updated kv
 		return i.key, i.value
 	}
@@ -149,5 +145,3 @@ func (nr *etcdNR) Stop() {
 	nr.recv.stop()
 	nr.cancel()
 }
-
-
