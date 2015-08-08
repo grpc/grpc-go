@@ -1,8 +1,8 @@
-package etcd
+package etcd 
 
 import (
-	"fmt"
 	"sync"
+	"log"
 
 	etcdcl "github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
@@ -77,7 +77,8 @@ type etcdNR struct {
 func NewETCDNR(cfg etcdcl.Config) naming.Resolver {
 	c, err := etcdcl.New(cfg)
 	if err != nil {
-		panic(err)
+		log.Fatalf("NewETCDNR() failed: %v",err)
+		return nil
 	}
 	kAPI := etcdcl.NewKeysAPI(c)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -103,7 +104,8 @@ func getNode(node *etcdcl.Node, res map[string]string) {
 func (nr *etcdNR) Get(target string) map[string]string {
 	resp, err := nr.kAPI.Get(nr.ctx, target, &etcdcl.GetOptions{Recursive: true, Sort: true})
 	if err != nil {
-		fmt.Printf("non-nil error: %v", err)
+		log.Fatalf("etcdNR.Get(_) failed: %v", err)
+		return nil
 	}
 	res := make(map[string]string)
 	getNode(resp.Node, res)
@@ -113,12 +115,9 @@ func (nr *etcdNR) Get(target string) map[string]string {
 func (nr *etcdNR) Watch(target string) {
 	watcher := nr.kAPI.Watcher(target, &etcdcl.WatcherOptions{Recursive: true})
 	for {
-		ctx, cancel := context.WithCancel(nr.ctx)
-		nr.ctx = ctx
-		nr.cancel = cancel
 		resp, err := watcher.Next(nr.ctx)
 		if err != nil {
-			fmt.Printf("non-nil error: %v", err)
+			log.Printf("etcdNR.Watch() stopped: %v", err)
 			break
 		}
 		if resp.Node.Dir {
@@ -130,15 +129,14 @@ func (nr *etcdNR) Watch(target string) {
 }
 
 func (nr *etcdNR) GetUpdate() (string, string) {
-	select {
-	case i := <-nr.recv.get():
+	i := <-nr.recv.get()
 		nr.recv.load()
 		if i == nil {
 			return "", ""
 		}
 		// returns key and the corresponding value of the updated kv
 		return i.key, i.value
-	}
+
 }
 
 func (nr *etcdNR) Stop() {
