@@ -71,18 +71,6 @@ type dialOptions struct {
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
-// NameResolver dose name resolution and watches for the resolution changes.
-type NameResolver interface {
-	// Get gets a snapshot of the current name resolution results for target.
-	Get(target string) map[string]string
-	// Watch watches for the name resolution changes on target. It blocks until Stop() is invoked. The watch results are obtained via GetUpdate().
-	Watch(target string)
-	// GetUpdate returns a name resolution change when watch is triggered. It blocks until it observes a change. The caller needs to call it again to get the next change.
-	GetUpdate() (string, string)
-	// Stop shuts down the NameResolver.
-	Stop()
-}
-
 // WithCodec returns a DialOption which sets a codec for message marshaling and unmarshaling.
 func WithCodec(c Codec) DialOption {
 	return func(o *dialOptions) {
