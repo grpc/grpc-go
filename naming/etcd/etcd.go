@@ -73,12 +73,11 @@ type etcdNR struct {
 	cancel context.CancelFunc
 }
 
-// NewETCDNR creates an etcd NameResolver
-func NewETCDNR(cfg etcdcl.Config) naming.Resolver {
+// NewETCDNR creates an etcd NameResolver.
+func NewETCDNR(cfg etcdcl.Config) (naming.Resolver, error) {
 	c, err := etcdcl.New(cfg)
 	if err != nil {
-		log.Fatalf("NewETCDNR(_) failed: %v", err)
-		return nil
+		return nil, err
 	}
 	kAPI := etcdcl.NewKeysAPI(c)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -87,10 +86,10 @@ func NewETCDNR(cfg etcdcl.Config) naming.Resolver {
 		recv:   newRecvBuffer(),
 		ctx:    ctx,
 		cancel: cancel,
-	}
+	}, nil
 }
 
-// getNode builds the resulting key-value map starting from node recursively
+// getNode builds the resulting key-value map starting from node recursively.
 func getNode(node *etcdcl.Node, res map[string]string) {
 	if !node.Dir {
 		res[node.Key] = node.Value
