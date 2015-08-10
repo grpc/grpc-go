@@ -119,9 +119,6 @@ class OutboundFlowController {
    */
   void data(boolean outFinished, int streamId, Buffer source, boolean flush) {
     Preconditions.checkNotNull(source, "source");
-    if (streamId <= 0 || !transport.mayHaveCreatedStream(streamId)) {
-      throw new IllegalArgumentException("Invalid streamId: " + streamId);
-    }
 
     OkHttpClientStream stream = transport.getStream(streamId);
     if (stream == null) {

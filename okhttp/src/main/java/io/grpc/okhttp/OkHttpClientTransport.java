@@ -272,6 +272,9 @@ class OkHttpClientTransport implements ClientTransport {
       frameWriter.flush();
     }
     if (nextStreamId >= Integer.MAX_VALUE - 2) {
+      // Make sure nextStreamId greater than all used id, so that mayHaveCreatedStream() performs
+      // correctly.
+      nextStreamId = Integer.MAX_VALUE;
       onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream ids exhausted"));
     } else {
       nextStreamId += 2;
