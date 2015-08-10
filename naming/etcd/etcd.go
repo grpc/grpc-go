@@ -1,8 +1,8 @@
-package etcd 
+package etcd
 
 import (
-	"sync"
 	"log"
+	"sync"
 
 	etcdcl "github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
@@ -77,7 +77,7 @@ type etcdNR struct {
 func NewETCDNR(cfg etcdcl.Config) naming.Resolver {
 	c, err := etcdcl.New(cfg)
 	if err != nil {
-		log.Fatalf("NewETCDNR() failed: %v",err)
+		log.Fatalf("NewETCDNR(_) failed: %v", err)
 		return nil
 	}
 	kAPI := etcdcl.NewKeysAPI(c)
@@ -104,7 +104,7 @@ func getNode(node *etcdcl.Node, res map[string]string) {
 func (nr *etcdNR) Get(target string) map[string]string {
 	resp, err := nr.kAPI.Get(nr.ctx, target, &etcdcl.GetOptions{Recursive: true, Sort: true})
 	if err != nil {
-		log.Fatalf("etcdNR.Get(_) failed: %v", err)
+		log.Printf("etcdNR.Get(_) stopped: %v", err)
 		return nil
 	}
 	res := make(map[string]string)
@@ -117,7 +117,7 @@ func (nr *etcdNR) Watch(target string) {
 	for {
 		resp, err := watcher.Next(nr.ctx)
 		if err != nil {
-			log.Printf("etcdNR.Watch() stopped: %v", err)
+			log.Printf("etcdNR.Watch(_) stopped: %v", err)
 			break
 		}
 		if resp.Node.Dir {
@@ -130,12 +130,12 @@ func (nr *etcdNR) Watch(target string) {
 
 func (nr *etcdNR) GetUpdate() (string, string) {
 	i := <-nr.recv.get()
-		nr.recv.load()
-		if i == nil {
-			return "", ""
-		}
-		// returns key and the corresponding value of the updated kv
-		return i.key, i.value
+	nr.recv.load()
+	if i == nil {
+		return "", ""
+	}
+	// returns key and the corresponding value of the updated kv pair
+	return i.key, i.value
 
 }
 
