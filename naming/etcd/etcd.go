@@ -13,7 +13,7 @@ type kv struct {
 	key, value string
 }
 
-// recvBuffer is an unbounded channel of *kv.
+// recvBuffer is an unbounded channel of *kv to record all the pending changes from etcd server.
 type recvBuffer struct {
 	c        chan *kv
 	mu       sync.Mutex
