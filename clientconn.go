@@ -42,7 +42,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/transport"
@@ -132,7 +131,6 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	}
 	cc := &ClientConn{
 		target:       target,
-		events:       trace.NewEventLog("grpc.ClientConn", target),
 		shutdownChan: make(chan struct{}),
 	}
 	for _, opt := range opts {
@@ -159,7 +157,6 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
 			if err := cc.resetTransport(false); err != nil {
-				cc.events.Errorf("dial failed: %v", err)
 				grpclog.Printf("Failed to dial %s: %v; please retry.", target, err)
 				cc.Close()
 				return
@@ -209,7 +206,6 @@ type ClientConn struct {
 	authority    string
 	dopts        dialOptions
 	shutdownChan chan struct{}
-	events       trace.EventLog
 
 	mu      sync.Mutex
 	state   ConnectivityState
@@ -324,11 +320,9 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			closeTransport = false
 			time.Sleep(sleepTime)
 			retries++
-			cc.events.Errorf("connection failed, will retry: %v", err)
 			grpclog.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
 			continue
 		}
-		cc.events.Printf("connection established")
 		cc.mu.Lock()
 		if cc.state == Shutdown {
 			// cc.Close() has been invoked.
@@ -365,7 +359,6 @@ func (cc *ClientConn) transportMonitor() {
 			cc.mu.Unlock()
 			if err := cc.resetTransport(true); err != nil {
 				// The ClientConn is closing.
-				cc.events.Printf("transport exiting: %v", err)
 				grpclog.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
 				return
 			}
@@ -418,7 +411,6 @@ func (cc *ClientConn) Close() error {
 	}
 	cc.state = Shutdown
 	cc.stateCV.Broadcast()
-	cc.events.Finish()
 	if cc.ready != nil {
 		close(cc.ready)
 		cc.ready = nil
