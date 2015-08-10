@@ -440,8 +440,11 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
 	for k, v := range md {
-		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
+		for _, entry := range v{
+		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
 	}
+}
+
 	if err := t.writeHeaders(s, t.hBuf, false); err != nil {
 		return err
 	}
@@ -473,8 +476,10 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 	t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-message", Value: statusDesc})
 	// Attach the trailer metadata.
 	for k, v := range s.trailer {
-		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
+		for _, entry := range v {
+		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
 	}
+}
 	if err := t.writeHeaders(s, t.hBuf, true); err != nil {
 		t.Close()
 		return err

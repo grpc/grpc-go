@@ -59,8 +59,8 @@ import (
 
 var (
 	testMetadata = metadata.MD{
-		"key1": "value1",
-		"key2": "value2",
+		"key1": []string{"value1"},
+		"key2": []string{"value2"},
 	}
 	testAppUA = "myApp1/1.0 myApp2/0.9"
 )
@@ -75,7 +75,12 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 		if _, ok := md["user-agent"]; !ok {
 			return nil, grpc.Errorf(codes.DataLoss, "got extra metadata")
 		}
-		grpc.SendHeader(ctx, metadata.Pairs("ua", md["user-agent"]))
+	//	kv := []string{"ua"}
+	//	for _, entry := range md["user-agent"]{
+	//		kv = append(kv,entry)
+	//	}
+	//	grpc.SendHeader(ctx, metadata.Pairs(kv))
+	grpc.SendHeader(ctx, metadata.Pairs("ua", md["user-agent"][0]))
 	}
 	return new(testpb.Empty), nil
 }
@@ -499,7 +504,7 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 	if err != nil || !proto.Equal(&testpb.Empty{}, reply) {
 		t.Fatalf("TestService/EmptyCall(_, _) = %v, %v, want %v, <nil>", reply, err, &testpb.Empty{})
 	}
-	if v, ok := header["ua"]; !ok || v != testAppUA {
+	if v, ok := header["ua"]; !ok || v[0] != testAppUA {
 		t.Fatalf("header[\"ua\"] = %q, %t, want %q, true", v, ok, testAppUA)
 	}
 	tearDown(s, cc)
