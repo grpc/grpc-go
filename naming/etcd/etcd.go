@@ -59,6 +59,7 @@ func (b *recvBuffer) get() <-chan *kv {
 	return b.c
 }
 
+// stop terminates the recvBuffer. After it is called, the recvBuffer is not usable any more.
 func (b *recvBuffer) stop() {
 	b.mu.Lock()
 	b.stopping = true
