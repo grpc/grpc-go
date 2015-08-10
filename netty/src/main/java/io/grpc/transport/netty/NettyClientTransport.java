@@ -227,9 +227,7 @@ class NettyClientTransport implements ClientTransport {
     boolean notifyShutdown;
     synchronized (this) {
       notifyShutdown = !shutdown;
-      if (!shutdown) {
-        shutdown = true;
-      }
+      shutdown = true;
     }
     if (notifyShutdown) {
       listener.transportShutdown(status);
