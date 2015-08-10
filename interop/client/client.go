@@ -304,8 +304,8 @@ func doServiceAccountCreds(tc testpb.TestServiceClient) {
 
 var (
 	testMetadata = metadata.MD{
-		"key1": "value1",
-		"key2": "value2",
+		"key1": []string{"value1"},
+		"key2": []string{"value2"},
 	}
 )
 
@@ -376,6 +376,12 @@ func main() {
 		if *testCase == "compute_engine_creds" {
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
 		} else if *testCase == "service_account_creds" {
+			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
+			if err != nil {
+				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
+			}
+			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
+		} else if *testCase == "jwt_token_creds" {
 			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
 			if err != nil {
 				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
