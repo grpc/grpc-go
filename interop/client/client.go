@@ -381,12 +381,6 @@ func main() {
 				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
-		} else if *testCase == "jwt_token_creds" {
-			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
-			if err != nil {
-				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
-			}
-			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		}
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
