@@ -284,6 +284,8 @@ class OkHttpClientTransport implements ClientTransport {
   private boolean startPendingStreams() {
     boolean hasStreamStarted = false;
     synchronized (lock) {
+      // No need to check goAway since the pendingStreams will be cleared when goAway
+      // becomes true.
       while (!pendingStreams.isEmpty() && streams.size() < maxConcurrentStreams) {
         OkHttpClientStream stream = pendingStreams.poll();
         startStream(stream);

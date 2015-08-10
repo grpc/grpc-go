@@ -660,19 +660,26 @@ public class OkHttpClientTransportTest {
   @Test
   public void pendingStreamFailedByGoAway() throws Exception {
     initTransport();
-    setMaxConcurrentStreams(0);
-    final MockStreamListener listener = new MockStreamListener();
-    final CountDownLatch newStreamReturn = new CountDownLatch(1);
-    // The stream should be pending.
-    clientTransport.newStream(method, new Metadata.Headers(), listener);
-    newStreamReturn.countDown();
+    setMaxConcurrentStreams(1);
+    final MockStreamListener listener1 = new MockStreamListener();
+    final MockStreamListener listener2 = new MockStreamListener();
+    clientTransport.newStream(method, new Metadata.Headers(), listener1);
+    // The second stream should be pending.
+    clientTransport.newStream(method, new Metadata.Headers(), listener2);
+
     waitForStreamPending(1);
+    assertEquals(1, activeStreamCount());
 
-    frameHandler().goAway(0, ErrorCode.CANCEL, null);
+    // Receives GO_AWAY.
+    frameHandler().goAway(99, ErrorCode.CANCEL, null);
 
-    listener.waitUntilStreamClosed();
-    assertEquals(Status.CANCELLED.getCode(), listener.status.getCode());
+    listener2.waitUntilStreamClosed();
+    assertEquals(Status.CANCELLED.getCode(), listener2.status.getCode());
     assertEquals(0, clientTransport.getPendingStreamSize());
+
+    // active stream should not be affected.
+    assertEquals(1, activeStreamCount());
+    getStream(3).sendCancel(Status.CANCELLED);
   }
 
   @Test
@@ -680,10 +687,8 @@ public class OkHttpClientTransportTest {
     initTransport();
     setMaxConcurrentStreams(0);
     final MockStreamListener listener = new MockStreamListener();
-    final CountDownLatch newStreamReturn = new CountDownLatch(1);
     // The second stream should be pending.
     clientTransport.newStream(method, new Metadata.Headers(), listener);
-    newStreamReturn.countDown();
     waitForStreamPending(1);
 
     clientTransport.shutdown();
