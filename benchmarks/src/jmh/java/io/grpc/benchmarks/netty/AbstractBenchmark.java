@@ -7,7 +7,6 @@ import io.grpc.ChannelImpl;
 import io.grpc.ClientCall;
 import io.grpc.Drainable;
 import io.grpc.KnownLength;
-import io.grpc.Marshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -495,9 +494,9 @@ public abstract class AbstractBenchmark {
   }
 
   /**
-   * Simple {@link io.grpc.Marshaller} for Netty ByteBuf.
+   * Simple {@link io.grpc.MethodDescriptor.Marshaller} for Netty ByteBuf.
    */
-  protected static class ByteBufOutputMarshaller implements Marshaller<ByteBuf> {
+  protected static class ByteBufOutputMarshaller implements MethodDescriptor.Marshaller<ByteBuf> {
 
     public static final EmptyByteBuf EMPTY_BYTE_BUF =
         new EmptyByteBuf(PooledByteBufAllocator.DEFAULT);

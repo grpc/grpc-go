@@ -40,9 +40,9 @@ import static org.junit.Assert.fail;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
 
-import io.grpc.Marshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.internal.ClientStream;

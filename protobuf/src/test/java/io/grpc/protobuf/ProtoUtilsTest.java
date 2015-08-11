@@ -38,7 +38,7 @@ import com.google.common.io.ByteStreams;
 import com.google.protobuf.Enum;
 import com.google.protobuf.Type;
 
-import io.grpc.Marshaller;
+import io.grpc.MethodDescriptor.Marshaller;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;

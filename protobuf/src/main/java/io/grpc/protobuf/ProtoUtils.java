@@ -36,8 +36,8 @@ import com.google.protobuf.Message;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.Parser;
 
-import io.grpc.Marshaller;
 import io.grpc.Metadata;
+import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
 
 import java.io.InputStream;

@@ -35,7 +35,7 @@ import com.google.common.io.ByteStreams;
 import com.google.protobuf.nano.CodedInputByteBufferNano;
 import com.google.protobuf.nano.MessageNano;
 
-import io.grpc.Marshaller;
+import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
 
 import java.io.IOException;

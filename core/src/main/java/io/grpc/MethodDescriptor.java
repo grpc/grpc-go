@@ -104,6 +104,35 @@ public class MethodDescriptor<RequestT, ResponseT> {
   }
 
   /**
+   * A typed abstraction over message parsing and serialization.
+   *
+   * <p>Stub implementations will define implementations of this interface for each of the request
+   * and response messages provided by a service.
+   *
+   * @param <T> type of serializable message
+   */
+  public interface Marshaller<T> {
+    /**
+     * Given a message, produce an {@link InputStream} for it so that it can be written to the wire.
+     * Where possible implementations should produce streams that are {@link io.grpc.KnownLength}
+     * to improve transport efficiency.
+     *
+     * @param value to serialize.
+     * @return serialized value as stream of bytes.
+     */
+    public InputStream stream(T value);
+
+    /**
+     * Given an {@link InputStream} parse it into an instance of the declared type so that it can be
+     * passed to application code.
+     *
+     * @param stream of bytes for serialized value
+     * @return parsed value
+     */
+    public T parse(InputStream stream);
+  }
+
+  /**
    * Creates a new {@code MethodDescriptor}.
    *
    * @param type the call type of this method
@@ -173,7 +202,7 @@ public class MethodDescriptor<RequestT, ResponseT> {
   /**
    * Convert a request message to an {@link InputStream}.
    *
-   * @param requestMessage to serialize using the request {@link io.grpc.Marshaller}.
+   * @param requestMessage to serialize using the request {@link Marshaller}.
    * @return serialized request message.
    */
   public InputStream streamRequest(RequestT requestMessage) {

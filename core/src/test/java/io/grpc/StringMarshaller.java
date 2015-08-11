@@ -40,7 +40,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /** Marshalls UTF-8 encoded strings. */
-class StringMarshaller implements Marshaller<String> {
+class StringMarshaller implements MethodDescriptor.Marshaller<String> {
   public static StringMarshaller INSTANCE = new StringMarshaller();
 
   @Override
