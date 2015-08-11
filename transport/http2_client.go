@@ -266,6 +266,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		return nil, err
 	}
 	t.mu.Lock()
+	if t.state != reachable {
+		t.mu.Unlock()
+		return nil, ErrConnClosing
+	}
 	s := t.newStream(ctx, callHdr)
 	t.activeStreams[s.id] = s
 	t.mu.Unlock()
