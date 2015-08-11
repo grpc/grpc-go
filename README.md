@@ -293,24 +293,24 @@ gRPC comes with three Transport implementations:
    [OkHttp](http://square.github.io/okhttp/). It is mainly for use on Android
    and is for client only.
 3. The
-   [inProcess](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/inprocess)
+   [inProcess](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/inprocess)
    transport is for when a server is in the same process as the client. It is
    useful for testing.
 
 #### Common
 
-* [Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/Stream.java)
-* [Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/StreamListener.java)
+* [Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/internal/Stream.java)
+* [Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/internal/StreamListener.java)
 
 #### Client
 
-* [Client Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/ClientStream.java)
-* [Client Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/ClientStreamListener.java)
+* [Client Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/internal/ClientStream.java)
+* [Client Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/internal/ClientStreamListener.java)
 
 #### Server
 
-* [Server Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/ServerStream.java)
-* [Server Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/transport/ServerStreamListener.java)
+* [Server Stream](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/internal/ServerStream.java)
+* [Server Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/internal/ServerStreamListener.java)
 
 
 ### Examples
