@@ -35,6 +35,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.Internal;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
@@ -164,6 +165,7 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
   /**
    * The essentials required for creating a channel.
    */
+  @Internal
   protected static class ChannelEssentials {
     final ClientTransportFactory transportFactory;
     @Nullable final Runnable terminationRunnable;
@@ -186,5 +188,6 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
    * information for the channel.  This method is mean for Transport implementors and should not be
    * used by normal users.
    */
+  @Internal
   protected abstract ChannelEssentials buildEssentials();
 }

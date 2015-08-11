@@ -41,6 +41,7 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.ExperimentalApi;
 import io.grpc.internal.HttpUtil;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
@@ -220,6 +221,7 @@ public final class ChannelImpl extends Channel {
    *
    * @see ClientTransport#ping(PingCallback, Executor)
    */
+  @ExperimentalApi
   public void ping(final PingCallback callback, final Executor executor) {
     try {
       obtainActiveTransport().ping(callback, executor);
