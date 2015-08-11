@@ -41,6 +41,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -79,11 +80,12 @@ type service struct {
 
 // Server is a gRPC server to serve RPC requests.
 type Server struct {
-	opts  options
-	mu    sync.Mutex
-	lis   map[net.Listener]bool
-	conns map[transport.ServerTransport]bool
-	m     map[string]*service // service name -> service info
+	opts   options
+	mu     sync.Mutex
+	lis    map[net.Listener]bool
+	conns  map[transport.ServerTransport]bool
+	m      map[string]*service // service name -> service info
+	events trace.EventLog
 }
 
 type options struct {
@@ -129,10 +131,11 @@ func NewServer(opt ...ServerOption) *Server {
 		opts.codec = protoCodec{}
 	}
 	return &Server{
-		lis:   make(map[net.Listener]bool),
-		opts:  opts,
-		conns: make(map[transport.ServerTransport]bool),
-		m:     make(map[string]*service),
+		lis:    make(map[net.Listener]bool),
+		opts:   opts,
+		conns:  make(map[transport.ServerTransport]bool),
+		m:      make(map[string]*service),
+		events: trace.NewEventLog("grpc.Server", time.Now().Format(time.RFC1123)),
 	}
 }
 
@@ -140,6 +143,7 @@ func NewServer(opt ...ServerOption) *Server {
 // server. Called from the IDL generated code. This must be called before
 // invoking Serve.
 func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
+	s.events.Printf("RegisterService(%q)", sd.ServiceName)
 	ht := reflect.TypeOf(sd.HandlerType).Elem()
 	st := reflect.TypeOf(ss)
 	if !st.Implements(ht) {
@@ -181,6 +185,7 @@ var (
 // read gRPC request and then call the registered handlers to reply to them.
 // Service returns when lis.Accept fails.
 func (s *Server) Serve(lis net.Listener) error {
+	s.events.Printf("serving...")
 	s.mu.Lock()
 	if s.lis == nil {
 		s.mu.Unlock()
@@ -197,11 +202,13 @@ func (s *Server) Serve(lis net.Listener) error {
 	for {
 		c, err := lis.Accept()
 		if err != nil {
+			s.events.Printf("done serving; Accept = %v", err)
 			return err
 		}
 		if creds, ok := s.opts.creds.(credentials.TransportAuthenticator); ok {
 			c, err = creds.ServerHandshake(c)
 			if err != nil {
+				s.events.Errorf("ServerHandshake(%q) failed: %v", c.RemoteAddr(), err)
 				grpclog.Println("grpc: Server.Serve failed to complete security handshake.")
 				continue
 			}
@@ -216,6 +223,7 @@ func (s *Server) Serve(lis net.Listener) error {
 		if err != nil {
 			s.mu.Unlock()
 			c.Close()
+			s.events.Errorf("NewServerTransport(%q) failed: %v", c.RemoteAddr(), err)
 			grpclog.Println("grpc: Server.Serve failed to create ServerTransport: ", err)
 			continue
 		}
@@ -417,6 +425,7 @@ func (s *Server) Stop() {
 	for c := range cs {
 		c.Close()
 	}
+	s.events.Finish()
 }
 
 // TestingCloseConns closes all exiting transports but keeps s.lis accepting new
