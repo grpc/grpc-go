@@ -295,9 +295,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		hasMD = true
 		for k, v := range md {
 			for _, entry := range v {
-			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
+				t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
+			}
 		}
-	}
 
 	}
 	first := true
