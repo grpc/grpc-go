@@ -444,7 +444,6 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
 		}
 	}
-
 	if err := t.writeHeaders(s, t.hBuf, false); err != nil {
 		return err
 	}

@@ -298,7 +298,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 				t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
 			}
 		}
-
 	}
 	first := true
 	// Sends the headers in a single batch even when they span multiple frames.

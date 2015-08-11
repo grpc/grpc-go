@@ -180,7 +180,7 @@ func newHPACKDecoder() *hpackDecoder {
 					grpclog.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
 					return
 				}
-				d.state.mdata[k]= append(d.state.mdata[k],v)
+				d.state.mdata[k] = append(d.state.mdata[k], v)
 			}
 		}
 	})
