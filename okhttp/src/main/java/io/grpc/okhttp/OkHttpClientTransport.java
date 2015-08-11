@@ -154,7 +154,7 @@ class OkHttpClientTransport implements ClientTransport {
   private SSLSocketFactory sslSocketFactory;
   private Socket socket;
   @GuardedBy("lock")
-  private int maxConcurrentStreams = Integer.MAX_VALUE;
+  private int maxConcurrentStreams = 0;
   @GuardedBy("lock")
   private LinkedList<OkHttpClientStream> pendingStreams = new LinkedList<OkHttpClientStream>();
   private final ConnectionSpec connectionSpec;
@@ -322,9 +322,14 @@ class OkHttpClientTransport implements ClientTransport {
           clientFrameHandler = new ClientFrameHandler(testFrameReader);
           executor.execute(clientFrameHandler);
           connectedCallback.run();
+          synchronized (lock) {
+            maxConcurrentStreams = Integer.MAX_VALUE;
+          }
           frameWriter.becomeConnected(testFrameWriter, socket);
+          startPendingStreams();
           return;
         }
+
         BufferedSource source;
         BufferedSink sink;
         Socket sock;
@@ -355,6 +360,7 @@ class OkHttpClientTransport implements ClientTransport {
             return;
           }
           socket = sock;
+          maxConcurrentStreams = Integer.MAX_VALUE;
         }
 
         Variant variant = new Http2();
@@ -377,6 +383,7 @@ class OkHttpClientTransport implements ClientTransport {
           OkHttpClientTransport.this.listener.transportReady();
         }
         executor.execute(clientFrameHandler);
+        startPendingStreams();
       }
     });
   }
