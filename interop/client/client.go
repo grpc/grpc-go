@@ -304,8 +304,8 @@ func doServiceAccountCreds(tc testpb.TestServiceClient) {
 
 var (
 	testMetadata = metadata.MD{
-		"key1": "value1",
-		"key2": "value2",
+		"key1": []string{"value1"},
+		"key2": []string{"value2"},
 	}
 )
 

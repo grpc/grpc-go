@@ -100,7 +100,7 @@ type decodeState struct {
 	timeout    time.Duration
 	method     string
 	// key-value metadata map from the peer.
-	mdata map[string]string
+	mdata map[string][]string
 }
 
 // An hpackDecoder decodes HTTP2 headers which may span multiple frames.
@@ -173,14 +173,14 @@ func newHPACKDecoder() *hpackDecoder {
 					f.Value = f.Value[:i]
 				}
 				if d.state.mdata == nil {
-					d.state.mdata = make(map[string]string)
+					d.state.mdata = make(map[string][]string)
 				}
 				k, v, err := metadata.DecodeKeyValue(f.Name, f.Value)
 				if err != nil {
 					grpclog.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
 					return
 				}
-				d.state.mdata[k] = v
+				d.state.mdata[k] = append(d.state.mdata[k], v)
 			}
 		}
 	})
