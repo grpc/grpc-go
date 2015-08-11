@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static java.lang.Math.min;
 
 import com.google.common.base.Preconditions;
@@ -38,6 +39,8 @@ import com.google.common.io.ByteStreams;
 
 import io.grpc.Drainable;
 import io.grpc.KnownLength;
+import io.grpc.MessageEncoding;
+import io.grpc.MessageEncoding.Compressor;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -46,7 +49,6 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.zip.GZIPOutputStream;
 
 /**
  * Encodes gRPC messages to be delivered via the transport layer which implements {@link
@@ -73,13 +75,10 @@ public class MessageFramer {
   private static final byte UNCOMPRESSED = 0;
   private static final byte COMPRESSED = 1;
 
-  public enum Compression {
-    NONE, GZIP;
-  }
 
   private final Sink sink;
   private WritableBuffer buffer;
-  private final Compression compression;
+  private Compressor compressor;
   private final OutputStreamAdapter outputStreamAdapter = new OutputStreamAdapter();
   private final byte[] headerScratch = new byte[HEADER_LENGTH];
   private final WritableBufferAllocator bufferAllocator;
@@ -92,7 +91,7 @@ public class MessageFramer {
    * @param bufferAllocator allocates buffers that the transport can commit to the wire.
    */
   public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator) {
-    this(sink, bufferAllocator, Compression.NONE);
+    this(sink, bufferAllocator, MessageEncoding.NONE);
   }
 
   /**
@@ -100,13 +99,17 @@ public class MessageFramer {
    *
    * @param sink the sink used to deliver frames to the transport
    * @param bufferAllocator allocates buffers that the transport can commit to the wire.
-   * @param compression the compression type
+   * @param compressor the compressor to use
    */
   public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator,
-                       Compression compression) {
+                       MessageEncoding.Compressor compressor) {
     this.sink = Preconditions.checkNotNull(sink, "sink");
     this.bufferAllocator = bufferAllocator;
-    this.compression = Preconditions.checkNotNull(compression, "compression");
+    this.compressor = Preconditions.checkNotNull(compressor, "compressor");
+  }
+
+  public void setCompressor(MessageEncoding.Compressor compressor) {
+    this.compressor = checkNotNull(compressor, "Can't pass an empty compressor");
   }
 
   /**
@@ -117,28 +120,46 @@ public class MessageFramer {
   public void writePayload(InputStream message) {
     verifyNotClosed();
     try {
-      switch (compression) {
-        case NONE:
-          int messageLength = getKnownLength(message);
-          if (messageLength != -1) {
-            writeKnownLength(message, messageLength, false);
-          } else {
-            BufferChainOutputStream bufferChain = new BufferChainOutputStream();
-            writeToOutputStream(message, bufferChain);
-            writeBufferChain(bufferChain, false);
-          }
-          break;
-        case GZIP:
-          BufferChainOutputStream bufferChain = new BufferChainOutputStream();
-          gzipCompressTo(message, bufferChain);
-          writeBufferChain(bufferChain, true);
-          break;
-        default:
-          throw new AssertionError("Unknown compression type");
+      if (compressor != MessageEncoding.NONE) {
+        writeCompressed(message);
+      } else {
+        writeUncompressed(message);
       }
     } catch (IOException ex) {
       throw new RuntimeException(ex);
     }
+  }
+
+  private void writeUncompressed(InputStream message) throws IOException {
+    int messageLength = getKnownLength(message);
+    if (messageLength != -1) {
+      writeKnownLength(message, messageLength, false);
+    } else {
+      BufferChainOutputStream bufferChain = new BufferChainOutputStream();
+      writeToOutputStream(message, bufferChain);
+      writeBufferChain(bufferChain, false);
+    }
+  }
+
+  private void writeCompressed(InputStream message) throws IOException {
+    BufferChainOutputStream bufferChain = new BufferChainOutputStream();
+    // Why this doesn't use getKnownLength() idk, but let's just roll with it.
+    int messageLength = -1;
+    if (message instanceof KnownLength) {
+      messageLength = message.available();
+    }
+
+    OutputStream compressingStream = compressor.compress(bufferChain);
+    try {
+      long written = writeToOutputStream(message, compressingStream);
+      if (messageLength != -1 && messageLength != written) {
+        throw new RuntimeException("Message length was inaccurate");
+      }
+    } finally {
+      compressingStream.close();
+    }
+
+    writeBufferChain(bufferChain, true);
   }
 
   private int getKnownLength(InputStream inputStream) throws IOException {
@@ -146,23 +167,6 @@ public class MessageFramer {
       return inputStream.available();
     }
     return -1;
-  }
-
-  private static void gzipCompressTo(InputStream in, OutputStream out)
-      throws IOException {
-    int messageLength = -1;
-    if (in instanceof KnownLength) {
-      messageLength = in.available();
-    }
-    GZIPOutputStream compressingStream = new GZIPOutputStream(out);
-    try {
-      long written = writeToOutputStream(in, compressingStream);
-      if (messageLength != -1 && messageLength != written) {
-        throw new RuntimeException("Message length was inaccurate");
-      }
-    } finally {
-      compressingStream.close();
-    }
   }
 
   /**

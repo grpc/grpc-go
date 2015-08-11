@@ -31,11 +31,16 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
+
+import io.grpc.MessageEncoding;
+import io.grpc.MessageEncoding.Compressor;
+import io.grpc.MessageEncoding.Decompressor;
 
 import java.io.InputStream;
 
@@ -126,6 +131,13 @@ public abstract class AbstractStream<IdT> implements Stream {
 
     framer = new MessageFramer(outboundFrameHandler, bufferAllocator);
     deframer = new MessageDeframer(inboundMessageHandler);
+  }
+
+  @Override
+  public void setCompressor(Compressor c) {
+    // TODO(carl-mastrangelo): check that headers haven't already been sent.  I can't find where
+    // the client stream changes outbound phase correctly, so I am ignoring it.
+    framer.setCompressor(c);
   }
 
   /**
@@ -278,6 +290,22 @@ public abstract class AbstractStream<IdT> implements Stream {
     } catch (Throwable t) {
       deframeFailed(t);
     }
+  }
+
+  /**
+   * Set the decompressor for this stream.  This may be called at most once.  Typically this is set
+   * after the message encoding header is provided by the remote host, but before any messages are
+   * received.
+   */
+  protected final void setDecompressor(Decompressor d) {
+    deframer.setDecompressor(d);
+  }
+
+  protected final void setDecompressor(String messageEncoding) {
+    Decompressor d = MessageEncoding.lookupDecompressor(messageEncoding);
+    checkArgument(d != null,
+        "Unable to find decompressor for message encoding %s", messageEncoding);
+    setDecompressor(d);
   }
 
   /**

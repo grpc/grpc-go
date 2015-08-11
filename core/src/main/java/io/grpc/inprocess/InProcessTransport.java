@@ -31,6 +31,7 @@
 
 package io.grpc.inprocess;
 
+import io.grpc.MessageEncoding.Compressor;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -202,6 +203,12 @@ class InProcessTransport implements ServerTransport, ClientTransport {
 
       private synchronized void setListener(ClientStreamListener listener) {
         clientStreamListener = listener;
+      }
+
+      @Override
+      public void setCompressor(Compressor c) {
+        // I don't *think* there is any good reason to do this, so just throw away the compressor
+        // intentional nop
       }
 
       @Override
@@ -414,6 +421,11 @@ class InProcessTransport implements ServerTransport, ClientTransport {
           serverNotifyHalfClose = true;
         }
       }
+
+      @Override
+      public void setCompressor(Compressor c) {
+        // nop
+      }
     }
   }
 
@@ -437,5 +449,10 @@ class InProcessTransport implements ServerTransport, ClientTransport {
 
     @Override
     public void halfClose() {}
+
+    @Override
+    public void setCompressor(Compressor c) {
+      // very much a nop
+    }
   }
 }

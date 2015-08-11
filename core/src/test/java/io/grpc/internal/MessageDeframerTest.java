@@ -44,6 +44,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Bytes;
 
+import io.grpc.MessageEncoding;
 import io.grpc.internal.MessageDeframer.Listener;
 
 import org.junit.Test;
@@ -175,7 +176,7 @@ public class MessageDeframerTest {
 
   @Test
   public void compressed() {
-    deframer = new MessageDeframer(listener, MessageDeframer.Compression.GZIP);
+    deframer = new MessageDeframer(listener, new MessageEncoding.Gzip());
     deframer.request(1);
 
     byte[] payload = compress(new byte[1000]);

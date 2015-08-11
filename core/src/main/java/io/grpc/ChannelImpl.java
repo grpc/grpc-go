@@ -35,6 +35,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import io.grpc.ClientCallImpl.ClientTransportProvider;
+import io.grpc.MessageEncoding.Compressor;
 import io.grpc.Metadata.Headers;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
@@ -104,6 +105,8 @@ public final class ChannelImpl extends Channel {
   private long reconnectTimeMillis;
   private BackoffPolicy reconnectPolicy;
 
+  private volatile Compressor defaultCompressor;
+
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
     public ClientTransport get() {
@@ -124,6 +127,20 @@ public final class ChannelImpl extends Channel {
   // TODO(ejona86): Replace with a real API.
   void setTerminationRunnable(Runnable runnable) {
     this.terminationRunnable = runnable;
+  }
+
+
+  /**
+   * Sets the default compression method for this Channel.  By default, new calls will use the
+   * provided compressor.  Each individual Call can override this by specifying it in CallOptions.
+   * If the remote host does not support the message encoding, the call will likely break.  There
+   * is currently no provided way to discover what message encodings the remote host supports.
+   * @param c The compressor to use.  If {@code null} no compression will by performed.  This is
+   *          equivalent to using {@link MessageEncoding#NONE}.  If not null, the Comressor must be
+   *          threadsafe.
+   */
+  public void setDefaultCompressor(@Nullable Compressor c) {
+    defaultCompressor = (c != null) ? c : MessageEncoding.NONE;
   }
 
   /**
@@ -241,6 +258,10 @@ public final class ChannelImpl extends Channel {
   @Override
   public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
       CallOptions callOptions) {
+    boolean hasCodecOverride = callOptions.getCompressor() == null;
+    if (!hasCodecOverride && defaultCompressor != MessageEncoding.NONE) {
+      callOptions = callOptions.withCompressor(defaultCompressor);
+    }
     return interceptorChannel.newCall(method, callOptions);
   }
 
@@ -375,6 +396,10 @@ public final class ChannelImpl extends Channel {
   @VisibleForTesting
   public static final Metadata.Key<Long> TIMEOUT_KEY =
       Metadata.Key.of(HttpUtil.TIMEOUT, new TimeoutMarshaller());
+
+  // TODO(carl-mastrangelo): move this to internal
+  public static final Metadata.Key<String> MESSAGE_ENCODING_KEY =
+      Metadata.Key.of(HttpUtil.MESSAGE_ENCODING, Metadata.ASCII_STRING_MARSHALLER);
 
   /**
    * Marshals a microseconds representation of the timeout to and from a string representation,

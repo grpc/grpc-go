@@ -31,6 +31,11 @@
 
 package io.grpc;
 
+import com.google.common.base.Objects;
+import com.google.common.base.Objects.ToStringHelper;
+
+import io.grpc.MessageEncoding.Compressor;
+
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
@@ -52,6 +57,9 @@ public final class CallOptions {
   // them outside of constructor. Otherwise the constructor will have a potentially long list of
   // unnamed arguments, which is undesirable.
   private Long deadlineNanoTime;
+
+  @Nullable
+  private Compressor compressor;
 
   /**
    * Returns a new {@code CallOptions} with the given absolute deadline in nanoseconds in the clock
@@ -86,6 +94,23 @@ public final class CallOptions {
     return deadlineNanoTime;
   }
 
+  /**
+   * Returns the compressor, or {@code null} if none is set.
+   */
+  @Nullable
+  public Compressor getCompressor() {
+    return compressor;
+  }
+
+  /**
+   * Use the desired compression.
+   */
+  public CallOptions withCompressor(@Nullable Compressor compressor) {
+    CallOptions newOptions = new CallOptions(this);
+    newOptions.compressor = compressor;
+    return newOptions;
+  }
+
   private CallOptions() {
   }
 
@@ -94,16 +119,20 @@ public final class CallOptions {
    */
   private CallOptions(CallOptions other) {
     deadlineNanoTime = other.deadlineNanoTime;
+    compressor = other.compressor;
   }
 
+  @SuppressWarnings("deprecation") // guava 14.0
   @Override
   public String toString() {
-    StringBuilder buffer = new StringBuilder();
-    buffer.append("[deadlineNanoTime=").append(deadlineNanoTime);
+    ToStringHelper toStringHelper = Objects.toStringHelper(this);
+    toStringHelper.add("deadlineNanoTime", deadlineNanoTime);
     if (deadlineNanoTime != null) {
-      buffer.append(" (").append(deadlineNanoTime - System.nanoTime()).append(" ns from now)");
+      long remainingNanos = deadlineNanoTime - System.nanoTime();
+      toStringHelper.addValue(remainingNanos + " ns from now");
     }
-    buffer.append("]");
-    return buffer.toString();
+    toStringHelper.add("compressor", compressor);
+
+    return toStringHelper.toString();
   }
 }

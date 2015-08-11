@@ -31,6 +31,8 @@
 
 package io.grpc.internal;
 
+import io.grpc.MessageEncoding.Compressor;
+
 import java.io.InputStream;
 
 /**
@@ -77,4 +79,10 @@ public interface Stream {
    * result in excessive buffering within the transport.
    */
   boolean isReady();
+
+  /**
+   * Sets the default message encoder for messages on this stream.
+   * @param c the compressor
+   */
+  void setCompressor(Compressor c);
 }

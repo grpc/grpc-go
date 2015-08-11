@@ -127,4 +127,8 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   public void cancel(Status status) {
     writeQueue.enqueue(new CancelServerStreamCommand(this, status), true);
   }
+
+  void useDecompressor(String messageEncoding) {
+    setDecompressor(messageEncoding);
+  }
 }

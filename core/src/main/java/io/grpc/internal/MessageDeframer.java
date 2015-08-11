@@ -31,15 +31,16 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.base.Preconditions;
 
+import io.grpc.MessageEncoding;
 import io.grpc.Status;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.ZipException;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -54,10 +55,6 @@ public class MessageDeframer implements Closeable {
   private static final int HEADER_LENGTH = 5;
   private static final int COMPRESSED_FLAG_MASK = 1;
   private static final int RESERVED_MASK = 0xFE;
-
-  public enum Compression {
-    NONE, GZIP
-  }
 
   /**
    * A listener of deframing events.
@@ -95,7 +92,7 @@ public class MessageDeframer implements Closeable {
   }
 
   private final Listener listener;
-  private final Compression compression;
+  private MessageEncoding.Decompressor decompressor;
   private State state = State.HEADER;
   private int requiredLength = HEADER_LENGTH;
   private boolean compressedFlag;
@@ -112,19 +109,30 @@ public class MessageDeframer implements Closeable {
    * @param listener listener for deframer events.
    */
   public MessageDeframer(Listener listener) {
-    this(listener, Compression.NONE);
+    this(listener, MessageEncoding.NONE);
   }
 
   /**
    * Create a deframer.
    *
    * @param listener listener for deframer events.
-   * @param compression the compression used if a compressed frame is encountered, with {@code NONE}
-   *        meaning unsupported
+   * @param decompressor the compression used if a compressed frame is encountered, with
+   *  {@code NONE} meaning unsupported
    */
-  public MessageDeframer(Listener listener, Compression compression) {
+  public MessageDeframer(Listener listener, MessageEncoding.Decompressor decompressor) {
     this.listener = Preconditions.checkNotNull(listener, "sink");
-    this.compression = Preconditions.checkNotNull(compression, "compression");
+    this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
+  }
+
+  /**
+   * Sets the decompressor available to use.  The message encoding for the stream comes later in
+   * time, and thus will not be available at the time of construction.  This should only be set
+   * once, since the compression codec cannot change after the headers have been sent.
+   *
+   * @param decompressor the decompressing wrapper.
+   */
+  public void setDecompressor(MessageEncoding.Decompressor decompressor) {
+    this.decompressor = checkNotNull(decompressor, "Can't pass an empty decompressor");
   }
 
   /**
@@ -347,20 +355,13 @@ public class MessageDeframer implements Closeable {
   }
 
   private InputStream getCompressedBody() {
-    if (compression == Compression.NONE) {
+    if (decompressor == MessageEncoding.NONE) {
       throw Status.INTERNAL.withDescription(
           "Can't decode compressed frame as compression not configured.").asRuntimeException();
     }
 
-    if (compression != Compression.GZIP) {
-      throw Status.INVALID_ARGUMENT.withDescription("Unknown compression type")
-          .asRuntimeException();
-    }
-
     try {
-      return new GZIPInputStream(ReadableBuffers.openStream(nextFrame, true));
-    } catch (ZipException e) {
-      throw Status.INTERNAL.withDescription("Decompression failed").asRuntimeException();
+      return decompressor.decompress(ReadableBuffers.openStream(nextFrame, true));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

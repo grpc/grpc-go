@@ -76,6 +76,11 @@ public final class HttpUtil {
   public static final String TIMEOUT = "grpc-timeout";
 
   /**
+   * The message encoding (i.e. compression) that can be used in the stream.
+   */
+  public static final String MESSAGE_ENCODING = "grpc-encoding";
+
+  /**
    * Maps HTTP error response status codes to transport codes.
    */
   public static Status httpStatusToGrpcStatus(int httpStatusCode) {

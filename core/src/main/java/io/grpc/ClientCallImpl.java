@@ -36,6 +36,7 @@ import static io.grpc.ChannelImpl.TIMEOUT_KEY;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 
+import io.grpc.MessageEncoding.Compressor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
@@ -128,6 +129,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       headers.put(HttpUtil.USER_AGENT_KEY, userAgent);
     }
 
+    headers.removeAll(ChannelImpl.MESSAGE_ENCODING_KEY);
+    Compressor compressor = callOptions.getCompressor();
+    if (compressor != null && compressor != MessageEncoding.NONE) {
+      headers.put(ChannelImpl.MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
+    }
+
     try {
       stream = transport.newStream(method, headers, listener);
     } catch (IllegalStateException ex) {
@@ -135,6 +142,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       // TODO(ejona86): Improve the API to remove the possibility of the race.
       closeCallPrematurely(listener, Status.fromThrowable(ex));
     }
+
+    if (stream != null && compressor != null) {
+      stream.setCompressor(compressor);
+    }
+
     // Start the deadline timer after stream creation because it will close the stream
     if (deadlineNanoTime != null) {
       deadlineCancellationFuture = startDeadlineTimer(timeoutMicros);
@@ -316,6 +328,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     @Override public void halfClose() {}
 
     @Override public void request(int numMessages) {}
+
+    @Override public void setCompressor(Compressor c) {}
 
     /**
      * Always returns {@code false}, since this is only used when the startup of the {@link
