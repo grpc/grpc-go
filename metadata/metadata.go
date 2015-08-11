@@ -92,7 +92,7 @@ func New(m map[string]string) MD {
 	md := MD{}
 	for k, v := range m {
 		key, val := encodeKeyValue(k, v)
-		md[key] = append(md[key],val)
+		md[key] = append(md[key], val)
 	}
 	return md
 }
@@ -111,7 +111,7 @@ func Pairs(kv ...string) MD {
 			continue
 		}
 		key, val := encodeKeyValue(k, s)
-		md[key] = append(md[key],val)
+		md[key] = append(md[key], val)
 	}
 	return md
 }
@@ -126,7 +126,7 @@ func (md MD) Copy() MD {
 	out := MD{}
 	for k, v := range md {
 		for _, i := range v {
-			out[k] = append(out[k],i)
+			out[k] = append(out[k], i)
 		}
 	}
 	return out

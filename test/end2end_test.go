@@ -76,8 +76,8 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 			return nil, grpc.Errorf(codes.DataLoss, "got extra metadata")
 		}
 		var str []string
-		for _,entry := range md["user-agent"]{
-			str = append(str,"ua",entry)	
+		for _, entry := range md["user-agent"] {
+			str = append(str, "ua", entry)
 		}
 		grpc.SendHeader(ctx, metadata.Pairs(str...))
 	}
