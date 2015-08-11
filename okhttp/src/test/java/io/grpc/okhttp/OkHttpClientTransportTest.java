@@ -107,6 +107,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import javax.annotation.Nullable;
+
 /**
  * Tests for {@link OkHttpClientTransport}.
  */
@@ -128,10 +130,10 @@ public class OkHttpClientTransportTest {
   private ClientTransport.Listener transportListener;
   private OkHttpClientTransport clientTransport;
   private MockFrameReader frameReader;
-  private ClientFrameHandler frameHandler;
   private ExecutorService executor;
   private long nanoTime; // backs a ticker, for testing ping round-trip time measurement
-  private ConnectedCallback connectedCallback;
+  private SettableFuture<Void> connectedFuture;
+  private DelayConnectedCallback delayConnectedCallback;
 
   /** Set up for test. */
   @Before
@@ -144,12 +146,22 @@ public class OkHttpClientTransportTest {
     frameReader = new MockFrameReader();
   }
 
-  private void initTransport() {
-    initTransport(3, new ConnectedCallback(false));
+  private void initTransport() throws Exception {
+    startTransport(3, null, true);
   }
 
-  private void initTransport(int startId, ConnectedCallback connectedCallback) {
-    this.connectedCallback = connectedCallback;
+  private void initTransport(int startId) throws Exception {
+    startTransport(startId, null, true);
+  }
+
+  private void initTransportAndDelayConnected() throws Exception {
+    delayConnectedCallback = new DelayConnectedCallback();
+    startTransport(3, delayConnectedCallback, false);
+  }
+
+  private void startTransport(int startId, @Nullable Runnable connectingCallback,
+      boolean waitingForConnected) throws Exception {
+    connectedFuture = SettableFuture.create();
     Ticker ticker = new Ticker() {
       @Override
       public long read() {
@@ -158,8 +170,11 @@ public class OkHttpClientTransportTest {
     };
     clientTransport = new OkHttpClientTransport(
         executor, frameReader, frameWriter, startId,
-        new MockSocket(frameReader), ticker, connectedCallback);
+        new MockSocket(frameReader), ticker, connectingCallback, connectedFuture);
     clientTransport.start(transportListener);
+    if (waitingForConnected) {
+      connectedFuture.get(TIME_OUT_MS, TimeUnit.MILLISECONDS);
+    }
   }
 
   /** Final test checks and clean up. */
@@ -601,7 +616,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void streamIdExhausted() throws Exception {
     int startId = Integer.MAX_VALUE - 2;
-    initTransport(startId, new ConnectedCallback(false));
+    initTransport(startId);
 
     MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method, new Metadata.Headers(), listener).request(1);
@@ -728,7 +743,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void pendingStreamFailedByIdExhausted() throws Exception {
     int startId = Integer.MAX_VALUE - 4;
-    initTransport(startId, new ConnectedCallback(false));
+    initTransport(startId);
     setMaxConcurrentStreams(1);
 
     final MockStreamListener listener1 = new MockStreamListener();
@@ -1057,7 +1072,7 @@ public class OkHttpClientTransportTest {
 
   @Test
   public void writeBeforeConnected() throws Exception {
-    initTransport(3, new ConnectedCallback(true));
+    initTransportAndDelayConnected();
     final String message = "Hello Server";
     MockStreamListener listener = new MockStreamListener();
     OkHttpClientStream stream = clientTransport.newStream(method, new Metadata.Headers(), listener);
@@ -1067,7 +1082,7 @@ public class OkHttpClientTransportTest {
     // The message should be queued.
     verifyNoMoreInteractions(frameWriter);
 
-    connectedCallback.allowConnected();
+    allowTransportConnected();
 
     // The queued message should be sent out.
     ArgumentCaptor<Buffer> captor = ArgumentCaptor.forClass(Buffer.class);
@@ -1080,7 +1095,7 @@ public class OkHttpClientTransportTest {
 
   @Test
   public void cancelBeforeConnected() throws Exception {
-    initTransport(3, new ConnectedCallback(true));
+    initTransportAndDelayConnected();
     final String message = "Hello Server";
     MockStreamListener listener = new MockStreamListener();
     OkHttpClientStream stream = clientTransport.newStream(method, new Metadata.Headers(), listener);
@@ -1090,41 +1105,24 @@ public class OkHttpClientTransportTest {
     stream.cancel(Status.CANCELLED);
     verifyNoMoreInteractions(frameWriter);
 
-    connectedCallback.allowConnected();
-
-    // There should be 4 pending operations
-    verify(frameWriter, timeout(TIME_OUT_MS)).synStream(
-        eq(false), eq(false), eq(3), eq(0), Matchers.<List<Header>>any());
-    verify(frameWriter, timeout(TIME_OUT_MS)).flush();
-    verify(frameWriter, timeout(TIME_OUT_MS)).rstStream(eq(3), eq(ErrorCode.CANCEL));
-
-    // TODO(madongfly): Is this really what we want, we may just throw away the messages of
-    // a cancelled stream.
-    verify(frameWriter, timeout(TIME_OUT_MS))
-        .data(eq(false), eq(3), any(Buffer.class), eq(12 + HEADER_LENGTH));
+    allowTransportConnected();
+    verifyNoMoreInteractions(frameWriter);
   }
 
   @Test
   public void shutdownDuringConnecting() throws Exception {
-    initTransport(3, new ConnectedCallback(true));
+    initTransportAndDelayConnected();
     final String message = "Hello Server";
     MockStreamListener listener = new MockStreamListener();
     OkHttpClientStream stream = clientTransport.newStream(method, new Metadata.Headers(), listener);
 
     clientTransport.shutdown();
-    connectedCallback.allowConnected();
+    allowTransportConnected();
 
-    // The new stream should be failed, but the started stream should not be affected.
+    // The new stream should be failed, as well as the pending stream.
     assertNewStreamFail();
-    InputStream input = new ByteArrayInputStream(message.getBytes(UTF_8));
-    stream.writeMessage(input);
-    stream.flush();
-    ArgumentCaptor<Buffer> captor = ArgumentCaptor.forClass(Buffer.class);
-    verify(frameWriter, timeout(TIME_OUT_MS))
-        .data(eq(false), eq(3), captor.capture(), eq(12 + HEADER_LENGTH));
-    Buffer sentFrame = captor.getValue();
-    assertEquals(createMessageFrame(message), sentFrame);
-    stream.cancel(Status.CANCELLED);
+    listener.waitUntilStreamClosed();
+    assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
   }
 
   private int activeStreamCount() {
@@ -1140,11 +1138,7 @@ public class OkHttpClientTransportTest {
   }
 
   private ClientFrameHandler frameHandler() throws Exception {
-    if (frameHandler == null) {
-      connectedCallback.waitUntilConnected();
-      frameHandler = clientTransport.getHandler();
-    }
-    return frameHandler;
+    return clientTransport.getHandler();
   }
 
   private void waitForStreamPending(int expected) throws Exception {
@@ -1353,31 +1347,20 @@ public class OkHttpClientTransportTest {
     }
   }
 
-  private class ConnectedCallback implements Runnable {
-    SettableFuture<Void> connected;
-    SettableFuture<Void> delayed;
+  private void allowTransportConnected() {
+    delayConnectedCallback.allowConnected();
+  }
 
-    private ConnectedCallback(boolean delayConnection) {
-      connected = SettableFuture.create();
-      if (delayConnection) {
-        delayed = SettableFuture.create();
-      }
-    }
+  private class DelayConnectedCallback implements Runnable {
+    SettableFuture<Void> delayed = SettableFuture.create();
 
     @Override
     public void run() {
-      if (delayed != null) {
-        Futures.getUnchecked(delayed);
-      }
-      connected.set(null);
+      Futures.getUnchecked(delayed);
     }
 
     void allowConnected() {
       delayed.set(null);
-    }
-
-    void waitUntilConnected() throws Exception {
-      connected.get(TIME_OUT_MS, TimeUnit.MILLISECONDS);
     }
   }
 }

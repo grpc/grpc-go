@@ -37,6 +37,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
+import com.google.common.util.concurrent.SettableFuture;
 
 import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.OkHttpTlsUpgrader;
@@ -154,13 +155,15 @@ class OkHttpClientTransport implements ClientTransport {
   private SSLSocketFactory sslSocketFactory;
   private Socket socket;
   @GuardedBy("lock")
-  private int maxConcurrentStreams = Integer.MAX_VALUE;
+  private int maxConcurrentStreams = 0;
   @GuardedBy("lock")
   private LinkedList<OkHttpClientStream> pendingStreams = new LinkedList<OkHttpClientStream>();
   private final ConnectionSpec connectionSpec;
   private FrameWriter testFrameWriter;
-  // Used by test only.
-  Runnable connectedCallback;
+
+  // The following fields should only be used for test.
+  Runnable connectingCallback;
+  SettableFuture<Void> connectedFuture;
 
   OkHttpClientTransport(String host, int port, String authorityHost, Executor executor,
       @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec) {
@@ -183,7 +186,8 @@ class OkHttpClientTransport implements ClientTransport {
    */
   @VisibleForTesting
   OkHttpClientTransport(Executor executor, FrameReader frameReader, FrameWriter testFrameWriter,
-      int nextStreamId, Socket socket, Ticker ticker, Runnable connectedCallback) {
+      int nextStreamId, Socket socket, Ticker ticker,
+      @Nullable Runnable connectingCallback, SettableFuture<Void> connectedFuture) {
     host = null;
     port = 0;
     authorityHost = null;
@@ -196,7 +200,8 @@ class OkHttpClientTransport implements ClientTransport {
     this.nextStreamId = nextStreamId;
     this.ticker = ticker;
     this.connectionSpec = null;
-    this.connectedCallback = Preconditions.checkNotNull(connectedCallback);
+    this.connectingCallback = connectingCallback;
+    this.connectedFuture = Preconditions.checkNotNull(connectedFuture);
   }
 
   private boolean isForTest() {
@@ -319,12 +324,20 @@ class OkHttpClientTransport implements ClientTransport {
       @Override
       public void run() {
         if (isForTest()) {
+          if (connectingCallback != null) {
+            connectingCallback.run();
+          }
           clientFrameHandler = new ClientFrameHandler(testFrameReader);
           executor.execute(clientFrameHandler);
-          connectedCallback.run();
+          synchronized (lock) {
+            maxConcurrentStreams = Integer.MAX_VALUE;
+          }
           frameWriter.becomeConnected(testFrameWriter, socket);
+          startPendingStreams();
+          connectedFuture.set(null);
           return;
         }
+
         BufferedSource source;
         BufferedSink sink;
         Socket sock;
@@ -355,6 +368,7 @@ class OkHttpClientTransport implements ClientTransport {
             return;
           }
           socket = sock;
+          maxConcurrentStreams = Integer.MAX_VALUE;
         }
 
         Variant variant = new Http2();
@@ -377,6 +391,7 @@ class OkHttpClientTransport implements ClientTransport {
           OkHttpClientTransport.this.listener.transportReady();
         }
         executor.execute(clientFrameHandler);
+        startPendingStreams();
       }
     });
   }
