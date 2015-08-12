@@ -277,7 +277,7 @@ func doTimeoutOnSleepingServer(tc testpb.TestServiceClient) {
 		grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
 	}
 	if _, err := stream.Recv(); grpc.Code(err) != codes.DeadlineExceeded {
-		grpclog.Fatalf("%v got the error %v, want error code: %d", stream, err, codes.DeadlineExceeded)
+		grpclog.Fatalf("%v.Recv() = _, %v, want error code %d", stream, err, codes.DeadlineExceeded)
 	}
 	grpclog.Println("TimeoutOnSleepingServer done")
 }
