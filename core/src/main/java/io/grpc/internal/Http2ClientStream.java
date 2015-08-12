@@ -181,7 +181,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
     if (status == null) {
       status = statusFromHttpStatus(trailers);
       if (status == null || status.isOk()) {
-        status = Status.INTERNAL.withDescription("missing GRPC status in response");
+        status = Status.UNKNOWN.withDescription("missing GRPC status in response");
       } else {
         status = status.withDescription(
             "missing GRPC status, inferred error from HTTP status code");

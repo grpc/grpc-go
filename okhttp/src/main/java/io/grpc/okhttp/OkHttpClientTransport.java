@@ -437,7 +437,7 @@ class OkHttpClientTransport implements ClientTransport {
    */
   void onIoException(IOException failureCause) {
     log.log(Level.SEVERE, "Transport failed", failureCause);
-    onGoAway(0, Status.INTERNAL.withCause(failureCause));
+    onGoAway(0, Status.UNAVAILABLE.withCause(failureCause));
   }
 
   /**

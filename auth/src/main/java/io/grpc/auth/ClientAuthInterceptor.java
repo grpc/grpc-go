@@ -41,7 +41,9 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors.CheckedForwardingClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.Status;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -82,8 +84,8 @@ public class ClientAuthInterceptor implements ClientInterceptor {
           // metadata map until the next refresh cycle. This will be fixed once
           // https://github.com/google/google-auth-library-java/issues/3
           // is resolved.
-          if (lastMetadata == null || lastMetadata != credentials.getRequestMetadata()) {
-            lastMetadata = credentials.getRequestMetadata();
+          if (lastMetadata == null || lastMetadata != getRequestMetadata()) {
+            lastMetadata = getRequestMetadata();
             cached = toHeaders(lastMetadata);
           }
           cachedSaved = cached;
@@ -92,6 +94,14 @@ public class ClientAuthInterceptor implements ClientInterceptor {
         delegate().start(responseListener, headers);
       }
     };
+  }
+
+  private Map<String, List<String>> getRequestMetadata() {
+    try {
+      return credentials.getRequestMetadata();
+    } catch (IOException e) {
+      throw Status.UNAUTHENTICATED.withCause(e).asRuntimeException();
+    }
   }
 
   private static final Metadata.Headers toHeaders(Map<String, List<String>> metadata) {

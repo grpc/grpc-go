@@ -1058,7 +1058,7 @@ public class OkHttpClientTransportTest {
     // ping failed on error
     assertEquals(1, callback.invocationCount);
     assertTrue(callback.failureCause instanceof StatusException);
-    assertEquals(Status.Code.INTERNAL,
+    assertEquals(Status.Code.UNAVAILABLE,
         ((StatusException) callback.failureCause).getStatus().getCode());
 
     // now that handler is in terminal state, all future pings fail immediately
@@ -1066,7 +1066,7 @@ public class OkHttpClientTransportTest {
     clientTransport.ping(callback, MoreExecutors.directExecutor());
     assertEquals(1, callback.invocationCount);
     assertTrue(callback.failureCause instanceof StatusException);
-    assertEquals(Status.Code.INTERNAL,
+    assertEquals(Status.Code.UNAVAILABLE,
         ((StatusException) callback.failureCause).getStatus().getCode());
   }
 

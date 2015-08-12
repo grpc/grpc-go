@@ -137,7 +137,7 @@ public class ClientAuthInterceptorTests {
     Mockito.verify(listener).onClose(statusCaptor.capture(), isA(Metadata.Trailers.class));
     Assert.assertNull(headers.getAll(AUTHORIZATION));
     Mockito.verify(call, never()).start(listener, headers);
-    Assert.assertEquals(Status.Code.UNKNOWN, statusCaptor.getValue().getCode());
+    Assert.assertEquals(Status.Code.UNAUTHENTICATED, statusCaptor.getValue().getCode());
     Assert.assertNotNull(statusCaptor.getValue().getCause());
   }
 

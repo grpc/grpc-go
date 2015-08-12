@@ -39,6 +39,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipException;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -352,11 +353,14 @@ public class MessageDeframer implements Closeable {
     }
 
     if (compression != Compression.GZIP) {
-      throw new AssertionError("Unknown compression type");
+      throw Status.INVALID_ARGUMENT.withDescription("Unknown compression type")
+          .asRuntimeException();
     }
 
     try {
       return new GZIPInputStream(ReadableBuffers.openStream(nextFrame, true));
+    } catch (ZipException e) {
+      throw Status.INTERNAL.withDescription("Decompression failed").asRuntimeException();
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
