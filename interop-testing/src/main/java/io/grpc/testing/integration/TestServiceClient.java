@@ -158,6 +158,18 @@ public class TestServiceClient {
           + "\n                              Defaults to server host"
           + "\n  --server_port=PORT          Port to connect to. Default " + c.serverPort
           + "\n  --test_case=TESTCASE        Test case to run. Default " + c.testCase
+          + "\n    Valid options:"
+          + "\n      empty_unary: empty (zero bytes) request and response"
+          + "\n      large_unary: single request and (large) response"
+          + "\n      client_streaming: request streaming with single response"
+          + "\n      server_streaming: single request with response streaming"
+          + "\n      ping_pong: full-duplex ping-pong streaming"
+          + "\n      empty_stream: A stream that has zero-messages in both directions"
+          + "\n      service_account_creds: large_unary with service_account auth"
+          + "\n      compute_engine_creds: large_unary with compute engine auth"
+          + "\n      oauth2_auth_token: raw oauth2 access token auth"
+          + "\n      cancel_after_begin: cancel stream after starting it"
+          + "\n      cancel_after_first_response: cancel on first response"
           + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
           + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Default " + c.useTestCa
           + "\n  --use_okhttp=true|false     Whether to use OkHttp instead of Netty. Default "
@@ -211,16 +223,20 @@ public class TestServiceClient {
       tester.pingPong();
     } else if ("empty_stream".equals(testCase)) {
       tester.emptyStream();
-    } else if ("cancel_after_begin".equals(testCase)) {
-      tester.cancelAfterBegin();
-    } else if ("cancel_after_first_response".equals(testCase)) {
-      tester.cancelAfterFirstResponse();
     } else if ("compute_engine_creds".equals(testCase)) {
       tester.computeEngineCreds(defaultServiceAccount, oauthScope);
     } else if ("service_account_creds".equals(testCase)) {
       String jsonKey = Files.toString(new File(serviceAccountKeyFile), Charset.forName("UTF-8"));
       FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
       tester.serviceAccountCreds(jsonKey, credentialsStream, oauthScope);
+    } else if ("oauth2_auth_token".equals(testCase)) {
+      String jsonKey = Files.toString(new File(serviceAccountKeyFile), Charset.forName("UTF-8"));
+      FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
+      tester.oauth2AuthToken(jsonKey, credentialsStream, oauthScope);
+    } else if ("cancel_after_begin".equals(testCase)) {
+      tester.cancelAfterBegin();
+    } else if ("cancel_after_first_response".equals(testCase)) {
+      tester.cancelAfterFirstResponse();
     } else {
       throw new IllegalArgumentException("Unknown test case: " + testCase);
     }

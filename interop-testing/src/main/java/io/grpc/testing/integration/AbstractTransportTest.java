@@ -43,8 +43,10 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.ComputeEngineCredentials;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.auth.oauth2.OAuth2Credentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
@@ -772,6 +774,41 @@ public abstract class AbstractTransportTest {
             .setBody(ByteString.copyFrom(new byte[314159])))
         .build();
     assertEquals(goldenResponse, response);
+  }
+
+  /** Sends a unary rpc with raw oauth2 access token credentials. */
+  public void oauth2AuthToken(String jsonKey, InputStream credentialsStream, String authScope)
+      throws Exception {
+    GoogleCredentials utilCredentials =
+        GoogleCredentials.fromStream(credentialsStream);
+    utilCredentials = utilCredentials.createScoped(Arrays.<String>asList(authScope));
+    AccessToken accessToken = utilCredentials.refreshAccessToken();
+
+    // TODO(madongfly): The Auth library may have something like AccessTokenCredentials in the
+    // future, change to the official implementation then.
+    OAuth2Credentials credentials = new OAuth2Credentials(accessToken) {
+      @Override
+      public AccessToken refreshAccessToken() throws IOException {
+        throw new IOException("This credential is based on a certain AccessToken, "
+            + "so you can not refresh AccessToken");
+      }
+    };
+
+    TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
+        .withInterceptors(new ClientAuthInterceptor(credentials,
+            Executors.newSingleThreadExecutor()));
+    final SimpleRequest request = SimpleRequest.newBuilder()
+        .setFillUsername(true)
+        .setFillOauthScope(true)
+        .build();
+
+    final SimpleResponse response = stub.unaryCall(request);
+    assertFalse(response.getUsername().isEmpty());
+    assertTrue("Received username: " + response.getUsername(),
+        jsonKey.contains(response.getUsername()));
+    assertFalse(response.getOauthScope().isEmpty());
+    assertTrue("Received oauth scope: " + response.getOauthScope(),
+        authScope.contains(response.getOauthScope()));
   }
 
   protected static void assertSuccess(StreamRecorder<?> recorder) {
