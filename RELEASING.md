@@ -20,6 +20,8 @@ your OSSRH (OSS Repository Hosting) account and signing keys.
 - Follow the instructions on [this
   page](http://central.sonatype.org/pages/ossrh-guide.html) to set up an
   account with OSSRH.
+  - You only need to create the account, not set up a new project
+  - Contact a gRPC maintainer to add your account after you have created it.
 - (For release deployment only) Install GnuPG and [generate your key
   pair](https://www.gnupg.org/documentation/howtos.html). You'll also
   need to [publish your public key](https://www.gnupg.org/gph/en/manual.html#AEN464)
