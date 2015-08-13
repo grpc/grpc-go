@@ -76,6 +76,7 @@ var (
         compute_engine_creds: large_unary with compute engine auth;
 	service_account_creds: large_unary with service account auth;
 	per_rpc_creds: large_unary with per rpc token;
+    oauth2_token_creds: large_unary with oauth2 token auth;
 	cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
 	cancel_after_first_response: cancellation after receiving 1st message from the server.`)
 )
