@@ -73,6 +73,7 @@ var (
         timeout_on_sleeping_server: fullduplex streaming;
         compute_engine_creds: large_unary with compute engine auth;
 	service_account_creds: large_unary with service account auth;
+		jwt_token_creds: large_unary with jwt token auth;
 	cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
 	cancel_after_first_response: cancellation after receiving 1st message from the server.`)
 )
@@ -339,6 +340,26 @@ func doServiceAccountCreds(tc testpb.TestServiceClient) {
 	grpclog.Println("ServiceAccountCreds done")
 }
 
+func doJwtTokenCreds(tc testpb.TestServiceClient) {
+	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(int32(largeRespSize)),
+		Payload:      pl,
+		FillUsername: proto.Bool(true),
+	}
+	reply, err := tc.UnaryCall(context.Background(), req)
+	if err != nil {
+		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+	}
+	jsonKey := getServiceAccountJSONKey()
+	user := reply.GetUsername()
+	if !strings.Contains(string(jsonKey), user) {
+		grpclog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
+	}
+	grpclog.Println("JwttokenCreds done")
+}
+
 var (
 	testMetadata = metadata.MD{
 		"key1": []string{"value1"},
@@ -418,6 +439,12 @@ func main() {
 				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
+		} else if *testCase == "jwt_token_creds" {
+			jwtCreds, err := oauth.NewJwtAccessFromFile(*serviceAccountKeyFile, "https://"+*serverHost+":"+string(*serverPort)+"/"+"TestService")
+			if err != nil {
+				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
+			}
+			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		}
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
@@ -451,6 +478,11 @@ func main() {
 			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
 		}
 		doServiceAccountCreds(tc)
+	case "jwt_token_creds":
+		if !*useTLS {
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+		}
+		doJwtTokenCreds(tc)
 	case "cancel_after_begin":
 		doCancelAfterBegin(tc)
 	case "cancel_after_first_response":
