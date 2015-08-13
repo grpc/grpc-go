@@ -102,7 +102,7 @@ Setup Build Environment
 The deployment for Linux uses [Docker](https://www.docker.com/) running
 CentOS 6.6 in order to ensure that we have a consistent deployment environment
 on Linux. You'll first need to install Docker if not already installed on your
-system.
+system.  Make sure to have at least version 1.7.1 or later.
 
 1. Under the [Protobuf source directory](https://github.com/google/protobuf), 
    build the `protoc-artifacts` image:
