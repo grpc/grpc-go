@@ -44,6 +44,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -73,6 +75,7 @@ var (
         timeout_on_sleeping_server: fullduplex streaming;
         compute_engine_creds: large_unary with compute engine auth;
 	service_account_creds: large_unary with service account auth;
+	per_rpc_creds: large_unary with per rpc token;
 	cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
 	cancel_after_first_response: cancellation after receiving 1st message from the server.`)
 )
@@ -343,6 +346,80 @@ func doServiceAccountCreds(tc testpb.TestServiceClient) {
 	grpclog.Println("ServiceAccountCreds done")
 }
 
+func getToken() (*oauth2.Token, error) {
+	jsonKey := getServiceAccountJSONKey()
+	grpclog.Printf("jsonkey is:%v", string(jsonKey))
+	config, err := google.JWTConfigFromJSON(jsonKey, *oauthScope)
+	if config != nil {
+		grpclog.Println("get the config")
+	}
+	if err != nil {
+		grpclog.Fatal("Get config failed: %v ", err)
+	}
+	token, err := config.TokenSource(context.Background()).Token()
+	if err != nil {
+		return nil, err
+	}
+	return token, err
+}
+
+func doOauth2TokenCreds(tc testpb.TestServiceClient) {
+	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	req := &testpb.SimpleRequest{
+		ResponseType:   testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize:   proto.Int32(int32(largeRespSize)),
+		Payload:        pl,
+		FillUsername:   proto.Bool(true),
+		FillOauthScope: proto.Bool(true),
+	}
+	reply, err := tc.UnaryCall(context.Background(), req)
+	if err != nil {
+		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+	}
+
+	jsonKey := getServiceAccountJSONKey()
+	user := reply.GetUsername()
+	scope := reply.GetOauthScope()
+	if !strings.Contains(string(jsonKey), user) {
+		grpclog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
+	}
+	if !strings.Contains(*oauthScope, scope) {
+		grpclog.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
+	}
+	grpclog.Println("Oauth2TokenCreds done")
+}
+
+func doPerRPCCreds(tc testpb.TestServiceClient) {
+	jsonKey := getServiceAccountJSONKey()
+	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	req := &testpb.SimpleRequest{
+		ResponseType:   testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize:   proto.Int32(int32(largeRespSize)),
+		Payload:        pl,
+		FillUsername:   proto.Bool(true),
+		FillOauthScope: proto.Bool(true),
+	}
+	token, err := getToken()
+	if err != nil {
+		grpclog.Fatal("Create token failed: ", err)
+	}
+	kv := map[string]string{"authorization": token.TokenType + " " + token.AccessToken}
+	ctx := metadata.NewContext(context.Background(), metadata.MD{"authorization": []string{kv["authorization"]}})
+	reply, err := tc.UnaryCall(ctx, req)
+	if err != nil {
+		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+	}
+	user := reply.GetUsername()
+	scope := reply.GetOauthScope()
+	if !strings.Contains(string(jsonKey), user) {
+		grpclog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
+	}
+	if !strings.Contains(*oauthScope, scope) {
+		grpclog.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
+	}
+	grpclog.Println("PerRPCCreds done")
+}
+
 var (
 	testMetadata = metadata.MD{
 		"key1": []string{"value1"},
@@ -422,6 +499,12 @@ func main() {
 				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
+		} else if *testCase == "oauth2_token_creds" {
+			token, err := getToken()
+			if err != nil {
+				grpclog.Fatal("Failed to create oauth2 credentials: %v", err)
+			}
+			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewOauthAccess(token)))
 		}
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
@@ -455,6 +538,16 @@ func main() {
 			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
 		}
 		doServiceAccountCreds(tc)
+	case "per_rpc_creds":
+		if !*useTLS {
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+		}
+		doPerRPCCreds(tc)
+	case "oauth2_token_creds":
+		if !*useTLS {
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+		}
+		doOauth2TokenCreds(tc)
 	case "cancel_after_begin":
 		doCancelAfterBegin(tc)
 	case "cancel_after_first_response":
