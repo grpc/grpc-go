@@ -266,6 +266,10 @@ func doTimeoutOnSleepingServer(tc testpb.TestServiceClient) {
 	ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
+		if grpc.Code(err) == codes.DeadlineExceeded) {
+			grpclog.Println("TimeoutOnSleepingServer done")
+			return
+		}
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
 	}
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, 27182)
