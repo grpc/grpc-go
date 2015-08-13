@@ -1,7 +1,15 @@
+plugins {
+    id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
+}
+
 description = 'gRPC: Protobuf Nano'
 
 dependencies {
     compile project(':grpc-core'),
             libraries.protobuf_nano,
             libraries.guava
+}
+
+animalsniffer {
+    signature = "org.codehaus.mojo.signature:java16:+@signature"
 }
