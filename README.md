@@ -16,16 +16,16 @@ Download [the JAR][]. Or for Maven, add to your `pom.xml`:
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-all</artifactId>
-  <version>0.7.1</version>
+  <version>0.8.0</version>
 </dependency>
 ```
 
 Or for Gradle, add to your dependencies:
 ```gradle
-compile 'io.grpc:grpc-all:0.7.1'
+compile 'io.grpc:grpc-all:0.8.0'
 ```
 
-[the JAR]: https://search.maven.org/remote_content?g=io.grpc&a=grpc-all&v=0.7.1
+[the JAR]: https://search.maven.org/remote_content?g=io.grpc&a=grpc-all&v=0.8.0
 
 Development snapshots are available in [Sonatypes's snapshot
 repository](https://oss.sonatype.org/content/repositories/snapshots/).
@@ -69,9 +69,9 @@ For protobuf-based codegen integrated with the Maven build system, you can use
           protobuf-java directly, you will be transitively depending on the
           protobuf-java version that grpc depends on.
         -->
-        <protocArtifact>com.google.protobuf:protoc:3.0.0-alpha-2:exe:${os.detected.classifier}</protocArtifact>
+        <protocArtifact>com.google.protobuf:protoc:3.0.0-alpha-3.1:exe:${os.detected.classifier}</protocArtifact>
         <pluginId>grpc-java</pluginId>
-        <pluginArtifact>io.grpc:protoc-gen-grpc-java:0.7.1:exe:${os.detected.classifier}</pluginArtifact>
+        <pluginArtifact>io.grpc:protoc-gen-grpc-java:0.8.0:exe:${os.detected.classifier}</pluginArtifact>
       </configuration>
       <executions>
         <execution>
@@ -108,11 +108,11 @@ protobuf {
     // The version of protoc must match protobuf-java. If you don't depend on
     // protobuf-java directly, you will be transitively depending on the
     // protobuf-java version that grpc depends on.
-    artifact = "com.google.protobuf:protoc:3.0.0-alpha-2"
+    artifact = "com.google.protobuf:protoc:3.0.0-alpha-3.1"
   }
   plugins {
     grpc {
-      artifact = 'io.grpc:protoc-gen-grpc-java:0.7.1'
+      artifact = 'io.grpc:protoc-gen-grpc-java:0.8.0'
     }
   }
   generateProtoTasks {
