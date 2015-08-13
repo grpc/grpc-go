@@ -130,7 +130,7 @@ subprojects {
                 okhttp: 'com.squareup.okhttp:okhttp:2.4.0',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufVersion}",
-                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.6.1',
+                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.0',
 
                 netty: 'io.netty:netty-codec-http2:4.1.0.Beta5',
                 netty_tcnative: 'io.netty:netty-tcnative:1.1.33.Fork2' + tcnative_suffix,
