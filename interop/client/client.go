@@ -71,8 +71,8 @@ var (
         ping_pong : full-duplex streaming;
         empty_stream : full-duplex streaming with zero message;
         timeout_on_sleeping_server: fullduplex streaming;
-		compute_engine_creds: large_unary with compute engine auth;
-		service_account_creds: large_unary with service account auth;
+        compute_engine_creds: large_unary with compute engine auth;
+        service_account_creds: large_unary with service account auth;
 	jwt_token_creds: large_unary with jwt token auth;
 	cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
 	cancel_after_first_response: cancellation after receiving 1st message from the server.`)
