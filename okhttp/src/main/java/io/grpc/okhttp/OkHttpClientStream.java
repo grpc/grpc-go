@@ -245,7 +245,7 @@ class OkHttpClientStream extends Http2ClientStream {
           data.buffer.clear();
         }
         pendingData = null;
-        transportReportStatus(reason, true, new Metadata.Trailers());
+        transportReportStatus(reason, true, new Metadata());
       } else {
         transport.finishStream(id(), reason, ErrorCode.CANCEL);
       }

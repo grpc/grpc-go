@@ -257,7 +257,7 @@ public class ClientCalls {
     }
 
     @Override
-    public void onClose(Status status, Metadata.Trailers trailers) {
+    public void onClose(Status status, Metadata trailers) {
       if (status.isOk()) {
         observer.onCompleted();
       } else {
@@ -291,7 +291,7 @@ public class ClientCalls {
     }
 
     @Override
-    public void onClose(Status status, Metadata.Trailers trailers) {
+    public void onClose(Status status, Metadata trailers) {
       if (status.isOk()) {
         if (value == null) {
           // No value received so mark the future as an error
@@ -403,7 +403,7 @@ public class ClientCalls {
       }
 
       @Override
-      public void onClose(Status status, Metadata.Trailers trailers) {
+      public void onClose(Status status, Metadata trailers) {
         Preconditions.checkState(!done, "ClientCall already closed");
         if (status.isOk()) {
           buffer.add(BlockingResponseStream.this);

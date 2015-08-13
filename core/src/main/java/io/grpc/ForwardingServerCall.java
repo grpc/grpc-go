@@ -61,7 +61,7 @@ public abstract class ForwardingServerCall<RespT> extends ServerCall<RespT> {
   }
 
   @Override
-  public void close(Status status, Metadata.Trailers trailers) {
+  public void close(Status status, Metadata trailers) {
     delegate().close(status, trailers);
   }
 

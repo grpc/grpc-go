@@ -106,7 +106,7 @@ public class TestUtils {
               }
 
               @Override
-              public void close(Status status, Metadata.Trailers trailers) {
+              public void close(Status status, Metadata trailers) {
                 trailers.merge(requestHeaders, keySet);
                 super.close(status, trailers);
               }

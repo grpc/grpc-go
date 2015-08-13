@@ -76,7 +76,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   @Mock
   private NettyServerHandler handler;
 
-  private Metadata.Trailers trailers = new Metadata.Trailers();
+  private Metadata trailers = new Metadata();
 
   @Before
   @Override
@@ -126,7 +126,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Test
   public void closeBeforeClientHalfCloseShouldSucceed() throws Exception {
-    stream().close(Status.OK, new Metadata.Trailers());
+    stream().close(Status.OK, new Metadata());
     verify(writeQueue).enqueue(
         new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
             .status(new AsciiString("200"))
@@ -224,7 +224,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Test
   public void emptyFramerShouldSendNoPayload() throws Exception {
-    stream().close(Status.OK, new Metadata.Trailers());
+    stream().close(Status.OK, new Metadata());
     verify(writeQueue).enqueue(
         new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
             .status(new AsciiString("200"))
@@ -265,7 +265,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Override
   protected void closeStream() {
-    stream().close(Status.ABORTED, new Metadata.Trailers());
+    stream().close(Status.ABORTED, new Metadata());
   }
 
   @Override

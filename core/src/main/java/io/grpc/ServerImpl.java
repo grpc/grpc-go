@@ -308,14 +308,14 @@ public final class ServerImpl extends Server {
               if (method == null) {
                 stream.close(
                     Status.UNIMPLEMENTED.withDescription("Method not found: " + methodName),
-                    new Metadata.Trailers());
+                    new Metadata());
                 timeout.cancel(true);
                 return;
               }
               listener = startCall(stream, methodName, method.getMethodDefinition(), timeout,
                   headers);
             } catch (Throwable t) {
-              stream.close(Status.fromThrowable(t), new Metadata.Trailers());
+              stream.close(Status.fromThrowable(t), new Metadata());
               timeout.cancel(true);
               throw Throwables.propagate(t);
             } finally {
@@ -410,9 +410,9 @@ public final class ServerImpl extends Server {
     }
 
     /**
-     * Like {@link ServerCall#close(Status, Metadata.Trailers)}, but thread-safe for internal use.
+     * Like {@link ServerCall#close(Status, Metadata)}, but thread-safe for internal use.
      */
-    private void internalClose(Status status, Metadata.Trailers trailers) {
+    private void internalClose(Status status, Metadata trailers) {
       // TODO(ejona86): this is not thread-safe :)
       stream.close(status, trailers);
     }
@@ -425,7 +425,7 @@ public final class ServerImpl extends Server {
           try {
             getListener().messageRead(message);
           } catch (Throwable t) {
-            internalClose(Status.fromThrowable(t), new Metadata.Trailers());
+            internalClose(Status.fromThrowable(t), new Metadata());
             throw Throwables.propagate(t);
           }
         }
@@ -440,7 +440,7 @@ public final class ServerImpl extends Server {
           try {
             getListener().halfClosed();
           } catch (Throwable t) {
-            internalClose(Status.fromThrowable(t), new Metadata.Trailers());
+            internalClose(Status.fromThrowable(t), new Metadata());
             throw Throwables.propagate(t);
           }
         }
@@ -504,7 +504,7 @@ public final class ServerImpl extends Server {
         stream.writeMessage(resp);
         stream.flush();
       } catch (Throwable t) {
-        close(Status.fromThrowable(t), new Metadata.Trailers());
+        close(Status.fromThrowable(t), new Metadata());
         throw Throwables.propagate(t);
       }
     }
@@ -515,7 +515,7 @@ public final class ServerImpl extends Server {
     }
 
     @Override
-    public void close(Status status, Metadata.Trailers trailers) {
+    public void close(Status status, Metadata trailers) {
       Preconditions.checkState(!closeCalled, "call already closed");
       closeCalled = true;
       stream.close(status, trailers);

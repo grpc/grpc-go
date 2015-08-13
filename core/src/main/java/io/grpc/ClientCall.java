@@ -91,7 +91,7 @@ public abstract class ClientCall<RequestT, ResponseT> {
      * @param status the result of the remote call.
      * @param trailers metadata provided at call completion.
      */
-    public abstract void onClose(Status status, Metadata.Trailers trailers);
+    public abstract void onClose(Status status, Metadata trailers);
 
     /**
      * This indicates that the ClientCall is now capable of sending additional messages (via

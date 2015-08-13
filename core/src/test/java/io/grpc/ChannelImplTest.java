@@ -137,7 +137,7 @@ public class ChannelImplTest {
         channel.newCall(method, CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime()));
     call.start(mockCallListener, new Metadata.Headers());
     verify(mockCallListener, timeout(1000)).onClose(
-        same(Status.DEADLINE_EXCEEDED), any(Metadata.Trailers.class));
+        same(Status.DEADLINE_EXCEEDED), any(Metadata.class));
   }
 
   @Test
@@ -179,7 +179,7 @@ public class ChannelImplTest {
     verify(mockTransport)
         .newStream(same(method), same(headers2), streamListenerCaptor.capture());
     ClientStreamListener streamListener2 = streamListenerCaptor.getValue();
-    Metadata.Trailers trailers = new Metadata.Trailers();
+    Metadata trailers = new Metadata();
     streamListener2.closed(Status.CANCELLED, trailers);
     verify(mockCallListener2, timeout(1000)).onClose(Status.CANCELLED, trailers);
 
@@ -194,7 +194,7 @@ public class ChannelImplTest {
     call3.start(mockCallListener3, new Metadata.Headers());
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     verify(mockCallListener3, timeout(1000))
-        .onClose(statusCaptor.capture(), any(Metadata.Trailers.class));
+        .onClose(statusCaptor.capture(), any(Metadata.class));
     assertSame(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
 
     // Finish shutdown
@@ -227,7 +227,7 @@ public class ChannelImplTest {
     verify(mockTransport).start(any(ClientTransport.Listener.class));
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     verify(mockCallListener, timeout(1000))
-        .onClose(statusCaptor.capture(), any(Metadata.Trailers.class));
+        .onClose(statusCaptor.capture(), any(Metadata.class));
     assertSame(goldenStatus, statusCaptor.getValue());
 
     // Have transport shutdown immediately during start
@@ -251,7 +251,7 @@ public class ChannelImplTest {
     verify(mockTransportFactory, times(2)).newClientTransport();
     verify(mockTransport2).start(any(ClientTransport.Listener.class));
     verify(mockTransport2).newStream(same(method), same(headers2), streamListenerCaptor.capture());
-    Metadata.Trailers trailers2 = new Metadata.Trailers();
+    Metadata trailers2 = new Metadata();
     streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers2);
     verify(mockCallListener2, timeout(1000)).onClose(Status.CANCELLED, trailers2);
 
@@ -267,7 +267,7 @@ public class ChannelImplTest {
     verify(mockTransportFactory, times(3)).newClientTransport();
     verify(mockTransport3).start(transportListenerCaptor.capture());
     verify(mockTransport3).newStream(same(method), same(headers3), streamListenerCaptor.capture());
-    Metadata.Trailers trailers3 = new Metadata.Trailers();
+    Metadata trailers3 = new Metadata();
     streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers3);
     verify(mockCallListener3, timeout(1000)).onClose(Status.CANCELLED, trailers3);
 

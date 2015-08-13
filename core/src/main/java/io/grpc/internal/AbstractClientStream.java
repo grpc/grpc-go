@@ -59,7 +59,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   // Stored status & trailers to report when deframer completes or
   // transportReportStatus is directly called.
   private Status status;
-  private Metadata.Trailers trailers;
+  private Metadata trailers;
   private Runnable closeListenerTask;
 
 
@@ -100,7 +100,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     }
     // For transport errors we immediately report status to the application layer
     // and do not wait for additional payloads.
-    transportReportStatus(errorStatus, false, new Metadata.Trailers());
+    transportReportStatus(errorStatus, false, new Metadata());
   }
 
   /**
@@ -165,7 +165,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * @param trailers the received trailers
    * @param status the status extracted from the trailers
    */
-  protected void inboundTrailersReceived(Metadata.Trailers trailers, Status status) {
+  protected void inboundTrailersReceived(Metadata trailers, Status status) {
     Preconditions.checkNotNull(trailers, "trailers");
     if (inboundPhase() == Phase.STATUS) {
       log.log(Level.INFO, "Received trailers on closed stream {0}\n {1}\n {2}",
@@ -212,7 +212,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * @param trailers new instance of {@code Trailers}, either empty or those returned by the server
    */
   public void transportReportStatus(final Status newStatus, boolean stopDelivery,
-      final Metadata.Trailers trailers) {
+      final Metadata trailers) {
     Preconditions.checkNotNull(newStatus, "newStatus");
 
     boolean closingLater = closeListenerTask != null && !stopDelivery;
@@ -240,7 +240,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   /**
    * Creates a new {@link Runnable} to close the listener with the given status/trailers.
    */
-  private Runnable newCloseListenerTask(final Status status, final Metadata.Trailers trailers) {
+  private Runnable newCloseListenerTask(final Status status, final Metadata trailers) {
     return new Runnable() {
       @Override
       public void run() {
@@ -252,7 +252,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   /**
    * Closes the listener if not previously closed.
    */
-  private void closeListener(Status newStatus, Metadata.Trailers trailers) {
+  private void closeListener(Status newStatus, Metadata trailers) {
     if (!listenerClosed) {
       listenerClosed = true;
       closeDeframer();

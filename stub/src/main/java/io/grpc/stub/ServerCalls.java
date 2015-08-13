@@ -142,7 +142,7 @@ public class ServerCalls {
               call.close(
                   Status.INVALID_ARGUMENT.withDescription(
                       "More than one request messages for unary call or server streaming call"),
-                  new Metadata.Trailers());
+                  new Metadata());
             }
           }
 
@@ -152,7 +152,7 @@ public class ServerCalls {
               method.invoke(request, responseObserver);
             } else {
               call.close(Status.INVALID_ARGUMENT.withDescription("Half-closed without a request"),
-                  new Metadata.Trailers());
+                  new Metadata());
             }
           }
 
@@ -239,7 +239,7 @@ public class ServerCalls {
 
     @Override
     public void onError(Throwable t) {
-      call.close(Status.fromThrowable(t), new Metadata.Trailers());
+      call.close(Status.fromThrowable(t), new Metadata());
     }
 
     @Override
@@ -247,7 +247,7 @@ public class ServerCalls {
       if (cancelled) {
         throw Status.CANCELLED.asRuntimeException();
       } else {
-        call.close(Status.OK, new Metadata.Trailers());
+        call.close(Status.OK, new Metadata());
       }
     }
   }

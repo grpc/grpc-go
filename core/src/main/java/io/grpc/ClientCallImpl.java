@@ -201,7 +201,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   private void closeCallPrematurely(ClientStreamListener listener, Status status) {
     Preconditions.checkState(stream == null, "Stream already created");
     stream = new NoopClientStream();
-    listener.closed(status, new Metadata.Trailers());
+    listener.closed(status, new Metadata());
   }
 
   private ScheduledFuture<?> startDeadlineTimer(long timeoutMicros) {
@@ -267,7 +267,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     }
 
     @Override
-    public void closed(Status status, Metadata.Trailers trailers) {
+    public void closed(Status status, Metadata trailers) {
       if (status.getCode() == Status.Code.CANCELLED && deadlineNanoTime != null) {
         // When the server's deadline expires, it can only reset the stream with CANCEL and no
         // description. Since our timer may be delayed in firing, we double-check the deadline and
@@ -276,11 +276,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         if (deadlineNanoTime <= System.nanoTime()) {
           status = Status.DEADLINE_EXCEEDED;
           // Replace trailers to prevent mixing sources of status and trailers.
-          trailers = new Metadata.Trailers();
+          trailers = new Metadata();
         }
       }
       final Status savedStatus = status;
-      final Metadata.Trailers savedTrailers = trailers;
+      final Metadata savedTrailers = trailers;
       callExecutor.execute(new Runnable() {
         @Override
         public void run() {

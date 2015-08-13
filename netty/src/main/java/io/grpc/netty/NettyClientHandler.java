@@ -216,7 +216,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private void onRstStreamRead(int streamId, long errorCode) throws Http2Exception {
     NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
     Status status = HttpUtil.Http2Error.statusForCode((int) errorCode);
-    stream.transportReportStatus(status, false, new Metadata.Trailers());
+    stream.transportReportStatus(status, false, new Metadata());
   }
 
   @Override
@@ -238,7 +238,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
       connection().forEachActiveStream(new Http2StreamVisitor() {
         @Override
         public boolean visit(Http2Stream stream) throws Http2Exception {
-          clientStream(stream).transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
+          clientStream(stream).transportReportStatus(goAwayStatus, false, new Metadata());
           return true;
         }
       });
@@ -274,7 +274,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     Http2Stream stream = connection().stream(http2Ex.streamId());
     if (stream != null) {
       clientStream(stream).transportReportStatus(Status.fromThrowable(cause), false,
-              new Metadata.Trailers());
+              new Metadata());
     }
 
     // Delegate to the base class to send a RST_STREAM.
@@ -315,10 +315,10 @@ class NettyClientHandler extends Http2ConnectionHandler {
                   if (future.cause() instanceof GoAwayClosedStreamException) {
                     GoAwayClosedStreamException e = (GoAwayClosedStreamException) future.cause();
                     goAwayStatus(statusFromGoAway(e.errorCode(), e.debugData()));
-                    stream.transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
+                    stream.transportReportStatus(goAwayStatus, false, new Metadata());
                   } else {
                     stream.transportReportStatus(Status.fromThrowable(future.cause()), true,
-                        new Metadata.Trailers());
+                        new Metadata());
                   }
                 }
               }
@@ -331,7 +331,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private void cancelStream(ChannelHandlerContext ctx, CancelClientStreamCommand cmd,
       ChannelPromise promise) {
     NettyClientStream stream = cmd.stream();
-    stream.transportReportStatus(cmd.reason(), true, new Metadata.Trailers());
+    stream.transportReportStatus(cmd.reason(), true, new Metadata());
     encoder().writeRstStream(ctx, stream.id(), Http2Error.CANCEL.code(), promise);
   }
 
@@ -402,7 +402,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
         public boolean visit(Http2Stream stream) throws Http2Exception {
           if (stream.id() > lastKnownStream) {
             clientStream(stream)
-                .transportReportStatus(goAwayStatus, false, new Metadata.Trailers());
+                .transportReportStatus(goAwayStatus, false, new Metadata());
             stream.close();
           }
           return true;

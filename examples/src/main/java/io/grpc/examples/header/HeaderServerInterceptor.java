@@ -78,7 +78,7 @@ public class HeaderServerInterceptor implements ServerInterceptor {
       }
 
       @Override
-      public void close(Status status, Metadata.Trailers trailers) {
+      public void close(Status status, Metadata trailers) {
         super.close(status, trailers);
       }
     }, requestHeaders);

@@ -475,7 +475,7 @@ public final class ChannelImpl extends Channel {
     @Override
     public ClientStream newStream(
         MethodDescriptor<?, ?> method, Headers headers, ClientStreamListener listener) {
-      listener.closed(shutdownStatus, new Metadata.Trailers());
+      listener.closed(shutdownStatus, new Metadata());
       return new ClientCallImpl.NoopClientStream();
     }
 

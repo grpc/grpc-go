@@ -160,35 +160,35 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setStatusWithOkShouldCloseStream() {
     stream().id(STREAM_ID);
-    stream().transportReportStatus(Status.OK, true, new Metadata.Trailers());
-    verify(listener).closed(same(Status.OK), any(Metadata.Trailers.class));
+    stream().transportReportStatus(Status.OK, true, new Metadata());
+    verify(listener).closed(same(Status.OK), any(Metadata.class));
     assertTrue(stream.isClosed());
   }
 
   @Test
   public void setStatusWithErrorShouldCloseStream() {
     Status errorStatus = Status.INTERNAL;
-    stream().transportReportStatus(errorStatus, true, new Metadata.Trailers());
-    verify(listener).closed(eq(errorStatus), any(Metadata.Trailers.class));
+    stream().transportReportStatus(errorStatus, true, new Metadata());
+    verify(listener).closed(eq(errorStatus), any(Metadata.class));
     assertTrue(stream.isClosed());
   }
 
   @Test
   public void setStatusWithOkShouldNotOverrideError() {
     Status errorStatus = Status.INTERNAL;
-    stream().transportReportStatus(errorStatus, true, new Metadata.Trailers());
-    stream().transportReportStatus(Status.OK, true, new Metadata.Trailers());
-    verify(listener).closed(any(Status.class), any(Metadata.Trailers.class));
+    stream().transportReportStatus(errorStatus, true, new Metadata());
+    stream().transportReportStatus(Status.OK, true, new Metadata());
+    verify(listener).closed(any(Status.class), any(Metadata.class));
     assertTrue(stream.isClosed());
   }
 
   @Test
   public void setStatusWithErrorShouldNotOverridePreviousError() {
     Status errorStatus = Status.INTERNAL;
-    stream().transportReportStatus(errorStatus, true, new Metadata.Trailers());
+    stream().transportReportStatus(errorStatus, true, new Metadata());
     stream().transportReportStatus(Status.fromThrowable(new RuntimeException("fake")), true,
-        new Metadata.Trailers());
-    verify(listener).closed(any(Status.class), any(Metadata.Trailers.class));
+        new Metadata());
+    verify(listener).closed(any(Status.class), any(Metadata.class));
     assertTrue(stream.isClosed());
   }
 
@@ -226,7 +226,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
 
     stream().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
+    verify(listener).closed(captor.capture(), any(Metadata.class));
     assertEquals(Status.INTERNAL.getCode(), captor.getValue().getCode());
     assertTrue(stream.isClosed());
   }
@@ -239,7 +239,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     // Remove once b/16290036 is fixed.
     headers.status(new AsciiString("500"));
     stream().transportHeadersReceived(headers, false);
-    verify(listener, never()).closed(any(Status.class), any(Metadata.Trailers.class));
+    verify(listener, never()).closed(any(Status.class), any(Metadata.class));
 
     // We are now waiting for 100 bytes of error context on the stream, cancel has not yet been
     // sent
@@ -251,7 +251,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     // Now verify that cancel is sent and an error is reported to the listener
     verify(writeQueue).enqueue(any(CancelClientStreamCommand.class), eq(true));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
+    verify(listener).closed(captor.capture(), any(Metadata.class));
     assertEquals(Status.UNKNOWN.getCode(), captor.getValue().getCode());
     assertTrue(stream.isClosed());
 
@@ -261,7 +261,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   public void nonGrpcResponseShouldSetStatus() throws Exception {
     stream().transportDataReceived(Unpooled.copiedBuffer(MESSAGE, UTF_8), true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
+    verify(listener).closed(captor.capture(), any(Metadata.class));
     assertEquals(Status.Code.INTERNAL, captor.getValue().getCode());
   }
 
@@ -288,7 +288,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     verify(listener).messageRead(any(InputStream.class));
 
     // Now set the error status.
-    Metadata.Trailers trailers = Utils.convertTrailers(grpcResponseTrailers(Status.CANCELLED));
+    Metadata trailers = Utils.convertTrailers(grpcResponseTrailers(Status.CANCELLED));
     stream().transportReportStatus(Status.CANCELLED, true, trailers);
 
     // Now allow the delivery of the second.
@@ -314,7 +314,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     verify(listener).messageRead(any(InputStream.class));
 
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture(), any(Metadata.Trailers.class));
+    verify(listener).closed(captor.capture(), any(Metadata.class));
     assertEquals(Status.Code.INTERNAL, captor.getValue().getCode());
   }
 
@@ -372,7 +372,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   }
 
   private Http2Headers grpcResponseTrailers(Status status) {
-    Metadata.Trailers trailers = new Metadata.Trailers();
+    Metadata trailers = new Metadata();
     trailers.put(Status.CODE_KEY, status);
     return Utils.convertTrailers(trailers, true);
   }

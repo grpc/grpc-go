@@ -142,11 +142,11 @@ class Utils {
     return http2Headers;
   }
 
-  public static Metadata.Trailers convertTrailers(Http2Headers http2Headers) {
-    return new Metadata.Trailers(convertHeadersToArray(http2Headers));
+  public static Metadata convertTrailers(Http2Headers http2Headers) {
+    return new Metadata(convertHeadersToArray(http2Headers));
   }
 
-  public static Http2Headers convertTrailers(Metadata.Trailers trailers, boolean headersSent) {
+  public static Http2Headers convertTrailers(Metadata trailers, boolean headersSent) {
     Http2Headers http2Trailers = convertMetadata(trailers);
     if (!headersSent) {
       http2Trailers.set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_GRPC);

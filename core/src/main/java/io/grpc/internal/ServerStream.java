@@ -58,7 +58,7 @@ public interface ServerStream extends Stream {
    * @param status details of the closure
    * @param trailers an additional block of metadata to pass to the client on stream closure.
    */
-  void close(Status status, Metadata.Trailers trailers);
+  void close(Status status, Metadata trailers);
 
 
   /**

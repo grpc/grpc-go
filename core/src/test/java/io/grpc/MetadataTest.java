@@ -203,13 +203,13 @@ public class MetadataTest {
     assertEquals("Headers(path=/path,authority=myauthority,"
         + "metadata={test-bin=[Fish(binary)], test=[ascii]})", h.toString());
 
-    Metadata.Trailers t = new Metadata.Trailers();
+    Metadata t = new Metadata();
     t.put(Metadata.Key.of("test", Metadata.ASCII_STRING_MARSHALLER), "ascii");
-    assertEquals("Trailers({test=[ascii]})", t.toString());
+    assertEquals("Metadata({test=[ascii]})", t.toString());
 
-    t = new Metadata.Trailers("test".getBytes(US_ASCII), "ascii".getBytes(US_ASCII),
+    t = new Metadata("test".getBytes(US_ASCII), "ascii".getBytes(US_ASCII),
         "test-bin".getBytes(US_ASCII), "binary".getBytes(US_ASCII));
-    assertEquals("Trailers({test=[ascii], test-bin=[[98, 105, 110, 97, 114, 121]]})", t.toString());
+    assertEquals("Metadata({test=[ascii], test-bin=[[98, 105, 110, 97, 114, 121]]})", t.toString());
   }
 
   @Test

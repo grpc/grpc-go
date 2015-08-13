@@ -56,7 +56,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * </p>
  */
 @NotThreadSafe
-public abstract class Metadata {
+public class Metadata {
 
   /**
    * All binary headers should have this suffix in their names. Vice versa.
@@ -108,7 +108,7 @@ public abstract class Metadata {
    * Constructor called by the transport layer when it receives binary metadata.
    */
   // TODO(louiscryan): Convert to use ByteString so we can cache transformations
-  private Metadata(byte[]... binaryValues) {
+  public Metadata(byte[]... binaryValues) {
     for (int i = 0; i < binaryValues.length; i++) {
       String name = new String(binaryValues[i], US_ASCII);
       storeAdd(name, new MetadataEntry(name.endsWith(BINARY_HEADER_SUFFIX), binaryValues[++i]));
@@ -118,7 +118,7 @@ public abstract class Metadata {
   /**
    * Constructor called by the application layer when it wants to send metadata.
    */
-  private Metadata() {}
+  public Metadata() {}
 
   private void storeAdd(String name, MetadataEntry value) {
     List<MetadataEntry> values = store.get(name);
@@ -286,6 +286,11 @@ public abstract class Metadata {
     }
   }
 
+  @Override
+  public String toString() {
+    return "Metadata(" + toStringInternal() + ")";
+  }
+
   private String toStringInternal() {
     return store.toString();
   }
@@ -375,30 +380,18 @@ public abstract class Metadata {
   /**
    * Concrete instance for metadata attached to the end of the call. Only provided by
    * servers.
+   *
+   * @deprecated use Metadata instead.
    */
+  @Deprecated
   public static class Trailers extends Metadata {
-    /**
-     * Called by the transport layer to create trailers from their binary serialized values.
-     *
-     * <p>This method does not copy the provided byte arrays. The byte arrays must not be mutated.
-     */
-    public Trailers(byte[]... headers) {
-      super(headers);
-    }
-
     /**
      * Called by the application layer to construct trailers prior to passing them to the
      * transport for serialization.
      */
     public Trailers() {
     }
-
-    @Override
-    public String toString() {
-      return "Trailers(" + super.toStringInternal() + ")";
-    }
   }
-
 
   /**
    * Marshaller for metadata values that are serialized into raw binary.

@@ -52,7 +52,7 @@ public abstract class ForwardingClientCallListener<RespT> extends ClientCall.Lis
   }
 
   @Override
-  public void onClose(Status status, Metadata.Trailers trailers) {
+  public void onClose(Status status, Metadata trailers) {
     delegate().onClose(status, trailers);
   }
 

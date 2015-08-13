@@ -347,7 +347,7 @@ public class ClientInterceptorsTest {
     interceptedCall.request(1);
     verifyNoMoreInteractions(call);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).onClose(captor.capture(), any(Metadata.Trailers.class));
+    verify(listener).onClose(captor.capture(), any(Metadata.class));
     assertSame(error, captor.getValue().getCause());
   }
 

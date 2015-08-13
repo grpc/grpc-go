@@ -40,7 +40,7 @@ public interface ClientStreamListener extends StreamListener {
    * Called upon receiving all header information from the remote end-point. Note that transports
    * are not required to call this method if no header information is received, this would occur
    * when a stream immediately terminates with an error and only
-   * {@link #closed(io.grpc.Status, Metadata.Trailers)} is called.
+   * {@link #closed(io.grpc.Status, Metadata)} is called.
    *
    * <p>This method should return quickly, as the same thread may be used to process other streams.
    *
@@ -60,5 +60,5 @@ public interface ClientStreamListener extends StreamListener {
    * @param status details about the remote closure
    * @param trailers trailing metadata
    */
-  void closed(Status status, Metadata.Trailers trailers);
+  void closed(Status status, Metadata trailers);
 }

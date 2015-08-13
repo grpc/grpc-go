@@ -149,12 +149,12 @@ public abstract class ServerCall<ResponseT> {
    * status} is not equal to {@link Status#OK}, then the call is said to have failed.
    *
    * <p>If {@code status} is not {@link Status#CANCELLED} and no errors or cancellations are known
-   * to have occured, then a {@link Listener#onComplete} notification should be expected.
+   * to have occurred, then a {@link Listener#onComplete} notification should be expected.
    * Otherwise {@link Listener#onCancel} has been or will be called.
    *
    * @throws IllegalStateException if call is already {@code close}d
    */
-  public abstract void close(Status status, Metadata.Trailers trailers);
+  public abstract void close(Status status, Metadata trailers);
 
   /**
    * Returns {@code true} when the call is cancelled and the server is encouraged to abort

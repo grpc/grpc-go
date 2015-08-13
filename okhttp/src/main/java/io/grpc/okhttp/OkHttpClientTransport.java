@@ -254,7 +254,7 @@ class OkHttpClientTransport implements ClientTransport {
 
     synchronized (lock) {
       if (goAway) {
-        clientStream.transportReportStatus(goAwayStatus, true, new Metadata.Trailers());
+        clientStream.transportReportStatus(goAwayStatus, true, new Metadata());
       } else if (streams.size() >= maxConcurrentStreams) {
         pendingStreams.add(clientStream);
       } else {
@@ -459,12 +459,12 @@ class OkHttpClientTransport implements ClientTransport {
         Map.Entry<Integer, OkHttpClientStream> entry = it.next();
         if (entry.getKey() > lastKnownStreamId) {
           it.remove();
-          entry.getValue().transportReportStatus(status, false, new Metadata.Trailers());
+          entry.getValue().transportReportStatus(status, false, new Metadata());
         }
       }
 
       for (OkHttpClientStream stream : pendingStreams) {
-        stream.transportReportStatus(status, true, new Metadata.Trailers());
+        stream.transportReportStatus(status, true, new Metadata());
       }
       pendingStreams.clear();
     }
@@ -501,7 +501,7 @@ class OkHttpClientTransport implements ClientTransport {
         if (status != null) {
           boolean isCancelled = (status.getCode() == Code.CANCELLED
               || status.getCode() == Code.DEADLINE_EXCEEDED);
-          stream.transportReportStatus(status, isCancelled, new Metadata.Trailers());
+          stream.transportReportStatus(status, isCancelled, new Metadata());
         }
         if (!startPendingStreams()) {
           stopIfNecessary();

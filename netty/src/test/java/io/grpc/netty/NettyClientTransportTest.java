@@ -282,7 +282,7 @@ public class NettyClientTransportTest {
     }
 
     @Override
-    public void closed(Status status, Metadata.Trailers trailers) {
+    public void closed(Status status, Metadata trailers) {
       if (status.isOk()) {
         closedFuture.set(null);
       } else {
@@ -328,7 +328,7 @@ public class NettyClientTransportTest {
     @Override
     public void halfClosed() {
       // Just close when the client closes.
-      stream.close(Status.OK, new Metadata.Trailers());
+      stream.close(Status.OK, new Metadata());
     }
 
     @Override

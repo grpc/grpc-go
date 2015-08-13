@@ -456,7 +456,7 @@ public abstract class AbstractTransportTest {
       }
 
       @Override
-      public void onClose(Status status, Metadata.Trailers trailers) {
+      public void onClose(Status status, Metadata trailers) {
         queue.add(status);
       }
     }, new Metadata.Headers());
@@ -527,7 +527,7 @@ public abstract class AbstractTransportTest {
     fixedHeaders.put(METADATA_KEY, contextValue);
     stub = MetadataUtils.attachHeaders(stub, fixedHeaders);
     // .. and expect it to be echoed back in trailers
-    AtomicReference<Metadata.Trailers> trailersCapture = new AtomicReference<Metadata.Trailers>();
+    AtomicReference<Metadata> trailersCapture = new AtomicReference<Metadata>();
     AtomicReference<Metadata.Headers> headersCapture = new AtomicReference<Metadata.Headers>();
     stub = MetadataUtils.captureMetadata(stub, headersCapture, trailersCapture);
 
@@ -550,7 +550,7 @@ public abstract class AbstractTransportTest {
     fixedHeaders.put(METADATA_KEY, contextValue);
     stub = MetadataUtils.attachHeaders(stub, fixedHeaders);
     // .. and expect it to be echoed back in trailers
-    AtomicReference<Metadata.Trailers> trailersCapture = new AtomicReference<Metadata.Trailers>();
+    AtomicReference<Metadata> trailersCapture = new AtomicReference<Metadata>();
     AtomicReference<Metadata.Headers> headersCapture = new AtomicReference<Metadata.Headers>();
     stub = MetadataUtils.captureMetadata(stub, headersCapture, trailersCapture);
 

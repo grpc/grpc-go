@@ -1254,7 +1254,7 @@ public class OkHttpClientTransportTest {
   private static class MockStreamListener implements ClientStreamListener {
     Status status;
     Metadata.Headers headers;
-    Metadata.Trailers trailers;
+    Metadata trailers;
     CountDownLatch closed = new CountDownLatch(1);
     ArrayList<String> messages = new ArrayList<String>();
     boolean onReadyCalled;
@@ -1276,7 +1276,7 @@ public class OkHttpClientTransportTest {
     }
 
     @Override
-    public void closed(Status status, Metadata.Trailers trailers) {
+    public void closed(Status status, Metadata trailers) {
       this.status = status;
       this.trailers = trailers;
       closed.countDown();

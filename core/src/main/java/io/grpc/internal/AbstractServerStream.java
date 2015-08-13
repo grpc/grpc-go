@@ -61,7 +61,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    */
   private boolean gracefulClose;
   /** Saved trailers from close() that need to be sent once the framer has sent all messages. */
-  private Metadata.Trailers stashedTrailers;
+  private Metadata stashedTrailers;
 
   protected AbstractServerStream(WritableBufferAllocator bufferAllocator) {
     super(bufferAllocator);
@@ -109,7 +109,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   }
 
   @Override
-  public final void close(Status status, Metadata.Trailers trailers) {
+  public final void close(Status status, Metadata trailers) {
     Preconditions.checkNotNull(status, "status");
     Preconditions.checkNotNull(trailers, "trailers");
     if (outboundPhase(Phase.STATUS) != Phase.STATUS) {
@@ -187,7 +187,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    * @param trailers metadata to be sent to end point
    * @param headersSent {@code true} if response headers have already been sent.
    */
-  protected abstract void sendTrailers(Metadata.Trailers trailers, boolean headersSent);
+  protected abstract void sendTrailers(Metadata trailers, boolean headersSent);
 
   /**
    * Indicates the stream is considered completely closed and there is no further opportunity for
@@ -216,7 +216,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    * Aborts the stream with an error status, cleans up resources and notifies the listener if
    * necessary.
    *
-   * <p>Unlike {@link #close(Status, Metadata.Trailers)}, this method is only called from the
+   * <p>Unlike {@link #close(Status, Metadata)}, this method is only called from the
    * transport. The transport should use this method instead of {@code close(Status)} for internal
    * errors to prevent exposing unexpected states and exceptions to the application.
    *
@@ -232,7 +232,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
     if (notifyClient) {
       // TODO(louiscryan): Remove
       if (stashedTrailers == null) {
-        stashedTrailers = new Metadata.Trailers();
+        stashedTrailers = new Metadata();
       }
       writeStatusToTrailers(status);
       closeFramer();

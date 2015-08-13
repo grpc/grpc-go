@@ -183,7 +183,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
 
     assertTrue(createPromise.isSuccess());
     verify(stream).transportReportStatus(eq(Status.CANCELLED), eq(true),
-        any(Metadata.Trailers.class));
+        any(Metadata.class));
   }
 
   @Test
@@ -341,7 +341,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     assertTrue(promise.isDone());
     assertFalse(promise.isSuccess());
     verify(stream).transportReportStatus(any(Status.class), eq(false),
-            notNull(Metadata.Trailers.class));
+            notNull(Metadata.class));
   }
 
   @Test
@@ -353,7 +353,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
             goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(stream).transportReportStatus(captor.capture(), eq(false),
-            notNull(Metadata.Trailers.class));
+            notNull(Metadata.class));
     assertEquals(Status.CANCELLED.getCode(), captor.getValue().getCode());
     assertEquals("HTTP/2 error code: CANCEL\nthis is a test",
             captor.getValue().getDescription());
@@ -371,7 +371,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
         goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(stream).transportReportStatus(captor.capture(), eq(false),
-        notNull(Metadata.Trailers.class));
+        notNull(Metadata.class));
     assertEquals(Status.CANCELLED.getCode(), captor.getValue().getCode());
     assertEquals("HTTP/2 error code: CANCEL\nthis is a test",
         captor.getValue().getDescription());
@@ -385,7 +385,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     when(stream.id()).thenReturn(3);
     writeQueue.enqueue(new CancelClientStreamCommand(stream, Status.CANCELLED), true);
     verify(stream).transportReportStatus(eq(Status.CANCELLED), eq(true),
-            any(Metadata.Trailers.class));
+            any(Metadata.class));
   }
 
   @Test
@@ -406,7 +406,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     InOrder inOrder = inOrder(stream);
     inOrder.verify(stream, calls(1)).transportReportStatus(captor.capture(), eq(false),
-            notNull(Metadata.Trailers.class));
+            notNull(Metadata.class));
     assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
   }
 

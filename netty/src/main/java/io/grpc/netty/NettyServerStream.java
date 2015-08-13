@@ -112,7 +112,7 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   }
 
   @Override
-  protected void sendTrailers(Metadata.Trailers trailers, boolean headersSent) {
+  protected void sendTrailers(Metadata trailers, boolean headersSent) {
     Http2Headers http2Trailers = Utils.convertTrailers(trailers, headersSent);
     writeQueue.enqueue(new SendResponseHeadersCommand(id(), http2Trailers, true), true);
   }

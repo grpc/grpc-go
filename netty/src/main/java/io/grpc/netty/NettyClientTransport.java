@@ -139,7 +139,7 @@ class NettyClientTransport implements ClientTransport {
         if (!future.isSuccess()) {
           // Stream creation failed. Close the stream if not already closed.
           stream.transportReportStatus(Status.fromThrowable(future.cause()), true,
-                  new Metadata.Trailers());
+                  new Metadata());
         }
       }
     };

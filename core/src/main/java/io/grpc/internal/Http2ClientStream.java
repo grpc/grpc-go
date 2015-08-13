@@ -145,7 +145,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
    *
    * @param trailers the received terminal trailer metadata
    */
-  protected void transportTrailersReceived(Metadata.Trailers trailers) {
+  protected void transportTrailersReceived(Metadata trailers) {
     Preconditions.checkNotNull(trailers);
     if (transportError != null) {
       // Already received a transport error so just augment it.
@@ -176,7 +176,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
   /**
    * Extract the response status from trailers.
    */
-  private Status statusFromTrailers(Metadata.Trailers trailers) {
+  private Status statusFromTrailers(Metadata trailers) {
     Status status = trailers.get(Status.CODE_KEY);
     if (status == null) {
       status = statusFromHttpStatus(trailers);

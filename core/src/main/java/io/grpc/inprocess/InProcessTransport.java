@@ -107,7 +107,7 @@ class InProcessTransport implements ServerTransport, ClientTransport {
   public synchronized ClientStream newStream(MethodDescriptor<?, ?> method,
       Metadata.Headers headers, ClientStreamListener clientStreamListener) {
     if (shutdownStatus != null) {
-      clientStreamListener.closed(shutdownStatus, new Metadata.Trailers());
+      clientStreamListener.closed(shutdownStatus, new Metadata());
       return new NoopClientStream();
     }
     InProcessStream stream = new InProcessStream();
@@ -195,7 +195,7 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       @GuardedBy("this")
       private Status clientNotifyStatus;
       @GuardedBy("this")
-      private Metadata.Trailers clientNotifyTrailers;
+      private Metadata clientNotifyTrailers;
       // Only is intended to prevent double-close when client cancels.
       @GuardedBy("this")
       private boolean closed;
@@ -266,7 +266,7 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       }
 
       @Override
-      public void close(Status status, Metadata.Trailers trailers) {
+      public void close(Status status, Metadata trailers) {
         synchronized (this) {
           if (closed) {
             return;
@@ -306,7 +306,7 @@ class InProcessTransport implements ServerTransport, ClientTransport {
             log.log(Level.WARNING, "Exception closing stream", t);
           }
         }
-        clientStreamListener.closed(status, new Metadata.Trailers());
+        clientStreamListener.closed(status, new Metadata());
         return true;
       }
     }

@@ -254,7 +254,7 @@ public abstract class AbstractBenchmark {
 
                       @Override
                       public void onHalfClose() {
-                        call.close(Status.OK, new Metadata.Trailers());
+                        call.close(Status.OK, new Metadata());
                       }
 
                       @Override
@@ -287,7 +287,7 @@ public abstract class AbstractBenchmark {
 
                       @Override
                       public void onHalfClose() {
-                        call.close(Status.OK, new Metadata.Trailers());
+                        call.close(Status.OK, new Metadata());
                       }
 
                       @Override
@@ -323,7 +323,7 @@ public abstract class AbstractBenchmark {
 
                       @Override
                       public void onHalfClose() {
-                        call.close(Status.OK, new Metadata.Trailers());
+                        call.close(Status.OK, new Metadata());
                       }
 
                       @Override

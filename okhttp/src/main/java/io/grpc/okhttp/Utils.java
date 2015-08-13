@@ -49,8 +49,8 @@ class Utils {
     return new Metadata.Headers(convertHeadersToArray(http2Headers));
   }
 
-  public static Metadata.Trailers convertTrailers(List<Header> http2Headers) {
-    return new Metadata.Trailers(convertHeadersToArray(http2Headers));
+  public static Metadata convertTrailers(List<Header> http2Headers) {
+    return new Metadata(convertHeadersToArray(http2Headers));
   }
 
   private static byte[][] convertHeadersToArray(List<Header> http2Headers) {

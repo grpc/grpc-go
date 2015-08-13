@@ -98,7 +98,7 @@ public class MetadataUtils {
   public static <T extends AbstractStub> T captureMetadata(
       T stub,
       AtomicReference<Metadata.Headers> headersCapture,
-      AtomicReference<Metadata.Trailers> trailersCapture) {
+      AtomicReference<Metadata> trailersCapture) {
     return (T) stub.withInterceptors(
         newCaptureMetadataInterceptor(headersCapture, trailersCapture));
   }
@@ -112,7 +112,7 @@ public class MetadataUtils {
    */
   public static ClientInterceptor newCaptureMetadataInterceptor(
       final AtomicReference<Metadata.Headers> headersCapture,
-      final AtomicReference<Metadata.Trailers> trailersCapture) {
+      final AtomicReference<Metadata> trailersCapture) {
     return new ClientInterceptor() {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
@@ -132,7 +132,7 @@ public class MetadataUtils {
               }
 
               @Override
-              public void onClose(Status status, Metadata.Trailers trailers) {
+              public void onClose(Status status, Metadata trailers) {
                 trailersCapture.set(trailers);
                 super.onClose(status, trailers);
               }

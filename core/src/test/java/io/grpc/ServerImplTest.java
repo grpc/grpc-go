@@ -227,7 +227,7 @@ public class ServerImplTest {
     verify(stream, times(2)).flush();
     assertEquals(50, INTEGER_MARSHALLER.parse(inputCaptor.getValue()).intValue());
 
-    Metadata.Trailers trailers = new Metadata.Trailers();
+    Metadata trailers = new Metadata();
     trailers.put(metadataKey, 3);
     Status status = Status.OK.withDescription("A okay");
     call.close(status, trailers);
@@ -268,7 +268,7 @@ public class ServerImplTest {
 
     barrier.await();
     executeBarrier(executor).await();
-    verify(stream).close(same(status), notNull(Metadata.Trailers.class));
+    verify(stream).close(same(status), notNull(Metadata.class));
     verifyNoMoreInteractions(stream);
   }
 
