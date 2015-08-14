@@ -1112,9 +1112,8 @@ public class OkHttpClientTransportTest {
   @Test
   public void shutdownDuringConnecting() throws Exception {
     initTransportAndDelayConnected();
-    final String message = "Hello Server";
     MockStreamListener listener = new MockStreamListener();
-    OkHttpClientStream stream = clientTransport.newStream(method, new Metadata.Headers(), listener);
+    clientTransport.newStream(method, new Metadata.Headers(), listener);
 
     clientTransport.shutdown();
     allowTransportConnected();

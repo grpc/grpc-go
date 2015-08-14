@@ -565,18 +565,6 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     return new AsciiString(string);
   }
 
-  private void mockContextForPing() {
-    mockContext();
-    /*when(ctx.write(any(SendPingCommand.class))).then(new Answer<ChannelFuture>() {
-      @Override
-      public ChannelFuture answer(InvocationOnMock invocation) throws Throwable {
-        SendPingCommand command = (SendPingCommand) invocation.getArguments()[0];
-        handler.write(ctx, command, promise);
-        return future;
-      }
-    });*/
-  }
-
   private static class PingCallbackImpl implements ClientTransport.PingCallback {
     int invocationCount;
     long roundTripTime;
