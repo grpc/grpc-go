@@ -161,6 +161,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   @Override
   public void cancel() {
+    if (cancelCalled) {
+      return;
+    }
     cancelCalled = true;
     // Cancel is called in exception handling cases, so it may be the case that the
     // stream was never successfully created.

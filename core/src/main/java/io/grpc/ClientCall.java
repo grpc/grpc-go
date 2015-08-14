@@ -42,13 +42,24 @@ package io.grpc;
  * reasons for doing so would be the need to interact with flow-control or when acting as a generic
  * proxy for arbitrary operations.
  *
- * <p>{@link #start} must be called prior to calling any other methods.
+ * <p>{@link #start start()} must be called prior to calling any other methods. {@link #cancel} must
+ * not be followed by any other methods, but can be called more than once, while only the first one
+ * has effect.
  *
  * <p>No generic method for determining message receipt or providing acknowledgement is provided.
  * Applications are expected to utilize normal payload messages for such signals, as a response
  * naturally acknowledges its request.
  *
  * <p>Methods are guaranteed to be non-blocking. Implementations are not required to be thread-safe.
+ *
+ * <p>There is no interaction between the states on the {@link Listener Listener} and {@link
+ * ClientCall}, i.e., if {@link Listener#onClose Listener.onClose()} is called, it has no bearing on
+ * the permitted operations on {@code ClientCall} (but it may impact whether they do anything).
+ *
+ * <p>There is a race between {@link #cancel} and the completion/failure of the RPC in other ways.
+ * If {@link #cancel} won the race, {@link Listener#onClose Listener.onClose()} is called with
+ * {@link Status#CANCELLED CANCELLED}. Otherwise, {@link Listener#onClose Listener.onClose()} is
+ * called with whatever status the RPC was finished. We ensure that at most one is called.
  *
  * @param <RequestT> type of message sent one or more times to the server.
  * @param <ResponseT> type of message received one or more times from the server.
@@ -105,9 +116,12 @@ public abstract class ClientCall<RequestT, ResponseT> {
   /**
    * Start a call, using {@code responseListener} for processing response messages.
    *
+   * <p>It must be called prior to any other method on this class.
+   *
    * @param responseListener receives response messages
    * @param headers which can contain extra call metadata, e.g. authentication credentials.
-   * @throws IllegalStateException if call is already started
+   * @throws IllegalStateException if a method (including {@code start()}) on this class has been
+   *                               called.
    */
   public abstract void start(Listener<ResponseT> responseListener, Metadata.Headers headers);
 
@@ -123,14 +137,23 @@ public abstract class ClientCall<RequestT, ResponseT> {
    * <p>If it is desired to bypass inbound flow control, a very large number of messages can be
    * specified (e.g. {@link Integer#MAX_VALUE}).
    *
-   * @param numMessages the requested number of messages to be delivered to the listener.
+   * <p>If called multiple times, the number of messages able to delivered will be the sum of the
+   * calls.
+   *
+   * @param numMessages the requested number of messages to be delivered to the listener. Must be
+   *                    non-negative.
+   * @throws IllegalStateException if call is already {@code halfClose()}d or {@link #cancel}ed
    */
   public abstract void request(int numMessages);
 
   /**
-   * Prevent any further processing for this ClientCall. No further messages may be sent or will be
-   * received. The server is informed of cancellations, but may not stop processing the call.
-   * Cancellation is permitted even if previously {@code cancel()}ed or {@link #halfClose}d.
+   * Prevent any further processing for this {@code ClientCall}. No further messages may be sent or
+   * will be received. The server is informed of cancellations, but may not stop processing the
+   * call. Cancellation is permitted if previously {@link #halfClose}d. Cancelling an already {@code
+   * cancel()}ed {@code ClientCall} has no effect.
+   *
+   *
+   * <p>No other methods on this class can be called after this method has been called.
    */
   public abstract void cancel();
 
