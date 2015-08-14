@@ -24,10 +24,14 @@ func NewHealthServer() *HealthServer {
 }
 
 func (s *HealthServer) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
-	service := in.Service
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if status, ok := s.statusMap[service]; ok {
+	if in.Service == "" {
+		return &healthpb.HealthCheckResponse{
+			Status: healthpb.HealthCheckResponse_SERVING,
+		}, nil
+	}
+	if status, ok := s.statusMap[in.Service]; ok {
 		return &healthpb.HealthCheckResponse{
 			Status: status,
 		}, nil

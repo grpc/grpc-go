@@ -453,11 +453,18 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 	hs := health.NewHealthServer()
 	s, cc := setUp(hs, math.MaxUint32, "", e)
 	defer tearDown(s, cc)
+	out, err := healthCheck(1*time.Second, cc, "")
+	if err != nil {
+		t.Fatalf("HealthCheck/Check(_, _) = _, %v, want _, <nil>", err)
+	}
+	if out.Status != healthpb.HealthCheckResponse_SERVING {
+		t.Fatalf("Got the serving status %v, want SERVING", out.Status)
+	}
 	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck"); err != grpc.Errorf(codes.NotFound, "unknown service") {
 		t.Fatalf("HealthCheck/Check(_, _) = _, %v, want _, error code %d", err, codes.NotFound)
 	}
 	hs.SetServingStatus("grpc.health.v1alpha.HealthCheck", healthpb.HealthCheckResponse_SERVING)
-	out, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck")
+	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck")
 	if err != nil {
 		t.Fatalf("HealthCheck/Check(_, _) = _, %v, want _, <nil>", err)
 	}
