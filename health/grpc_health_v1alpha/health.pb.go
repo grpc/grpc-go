@@ -22,10 +22,6 @@ import (
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
-
-// Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 
 type HealthCheckResponse_ServingStatus int32
@@ -52,7 +48,6 @@ func (x HealthCheckResponse_ServingStatus) String() string {
 }
 
 type HealthCheckRequest struct {
-	Host    string `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
 	Service string `protobuf:"bytes,2,opt,name=service" json:"service,omitempty"`
 }
 
@@ -71,6 +66,10 @@ func (*HealthCheckResponse) ProtoMessage()    {}
 func init() {
 	proto.RegisterEnum("grpc.health.v1alpha.HealthCheckResponse_ServingStatus", HealthCheckResponse_ServingStatus_name, HealthCheckResponse_ServingStatus_value)
 }
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConn
 
 // Client API for HealthCheck service
 
