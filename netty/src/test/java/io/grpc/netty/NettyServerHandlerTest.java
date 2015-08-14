@@ -135,14 +135,14 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     mockContext();
     mockFuture(true);
     // Delegate writes on the channel to the handler
-    doAnswer(new Answer() {
+    doAnswer(new Answer<Object>() {
       @Override
       public Object answer(InvocationOnMock invocation) throws Throwable {
         handler.write(ctx, invocation.getArguments()[0], promise);
         return future;
       }
     }).when(channel).write(any());
-    doAnswer(new Answer() {
+    doAnswer(new Answer<Object>() {
       @Override
       public Object answer(InvocationOnMock invocation) throws Throwable {
         handler.write(ctx, invocation.getArguments()[0],

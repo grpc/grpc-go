@@ -244,7 +244,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
   @Override
   protected NettyServerStream createStream() {
     when(handler.getWriteQueue()).thenReturn(writeQueue);
-    doAnswer(new Answer() {
+    doAnswer(new Answer<Object>() {
       @Override
       public Object answer(InvocationOnMock invocation) throws Throwable {
         if (future.isDone()) {

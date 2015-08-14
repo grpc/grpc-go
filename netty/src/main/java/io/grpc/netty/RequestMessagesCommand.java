@@ -39,7 +39,7 @@ import io.grpc.internal.AbstractStream;
 class RequestMessagesCommand {
 
   private final int numMessages;
-  private final AbstractStream stream;
+  private final AbstractStream<Integer> stream;
 
   public RequestMessagesCommand(AbstractStream<Integer> stream, int numMessages) {
     this.numMessages = numMessages;

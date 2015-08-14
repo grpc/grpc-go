@@ -333,7 +333,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Override
   protected NettyClientStream createStream() {
     when(handler.getWriteQueue()).thenReturn(writeQueue);
-    doAnswer(new Answer() {
+    doAnswer(new Answer<Object>() {
       @Override
       public Object answer(InvocationOnMock invocation) throws Throwable {
         if (future.isDone()) {

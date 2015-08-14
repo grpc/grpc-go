@@ -190,9 +190,9 @@ public class MessageDeframerTest {
 
   @Test
   public void deliverIsReentrantSafe() {
-    doAnswer(new Answer() {
+    doAnswer(new Answer<Void>() {
       @Override
-      public Object answer(InvocationOnMock invocation) throws Throwable {
+      public Void answer(InvocationOnMock invocation) throws Throwable {
         deframer.request(1);
         return null;
       }

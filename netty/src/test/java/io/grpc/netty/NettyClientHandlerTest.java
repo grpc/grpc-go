@@ -148,7 +148,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase {
     handler.startWriteQueue(channel);
     writeQueue = handler.getWriteQueue();
     // Delegate writes on the channel to the handler
-    doAnswer(new Answer() {
+    doAnswer(new Answer<Object>() {
       @Override
       public Object answer(InvocationOnMock invocation) throws Throwable {
         handler.write(ctx, invocation.getArguments()[0],
