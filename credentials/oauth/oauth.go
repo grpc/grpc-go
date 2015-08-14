@@ -122,7 +122,7 @@ type serviceAccount struct {
 
 func (s serviceAccount) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
 	token, err := s.config.TokenSource(ctx).Token()
-	if err != nil {
+	if err != nil 
 		return nil, err
 	}
 	return map[string]string{
