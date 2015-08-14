@@ -96,7 +96,7 @@ public class MethodDescriptor<RequestT, ResponseT> {
     /**
      * Returns {@code true} if the server will immediately send one response message to the client
      * upon receipt of {@link io.grpc.ServerCall.Listener#onHalfClose()} and then immediately
-     * close the stream by calling {@link ServerCall#close(Status, io.grpc.Metadata.Trailers)}.
+     * close the stream by calling {@link ServerCall#close(Status, io.grpc.Metadata)}.
      */
     public final boolean serverSendsOneMessage() {
       return this == UNARY || this == CLIENT_STREAMING;
