@@ -75,6 +75,7 @@ var (
         timeout_on_sleeping_server: fullduplex streaming;
         compute_engine_creds: large_unary with compute engine auth;
         service_account_creds: large_unary with service account auth;
+        jwt_token_creds: large_unary with jwt token auth;
         per_rpc_creds: large_unary with per rpc token;
         oauth2_token_creds: large_unary with oauth2 token auth;
         cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
@@ -347,21 +348,38 @@ func doServiceAccountCreds(tc testpb.TestServiceClient) {
 	grpclog.Println("ServiceAccountCreds done")
 }
 
-func getToken() (*oauth2.Token, error) {
-	jsonKey := getServiceAccountJSONKey()
-	grpclog.Printf("jsonkey is:%v", string(jsonKey))
-	config, err := google.JWTConfigFromJSON(jsonKey, *oauthScope)
-	if config != nil {
-		grpclog.Println("get the config")
+func doJWTTokenCreds(tc testpb.TestServiceClient) {
+	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(int32(largeRespSize)),
+		Payload:      pl,
+		FillUsername: proto.Bool(true),
 	}
+	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
-		grpclog.Fatal("Get config failed: %v ", err)
+		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+	}
+
+	jsonKey := getServiceAccountJSONKey()
+	user := reply.GetUsername()
+	if !strings.Contains(string(jsonKey), user) {
+		grpclog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
+	}
+	grpclog.Println("JWTtokenCreds done")
+}
+
+func getToken() *oauth2.Token {
+	jsonKey := getServiceAccountJSONKey()
+	config, err := google.JWTConfigFromJSON(jsonKey, *oauthScope)
+	if err != nil {
+		grpclog.Fatalf("Failed to get the config: %v", err)
 	}
 	token, err := config.TokenSource(context.Background()).Token()
 	if err != nil {
-		return nil, err
+		grpclog.Fatalf("Failed to get the token: %v", err)
 	}
-	return token, err
+	return token
 }
 
 func doOauth2TokenCreds(tc testpb.TestServiceClient) {
@@ -377,7 +395,6 @@ func doOauth2TokenCreds(tc testpb.TestServiceClient) {
 	if err != nil {
 		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
-
 	jsonKey := getServiceAccountJSONKey()
 	user := reply.GetUsername()
 	scope := reply.GetOauthScope()
@@ -400,10 +417,7 @@ func doPerRPCCreds(tc testpb.TestServiceClient) {
 		FillUsername:   proto.Bool(true),
 		FillOauthScope: proto.Bool(true),
 	}
-	token, err := getToken()
-	if err != nil {
-		grpclog.Fatal("Create token failed: ", err)
-	}
+	token := getToken()
 	kv := map[string]string{"authorization": token.TokenType + " " + token.AccessToken}
 	ctx := metadata.NewContext(context.Background(), metadata.MD{"authorization": []string{kv["authorization"]}})
 	reply, err := tc.UnaryCall(ctx, req)
@@ -500,11 +514,14 @@ func main() {
 				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
-		} else if *testCase == "oauth2_token_creds" {
-			token, err := getToken()
+		} else if *testCase == "jwt_token_creds" {
+			jwtCreds, err := oauth.NewJWTAccessFromFile(*serviceAccountKeyFile, "https://"+*serverHost+":"+string(*serverPort)+"/"+"TestService")
 			if err != nil {
-				grpclog.Fatal("Failed to create oauth2 credentials: %v", err)
+				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
 			}
+			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
+		} else if *testCase == "oauth2_token_creds" {
+			token := getToken()
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewOauthAccess(token)))
 		}
 	}
@@ -539,14 +556,19 @@ func main() {
 			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
 		}
 		doServiceAccountCreds(tc)
+	case "jwt_token_creds":
+		if !*useTLS {
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute jwt_token_creds test case.")
+		}
+		doJWTTokenCreds(tc)
 	case "per_rpc_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute per_rpc_creds test case.")
 		}
 		doPerRPCCreds(tc)
 	case "oauth2_token_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute oauth2_token_creds test case.")
 		}
 		doOauth2TokenCreds(tc)
 	case "cancel_after_begin":

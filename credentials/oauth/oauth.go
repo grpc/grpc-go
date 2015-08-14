@@ -61,13 +61,43 @@ func (ts TokenSource) GetRequestMetadata(ctx context.Context) (map[string]string
 	}, nil
 }
 
+type jwtAccess struct {
+	ts oauth2.TokenSource
+}
+
+func NewJWTAccessFromFile(keyFile string, audience string) (credentials.Credentials, error) {
+	jsonKey, err := ioutil.ReadFile(keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("credentials: failed to read the service account key file: %v", err)
+	}
+	return NewJWTAccessFromKey(jsonKey, audience)
+}
+
+func NewJWTAccessFromKey(jsonKey []byte, audience string) (credentials.Credentials, error) {
+	ts, err := google.JWTAccessTokenSourceFromJSON(jsonKey, audience)
+	if err != nil {
+		return nil, err
+	}
+	return jwtAccess{ts: ts}, nil
+}
+
+func (j jwtAccess) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+	token, err := j.ts.Token()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{
+		"authorization": token.TokenType + " " + token.AccessToken,
+	}, nil
+}
+
 // oauthAccess supplies credentials from a given token.
 type oauthAccess struct {
-	token *oauth2.Token
+	token oauth2.Token
 }
 
 func NewOauthAccess(token *oauth2.Token) credentials.Credentials {
-	return oauthAccess{token: token}
+	return oauthAccess{token: *token}
 }
 
 func (oa oauthAccess) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
