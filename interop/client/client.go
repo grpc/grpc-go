@@ -340,7 +340,7 @@ func doServiceAccountCreds(tc testpb.TestServiceClient) {
 	grpclog.Println("ServiceAccountCreds done")
 }
 
-func doJwtTokenCreds(tc testpb.TestServiceClient) {
+func doJWTTokenCreds(tc testpb.TestServiceClient) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
@@ -357,7 +357,7 @@ func doJwtTokenCreds(tc testpb.TestServiceClient) {
 	if !strings.Contains(string(jsonKey), user) {
 		grpclog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
 	}
-	grpclog.Println("JwttokenCreds done")
+	grpclog.Println("JWTtokenCreds done")
 }
 
 var (
@@ -440,7 +440,7 @@ func main() {
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		} else if *testCase == "jwt_token_creds" {
-			jwtCreds, err := oauth.NewJwtAccessFromFile(*serviceAccountKeyFile, "https://"+*serverHost+":"+string(*serverPort)+"/"+"TestService")
+			jwtCreds, err := oauth.NewJWTAccessFromFile(*serviceAccountKeyFile, "https://"+*serverHost+":"+string(*serverPort)+"/"+"TestService")
 			if err != nil {
 				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
 			}
@@ -482,7 +482,7 @@ func main() {
 		if !*useTLS {
 			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
 		}
-		doJwtTokenCreds(tc)
+		doJWTTokenCreds(tc)
 	case "cancel_after_begin":
 		doCancelAfterBegin(tc)
 	case "cancel_after_first_response":

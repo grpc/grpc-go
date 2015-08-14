@@ -66,11 +66,19 @@ type jwtAccess struct {
 	ts oauth2.TokenSource
 }
 
-func NewJwtAccessFromFile(keyFile string, audience string) (credentials.Credentials, error) {
+func NewJWTAccessFromFile(keyFile string, audience string) (credentials.Credentials, error) {
 	jsonKey, err := ioutil.ReadFile(keyFile)
 	if err != nil {
 		return nil, fmt.Errorf("credentials: failed to read the service account key file: %v", err)
 	}
+	ts, err := google.JWTAccessTokenSourceFromJSON(jsonKey, audience)
+	if err != nil {
+		return nil, err
+	}
+	return jwtAccess{ts: ts}, nil
+}
+
+func NewJWTAccessFromKey(jsonKey []byte, audience string) (credentials.Credentials, error) {
 	ts, err := google.JWTAccessTokenSourceFromJSON(jsonKey, audience)
 	if err != nil {
 		return nil, err
