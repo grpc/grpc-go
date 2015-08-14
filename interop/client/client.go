@@ -570,7 +570,6 @@ func main() {
 			grpclog.Fatalf("TLS is not enabled. TLS is required to execute oauth2_token_creds test case.")
 		}
 		doOauth2TokenCreds(tc)
-
 	case "cancel_after_begin":
 		doCancelAfterBegin(tc)
 	case "cancel_after_first_response":
