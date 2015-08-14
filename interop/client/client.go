@@ -480,7 +480,7 @@ func main() {
 		doServiceAccountCreds(tc)
 	case "jwt_token_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute jwt_token_creds test case.")
 		}
 		doJWTTokenCreds(tc)
 	case "cancel_after_begin":
