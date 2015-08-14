@@ -50,6 +50,7 @@ import io.netty.channel.ServerChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 
 import java.io.File;
@@ -107,10 +108,17 @@ public class AsyncServer {
 
       File cert = TestUtils.loadCert("server1.pem");
       File key = TestUtils.loadCert("server1.key");
-      boolean useJdkSsl = config.transport == ServerConfiguration.Transport.NETTY_NIO;
-      sslContext = GrpcSslContexts.forServer(cert, key)
-          .sslProvider(useJdkSsl ? SslProvider.JDK : SslProvider.OPENSSL)
-          .build();
+      SslContextBuilder sslContextBuilder = GrpcSslContexts.forServer(cert, key);
+      if (config.transport == ServerConfiguration.Transport.NETTY_NIO) {
+        sslContextBuilder = GrpcSslContexts.configure(sslContextBuilder, SslProvider.JDK);
+      } else {
+        // Native transport with OpenSSL
+        sslContextBuilder = GrpcSslContexts.configure(sslContextBuilder, SslProvider.OPENSSL);
+      }
+      if (config.useDefaultCiphers) {
+        sslContextBuilder.ciphers(null);
+      }
+      sslContext = sslContextBuilder.build();
     }
 
     final EventLoopGroup boss;

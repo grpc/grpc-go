@@ -32,31 +32,33 @@
 package io.grpc.netty;
 
 /**
- * Utility class that verifies that Jetty ALPN is properly configured for the system.
+ * Utility class for determining support for Jetty TLS ALPN/NPN.
  */
-final class JettyAlpnVerifier {
-  private JettyAlpnVerifier() {
+final class JettyTlsUtil {
+  private JettyTlsUtil() {
   }
 
   /**
-   * Exception thrown when Jetty ALPN was not found in the boot classloader.
+   * Indicates whether or not the Jetty ALPN jar is installed in the boot classloader.
    */
-  static final class NotFoundException extends Exception {
-    public NotFoundException(Throwable cause) {
-      super("Jetty ALPN not found in boot classloader.", cause);
+  static boolean isJettyAlpnConfigured() {
+    try {
+      Class.forName("org.eclipse.jetty.alpn.ALPN", true, null);
+      return true;
+    } catch (ClassNotFoundException e) {
+      return false;
     }
   }
 
   /**
-   * Verifies that Jetty ALPN is configured properly on this system.
-   * @throws NotFoundException thrown if Jetty ALPN is missing from the boot classloader.
+   * Indicates whether or not the Jetty NPN jar is installed in the boot classloader.
    */
-  static void verifyJettyAlpn() throws NotFoundException {
+  static boolean isJettyNpnConfigured() {
     try {
-      // Check the boot classloader for the ALPN class.
-      Class.forName("org.eclipse.jetty.alpn.ALPN", true, null);
+      Class.forName("org.eclipse.jetty.npn.NextProtoNego", true, null);
+      return true;
     } catch (ClassNotFoundException e) {
-      throw new NotFoundException(e);
+      return false;
     }
   }
 }
