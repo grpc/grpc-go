@@ -61,6 +61,36 @@ func (ts TokenSource) GetRequestMetadata(ctx context.Context) (map[string]string
 	}, nil
 }
 
+type jwtAccess struct {
+	ts oauth2.TokenSource
+}
+
+func NewJWTAccessFromFile(keyFile string, audience string) (credentials.Credentials, error) {
+	jsonKey, err := ioutil.ReadFile(keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("credentials: failed to read the service account key file: %v", err)
+	}
+	return NewJWTAccessFromKey(jsonKey, audience)
+}
+
+func NewJWTAccessFromKey(jsonKey []byte, audience string) (credentials.Credentials, error) {
+	ts, err := google.JWTAccessTokenSourceFromJSON(jsonKey, audience)
+	if err != nil {
+		return nil, err
+	}
+	return jwtAccess{ts: ts}, nil
+}
+
+func (j jwtAccess) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+	token, err := j.ts.Token()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{
+		"authorization": token.TokenType + " " + token.AccessToken,
+	}, nil
+}
+
 // NewComputeEngine constructs the credentials that fetches access tokens from
 // Google Compute Engine (GCE)'s metadata server. It is only valid to use this
 // if your program is running on a GCE instance.
