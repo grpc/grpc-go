@@ -96,6 +96,7 @@ type oauthAccess struct {
 	token oauth2.Token
 }
 
+// NewOauthAccess constructs the credentials using a given token.
 func NewOauthAccess(token *oauth2.Token) credentials.Credentials {
 	return oauthAccess{token: *token}
 }
