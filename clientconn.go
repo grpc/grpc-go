@@ -132,8 +132,10 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	}
 	cc := &ClientConn{
 		target:       target,
-		events:       trace.NewEventLog("grpc.ClientConn", target),
 		shutdownChan: make(chan struct{}),
+	}
+	if EnableTracing {
+		cc.events = trace.NewEventLog("grpc.ClientConn", target)
 	}
 	for _, opt := range opts {
 		opt(&cc.dopts)
@@ -150,7 +152,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	cc.stateCV = sync.NewCond(&cc.mu)
 	if cc.dopts.block {
 		if err := cc.resetTransport(false); err != nil {
-			cc.events.Errorf("dial failed: %v", err)
+			cc.errorf("dial failed: %v", err)
 			cc.Close()
 			return nil, err
 		}
@@ -160,7 +162,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
 			if err := cc.resetTransport(false); err != nil {
-				cc.events.Errorf("dial failed: %v", err)
+				cc.errorf("dial failed: %v", err)
 				grpclog.Printf("Failed to dial %s: %v; please retry.", target, err)
 				cc.Close()
 				return
@@ -169,6 +171,18 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		}()
 	}
 	return cc, nil
+}
+
+func (cc *ClientConn) printf(format string, a ...interface{}) {
+	if cc.events != nil {
+		cc.events.Printf(format, a...)
+	}
+}
+
+func (cc *ClientConn) errorf(format string, a ...interface{}) {
+	if cc.events != nil {
+		cc.events.Errorf(format, a...)
+	}
 }
 
 // ConnectivityState indicates the state of a client connection.
@@ -325,11 +339,11 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			closeTransport = false
 			time.Sleep(sleepTime)
 			retries++
-			cc.events.Errorf("connection failed, will retry: %v", err)
+			cc.errorf("connection failed, will retry: %v", err)
 			grpclog.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
 			continue
 		}
-		cc.events.Printf("connection established")
+		cc.printf("connection established")
 		cc.mu.Lock()
 		if cc.state == Shutdown {
 			// cc.Close() has been invoked.
@@ -366,7 +380,7 @@ func (cc *ClientConn) transportMonitor() {
 			cc.mu.Unlock()
 			if err := cc.resetTransport(true); err != nil {
 				// The ClientConn is closing.
-				cc.events.Printf("transport exiting: %v", err)
+				cc.printf("transport exiting: %v", err)
 				grpclog.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
 				return
 			}
@@ -419,7 +433,9 @@ func (cc *ClientConn) Close() error {
 	}
 	cc.state = Shutdown
 	cc.stateCV.Broadcast()
-	cc.events.Finish()
+	if cc.events != nil {
+		cc.events.Finish()
+	}
 	if cc.ready != nil {
 		close(cc.ready)
 		cc.ready = nil
