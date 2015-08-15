@@ -520,8 +520,7 @@ func main() {
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		} else if *testCase == "oauth2_token_creds" {
-			token := getToken()
-			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewOauthAccess(token)))
+			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewOauthAccess(getToken())))
 		}
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
