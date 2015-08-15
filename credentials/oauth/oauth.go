@@ -91,6 +91,22 @@ func (j jwtAccess) GetRequestMetadata(ctx context.Context) (map[string]string, e
 	}, nil
 }
 
+// oauthAccess supplies credentials from a given token.
+type oauthAccess struct {
+	token oauth2.Token
+}
+
+// NewOauthAccess constructs the credentials using a given token.
+func NewOauthAccess(token *oauth2.Token) credentials.Credentials {
+	return oauthAccess{token: *token}
+}
+
+func (oa oauthAccess) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+	return map[string]string{
+		"authorization": oa.token.TokenType + " " + oa.token.AccessToken,
+	}, nil
+}
+
 // NewComputeEngine constructs the credentials that fetches access tokens from
 // Google Compute Engine (GCE)'s metadata server. It is only valid to use this
 // if your program is running on a GCE instance.
