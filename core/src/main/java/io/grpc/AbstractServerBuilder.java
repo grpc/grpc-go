@@ -134,11 +134,13 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
    * information for the server.  This method is mean for Transport implementors and should not be
    * used by normal users.
    */
+  @Internal
   protected abstract ServerEssentials buildEssentials();
 
   /**
    * The essentials required for creating a server.
    */
+  @Internal
   protected static class ServerEssentials {
     final io.grpc.internal.Server server;
     @Nullable
