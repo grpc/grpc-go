@@ -293,7 +293,7 @@ public final class ServerImpl extends Server {
 
     @Override
     public ServerStreamListener streamCreated(final ServerStream stream, final String methodName,
-        final Metadata.Headers headers) {
+        final Metadata headers) {
       final Future<?> timeout = scheduleTimeout(stream, headers);
       SerializingExecutor serializingExecutor = new SerializingExecutor(executor);
       final JumpToApplicationThreadServerStreamListener jumpListener
@@ -328,7 +328,7 @@ public final class ServerImpl extends Server {
       return jumpListener;
     }
 
-    private Future<?> scheduleTimeout(final ServerStream stream, Metadata.Headers headers) {
+    private Future<?> scheduleTimeout(final ServerStream stream, Metadata headers) {
       Long timeoutMicros = headers.get(TIMEOUT_KEY);
       if (timeoutMicros == null) {
         return DEFAULT_TIMEOUT_FUTURE;
@@ -348,7 +348,7 @@ public final class ServerImpl extends Server {
     /** Never returns {@code null}. */
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Future<?> timeout,
-        Metadata.Headers headers) {
+        Metadata headers) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       final ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
           stream, methodDef.getMethodDescriptor());
@@ -489,7 +489,7 @@ public final class ServerImpl extends Server {
     }
 
     @Override
-    public void sendHeaders(Metadata.Headers headers) {
+    public void sendHeaders(Metadata headers) {
       Preconditions.checkState(!sendHeadersCalled, "sendHeaders has already been called");
       Preconditions.checkState(!closeCalled, "call is closed");
       Preconditions.checkState(!sendMessageCalled, "sendMessage has already been called");

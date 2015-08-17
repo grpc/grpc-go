@@ -80,7 +80,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
    *
    * @param headers the received headers
    */
-  protected void transportHeadersReceived(Metadata.Headers headers) {
+  protected void transportHeadersReceived(Metadata headers) {
     Preconditions.checkNotNull(headers);
     if (transportError != null) {
       // Already received a transport error so just augment it.

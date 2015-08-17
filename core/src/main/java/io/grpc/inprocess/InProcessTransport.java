@@ -38,6 +38,7 @@ import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
@@ -106,11 +107,12 @@ class InProcessTransport implements ServerTransport, ClientTransport {
 
   @Override
   public synchronized ClientStream newStream(MethodDescriptor<?, ?> method,
-      Metadata.Headers headers, ClientStreamListener clientStreamListener) {
+      Metadata headers, ClientStreamListener clientStreamListener) {
     if (shutdownStatus != null) {
       clientStreamListener.closed(shutdownStatus, new Metadata());
       return new NoopClientStream();
     }
+    headers.removeAll(GrpcUtil.AUTHORITY_KEY);
     InProcessStream stream = new InProcessStream();
     stream.serverStream.setListener(clientStreamListener);
     ServerStreamListener serverStreamListener = serverTransportListener.streamCreated(
@@ -265,7 +267,7 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       }
 
       @Override
-      public synchronized void writeHeaders(Metadata.Headers headers) {
+      public synchronized void writeHeaders(Metadata headers) {
         if (closed) {
           return;
         }

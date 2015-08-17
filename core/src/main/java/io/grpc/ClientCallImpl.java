@@ -31,6 +31,7 @@
 
 package io.grpc;
 
+import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
@@ -94,7 +95,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   }
 
   @Override
-  public void start(Listener<RespT> observer, Metadata.Headers headers) {
+  public void start(Listener<RespT> observer, Metadata headers) {
     Preconditions.checkState(stream == null, "Already started");
     Long deadlineNanoTime = callOptions.getDeadlineNanoTime();
     ClientStreamListener listener = new ClientStreamListenerImpl(observer, deadlineNanoTime);
@@ -122,6 +123,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         return;
       }
       headers.put(TIMEOUT_KEY, timeoutMicros);
+    }
+
+    // Hack to propagate authority.  This should be properly pass to the transport.newStream
+    // somehow.
+    headers.removeAll(AUTHORITY_KEY);
+    if (callOptions.getAuthority() != null) {
+      headers.put(AUTHORITY_KEY, callOptions.getAuthority());
     }
 
     // Fill out the User-Agent header.
@@ -241,7 +249,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     }
 
     @Override
-    public void headersRead(final Metadata.Headers headers) {
+    public void headersRead(final Metadata headers) {
       callExecutor.execute(new Runnable() {
         @Override
         public void run() {

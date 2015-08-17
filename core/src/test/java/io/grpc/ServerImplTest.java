@@ -186,7 +186,7 @@ public class ServerImplTest {
               public ServerCall.Listener<String> startCall(
                   MethodDescriptor<String, Integer> method,
                   ServerCall<Integer> call,
-                  Metadata.Headers headers) {
+                  Metadata headers) {
                 assertEquals("Waiter/serve", method.getFullMethodName());
                 assertNotNull(call);
                 assertNotNull(headers);
@@ -198,7 +198,7 @@ public class ServerImplTest {
     ServerTransportListener transportListener
         = transportServer.registerNewServerTransport(new SimpleServerTransport());
 
-    Metadata.Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     headers.put(metadataKey, 0);
     ServerStreamListener streamListener
         = transportListener.streamCreated(stream, "Waiter/serve", headers);
@@ -254,7 +254,7 @@ public class ServerImplTest {
               public ServerCall.Listener<String> startCall(
                   MethodDescriptor<String, Integer> method,
                   ServerCall<Integer> call,
-                  Metadata.Headers headers) {
+                  Metadata headers) {
                 throw status.asRuntimeException();
               }
             }).build());
@@ -262,7 +262,7 @@ public class ServerImplTest {
         = transportServer.registerNewServerTransport(new SimpleServerTransport());
 
     ServerStreamListener streamListener
-        = transportListener.streamCreated(stream, "Waiter/serve", new Metadata.Headers());
+        = transportListener.streamCreated(stream, "Waiter/serve", new Metadata());
     assertNotNull(streamListener);
     verifyNoMoreInteractions(stream);
 

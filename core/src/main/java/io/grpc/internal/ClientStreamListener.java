@@ -46,7 +46,7 @@ public interface ClientStreamListener extends StreamListener {
    *
    * @param headers the fully buffered received headers.
    */
-  void headersRead(Metadata.Headers headers);
+  void headersRead(Metadata headers);
 
   /**
    * Called when the stream is fully closed. {@link

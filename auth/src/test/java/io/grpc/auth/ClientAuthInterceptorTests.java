@@ -31,10 +31,10 @@
 
 package io.grpc.auth;
 
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.isA;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.isA;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -114,7 +114,7 @@ public class ClientAuthInterceptorTests {
     when(credentials.getRequestMetadata()).thenReturn(Multimaps.asMap(values));
     ClientCall<String, Integer> interceptedCall =
         interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
-    Metadata.Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     interceptedCall.start(listener, headers);
     verify(call).start(listener, headers);
 
@@ -131,7 +131,7 @@ public class ClientAuthInterceptorTests {
     when(credentials.getRequestMetadata()).thenThrow(new IOException("Broken"));
     ClientCall<String, Integer> interceptedCall =
         interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
-    Metadata.Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     interceptedCall.start(listener, headers);
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     Mockito.verify(listener).onClose(statusCaptor.capture(), isA(Metadata.class));
@@ -142,7 +142,7 @@ public class ClientAuthInterceptorTests {
   }
 
   @Test
-  public void testWithOAuth2Credential() throws IOException {
+  public void testWithOAuth2Credential() {
     final AccessToken token = new AccessToken("allyourbase", new Date(Long.MAX_VALUE));
     final OAuth2Credentials oAuth2Credentials = new OAuth2Credentials() {
       @Override
@@ -153,7 +153,7 @@ public class ClientAuthInterceptorTests {
     interceptor = new ClientAuthInterceptor(oAuth2Credentials, Executors.newSingleThreadExecutor());
     ClientCall<String, Integer> interceptedCall =
         interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
-    Metadata.Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     interceptedCall.start(listener, headers);
     verify(call).start(listener, headers);
     Iterable<String> authorization = headers.getAll(AUTHORIZATION);

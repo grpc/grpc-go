@@ -48,7 +48,7 @@ public interface ServerTransportListener {
    * @return a listener for events on the new stream.
    */
   ServerStreamListener streamCreated(ServerStream stream, String method,
-      Metadata.Headers headers);
+      Metadata headers);
 
   /**
    * The transport completed shutting down. All resources have been released.

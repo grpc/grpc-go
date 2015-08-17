@@ -54,5 +54,5 @@ public interface ServerCallHandler<RequestT, ResponseT> {
   ServerCall.Listener<RequestT> startCall(
       MethodDescriptor<RequestT, ResponseT> method,
       ServerCall<ResponseT> call,
-      Metadata.Headers headers);
+      Metadata headers);
 }

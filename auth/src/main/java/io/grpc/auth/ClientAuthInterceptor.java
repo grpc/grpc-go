@@ -59,7 +59,7 @@ public class ClientAuthInterceptor implements ClientInterceptor {
 
   private final Credentials credentials;
 
-  private Metadata.Headers cached;
+  private Metadata cached;
   private Map<String, List<String>> lastMetadata;
   // TODO(louiscryan): refresh token asynchronously with this executor.
   private Executor executor;
@@ -76,9 +76,9 @@ public class ClientAuthInterceptor implements ClientInterceptor {
     // would be in WWW-Authenticate, because it does not yet have access to the header.
     return new CheckedForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
       @Override
-      protected void checkedStart(Listener<RespT> responseListener, Metadata.Headers headers)
+      protected void checkedStart(Listener<RespT> responseListener, Metadata headers)
           throws Exception {
-        Metadata.Headers cachedSaved;
+        Metadata cachedSaved;
         synchronized (ClientAuthInterceptor.this) {
           // TODO(louiscryan): This is icky but the current auth library stores the same
           // metadata map until the next refresh cycle. This will be fixed once
@@ -104,8 +104,8 @@ public class ClientAuthInterceptor implements ClientInterceptor {
     }
   }
 
-  private static final Metadata.Headers toHeaders(Map<String, List<String>> metadata) {
-    Metadata.Headers headers = new Metadata.Headers();
+  private static final Metadata toHeaders(Map<String, List<String>> metadata) {
+    Metadata headers = new Metadata();
     if (metadata != null) {
       for (String key : metadata.keySet()) {
         Metadata.Key<String> headerKey = Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER);

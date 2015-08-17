@@ -109,7 +109,7 @@ public class ServerInterceptors {
     public ServerCall.Listener<ReqT> startCall(
         MethodDescriptor<ReqT, RespT> method,
         ServerCall<RespT> call,
-        Metadata.Headers headers) {
+        Metadata headers) {
       return interceptor.interceptCall(method, call, headers, callHandler);
     }
   }

@@ -99,8 +99,8 @@ public abstract class AbstractTransportTest {
 
   public static final Metadata.Key<Messages.SimpleContext> METADATA_KEY =
       ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
-  private static final AtomicReference<Metadata.Headers> requestHeadersCapture =
-      new AtomicReference<Metadata.Headers>();
+  private static final AtomicReference<Metadata> requestHeadersCapture =
+      new AtomicReference<Metadata>();
   private static ScheduledExecutorService testServiceExecutor;
   private static ServerImpl server;
   private static int OPERATION_TIMEOUT = 5000;
@@ -449,7 +449,7 @@ public abstract class AbstractTransportTest {
         channel.newCall(TestServiceGrpc.METHOD_STREAMING_OUTPUT_CALL, CallOptions.DEFAULT);
     call.start(new ClientCall.Listener<StreamingOutputCallResponse>() {
       @Override
-      public void onHeaders(Metadata.Headers headers) {}
+      public void onHeaders(Metadata headers) {}
 
       @Override
       public void onMessage(final StreamingOutputCallResponse message) {
@@ -460,7 +460,7 @@ public abstract class AbstractTransportTest {
       public void onClose(Status status, Metadata trailers) {
         queue.add(status);
       }
-    }, new Metadata.Headers());
+    }, new Metadata());
     call.sendMessage(request);
     call.halfClose();
 
@@ -521,7 +521,7 @@ public abstract class AbstractTransportTest {
         TestServiceGrpc.newBlockingStub(channel);
 
     // Capture the context exchange
-    Metadata.Headers fixedHeaders = new Metadata.Headers();
+    Metadata fixedHeaders = new Metadata();
     // Send a context proto (as it's in the default extension registry)
     Messages.SimpleContext contextValue =
         Messages.SimpleContext.newBuilder().setValue("dog").build();
@@ -529,7 +529,7 @@ public abstract class AbstractTransportTest {
     stub = MetadataUtils.attachHeaders(stub, fixedHeaders);
     // .. and expect it to be echoed back in trailers
     AtomicReference<Metadata> trailersCapture = new AtomicReference<Metadata>();
-    AtomicReference<Metadata.Headers> headersCapture = new AtomicReference<Metadata.Headers>();
+    AtomicReference<Metadata> headersCapture = new AtomicReference<Metadata>();
     stub = MetadataUtils.captureMetadata(stub, headersCapture, trailersCapture);
 
     Assert.assertNotNull(stub.emptyCall(Empty.getDefaultInstance()));
@@ -544,7 +544,7 @@ public abstract class AbstractTransportTest {
     TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
 
     // Capture the context exchange
-    Metadata.Headers fixedHeaders = new Metadata.Headers();
+    Metadata fixedHeaders = new Metadata();
     // Send a context proto (as it's in the default extension registry)
     Messages.SimpleContext contextValue =
         Messages.SimpleContext.newBuilder().setValue("dog").build();
@@ -552,7 +552,7 @@ public abstract class AbstractTransportTest {
     stub = MetadataUtils.attachHeaders(stub, fixedHeaders);
     // .. and expect it to be echoed back in trailers
     AtomicReference<Metadata> trailersCapture = new AtomicReference<Metadata>();
-    AtomicReference<Metadata.Headers> headersCapture = new AtomicReference<Metadata.Headers>();
+    AtomicReference<Metadata> headersCapture = new AtomicReference<Metadata>();
     stub = MetadataUtils.captureMetadata(stub, headersCapture, trailersCapture);
 
     List<Integer> responseSizes = Arrays.asList(50, 100, 150, 200);

@@ -41,8 +41,8 @@ import static org.junit.Assert.fail;
 
 import com.google.common.io.BaseEncoding;
 
+import io.grpc.Metadata;
 import io.grpc.Metadata.BinaryMarshaller;
-import io.grpc.Metadata.Headers;
 import io.grpc.Metadata.Key;
 
 import org.junit.Test;
@@ -79,7 +79,7 @@ public class TransportFrameUtilTest {
 
   @Test
   public void testToHttp2Headers() {
-    Headers headers = new Headers();
+    Metadata headers = new Metadata();
     headers.put(PLAIN_STRING, COMPLIANT_ASCII_STRING);
     headers.put(BINARY_STRING, NONCOMPLIANT_ASCII_STRING);
     headers.put(BINARY_STRING_WITHOUT_SUFFIX, NONCOMPLIANT_ASCII_STRING);
@@ -104,13 +104,13 @@ public class TransportFrameUtilTest {
 
   @Test
   public void testToAndFromHttp2Headers() {
-    Headers headers = new Headers();
+    Metadata headers = new Metadata();
     headers.put(PLAIN_STRING, COMPLIANT_ASCII_STRING);
     headers.put(BINARY_STRING, NONCOMPLIANT_ASCII_STRING);
     headers.put(BINARY_STRING_WITHOUT_SUFFIX, NONCOMPLIANT_ASCII_STRING);
     byte[][] http2Headers = TransportFrameUtil.toHttp2Headers(headers);
     byte[][] rawSerialized = TransportFrameUtil.toRawSerializedHeaders(http2Headers);
-    Headers recoveredHeaders = new Headers(rawSerialized);
+    Metadata recoveredHeaders = new Metadata(rawSerialized);
     assertEquals(COMPLIANT_ASCII_STRING, recoveredHeaders.get(PLAIN_STRING));
     assertEquals(NONCOMPLIANT_ASCII_STRING, recoveredHeaders.get(BINARY_STRING));
     assertNull(recoveredHeaders.get(BINARY_STRING_WITHOUT_SUFFIX));

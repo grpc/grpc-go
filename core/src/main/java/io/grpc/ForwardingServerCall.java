@@ -46,7 +46,7 @@ public abstract class ForwardingServerCall<RespT> extends ServerCall<RespT> {
   }
 
   @Override
-  public void sendHeaders(Metadata.Headers headers) {
+  public void sendHeaders(Metadata headers) {
     delegate().sendHeaders(headers);
   }
 

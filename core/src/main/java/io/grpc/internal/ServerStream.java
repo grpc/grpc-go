@@ -48,7 +48,7 @@ public interface ServerStream extends Stream {
    *
    * @param headers to send to client.
    */
-  void writeHeaders(Metadata.Headers headers);
+  void writeHeaders(Metadata headers);
 
   /**
    * Closes the stream for both reading and writing. A status code of

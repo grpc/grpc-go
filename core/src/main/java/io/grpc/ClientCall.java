@@ -80,7 +80,7 @@ public abstract class ClientCall<RequestT, ResponseT> {
      *
      * @param headers containing metadata sent by the server at the start of the response.
      */
-    public abstract void onHeaders(Metadata.Headers headers);
+    public abstract void onHeaders(Metadata headers);
 
     /**
      * A response message has been received. May be called zero or more times depending on whether
@@ -123,7 +123,7 @@ public abstract class ClientCall<RequestT, ResponseT> {
    * @throws IllegalStateException if a method (including {@code start()}) on this class has been
    *                               called.
    */
-  public abstract void start(Listener<ResponseT> responseListener, Metadata.Headers headers);
+  public abstract void start(Listener<ResponseT> responseListener, Metadata headers);
 
   /**
    * Requests up to the given number of messages from the call to be delivered to

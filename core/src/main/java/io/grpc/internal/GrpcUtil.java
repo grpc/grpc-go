@@ -62,6 +62,17 @@ public final class GrpcUtil {
           Metadata.Key.of(GrpcUtil.MESSAGE_ENCODING, Metadata.ASCII_STRING_MARSHALLER);
 
   /**
+   * {@link io.grpc.Metadata.Key} for the :authority pseudo header.
+   *
+   * <p> Don't actually serialized this.
+   *
+   * <p>TODO(carl-mastrangelo): This is a hack and should exist as shortly as possible.  Remove it
+   *    once a cleaner alternative exists (passing it directly into the transport, etc.)
+   */
+  public static final Metadata.Key<String> AUTHORITY_KEY =
+          Metadata.Key.of("grpc-authority", Metadata.ASCII_STRING_MARSHALLER);
+
+  /**
    * {@link io.grpc.Metadata.Key} for the Content-Type request/response header.
    */
   public static final Metadata.Key<String> CONTENT_TYPE_KEY =

@@ -38,6 +38,8 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 
+import io.grpc.internal.GrpcUtil;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -239,6 +241,11 @@ public class Metadata {
     // One *2 for keys+values, one *2 to prevent resizing if a single key has multiple values
     List<byte[]> serialized = new ArrayList<byte[]>(store.size() * 2 * 2);
     for (Map.Entry<String, List<MetadataEntry>> keyEntry : store.entrySet()) {
+      // Intentionally skip this field on serialization.  It must be handled special by the
+      // transport.
+      if (keyEntry.getKey().equals(GrpcUtil.AUTHORITY_KEY.name())) {
+        continue;
+      }
       for (int i = 0; i < keyEntry.getValue().size(); i++) {
         MetadataEntry entry = keyEntry.getValue().get(i);
         byte[] asciiName;
@@ -297,83 +304,16 @@ public class Metadata {
 
   /**
    * Concrete instance for metadata attached to the start of a call.
+   *
+   * @deprecated use Metadata instead.
    */
+  @Deprecated
   public static class Headers extends Metadata {
-    private String path;
-    private String authority;
-
-    /**
-     * Called by the transport layer to create headers from their binary serialized values.
-     *
-     * <p>This method does not copy the provided byte arrays. The byte arrays must not be mutated.
-     */
-    public Headers(byte[]... headers) {
-      super(headers);
-    }
-
     /**
      * Called by the application layer to construct headers prior to passing them to the
      * transport for serialization.
      */
     public Headers() {
-    }
-
-    /**
-     * The path for the operation.
-     */
-    public String getPath() {
-      return path;
-    }
-
-    public void setPath(String path) {
-      this.path = path;
-    }
-
-    /**
-     * The serving authority for the operation.
-     */
-    public String getAuthority() {
-      return authority;
-    }
-
-    /**
-     * Override the HTTP/2 authority the channel claims to be connecting to. <em>This is not
-     * generally safe.</em> Overriding allows advanced users to re-use a single Channel for multiple
-     * services, even if those services are hosted on different domain names. That assumes the
-     * server is virtually hosting multiple domains and is guaranteed to continue doing so. It is
-     * rare for a service provider to make such a guarantee. <em>At this time, there is no security
-     * verification of the overridden value, such as making sure the authority matches the server's
-     * TLS certificate.</em>
-     */
-    public void setAuthority(String authority) {
-      this.authority = authority;
-    }
-
-    @Override
-    public void merge(Metadata other) {
-      super.merge(other);
-      mergePathAndAuthority(other);
-    }
-
-    @Override
-    public void merge(Metadata other, Set<Key<?>> keys) {
-      super.merge(other, keys);
-      mergePathAndAuthority(other);
-    }
-
-    private void mergePathAndAuthority(Metadata other) {
-      if (other instanceof Headers) {
-        Headers otherHeaders = (Headers) other;
-        path = otherHeaders.path != null ? otherHeaders.path : path;
-        authority = otherHeaders.authority != null ? otherHeaders.authority : authority;
-      }
-    }
-
-    @Override
-    public String toString() {
-      return "Headers(path=" + path
-          + ",authority=" + authority
-          + ",metadata=" + super.toStringInternal() + ")";
     }
   }
 

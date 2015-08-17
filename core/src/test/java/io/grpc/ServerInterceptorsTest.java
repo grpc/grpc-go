@@ -41,7 +41,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
 
-import io.grpc.Metadata.Headers;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall.Listener;
@@ -80,7 +80,7 @@ public class ServerInterceptorsTest {
           MethodDescriptor.create(
             MethodType.UNKNOWN, "basic/flow", requestMarshaller, responseMarshaller),
           handler).build();
-  private Headers headers = new Headers();
+  private Metadata headers = new Metadata();
 
   /** Set up for test. */
   @Before
@@ -88,7 +88,7 @@ public class ServerInterceptorsTest {
     MockitoAnnotations.initMocks(this);
     Mockito.when(handler.startCall(
         Mockito.<MethodDescriptor<String, Integer>>any(),
-        Mockito.<ServerCall<Integer>>any(), Mockito.<Headers>any()))
+        Mockito.<ServerCall<Integer>>any(), Mockito.<Metadata>any()))
             .thenReturn(listener);
   }
 
@@ -172,7 +172,7 @@ public class ServerInterceptorsTest {
       public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
           MethodDescriptor<ReqT, RespT> method,
           ServerCall<RespT> call,
-          Headers headers,
+          Metadata headers,
           ServerCallHandler<ReqT, RespT> next) {
         // Calling next twice is permitted, although should only rarely be useful.
         assertSame(listener, next.startCall(method, call, headers));
@@ -195,7 +195,7 @@ public class ServerInterceptorsTest {
           public ServerCall.Listener<String> startCall(
               MethodDescriptor<String, Integer> method,
               ServerCall<Integer> call,
-              Headers headers) {
+              Metadata headers) {
             order.add("handler");
             return listener;
           }
@@ -205,7 +205,7 @@ public class ServerInterceptorsTest {
           public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
               MethodDescriptor<ReqT, RespT> method,
               ServerCall<RespT> call,
-              Headers headers,
+              Metadata headers,
               ServerCallHandler<ReqT, RespT> next) {
             order.add("i1");
             return next.startCall(method, call, headers);
@@ -216,7 +216,7 @@ public class ServerInterceptorsTest {
           public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
               MethodDescriptor<ReqT, RespT> method,
               ServerCall<RespT> call,
-              Headers headers,
+              Metadata headers,
               ServerCallHandler<ReqT, RespT> next) {
             order.add("i2");
             return next.startCall(method, call, headers);
@@ -247,7 +247,7 @@ public class ServerInterceptorsTest {
         public <R1, R2> ServerCall.Listener<R1> interceptCall(
             MethodDescriptor<R1, R2> methodDescriptor,
             ServerCall<R2> call,
-            Headers headers,
+            Metadata headers,
             ServerCallHandler<R1, R2> next) {
           assertSame(method, methodDescriptor);
           assertSame(call, ServerInterceptorsTest.this.call);
@@ -287,7 +287,7 @@ public class ServerInterceptorsTest {
     public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
         MethodDescriptor<ReqT, RespT> method,
         ServerCall<RespT> call,
-        Headers headers,
+        Metadata headers,
         ServerCallHandler<ReqT, RespT> next) {
       return next.startCall(method, call, headers);
     }

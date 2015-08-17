@@ -64,6 +64,6 @@ public interface ServerInterceptor {
   <RequestT, ResponseT> ServerCall.Listener<RequestT> interceptCall(
       MethodDescriptor<RequestT, ResponseT> method,
       ServerCall<ResponseT> call,
-      Metadata.Headers headers,
+      Metadata headers,
       ServerCallHandler<RequestT, ResponseT> next);
 }

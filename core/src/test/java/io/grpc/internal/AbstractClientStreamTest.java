@@ -38,7 +38,6 @@ import static org.mockito.Mockito.verify;
 
 import io.grpc.MessageEncoding;
 import io.grpc.Metadata;
-import io.grpc.Metadata.Headers;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.internal.AbstractStream.Phase;
@@ -172,7 +171,7 @@ public class AbstractClientStreamTest {
   public void inboundHeadersReceived_notifiesListener() {
     AbstractClientStream<Integer> stream =
         new BaseAbstractClientStream<Integer>(allocator, mockListener);
-    Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
 
     stream.inboundHeadersReceived(headers);
     verify(mockListener).headersRead(headers);
@@ -182,7 +181,7 @@ public class AbstractClientStreamTest {
   public void inboundHeadersReceived_failsOnPhaseStatus() {
     AbstractClientStream<Integer> stream =
         new BaseAbstractClientStream<Integer>(allocator, mockListener);
-    Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     stream.inboundPhase(Phase.STATUS);
 
     thrown.expect(IllegalStateException.class);
@@ -194,7 +193,7 @@ public class AbstractClientStreamTest {
   public void inboundHeadersReceived_succeedsOnPhaseMessage() {
     AbstractClientStream<Integer> stream =
         new BaseAbstractClientStream<Integer>(allocator, mockListener);
-    Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     stream.inboundPhase(Phase.MESSAGE);
 
     stream.inboundHeadersReceived(headers);
@@ -206,7 +205,7 @@ public class AbstractClientStreamTest {
   public void inboundHeadersReceived_acceptsGzipEncoding() {
     AbstractClientStream<Integer> stream =
         new BaseAbstractClientStream<Integer>(allocator, mockListener);
-    Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     headers.put(GrpcUtil.MESSAGE_ENCODING_KEY, new MessageEncoding.Gzip().getMessageEncoding());
 
     stream.inboundHeadersReceived(headers);
@@ -217,7 +216,7 @@ public class AbstractClientStreamTest {
   public void inboundHeadersReceived_acceptsIdentityEncoding() {
     AbstractClientStream<Integer> stream =
         new BaseAbstractClientStream<Integer>(allocator, mockListener);
-    Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     headers.put(GrpcUtil.MESSAGE_ENCODING_KEY, MessageEncoding.NONE.getMessageEncoding());
 
     stream.inboundHeadersReceived(headers);
@@ -228,7 +227,7 @@ public class AbstractClientStreamTest {
   public void inboundHeadersReceived_notifiesListenerOnBadEncoding() {
     AbstractClientStream<Integer> stream =
         new BaseAbstractClientStream<Integer>(allocator, mockListener);
-    Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     headers.put(GrpcUtil.MESSAGE_ENCODING_KEY, "bad");
 
     stream.inboundHeadersReceived(headers);
@@ -275,7 +274,7 @@ public class AbstractClientStreamTest {
     public void onReady() {}
 
     @Override
-    public void headersRead(Headers headers) {}
+    public void headersRead(Metadata headers) {}
 
     @Override
     public void closed(Status status, Metadata trailers) {}

@@ -206,7 +206,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     stream().id(STREAM_ID);
     Http2Headers headers = grpcResponseHeaders();
     stream().transportHeadersReceived(headers, false);
-    verify(listener).headersRead(any(Metadata.Headers.class));
+    verify(listener).headersRead(any(Metadata.class));
   }
 
   @Test

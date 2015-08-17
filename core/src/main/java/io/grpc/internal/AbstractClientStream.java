@@ -116,7 +116,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    *
    * @param headers the parsed headers
    */
-  protected void inboundHeadersReceived(Metadata.Headers headers) {
+  protected void inboundHeadersReceived(Metadata headers) {
     if (inboundPhase() == Phase.STATUS) {
       log.log(Level.INFO, "Received headers on closed stream {0} {1}",
           new Object[]{id(), headers});

@@ -121,7 +121,7 @@ public abstract class ServerCall<ResponseT> {
    * @throws IllegalStateException if {@code close} has been called, a message has been sent, or
    *     headers have already been sent
    */
-  public abstract void sendHeaders(Metadata.Headers headers);
+  public abstract void sendHeaders(Metadata headers);
 
   /**
    * Send a response message. Messages are the primary form of communication associated with

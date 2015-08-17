@@ -67,7 +67,7 @@ public interface ClientTransport {
    */
   // TODO(nmittler): Consider also throwing for stopping.
   ClientStream newStream(MethodDescriptor<?, ?> method,
-                         Metadata.Headers headers,
+                         Metadata headers,
                          ClientStreamListener listener);
 
   /**

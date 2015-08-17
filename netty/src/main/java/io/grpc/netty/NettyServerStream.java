@@ -87,7 +87,7 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   }
 
   @Override
-  protected void internalSendHeaders(Metadata.Headers headers) {
+  protected void internalSendHeaders(Metadata headers) {
     writeQueue.enqueue(new SendResponseHeadersCommand(id(),
         Utils.convertServerHeaders(headers), false),
         true);

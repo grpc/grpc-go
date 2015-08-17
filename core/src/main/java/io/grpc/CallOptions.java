@@ -57,8 +57,28 @@ public final class CallOptions {
   // unnamed arguments, which is undesirable.
   private Long deadlineNanoTime;
 
+
   @Nullable
   private Compressor compressor;
+
+  @Nullable
+  private String authority;
+
+  /**
+   * Override the HTTP/2 authority the channel claims to be connecting to. <em>This is not
+   * generally safe.</em> Overriding allows advanced users to re-use a single Channel for multiple
+   * services, even if those services are hosted on different domain names. That assumes the
+   * server is virtually hosting multiple domains and is guaranteed to continue doing so. It is
+   * rare for a service provider to make such a guarantee. <em>At this time, there is no security
+   * verification of the overridden value, such as making sure the authority matches the server's
+   * TLS certificate.</em>
+   */
+  @ExperimentalApi
+  public CallOptions withAuthority(@Nullable String authority) {
+    CallOptions newOptions = new CallOptions(this);
+    newOptions.authority = authority;
+    return newOptions;
+  }
 
   /**
    * Returns a new {@code CallOptions} with the given absolute deadline in nanoseconds in the clock
@@ -110,6 +130,20 @@ public final class CallOptions {
     return newOptions;
   }
 
+  /**
+   * Override the HTTP/2 authority the channel claims to be connecting to. <em>This is not
+   * generally safe.</em> Overriding allows advanced users to re-use a single Channel for multiple
+   * services, even if those services are hosted on different domain names. That assumes the
+   * server is virtually hosting multiple domains and is guaranteed to continue doing so. It is
+   * rare for a service provider to make such a guarantee. <em>At this time, there is no security
+   * verification of the overridden value, such as making sure the authority matches the server's
+   * TLS certificate.</em>
+   */
+  @Nullable
+  public String getAuthority() {
+    return authority;
+  }
+
   private CallOptions() {
   }
 
@@ -119,6 +153,7 @@ public final class CallOptions {
   private CallOptions(CallOptions other) {
     deadlineNanoTime = other.deadlineNanoTime;
     compressor = other.compressor;
+    authority = other.authority;
   }
 
   @SuppressWarnings("deprecation") // guava 14.0

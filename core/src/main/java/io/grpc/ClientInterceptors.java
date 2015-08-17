@@ -92,7 +92,7 @@ public class ClientInterceptors {
 
   private static final ClientCall<Object, Object> NOOP_CALL = new ClientCall<Object, Object>() {
     @Override
-    public void start(Listener<Object> responseListener, Metadata.Headers headers) {}
+    public void start(Listener<Object> responseListener, Metadata headers) {}
 
     @Override
     public void request(int numMessages) {}
@@ -120,7 +120,7 @@ public class ClientInterceptors {
    * A {@link io.grpc.ForwardingClientCall} that delivers exceptions from its start logic to the
    * call listener.
    *
-   * <p>{@link ClientCall#start(ClientCall.Listener, Metadata.Headers)} should not throw any
+   * <p>{@link ClientCall#start(ClientCall.Listener, Metadata)} should not throw any
    * exception other than those caused by misuse, e.g., {@link IllegalStateException}.  {@code
    * CheckedForwardingClientCall} provides {@code checkedStart()} in which throwing exceptions is
    * allowed.
@@ -140,7 +140,7 @@ public class ClientInterceptors {
      * this.delegate().start()}, as this can result in {@link ClientCall.Listener#onClose} being
      * called multiple times.
      */
-    protected abstract void checkedStart(Listener<RespT> responseListener, Metadata.Headers headers)
+    protected abstract void checkedStart(Listener<RespT> responseListener, Metadata headers)
         throws Exception;
 
     protected CheckedForwardingClientCall(ClientCall<ReqT, RespT> delegate) {
@@ -154,7 +154,7 @@ public class ClientInterceptors {
 
     @Override
     @SuppressWarnings("unchecked")
-    public final void start(Listener<RespT> responseListener, Metadata.Headers headers) {
+    public final void start(Listener<RespT> responseListener, Metadata headers) {
       try {
         checkedStart(responseListener, headers);
       } catch (Exception e) {

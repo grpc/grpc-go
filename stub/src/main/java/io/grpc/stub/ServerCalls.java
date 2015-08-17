@@ -125,7 +125,7 @@ public class ServerCalls {
       public ServerCall.Listener<ReqT> startCall(
           MethodDescriptor<ReqT, RespT> methodDescriptor,
           final ServerCall<RespT> call,
-          Metadata.Headers headers) {
+          Metadata headers) {
         final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
         // We expect only 1 request, but we ask for 2 requests here so that if a misbehaving client
         // sends more than 1 requests, we will catch it in onMessage() and emit INVALID_ARGUMENT.
@@ -177,7 +177,7 @@ public class ServerCalls {
       public ServerCall.Listener<ReqT> startCall(
           MethodDescriptor<ReqT, RespT> methodDescriptor,
           final ServerCall<RespT> call,
-          Metadata.Headers headers) {
+          Metadata headers) {
         call.request(1);
         final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
         final StreamObserver<ReqT> requestObserver = method.invoke(responseObserver);

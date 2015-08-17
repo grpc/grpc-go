@@ -127,7 +127,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
 
     when(transportListener.streamCreated(any(ServerStream.class),
         any(String.class),
-        any(Metadata.Headers.class)))
+        any(Metadata.class)))
         .thenReturn(streamListener);
     handler = newHandler(transportListener);
     frameWriter = new DefaultHttp2FrameWriter();
@@ -358,7 +358,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
         ArgumentCaptor.forClass(NettyServerStream.class);
     ArgumentCaptor<String> methodCaptor = ArgumentCaptor.forClass(String.class);
     verify(transportListener).streamCreated(streamCaptor.capture(), methodCaptor.capture(),
-        any(Metadata.Headers.class));
+        any(Metadata.class));
     stream = streamCaptor.getValue();
   }
 

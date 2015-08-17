@@ -56,14 +56,14 @@ public class HeaderServerInterceptor implements ServerInterceptor {
   public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
       MethodDescriptor<ReqT, RespT> method,
       ServerCall<RespT> call,
-      final Metadata.Headers requestHeaders,
+      final Metadata requestHeaders,
       ServerCallHandler<ReqT, RespT> next) {
     logger.info("header received from client:" + requestHeaders.toString());
     return next.startCall(method, new SimpleForwardingServerCall<RespT>(call) {
       boolean sentHeaders = false;
 
       @Override
-      public void sendHeaders(Metadata.Headers responseHeaders) {
+      public void sendHeaders(Metadata responseHeaders) {
         responseHeaders.put(customHeadKey, "customRespondValue");
         super.sendHeaders(responseHeaders);
         sentHeaders = true;
@@ -72,7 +72,7 @@ public class HeaderServerInterceptor implements ServerInterceptor {
       @Override
       public void sendMessage(RespT message) {
         if (!sentHeaders) {
-          sendHeaders(new Metadata.Headers());
+          sendHeaders(new Metadata());
         }
         super.sendMessage(message);
       }

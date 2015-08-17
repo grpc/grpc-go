@@ -129,7 +129,7 @@ public class NettyClientTransportTest {
     // Verify that the received headers contained the User-Agent.
     assertEquals(1, serverListener.streamListeners.size());
 
-    Metadata.Headers headers = serverListener.streamListeners.get(0).headers;
+    Metadata headers = serverListener.streamListeners.get(0).headers;
     assertEquals(GrpcUtil.getGrpcUserAgent("netty", null), headers.get(USER_AGENT_KEY));
   }
 
@@ -141,13 +141,13 @@ public class NettyClientTransportTest {
 
     // Send a single RPC and wait for the response.
     String userAgent = "testUserAgent";
-    Metadata.Headers sentHeaders = new Metadata.Headers();
+    Metadata sentHeaders = new Metadata();
     sentHeaders.put(USER_AGENT_KEY, userAgent);
     new Rpc(transport, sentHeaders).halfClose().waitForResponse();
 
     // Verify that the received headers contained the User-Agent.
     assertEquals(1, serverListener.streamListeners.size());
-    Metadata.Headers receivedHeaders = serverListener.streamListeners.get(0).headers;
+    Metadata receivedHeaders = serverListener.streamListeners.get(0).headers;
     assertEquals(GrpcUtil.getGrpcUserAgent("netty", userAgent),
             receivedHeaders.get(USER_AGENT_KEY));
   }
@@ -249,10 +249,10 @@ public class NettyClientTransportTest {
     final TestClientStreamListener listener = new TestClientStreamListener();
 
     Rpc(NettyClientTransport transport) {
-      this(transport, new Metadata.Headers());
+      this(transport, new Metadata());
     }
 
-    Rpc(NettyClientTransport transport, Metadata.Headers headers) {
+    Rpc(NettyClientTransport transport, Metadata headers) {
       stream = transport.newStream(METHOD, headers, listener);
       stream.request(1);
       stream.writeMessage(new ByteArrayInputStream(MESSAGE.getBytes()));
@@ -278,7 +278,7 @@ public class NettyClientTransportTest {
     private final SettableFuture<Void> responseFuture = SettableFuture.create();
 
     @Override
-    public void headersRead(Metadata.Headers headers) {
+    public void headersRead(Metadata headers) {
     }
 
     @Override
@@ -305,9 +305,9 @@ public class NettyClientTransportTest {
   private static final class EchoServerStreamListener implements ServerStreamListener {
     final ServerStream stream;
     final String method;
-    final Metadata.Headers headers;
+    final Metadata headers;
 
-    EchoServerStreamListener(ServerStream stream, String method, Metadata.Headers headers) {
+    EchoServerStreamListener(ServerStream stream, String method, Metadata headers) {
       this.stream = stream;
       this.method = method;
       this.headers = headers;
@@ -348,7 +348,7 @@ public class NettyClientTransportTest {
 
         @Override
         public ServerStreamListener streamCreated(final ServerStream stream, String method,
-                                                  Metadata.Headers headers) {
+                                                  Metadata headers) {
           EchoServerStreamListener listener = new EchoServerStreamListener(stream, method, headers);
           streamListeners.add(listener);
           return listener;

@@ -31,6 +31,7 @@
 
 package io.grpc.netty;
 
+import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.Preconditions;
@@ -120,7 +121,7 @@ class NettyClientTransport implements ClientTransport {
   }
 
   @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata.Headers headers,
+  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers,
       ClientStreamListener listener) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
@@ -131,8 +132,11 @@ class NettyClientTransport implements ClientTransport {
 
     // Convert the headers into Netty HTTP/2 headers.
     AsciiString defaultPath = new AsciiString("/" + method.getFullMethodName());
+    AsciiString defaultAuthority  = new AsciiString(headers.containsKey(AUTHORITY_KEY)
+        ? headers.get(AUTHORITY_KEY) : authority);
+    headers.removeAll(AUTHORITY_KEY);
     Http2Headers http2Headers = Utils.convertClientHeaders(headers, negotiationHandler.scheme(),
-        defaultPath, authority);
+        defaultPath, defaultAuthority);
 
     ChannelFutureListener failureListener = new ChannelFutureListener() {
       @Override

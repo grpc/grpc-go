@@ -104,7 +104,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Test
   public void writeHeadersShouldSendHeaders() throws Exception {
-    Metadata.Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     stream().writeHeaders(headers);
     verify(writeQueue).enqueue(new SendResponseHeadersCommand(STREAM_ID,
         Utils.convertServerHeaders(headers), false), true);
@@ -112,7 +112,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Test
   public void duplicateWriteHeadersShouldFail() throws Exception {
-    Metadata.Headers headers = new Metadata.Headers();
+    Metadata headers = new Metadata();
     stream().writeHeaders(headers);
     verify(writeQueue).enqueue(new SendResponseHeadersCommand(STREAM_ID,
         Utils.convertServerHeaders(headers), false), true);

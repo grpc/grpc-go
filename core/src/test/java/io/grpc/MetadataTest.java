@@ -76,7 +76,7 @@ public class MetadataTest {
   public void testMutations() {
     Fish lance = new Fish(LANCE);
     Fish cat = new Fish("cat");
-    Metadata.Headers metadata = new Metadata.Headers();
+    Metadata metadata = new Metadata();
 
     assertEquals(null, metadata.get(KEY));
     metadata.put(KEY, lance);
@@ -107,7 +107,7 @@ public class MetadataTest {
   @Test
   public void testWriteParsed() {
     Fish lance = new Fish(LANCE);
-    Metadata.Headers metadata = new Metadata.Headers();
+    Metadata metadata = new Metadata();
     metadata.put(KEY, lance);
     // Should be able to read same instance out
     assertSame(lance, metadata.get(KEY));
@@ -127,7 +127,7 @@ public class MetadataTest {
 
   @Test
   public void testWriteRaw() {
-    Metadata.Headers raw = new Metadata.Headers(KEY.asciiName(), LANCE_BYTES);
+    Metadata raw = new Metadata(KEY.asciiName(), LANCE_BYTES);
     Fish lance = raw.get(KEY);
     assertEquals(lance, new Fish(LANCE));
     // Reading again should return the same parsed instance
@@ -136,7 +136,7 @@ public class MetadataTest {
 
   @Test
   public void testSerializeRaw() {
-    Metadata.Headers raw = new Metadata.Headers(KEY.asciiName(), LANCE_BYTES);
+    Metadata raw = new Metadata(KEY.asciiName(), LANCE_BYTES);
     byte[][] serialized = raw.serialize();
     assertArrayEquals(serialized[0], KEY.asciiName());
     assertArrayEquals(serialized[1], LANCE_BYTES);
@@ -144,8 +144,8 @@ public class MetadataTest {
 
   @Test
   public void testMergeByteConstructed() {
-    Metadata.Headers raw = new Metadata.Headers(KEY.asciiName(), LANCE_BYTES);
-    Metadata.Headers serializable = new Metadata.Headers();
+    Metadata raw = new Metadata(KEY.asciiName(), LANCE_BYTES);
+    Metadata serializable = new Metadata();
     serializable.merge(raw);
 
     byte[][] serialized = serializable.serialize();
@@ -157,11 +157,9 @@ public class MetadataTest {
   @Test
   public void headerMergeShouldCopyValues() {
     Fish lance = new Fish(LANCE);
-    Metadata.Headers h1 = new Metadata.Headers();
+    Metadata h1 = new Metadata();
 
-    Metadata.Headers h2 = new Metadata.Headers();
-    h2.setPath("/some/path");
-    h2.setAuthority("authority");
+    Metadata h2 = new Metadata();
     h2.put(KEY, lance);
 
     h1.merge(h2);
@@ -170,8 +168,6 @@ public class MetadataTest {
     assertTrue(fishes.hasNext());
     assertSame(fishes.next(), lance);
     assertFalse(fishes.hasNext());
-    assertEquals("/some/path", h1.getPath());
-    assertEquals("authority", h1.getAuthority());
   }
 
   @Test
@@ -195,13 +191,10 @@ public class MetadataTest {
 
   @Test
   public void verifyToString() {
-    Metadata.Headers h = new Metadata.Headers();
-    h.setPath("/path");
-    h.setAuthority("myauthority");
+    Metadata h = new Metadata();
     h.put(KEY, new Fish("binary"));
     h.put(Metadata.Key.of("test", Metadata.ASCII_STRING_MARSHALLER), "ascii");
-    assertEquals("Headers(path=/path,authority=myauthority,"
-        + "metadata={test-bin=[Fish(binary)], test=[ascii]})", h.toString());
+    assertEquals("Metadata({test-bin=[Fish(binary)], test=[ascii]})", h.toString());
 
     Metadata t = new Metadata();
     t.put(Metadata.Key.of("test", Metadata.ASCII_STRING_MARSHALLER), "ascii");
@@ -229,7 +222,7 @@ public class MetadataTest {
       Metadata.Key<String> keyUpperCase
           = Metadata.Key.of("IF-MODIFIED-SINCE", Metadata.ASCII_STRING_MARSHALLER);
 
-      Metadata metadata = new Metadata.Headers();
+      Metadata metadata = new Metadata();
       metadata.put(keyTitleCase, "plain string");
       assertEquals("plain string", metadata.get(keyTitleCase));
       assertEquals("plain string", metadata.get(keyLowerCase));

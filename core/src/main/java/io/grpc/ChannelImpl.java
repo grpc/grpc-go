@@ -35,7 +35,7 @@ import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
 import io.grpc.ClientCallImpl.ClientTransportProvider;
 import io.grpc.MessageEncoding.Compressor;
-import io.grpc.Metadata.Headers;
+import io.grpc.Metadata;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
@@ -393,7 +393,7 @@ public final class ChannelImpl extends Channel {
 
     @Override
     public ClientStream newStream(
-        MethodDescriptor<?, ?> method, Headers headers, ClientStreamListener listener) {
+        MethodDescriptor<?, ?> method, Metadata headers, ClientStreamListener listener) {
       listener.closed(shutdownStatus, new Metadata());
       return new ClientCallImpl.NoopClientStream();
     }

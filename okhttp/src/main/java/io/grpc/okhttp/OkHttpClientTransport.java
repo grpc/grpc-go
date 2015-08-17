@@ -241,7 +241,7 @@ class OkHttpClientTransport implements ClientTransport {
 
   @Override
   public OkHttpClientStream newStream(MethodDescriptor<?, ?> method,
-                                      Metadata.Headers headers,
+                                      Metadata headers,
                                       ClientStreamListener listener) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");

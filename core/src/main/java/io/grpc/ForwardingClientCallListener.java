@@ -42,7 +42,7 @@ public abstract class ForwardingClientCallListener<RespT> extends ClientCall.Lis
   protected abstract ClientCall.Listener<RespT> delegate();
 
   @Override
-  public void onHeaders(Metadata.Headers headers) {
+  public void onHeaders(Metadata headers) {
     delegate().onHeaders(headers);
   }
 

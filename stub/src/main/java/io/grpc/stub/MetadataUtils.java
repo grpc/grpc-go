@@ -58,7 +58,7 @@ public class MetadataUtils {
   @SuppressWarnings({"unchecked", "rawtypes"})
   public static <T extends AbstractStub> T attachHeaders(
       T stub,
-      final Metadata.Headers extraHeaders) {
+      final Metadata extraHeaders) {
     return (T) stub.withInterceptors(newAttachHeadersInterceptor(extraHeaders));
   }
 
@@ -68,7 +68,7 @@ public class MetadataUtils {
    * @param extraHeaders the headers to be passed by each call that is processed by the returned
    *                     interceptor
    */
-  public static ClientInterceptor newAttachHeadersInterceptor(final Metadata.Headers extraHeaders) {
+  public static ClientInterceptor newAttachHeadersInterceptor(final Metadata extraHeaders) {
     return new ClientInterceptor() {
       @Override
       public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
@@ -77,7 +77,7 @@ public class MetadataUtils {
           Channel next) {
         return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
           @Override
-          public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
+          public void start(Listener<RespT> responseListener, Metadata headers) {
             headers.merge(extraHeaders);
             super.start(responseListener, headers);
           }
@@ -97,7 +97,7 @@ public class MetadataUtils {
   @SuppressWarnings({"unchecked", "rawtypes"})
   public static <T extends AbstractStub> T captureMetadata(
       T stub,
-      AtomicReference<Metadata.Headers> headersCapture,
+      AtomicReference<Metadata> headersCapture,
       AtomicReference<Metadata> trailersCapture) {
     return (T) stub.withInterceptors(
         newCaptureMetadataInterceptor(headersCapture, trailersCapture));
@@ -111,7 +111,7 @@ public class MetadataUtils {
    * @return an implementation of the channel with captures installed.
    */
   public static ClientInterceptor newCaptureMetadataInterceptor(
-      final AtomicReference<Metadata.Headers> headersCapture,
+      final AtomicReference<Metadata> headersCapture,
       final AtomicReference<Metadata> trailersCapture) {
     return new ClientInterceptor() {
       @Override
@@ -121,12 +121,12 @@ public class MetadataUtils {
           Channel next) {
         return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
           @Override
-          public void start(Listener<RespT> responseListener, Metadata.Headers headers) {
+          public void start(Listener<RespT> responseListener, Metadata headers) {
             headersCapture.set(null);
             trailersCapture.set(null);
             super.start(new SimpleForwardingClientCallListener<RespT>(responseListener) {
               @Override
-              public void onHeaders(Metadata.Headers headers) {
+              public void onHeaders(Metadata headers) {
                 headersCapture.set(headers);
                 super.onHeaders(headers);
               }

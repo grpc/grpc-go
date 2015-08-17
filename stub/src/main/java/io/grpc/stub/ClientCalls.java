@@ -188,7 +188,7 @@ public class ClientCalls {
 
   private static <ReqT, RespT> void startCall(ClientCall<ReqT, RespT> call,
       ClientCall.Listener<RespT> responseListener, boolean streamingResponse) {
-    call.start(responseListener, new Metadata.Headers());
+    call.start(responseListener, new Metadata());
     if (streamingResponse) {
       call.request(1);
     } else {
@@ -237,7 +237,7 @@ public class ClientCalls {
     }
 
     @Override
-    public void onHeaders(Metadata.Headers headers) {
+    public void onHeaders(Metadata headers) {
     }
 
     @Override
@@ -278,7 +278,7 @@ public class ClientCalls {
     }
 
     @Override
-    public void onHeaders(Metadata.Headers headers) {
+    public void onHeaders(Metadata headers) {
     }
 
     @Override
@@ -393,7 +393,7 @@ public class ClientCalls {
       private boolean done = false;
 
       @Override
-      public void onHeaders(Metadata.Headers headers) {
+      public void onHeaders(Metadata headers) {
       }
 
       @Override

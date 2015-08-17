@@ -39,12 +39,11 @@ import static io.grpc.netty.Utils.TE_TRAILERS;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.Metadata.Headers;
+import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -151,7 +150,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
       http2Stream.setProperty(streamKey, stream);
       String method = determineMethod(streamId, headers);
 
-      Headers metadata = Utils.convertHeaders(headers);
+      Metadata metadata = Utils.convertHeaders(headers);
       ServerStreamListener listener =
           transportListener.streamCreated(stream, method, metadata);
       stream.setListener(listener);

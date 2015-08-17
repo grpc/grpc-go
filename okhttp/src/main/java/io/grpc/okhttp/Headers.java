@@ -31,6 +31,7 @@
 
 package io.grpc.okhttp;
 
+import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.grpc.internal.GrpcUtil.CONTENT_TYPE_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 
@@ -63,7 +64,7 @@ public class Headers {
    * creating a stream. Since this serializes the headers, this method should be called in the
    * application thread context.
    */
-  public static List<Header> createRequestHeaders(Metadata.Headers headers, String defaultPath,
+  public static List<Header> createRequestHeaders(Metadata headers, String defaultPath,
       String defaultAuthority) {
     Preconditions.checkNotNull(headers, "headers");
     Preconditions.checkNotNull(defaultPath, "defaultPath");
@@ -74,9 +75,12 @@ public class Headers {
     // Set GRPC-specific headers.
     okhttpHeaders.add(SCHEME_HEADER);
     okhttpHeaders.add(METHOD_HEADER);
-    String authority = headers.getAuthority() != null ? headers.getAuthority() : defaultAuthority;
+
+    String authority = headers.containsKey(AUTHORITY_KEY)
+        ? headers.get(AUTHORITY_KEY) : defaultAuthority;
+    headers.removeAll(AUTHORITY_KEY);
     okhttpHeaders.add(new Header(Header.TARGET_AUTHORITY, authority));
-    String path = headers.getPath() != null ? headers.getPath() : defaultPath;
+    String path = defaultPath;
     okhttpHeaders.add(new Header(Header.TARGET_PATH, path));
 
     String userAgent = GrpcUtil.getGrpcUserAgent("okhttp", headers.get(USER_AGENT_KEY));
