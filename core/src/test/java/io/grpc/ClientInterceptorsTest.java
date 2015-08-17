@@ -328,10 +328,8 @@ public class ClientInterceptorsTest {
           @Override
           protected void checkedStart(ClientCall.Listener<RespT> responseListener,
               Metadata.Headers headers) throws Exception {
-            if (this instanceof Object) {
-              throw error;
-            }
-            delegate().start(responseListener, headers);  // will not be called
+            throw error;
+            // delegate().start will not be called
           }
         };
       }
