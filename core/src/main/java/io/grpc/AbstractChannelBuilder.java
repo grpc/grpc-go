@@ -35,7 +35,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.grpc.internal.ClientTransportFactory;
-import io.grpc.internal.Internal;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 

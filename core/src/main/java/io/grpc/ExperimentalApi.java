@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -38,9 +38,18 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Annotates a program element which is internal to gRPC, not part of the public API, and should not
- * be used outside of gRPC codebase.
+ * Indicates a public API that can change at any time, and has no guarantee of API stability and
+ * backward-compatibility.
+ *
+ * <p>Usage guidelines:
+ * <ol>
+ * <li>This annotation is used only on public API. Internal interfaces should not use it.</li>
+ * <li>After gRPC has gained API stability, this annotation can only be added to new API. Adding it
+ * to an existing API is considered API-breaking.</li>
+ * <li>Removing this annotation from an API gives it stable status.</li>
+ * </ol>
  */
+@Internal
 @Retention(RetentionPolicy.SOURCE)
 @Target({
     ElementType.ANNOTATION_TYPE,
@@ -50,5 +59,5 @@ import java.lang.annotation.Target;
     ElementType.PACKAGE,
     ElementType.TYPE})
 @Documented
-public @interface Internal {
+public @interface ExperimentalApi {
 }

@@ -34,5 +34,5 @@
  *
  * <p>All interfaces under this package are not public API, and should not be used outside of gRPC.
  */
-@Internal
+@io.grpc.Internal
 package io.grpc.internal;

@@ -35,7 +35,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import io.grpc.internal.ExperimentalApi;
 import io.grpc.internal.SharedResourceHolder;
 
 import java.io.Closeable;

@@ -31,7 +31,7 @@
 
 package io.grpc.netty;
 
-import io.grpc.internal.ExperimentalApi;
+import io.grpc.ExperimentalApi;
 import io.netty.handler.codec.http2.Http2SecurityUtil;
 import io.netty.handler.ssl.ApplicationProtocolConfig;
 import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;

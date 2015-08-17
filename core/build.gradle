@@ -13,3 +13,5 @@ dependencies {
 animalsniffer {
     signature = "org.codehaus.mojo.signature:java16:+@signature"
 }
+
+javadoc.exclude 'io/grpc/internal/**'
