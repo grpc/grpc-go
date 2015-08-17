@@ -71,14 +71,14 @@ public class ServerInterceptorsTest {
   @Mock private ServerCall.Listener<String> listener;
   private MethodDescriptor<String, Integer> method = MethodDescriptor.create(
       MethodType.UNKNOWN,
-      "/someRandom.Name",
+      "someRandom/Name",
       requestMarshaller,
       responseMarshaller);
   @Mock private ServerCall<Integer> call;
   private ServerServiceDefinition serviceDefinition = ServerServiceDefinition.builder("basic")
       .addMethod(
           MethodDescriptor.create(
-            MethodType.UNKNOWN, "basic", "flow", requestMarshaller, responseMarshaller),
+            MethodType.UNKNOWN, "basic/flow", requestMarshaller, responseMarshaller),
           handler).build();
   private Headers headers = new Headers();
 
@@ -146,9 +146,9 @@ public class ServerInterceptorsTest {
     @SuppressWarnings("unchecked")
     ServerCallHandler<String, Integer> handler2 = mock(ServerCallHandler.class);
     serviceDefinition = ServerServiceDefinition.builder("basic")
-        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic", "flow",
+        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic/flow",
               requestMarshaller, responseMarshaller), handler)
-        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic", "flow2",
+        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic/flow2",
               requestMarshaller, responseMarshaller), handler2).build();
     ServerServiceDefinition intercepted = ServerInterceptors.intercept(
         serviceDefinition, Arrays.<ServerInterceptor>asList(new NoopInterceptor()));
@@ -223,7 +223,7 @@ public class ServerInterceptorsTest {
           }
         };
     ServerServiceDefinition serviceDefinition = ServerServiceDefinition.builder("basic")
-        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic", "flow",
+        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic/flow",
               requestMarshaller, responseMarshaller), handler).build();
     ServerServiceDefinition intercepted = ServerInterceptors.intercept(
         serviceDefinition, Arrays.asList(interceptor1, interceptor2));
@@ -235,7 +235,7 @@ public class ServerInterceptorsTest {
   @Test
   public void argumentsPassed() {
     final MethodDescriptor<String, Integer> method2 =
-        MethodDescriptor.create(MethodType.UNKNOWN, "/someOtherRandom.Method", null, null);
+        MethodDescriptor.create(MethodType.UNKNOWN, "someOtherRandom/Method", null, null);
     @SuppressWarnings("unchecked")
     final ServerCall<Integer> call2 = mock(ServerCall.class);
     @SuppressWarnings("unchecked")

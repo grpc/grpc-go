@@ -62,7 +62,7 @@ public class MutableHandlerRegistryImplTest {
   private ServerCallHandler<String, Integer> handler = mock(ServerCallHandler.class);
   private ServerServiceDefinition basicServiceDefinition = ServerServiceDefinition.builder("basic")
       .addMethod(
-          MethodDescriptor.create(MethodType.UNKNOWN, "basic", "flow",
+          MethodDescriptor.create(MethodType.UNKNOWN, "basic/flow",
               requestMarshaller, responseMarshaller),
           handler).build();
   @SuppressWarnings("rawtypes")
@@ -70,12 +70,12 @@ public class MutableHandlerRegistryImplTest {
       getOnlyElement(basicServiceDefinition.getMethods());
   private ServerServiceDefinition multiServiceDefinition = ServerServiceDefinition.builder("multi")
       .addMethod(
-          MethodDescriptor.create(MethodType.UNKNOWN, "multi", "couple",
-            requestMarshaller, responseMarshaller),
+          MethodDescriptor.create(MethodType.UNKNOWN, "multi/couple",
+              requestMarshaller, responseMarshaller),
           handler)
       .addMethod(
-          MethodDescriptor.create(MethodType.UNKNOWN, "multi", "few",
-            requestMarshaller, responseMarshaller),
+          MethodDescriptor.create(MethodType.UNKNOWN, "multi/few",
+              requestMarshaller, responseMarshaller),
           handler).build();
   @SuppressWarnings("rawtypes")
   private ServerMethodDefinition coupleMethodDefinition =
@@ -142,7 +142,7 @@ public class MutableHandlerRegistryImplTest {
     assertNull(registry.addService(basicServiceDefinition));
     assertNotNull(registry.lookupMethod("basic/flow"));
     ServerServiceDefinition replaceServiceDefinition = ServerServiceDefinition.builder("basic")
-        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic", "another",
+        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic/another",
               requestMarshaller, responseMarshaller), handler).build();
     ServerMethodDefinition<?, ?> anotherMethodDefinition =
         replaceServiceDefinition.getMethod("basic/another");

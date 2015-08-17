@@ -96,7 +96,8 @@ static void PrintMethodFields(
           "    $output_type$> $method_field_name$ =\n"
           "    $MethodDescriptor$.create(\n"
           "        $MethodType$.$method_type$,\n"
-          "        \"$Package$$service_name$\", \"$method_name$\",\n"
+          "        generateFullMethodName(\n"
+          "            \"$Package$$service_name$\", \"$method_name$\"),\n"
           "        $NanoUtils$.<$input_type$>marshaller(\n"
           "            new io.grpc.protobuf.nano.Parser<$input_type$>() {\n"
           "                @Override\n"
@@ -120,7 +121,8 @@ static void PrintMethodFields(
           "    $output_type$> $method_field_name$ =\n"
           "    $MethodDescriptor$.create(\n"
           "        $MethodType$.$method_type$,\n"
-          "        \"$Package$$service_name$\", \"$method_name$\",\n"
+          "        generateFullMethodName(\n"
+          "            \"$Package$$service_name$\", \"$method_name$\"),\n"
           "        $ProtoUtils$.marshaller($input_type$.parser()),\n"
           "        $ProtoUtils$.marshaller($output_type$.parser()));\n");
     }
@@ -550,6 +552,8 @@ void PrintImports(Printer* p, bool generate_nano) {
       "io.grpc.stub.ClientCalls.blockingServerStreamingCall;\n"
       "import static "
       "io.grpc.stub.ClientCalls.futureUnaryCall;\n"
+      "import static "
+      "io.grpc.MethodDescriptor.generateFullMethodName;\n"
       "import static "
       "io.grpc.stub.ServerCalls.asyncUnaryCall;\n"
       "import static "

@@ -84,7 +84,8 @@ public class HandlerRegistryBenchmark {
       for (int methodIndex = 0; methodIndex < methodCountPerService; ++methodIndex) {
         String methodName = randomString();
         MethodDescriptor<?, ?> methodDescriptor = MethodDescriptor.create(
-            MethodDescriptor.MethodType.UNKNOWN, serviceName, methodName, null, null);
+            MethodDescriptor.MethodType.UNKNOWN,
+            MethodDescriptor.generateFullMethodName(serviceName, methodName), null, null);
         serviceBuilder.addMethod(ServerMethodDefinition.create(methodDescriptor, null));
         fullMethodNames.add(methodDescriptor.getFullMethodName());
       }

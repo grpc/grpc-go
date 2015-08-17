@@ -7,6 +7,7 @@ import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.futureUnaryCall;
+import static io.grpc.MethodDescriptor.generateFullMethodName;
 import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
@@ -20,28 +21,32 @@ public class RouteGuideGrpc {
       io.grpc.examples.routeguide.Feature> METHOD_GET_FEATURE =
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
-          "routeguide.RouteGuide", "GetFeature",
+          generateFullMethodName(
+              "routeguide.RouteGuide", "GetFeature"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.parser()));
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Rectangle,
       io.grpc.examples.routeguide.Feature> METHOD_LIST_FEATURES =
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING,
-          "routeguide.RouteGuide", "ListFeatures",
+          generateFullMethodName(
+              "routeguide.RouteGuide", "ListFeatures"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Rectangle.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.parser()));
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Point,
       io.grpc.examples.routeguide.RouteSummary> METHOD_RECORD_ROUTE =
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING,
-          "routeguide.RouteGuide", "RecordRoute",
+          generateFullMethodName(
+              "routeguide.RouteGuide", "RecordRoute"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteSummary.parser()));
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.RouteNote,
       io.grpc.examples.routeguide.RouteNote> METHOD_ROUTE_CHAT =
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
-          "routeguide.RouteGuide", "RouteChat",
+          generateFullMethodName(
+              "routeguide.RouteGuide", "RouteChat"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.parser()));
 

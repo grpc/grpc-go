@@ -349,7 +349,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
         .method(HTTP_METHOD)
         .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC)
         .set(TE_HEADER, TE_TRAILERS)
-        .path(new AsciiString("/foo.bar"));
+        .path(new AsciiString("/foo/bar"));
     ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
     handler.channelRead(ctx, headersFrame);
 

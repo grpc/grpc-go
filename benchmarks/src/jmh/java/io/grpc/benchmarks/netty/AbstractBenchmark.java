@@ -221,15 +221,15 @@ public abstract class AbstractBenchmark {
 
     // Simple method that sends and receives NettyByteBuf
     unaryMethod = MethodDescriptor.create(MethodType.UNARY,
-        "benchmark", "unary",
+        "benchmark/unary",
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
     pingPongMethod = MethodDescriptor.create(MethodType.BIDI_STREAMING,
-        "benchmark", "pingPong",
+        "benchmark/pingPong",
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
     flowControlledStreaming = MethodDescriptor.create(MethodType.BIDI_STREAMING,
-        "benchmark", "flowControlledStreaming",
+        "benchmark/flowControlledStreaming",
         new ByteBufOutputMarshaller(),
         new ByteBufOutputMarshaller());
 

@@ -180,7 +180,7 @@ public class ServerImplTest {
     registry.addService(ServerServiceDefinition.builder("Waiter")
         .addMethod(
             MethodDescriptor.create(
-                MethodType.UNKNOWN, "Waiter", "serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
+                MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
             new ServerCallHandler<String, Integer>() {
               @Override
               public ServerCall.Listener<String> startCall(
@@ -247,7 +247,7 @@ public class ServerImplTest {
     final Status status = Status.ABORTED.withDescription("Oh, no!");
     registry.addService(ServerServiceDefinition.builder("Waiter")
         .addMethod(
-            MethodDescriptor.create(MethodType.UNKNOWN, "Waiter", "serve",
+            MethodDescriptor.create(MethodType.UNKNOWN, "Waiter/serve",
               STRING_MARSHALLER, INTEGER_MARSHALLER),
             new ServerCallHandler<String, Integer>() {
               @Override

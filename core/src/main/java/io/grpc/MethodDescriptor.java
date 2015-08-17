@@ -136,24 +136,6 @@ public class MethodDescriptor<RequestT, ResponseT> {
    * Creates a new {@code MethodDescriptor}.
    *
    * @param type the call type of this method
-   * @param fullServiceName the fully qualified service name
-   * @param methodName the short-form method name
-   * @param requestMarshaller the marshaller used to encode and decode requests
-   * @param responseMarshaller the marshaller used to encode and decode responses
-   */
-  public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> create(
-      MethodType type, String fullServiceName, String methodName,
-      Marshaller<RequestT> requestMarshaller,
-      Marshaller<ResponseT> responseMarshaller) {
-    return new MethodDescriptor<RequestT, ResponseT>(
-        type, generateFullMethodName(fullServiceName, methodName), requestMarshaller,
-        responseMarshaller);
-  }
-
-  /**
-   * Creates a new {@code MethodDescriptor}.
-   *
-   * @param type the call type of this method
    * @param fullMethodName the fully qualified name of this method
    * @param requestMarshaller the marshaller used to encode and decode requests
    * @param responseMarshaller the marshaller used to encode and decode responses

@@ -7,6 +7,7 @@ import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.stub.ClientCalls.futureUnaryCall;
+import static io.grpc.MethodDescriptor.generateFullMethodName;
 import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
@@ -22,7 +23,8 @@ public class TestServiceGrpc {
       io.grpc.testing.integration.Test.SimpleResponse> METHOD_UNARY_CALL =
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
-          "grpc.testing.TestService", "UnaryCall",
+          generateFullMethodName(
+              "grpc.testing.TestService", "UnaryCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.Test.SimpleRequest>marshaller(
               new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.Test.SimpleRequest>() {
                   @Override
@@ -41,7 +43,8 @@ public class TestServiceGrpc {
       io.grpc.testing.integration.Test.StreamingOutputCallResponse> METHOD_STREAMING_OUTPUT_CALL =
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING,
-          "grpc.testing.TestService", "StreamingOutputCall",
+          generateFullMethodName(
+              "grpc.testing.TestService", "StreamingOutputCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.Test.StreamingOutputCallRequest>marshaller(
               new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.Test.StreamingOutputCallRequest>() {
                   @Override
@@ -60,7 +63,8 @@ public class TestServiceGrpc {
       io.grpc.testing.integration.Test.StreamingInputCallResponse> METHOD_STREAMING_INPUT_CALL =
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING,
-          "grpc.testing.TestService", "StreamingInputCall",
+          generateFullMethodName(
+              "grpc.testing.TestService", "StreamingInputCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.Test.StreamingInputCallRequest>marshaller(
               new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.Test.StreamingInputCallRequest>() {
                   @Override
@@ -79,7 +83,8 @@ public class TestServiceGrpc {
       io.grpc.testing.integration.Test.StreamingOutputCallResponse> METHOD_FULL_BIDI_CALL =
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
-          "grpc.testing.TestService", "FullBidiCall",
+          generateFullMethodName(
+              "grpc.testing.TestService", "FullBidiCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.Test.StreamingOutputCallRequest>marshaller(
               new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.Test.StreamingOutputCallRequest>() {
                   @Override
@@ -98,7 +103,8 @@ public class TestServiceGrpc {
       io.grpc.testing.integration.Test.StreamingOutputCallResponse> METHOD_HALF_BIDI_CALL =
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
-          "grpc.testing.TestService", "HalfBidiCall",
+          generateFullMethodName(
+              "grpc.testing.TestService", "HalfBidiCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.Test.StreamingOutputCallRequest>marshaller(
               new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.Test.StreamingOutputCallRequest>() {
                   @Override
