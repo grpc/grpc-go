@@ -29,3 +29,5 @@ dependencies {
 
     signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }
+
+javadoc.options.links 'https://developers.google.com/protocol-buffers/docs/reference/java/'
