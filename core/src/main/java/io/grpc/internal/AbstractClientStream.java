@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.Status.Code.CANCELLED;
 import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
 
@@ -40,9 +41,11 @@ import com.google.common.base.Preconditions;
 import io.grpc.ChannelImpl;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.Status.Code;
 
 import java.io.InputStream;
 import java.util.EnumSet;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -53,6 +56,8 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     implements ClientStream {
 
   private static final Logger log = Logger.getLogger(AbstractClientStream.class.getName());
+  private static final Set<Code> CANCEL_REASONS =
+      EnumSet.of(CANCELLED, DEADLINE_EXCEEDED, Code.INTERNAL, Code.UNKNOWN);
 
   private final ClientStreamListener listener;
   private boolean listenerClosed;
@@ -119,8 +124,20 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     }
     if (headers.containsKey(ChannelImpl.MESSAGE_ENCODING_KEY)) {
       String messageEncoding = headers.get(ChannelImpl.MESSAGE_ENCODING_KEY);
-      setDecompressor(messageEncoding);
+      try {
+        setDecompressor(messageEncoding);
+      } catch (IllegalArgumentException e) {
+        // Don't use INVALID_ARGUMENT since that is for servers to send clients.
+        Status status = Status.INTERNAL.withDescription("Unable to decompress message from server.")
+            .withCause(e);
+        // TODO(carl-mastrangelo): look back into tearing down this stream.  sendCancel() can be
+        // buffered.
+        inboundTransportError(status);
+        sendCancel(status);
+        return;
+      }
     }
+
     inboundPhase(Phase.MESSAGE);
     listener.headersRead(headers);
   }
@@ -287,8 +304,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    */
   @Override
   public final void cancel(Status reason) {
-    Preconditions.checkArgument(EnumSet.of(CANCELLED, DEADLINE_EXCEEDED).contains(reason.getCode()),
-        "Invalid cancellation reason");
+    checkArgument(CANCEL_REASONS.contains(reason.getCode()), "Invalid cancellation reason");
     outboundPhase(Phase.STATUS);
     sendCancel(reason);
     dispose();

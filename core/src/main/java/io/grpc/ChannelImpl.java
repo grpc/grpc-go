@@ -257,7 +257,7 @@ public final class ChannelImpl extends Channel {
   @Override
   public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
       CallOptions callOptions) {
-    boolean hasCodecOverride = callOptions.getCompressor() == null;
+    boolean hasCodecOverride = callOptions.getCompressor() != null;
     if (!hasCodecOverride && defaultCompressor != MessageEncoding.NONE) {
       callOptions = callOptions.withCompressor(defaultCompressor);
     }

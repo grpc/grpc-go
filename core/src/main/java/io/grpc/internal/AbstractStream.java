@@ -301,6 +301,13 @@ public abstract class AbstractStream<IdT> implements Stream {
     deframer.setDecompressor(d);
   }
 
+  /**
+   * Looks up the decompressor by its message encoding name, and sets it for this stream.
+   * Decompressors are registered with {@link MessageEncoding#registerDecompressor}.
+   *
+   * @param messageEncoding the name of the encoding provided by the remote host
+   * @throws IllegalArgumentException if the provided message encoding cannot be found.
+   */
   protected final void setDecompressor(String messageEncoding) {
     Decompressor d = MessageEncoding.lookupDecompressor(messageEncoding);
     checkArgument(d != null,

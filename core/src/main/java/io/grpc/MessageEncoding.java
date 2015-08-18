@@ -18,9 +18,6 @@ import javax.annotation.Nullable;
  * Encloses classes related to the compression and decompression of messages.
  */
 public final class MessageEncoding {
-  private static final ConcurrentMap<String, Decompressor> decompressors =
-      initializeDefaultDecompressors();
-
   /**
    * Special sentinel codec indicating that no compression should be used.  Users should use
    * reference equality to see if compression is disabled.
@@ -41,6 +38,9 @@ public final class MessageEncoding {
       return os;
     }
   };
+
+  private static final ConcurrentMap<String, Decompressor> decompressors =
+      initializeDefaultDecompressors();
 
   /**
    * Represents a message compressor.
@@ -137,7 +137,7 @@ public final class MessageEncoding {
         new ConcurrentHashMap<String, Decompressor>();
     Decompressor gzip = new Gzip();
     defaultDecompressors.put(gzip.getMessageEncoding(), gzip);
+    defaultDecompressors.put(NONE.getMessageEncoding(), NONE);
     return defaultDecompressors;
   }
 }
-

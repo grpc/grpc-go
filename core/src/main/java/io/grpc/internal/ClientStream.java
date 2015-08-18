@@ -46,7 +46,9 @@ public interface ClientStream extends Stream {
    * period until {@link ClientStreamListener#closed} is called. This method is safe to be called
    * at any time and multiple times.
    *
-   * @param reason must be one of Status.CANCELLED or Status.DEADLINE_EXCEEDED
+   * @param reason must have {@link io.grpc.Status.Code#CANCELLED},
+   *     {@link io.grpc.Status.Code#DEADLINE_EXCEEDED}, {@link io.grpc.Status.Code#INTERNAL},
+   *     or {@link io.grpc.Status.Code#UNKNOWN}
    */
   void cancel(Status reason);
 
