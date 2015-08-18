@@ -223,15 +223,6 @@ public class TestUtils {
   }
 
   /**
-   * Deprecated, please use {@link #newSslSocketFactoryForCa(File)} instead.
-   */
-  @Deprecated
-  public static SSLSocketFactory getSslSocketFactoryForCertainCert(File certChainFile)
-          throws Exception {
-    return newSslSocketFactoryForCa(certChainFile);
-  }
-
-  /**
    * Creates an SSLSocketFactory which contains {@code certChainFile} as its only root certificate.
    */
   public static SSLSocketFactory newSslSocketFactoryForCa(File certChainFile) throws Exception {
