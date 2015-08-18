@@ -44,6 +44,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
+	"google.golang.org/grpc/monitoring"
 )
 
 type streamHandler func(srv interface{}, stream ServerStream) error
@@ -100,10 +101,13 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		t   transport.ClientTransport
 		err error
 	)
+	monitor := cc.dopts.monitor.NewForRpc(monitoring.Streaming, method)
 	t, err = cc.dopts.picker.Pick(ctx)
 	if err != nil {
+		monitor.Erred(err)
 		return nil, toRPCErr(err)
 	}
+
 	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
@@ -113,6 +117,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		desc:    desc,
 		codec:   cc.dopts.codec,
 		tracing: EnableTracing,
+		monitor: monitor,
 	}
 	if cs.tracing {
 		cs.trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
@@ -125,6 +130,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	s, err := t.NewStream(ctx, callHdr)
 	if err != nil {
+		cs.monitor.Erred(err)
 		return nil, toRPCErr(err)
 	}
 	cs.t = t
@@ -140,6 +146,7 @@ type clientStream struct {
 	p     *parser
 	desc  *StreamDesc
 	codec Codec
+	monitor    monitoring.PerRpcMonitor
 
 	tracing bool // set to EnableTracing when the clientStream is created.
 
@@ -177,6 +184,9 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	}
 	defer func() {
 		if err == nil || err == io.EOF {
+			if err == nil {
+				cs.monitor.SentMessage()
+			}
 			return
 		}
 		if _, ok := err.(transport.ConnectionError); !ok {
@@ -196,7 +206,15 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
 		// err != nil indicates the termination of the stream.
 		if err != nil {
+			if rErr, ok := err.(rpcError); ok {
+				cs.monitor.Handled(rErr.code, rErr.desc)
+			} else if err != io.EOF {
+				cs.monitor.Erred(err)
+				err = toRPCErr(err)
+			}
 			cs.finish(err)
+		} else {
+			cs.monitor.ReceivedMessage()
 		}
 	}()
 	if err == nil {
@@ -214,7 +232,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		err = recv(cs.p, cs.codec, m)
 		cs.t.CloseStream(cs.s, err)
 		if err == nil {
-			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
+			return errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>")
 		}
 		if err == io.EOF {
 			if cs.s.StatusCode() == codes.OK {
@@ -222,19 +240,20 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			}
 			return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
 		}
-		return toRPCErr(err)
+		return err
 	}
 	if _, ok := err.(transport.ConnectionError); !ok {
 		cs.t.CloseStream(cs.s, err)
 	}
 	if err == io.EOF {
 		if cs.s.StatusCode() == codes.OK {
+			cs.monitor.Handled(codes.OK, "")
 			// Returns io.EOF to indicate the end of the stream.
 			return
 		}
 		return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
 	}
-	return toRPCErr(err)
+	return err
 }
 
 func (cs *clientStream) CloseSend() (err error) {
@@ -287,6 +306,7 @@ type serverStream struct {
 	codec      Codec
 	statusCode codes.Code
 	statusDesc string
+	monitor    monitoring.PerRpcMonitor
 	trInfo     *traceInfo
 
 	mu sync.Mutex // protects trInfo.tr after the service handler runs.
@@ -310,6 +330,9 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 
 func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	defer func() {
+		if err != nil {
+			ss.monitor.SentMessage()
+		}
 		if ss.trInfo != nil {
 			ss.mu.Lock()
 			if ss.trInfo.tr != nil {
@@ -333,6 +356,9 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 
 func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
+		if err != nil {
+			ss.monitor.ReceivedMessage()
+		}
 		if ss.trInfo != nil {
 			ss.mu.Lock()
 			if ss.trInfo.tr != nil {
