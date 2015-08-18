@@ -6230,6 +6230,565 @@ public final class Messages {
 
   }
 
+  public interface ReconnectInfoOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ReconnectInfo)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>optional bool passed = 1;</code>
+     */
+    boolean getPassed();
+
+    /**
+     * <code>repeated int32 backoff_ms = 2;</code>
+     */
+    java.util.List<java.lang.Integer> getBackoffMsList();
+    /**
+     * <code>repeated int32 backoff_ms = 2;</code>
+     */
+    int getBackoffMsCount();
+    /**
+     * <code>repeated int32 backoff_ms = 2;</code>
+     */
+    int getBackoffMs(int index);
+  }
+  /**
+   * Protobuf type {@code grpc.testing.ReconnectInfo}
+   *
+   * <pre>
+   * For reconnect interop test only.
+   * Server tells client whether its reconnects are following the spec and the
+   * reconnect backoffs it saw.
+   * </pre>
+   */
+  public  static final class ReconnectInfo extends
+      com.google.protobuf.GeneratedMessage implements
+      // @@protoc_insertion_point(message_implements:grpc.testing.ReconnectInfo)
+      ReconnectInfoOrBuilder {
+    // Use ReconnectInfo.newBuilder() to construct.
+    private ReconnectInfo(com.google.protobuf.GeneratedMessage.Builder builder) {
+      super(builder);
+    }
+    private ReconnectInfo() {
+      passed_ = false;
+      backoffMs_ = java.util.Collections.emptyList();
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    }
+    private ReconnectInfo(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 8: {
+
+              passed_ = input.readBool();
+              break;
+            }
+            case 16: {
+              if (!((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
+                backoffMs_ = new java.util.ArrayList<java.lang.Integer>();
+                mutable_bitField0_ |= 0x00000002;
+              }
+              backoffMs_.add(input.readInt32());
+              break;
+            }
+            case 18: {
+              int length = input.readRawVarint32();
+              int limit = input.pushLimit(length);
+              if (!((mutable_bitField0_ & 0x00000002) == 0x00000002) && input.getBytesUntilLimit() > 0) {
+                backoffMs_ = new java.util.ArrayList<java.lang.Integer>();
+                mutable_bitField0_ |= 0x00000002;
+              }
+              while (input.getBytesUntilLimit() > 0) {
+                backoffMs_.add(input.readInt32());
+              }
+              input.popLimit(limit);
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw new RuntimeException(e.setUnfinishedMessage(this));
+      } catch (java.io.IOException e) {
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
+      } finally {
+        if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
+          backoffMs_ = java.util.Collections.unmodifiableList(backoffMs_);
+        }
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ReconnectInfo_descriptor;
+    }
+
+    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.grpc.testing.integration.Messages.ReconnectInfo.class, io.grpc.testing.integration.Messages.ReconnectInfo.Builder.class);
+    }
+
+    private int bitField0_;
+    public static final int PASSED_FIELD_NUMBER = 1;
+    private boolean passed_;
+    /**
+     * <code>optional bool passed = 1;</code>
+     */
+    public boolean getPassed() {
+      return passed_;
+    }
+
+    public static final int BACKOFF_MS_FIELD_NUMBER = 2;
+    private java.util.List<java.lang.Integer> backoffMs_;
+    /**
+     * <code>repeated int32 backoff_ms = 2;</code>
+     */
+    public java.util.List<java.lang.Integer>
+        getBackoffMsList() {
+      return backoffMs_;
+    }
+    /**
+     * <code>repeated int32 backoff_ms = 2;</code>
+     */
+    public int getBackoffMsCount() {
+      return backoffMs_.size();
+    }
+    /**
+     * <code>repeated int32 backoff_ms = 2;</code>
+     */
+    public int getBackoffMs(int index) {
+      return backoffMs_.get(index);
+    }
+    private int backoffMsMemoizedSerializedSize = -1;
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      getSerializedSize();
+      if (passed_ != false) {
+        output.writeBool(1, passed_);
+      }
+      if (getBackoffMsList().size() > 0) {
+        output.writeRawVarint32(18);
+        output.writeRawVarint32(backoffMsMemoizedSerializedSize);
+      }
+      for (int i = 0; i < backoffMs_.size(); i++) {
+        output.writeInt32NoTag(backoffMs_.get(i));
+      }
+    }
+
+    private int memoizedSerializedSize = -1;
+    public int getSerializedSize() {
+      int size = memoizedSerializedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (passed_ != false) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBoolSize(1, passed_);
+      }
+      {
+        int dataSize = 0;
+        for (int i = 0; i < backoffMs_.size(); i++) {
+          dataSize += com.google.protobuf.CodedOutputStream
+            .computeInt32SizeNoTag(backoffMs_.get(i));
+        }
+        size += dataSize;
+        if (!getBackoffMsList().isEmpty()) {
+          size += 1;
+          size += com.google.protobuf.CodedOutputStream
+              .computeInt32SizeNoTag(dataSize);
+        }
+        backoffMsMemoizedSerializedSize = dataSize;
+      }
+      memoizedSerializedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectInfo parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return PARSER.parseDelimitedFrom(input);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectInfo parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.ReconnectInfo prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code grpc.testing.ReconnectInfo}
+     *
+     * <pre>
+     * For reconnect interop test only.
+     * Server tells client whether its reconnects are following the spec and the
+     * reconnect backoffs it saw.
+     * </pre>
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ReconnectInfo)
+        io.grpc.testing.integration.Messages.ReconnectInfoOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ReconnectInfo_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.grpc.testing.integration.Messages.ReconnectInfo.class, io.grpc.testing.integration.Messages.ReconnectInfo.Builder.class);
+      }
+
+      // Construct using io.grpc.testing.integration.Messages.ReconnectInfo.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        passed_ = false;
+
+        backoffMs_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000002);
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ReconnectInfo_descriptor;
+      }
+
+      public io.grpc.testing.integration.Messages.ReconnectInfo getDefaultInstanceForType() {
+        return io.grpc.testing.integration.Messages.ReconnectInfo.getDefaultInstance();
+      }
+
+      public io.grpc.testing.integration.Messages.ReconnectInfo build() {
+        io.grpc.testing.integration.Messages.ReconnectInfo result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public io.grpc.testing.integration.Messages.ReconnectInfo buildPartial() {
+        io.grpc.testing.integration.Messages.ReconnectInfo result = new io.grpc.testing.integration.Messages.ReconnectInfo(this);
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
+        result.passed_ = passed_;
+        if (((bitField0_ & 0x00000002) == 0x00000002)) {
+          backoffMs_ = java.util.Collections.unmodifiableList(backoffMs_);
+          bitField0_ = (bitField0_ & ~0x00000002);
+        }
+        result.backoffMs_ = backoffMs_;
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.grpc.testing.integration.Messages.ReconnectInfo) {
+          return mergeFrom((io.grpc.testing.integration.Messages.ReconnectInfo)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.grpc.testing.integration.Messages.ReconnectInfo other) {
+        if (other == io.grpc.testing.integration.Messages.ReconnectInfo.getDefaultInstance()) return this;
+        if (other.getPassed() != false) {
+          setPassed(other.getPassed());
+        }
+        if (!other.backoffMs_.isEmpty()) {
+          if (backoffMs_.isEmpty()) {
+            backoffMs_ = other.backoffMs_;
+            bitField0_ = (bitField0_ & ~0x00000002);
+          } else {
+            ensureBackoffMsIsMutable();
+            backoffMs_.addAll(other.backoffMs_);
+          }
+          onChanged();
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.grpc.testing.integration.Messages.ReconnectInfo parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.grpc.testing.integration.Messages.ReconnectInfo) e.getUnfinishedMessage();
+          throw e;
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+      private int bitField0_;
+
+      private boolean passed_ ;
+      /**
+       * <code>optional bool passed = 1;</code>
+       */
+      public boolean getPassed() {
+        return passed_;
+      }
+      /**
+       * <code>optional bool passed = 1;</code>
+       */
+      public Builder setPassed(boolean value) {
+        
+        passed_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional bool passed = 1;</code>
+       */
+      public Builder clearPassed() {
+        
+        passed_ = false;
+        onChanged();
+        return this;
+      }
+
+      private java.util.List<java.lang.Integer> backoffMs_ = java.util.Collections.emptyList();
+      private void ensureBackoffMsIsMutable() {
+        if (!((bitField0_ & 0x00000002) == 0x00000002)) {
+          backoffMs_ = new java.util.ArrayList<java.lang.Integer>(backoffMs_);
+          bitField0_ |= 0x00000002;
+         }
+      }
+      /**
+       * <code>repeated int32 backoff_ms = 2;</code>
+       */
+      public java.util.List<java.lang.Integer>
+          getBackoffMsList() {
+        return java.util.Collections.unmodifiableList(backoffMs_);
+      }
+      /**
+       * <code>repeated int32 backoff_ms = 2;</code>
+       */
+      public int getBackoffMsCount() {
+        return backoffMs_.size();
+      }
+      /**
+       * <code>repeated int32 backoff_ms = 2;</code>
+       */
+      public int getBackoffMs(int index) {
+        return backoffMs_.get(index);
+      }
+      /**
+       * <code>repeated int32 backoff_ms = 2;</code>
+       */
+      public Builder setBackoffMs(
+          int index, int value) {
+        ensureBackoffMsIsMutable();
+        backoffMs_.set(index, value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated int32 backoff_ms = 2;</code>
+       */
+      public Builder addBackoffMs(int value) {
+        ensureBackoffMsIsMutable();
+        backoffMs_.add(value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated int32 backoff_ms = 2;</code>
+       */
+      public Builder addAllBackoffMs(
+          java.lang.Iterable<? extends java.lang.Integer> values) {
+        ensureBackoffMsIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, backoffMs_);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated int32 backoff_ms = 2;</code>
+       */
+      public Builder clearBackoffMs() {
+        backoffMs_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000002);
+        onChanged();
+        return this;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ReconnectInfo)
+    }
+
+    // @@protoc_insertion_point(class_scope:grpc.testing.ReconnectInfo)
+    private static final io.grpc.testing.integration.Messages.ReconnectInfo DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.ReconnectInfo();
+    }
+
+    public static io.grpc.testing.integration.Messages.ReconnectInfo getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    public static final com.google.protobuf.Parser<ReconnectInfo> PARSER =
+        new com.google.protobuf.AbstractParser<ReconnectInfo>() {
+      public ReconnectInfo parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new ReconnectInfo(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    public static com.google.protobuf.Parser<ReconnectInfo> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<ReconnectInfo> getParserForType() {
+      return PARSER;
+    }
+
+    public io.grpc.testing.integration.Messages.ReconnectInfo getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_Payload_descriptor;
   private static
@@ -6275,6 +6834,11 @@ public final class Messages {
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable;
+  private static com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_testing_ReconnectInfo_descriptor;
+  private static
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -6305,10 +6869,11 @@ public final class Messages {
       "meters\030\002 \003(\0132 .grpc.testing.ResponsePara" +
       "meters\022&\n\007payload\030\003 \001(\0132\025.grpc.testing.P",
       "ayload\"E\n\033StreamingOutputCallResponse\022&\n" +
-      "\007payload\030\001 \001(\0132\025.grpc.testing.Payload*?\n" +
-      "\013PayloadType\022\020\n\014COMPRESSABLE\020\000\022\022\n\016UNCOMP" +
-      "RESSABLE\020\001\022\n\n\006RANDOM\020\002B\035\n\033io.grpc.testin" +
-      "g.integrationb\006proto3"
+      "\007payload\030\001 \001(\0132\025.grpc.testing.Payload\"3\n" +
+      "\rReconnectInfo\022\016\n\006passed\030\001 \001(\010\022\022\n\nbackof" +
+      "f_ms\030\002 \003(\005*?\n\013PayloadType\022\020\n\014COMPRESSABL" +
+      "E\020\000\022\022\n\016UNCOMPRESSABLE\020\001\022\n\n\006RANDOM\020\002B\035\n\033i" +
+      "o.grpc.testing.integrationb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -6376,6 +6941,12 @@ public final class Messages {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_StreamingOutputCallResponse_descriptor,
         new java.lang.String[] { "Payload", });
+    internal_static_grpc_testing_ReconnectInfo_descriptor =
+      getDescriptor().getMessageTypes().get(9);
+    internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_grpc_testing_ReconnectInfo_descriptor,
+        new java.lang.String[] { "Passed", "BackoffMs", });
   }
 
   // @@protoc_insertion_point(outer_class_scope)

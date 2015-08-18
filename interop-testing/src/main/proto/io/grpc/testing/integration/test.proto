@@ -71,3 +71,9 @@ service TestService {
   rpc HalfDuplexCall(stream StreamingOutputCallRequest)
       returns (stream StreamingOutputCallResponse);
 }
+
+// A service used to control reconnect server.
+service ReconnectService {
+  rpc Start(grpc.testing.Empty) returns (grpc.testing.Empty);
+  rpc Stop(grpc.testing.Empty) returns (grpc.testing.ReconnectInfo);
+}

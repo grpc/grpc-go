@@ -46,9 +46,18 @@ task test_server(type: CreateStartScripts) {
     classpath = jar.outputs.files + project.configurations.runtime
 }
 
+task reconnect_test_client(type: CreateStartScripts) {
+    mainClassName = "io.grpc.testing.integration.ReconnectTestClient"
+    applicationName = "reconnect-test-client"
+    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
+
 applicationDistribution.into("bin") {
     from(test_client)
     from(test_server)
+    from(reconnect_test_client)
     fileMode = 0755
 }
 
