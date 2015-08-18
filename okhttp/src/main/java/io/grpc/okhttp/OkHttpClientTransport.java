@@ -387,9 +387,6 @@ class OkHttpClientTransport implements ClientTransport {
         }
 
         clientFrameHandler = new ClientFrameHandler(variant.newReader(source, true));
-        synchronized (lock) {
-          OkHttpClientTransport.this.listener.transportReady();
-        }
         executor.execute(clientFrameHandler);
         startPendingStreams();
       }
@@ -667,20 +664,20 @@ class OkHttpClientTransport implements ClientTransport {
 
     @Override
     public void settings(boolean clearPrevious, Settings settings) {
-      if (OkHttpSettingsUtil.isSet(settings, OkHttpSettingsUtil.MAX_CONCURRENT_STREAMS)) {
-        int receivedMaxConcurrentStreams = OkHttpSettingsUtil.get(
-            settings, OkHttpSettingsUtil.MAX_CONCURRENT_STREAMS);
-        synchronized (lock) {
+      synchronized (lock) {
+        if (OkHttpSettingsUtil.isSet(settings, OkHttpSettingsUtil.MAX_CONCURRENT_STREAMS)) {
+          int receivedMaxConcurrentStreams = OkHttpSettingsUtil.get(
+              settings, OkHttpSettingsUtil.MAX_CONCURRENT_STREAMS);
           maxConcurrentStreams = receivedMaxConcurrentStreams;
         }
-      }
 
-      if (OkHttpSettingsUtil.isSet(settings, OkHttpSettingsUtil.INITIAL_WINDOW_SIZE)) {
-        int initialWindowSize = OkHttpSettingsUtil.get(
-            settings, OkHttpSettingsUtil.INITIAL_WINDOW_SIZE);
-        synchronized (lock) {
+        if (OkHttpSettingsUtil.isSet(settings, OkHttpSettingsUtil.INITIAL_WINDOW_SIZE)) {
+          int initialWindowSize = OkHttpSettingsUtil.get(
+              settings, OkHttpSettingsUtil.INITIAL_WINDOW_SIZE);
           outboundFlow.initialOutboundWindowSize(initialWindowSize);
         }
+
+        listener.transportReady();
       }
 
       frameWriter.ackSettings(settings);

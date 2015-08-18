@@ -52,6 +52,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Ticker;
@@ -979,6 +980,14 @@ public class OkHttpClientTransportTest {
     assertTrue(listener.isOnReadyCalled());
 
     stream.cancel(Status.CANCELLED);
+  }
+
+  @Test
+  public void transportReady() throws Exception {
+    initTransport();
+    verifyZeroInteractions(transportListener);
+    frameHandler().settings(false, new Settings());
+    verify(transportListener).transportReady();
   }
 
   @Test
