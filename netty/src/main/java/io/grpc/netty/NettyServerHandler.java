@@ -203,7 +203,8 @@ class NettyServerHandler extends Http2ConnectionHandler {
       // Abort the stream with a status to help the client with debugging.
       // Don't need to send a RST_STREAM since the end-of-stream flag will
       // be sent.
-      serverStream(stream).abortStream(Status.fromThrowable(cause), true);
+      serverStream(stream).abortStream(cause instanceof Http2Exception
+          ? Status.INTERNAL.withCause(cause) : Status.fromThrowable(cause), true);
     } else {
       // Delegate to the base class to send a RST_STREAM.
       super.onStreamError(ctx, cause, http2Ex);
