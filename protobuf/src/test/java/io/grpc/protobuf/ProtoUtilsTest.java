@@ -35,6 +35,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
 import com.google.common.io.ByteStreams;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.Enum;
 import com.google.protobuf.Type;
 
@@ -46,6 +47,7 @@ import org.junit.runners.JUnit4;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.Random;
 
 /** Unit tests for {@link ProtoUtils}. */
 @RunWith(JUnit4.class)
@@ -71,5 +73,16 @@ public class ProtoUtilsTest {
     // Enum's name and Type's name are both strings with tag 1.
     Enum altProto = Enum.newBuilder().setName(proto.getName()).build();
     assertEquals(proto, marshaller.parse(enumMarshaller.stream(altProto)));
+  }
+
+  @Test
+  public void marshallerShouldNotLimitProtoSize() throws Exception {
+    byte[] bigName = new byte[100 * 1024 * 1024];
+    new Random().nextBytes(bigName);
+
+    proto = Type.newBuilder().setNameBytes(ByteString.copyFrom(bigName)).build();
+
+    // Just perform a round trip to verify that it works.
+    testRoundtrip();
   }
 }
