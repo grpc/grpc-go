@@ -185,7 +185,7 @@ public class ChannelImplTest {
     transportListener.transportTerminated();
     assertTrue(channel.isTerminated());
 
-    verifyNoMoreInteractions(mockTransportFactory);
+    verify(mockTransportFactory).newClientTransport();
     verifyNoMoreInteractions(mockTransport);
     verifyNoMoreInteractions(mockStream);
   }
@@ -260,7 +260,7 @@ public class ChannelImplTest {
     transportListenerCaptor.getValue().transportTerminated();
     assertTrue(channel.isTerminated());
 
-    verifyNoMoreInteractions(mockTransportFactory);
+    verify(mockTransportFactory, times(3)).newClientTransport();
     verifyNoMoreInteractions(mockTransport);
     verifyNoMoreInteractions(mockTransport2);
     verifyNoMoreInteractions(mockTransport3);

@@ -29,59 +29,28 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.inprocess;
-
-import com.google.common.base.Preconditions;
-
-import io.grpc.AbstractChannelBuilder;
-import io.grpc.internal.AbstractReferenceCounted;
-import io.grpc.internal.ClientTransport;
-import io.grpc.internal.ClientTransportFactory;
+package io.grpc.internal;
 
 /**
- * Builder for a channel that issues in-process requests. Clients identify the in-process server by
- * its name.
- *
- * <p>The channel is intended to be fully-featured, high performance, and useful in testing.
+ * A reference-counted object that requires explicit deallocation.
  */
-public class InProcessChannelBuilder extends AbstractChannelBuilder<InProcessChannelBuilder> {
+public interface ReferenceCounted {
   /**
-   * Create a channel builder that will connect to the server with the given name.
-   *
-   * @param name the identity of the server to connect to
-   * @return a new builder
+   * Gets the current reference count.
    */
-  public static InProcessChannelBuilder forName(String name) {
-    return new InProcessChannelBuilder(name);
-  }
+  int referenceCount();
 
-  private final String name;
+  /**
+   * Increases the reference count by 1.
+   */
+  ReferenceCounted retain();
 
-  private InProcessChannelBuilder(String name) {
-    this.name = Preconditions.checkNotNull(name);
-  }
-
-  @Override
-  protected ClientTransportFactory buildTransportFactory() {
-    return new InProcessClientTransportFactory(name);
-  }
-
-  private static class InProcessClientTransportFactory extends AbstractReferenceCounted
-          implements ClientTransportFactory {
-    private final String name;
-
-    private InProcessClientTransportFactory(String name) {
-      this.name = name;
-    }
-
-    @Override
-    public ClientTransport newClientTransport() {
-      return new InProcessTransport(name);
-    }
-
-    @Override
-    protected void deallocate() {
-      // Do nothing.
-    }
-  }
+  /**
+   * Decreases the reference count by {@code 1} and deallocates this object if the reference count
+   * reaches at {@code 0}.
+   *
+   * @return {@code true} if and only if the reference count became {@code 0} and this object has
+   *         been deallocated
+   */
+  ReferenceCounted release();
 }

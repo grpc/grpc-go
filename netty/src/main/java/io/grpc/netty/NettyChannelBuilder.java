@@ -34,6 +34,7 @@ package io.grpc.netty;
 import com.google.common.base.Preconditions;
 
 import io.grpc.AbstractChannelBuilder;
+import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.SharedResourceHolder;
@@ -45,6 +46,7 @@ import io.netty.handler.ssl.SslContext;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
+import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
 
 /**
@@ -56,7 +58,8 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   private final SocketAddress serverAddress;
   private NegotiationType negotiationType = NegotiationType.TLS;
   private Class<? extends Channel> channelType = NioSocketChannel.class;
-  private EventLoopGroup userEventLoopGroup;
+  @Nullable
+  private EventLoopGroup eventLoopGroup;
   private SslContext sslContext;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
 
@@ -105,8 +108,8 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
    * <p>The channel won't take ownership of the given EventLoopGroup. It's caller's responsibility
    * to shut it down when it's desired.
    */
-  public NettyChannelBuilder eventLoopGroup(EventLoopGroup group) {
-    userEventLoopGroup = group;
+  public NettyChannelBuilder eventLoopGroup(@Nullable EventLoopGroup eventLoopGroup) {
+    this.eventLoopGroup = eventLoopGroup;
     return this;
   }
 
@@ -130,20 +133,18 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   }
 
   @Override
-  protected ChannelEssentials buildEssentials() {
-    final EventLoopGroup group = (userEventLoopGroup == null)
-        ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP) : userEventLoopGroup;
-    final NegotiationType negotiationType = this.negotiationType;
-    final Class<? extends Channel> channelType = this.channelType;
-    final int flowControlWindow = this.flowControlWindow;
-    final ProtocolNegotiator negotiator;
+  protected ClientTransportFactory buildTransportFactory() {
+    return new NettyTransportFactory(serverAddress, channelType, eventLoopGroup, flowControlWindow,
+            createProtocolNegotiator());
+  }
+
+  private ProtocolNegotiator createProtocolNegotiator() {
+    ProtocolNegotiator negotiator;
     switch (negotiationType) {
       case PLAINTEXT:
-        negotiator = ProtocolNegotiators.plaintext();
-        break;
+        return ProtocolNegotiators.plaintext();
       case PLAINTEXT_UPGRADE:
-        negotiator = ProtocolNegotiators.plaintextUpgrade();
-        break;
+        return ProtocolNegotiators.plaintextUpgrade();
       case TLS:
         if (!(serverAddress instanceof InetSocketAddress)) {
           throw new IllegalStateException("TLS not supported for non-internet socket types");
@@ -155,28 +156,51 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
             throw new RuntimeException(ex);
           }
         }
-        negotiator = ProtocolNegotiators.tls(sslContext, (InetSocketAddress) serverAddress);
-        break;
+        return ProtocolNegotiators.tls(sslContext, (InetSocketAddress) serverAddress);
       default:
         throw new IllegalArgumentException("Unsupported negotiationType: " + negotiationType);
     }
+  }
 
-    ClientTransportFactory transportFactory = new ClientTransportFactory() {
-      @Override
-      public ClientTransport newClientTransport() {
-        return new NettyClientTransport(serverAddress, channelType, group,
-            negotiator, flowControlWindow);
+  private static class NettyTransportFactory extends AbstractReferenceCounted
+          implements ClientTransportFactory {
+    private final SocketAddress serverAddress;
+    private final Class<? extends Channel> channelType;
+    private final EventLoopGroup group;
+    private final boolean usingSharedGroup;
+    private final int flowControlWindow;
+    private final ProtocolNegotiator negotiator;
+
+    private NettyTransportFactory(SocketAddress serverAddress,
+                                  Class<? extends Channel> channelType,
+                                  EventLoopGroup group,
+                                  int flowControlWindow,
+                                  ProtocolNegotiator negotiator) {
+      this.serverAddress = serverAddress;
+      this.channelType = channelType;
+      this.flowControlWindow = flowControlWindow;
+      this.negotiator = negotiator;
+
+      usingSharedGroup = group == null;
+      if (usingSharedGroup) {
+        // The group was unspecified, using the shared group.
+        this.group = SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP);
+      } else {
+        this.group = group;
       }
-    };
-    Runnable terminationRunnable = null;
-    if (userEventLoopGroup == null) {
-      terminationRunnable = new Runnable() {
-        @Override
-        public void run() {
-          SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, group);
-        }
-      };
     }
-    return new ChannelEssentials(transportFactory, terminationRunnable);
+
+    @Override
+    public ClientTransport newClientTransport() {
+      return new NettyClientTransport(serverAddress, channelType, group, negotiator,
+              flowControlWindow);
+    }
+
+    @Override
+    protected void deallocate() {
+      if (usingSharedGroup) {
+        SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, group);
+      }
+    }
   }
 }

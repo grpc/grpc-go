@@ -39,6 +39,8 @@ import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.TlsVersion;
 
 import io.grpc.AbstractChannelBuilder;
+import io.grpc.internal.AbstractReferenceCounted;
+import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
@@ -46,24 +48,11 @@ import io.grpc.internal.SharedResourceHolder.Resource;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocketFactory;
 
 /** Convenience class for building channels with the OkHttp transport. */
 public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpChannelBuilder> {
-  private static final Resource<ExecutorService> DEFAULT_TRANSPORT_THREAD_POOL =
-      new Resource<ExecutorService>() {
-        @Override
-        public ExecutorService create() {
-          return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
-              .setNameFormat("grpc-okhttp-%d")
-              .build());
-        }
-
-        @Override
-        public void close(ExecutorService executor) {
-          executor.shutdown();
-        }
-      };
 
   public static final ConnectionSpec DEFAULT_CONNECTION_SPEC =
       new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
@@ -80,6 +69,20 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
           .tlsVersions(TlsVersion.TLS_1_2)
           .supportsTlsExtensions(true)
           .build();
+  private static final Resource<ExecutorService> SHARED_EXECUTOR =
+      new Resource<ExecutorService>() {
+        @Override
+        public ExecutorService create() {
+          return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
+                  .setNameFormat("grpc-okhttp-%d")
+                  .build());
+        }
+
+        @Override
+        public void close(ExecutorService executor) {
+          executor.shutdown();
+        }
+      };
 
   /** Creates a new builder for the given server host and port. */
   public static OkHttpChannelBuilder forAddress(String host, int port) {
@@ -106,8 +109,8 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
    * <p>The channel does not take ownership of the given executor. It is the caller' responsibility
    * to shutdown the executor when appropriate.
    */
-  public OkHttpChannelBuilder transportExecutor(ExecutorService executor) {
-    this.transportExecutor = executor;
+  public OkHttpChannelBuilder transportExecutor(@Nullable ExecutorService transportExecutor) {
+    this.transportExecutor = transportExecutor;
     return this;
   }
 
@@ -157,34 +160,65 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
   }
 
   @Override
-  protected ChannelEssentials buildEssentials() {
-    final ExecutorService executor = (transportExecutor == null)
-        ? SharedResourceHolder.get(DEFAULT_TRANSPORT_THREAD_POOL) : transportExecutor;
-    SSLSocketFactory socketFactory;
+  protected ClientTransportFactory buildTransportFactory() {
+    return new OkHttpTransportFactory(host, port, authorityHost, transportExecutor,
+            createSocketFactory(), connectionSpec);
+  }
+
+  private SSLSocketFactory createSocketFactory() {
     switch (negotiationType) {
       case TLS:
-        socketFactory = sslSocketFactory == null
-            ? (SSLSocketFactory) SSLSocketFactory.getDefault() : sslSocketFactory;
-        break;
+        return sslSocketFactory == null
+                ? (SSLSocketFactory) SSLSocketFactory.getDefault() : sslSocketFactory;
       case PLAINTEXT:
-        socketFactory = null;
-        break;
+        return null;
       default:
         throw new RuntimeException("Unknown negotiation type: " + negotiationType);
     }
+  }
 
-    ClientTransportFactory transportFactory = new OkHttpClientTransportFactory(
-        host, port, authorityHost, executor, socketFactory, connectionSpec);
-    Runnable terminationRunnable = null;
-    // We shut down the executor only if we created it.
-    if (transportExecutor == null) {
-      terminationRunnable = new Runnable() {
-        @Override
-        public void run() {
-          SharedResourceHolder.release(DEFAULT_TRANSPORT_THREAD_POOL, executor);
-        }
-      };
+  private static class OkHttpTransportFactory extends AbstractReferenceCounted
+          implements ClientTransportFactory {
+    private final String host;
+    private final int port;
+    private final String authorityHost;
+    private final ExecutorService executor;
+    private final boolean usingSharedExecutor;
+    private final SSLSocketFactory socketFactory;
+    private final ConnectionSpec connectionSpec;
+
+    private OkHttpTransportFactory(String host,
+                                   int port,
+                                   String authorityHost,
+                                   ExecutorService executor,
+                                   SSLSocketFactory socketFactory,
+                                   ConnectionSpec connectionSpec) {
+      this.host = host;
+      this.port = port;
+      this.authorityHost = authorityHost;
+      this.socketFactory = socketFactory;
+      this.connectionSpec = connectionSpec;
+
+      usingSharedExecutor = executor == null;
+      if (usingSharedExecutor) {
+        // The executor was unspecified, using the shared executor.
+        this.executor = SharedResourceHolder.get(SHARED_EXECUTOR);
+      } else {
+        this.executor = executor;
+      }
     }
-    return new ChannelEssentials(transportFactory, terminationRunnable);
+
+    @Override
+    public ClientTransport newClientTransport() {
+      return new OkHttpClientTransport(host, port, authorityHost, executor, socketFactory,
+              connectionSpec);
+    }
+
+    @Override
+    protected void deallocate() {
+      if (usingSharedExecutor) {
+        SharedResourceHolder.release(SHARED_EXECUTOR, executor);
+      }
+    }
   }
 }

@@ -167,17 +167,17 @@ class OkHttpClientTransport implements ClientTransport {
 
   OkHttpClientTransport(String host, int port, String authorityHost, Executor executor,
       @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec) {
-    this.host = Preconditions.checkNotNull(host);
+    this.host = Preconditions.checkNotNull(host, "host");
     this.port = port;
     this.authorityHost = authorityHost;
     defaultAuthority = authorityHost + ":" + port;
-    this.executor = Preconditions.checkNotNull(executor);
+    this.executor = Preconditions.checkNotNull(executor, "executor");
     serializingExecutor = new SerializingExecutor(executor);
     // Client initiated streams are odd, server initiated ones are even. Server should not need to
     // use it. We start clients at 3 to avoid conflicting with HTTP negotiation.
     nextStreamId = 3;
     this.sslSocketFactory = sslSocketFactory;
-    this.connectionSpec = Preconditions.checkNotNull(connectionSpec);
+    this.connectionSpec = Preconditions.checkNotNull(connectionSpec, "connectionSpec");
     this.ticker = Ticker.systemTicker();
   }
 

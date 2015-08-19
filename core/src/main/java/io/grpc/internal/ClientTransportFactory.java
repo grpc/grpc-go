@@ -32,7 +32,7 @@
 package io.grpc.internal;
 
 /** Pre-configured factory for creating {@link ClientTransport} instances. */
-public interface ClientTransportFactory {
+public interface ClientTransportFactory extends ReferenceCounted {
   /** Creates an unstarted transport for exclusive use. */
   ClientTransport newClientTransport();
 }

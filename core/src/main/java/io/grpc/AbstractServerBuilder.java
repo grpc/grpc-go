@@ -31,11 +31,7 @@
 
 package io.grpc;
 
-import static io.grpc.AbstractChannelBuilder.DEFAULT_EXECUTOR;
-
 import com.google.common.base.Preconditions;
-
-import io.grpc.internal.SharedResourceHolder;
 
 import java.util.concurrent.ExecutorService;
 
@@ -50,7 +46,7 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
 
   private final HandlerRegistry registry;
   @Nullable
-  private ExecutorService userExecutor;
+  private ExecutorService executor;
 
   /**
    * Constructs using a given handler registry.
@@ -77,7 +73,7 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
    */
   @SuppressWarnings("unchecked")
   public final BuilderT executor(ExecutorService executor) {
-    userExecutor = executor;
+    this.executor = executor;
     return (BuilderT) this;
   }
 
@@ -103,30 +99,8 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
    * with {@link ServerImpl#start()}.
    */
   public ServerImpl build() {
-    final ExecutorService executor;
-    final boolean releaseExecutor;
-    if (userExecutor != null) {
-      executor = userExecutor;
-      releaseExecutor = false;
-    } else {
-      executor = SharedResourceHolder.get(DEFAULT_EXECUTOR);
-      releaseExecutor = true;
-    }
-
-    final ServerEssentials essentials = buildEssentials();
-    ServerImpl server = new ServerImpl(executor, registry, essentials.server);
-    server.setTerminationRunnable(new Runnable() {
-      @Override
-      public void run() {
-        if (releaseExecutor) {
-          SharedResourceHolder.release(DEFAULT_EXECUTOR, executor);
-        }
-        if (essentials.terminationRunnable != null) {
-          essentials.terminationRunnable.run();
-        }
-      }
-    });
-    return server;
+    io.grpc.internal.Server transportServer = buildTransportServer();
+    return new ServerImpl(executor, registry, transportServer);
   }
 
   /**
@@ -135,27 +109,5 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
    * used by normal users.
    */
   @Internal
-  protected abstract ServerEssentials buildEssentials();
-
-  /**
-   * The essentials required for creating a server.
-   */
-  @Internal
-  protected static class ServerEssentials {
-    final io.grpc.internal.Server server;
-    @Nullable
-    final Runnable terminationRunnable;
-
-    /**
-     * Constructor.
-     *
-     * @param server the created server uses this server to accept transports
-     * @param terminationRunnable will be called at the server termination
-     */
-    public ServerEssentials(io.grpc.internal.Server server,
-        @Nullable Runnable terminationRunnable) {
-      this.server = Preconditions.checkNotNull(server, "server");
-      this.terminationRunnable = terminationRunnable;
-    }
-  }
+  protected abstract io.grpc.internal.Server buildTransportServer();
 }

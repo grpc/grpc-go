@@ -52,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -76,7 +77,8 @@ public final class ServerImpl extends Server {
   private static final Future<?> DEFAULT_TIMEOUT_FUTURE = Futures.immediateCancelledFuture();
 
   /** Executor for application processing. */
-  private final Executor executor;
+  private Executor executor;
+  private boolean usingSharedExecutor;
   private final HandlerRegistry registry;
   private boolean started;
   private boolean shutdown;
@@ -99,7 +101,7 @@ public final class ServerImpl extends Server {
    */
   ServerImpl(Executor executor, HandlerRegistry registry,
       io.grpc.internal.Server transportServer) {
-    this.executor = Preconditions.checkNotNull(executor, "executor");
+    this.executor = executor;
     this.registry = Preconditions.checkNotNull(registry, "registry");
     this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");
   }
@@ -123,6 +125,10 @@ public final class ServerImpl extends Server {
     synchronized (lock) {
       if (started) {
         throw new IllegalStateException("Already started");
+      }
+      usingSharedExecutor = executor == null;
+      if (usingSharedExecutor) {
+        executor = SharedResourceHolder.get(ChannelImpl.SHARED_EXECUTOR);
       }
       // Start and wait for any port to actually be bound.
       transportServer.start(new ServerListenerImpl());
@@ -151,6 +157,9 @@ public final class ServerImpl extends Server {
       transportServer.shutdown();
     }
     SharedResourceHolder.release(TIMER_SERVICE, timeoutService);
+    if (usingSharedExecutor) {
+      SharedResourceHolder.release(ChannelImpl.SHARED_EXECUTOR, (ExecutorService) executor);
+    }
     return this;
   }
 

@@ -31,18 +31,12 @@
 
 package io.grpc;
 
-import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import io.grpc.internal.ClientTransportFactory;
-import io.grpc.internal.SharedResourceHolder;
-import io.grpc.internal.SharedResourceHolder.Resource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import javax.annotation.Nullable;
 
@@ -52,28 +46,9 @@ import javax.annotation.Nullable;
  * @param <BuilderT> The concrete type of this builder.
  */
 public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBuilder<BuilderT>> {
-  static final Resource<ExecutorService> DEFAULT_EXECUTOR =
-      new Resource<ExecutorService>() {
-        private static final String name = "grpc-default-executor";
-        @Override
-        public ExecutorService create() {
-          return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
-              .setNameFormat(name + "-%d").build());
-        }
-
-        @Override
-        public void close(ExecutorService instance) {
-          instance.shutdown();
-        }
-
-        @Override
-        public String toString() {
-          return name;
-        }
-      };
 
   @Nullable
-  private ExecutorService userExecutor;
+  private ExecutorService executor;
   private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
 
   @Nullable
@@ -89,7 +64,7 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
    * shut down the executor when it's desired.
    */
   public final BuilderT executor(ExecutorService executor) {
-    userExecutor = executor;
+    this.executor = executor;
     return thisT();
   }
 
@@ -134,59 +109,15 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
    * Builds a channel using the given parameters.
    */
   public ChannelImpl build() {
-    final ExecutorService executor;
-    final boolean releaseExecutor;
-    if (userExecutor != null) {
-      executor = userExecutor;
-      releaseExecutor = false;
-    } else {
-      executor = SharedResourceHolder.get(DEFAULT_EXECUTOR);
-      releaseExecutor = true;
-    }
-
-    final ChannelEssentials essentials = buildEssentials();
-    ChannelImpl channel = new ChannelImpl(essentials.transportFactory, executor, userAgent,
-        interceptors);
-    channel.setTerminationRunnable(new Runnable() {
-      @Override
-      public void run() {
-        if (releaseExecutor) {
-          SharedResourceHolder.release(DEFAULT_EXECUTOR, executor);
-        }
-        if (essentials.terminationRunnable != null) {
-          essentials.terminationRunnable.run();
-        }
-      }
-    });
-    return channel;
+    ClientTransportFactory transportFactory = buildTransportFactory();
+    return new ChannelImpl(transportFactory, executor, userAgent, interceptors);
   }
 
   /**
-   * The essentials required for creating a channel.
+   * Children of AbstractChannelBuilder should override this method to provide the
+   * {@link ClientTransportFactory} appropriate for this channel.  This method is meant for
+   * Transport implementors and should not be used by normal users.
    */
   @Internal
-  protected static class ChannelEssentials {
-    final ClientTransportFactory transportFactory;
-    @Nullable final Runnable terminationRunnable;
-
-    /**
-     * Constructor.
-     *
-     * @param transportFactory the created channel uses this factory to create transports
-     * @param terminationRunnable will be called at the channel termination
-     */
-    public ChannelEssentials(ClientTransportFactory transportFactory,
-        @Nullable Runnable terminationRunnable) {
-      this.transportFactory = Preconditions.checkNotNull(transportFactory);
-      this.terminationRunnable = terminationRunnable;
-    }
-  }
-
-  /**
-   * Children of AbstractChannelBuilder should override this method to provide transport specific
-   * information for the channel.  This method is mean for Transport implementors and should not be
-   * used by normal users.
-   */
-  @Internal
-  protected abstract ChannelEssentials buildEssentials();
+  protected abstract ClientTransportFactory buildTransportFactory();
 }

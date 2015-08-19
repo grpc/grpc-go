@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,44 +29,50 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.okhttp;
+package io.grpc.internal;
 
-import com.google.common.base.Preconditions;
-
-import com.squareup.okhttp.ConnectionSpec;
-
-import io.grpc.internal.ClientTransport;
-import io.grpc.internal.ClientTransportFactory;
-
-import java.util.concurrent.ExecutorService;
-
-import javax.net.ssl.SSLSocketFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Factory that manufactures instances of {@link OkHttpClientTransport}.
+ * Base implementation for all reference counted objects.
  */
-class OkHttpClientTransportFactory implements ClientTransportFactory {
-  private final String host;
-  private final int port;
-  private final ExecutorService executor;
-  private final String authorityHost;
-  private final SSLSocketFactory sslSocketFactory;
-  private final ConnectionSpec connectionSpec;
+public abstract class AbstractReferenceCounted implements ReferenceCounted {
+  private final AtomicInteger refCount = new AtomicInteger(1);
 
-  public OkHttpClientTransportFactory(String host, int port, String authorityHost,
-      ExecutorService executor, SSLSocketFactory factory, ConnectionSpec connectionSpec) {
-    this.host = Preconditions.checkNotNull(host, "host");
-    this.port = port;
-    this.executor = Preconditions.checkNotNull(executor, "executor");
-    this.authorityHost = Preconditions.checkNotNull(authorityHost, "authorityHost");
-    this.sslSocketFactory = factory;
-    this.connectionSpec = connectionSpec;
+  @Override
+  public final int referenceCount() {
+    return refCount.get();
   }
 
   @Override
-  public ClientTransport newClientTransport() {
-    return new OkHttpClientTransport(
-        host, port, authorityHost, executor, sslSocketFactory, connectionSpec);
+  public final ReferenceCounted retain() {
+    int newCount = refCount.incrementAndGet();
+    if (newCount <= 1) {
+      throw illegalReferenceCount(newCount);
+    }
+    return this;
   }
 
+  @Override
+  public final ReferenceCounted release() {
+    int newCount = refCount.decrementAndGet();
+    if (newCount < 0) {
+      throw illegalReferenceCount(newCount);
+    }
+    if (newCount == 0) {
+      deallocate();
+    }
+    return this;
+  }
+
+  /**
+   * Called once {@link #referenceCount()} is equals 0.
+   */
+  protected abstract void deallocate();
+
+  private IllegalStateException illegalReferenceCount(int count) {
+    throw new IllegalStateException(String.format("Illegal reference count for class %s: %d",
+            getClass().getName(),
+            count));
+  }
 }

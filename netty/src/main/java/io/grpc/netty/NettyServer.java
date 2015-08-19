@@ -31,13 +31,14 @@
 
 package io.grpc.netty;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static io.netty.channel.ChannelOption.SO_BACKLOG;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
-import com.google.common.base.Preconditions;
-
 import io.grpc.internal.Server;
 import io.grpc.internal.ServerListener;
+import io.grpc.internal.SharedResourceHolder;
+
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -63,36 +64,37 @@ public class NettyServer implements Server {
 
   private final SocketAddress address;
   private final Class<? extends ServerChannel> channelType;
-  private final EventLoopGroup bossGroup;
-  private final EventLoopGroup workerGroup;
   private final SslContext sslContext;
   private final int maxStreamsPerConnection;
+  private final boolean usingSharedBossGroup;
+  private final boolean usingSharedWorkerGroup;
+  private EventLoopGroup bossGroup;
+  private EventLoopGroup workerGroup;
   private ServerListener listener;
   private Channel channel;
   private int flowControlWindow;
 
   NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
-      EventLoopGroup bossGroup, EventLoopGroup workerGroup, int maxStreamsPerConnection,
-      int flowControlWindow) {
-    this(address, channelType, bossGroup, workerGroup, null, maxStreamsPerConnection,
-            flowControlWindow);
-  }
-
-  NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
-      EventLoopGroup bossGroup, EventLoopGroup workerGroup, @Nullable SslContext sslContext,
-      int maxStreamsPerConnection, int flowControlWindow) {
+              @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
+              @Nullable SslContext sslContext, int maxStreamsPerConnection, int flowControlWindow) {
     this.address = address;
-    this.channelType = Preconditions.checkNotNull(channelType, "channelType");
-    this.bossGroup = Preconditions.checkNotNull(bossGroup, "bossGroup");
-    this.workerGroup = Preconditions.checkNotNull(workerGroup, "workerGroup");
+    this.channelType = checkNotNull(channelType, "channelType");
+    this.bossGroup = bossGroup;
+    this.workerGroup = workerGroup;
     this.sslContext = sslContext;
+    this.usingSharedBossGroup = bossGroup == null;
+    this.usingSharedWorkerGroup = workerGroup == null;
     this.maxStreamsPerConnection = maxStreamsPerConnection;
     this.flowControlWindow = flowControlWindow;
   }
 
   @Override
   public void start(ServerListener serverListener) throws IOException {
-    listener = serverListener;
+    listener = checkNotNull(serverListener, "serverListener");
+
+    // If using the shared groups, get references to them.
+    allocateSharedGroups();
+
     ServerBootstrap b = new ServerBootstrap();
     b.group(bossGroup, workerGroup);
     b.channel(channelType);
@@ -126,6 +128,7 @@ public class NettyServer implements Server {
   @Override
   public void shutdown() {
     if (channel == null || !channel.isOpen()) {
+      // Already closed.
       return;
     }
     channel.close().addListener(new ChannelFutureListener() {
@@ -135,7 +138,34 @@ public class NettyServer implements Server {
           log.log(Level.WARNING, "Error shutting down server", future.cause());
         }
         listener.serverShutdown();
+        releaseSharedGroups();
       }
     });
+  }
+
+  private void allocateSharedGroups() {
+    if (bossGroup == null) {
+      bossGroup = SharedResourceHolder.get(Utils.DEFAULT_BOSS_EVENT_LOOP_GROUP);
+    }
+    if (workerGroup == null) {
+      workerGroup = SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP);
+    }
+  }
+
+  private void releaseSharedGroups() {
+    try {
+      if (usingSharedBossGroup && bossGroup != null) {
+        SharedResourceHolder.release(Utils.DEFAULT_BOSS_EVENT_LOOP_GROUP, bossGroup);
+      }
+    } finally {
+      bossGroup = null;
+      try {
+        if (usingSharedWorkerGroup && workerGroup != null) {
+          SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, workerGroup);
+        }
+      } finally {
+        workerGroup = null;
+      }
+    }
   }
 }

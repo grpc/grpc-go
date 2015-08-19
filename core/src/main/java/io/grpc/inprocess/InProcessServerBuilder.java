@@ -76,7 +76,7 @@ public final class InProcessServerBuilder extends AbstractServerBuilder<InProces
   }
 
   @Override
-  protected ServerEssentials buildEssentials() {
-    return new ServerEssentials(new InProcessServer(name), null);
+  protected InProcessServer buildTransportServer() {
+    return new InProcessServer(name);
   }
 }

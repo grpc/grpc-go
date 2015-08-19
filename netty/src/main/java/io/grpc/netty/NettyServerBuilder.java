@@ -35,7 +35,7 @@ import com.google.common.base.Preconditions;
 
 import io.grpc.AbstractServerBuilder;
 import io.grpc.HandlerRegistry;
-import io.grpc.internal.SharedResourceHolder;
+
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -43,6 +43,8 @@ import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+
+import javax.annotation.Nullable;
 
 /**
  * A builder to help simplify the construction of a Netty-based GRPC server.
@@ -52,8 +54,10 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
 
   private final SocketAddress address;
   private Class<? extends ServerChannel> channelType = NioServerSocketChannel.class;
-  private EventLoopGroup userBossEventLoopGroup;
-  private EventLoopGroup userWorkerEventLoopGroup;
+  @Nullable
+  private EventLoopGroup bossEventLoopGroup;
+  @Nullable
+  private EventLoopGroup workerEventLoopGroup;
   private SslContext sslContext;
   private int maxConcurrentCallsPerConnection = Integer.MAX_VALUE;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
@@ -130,7 +134,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
    * keep the main thread alive until the server has terminated.
    */
   public NettyServerBuilder bossEventLoopGroup(EventLoopGroup group) {
-    this.userBossEventLoopGroup = group;
+    this.bossEventLoopGroup = group;
     return this;
   }
 
@@ -153,7 +157,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
    * keep the main thread alive until the server has terminated.
    */
   public NettyServerBuilder workerEventLoopGroup(EventLoopGroup group) {
-    this.userWorkerEventLoopGroup = group;
+    this.workerEventLoopGroup = group;
     return this;
   }
 
@@ -187,25 +191,8 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
   }
 
   @Override
-  protected ServerEssentials buildEssentials() {
-    final EventLoopGroup bossEventLoopGroup  = (userBossEventLoopGroup == null)
-        ? SharedResourceHolder.get(Utils.DEFAULT_BOSS_EVENT_LOOP_GROUP) : userBossEventLoopGroup;
-    final EventLoopGroup workerEventLoopGroup = (userWorkerEventLoopGroup == null)
-        ? SharedResourceHolder.get(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP)
-        : userWorkerEventLoopGroup;
-    NettyServer server = new NettyServer(address, channelType, bossEventLoopGroup,
-        workerEventLoopGroup, sslContext, maxConcurrentCallsPerConnection, flowControlWindow);
-    Runnable terminationRunnable = new Runnable() {
-      @Override
-      public void run() {
-        if (userBossEventLoopGroup == null) {
-          SharedResourceHolder.release(Utils.DEFAULT_BOSS_EVENT_LOOP_GROUP, bossEventLoopGroup);
-        }
-        if (userWorkerEventLoopGroup == null) {
-          SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, workerEventLoopGroup);
-        }
-      }
-    };
-    return new ServerEssentials(server, terminationRunnable);
+  protected NettyServer buildTransportServer() {
+    return new NettyServer(address, channelType, bossEventLoopGroup,
+            workerEventLoopGroup, sslContext, maxConcurrentCallsPerConnection, flowControlWindow);
   }
 }

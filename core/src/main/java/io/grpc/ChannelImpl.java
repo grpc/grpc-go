@@ -33,9 +33,10 @@ package io.grpc;
 
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import io.grpc.ClientCallImpl.ClientTransportProvider;
 import io.grpc.MessageEncoding.Compressor;
-import io.grpc.Metadata;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
@@ -43,12 +44,14 @@ import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
+import io.grpc.internal.SharedResourceHolder.Resource;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -61,8 +64,30 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 public final class ChannelImpl extends Channel {
   private static final Logger log = Logger.getLogger(ChannelImpl.class.getName());
+
+  static final Resource<ExecutorService> SHARED_EXECUTOR =
+      new Resource<ExecutorService>() {
+        private static final String name = "grpc-default-executor";
+        @Override
+        public ExecutorService create() {
+          return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
+              .setNameFormat(name + "-%d").build());
+        }
+
+        @Override
+        public void close(ExecutorService instance) {
+          instance.shutdown();
+        }
+
+        @Override
+        public String toString() {
+          return name;
+        }
+      };
+
   private final ClientTransportFactory transportFactory;
   private final ExecutorService executor;
+  private final boolean usingSharedExecutor;
   private final String userAgent;
   private final Object lock = new Object();
 
@@ -95,7 +120,6 @@ public final class ChannelImpl extends Channel {
   private boolean shutdown;
   @GuardedBy("lock")
   private boolean terminated;
-  private Runnable terminationRunnable;
 
   private long reconnectTimeMillis;
   private BackoffPolicy reconnectPolicy;
@@ -109,21 +133,21 @@ public final class ChannelImpl extends Channel {
     }
   };
 
-  ChannelImpl(ClientTransportFactory transportFactory, ExecutorService executor,
+  ChannelImpl(ClientTransportFactory transportFactory, @Nullable ExecutorService executor,
       @Nullable String userAgent, List<ClientInterceptor> interceptors) {
     this.transportFactory = transportFactory;
-    this.executor = executor;
     this.userAgent = userAgent;
     this.interceptorChannel = ClientInterceptors.intercept(new RealChannel(), interceptors);
     scheduledExecutor = SharedResourceHolder.get(TIMER_SERVICE);
-  }
 
-  /** Hack to allow executors to auto-shutdown. Not for general use. */
-  // TODO(ejona86): Replace with a real API.
-  void setTerminationRunnable(Runnable runnable) {
-    this.terminationRunnable = runnable;
+    if (executor == null) {
+      usingSharedExecutor = true;
+      this.executor = SharedResourceHolder.get(SHARED_EXECUTOR);
+    } else {
+      usingSharedExecutor = false;
+      this.executor = executor;
+    }
   }
-
 
   /**
    * Sets the default compression method for this Channel.  By default, new calls will use the
@@ -157,9 +181,7 @@ public final class ChannelImpl extends Channel {
       } else if (transports.isEmpty()) {
         terminated = true;
         lock.notifyAll();
-        if (terminationRunnable != null) {
-          terminationRunnable.run();
-        }
+        onChannelTerminated();
       }
     }
     if (savedActiveTransport != null) {
@@ -376,12 +398,21 @@ public final class ChannelImpl extends Channel {
           }
           terminated = true;
           lock.notifyAll();
-          if (terminationRunnable != null) {
-            terminationRunnable.run();
-          }
+          onChannelTerminated();
         }
       }
     }
+  }
+
+  /**
+   * If we're using the shared executor, returns its reference.
+   */
+  private void onChannelTerminated() {
+    if (usingSharedExecutor) {
+      SharedResourceHolder.release(SHARED_EXECUTOR, executor);
+    }
+    // Release the transport factory so that it can deallocate any resources.
+    transportFactory.release();
   }
 
   private static final class InactiveTransport implements ClientTransport {
