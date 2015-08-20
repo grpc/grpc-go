@@ -32,7 +32,6 @@
 package io.grpc;
 
 import com.google.common.base.Objects;
-import com.google.common.base.Objects.ToStringHelper;
 
 import io.grpc.MessageEncoding.Compressor;
 
@@ -125,7 +124,7 @@ public final class CallOptions {
   @SuppressWarnings("deprecation") // guava 14.0
   @Override
   public String toString() {
-    ToStringHelper toStringHelper = Objects.toStringHelper(this);
+    Objects.ToStringHelper toStringHelper = Objects.toStringHelper(this);
     toStringHelper.add("deadlineNanoTime", deadlineNanoTime);
     if (deadlineNanoTime != null) {
       long remainingNanos = deadlineNanoTime - System.nanoTime();
