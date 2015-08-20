@@ -77,7 +77,7 @@ In this example the service owner provides a certificate chain and private key t
 
 ```java
 // Load certificate chain and key for SSL server into a Netty SslContext
-SslContext sslContext = SslContext.newServerContext(certChainFile, privateKeyFile);
+SslContext sslContext = GrpcSslContexts.forServer(certChainFile, privateKeyFile);
 // Create a server, bound to port 443 and exposing a service implementation
 ServerImpl server = NettyServerBuilder.forPort(443)
     .sslContext(sslContext)
