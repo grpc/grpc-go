@@ -34,12 +34,14 @@ public final class Test {
       ").grpc.testing.StreamingOutputCallRespon" +
       "se(\0010\001\022i\n\016HalfDuplexCall\022(.grpc.testing." +
       "StreamingOutputCallRequest\032).grpc.testin" +
-      "g.StreamingOutputCallResponse(\0010\0012\177\n\020Rec" +
-      "onnectService\0221\n\005Start\022\023.grpc.testing.Em" +
-      "pty\032\023.grpc.testing.Empty\0228\n\004Stop\022\023.grpc.",
-      "testing.Empty\032\033.grpc.testing.ReconnectIn" +
-      "foB\035\n\033io.grpc.testing.integrationb\006proto" +
-      "3"
+      "g.StreamingOutputCallResponse(\0010\0012U\n\024Uni" +
+      "mplementedService\022=\n\021UnimplementedCall\022\023" +
+      ".grpc.testing.Empty\032\023.grpc.testing.Empty",
+      "2\177\n\020ReconnectService\0221\n\005Start\022\023.grpc.tes" +
+      "ting.Empty\032\023.grpc.testing.Empty\0228\n\004Stop\022" +
+      "\023.grpc.testing.Empty\032\033.grpc.testing.Reco" +
+      "nnectInfoB\035\n\033io.grpc.testing.integration" +
+      "b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {

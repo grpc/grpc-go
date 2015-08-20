@@ -59,6 +59,7 @@ import io.grpc.Metadata;
 import io.grpc.ServerImpl;
 import io.grpc.ServerInterceptors;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.auth.ClientAuthInterceptor;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.protobuf.ProtoUtils;
@@ -810,6 +811,19 @@ public abstract class AbstractTransportTest {
     assertFalse(response.getOauthScope().isEmpty());
     assertTrue("Received oauth scope: " + response.getOauthScope(),
         authScope.contains(response.getOauthScope()));
+  }
+
+  /** Sends an rpc to an unimplemented method on the server. */
+  @Test(timeout = 10000)
+  public void unimplementedMethod() {
+    UnimplementedServiceGrpc.UnimplementedServiceBlockingStub stub =
+        UnimplementedServiceGrpc.newBlockingStub(channel);
+    try {
+      stub.unimplementedCall(Empty.getDefaultInstance());
+      fail();
+    } catch (StatusRuntimeException e) {
+      assertEquals(Status.UNIMPLEMENTED.getCode(), e.getStatus().getCode());
+    }
   }
 
   protected static void assertSuccess(StreamRecorder<?> recorder) {

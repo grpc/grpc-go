@@ -72,6 +72,13 @@ service TestService {
       returns (stream StreamingOutputCallResponse);
 }
 
+// A simple service NOT implemented at servers so clients can test for
+// that case.
+service UnimplementedService {
+  // A call that no server should implement
+  rpc UnimplementedCall(grpc.testing.Empty) returns(grpc.testing.Empty);  
+}
+
 // A service used to control reconnect server.
 service ReconnectService {
   rpc Start(grpc.testing.Empty) returns (grpc.testing.Empty);
