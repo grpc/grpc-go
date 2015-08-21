@@ -124,7 +124,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 			if timeout > 0 {
 				timeout -= time.Since(startT)
 			}
-			conn, connErr = ccreds.ClientHandshake(addr, conn, timeout)
+			conn, _, connErr = ccreds.ClientHandshake(addr, conn, timeout)
 			break
 		}
 	}

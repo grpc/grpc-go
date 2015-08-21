@@ -82,14 +82,23 @@ type ProtocolInfo struct {
 // protocols and supported transport security protocols (e.g., TLS, SSL).
 type TransportAuthenticator interface {
 	// ClientHandshake does the authentication handshake specified by the corresponding
-	// authentication protocol on rawConn for clients.
-	ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, error)
-	// ServerHandshake does the authentication handshake for servers.
-	ServerHandshake(rawConn net.Conn) (net.Conn, error)
+	// authentication protocol on rawConn for clients. It returns the authenticated
+	// connection and the corresponding auth information about the connection.
+	ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, map[string][]string, error)
+	// ServerHandshake does the authentication handshake for servers. It returns
+	// the authenticated connection and the corresponding auth information about
+	// the connection.
+	ServerHandshake(rawConn net.Conn) (net.Conn, map[string][]string, error)
 	// Info provides the ProtocolInfo of this TransportAuthenticator.
 	Info() ProtocolInfo
 	Credentials
 }
+
+const (
+	transportSecurityType = "transport_security_type"
+	x509CN = "x509_common_name"
+	x509SAN = "x509_suject_alternative_name"
+)
 
 // tlsCreds is the credentials required for authenticating a connection using TLS.
 type tlsCreds struct {
@@ -116,7 +125,7 @@ func (timeoutError) Error() string   { return "credentials: Dial timed out" }
 func (timeoutError) Timeout() bool   { return true }
 func (timeoutError) Temporary() bool { return true }
 
-func (c *tlsCreds) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (_ net.Conn, err error) {
+func (c *tlsCreds) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (_ net.Conn, _ map[string][]string, err error) {
 	// borrow some code from tls.DialWithDialer
 	var errChannel chan error
 	if timeout != 0 {
@@ -143,18 +152,32 @@ func (c *tlsCreds) ClientHandshake(addr string, rawConn net.Conn, timeout time.D
 	}
 	if err != nil {
 		rawConn.Close()
-		return nil, err
+		return nil, nil, err
 	}
-	return conn, nil
+	// TODO(zhaoq): Omit the auth info for client now. It is more for
+	// information than anything else.
+	return conn, nil, nil
 }
 
-func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, error) {
+func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, map[string][]string, error) {
 	conn := tls.Server(rawConn, &c.config)
 	if err := conn.Handshake(); err != nil {
 		rawConn.Close()
-		return nil, err
+		return nil, nil, err
 	}
-	return conn, nil
+	state := conn.ConnectionState()
+	info := make(map[string][]string)
+	info[transportSecurityType] = []string{"tls"}
+	for _, certs := range state.VerifiedChains {
+		fmt.Println("DEBUG: reach here")
+		for _, cert := range certs {
+			info[x509CN] = append(info[x509CN], cert.Subject.CommonName)
+			for _, san := range cert.DNSNames {
+				info[x509SAN] = append(info[x509SAN], san)
+			}
+		}
+	}
+	return conn, info, nil
 }
 
 // NewTLS uses c to construct a TransportAuthenticator based on TLS.

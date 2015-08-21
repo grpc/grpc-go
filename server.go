@@ -199,8 +199,9 @@ func (s *Server) Serve(lis net.Listener) error {
 		if err != nil {
 			return err
 		}
+		var authInfo map[string][]string
 		if creds, ok := s.opts.creds.(credentials.TransportAuthenticator); ok {
-			c, err = creds.ServerHandshake(c)
+			c, authInfo, err = creds.ServerHandshake(c)
 			if err != nil {
 				grpclog.Println("grpc: Server.Serve failed to complete security handshake.")
 				continue
@@ -212,7 +213,7 @@ func (s *Server) Serve(lis net.Listener) error {
 			c.Close()
 			return nil
 		}
-		st, err := transport.NewServerTransport("http2", c, s.opts.maxConcurrentStreams)
+		st, err := transport.NewServerTransport("http2", c, s.opts.maxConcurrentStreams, authInfo)
 		if err != nil {
 			s.mu.Unlock()
 			c.Close()
