@@ -205,10 +205,10 @@ public class OkHttpClientTransportTest {
     listener1.waitUntilStreamClosed();
     listener2.waitUntilStreamClosed();
     assertEquals(0, activeStreamCount());
-    assertEquals(Status.INTERNAL.getCode(), listener1.status.getCode());
-    assertEquals("Protocol error\n" + NETWORK_ISSUE_MESSAGE, listener1.status.getDescription());
-    assertEquals(Status.INTERNAL.getCode(), listener2.status.getCode());
-    assertEquals("Protocol error\n" + NETWORK_ISSUE_MESSAGE, listener2.status.getDescription());
+    assertEquals(Status.UNAVAILABLE.getCode(), listener1.status.getCode());
+    assertEquals(NETWORK_ISSUE_MESSAGE, listener1.status.getCause().getMessage());
+    assertEquals(Status.UNAVAILABLE.getCode(), listener2.status.getCode());
+    assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
     verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }

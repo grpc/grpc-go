@@ -580,9 +580,10 @@ class OkHttpClientTransport implements ClientTransport {
         while (frameReader.nextFrame(this)) {
         }
       } catch (IOException ioe) {
-        // We call onError instead of onIoException here, because OkHttp wraps many protocol errors
-        // as IOException, we should send GoAway for such errors.
-        onError(ErrorCode.PROTOCOL_ERROR, ioe.getMessage());
+        // We send GoAway here because OkHttp wraps many protocol errors as IOException.
+        // TODO(madongfly): Send the exception message to the server.
+        frameWriter.goAway(0, ErrorCode.PROTOCOL_ERROR, new byte[0]);
+        onIoException(ioe);
       } finally {
         try {
           frameReader.close();
