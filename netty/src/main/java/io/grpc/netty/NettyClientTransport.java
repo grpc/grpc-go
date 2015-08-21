@@ -46,6 +46,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
@@ -188,9 +189,7 @@ class NettyClientTransport implements ClientTransport {
     channel.write(NettyClientHandler.NOOP_MESSAGE).addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
-        if (future.isSuccess()) {
-          listener.transportReady();
-        } else {
+        if (!future.isSuccess()) {
           // Need to notify of this failure, because handler.connectionError() is not guaranteed to
           // have seen this cause.
           notifyTerminated(Status.fromThrowable(future.cause()));
@@ -255,7 +254,18 @@ class NettyClientTransport implements ClientTransport {
     frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
 
     BufferingHttp2ConnectionEncoder encoder = new BufferingHttp2ConnectionEncoder(
-            new DefaultHttp2ConnectionEncoder(connection, frameWriter));
+            new DefaultHttp2ConnectionEncoder(connection, frameWriter)) {
+      private boolean firstSettings = true;
+
+      @Override
+      public ChannelFuture writeSettingsAck(ChannelHandlerContext ctx, ChannelPromise promise) {
+        if (firstSettings) {
+          listener.transportReady();
+          firstSettings = false;
+        }
+        return super.writeSettingsAck(ctx, promise);
+      }
+    };
     return new NettyClientHandler(encoder, connection, frameReader, flowControlWindow);
   }
 }
