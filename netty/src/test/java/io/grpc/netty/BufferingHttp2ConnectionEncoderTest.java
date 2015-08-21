@@ -31,7 +31,7 @@
 
 package io.grpc.netty;
 
-import static io.grpc.internal.HttpUtil.Http2Error.CANCEL;
+import static io.grpc.internal.GrpcUtil.Http2Error.CANCEL;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_MAX_FRAME_SIZE;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_PRIORITY_WEIGHT;
 import static io.netty.handler.codec.http2.Http2Stream.State.HALF_CLOSED_LOCAL;

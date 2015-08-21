@@ -43,8 +43,9 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.internal.ClientTransport.PingCallback;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
-import io.grpc.internal.HttpUtil;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -224,7 +225,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
    */
   private void onRstStreamRead(int streamId, long errorCode) throws Http2Exception {
     NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
-    Status status = HttpUtil.Http2Error.statusForCode((int) errorCode);
+    Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode);
     stream.transportReportStatus(status, false, new Metadata());
   }
 
@@ -464,7 +465,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
   }
 
   private Status statusFromGoAway(long errorCode, ByteBuf debugData) {
-    Status status = HttpUtil.Http2Error.statusForCode((int) errorCode);
+    Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode);
     if (debugData.isReadable()) {
       // If a debug message was provided, use it.
       String msg = debugData.toString(UTF_8);

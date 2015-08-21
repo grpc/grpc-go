@@ -35,15 +35,15 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 import io.grpc.Status;
-import io.grpc.internal.HttpUtil.Http2Error;
+import io.grpc.internal.GrpcUtil.Http2Error;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Unit tests for {@link HttpUtil}. */
+/** Unit tests for {@link GrpcUtil}. */
 @RunWith(JUnit4.class)
-public class HttpUtilTest {
+public class GrpcUtilTest {
   @Test
   public void http2ErrorForCode() {
     // Try edge cases manually, to make the test obviously correct for important cases.

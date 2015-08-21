@@ -77,7 +77,7 @@ import io.grpc.StatusException;
 import io.grpc.internal.AbstractStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
-import io.grpc.internal.HttpUtil;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.okhttp.OkHttpClientTransport.ClientFrameHandler;
 
 import okio.Buffer;
@@ -316,8 +316,8 @@ public class OkHttpClientTransportTest {
     initTransport();
     MockStreamListener listener = new MockStreamListener();
     clientTransport.newStream(method, new Metadata.Headers(), listener);
-    Header userAgentHeader = new Header(HttpUtil.USER_AGENT_KEY.name(),
-            HttpUtil.getGrpcUserAgent("okhttp", null));
+    Header userAgentHeader = new Header(GrpcUtil.USER_AGENT_KEY.name(),
+            GrpcUtil.getGrpcUserAgent("okhttp", null));
     List<Header> expectedHeaders = Arrays.asList(SCHEME_HEADER, METHOD_HEADER,
             new Header(Header.TARGET_AUTHORITY, "notarealauthority:80"),
             new Header(Header.TARGET_PATH, "/fakemethod"),
@@ -333,13 +333,13 @@ public class OkHttpClientTransportTest {
     MockStreamListener listener = new MockStreamListener();
     String userAgent = "fakeUserAgent";
     Metadata.Headers metadata = new Metadata.Headers();
-    metadata.put(HttpUtil.USER_AGENT_KEY, userAgent);
+    metadata.put(GrpcUtil.USER_AGENT_KEY, userAgent);
     clientTransport.newStream(method, metadata, listener);
     List<Header> expectedHeaders = Arrays.asList(SCHEME_HEADER, METHOD_HEADER,
         new Header(Header.TARGET_AUTHORITY, "notarealauthority:80"),
         new Header(Header.TARGET_PATH, "/fakemethod"),
-        new Header(HttpUtil.USER_AGENT_KEY.name(),
-            HttpUtil.getGrpcUserAgent("okhttp", userAgent)),
+        new Header(GrpcUtil.USER_AGENT_KEY.name(),
+            GrpcUtil.getGrpcUserAgent("okhttp", userAgent)),
         CONTENT_TYPE_HEADER, TE_HEADER);
     verify(frameWriter, timeout(TIME_OUT_MS))
         .synStream(eq(false), eq(false), eq(3), eq(0), eq(expectedHeaders));

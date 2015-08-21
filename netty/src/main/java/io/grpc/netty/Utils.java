@@ -31,15 +31,15 @@
 
 package io.grpc.netty;
 
-import static io.grpc.internal.HttpUtil.CONTENT_TYPE_KEY;
-import static io.grpc.internal.HttpUtil.USER_AGENT_KEY;
+import static io.grpc.internal.GrpcUtil.CONTENT_TYPE_KEY;
+import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.grpc.Metadata;
-import io.grpc.internal.HttpUtil;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.internal.TransportFrameUtil;
 import io.netty.channel.EventLoopGroup;
@@ -62,15 +62,15 @@ import java.util.concurrent.TimeUnit;
 class Utils {
 
   public static final ByteString STATUS_OK = new ByteString("200".getBytes(UTF_8));
-  public static final ByteString HTTP_METHOD = new ByteString(HttpUtil.HTTP_METHOD.getBytes(UTF_8));
+  public static final ByteString HTTP_METHOD = new ByteString(GrpcUtil.HTTP_METHOD.getBytes(UTF_8));
   public static final ByteString HTTPS = new ByteString("https".getBytes(UTF_8));
   public static final ByteString HTTP = new ByteString("http".getBytes(UTF_8));
   public static final ByteString CONTENT_TYPE_HEADER = new ByteString(CONTENT_TYPE_KEY.name()
       .getBytes(UTF_8));
   public static final ByteString CONTENT_TYPE_GRPC = new ByteString(
-      HttpUtil.CONTENT_TYPE_GRPC.getBytes(UTF_8));
+      GrpcUtil.CONTENT_TYPE_GRPC.getBytes(UTF_8));
   public static final ByteString TE_HEADER = new ByteString("te".getBytes(UTF_8));
-  public static final ByteString TE_TRAILERS = new ByteString(HttpUtil.TE_TRAILERS.getBytes(UTF_8));
+  public static final ByteString TE_TRAILERS = new ByteString(GrpcUtil.TE_TRAILERS.getBytes(UTF_8));
   public static final ByteString USER_AGENT = new ByteString(USER_AGENT_KEY.name().getBytes(UTF_8));
 
   public static final Resource<EventLoopGroup> DEFAULT_BOSS_EVENT_LOOP_GROUP =
@@ -129,7 +129,7 @@ class Utils {
     }
 
     // Set the User-Agent header.
-    String userAgent = HttpUtil.getGrpcUserAgent("netty", headers.get(USER_AGENT_KEY));
+    String userAgent = GrpcUtil.getGrpcUserAgent("netty", headers.get(USER_AGENT_KEY));
     http2Headers.set(USER_AGENT, new ByteString(userAgent.getBytes(UTF_8)));
 
     return http2Headers;

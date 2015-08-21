@@ -39,9 +39,9 @@ import java.net.HttpURLConnection;
 import javax.annotation.Nullable;
 
 /**
- * Constants for GRPC-over-HTTP (or HTTP/2).
+ * Common utilities for GRPC.
  */
-public final class HttpUtil {
+public final class GrpcUtil {
 
   /**
    * {@link io.grpc.Metadata.Key} for the Content-Type request/response header.
@@ -204,7 +204,7 @@ public final class HttpUtil {
   public static String getGrpcUserAgent(String transportName,
                                         @Nullable String applicationUserAgent) {
     StringBuilder builder = new StringBuilder("grpc-java-").append(transportName);
-    String version = HttpUtil.class.getPackage().getImplementationVersion();
+    String version = GrpcUtil.class.getPackage().getImplementationVersion();
     if (version != null) {
       builder.append("/");
       builder.append(version);
@@ -216,5 +216,5 @@ public final class HttpUtil {
     return builder.toString();
   }
 
-  private HttpUtil() {}
+  private GrpcUtil() {}
 }

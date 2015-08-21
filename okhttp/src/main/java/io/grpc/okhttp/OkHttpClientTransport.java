@@ -58,8 +58,8 @@ import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
-import io.grpc.internal.HttpUtil;
 import io.grpc.internal.SerializingExecutor;
 
 import okio.Buffer;
@@ -717,7 +717,7 @@ class OkHttpClientTransport implements ClientTransport {
 
     @Override
     public void goAway(int lastGoodStreamId, ErrorCode errorCode, ByteString debugData) {
-      Status status = HttpUtil.Http2Error.statusForCode(errorCode.httpCode);
+      Status status = GrpcUtil.Http2Error.statusForCode(errorCode.httpCode);
       if (debugData != null && debugData.size() > 0) {
         // If a debug message was provided, use it.
         status.augmentDescription(debugData.utf8());

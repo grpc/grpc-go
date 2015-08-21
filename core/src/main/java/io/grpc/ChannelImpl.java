@@ -42,7 +42,7 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.ClientTransportFactory;
-import io.grpc.internal.HttpUtil;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
 
@@ -394,11 +394,11 @@ public final class ChannelImpl extends Channel {
   // TODO(johnbcoughlin) make this package private when we can do so with the tests.
   @VisibleForTesting
   public static final Metadata.Key<Long> TIMEOUT_KEY =
-      Metadata.Key.of(HttpUtil.TIMEOUT, new TimeoutMarshaller());
+      Metadata.Key.of(GrpcUtil.TIMEOUT, new TimeoutMarshaller());
 
   // TODO(carl-mastrangelo): move this to internal
   public static final Metadata.Key<String> MESSAGE_ENCODING_KEY =
-      Metadata.Key.of(HttpUtil.MESSAGE_ENCODING, Metadata.ASCII_STRING_MARSHALLER);
+      Metadata.Key.of(GrpcUtil.MESSAGE_ENCODING, Metadata.ASCII_STRING_MARSHALLER);
 
   /**
    * Marshals a microseconds representation of the timeout to and from a string representation,
