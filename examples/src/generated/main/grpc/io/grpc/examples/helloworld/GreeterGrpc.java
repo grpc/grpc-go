@@ -16,6 +16,8 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 @javax.annotation.Generated("by gRPC proto compiler")
 public class GreeterGrpc {
 
+  public static final String SERVICE_NAME = "helloworld.Greeter";
+
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.examples.helloworld.HelloRequest,
@@ -134,7 +136,7 @@ public class GreeterGrpc {
 
   public static io.grpc.ServerServiceDefinition bindService(
       final Greeter serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder("helloworld.Greeter")
+    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_SAY_HELLO,
           asyncUnaryCall(

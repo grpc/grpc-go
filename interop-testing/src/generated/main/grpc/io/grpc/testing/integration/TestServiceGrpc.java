@@ -16,6 +16,8 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 @javax.annotation.Generated("by gRPC proto compiler")
 public class TestServiceGrpc {
 
+  public static final String SERVICE_NAME = "grpc.testing.TestService";
+
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
@@ -257,7 +259,7 @@ public class TestServiceGrpc {
 
   public static io.grpc.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder("grpc.testing.TestService")
+    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_EMPTY_CALL,
           asyncUnaryCall(

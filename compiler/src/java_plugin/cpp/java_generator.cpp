@@ -421,7 +421,7 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
   p->Indent();
   p->Print(*vars,
            "return "
-           "$ServerServiceDefinition$.builder(\"$Package$$service_name$\")\n");
+           "$ServerServiceDefinition$.builder(SERVICE_NAME)\n");
   p->Indent();
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
@@ -513,6 +513,11 @@ static void PrintService(const ServiceDescriptor* service,
       "@$Generated$(\"by gRPC proto compiler\")\n"
       "public class $service_class_name$ {\n\n");
   p->Indent();
+
+  p->Print(
+      *vars,
+      "public static final String SERVICE_NAME = "
+      "\"$Package$$service_name$\";\n\n");
 
   PrintMethodFields(service, vars, p, generate_nano);
 

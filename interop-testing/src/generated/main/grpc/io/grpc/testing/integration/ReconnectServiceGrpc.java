@@ -16,6 +16,8 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 @javax.annotation.Generated("by gRPC proto compiler")
 public class ReconnectServiceGrpc {
 
+  public static final String SERVICE_NAME = "grpc.testing.ReconnectService";
+
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
@@ -171,7 +173,7 @@ public class ReconnectServiceGrpc {
 
   public static io.grpc.ServerServiceDefinition bindService(
       final ReconnectService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder("grpc.testing.ReconnectService")
+    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
       .addMethod(io.grpc.ServerMethodDefinition.create(
           METHOD_START,
           asyncUnaryCall(
