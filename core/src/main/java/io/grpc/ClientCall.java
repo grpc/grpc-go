@@ -142,7 +142,6 @@ public abstract class ClientCall<RequestT, ResponseT> {
    *
    * @param numMessages the requested number of messages to be delivered to the listener. Must be
    *                    non-negative.
-   * @throws IllegalStateException if call is already {@code halfClose()}d or {@link #cancel}ed
    */
   public abstract void request(int numMessages);
 
