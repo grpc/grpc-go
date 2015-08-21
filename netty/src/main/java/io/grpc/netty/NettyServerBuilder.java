@@ -31,6 +31,9 @@
 
 package io.grpc.netty;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
+
 import com.google.common.base.Preconditions;
 
 import io.grpc.AbstractServerBuilder;
@@ -61,6 +64,7 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
   private SslContext sslContext;
   private int maxConcurrentCallsPerConnection = Integer.MAX_VALUE;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
+  private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
 
   /**
    * Creates a server builder that will bind to the given port.
@@ -190,9 +194,20 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
     return this;
   }
 
+  /**
+   * Sets the maximum message size allowed to be received on the server. If not called,
+   * defaults to 100 MiB.
+   */
+  public NettyServerBuilder maxMessageSize(int maxMessageSize) {
+    checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
+    this.maxMessageSize = maxMessageSize;
+    return this;
+  }
+
   @Override
   protected NettyServer buildTransportServer() {
     return new NettyServer(address, channelType, bossEventLoopGroup,
-            workerEventLoopGroup, sslContext, maxConcurrentCallsPerConnection, flowControlWindow);
+            workerEventLoopGroup, sslContext, maxConcurrentCallsPerConnection, flowControlWindow,
+            maxMessageSize);
   }
 }

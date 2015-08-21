@@ -31,6 +31,9 @@
 
 package io.grpc.okhttp;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
+
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -96,6 +99,7 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
   private SSLSocketFactory sslSocketFactory;
   private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
   private NegotiationType negotiationType = NegotiationType.TLS;
+  private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
 
   private OkHttpChannelBuilder(String host, int port) {
     this.host = Preconditions.checkNotNull(host);
@@ -159,10 +163,20 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
     return this;
   }
 
+  /**
+   * Sets the maximum message size allowed to be received on the channel. If not called,
+   * defaults to {@link io.grpc.internal.GrpcUtil#DEFAULT_MAX_MESSAGE_SIZE}.
+   */
+  public OkHttpChannelBuilder maxMessageSize(int maxMessageSize) {
+    checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
+    this.maxMessageSize = maxMessageSize;
+    return this;
+  }
+
   @Override
   protected ClientTransportFactory buildTransportFactory() {
     return new OkHttpTransportFactory(host, port, authorityHost, transportExecutor,
-            createSocketFactory(), connectionSpec);
+            createSocketFactory(), connectionSpec, maxMessageSize);
   }
 
   private SSLSocketFactory createSocketFactory() {
@@ -186,18 +200,21 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
     private final boolean usingSharedExecutor;
     private final SSLSocketFactory socketFactory;
     private final ConnectionSpec connectionSpec;
+    private final int maxMessageSize;
 
     private OkHttpTransportFactory(String host,
                                    int port,
                                    String authorityHost,
                                    ExecutorService executor,
                                    SSLSocketFactory socketFactory,
-                                   ConnectionSpec connectionSpec) {
+                                   ConnectionSpec connectionSpec,
+                                   int maxMessageSize) {
       this.host = host;
       this.port = port;
       this.authorityHost = authorityHost;
       this.socketFactory = socketFactory;
       this.connectionSpec = connectionSpec;
+      this.maxMessageSize = maxMessageSize;
 
       usingSharedExecutor = executor == null;
       if (usingSharedExecutor) {
@@ -211,7 +228,7 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
     @Override
     public ClientTransport newClientTransport() {
       return new OkHttpClientTransport(host, port, authorityHost, executor, socketFactory,
-              connectionSpec);
+              connectionSpec, maxMessageSize);
     }
 
     @Override

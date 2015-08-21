@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyInt;
@@ -67,7 +68,8 @@ import java.util.zip.GZIPOutputStream;
 @RunWith(JUnit4.class)
 public class MessageDeframerTest {
   private Listener listener = mock(Listener.class);
-  private MessageDeframer deframer = new MessageDeframer(listener);
+  private MessageDeframer deframer = new MessageDeframer(listener, MessageEncoding.NONE,
+          DEFAULT_MAX_MESSAGE_SIZE);
   private ArgumentCaptor<InputStream> messages = ArgumentCaptor.forClass(InputStream.class);
 
   @Test
@@ -176,7 +178,7 @@ public class MessageDeframerTest {
 
   @Test
   public void compressed() {
-    deframer = new MessageDeframer(listener, new MessageEncoding.Gzip());
+    deframer = new MessageDeframer(listener, new MessageEncoding.Gzip(), DEFAULT_MAX_MESSAGE_SIZE);
     deframer.request(1);
 
     byte[] payload = compress(new byte[1000]);

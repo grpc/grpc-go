@@ -32,6 +32,7 @@
 
 package io.grpc.internal;
 
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.verify;
 
@@ -102,7 +103,7 @@ public class AbstractStreamTest {
    */
   private class AbstractStreamBase<IdT> extends AbstractStream<IdT> {
     private AbstractStreamBase(WritableBufferAllocator bufferAllocator) {
-      super(bufferAllocator);
+      super(bufferAllocator, DEFAULT_MAX_MESSAGE_SIZE);
     }
 
     @Override

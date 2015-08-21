@@ -32,9 +32,12 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Charsets.UTF_8;
+import static io.grpc.Status.Code.INTERNAL;
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.io.ByteStreams;
@@ -152,6 +155,25 @@ public class NettyClientTransportTest {
             receivedHeaders.get(USER_AGENT_KEY));
   }
 
+  @Test
+  public void maxMessageSizeShouldBeEnforced() throws Throwable {
+    startServer();
+    // Allow the response payloads of up to 1 byte.
+    NettyClientTransport transport = newTransport(newNegotiator(), 1);
+    transport.start(clientTransportListener);
+
+    try {
+      // Send a single RPC and wait for the response.
+      new Rpc(transport).halfClose().waitForResponse();
+      fail("Expected the stream to fail.");
+    } catch (ExecutionException e) {
+      Status status = Status.fromThrowable(e);
+      assertEquals(INTERNAL, status.getCode());
+      System.err.println(status.getDescription());
+      assertTrue(status.getDescription().contains("deframing"));
+    }
+  }
+
   /**
    * Verifies that we can create multiple TLS client transports from the same builder.
    */
@@ -218,8 +240,12 @@ public class NettyClientTransportTest {
   }
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator) {
+    return newTransport(negotiator, DEFAULT_MAX_MESSAGE_SIZE);
+  }
+
+  private NettyClientTransport newTransport(ProtocolNegotiator negotiator, int maxMsgSize) {
     NettyClientTransport transport = new NettyClientTransport(address, NioSocketChannel.class,
-            group, negotiator, DEFAULT_WINDOW_SIZE);
+            group, negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize);
     transports.add(transport);
     return transport;
   }
@@ -235,7 +261,7 @@ public class NettyClientTransportTest {
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
     server = new NettyServer(address, NioServerSocketChannel.class,
             group, group, serverContext, maxStreamsPerConnection,
-            DEFAULT_WINDOW_SIZE);
+            DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE);
     server.start(serverListener);
   }
 

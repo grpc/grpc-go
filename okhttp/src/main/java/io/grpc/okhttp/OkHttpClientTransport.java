@@ -141,6 +141,7 @@ class OkHttpClientTransport implements ClientTransport {
   private final Executor executor;
   // Wrap on executor, to guarantee some operations be executed serially.
   private final SerializingExecutor serializingExecutor;
+  private final int maxMessageSize;
   private int connectionUnacknowledgedBytesRead;
   private ClientFrameHandler clientFrameHandler;
   // The status used to finish all active streams when the transport is closed.
@@ -166,10 +167,13 @@ class OkHttpClientTransport implements ClientTransport {
   SettableFuture<Void> connectedFuture;
 
   OkHttpClientTransport(String host, int port, String authorityHost, Executor executor,
-      @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec) {
+
+      @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec,
+      int maxMessageSize) {
     this.host = Preconditions.checkNotNull(host, "host");
     this.port = port;
     this.authorityHost = authorityHost;
+    this.maxMessageSize = maxMessageSize;
     defaultAuthority = authorityHost + ":" + port;
     this.executor = Preconditions.checkNotNull(executor, "executor");
     serializingExecutor = new SerializingExecutor(executor);
@@ -187,10 +191,12 @@ class OkHttpClientTransport implements ClientTransport {
   @VisibleForTesting
   OkHttpClientTransport(Executor executor, FrameReader frameReader, FrameWriter testFrameWriter,
       int nextStreamId, Socket socket, Ticker ticker,
-      @Nullable Runnable connectingCallback, SettableFuture<Void> connectedFuture) {
+      @Nullable Runnable connectingCallback, SettableFuture<Void> connectedFuture,
+      int maxMessageSize) {
     host = null;
     port = 0;
     authorityHost = null;
+    this.maxMessageSize = maxMessageSize;
     defaultAuthority = "notarealauthority:80";
     this.executor = Preconditions.checkNotNull(executor);
     serializingExecutor = new SerializingExecutor(executor);
@@ -248,9 +254,10 @@ class OkHttpClientTransport implements ClientTransport {
     Preconditions.checkNotNull(listener, "listener");
 
     String defaultPath = "/" + method.getFullMethodName();
-    OkHttpClientStream clientStream = OkHttpClientStream.newStream(
+    OkHttpClientStream clientStream = new OkHttpClientStream(
         listener, frameWriter, this, outboundFlow, method.getType(), lock,
-        Headers.createRequestHeaders(headers, defaultPath, defaultAuthority));
+        Headers.createRequestHeaders(headers, defaultPath, defaultAuthority),
+        maxMessageSize);
 
     synchronized (lock) {
       if (goAway) {

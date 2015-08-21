@@ -32,19 +32,15 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static io.grpc.Status.Code.CANCELLED;
-import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
+import static io.grpc.internal.GrpcUtil.CANCEL_REASONS;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
-import io.grpc.Status.Code;
 
 import java.io.InputStream;
-import java.util.EnumSet;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -55,8 +51,6 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     implements ClientStream {
 
   private static final Logger log = Logger.getLogger(AbstractClientStream.class.getName());
-  private static final Set<Code> CANCEL_REASONS =
-      EnumSet.of(CANCELLED, DEADLINE_EXCEEDED, Code.INTERNAL, Code.UNKNOWN);
 
   private final ClientStreamListener listener;
   private boolean listenerClosed;
@@ -67,15 +61,10 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   private Metadata trailers;
   private Runnable closeListenerTask;
 
-
-  /**
-   * Constructor used by subclasses.
-   *
-   * @param listener the listener to receive notifications
-   */
   protected AbstractClientStream(WritableBufferAllocator bufferAllocator,
-                                 ClientStreamListener listener) {
-    super(bufferAllocator);
+                                 ClientStreamListener listener,
+                                 int maxMessageSize) {
+    super(bufferAllocator, maxMessageSize);
     this.listener = Preconditions.checkNotNull(listener);
   }
 

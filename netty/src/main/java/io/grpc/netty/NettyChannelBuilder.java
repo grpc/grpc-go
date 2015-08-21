@@ -31,6 +31,9 @@
 
 package io.grpc.netty;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
+
 import com.google.common.base.Preconditions;
 
 import io.grpc.AbstractChannelBuilder;
@@ -38,6 +41,7 @@ import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.SharedResourceHolder;
+
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -62,6 +66,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
   private EventLoopGroup eventLoopGroup;
   private SslContext sslContext;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
+  private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
 
   /**
    * Creates a new builder with the given server address.
@@ -132,10 +137,20 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     return this;
   }
 
+  /**
+   * Sets the maximum message size allowed to be received on the channel. If not called,
+   * defaults to {@link io.grpc.internal.GrpcUtil#DEFAULT_MAX_MESSAGE_SIZE}.
+   */
+  public NettyChannelBuilder maxMessageSize(int maxMessageSize) {
+    checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
+    this.maxMessageSize = maxMessageSize;
+    return this;
+  }
+
   @Override
   protected ClientTransportFactory buildTransportFactory() {
     return new NettyTransportFactory(serverAddress, channelType, eventLoopGroup, flowControlWindow,
-            createProtocolNegotiator());
+            createProtocolNegotiator(), maxMessageSize);
   }
 
   private ProtocolNegotiator createProtocolNegotiator() {
@@ -170,16 +185,19 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     private final boolean usingSharedGroup;
     private final int flowControlWindow;
     private final ProtocolNegotiator negotiator;
+    private final int maxMessageSize;
 
     private NettyTransportFactory(SocketAddress serverAddress,
                                   Class<? extends Channel> channelType,
                                   EventLoopGroup group,
                                   int flowControlWindow,
-                                  ProtocolNegotiator negotiator) {
+                                  ProtocolNegotiator negotiator,
+                                  int maxMessageSize) {
       this.serverAddress = serverAddress;
       this.channelType = channelType;
       this.flowControlWindow = flowControlWindow;
       this.negotiator = negotiator;
+      this.maxMessageSize = maxMessageSize;
 
       usingSharedGroup = group == null;
       if (usingSharedGroup) {
@@ -193,7 +211,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     @Override
     public ClientTransport newClientTransport() {
       return new NettyClientTransport(serverAddress, channelType, group, negotiator,
-              flowControlWindow);
+              flowControlWindow, maxMessageSize);
     }
 
     @Override

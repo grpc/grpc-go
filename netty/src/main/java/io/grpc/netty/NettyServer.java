@@ -72,11 +72,13 @@ public class NettyServer implements Server {
   private EventLoopGroup workerGroup;
   private ServerListener listener;
   private Channel channel;
-  private int flowControlWindow;
+  private final int flowControlWindow;
+  private final int maxMessageSize;
 
   NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
               @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
-              @Nullable SslContext sslContext, int maxStreamsPerConnection, int flowControlWindow) {
+              @Nullable SslContext sslContext, int maxStreamsPerConnection, int flowControlWindow,
+              int maxMessageSize) {
     this.address = address;
     this.channelType = checkNotNull(channelType, "channelType");
     this.bossGroup = bossGroup;
@@ -86,6 +88,7 @@ public class NettyServer implements Server {
     this.usingSharedWorkerGroup = workerGroup == null;
     this.maxStreamsPerConnection = maxStreamsPerConnection;
     this.flowControlWindow = flowControlWindow;
+    this.maxMessageSize = maxMessageSize;
   }
 
   @Override
@@ -106,7 +109,8 @@ public class NettyServer implements Server {
       @Override
       public void initChannel(Channel ch) throws Exception {
         NettyServerTransport transport
-            = new NettyServerTransport(ch, sslContext, maxStreamsPerConnection, flowControlWindow);
+            = new NettyServerTransport(ch, sslContext, maxStreamsPerConnection, flowControlWindow,
+                maxMessageSize);
         transport.start(listener.transportCreated(transport));
       }
     });

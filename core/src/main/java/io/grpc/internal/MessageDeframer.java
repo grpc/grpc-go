@@ -39,6 +39,7 @@ import io.grpc.MessageEncoding;
 import io.grpc.Status;
 
 import java.io.Closeable;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -94,6 +95,7 @@ public class MessageDeframer implements Closeable {
   }
 
   private final Listener listener;
+  private final int maxMessageSize;
   private MessageEncoding.Decompressor decompressor;
   private State state = State.HEADER;
   private int requiredLength = HEADER_LENGTH;
@@ -106,24 +108,18 @@ public class MessageDeframer implements Closeable {
   private boolean inDelivery = false;
 
   /**
-   * Creates a deframer. Compression will not be supported.
-   *
-   * @param listener listener for deframer events.
-   */
-  public MessageDeframer(Listener listener) {
-    this(listener, MessageEncoding.NONE);
-  }
-
-  /**
    * Create a deframer.
    *
    * @param listener listener for deframer events.
    * @param decompressor the compression used if a compressed frame is encountered, with
    *  {@code NONE} meaning unsupported
+   * @param maxMessageSize the maximum allowed size for received messages.
    */
-  public MessageDeframer(Listener listener, MessageEncoding.Decompressor decompressor) {
-    this.listener = Preconditions.checkNotNull(listener, "listener");
+  public MessageDeframer(Listener listener, MessageEncoding.Decompressor decompressor,
+                         int maxMessageSize) {
+    this.listener = Preconditions.checkNotNull(listener, "sink");
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
+    this.maxMessageSize = maxMessageSize;
   }
 
   /**
@@ -162,8 +158,7 @@ public class MessageDeframer implements Closeable {
    *        the remote endpoint.  End of stream should not be used in the event of a transport
    *        error, such as a stream reset.
    * @throws IllegalStateException if {@link #close()} has been called previously or if
-   *         {@link #deframe(ReadableBuffer, boolean)} has previously been called with
-   *         {@code endOfStream=true}.
+   *         this method has previously been called with {@code endOfStream=true}.
    */
   public void deframe(ReadableBuffer data, boolean endOfStream) {
     Preconditions.checkNotNull(data, "data");
@@ -291,10 +286,6 @@ public class MessageDeframer implements Closeable {
     }
   }
 
-  private boolean isDataAvailable() {
-    return unprocessed.readableBytes() > 0 || (nextFrame != null && nextFrame.readableBytes() > 0);
-  }
-
   /**
    * Attempts to read the required bytes into nextFrame.
    *
@@ -340,6 +331,10 @@ public class MessageDeframer implements Closeable {
 
     // Update the required length to include the length of the frame.
     requiredLength = nextFrame.readInt();
+    if (requiredLength < 0 || requiredLength > maxMessageSize) {
+      throw Status.INTERNAL.withDescription(String.format("Frame size %d exceeds maximum: %d, ",
+              requiredLength, maxMessageSize)).asRuntimeException();
+    }
 
     // Continue reading the frame body.
     state = State.BODY;
@@ -370,9 +365,79 @@ public class MessageDeframer implements Closeable {
     }
 
     try {
-      return decompressor.decompress(ReadableBuffers.openStream(nextFrame, true));
+      // Enforce the maxMessageSize limit on the returned stream.
+      return new SizeEnforcingInputStream(decompressor.decompress(
+              ReadableBuffers.openStream(nextFrame, true)));
     } catch (IOException e) {
       throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * An {@link InputStream} that enforces the {@link #maxMessageSize} limit for compressed frames.
+   */
+  private final class SizeEnforcingInputStream extends FilterInputStream {
+    private long count;
+    private long mark = -1;
+
+    public SizeEnforcingInputStream(InputStream in) {
+      super(in);
+    }
+
+    @Override
+    public int read() throws IOException {
+      int result = in.read();
+      if (result != -1) {
+        count++;
+      }
+      verifySize();
+      return result;
+    }
+
+    @Override
+    public int read(byte[] b, int off, int len) throws IOException {
+      int result = in.read(b, off, len);
+      if (result != -1) {
+        count += result;
+      }
+      verifySize();
+      return result;
+    }
+
+    @Override
+    public long skip(long n) throws IOException {
+      long result = in.skip(n);
+      count += result;
+      verifySize();
+      return result;
+    }
+
+    @Override
+    public synchronized void mark(int readlimit) {
+      in.mark(readlimit);
+      mark = count;
+      // it's okay to mark even if mark isn't supported, as reset won't work
+    }
+
+    @Override
+    public synchronized void reset() throws IOException {
+      if (!in.markSupported()) {
+        throw new IOException("Mark not supported");
+      }
+      if (mark == -1) {
+        throw new IOException("Mark not set");
+      }
+
+      in.reset();
+      count = mark;
+    }
+
+    private void verifySize() {
+      if (count > maxMessageSize) {
+        throw Status.INTERNAL.withDescription(String.format(
+                "Compressed frame exceeds maximum frame size: %d. Bytes read: %d",
+                maxMessageSize, count)).asRuntimeException();
+      }
     }
   }
 }

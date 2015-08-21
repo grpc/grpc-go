@@ -31,6 +31,7 @@
 
 package io.grpc.netty;
 
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.netty.NettyTestUtil.messageFrame;
 import static io.grpc.netty.Utils.CONTENT_TYPE_GRPC;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
@@ -54,6 +55,7 @@ import static org.mockito.Mockito.when;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelPromise;
@@ -321,7 +323,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
   @Test
   public void setHttp2StreamShouldNotifyReady() {
     listener = mock(ClientStreamListener.class);
-    stream = new NettyClientStream(listener, channel, handler);
+    stream = new NettyClientStream(listener, channel, handler, DEFAULT_MAX_MESSAGE_SIZE);
     stream().id(STREAM_ID);
     verify(listener, never()).onReady();
     assertFalse(stream.isReady());
@@ -343,7 +345,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
       }
     }).when(writeQueue).enqueue(any(), any(ChannelPromise.class), anyBoolean());
     when(writeQueue.enqueue(any(), anyBoolean())).thenReturn(future);
-    NettyClientStream stream = new NettyClientStream(listener, channel, handler);
+    NettyClientStream stream = new NettyClientStream(listener, channel, handler,
+            DEFAULT_MAX_MESSAGE_SIZE);
     assertTrue(stream.canSend());
     assertTrue(stream.canReceive());
     stream.id(STREAM_ID);

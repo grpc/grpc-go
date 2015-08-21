@@ -100,7 +100,7 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   private final Object onReadyLock = new Object();
 
-  AbstractStream(WritableBufferAllocator bufferAllocator) {
+  AbstractStream(WritableBufferAllocator bufferAllocator, int maxMessageSize) {
     MessageDeframer.Listener inboundMessageHandler = new MessageDeframer.Listener() {
       @Override
       public void bytesRead(int numBytes) {
@@ -130,7 +130,7 @@ public abstract class AbstractStream<IdT> implements Stream {
     };
 
     framer = new MessageFramer(outboundFrameHandler, bufferAllocator);
-    deframer = new MessageDeframer(inboundMessageHandler);
+    deframer = new MessageDeframer(inboundMessageHandler, MessageEncoding.NONE, maxMessageSize);
   }
 
   @Override

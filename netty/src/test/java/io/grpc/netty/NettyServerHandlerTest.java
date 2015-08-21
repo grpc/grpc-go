@@ -32,6 +32,7 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Charsets.UTF_8;
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.netty.Utils.CONTENT_TYPE_GRPC;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
@@ -64,6 +65,7 @@ import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.WritableBuffer;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
@@ -303,7 +305,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     Http2Connection connection = new DefaultHttp2Connection(true);
     handler =
         new NettyServerHandler(transportListener, connection, new DefaultHttp2FrameReader(),
-            frameWriter, maxConcurrentStreams, DEFAULT_WINDOW_SIZE);
+            frameWriter, maxConcurrentStreams, DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE);
 
     when(channel.isActive()).thenReturn(true);
     mockContext();
@@ -403,7 +405,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     Http2FrameReader frameReader = new DefaultHttp2FrameReader();
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
     return new NettyServerHandler(transportListener, connection, frameReader, frameWriter,
-        Integer.MAX_VALUE, flowControlWindow);
+        Integer.MAX_VALUE, flowControlWindow, DEFAULT_MAX_MESSAGE_SIZE);
   }
 
   private static NettyServerHandler newHandler(ServerTransportListener transportListener) {

@@ -58,25 +58,11 @@ import javax.annotation.concurrent.GuardedBy;
  */
 class OkHttpClientStream extends Http2ClientStream {
 
-  private static int WINDOW_UPDATE_THRESHOLD = Utils.DEFAULT_WINDOW_SIZE / 2;
+  private static final int WINDOW_UPDATE_THRESHOLD = Utils.DEFAULT_WINDOW_SIZE / 2;
 
   private static final Buffer EMPTY_BUFFER = new Buffer();
 
   private final MethodType type;
-
-  /**
-   * Construct a new client stream.
-   */
-  static OkHttpClientStream newStream(ClientStreamListener listener,
-      AsyncFrameWriter frameWriter,
-      OkHttpClientTransport transport,
-      OutboundFlowController outboundFlow,
-      MethodType type,
-      Object lock,
-      List<Header> requestHeaders) {
-    return new OkHttpClientStream(
-        listener, frameWriter, transport, outboundFlow, type, lock, requestHeaders);
-  }
 
   @GuardedBy("lock")
   private int window = Utils.DEFAULT_WINDOW_SIZE;
@@ -94,15 +80,15 @@ class OkHttpClientStream extends Http2ClientStream {
   @GuardedBy("lock")
   private boolean cancelSent = false;
 
-
-  private OkHttpClientStream(ClientStreamListener listener,
+  OkHttpClientStream(ClientStreamListener listener,
       AsyncFrameWriter frameWriter,
       OkHttpClientTransport transport,
       OutboundFlowController outboundFlow,
       MethodType type,
       Object lock,
-      List<Header> requestHeaders) {
-    super(new OkHttpWritableBufferAllocator(), listener);
+      List<Header> requestHeaders,
+      int maxMessageSize) {
+    super(new OkHttpWritableBufferAllocator(), listener, maxMessageSize);
     this.frameWriter = frameWriter;
     this.transport = transport;
     this.outboundFlow = outboundFlow;

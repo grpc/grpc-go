@@ -32,6 +32,8 @@
 package io.grpc.okhttp;
 
 import static com.google.common.base.Charsets.UTF_8;
+import static io.grpc.Status.Code.INTERNAL;
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.okhttp.Headers.CONTENT_TYPE_HEADER;
 import static io.grpc.okhttp.Headers.METHOD_HEADER;
 import static io.grpc.okhttp.Headers.SCHEME_HEADER;
@@ -148,20 +150,20 @@ public class OkHttpClientTransportTest {
   }
 
   private void initTransport() throws Exception {
-    startTransport(3, null, true);
+    startTransport(3, null, true, DEFAULT_MAX_MESSAGE_SIZE);
   }
 
   private void initTransport(int startId) throws Exception {
-    startTransport(startId, null, true);
+    startTransport(startId, null, true, DEFAULT_MAX_MESSAGE_SIZE);
   }
 
   private void initTransportAndDelayConnected() throws Exception {
     delayConnectedCallback = new DelayConnectedCallback();
-    startTransport(3, delayConnectedCallback, false);
+    startTransport(3, delayConnectedCallback, false, DEFAULT_MAX_MESSAGE_SIZE);
   }
 
   private void startTransport(int startId, @Nullable Runnable connectingCallback,
-      boolean waitingForConnected) throws Exception {
+      boolean waitingForConnected, int maxMessageSize) throws Exception {
     connectedFuture = SettableFuture.create();
     Ticker ticker = new Ticker() {
       @Override
@@ -171,7 +173,8 @@ public class OkHttpClientTransportTest {
     };
     clientTransport = new OkHttpClientTransport(
         executor, frameReader, frameWriter, startId,
-        new MockSocket(frameReader), ticker, connectingCallback, connectedFuture);
+        new MockSocket(frameReader), ticker, connectingCallback, connectedFuture,
+        maxMessageSize);
     clientTransport.start(transportListener);
     if (waitingForConnected) {
       connectedFuture.get(TIME_OUT_MS, TimeUnit.MILLISECONDS);
@@ -186,6 +189,26 @@ public class OkHttpClientTransportTest {
     verify(frameWriter, timeout(TIME_OUT_MS)).close();
     frameReader.assertClosed();
     executor.shutdown();
+  }
+
+  @Test
+  public void maxMessageSizeShouldBeEnforced() throws Exception {
+    // Allow the response payloads of up to 1 byte.
+    startTransport(3, null, true, 1);
+
+    MockStreamListener listener = new MockStreamListener();
+    clientTransport.newStream(method, new Metadata.Headers(), listener).request(1);
+    assertContainStream(3);
+    frameHandler().headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
+    assertNotNull(listener.headers);
+
+    // Receive the message.
+    final String message = "Hello Client";
+    Buffer buffer = createMessageFrame(message);
+    frameHandler().data(false, 3, buffer, (int) buffer.size());
+
+    listener.waitUntilStreamClosed();
+    assertEquals(INTERNAL, listener.status.getCode());
   }
 
   /**

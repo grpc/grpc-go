@@ -71,8 +71,9 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
   private boolean contentTypeChecked;
 
   protected Http2ClientStream(WritableBufferAllocator bufferAllocator,
-                              ClientStreamListener listener) {
-    super(bufferAllocator, listener);
+                              ClientStreamListener listener,
+                              int maxMessageSize) {
+    super(bufferAllocator, listener, maxMessageSize);
   }
 
   /**

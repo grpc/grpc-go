@@ -31,6 +31,9 @@
 
 package io.grpc.internal;
 
+import static io.grpc.Status.Code.CANCELLED;
+import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
@@ -38,6 +41,8 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 
 import java.net.HttpURLConnection;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -108,6 +113,17 @@ public final class GrpcUtil {
    * The message encoding (i.e. compression) that can be used in the stream.
    */
   public static final String MESSAGE_ENCODING = "grpc-encoding";
+
+  /**
+   * The default maximum uncompressed size (in bytes) for inbound messages. Defaults to 100 MiB.
+   */
+  public static final int DEFAULT_MAX_MESSAGE_SIZE = 100 * 1024 * 1024;
+
+  /**
+   * The set of valid status codes for client cancellation.
+   */
+  public static final Set<Status.Code> CANCEL_REASONS =
+          EnumSet.of(CANCELLED, DEADLINE_EXCEEDED, Status.Code.INTERNAL, Status.Code.UNKNOWN);
 
   /**
    * Maps HTTP error response status codes to transport codes.

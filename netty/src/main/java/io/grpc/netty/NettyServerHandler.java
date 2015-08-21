@@ -31,6 +31,7 @@
 
 package io.grpc.netty;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.netty.Utils.CONTENT_TYPE_GRPC;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
@@ -81,6 +82,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
   private final Http2Connection.PropertyKey streamKey;
   private final ServerTransportListener transportListener;
+  private final int maxMessageSize;
   private Throwable connectionError;
   private ChannelHandlerContext ctx;
   private boolean teWarningLogged;
@@ -93,10 +95,13 @@ class NettyServerHandler extends Http2ConnectionHandler {
       Http2FrameReader frameReader,
       Http2FrameWriter frameWriter,
       int maxStreams,
-      int flowControlWindow) {
+      int flowControlWindow,
+      int maxMessageSize) {
     super(connection, frameReader, frameWriter, new LazyFrameListener());
     Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
     this.flowControlWindow = flowControlWindow;
+    checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
+    this.maxMessageSize = maxMessageSize;
 
     streamKey = connection.newKey();
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
@@ -146,7 +151,8 @@ class NettyServerHandler extends Http2ConnectionHandler {
       // The Http2Stream object was put by AbstractHttp2ConnectionHandler before calling this
       // method.
       Http2Stream http2Stream = requireHttp2Stream(streamId);
-      NettyServerStream stream = new NettyServerStream(ctx.channel(), http2Stream, this);
+      NettyServerStream stream = new NettyServerStream(ctx.channel(), http2Stream, this,
+              maxMessageSize);
       http2Stream.setProperty(streamKey, stream);
       String method = determineMethod(streamId, headers);
 

@@ -31,6 +31,7 @@
 
 package io.grpc.netty;
 
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.netty.NettyTestUtil.messageFrame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -50,6 +51,7 @@ import static org.mockito.Mockito.when;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.ServerStreamListener;
+
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.ChannelPromise;
@@ -254,7 +256,8 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
       }
     }).when(writeQueue).enqueue(any(), any(ChannelPromise.class), anyBoolean());
     when(writeQueue.enqueue(any(), anyBoolean())).thenReturn(future);
-    NettyServerStream stream = new NettyServerStream(channel, http2Stream, handler);
+    NettyServerStream stream = new NettyServerStream(channel, http2Stream, handler,
+            DEFAULT_MAX_MESSAGE_SIZE);
     stream.setListener(serverListener);
     assertTrue(stream.canReceive());
     assertTrue(stream.canSend());

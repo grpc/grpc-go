@@ -58,8 +58,9 @@ class NettyClientStream extends Http2ClientStream {
   private Integer id;
   private WriteQueue writeQueue;
 
-  NettyClientStream(ClientStreamListener listener, Channel channel, NettyClientHandler handler) {
-    super(new NettyWritableBufferAllocator(channel.alloc()), listener);
+  NettyClientStream(ClientStreamListener listener, Channel channel, NettyClientHandler handler,
+                    int maxMessageSize) {
+    super(new NettyWritableBufferAllocator(channel.alloc()), listener, maxMessageSize);
     this.writeQueue = handler.getWriteQueue();
     this.channel = checkNotNull(channel, "channel");
     this.handler = checkNotNull(handler, "handler");

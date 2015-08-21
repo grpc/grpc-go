@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.isA;
@@ -242,7 +243,7 @@ public class AbstractClientStreamTest {
   private static class BaseAbstractClientStream<T> extends AbstractClientStream<T> {
     protected BaseAbstractClientStream(
         WritableBufferAllocator allocator, ClientStreamListener listener) {
-      super(allocator, listener);
+      super(allocator, listener, DEFAULT_MAX_MESSAGE_SIZE);
     }
 
     @Override
