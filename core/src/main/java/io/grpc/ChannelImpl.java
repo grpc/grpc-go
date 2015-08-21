@@ -31,8 +31,7 @@
 
 package io.grpc;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
+import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
 import io.grpc.ClientCallImpl.ClientTransportProvider;
 import io.grpc.MessageEncoding.Compressor;
@@ -42,7 +41,6 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.ClientTransportFactory;
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
 
@@ -51,9 +49,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
@@ -387,107 +383,6 @@ public final class ChannelImpl extends Channel {
       }
     }
   }
-
-  /**
-   * Intended for internal use only.
-   */
-  // TODO(johnbcoughlin) make this package private when we can do so with the tests.
-  @VisibleForTesting
-  public static final Metadata.Key<Long> TIMEOUT_KEY =
-      Metadata.Key.of(GrpcUtil.TIMEOUT, new TimeoutMarshaller());
-
-  // TODO(carl-mastrangelo): move this to internal
-  public static final Metadata.Key<String> MESSAGE_ENCODING_KEY =
-      Metadata.Key.of(GrpcUtil.MESSAGE_ENCODING, Metadata.ASCII_STRING_MARSHALLER);
-
-  /**
-   * Marshals a microseconds representation of the timeout to and from a string representation,
-   * consisting of an ASCII decimal representation of a number with at most 8 digits, followed by a
-   * unit:
-   * u = microseconds
-   * m = milliseconds
-   * S = seconds
-   * M = minutes
-   * H = hours
-   *
-   * <p>The representation is greedy with respect to precision. That is, 2 seconds will be
-   * represented as `2000000u`.</p>
-   *
-   * <p>See <a href="https://github.com/grpc/grpc-common/blob/master/PROTOCOL-HTTP2.md#requests">the
-   * request header definition</a></p>
-   */
-  @VisibleForTesting
-  static class TimeoutMarshaller implements Metadata.AsciiMarshaller<Long> {
-    @Override
-    public String toAsciiString(Long timeoutMicros) {
-      Preconditions.checkArgument(timeoutMicros >= 0, "Negative timeout");
-      long timeout;
-      String timeoutUnit;
-      // the smallest integer with 9 digits
-      int cutoff = 100000000;
-      if (timeoutMicros < cutoff) {
-        timeout = timeoutMicros;
-        timeoutUnit = "u";
-      } else if (timeoutMicros / 1000 < cutoff) {
-        timeout = timeoutMicros / 1000;
-        timeoutUnit = "m";
-      } else if (timeoutMicros / (1000 * 1000) < cutoff) {
-        timeout = timeoutMicros / (1000 * 1000);
-        timeoutUnit = "S";
-      } else if (timeoutMicros / (60 * 1000 * 1000) < cutoff) {
-        timeout = timeoutMicros / (60 * 1000 * 1000);
-        timeoutUnit = "M";
-      } else if (timeoutMicros / (60L * 60L * 1000L * 1000L) < cutoff) {
-        timeout = timeoutMicros / (60L * 60L * 1000L * 1000L);
-        timeoutUnit = "H";
-      } else {
-        throw new IllegalArgumentException("Timeout too large");
-      }
-      return Long.toString(timeout) + timeoutUnit;
-    }
-
-    @Override
-    public Long parseAsciiString(String serialized) {
-      String valuePart = serialized.substring(0, serialized.length() - 1);
-      char unit = serialized.charAt(serialized.length() - 1);
-      long factor;
-      switch (unit) {
-        case 'u':
-          factor = 1; break;
-        case 'm':
-          factor = 1000L; break;
-        case 'S':
-          factor = 1000L * 1000L; break;
-        case 'M':
-          factor = 60L * 1000L * 1000L; break;
-        case 'H':
-          factor = 60L * 60L * 1000L * 1000L; break;
-        default:
-          throw new IllegalArgumentException(String.format("Invalid timeout unit: %s", unit));
-      }
-      return Long.parseLong(valuePart) * factor;
-    }
-  }
-
-  static final SharedResourceHolder.Resource<ScheduledExecutorService> TIMER_SERVICE =
-      new SharedResourceHolder.Resource<ScheduledExecutorService>() {
-        @Override
-        public ScheduledExecutorService create() {
-          return Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-              Thread thread = new Thread(r);
-              thread.setDaemon(true);
-              return thread;
-            }
-          });
-        }
-
-        @Override
-        public void close(ScheduledExecutorService instance) {
-          instance.shutdown();
-        }
-      };
 
   private static final class InactiveTransport implements ClientTransport {
     private final Status shutdownStatus;

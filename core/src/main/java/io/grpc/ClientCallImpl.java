@@ -31,7 +31,9 @@
 
 package io.grpc;
 
-import static io.grpc.ChannelImpl.TIMEOUT_KEY;
+import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
+import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
+import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -41,7 +43,6 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SerializingExecutor;
 
 import java.io.InputStream;
@@ -124,15 +125,15 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     }
 
     // Fill out the User-Agent header.
-    headers.removeAll(GrpcUtil.USER_AGENT_KEY);
+    headers.removeAll(USER_AGENT_KEY);
     if (userAgent != null) {
-      headers.put(GrpcUtil.USER_AGENT_KEY, userAgent);
+      headers.put(USER_AGENT_KEY, userAgent);
     }
 
-    headers.removeAll(ChannelImpl.MESSAGE_ENCODING_KEY);
+    headers.removeAll(MESSAGE_ENCODING_KEY);
     Compressor compressor = callOptions.getCompressor();
     if (compressor != null && compressor != MessageEncoding.NONE) {
-      headers.put(ChannelImpl.MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
+      headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
     }
 
     try {

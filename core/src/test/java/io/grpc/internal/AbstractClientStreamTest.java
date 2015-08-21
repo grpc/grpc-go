@@ -36,7 +36,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.verify;
 
-import io.grpc.ChannelImpl;
 import io.grpc.MessageEncoding;
 import io.grpc.Metadata;
 import io.grpc.Metadata.Headers;
@@ -208,7 +207,7 @@ public class AbstractClientStreamTest {
     AbstractClientStream<Integer> stream =
         new BaseAbstractClientStream<Integer>(allocator, mockListener);
     Headers headers = new Metadata.Headers();
-    headers.put(ChannelImpl.MESSAGE_ENCODING_KEY, new MessageEncoding.Gzip().getMessageEncoding());
+    headers.put(GrpcUtil.MESSAGE_ENCODING_KEY, new MessageEncoding.Gzip().getMessageEncoding());
 
     stream.inboundHeadersReceived(headers);
     verify(mockListener).headersRead(headers);
@@ -219,7 +218,7 @@ public class AbstractClientStreamTest {
     AbstractClientStream<Integer> stream =
         new BaseAbstractClientStream<Integer>(allocator, mockListener);
     Headers headers = new Metadata.Headers();
-    headers.put(ChannelImpl.MESSAGE_ENCODING_KEY, MessageEncoding.NONE.getMessageEncoding());
+    headers.put(GrpcUtil.MESSAGE_ENCODING_KEY, MessageEncoding.NONE.getMessageEncoding());
 
     stream.inboundHeadersReceived(headers);
     verify(mockListener).headersRead(headers);
@@ -230,7 +229,7 @@ public class AbstractClientStreamTest {
     AbstractClientStream<Integer> stream =
         new BaseAbstractClientStream<Integer>(allocator, mockListener);
     Headers headers = new Metadata.Headers();
-    headers.put(ChannelImpl.MESSAGE_ENCODING_KEY, "bad");
+    headers.put(GrpcUtil.MESSAGE_ENCODING_KEY, "bad");
 
     stream.inboundHeadersReceived(headers);
 

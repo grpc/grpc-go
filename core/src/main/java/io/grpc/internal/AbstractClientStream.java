@@ -38,7 +38,6 @@ import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
-import io.grpc.ChannelImpl;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
@@ -122,8 +121,8 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
       log.log(Level.INFO, "Received headers on closed stream {0} {1}",
           new Object[]{id(), headers});
     }
-    if (headers.containsKey(ChannelImpl.MESSAGE_ENCODING_KEY)) {
-      String messageEncoding = headers.get(ChannelImpl.MESSAGE_ENCODING_KEY);
+    if (headers.containsKey(GrpcUtil.MESSAGE_ENCODING_KEY)) {
+      String messageEncoding = headers.get(GrpcUtil.MESSAGE_ENCODING_KEY);
       try {
         setDecompressor(messageEncoding);
       } catch (IllegalArgumentException e) {

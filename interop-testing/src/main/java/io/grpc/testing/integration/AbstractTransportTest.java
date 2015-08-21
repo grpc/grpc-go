@@ -60,6 +60,7 @@ import io.grpc.ServerImpl;
 import io.grpc.ServerInterceptors;
 import io.grpc.Status;
 import io.grpc.auth.ClientAuthInterceptor;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
@@ -588,7 +589,7 @@ public abstract class AbstractTransportTest {
         .withDeadlineAfter(configuredTimeoutMinutes, TimeUnit.MINUTES);
     stub.emptyCall(Empty.getDefaultInstance());
     long transferredTimeoutMinutes = TimeUnit.MICROSECONDS.toMinutes(
-        requestHeadersCapture.get().get(ChannelImpl.TIMEOUT_KEY));
+        requestHeadersCapture.get().get(GrpcUtil.TIMEOUT_KEY));
     Assert.assertTrue(
         "configuredTimeoutMinutes=" + configuredTimeoutMinutes
         + ", transferredTimeoutMinutes=" + transferredTimeoutMinutes,
