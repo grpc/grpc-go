@@ -566,6 +566,7 @@ class OkHttpClientTransport implements ClientTransport {
   @VisibleForTesting
   class ClientFrameHandler implements FrameReader.Handler, Runnable {
     FrameReader frameReader;
+    boolean firstSettings = true;
 
     ClientFrameHandler(FrameReader frameReader) {
       this.frameReader = frameReader;
@@ -677,8 +678,10 @@ class OkHttpClientTransport implements ClientTransport {
               settings, OkHttpSettingsUtil.INITIAL_WINDOW_SIZE);
           outboundFlow.initialOutboundWindowSize(initialWindowSize);
         }
-
-        listener.transportReady();
+        if (firstSettings) {
+          listener.transportReady();
+          firstSettings = false;
+        }
       }
 
       frameWriter.ackSettings(settings);
