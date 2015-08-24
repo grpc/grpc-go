@@ -106,6 +106,7 @@ type decodeState struct {
 // An hpackDecoder decodes HTTP2 headers which may span multiple frames.
 type hpackDecoder struct {
 	h     *hpack.Decoder
+	mdata map[string][]string // persistent metadata with this decoder
 	state decodeState
 	err   error // The err when decoding
 }
@@ -138,8 +139,12 @@ func isReservedHeader(hdr string) bool {
 	}
 }
 
-func newHPACKDecoder() *hpackDecoder {
+func newHPACKDecoder(mdata map[string][]string) *hpackDecoder {
 	d := &hpackDecoder{}
+	for k, v := range mdata {
+		d.mdata = make(map[string][]string)
+		d.mdata[k] = v
+	}
 	d.h = hpack.NewDecoder(http2InitHeaderTableSize, func(f hpack.HeaderField) {
 		switch f.Name {
 		case "grpc-status":
@@ -174,6 +179,9 @@ func newHPACKDecoder() *hpackDecoder {
 				}
 				if d.state.mdata == nil {
 					d.state.mdata = make(map[string][]string)
+					for k, v := range d.mdata {
+						d.state.mdata[k] = v
+					}
 				}
 				k, v, err := metadata.DecodeKeyValue(f.Name, f.Value)
 				if err != nil {

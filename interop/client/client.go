@@ -566,7 +566,7 @@ func main() {
 		doPerRPCCreds(tc)
 	case "oauth2_auth_token":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute oauth2_token_creds test case.")
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute oauth2_auth_token test case.")
 		}
 		doOauth2TokenCreds(tc)
 	case "cancel_after_begin":

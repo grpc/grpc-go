@@ -308,8 +308,8 @@ const (
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
 // if it fails.
-func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32) (ServerTransport, error) {
-	return newHTTP2Server(conn, maxStreams)
+func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, authInfo map[string][]string) (ServerTransport, error) {
+	return newHTTP2Server(conn, maxStreams, authInfo)
 }
 
 // ConnectOptions covers all relevant options for dialing a server.
