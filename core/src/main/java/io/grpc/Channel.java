@@ -49,7 +49,7 @@ public abstract class Channel {
   /**
    * Create a {@link ClientCall} to the remote operation specified by the given
    * {@link MethodDescriptor}. The returned {@link ClientCall} does not trigger any remote
-   * behavior until {@link ClientCall#start(ClientCall.Listener, Metadata.Headers)} is
+   * behavior until {@link ClientCall#start(ClientCall.Listener, Metadata)} is
    * invoked.
    *
    * @param methodDescriptor describes the name and parameter types of the operation to call.

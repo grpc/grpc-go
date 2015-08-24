@@ -86,7 +86,7 @@ public class MethodDescriptor<RequestT, ResponseT> {
 
     /**
      * Returns {@code true} if the client will immediately send one request message to the server
-     * after calling {@link ClientCall#start(io.grpc.ClientCall.Listener, io.grpc.Metadata.Headers)}
+     * after calling {@link ClientCall#start(io.grpc.ClientCall.Listener, io.grpc.Metadata)}
      * and then immediately half-close the stream by calling {@link io.grpc.ClientCall#halfClose()}.
      */
     public final boolean clientSendsOneMessage() {
