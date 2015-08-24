@@ -62,6 +62,7 @@ public class NanoUtils {
           // TODO(simonma): Investigate whether we can do 0-copy here. 
           CodedInputByteBufferNano input =
               CodedInputByteBufferNano.newInstance(ByteStreams.toByteArray(stream));
+          input.setSizeLimit(Integer.MAX_VALUE);
           return parser.parse(input);
         } catch (IOException ipbe) {
           throw Status.INTERNAL.withDescription("Failed parsing nano proto message").withCause(ipbe)
