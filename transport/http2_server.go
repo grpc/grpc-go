@@ -57,8 +57,8 @@ var ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHe
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
 	conn        net.Conn
-	maxStreamID uint32 // max stream ID ever seen
-	authInfo    map[string][]string  // basic auth info about the connection
+	maxStreamID uint32              // max stream ID ever seen
+	authInfo    map[string][]string // auth info about the connection
 	// writableChan synchronizes write access to the transport.
 	// A writer acquires the write lock by sending a value on writableChan
 	// and releases it by receiving from writableChan.
@@ -236,8 +236,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 	}
 	t.handleSettings(sf)
 
-	hDec := newHPACKDecoder()
-	hDec.state.mdata = t.authInfo
+	hDec := newHPACKDecoder(t.authInfo)
 	var curStream *Stream
 	var wg sync.WaitGroup
 	defer wg.Wait()

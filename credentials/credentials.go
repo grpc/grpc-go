@@ -96,8 +96,8 @@ type TransportAuthenticator interface {
 
 const (
 	transportSecurityType = "transport_security_type"
-	x509CN = "x509_common_name"
-	x509SAN = "x509_suject_alternative_name"
+	x509CN                = "x509_common_name"
+	x509SAN               = "x509_suject_alternative_name"
 )
 
 // tlsCreds is the credentials required for authenticating a connection using TLS.
@@ -169,7 +169,6 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, map[string][]str
 	info := make(map[string][]string)
 	info[transportSecurityType] = []string{"tls"}
 	for _, certs := range state.VerifiedChains {
-		fmt.Println("DEBUG: reach here")
 		for _, cert := range certs {
 			info[x509CN] = append(info[x509CN], cert.Subject.CommonName)
 			for _, san := range cert.DNSNames {

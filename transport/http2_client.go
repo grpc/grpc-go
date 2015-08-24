@@ -55,8 +55,9 @@ import (
 type http2Client struct {
 	target    string // server name/addr
 	userAgent string
-	conn      net.Conn // underlying communication channel
-	nextID    uint32   // the next stream ID to be used
+	conn      net.Conn            // underlying communication channel
+	authInfo  map[string][]string // auth info about the connection
+	nextID    uint32              // the next stream ID to be used
 
 	// writableChan synchronizes write access to the transport.
 	// A writer acquires the write lock by sending a value on writableChan
@@ -114,6 +115,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)
 	}
+	var authInfo map[string][]string
 	for _, c := range opts.AuthOptions {
 		if ccreds, ok := c.(credentials.TransportAuthenticator); ok {
 			scheme = "https"
@@ -124,7 +126,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 			if timeout > 0 {
 				timeout -= time.Since(startT)
 			}
-			conn, _, connErr = ccreds.ClientHandshake(addr, conn, timeout)
+			conn, authInfo, connErr = ccreds.ClientHandshake(addr, conn, timeout)
 			break
 		}
 	}
@@ -168,6 +170,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 		target:    addr,
 		userAgent: ua,
 		conn:      conn,
+		authInfo:  authInfo,
 		// The client initiated stream id is odd starting from 1.
 		nextID:          1,
 		writableChan:    make(chan int, 1),
@@ -701,7 +704,7 @@ func (t *http2Client) reader() {
 	}
 	t.handleSettings(sf)
 
-	hDec := newHPACKDecoder()
+	hDec := newHPACKDecoder(t.authInfo)
 	var curStream *Stream
 	// loop to keep reading incoming messages on this transport.
 	for {
