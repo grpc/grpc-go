@@ -165,10 +165,9 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, map[string][]str
 		rawConn.Close()
 		return nil, nil, err
 	}
-	state := conn.ConnectionState()
 	info := make(map[string][]string)
 	info[transportSecurityType] = []string{"tls"}
-	for _, certs := range state.VerifiedChains {
+	for _, certs := range conn.ConnectionState().VerifiedChains {
 		for _, cert := range certs {
 			info[x509CN] = append(info[x509CN], cert.Subject.CommonName)
 			for _, san := range cert.DNSNames {
