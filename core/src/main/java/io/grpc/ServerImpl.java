@@ -97,8 +97,7 @@ public final class ServerImpl extends Server {
    * @param executor to call methods on behalf of remote clients
    * @param registry of methods to expose to remote clients.
    */
-  @Internal
-  public ServerImpl(Executor executor, HandlerRegistry registry,
+  ServerImpl(Executor executor, HandlerRegistry registry,
       io.grpc.internal.Server transportServer) {
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.registry = Preconditions.checkNotNull(registry, "registry");
