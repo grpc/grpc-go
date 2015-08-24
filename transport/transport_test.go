@@ -151,7 +151,7 @@ func (s *server) start(port int, maxStreams uint32, ht hType) {
 		if err != nil {
 			return
 		}
-		t, err := NewServerTransport("http2", conn, maxStreams)
+		t, err := NewServerTransport("http2", conn, maxStreams, nil)
 		if err != nil {
 			return
 		}
