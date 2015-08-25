@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -103,5 +104,17 @@ public class GrpcUtilTest {
     assertTrue(GrpcUtil.getGrpcUserAgent("netty", null).startsWith("grpc-java-netty"));
     assertTrue(GrpcUtil.getGrpcUserAgent("okhttp", "libfoo/1.0")
         .startsWith("libfoo/1.0 grpc-java-okhttp"));
+  }
+
+  @Test
+  public void contentTypeShouldBeValid() {
+    assertTrue(GrpcUtil.isGrpcContentType(GrpcUtil.CONTENT_TYPE_GRPC));
+    assertTrue(GrpcUtil.isGrpcContentType(GrpcUtil.CONTENT_TYPE_GRPC + "+blaa"));
+    assertTrue(GrpcUtil.isGrpcContentType(GrpcUtil.CONTENT_TYPE_GRPC + ";blaa"));
+  }
+
+  @Test
+  public void contentTypeShouldNotBeValid() {
+    assertFalse(GrpcUtil.isGrpcContentType("application/bad"));
   }
 }

@@ -45,6 +45,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -89,6 +90,7 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
+import io.netty.util.ByteString;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -345,6 +347,23 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase {
     ByteBuf expected = rstStreamFrame(stream.id(), (int) Http2Error.CANCEL.code());
     ByteBuf actual = captureWrite(ctx);
     assertEquals(expected, actual);
+  }
+
+  @Test
+  public void headersWithInvalidContentTypeShouldFail() throws Exception {
+    Http2Headers headers = new DefaultHttp2Headers()
+            .method(HTTP_METHOD)
+            .set(CONTENT_TYPE_HEADER, new ByteString("application/bad", UTF_8))
+            .set(TE_HEADER, TE_TRAILERS)
+            .path(new AsciiString("/foo/bar"));
+    ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
+    handler.channelRead(ctx, headersFrame);
+    ByteBuf expectedFrame = rstStreamFrame(STREAM_ID, (int) Http2Error.REFUSED_STREAM.code());
+    try {
+      verify(ctx).write(eq(expectedFrame), any(ChannelPromise.class));
+    } finally {
+      expectedFrame.release();
+    }
   }
 
   private void createStream() throws Exception {

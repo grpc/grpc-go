@@ -46,7 +46,6 @@ import javax.annotation.Nullable;
  */
 public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
 
-  private static final boolean TEMP_CHECK_CONTENT_TYPE = false;
   /**
    * Metadata marshaller for HTTP status lines.
    */
@@ -206,9 +205,8 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
     }
     contentTypeChecked = true;
     String contentType = headers.get(GrpcUtil.CONTENT_TYPE_KEY);
-    if (TEMP_CHECK_CONTENT_TYPE && !GrpcUtil.CONTENT_TYPE_GRPC.equalsIgnoreCase(contentType)) {
-      // Malformed content-type so report an error
-      return Status.INTERNAL.withDescription("invalid content-type " + contentType);
+    if (!GrpcUtil.isGrpcContentType(contentType)) {
+      return Status.INTERNAL.withDescription("Invalid content-type: " + contentType);
     }
     return null;
   }

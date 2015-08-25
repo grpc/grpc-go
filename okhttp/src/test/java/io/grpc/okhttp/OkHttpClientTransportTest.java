@@ -509,7 +509,8 @@ public class OkHttpClientTransportTest {
     frameHandler().windowUpdate(3, Utils.DEFAULT_WINDOW_SIZE);
     frameHandler().windowUpdate(0, Utils.DEFAULT_WINDOW_SIZE);
     verify(frameWriter, timeout(TIME_OUT_MS)).data(
-        eq(false), eq(3), any(Buffer.class), eq(messageLength + HEADER_LENGTH - partiallySentSize));
+        eq(false), eq(3), any(Buffer.class),
+        eq(messageLength + HEADER_LENGTH - partiallySentSize));
 
     stream.cancel(Status.CANCELLED);
     listener.waitUntilStreamClosed();
@@ -1224,6 +1225,8 @@ public class OkHttpClientTransportTest {
   private List<Header> grpcResponseTrailers() {
     return ImmutableList.<Header>builder()
         .add(new Header(Status.CODE_KEY.name(), "0"))
+        // Adding Content-Type for testing responses with only a single HEADERS frame.
+        .add(CONTENT_TYPE_HEADER)
         .build();
   }
 

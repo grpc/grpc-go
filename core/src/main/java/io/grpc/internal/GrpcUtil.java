@@ -244,6 +244,36 @@ public final class GrpcUtil {
   }
 
   /**
+   * Indicates whether or not the given value is a valid gRPC content-type.
+   */
+  public static boolean isGrpcContentType(String contentType) {
+    if (contentType == null) {
+      return false;
+    }
+
+    if (CONTENT_TYPE_GRPC.length() > contentType.length()) {
+      return false;
+    }
+
+    contentType = contentType.toLowerCase();
+    if (!contentType.startsWith(CONTENT_TYPE_GRPC)) {
+      // Not a gRPC content-type.
+      return false;
+    }
+
+    if (contentType.length() == CONTENT_TYPE_GRPC.length()) {
+      // The strings match exactly.
+      return true;
+    }
+
+    // The contentType matches, but is longer than the expected string.
+    // We need to support variations on the content-type (e.g. +proto, +json) as defined by the
+    // gRPC wire spec.
+    char nextChar = contentType.charAt(CONTENT_TYPE_GRPC.length());
+    return nextChar == '+' || nextChar == ';';
+  }
+
+  /**
    * Gets the User-Agent string for the gRPC transport.
    */
   public static String getGrpcUserAgent(String transportName,

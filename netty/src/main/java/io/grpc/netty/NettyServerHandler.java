@@ -31,6 +31,7 @@
 
 package io.grpc.netty;
 
+import static com.google.common.base.Charsets.US_ASCII;
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.netty.Utils.CONTENT_TYPE_GRPC;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
@@ -148,14 +149,16 @@ class NettyServerHandler extends Http2ConnectionHandler {
     }
 
     try {
+      // Verify that the Content-Type is correct in the request.
+      verifyContentType(streamId, headers);
+      String method = determineMethod(streamId, headers);
+
       // The Http2Stream object was put by AbstractHttp2ConnectionHandler before calling this
       // method.
       Http2Stream http2Stream = requireHttp2Stream(streamId);
+
       NettyServerStream stream = new NettyServerStream(ctx.channel(), http2Stream, this,
               maxMessageSize);
-      http2Stream.setProperty(streamKey, stream);
-      String method = determineMethod(streamId, headers);
-
       Metadata metadata = Utils.convertHeaders(headers);
       ServerStreamListener listener =
           transportListener.streamCreated(stream, method, metadata);
@@ -163,6 +166,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
       if (metadata.containsKey(GrpcUtil.MESSAGE_ENCODING_KEY)) {
         stream.useDecompressor(metadata.get(GrpcUtil.MESSAGE_ENCODING_KEY));
       }
+      http2Stream.setProperty(streamKey, stream);
 
     } catch (Http2Exception e) {
       throw e;
@@ -205,11 +209,12 @@ class NettyServerHandler extends Http2ConnectionHandler {
       StreamException http2Ex) {
     logger.log(Level.WARNING, "Stream Error", cause);
     Http2Stream stream = connection().stream(Http2Exception.streamId(http2Ex));
-    if (stream != null) {
+    NettyServerStream serverStream = stream != null ? serverStream(stream) : null;
+    if (serverStream != null) {
       // Abort the stream with a status to help the client with debugging.
       // Don't need to send a RST_STREAM since the end-of-stream flag will
       // be sent.
-      serverStream(stream).abortStream(cause instanceof Http2Exception
+      serverStream.abortStream(cause instanceof Http2Exception
           ? Status.INTERNAL.withCause(cause) : Status.fromThrowable(cause), true);
     } else {
       // Delegate to the base class to send a RST_STREAM.
@@ -308,6 +313,19 @@ class NettyServerHandler extends Http2ConnectionHandler {
       ChannelPromise promise) {
     cmd.stream().abortStream(cmd.reason(), false);
     encoder().writeRstStream(ctx, cmd.stream().id(), Http2Error.CANCEL.code(), promise);
+  }
+
+  private void verifyContentType(int streamId, Http2Headers headers) throws Http2Exception {
+    ByteString contentType = headers.get(CONTENT_TYPE_HEADER);
+    if (contentType == null) {
+      throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
+          "Content-Type is missing from the request");
+    }
+    String contentTypeString = contentType.toString(US_ASCII);
+    if (!GrpcUtil.isGrpcContentType(contentTypeString)) {
+      throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
+          "Content-Type '%s' is not supported", contentTypeString);
+    }
   }
 
   private Http2Stream requireHttp2Stream(int streamId) {
