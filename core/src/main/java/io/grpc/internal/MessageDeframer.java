@@ -63,6 +63,8 @@ public class MessageDeframer implements Closeable {
 
     /**
      * Called when the given number of bytes has been read from the input source of the deframer.
+     * This is typically used to indicate to the underlying transport that more data can be
+     * accepted.
      *
      * @param numBytes the number of bytes read from the deframer's input source.
      */
@@ -120,7 +122,7 @@ public class MessageDeframer implements Closeable {
    *  {@code NONE} meaning unsupported
    */
   public MessageDeframer(Listener listener, MessageEncoding.Decompressor decompressor) {
-    this.listener = Preconditions.checkNotNull(listener, "sink");
+    this.listener = Preconditions.checkNotNull(listener, "listener");
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
   }
 
@@ -153,11 +155,12 @@ public class MessageDeframer implements Closeable {
   }
 
   /**
-   * Adds the given data to this deframer and attempts delivery to the sink.
+   * Adds the given data to this deframer and attempts delivery to the listener.
    *
    * @param data the raw data read from the remote endpoint. Must be non-null.
    * @param endOfStream if {@code true}, indicates that {@code data} is the end of the stream from
-   *        the remote endpoint.
+   *        the remote endpoint.  End of stream should not be used in the event of a transport
+   *        error, such as a stream reset.
    * @throws IllegalStateException if {@link #close()} has been called previously or if
    *         {@link #deframe(ReadableBuffer, boolean)} has previously been called with
    *         {@code endOfStream=true}.
@@ -169,8 +172,8 @@ public class MessageDeframer implements Closeable {
       checkNotClosed();
       Preconditions.checkState(!this.endOfStream, "Past end of stream");
 
-      needToCloseData = false;
       unprocessed.addBuffer(data);
+      needToCloseData = false;
 
       // Indicate that all of the data for this stream has been received.
       this.endOfStream = endOfStream;
@@ -183,7 +186,8 @@ public class MessageDeframer implements Closeable {
   }
 
   /**
-   * Indicates whether delivery is currently stalled, pending receipt of more data.
+   * Indicates whether delivery is currently stalled, pending receipt of more data.  This means
+   * that no additional data can be delivered to the application.
    */
   public boolean isStalled() {
     return deliveryStalled;
@@ -223,7 +227,7 @@ public class MessageDeframer implements Closeable {
   }
 
   /**
-   * Reads and delivers as many messages to the sink as possible.
+   * Reads and delivers as many messages to the listener as possible.
    */
   private void deliver() {
     // We can have reentrancy here when using a direct executor, triggered by calls to
@@ -234,7 +238,6 @@ public class MessageDeframer implements Closeable {
     inDelivery = true;
     try {
       // Process the uncompressed bytes.
-      boolean stalled = false;
       while (pendingDeliveries > 0 && readRequiredBytes()) {
         switch (state) {
           case HEADER:
@@ -252,24 +255,30 @@ public class MessageDeframer implements Closeable {
             throw new AssertionError("Invalid state: " + state);
         }
       }
-      // We are stalled when there are no more bytes to process. This allows delivering errors as
-      // soon as the buffered input has been consumed, independent of whether the application
-      // has requested another message.
-      stalled = !isDataAvailable();
 
-      if (endOfStream) {
-        if (!isDataAvailable()) {
+      /*
+       * We are stalled when there are no more bytes to process. This allows delivering errors as
+       * soon as the buffered input has been consumed, independent of whether the application
+       * has requested another message.  At this point in the function, either all frames have been
+       * delivered, or unprocessed is empty.  If there is a partial message, it will be inside next
+       * frame and not in unprocessed.  If there is extra data but no pending deliveries, it will
+       * be in unprocessed.
+       */
+      boolean stalled = unprocessed.readableBytes() == 0;
+
+      if (endOfStream && stalled) {
+        boolean havePartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
+        if (!havePartialMessage) {
           listener.endOfStream();
-        } else if (stalled) {
+          deliveryStalled = false;
+          return;
+        } else {
           // We've received the entire stream and have data available but we don't have
           // enough to read the next frame ... this is bad.
           throw Status.INTERNAL.withDescription("Encountered end-of-stream mid-frame")
               .asRuntimeException();
         }
       }
-
-      // Never indicate that we're stalled if we've received all the data for the stream.
-      stalled &= !endOfStream;
 
       // If we're transitioning to the stalled state, notify the listener.
       boolean previouslyStalled = deliveryStalled;
