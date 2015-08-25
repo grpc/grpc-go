@@ -232,15 +232,17 @@ public final class GrpcUtil {
    */
   public static String getGrpcUserAgent(String transportName,
                                         @Nullable String applicationUserAgent) {
-    StringBuilder builder = new StringBuilder("grpc-java-").append(transportName);
+    StringBuilder builder = new StringBuilder();
+    if (applicationUserAgent != null) {
+      builder.append(applicationUserAgent);
+      builder.append(' ');
+    }
+    builder.append("grpc-java-");
+    builder.append(transportName);
     String version = GrpcUtil.class.getPackage().getImplementationVersion();
     if (version != null) {
       builder.append("/");
       builder.append(version);
-    }
-    if (applicationUserAgent != null) {
-      builder.append(' ');
-      builder.append(applicationUserAgent);
     }
     return builder.toString();
   }

@@ -34,6 +34,7 @@ package io.grpc.internal;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil.Http2Error;
@@ -95,5 +96,12 @@ public class GrpcUtilTest {
     // 1,666,667 * 60 has 9 digits
     assertEquals("1666666H", marshaller.toAsciiString(6000000000000000L));
     assertEquals(3600000000000000L, (long) marshaller.parseAsciiString("1000000H"));
+  }
+
+  @Test
+  public void grpcUserAgent() {
+    assertTrue(GrpcUtil.getGrpcUserAgent("netty", null).startsWith("grpc-java-netty"));
+    assertTrue(GrpcUtil.getGrpcUserAgent("okhttp", "libfoo/1.0")
+        .startsWith("libfoo/1.0 grpc-java-okhttp"));
   }
 }
