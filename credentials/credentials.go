@@ -78,27 +78,47 @@ type ProtocolInfo struct {
 	SecurityVersion string
 }
 
+// AuthInfo defines the common interface for the auth information the users are interested in.
+type AuthInfo interface {
+	Type() string
+}
+
+type authInfoKey struct{}
+
+// NewContext creates a new context with authInfo attached.
+func NewContext(ctx context.Context, authInfo AuthInfo) context.Context {
+	return context.WithValue(ctx, authInfoKey{}, authInfo)
+}
+
+// FromContext returns the authInfo in ctx if it exists.
+func FromContext(ctx context.Context) (authInfo AuthInfo, ok bool) {
+	authInfo, ok = ctx.Value(authInfoKey{}).(AuthInfo)
+	return
+}
+
 // TransportAuthenticator defines the common interface for all the live gRPC wire
 // protocols and supported transport security protocols (e.g., TLS, SSL).
 type TransportAuthenticator interface {
 	// ClientHandshake does the authentication handshake specified by the corresponding
 	// authentication protocol on rawConn for clients. It returns the authenticated
 	// connection and the corresponding auth information about the connection.
-	ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, map[string][]string, error)
+	ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (net.Conn, AuthInfo, error)
 	// ServerHandshake does the authentication handshake for servers. It returns
 	// the authenticated connection and the corresponding auth information about
 	// the connection.
-	ServerHandshake(rawConn net.Conn) (net.Conn, map[string][]string, error)
+	ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 	// Info provides the ProtocolInfo of this TransportAuthenticator.
 	Info() ProtocolInfo
 	Credentials
 }
 
-const (
-	transportSecurityType = "transport_security_type"
-	x509CN                = "x509_common_name"
-	x509SAN               = "x509_suject_alternative_name"
-)
+type TLSInfo struct {
+	state tls.ConnectionState
+}
+
+func (t TLSInfo) Type() string {
+	return "tls"
+}
 
 // tlsCreds is the credentials required for authenticating a connection using TLS.
 type tlsCreds struct {
@@ -106,7 +126,7 @@ type tlsCreds struct {
 	config tls.Config
 }
 
-func (c *tlsCreds) Info() ProtocolInfo {
+func (c tlsCreds) Info() ProtocolInfo {
 	return ProtocolInfo{
 		SecurityProtocol: "tls",
 		SecurityVersion:  "1.2",
@@ -125,7 +145,7 @@ func (timeoutError) Error() string   { return "credentials: Dial timed out" }
 func (timeoutError) Timeout() bool   { return true }
 func (timeoutError) Temporary() bool { return true }
 
-func (c *tlsCreds) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (_ net.Conn, _ map[string][]string, err error) {
+func (c *tlsCreds) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (_ net.Conn, _ AuthInfo, err error) {
 	// borrow some code from tls.DialWithDialer
 	var errChannel chan error
 	if timeout != 0 {
@@ -159,23 +179,13 @@ func (c *tlsCreds) ClientHandshake(addr string, rawConn net.Conn, timeout time.D
 	return conn, nil, nil
 }
 
-func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, map[string][]string, error) {
+func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error) {
 	conn := tls.Server(rawConn, &c.config)
 	if err := conn.Handshake(); err != nil {
 		rawConn.Close()
 		return nil, nil, err
 	}
-	info := make(map[string][]string)
-	info[transportSecurityType] = []string{"tls"}
-	for _, certs := range conn.ConnectionState().VerifiedChains {
-		for _, cert := range certs {
-			info[x509CN] = append(info[x509CN], cert.Subject.CommonName)
-			for _, san := range cert.DNSNames {
-				info[x509SAN] = append(info[x509SAN], san)
-			}
-		}
-	}
-	return conn, info, nil
+	return conn, &TLSInfo{ conn.ConnectionState() }, nil
 }
 
 // NewTLS uses c to construct a TransportAuthenticator based on TLS.

@@ -308,7 +308,7 @@ const (
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
 // if it fails.
-func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, authInfo map[string][]string) (ServerTransport, error) {
+func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo) (ServerTransport, error) {
 	return newHTTP2Server(conn, maxStreams, authInfo)
 }
 
