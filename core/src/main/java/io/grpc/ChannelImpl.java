@@ -256,7 +256,7 @@ public final class ChannelImpl extends Channel {
    *
    * @see ClientTransport#ping(PingCallback, Executor)
    */
-  @ExperimentalApi(comment = "https://github.com/grpc/grpc-java/issues/737")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/737")
   public void ping(final PingCallback callback, final Executor executor) {
     try {
       obtainActiveTransport().ping(callback, executor);

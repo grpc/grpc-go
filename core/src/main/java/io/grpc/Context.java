@@ -110,7 +110,7 @@ import javax.annotation.Nullable;
  * responsibility of the application to ensure that all contexts are properly cancelled.</li>
  * </ul>
  */
-@ExperimentalApi(comment = "https://github.com/grpc/grpc-java/issues/262")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/262")
 public class Context {
 
   private static final Logger LOG = Logger.getLogger(Context.class.getName());
