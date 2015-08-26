@@ -112,6 +112,8 @@ type TransportAuthenticator interface {
 	Credentials
 }
 
+// TLSInfo contains the auth information for a TLS authenticated connection.
+// It implements the AuthInfo interface.
 type TLSInfo struct {
 	state tls.ConnectionState
 }
