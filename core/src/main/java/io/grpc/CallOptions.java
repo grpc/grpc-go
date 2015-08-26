@@ -117,6 +117,7 @@ public final class CallOptions {
    * Returns the compressor, or {@code null} if none is set.
    */
   @Nullable
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
   public Compressor getCompressor() {
     return compressor;
   }
@@ -124,6 +125,7 @@ public final class CallOptions {
   /**
    * Use the desired compression.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
   public CallOptions withCompressor(@Nullable Compressor compressor) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.compressor = compressor;

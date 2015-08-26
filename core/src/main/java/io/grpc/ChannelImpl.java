@@ -158,6 +158,7 @@ public final class ChannelImpl extends Channel {
    *          equivalent to using {@link MessageEncoding#NONE}.  If not null, the Comressor must be
    *          threadsafe.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
   public void setDefaultCompressor(@Nullable Compressor c) {
     defaultCompressor = (c != null) ? c : MessageEncoding.NONE;
   }
