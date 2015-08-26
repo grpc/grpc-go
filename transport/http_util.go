@@ -104,7 +104,6 @@ type decodeState struct {
 // An hpackDecoder decodes HTTP2 headers which may span multiple frames.
 type hpackDecoder struct {
 	h     *hpack.Decoder
-	mdata map[string][]string // persistent metadata with this decoder
 	state decodeState
 	err   error // The err when decoding
 }
@@ -173,9 +172,6 @@ func newHPACKDecoder() *hpackDecoder {
 				}
 				if d.state.mdata == nil {
 					d.state.mdata = make(map[string][]string)
-					for k, v := range d.mdata {
-						d.state.mdata[k] = v
-					}
 				}
 				k, v, err := metadata.DecodeKeyValue(f.Name, f.Value)
 				if err != nil {
