@@ -120,7 +120,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		var authType string
 		switch info := authInfo.(type) {
 		case credentials.TLSInfo:
-			authType = info.Type()
+			authType = info.AuthType()
 		default:
 			grpclog.Fatalf("Unknown AuthInfo type")
 		}
