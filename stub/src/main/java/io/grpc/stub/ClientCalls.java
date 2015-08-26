@@ -206,7 +206,7 @@ public class ClientCalls {
     }
 
     @Override
-    public void onValue(T value) {
+    public void onNext(T value) {
       call.sendMessage(value);
     }
 
@@ -248,7 +248,7 @@ public class ClientCalls {
             .asRuntimeException();
       }
       firstResponseReceived = true;
-      observer.onValue(message);
+      observer.onNext(message);
 
       if (streamingResponse) {
         // Request delivery of the next inbound message.

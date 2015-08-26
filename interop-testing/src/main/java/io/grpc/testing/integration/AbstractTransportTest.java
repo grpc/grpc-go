@@ -240,7 +240,7 @@ public abstract class AbstractTransportTest {
     StreamObserver<StreamingInputCallRequest> requestObserver =
         asyncStub.streamingInputCall(responseObserver);
     for (StreamingInputCallRequest request : requests) {
-      requestObserver.onValue(request);
+      requestObserver.onNext(request);
     }
     requestObserver.onCompleted();
     assertEquals(goldenResponse, responseObserver.firstValue().get());
@@ -300,8 +300,8 @@ public abstract class AbstractTransportTest {
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     for (int i = 0; i < requests.size(); i++) {
-      requestObserver.onValue(requests.get(i));
-      verify(responseObserver, timeout(OPERATION_TIMEOUT)).onValue(goldenResponses.get(i));
+      requestObserver.onNext(requests.get(i));
+      verify(responseObserver, timeout(OPERATION_TIMEOUT)).onNext(goldenResponses.get(i));
       verifyNoMoreInteractions(responseObserver);
     }
     requestObserver.onCompleted();
@@ -349,8 +349,8 @@ public abstract class AbstractTransportTest {
     StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
-    requestObserver.onValue(request);
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onValue(goldenResponse);
+    requestObserver.onNext(request);
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onNext(goldenResponse);
     verifyNoMoreInteractions(responseObserver);
 
     requestObserver.onError(new RuntimeException());
@@ -378,7 +378,7 @@ public abstract class AbstractTransportTest {
 
     final int numRequests = 10;
     for (int ix = numRequests; ix > 0; --ix) {
-      requestStream.onValue(request);
+      requestStream.onNext(request);
     }
     requestStream.onCompleted();
     recorder.awaitCompletion();
@@ -410,7 +410,7 @@ public abstract class AbstractTransportTest {
 
     final int numRequests = 10;
     for (int ix = numRequests; ix > 0; --ix) {
-      requestStream.onValue(request);
+      requestStream.onNext(request);
     }
     requestStream.onCompleted();
     recorder.awaitCompletion();
@@ -570,7 +570,7 @@ public abstract class AbstractTransportTest {
 
     final int numRequests = 10;
     for (int ix = numRequests; ix > 0; --ix) {
-      requestStream.onValue(request);
+      requestStream.onNext(request);
     }
     requestStream.onCompleted();
     recorder.awaitCompletion();
@@ -695,15 +695,15 @@ public abstract class AbstractTransportTest {
     StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
-    requestObserver.onValue(requests.get(0));
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onValue(goldenResponses.get(0));
+    requestObserver.onNext(requests.get(0));
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onNext(goldenResponses.get(0));
     // Initiate graceful shutdown.
     channel.shutdown();
-    requestObserver.onValue(requests.get(1));
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onValue(goldenResponses.get(1));
+    requestObserver.onNext(requests.get(1));
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onNext(goldenResponses.get(1));
     // The previous ping-pong could have raced with the shutdown, but this one certainly shouldn't.
-    requestObserver.onValue(requests.get(2));
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onValue(goldenResponses.get(2));
+    requestObserver.onNext(requests.get(2));
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onNext(goldenResponses.get(2));
     requestObserver.onCompleted();
     verify(responseObserver, timeout(OPERATION_TIMEOUT)).onCompleted();
     verifyNoMoreInteractions(responseObserver);

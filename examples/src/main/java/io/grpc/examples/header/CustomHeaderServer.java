@@ -87,7 +87,7 @@ public class CustomHeaderServer {
     @Override
     public void sayHello(HelloRequest req, StreamObserver<HelloResponse> responseObserver) {
       HelloResponse reply = HelloResponse.newBuilder().setMessage("Hello " + req.getName()).build();
-      responseObserver.onValue(reply);
+      responseObserver.onNext(reply);
       responseObserver.onCompleted();
     }
   }

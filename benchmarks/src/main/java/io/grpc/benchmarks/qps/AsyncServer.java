@@ -184,7 +184,7 @@ public class AsyncServer {
     @Override
     public void unaryCall(SimpleRequest request, StreamObserver<SimpleResponse> responseObserver) {
       SimpleResponse response = buildSimpleResponse(request);
-      responseObserver.onValue(response);
+      responseObserver.onNext(response);
       responseObserver.onCompleted();
     }
 
@@ -193,9 +193,9 @@ public class AsyncServer {
         final StreamObserver<SimpleResponse> responseObserver) {
       return new StreamObserver<SimpleRequest>() {
         @Override
-        public void onValue(SimpleRequest request) {
+        public void onNext(SimpleRequest request) {
           SimpleResponse response = buildSimpleResponse(request);
-          responseObserver.onValue(response);
+          responseObserver.onNext(response);
         }
 
         @Override

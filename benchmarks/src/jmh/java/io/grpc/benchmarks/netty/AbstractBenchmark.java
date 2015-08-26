@@ -372,7 +372,7 @@ public abstract class AbstractBenchmark {
       for (int i = 0; i < callsPerChannel; i++) {
         StreamObserver<ByteBuf> observer = new StreamObserver<ByteBuf>() {
           @Override
-          public void onValue(ByteBuf value) {
+          public void onNext(ByteBuf value) {
             counter.addAndGet(counterDelta);
           }
 
@@ -414,10 +414,10 @@ public abstract class AbstractBenchmark {
             streamingCall,
             new StreamObserver<ByteBuf>() {
               @Override
-              public void onValue(ByteBuf value) {
+              public void onNext(ByteBuf value) {
                 if (!done.get()) {
                   counter.addAndGet(counterDelta);
-                  requestObserverRef.get().onValue(request.slice());
+                  requestObserverRef.get().onNext(request.slice());
                   streamingCall.request(1);
                 }
               }
@@ -432,8 +432,8 @@ public abstract class AbstractBenchmark {
               }
             });
         requestObserverRef.set(requestObserver);
-        requestObserver.onValue(request.slice());
-        requestObserver.onValue(request.slice());
+        requestObserver.onNext(request.slice());
+        requestObserver.onNext(request.slice());
       }
     }
   }
@@ -457,7 +457,7 @@ public abstract class AbstractBenchmark {
             streamingCall,
             new StreamObserver<ByteBuf>() {
               @Override
-              public void onValue(ByteBuf value) {
+              public void onNext(ByteBuf value) {
                 if (!done.get()) {
                   counter.addAndGet(counterDelta);
                   streamingCall.request(1);
@@ -474,7 +474,7 @@ public abstract class AbstractBenchmark {
               }
             });
         requestObserverRef.set(requestObserver);
-        requestObserver.onValue(request.slice());
+        requestObserver.onNext(request.slice());
       }
     }
   }

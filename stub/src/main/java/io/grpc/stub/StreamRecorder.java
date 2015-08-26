@@ -67,7 +67,7 @@ public class StreamRecorder<T> implements StreamObserver<T> {
   }
 
   @Override
-  public void onValue(T value) {
+  public void onNext(T value) {
     if (!firstValue.isDone()) {
       firstValue.set(value);
     }

@@ -132,7 +132,7 @@ public class RouteGuideClient {
     final SettableFuture<Void> finishFuture = SettableFuture.create();
     StreamObserver<RouteSummary> responseObserver = new StreamObserver<RouteSummary>() {
       @Override
-      public void onValue(RouteSummary summary) {
+      public void onNext(RouteSummary summary) {
         info("Finished trip with {0} points. Passed {1} features. "
             + "Travelled {2} meters. It took {3} seconds.", summary.getPointCount(),
             summary.getFeatureCount(), summary.getDistance(), summary.getElapsedTime());
@@ -159,7 +159,7 @@ public class RouteGuideClient {
         Point point = features.get(index).getLocation();
         info("Visiting point {0}, {1}", RouteGuideUtil.getLatitude(point),
             RouteGuideUtil.getLongitude(point));
-        requestObserver.onValue(point);
+        requestObserver.onNext(point);
         // Sleep for a bit before sending the next one.
         Thread.sleep(rand.nextInt(1000) + 500);
         if (finishFuture.isDone()) {
@@ -188,7 +188,7 @@ public class RouteGuideClient {
     StreamObserver<RouteNote> requestObserver =
         asyncStub.routeChat(new StreamObserver<RouteNote>() {
           @Override
-          public void onValue(RouteNote note) {
+          public void onNext(RouteNote note) {
             info("Got message \"{0}\" at {1}, {2}", note.getMessage(), note.getLocation()
                 .getLatitude(), note.getLocation().getLongitude());
           }
@@ -212,7 +212,7 @@ public class RouteGuideClient {
       for (RouteNote request : requests) {
         info("Sending message \"{0}\" at {1}, {2}", request.getMessage(), request.getLocation()
             .getLatitude(), request.getLocation().getLongitude());
-        requestObserver.onValue(request);
+        requestObserver.onNext(request);
       }
       requestObserver.onCompleted();
 

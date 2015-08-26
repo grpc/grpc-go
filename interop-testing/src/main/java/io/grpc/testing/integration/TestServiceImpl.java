@@ -78,7 +78,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
   @Override
   public void emptyCall(EmptyProtos.Empty empty,
                         StreamObserver<EmptyProtos.Empty> responseObserver) {
-    responseObserver.onValue(EmptyProtos.Empty.getDefaultInstance());
+    responseObserver.onNext(EmptyProtos.Empty.getDefaultInstance());
     responseObserver.onCompleted();
   }
 
@@ -101,7 +101,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
           .setType(compressable ? PayloadType.COMPRESSABLE : PayloadType.UNCOMPRESSABLE)
           .setBody(payload);
     }
-    responseObserver.onValue(responseBuilder.build());
+    responseObserver.onNext(responseBuilder.build());
     responseObserver.onCompleted();
   }
 
@@ -127,13 +127,13 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
       private int totalPayloadSize;
 
       @Override
-      public void onValue(StreamingInputCallRequest message) {
+      public void onNext(StreamingInputCallRequest message) {
         totalPayloadSize += message.getPayload().getBody().size();
       }
 
       @Override
       public void onCompleted() {
-        responseObserver.onValue(StreamingInputCallResponse.newBuilder()
+        responseObserver.onNext(StreamingInputCallResponse.newBuilder()
             .setAggregatedPayloadSize(totalPayloadSize).build());
         responseObserver.onCompleted();
       }
@@ -155,7 +155,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
     final ResponseDispatcher dispatcher = new ResponseDispatcher(responseObserver);
     return new StreamObserver<StreamingOutputCallRequest>() {
       @Override
-      public void onValue(StreamingOutputCallRequest request) {
+      public void onNext(StreamingOutputCallRequest request) {
         dispatcher.enqueue(toChunkQueue(request));
       }
 
@@ -182,7 +182,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
     final Queue<Chunk> chunks = new LinkedList<Chunk>();
     return new StreamObserver<StreamingOutputCallRequest>() {
       @Override
-      public void onValue(StreamingOutputCallRequest request) {
+      public void onNext(StreamingOutputCallRequest request) {
         chunks.addAll(toChunkQueue(request));
       }
 
@@ -271,7 +271,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
 
         // Pop off the next chunk and send it to the client.
         Chunk chunk = chunks.remove();
-        responseStream.onValue(chunk.toResponse());
+        responseStream.onNext(chunk.toResponse());
 
       } catch (Throwable e) {
         responseStream.onError(e);

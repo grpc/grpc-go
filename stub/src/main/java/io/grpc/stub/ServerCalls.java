@@ -186,7 +186,7 @@ public class ServerCalls {
 
           @Override
           public void onMessage(ReqT request) {
-            requestObserver.onValue(request);
+            requestObserver.onNext(request);
 
             // Request delivery of the next inbound message.
             call.request(1);
@@ -227,7 +227,7 @@ public class ServerCalls {
     }
 
     @Override
-    public void onValue(RespT response) {
+    public void onNext(RespT response) {
       if (cancelled) {
         throw Status.CANCELLED.asRuntimeException();
       }

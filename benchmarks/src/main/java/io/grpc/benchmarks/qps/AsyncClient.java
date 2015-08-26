@@ -179,7 +179,7 @@ public class AsyncClient {
       long lastCall = System.nanoTime();
 
       @Override
-      public void onValue(SimpleResponse value) {
+      public void onNext(SimpleResponse value) {
       }
 
       @Override
@@ -220,7 +220,7 @@ public class AsyncClient {
 
     StreamObserver<SimpleRequest> requestObserver = stub.streamingCall(responseObserver);
     responseObserver.requestObserver = requestObserver;
-    requestObserver.onValue(request);
+    requestObserver.onNext(request);
     return future;
   }
 
@@ -249,14 +249,14 @@ public class AsyncClient {
     }
 
     @Override
-    public void onValue(SimpleResponse value) {
+    public void onNext(SimpleResponse value) {
       long now = System.nanoTime();
       // Record the latencies in microseconds
       histogram.recordValue((now - lastCall) / 1000);
       lastCall = now;
 
       if (endTime > now) {
-        requestObserver.onValue(request);
+        requestObserver.onNext(request);
       } else {
         requestObserver.onCompleted();
       }

@@ -203,7 +203,7 @@ public class OpenLoopClient {
         private final long start = System.nanoTime();
 
         @Override
-        public void onValue(SimpleResponse value) {
+        public void onNext(SimpleResponse value) {
         }
 
         @Override

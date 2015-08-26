@@ -131,7 +131,7 @@ public class RouteGuideServer {
      */
     @Override
     public void getFeature(Point request, StreamObserver<Feature> responseObserver) {
-      responseObserver.onValue(checkFeature(request));
+      responseObserver.onNext(checkFeature(request));
       responseObserver.onCompleted();
     }
 
@@ -156,7 +156,7 @@ public class RouteGuideServer {
         int lat = feature.getLocation().getLatitude();
         int lon = feature.getLocation().getLongitude();
         if (lon >= left && lon <= right && lat >= bottom && lat <= top) {
-          responseObserver.onValue(feature);
+          responseObserver.onNext(feature);
         }
       }
       responseObserver.onCompleted();
@@ -179,7 +179,7 @@ public class RouteGuideServer {
         long startTime = System.nanoTime();
 
         @Override
-        public void onValue(Point point) {
+        public void onNext(Point point) {
           pointCount++;
           if (RouteGuideUtil.exists(checkFeature(point))) {
             featureCount++;
@@ -200,7 +200,7 @@ public class RouteGuideServer {
         @Override
         public void onCompleted() {
           long seconds = NANOSECONDS.toSeconds(System.nanoTime() - startTime);
-          responseObserver.onValue(RouteSummary.newBuilder().setPointCount(pointCount)
+          responseObserver.onNext(RouteSummary.newBuilder().setPointCount(pointCount)
               .setFeatureCount(featureCount).setDistance(distance)
               .setElapsedTime((int) seconds).build());
           responseObserver.onCompleted();
@@ -219,12 +219,12 @@ public class RouteGuideServer {
     public StreamObserver<RouteNote> routeChat(final StreamObserver<RouteNote> responseObserver) {
       return new StreamObserver<RouteNote>() {
         @Override
-        public void onValue(RouteNote note) {
+        public void onNext(RouteNote note) {
           List<RouteNote> notes = getOrCreateNotes(note.getLocation());
 
           // Respond with all previous notes at this location.
           for (RouteNote prevNote : notes.toArray(new RouteNote[0])) {
-            responseObserver.onValue(prevNote);
+            responseObserver.onNext(prevNote);
           }
 
           // Now add the new note to the list

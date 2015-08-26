@@ -55,7 +55,7 @@ public interface StreamObserver<V>  {
    *
    * @param value the value passed to the stream
    */
-  void onValue(V value);
+  void onNext(V value);
 
   /**
    * Receives a terminating error from the stream.
