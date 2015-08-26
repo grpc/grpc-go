@@ -60,4 +60,8 @@ import java.lang.annotation.Target;
     ElementType.TYPE})
 @Documented
 public @interface ExperimentalApi {
+  /**
+   * Context information such as links to discussion thread, tracking issue etc.
+   */
+  String comment() default "";
 }
