@@ -119,8 +119,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
 	if md, ok := metadata.FromContext(stream.Context()); ok {
-		delete(md, "transport_security_type")
-		// For testing purpose, returns an error if there is attached metadata other than transport_security_type.
+		// For testing purpose, returns an error if there is attached metadata.
 		if len(md) > 0 {
 			return grpc.Errorf(codes.DataLoss, "got extra metadata")
 		}
@@ -591,10 +590,6 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
-	if e.security == "tls" {
-		delete(header, "transport_security_type")
-		delete(trailer, "transport_security_type")
-	}
 	if !reflect.DeepEqual(testMetadata, header) {
 		t.Fatalf("Received header metadata %v, want %v", header, testMetadata)
 	}
@@ -790,9 +785,6 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		}
 		// test the cached value.
 		headerMD, err = stream.Header()
-		if e.security == "tls" {
-			delete(headerMD, "transport_security_type")
-		}
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
@@ -823,9 +815,6 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		}
 	}
 	trailerMD := stream.Trailer()
-	if e.security == "tls" {
-		delete(trailerMD, "transport_security_type")
-	}
 	if !reflect.DeepEqual(testMetadata, trailerMD) {
 		t.Fatalf("%v.Trailer() = %v, want %v", stream, trailerMD, testMetadata)
 	}

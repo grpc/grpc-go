@@ -62,7 +62,7 @@ const (
 )
 
 var (
-	clientPreface = []byte(http2.ClientPreface)
+	clientPreface      = []byte(http2.ClientPreface)
 	http2RSTErrConvTab = map[http2.ErrCode]codes.Code{
 		http2.ErrCodeNo:                 codes.Internal,
 		http2.ErrCodeProtocol:           codes.Internal,

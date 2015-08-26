@@ -187,7 +187,7 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 		rawConn.Close()
 		return nil, nil, err
 	}
-	return conn, &TLSInfo{ conn.ConnectionState() }, nil
+	return conn, &TLSInfo{conn.ConnectionState()}, nil
 }
 
 // NewTLS uses c to construct a TransportAuthenticator based on TLS.

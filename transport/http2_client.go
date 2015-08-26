@@ -55,9 +55,9 @@ import (
 type http2Client struct {
 	target    string // server name/addr
 	userAgent string
-	conn      net.Conn            // underlying communication channel
+	conn      net.Conn             // underlying communication channel
 	authInfo  credentials.AuthInfo // auth info about the connection
-	nextID    uint32              // the next stream ID to be used
+	nextID    uint32               // the next stream ID to be used
 
 	// writableChan synchronizes write access to the transport.
 	// A writer acquires the write lock by sending a value on writableChan
