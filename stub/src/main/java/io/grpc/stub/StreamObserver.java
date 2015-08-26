@@ -55,7 +55,7 @@ public interface StreamObserver<V>  {
    *
    * @param value the value passed to the stream
    */
-  public void onValue(V value);
+  void onValue(V value);
 
   /**
    * Receives a terminating error from the stream.
@@ -66,7 +66,7 @@ public interface StreamObserver<V>  {
    *
    * @param t the error occurred on the stream
    */
-  public void onError(Throwable t);
+  void onError(Throwable t);
 
   /**
    * Receives a notification of successful stream completion.
@@ -75,5 +75,5 @@ public interface StreamObserver<V>  {
    * exception is thrown by an implementation of {@code onCompleted} no further calls to any method
    * are allowed.
    */
-  public void onCompleted();
+  void onCompleted();
 }

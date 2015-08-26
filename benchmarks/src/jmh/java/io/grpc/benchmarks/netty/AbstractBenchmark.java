@@ -419,8 +419,6 @@ public abstract class AbstractBenchmark {
                   counter.addAndGet(counterDelta);
                   requestObserverRef.get().onValue(request.slice());
                   streamingCall.request(1);
-                } else {
-                  requestObserverRef.get().onCompleted();
                 }
               }
 
@@ -463,8 +461,6 @@ public abstract class AbstractBenchmark {
                 if (!done.get()) {
                   counter.addAndGet(counterDelta);
                   streamingCall.request(1);
-                } else {
-                  requestObserverRef.get().onCompleted();
                 }
               }
 

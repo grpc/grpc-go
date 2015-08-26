@@ -24,7 +24,7 @@ jmh {
     warmupIterations = 10
     iterations = 10
     fork = 1
-    jvmArgs = "-server -Xms768m -Xmx768m -dsa -da -XX:+AggressiveOpts -XX:+UseBiasedLocking -XX:+UseFastAccessorMethods -XX:+OptimizeStringConcat"
+    jvmArgs = "-server -Xms2g -Xmx2g -dsa -da -XX:+AggressiveOpts -XX:+UseBiasedLocking -XX:+UseFastAccessorMethods -XX:+OptimizeStringConcat"
 }
 
 dependencies {
