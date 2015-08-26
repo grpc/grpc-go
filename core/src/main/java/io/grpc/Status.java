@@ -459,4 +459,24 @@ public final class Status {
       return fromCodeValue(Integer.valueOf(serialized));
     }
   }
+
+  /**
+   * Equality on Statuses is not well defined.  Instead, do comparison based on their Code with
+   * {@link #getCode}.  The description and cause of the Status are unlikely to be stable, and
+   * additional fields may be added to Status in the future.
+   */
+  @Override
+  public boolean equals(Object obj) {
+    return super.equals(obj);
+  }
+
+  /**
+   * Hash codes on Statuses are not well defined.
+   *
+   * @see #equals
+   */
+  @Override
+  public int hashCode() {
+    return super.hashCode();
+  }
 }
