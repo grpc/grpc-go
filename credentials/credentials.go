@@ -80,7 +80,7 @@ type ProtocolInfo struct {
 
 // AuthInfo defines the common interface for the auth information the users are interested in.
 type AuthInfo interface {
-	Type() string
+	AuthType() string
 }
 
 type authInfoKey struct{}
@@ -118,7 +118,7 @@ type TLSInfo struct {
 	state tls.ConnectionState
 }
 
-func (t TLSInfo) Type() string {
+func (t TLSInfo) AuthType() string {
 	return "tls"
 }
 
