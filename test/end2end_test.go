@@ -66,6 +66,7 @@ var (
 )
 
 type testServer struct {
+	security string // indicate the authentication protocol used by this server.
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -110,6 +111,24 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		}
 		grpc.SetTrailer(ctx, md)
 	}
+	if s.security != "" {
+		// Check Auth info
+		authInfo, ok := credentials.FromContext(ctx)
+		if !ok {
+			grpclog.Fatalf("Failed to get AuthInfo from ctx.")
+		}
+		var authType string
+		switch info := authInfo.(type) {
+		case credentials.TLSInfo:
+			authType = info.Type()
+		default:
+			grpclog.Fatalf("Unknown AuthInfo type")
+		}
+		if authType != s.security {
+			grpclog.Fatalf("Wrong auth type: got %q, want %q", authType, s.security)
+		}
+	}
+
 	// Simulate some service delay.
 	time.Sleep(time.Second)
 	return &testpb.SimpleResponse{
@@ -319,7 +338,7 @@ func setUp(hs *health.HealthServer, maxStream uint32, ua string, e env) (s *grpc
 	if hs != nil {
 		healthpb.RegisterHealthCheckServer(s, hs)
 	}
-	testpb.RegisterTestServiceServer(s, &testServer{})
+	testpb.RegisterTestServiceServer(s, &testServer{security: e.security})
 	go s.Serve(lis)
 	addr := la
 	switch e.network {
