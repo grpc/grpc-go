@@ -199,7 +199,7 @@ func (s *Server) Serve(lis net.Listener) error {
 		if err != nil {
 			return err
 		}
-		var authInfo map[string][]string
+		var authInfo credentials.AuthInfo
 		if creds, ok := s.opts.creds.(credentials.TransportAuthenticator); ok {
 			c, authInfo, err = creds.ServerHandshake(c)
 			if err != nil {

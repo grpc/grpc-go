@@ -66,6 +66,7 @@ var (
 )
 
 type testServer struct {
+	security string // indicate the authentication protocol used by this server.
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -110,6 +111,24 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		}
 		grpc.SetTrailer(ctx, md)
 	}
+	if s.security != "" {
+		// Check Auth info
+		authInfo, ok := credentials.FromContext(ctx)
+		if !ok {
+			grpclog.Fatalf("Failed to get AuthInfo from ctx.")
+		}
+		var authType string
+		switch info := authInfo.(type) {
+		case credentials.TLSInfo:
+			authType = info.Type()
+		default:
+			grpclog.Fatalf("Unknown AuthInfo type")
+		}
+		if authType != s.security {
+			grpclog.Fatalf("Wrong auth type: got %q, want %q", authType, s.security)
+		}
+	}
+
 	// Simulate some service delay.
 	time.Sleep(time.Second)
 	return &testpb.SimpleResponse{
@@ -119,8 +138,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
 	if md, ok := metadata.FromContext(stream.Context()); ok {
-		delete(md, "transport_security_type")
-		// For testing purpose, returns an error if there is attached metadata other than transport_security_type.
+		// For testing purpose, returns an error if there is attached metadata.
 		if len(md) > 0 {
 			return grpc.Errorf(codes.DataLoss, "got extra metadata")
 		}
@@ -320,7 +338,7 @@ func setUp(hs *health.HealthServer, maxStream uint32, ua string, e env) (s *grpc
 	if hs != nil {
 		healthpb.RegisterHealthCheckServer(s, hs)
 	}
-	testpb.RegisterTestServiceServer(s, &testServer{})
+	testpb.RegisterTestServiceServer(s, &testServer{security: e.security})
 	go s.Serve(lis)
 	addr := la
 	switch e.network {
@@ -591,10 +609,6 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
-	if e.security == "tls" {
-		delete(header, "transport_security_type")
-		delete(trailer, "transport_security_type")
-	}
 	if !reflect.DeepEqual(testMetadata, header) {
 		t.Fatalf("Received header metadata %v, want %v", header, testMetadata)
 	}
@@ -790,9 +804,6 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		}
 		// test the cached value.
 		headerMD, err = stream.Header()
-		if e.security == "tls" {
-			delete(headerMD, "transport_security_type")
-		}
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
@@ -823,9 +834,6 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		}
 	}
 	trailerMD := stream.Trailer()
-	if e.security == "tls" {
-		delete(trailerMD, "transport_security_type")
-	}
 	if !reflect.DeepEqual(testMetadata, trailerMD) {
 		t.Fatalf("%v.Trailer() = %v, want %v", stream, trailerMD, testMetadata)
 	}

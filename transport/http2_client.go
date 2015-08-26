@@ -55,9 +55,9 @@ import (
 type http2Client struct {
 	target    string // server name/addr
 	userAgent string
-	conn      net.Conn            // underlying communication channel
-	authInfo  map[string][]string // auth info about the connection
-	nextID    uint32              // the next stream ID to be used
+	conn      net.Conn             // underlying communication channel
+	authInfo  credentials.AuthInfo // auth info about the connection
+	nextID    uint32               // the next stream ID to be used
 
 	// writableChan synchronizes write access to the transport.
 	// A writer acquires the write lock by sending a value on writableChan
@@ -115,7 +115,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)
 	}
-	var authInfo map[string][]string
+	var authInfo credentials.AuthInfo
 	for _, c := range opts.AuthOptions {
 		if ccreds, ok := c.(credentials.TransportAuthenticator); ok {
 			scheme = "https"
@@ -236,6 +236,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		if timeout <= 0 {
 			return nil, ContextErr(context.DeadlineExceeded)
 		}
+	}
+	// Attach Auth info if there is any.
+	if t.authInfo != nil {
+		ctx = credentials.NewContext(ctx, t.authInfo)
 	}
 	authData := make(map[string]string)
 	for _, c := range t.authCreds {
@@ -704,7 +708,7 @@ func (t *http2Client) reader() {
 	}
 	t.handleSettings(sf)
 
-	hDec := newHPACKDecoder(t.authInfo)
+	hDec := newHPACKDecoder()
 	var curStream *Stream
 	// loop to keep reading incoming messages on this transport.
 	for {

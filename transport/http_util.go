@@ -62,31 +62,29 @@ const (
 )
 
 var (
-	clientPreface = []byte(http2.ClientPreface)
+	clientPreface      = []byte(http2.ClientPreface)
+	http2RSTErrConvTab = map[http2.ErrCode]codes.Code{
+		http2.ErrCodeNo:                 codes.Internal,
+		http2.ErrCodeProtocol:           codes.Internal,
+		http2.ErrCodeInternal:           codes.Internal,
+		http2.ErrCodeFlowControl:        codes.ResourceExhausted,
+		http2.ErrCodeSettingsTimeout:    codes.Internal,
+		http2.ErrCodeFrameSize:          codes.Internal,
+		http2.ErrCodeRefusedStream:      codes.Unavailable,
+		http2.ErrCodeCancel:             codes.Canceled,
+		http2.ErrCodeCompression:        codes.Internal,
+		http2.ErrCodeConnect:            codes.Internal,
+		http2.ErrCodeEnhanceYourCalm:    codes.ResourceExhausted,
+		http2.ErrCodeInadequateSecurity: codes.PermissionDenied,
+	}
+	statusCodeConvTab = map[codes.Code]http2.ErrCode{
+		codes.Internal:          http2.ErrCodeInternal,
+		codes.Canceled:          http2.ErrCodeCancel,
+		codes.Unavailable:       http2.ErrCodeRefusedStream,
+		codes.ResourceExhausted: http2.ErrCodeEnhanceYourCalm,
+		codes.PermissionDenied:  http2.ErrCodeInadequateSecurity,
+	}
 )
-
-var http2RSTErrConvTab = map[http2.ErrCode]codes.Code{
-	http2.ErrCodeNo:                 codes.Internal,
-	http2.ErrCodeProtocol:           codes.Internal,
-	http2.ErrCodeInternal:           codes.Internal,
-	http2.ErrCodeFlowControl:        codes.ResourceExhausted,
-	http2.ErrCodeSettingsTimeout:    codes.Internal,
-	http2.ErrCodeFrameSize:          codes.Internal,
-	http2.ErrCodeRefusedStream:      codes.Unavailable,
-	http2.ErrCodeCancel:             codes.Canceled,
-	http2.ErrCodeCompression:        codes.Internal,
-	http2.ErrCodeConnect:            codes.Internal,
-	http2.ErrCodeEnhanceYourCalm:    codes.ResourceExhausted,
-	http2.ErrCodeInadequateSecurity: codes.PermissionDenied,
-}
-
-var statusCodeConvTab = map[codes.Code]http2.ErrCode{
-	codes.Internal:          http2.ErrCodeInternal, // pick an arbitrary one which is matched.
-	codes.Canceled:          http2.ErrCodeCancel,
-	codes.Unavailable:       http2.ErrCodeRefusedStream,
-	codes.ResourceExhausted: http2.ErrCodeEnhanceYourCalm,
-	codes.PermissionDenied:  http2.ErrCodeInadequateSecurity,
-}
 
 // Records the states during HPACK decoding. Must be reset once the
 // decoding of the entire headers are finished.
@@ -139,12 +137,8 @@ func isReservedHeader(hdr string) bool {
 	}
 }
 
-func newHPACKDecoder(mdata map[string][]string) *hpackDecoder {
+func newHPACKDecoder() *hpackDecoder {
 	d := &hpackDecoder{}
-	for k, v := range mdata {
-		d.mdata = make(map[string][]string)
-		d.mdata[k] = v
-	}
 	d.h = hpack.NewDecoder(http2InitHeaderTableSize, func(f hpack.HeaderField) {
 		switch f.Name {
 		case "grpc-status":
