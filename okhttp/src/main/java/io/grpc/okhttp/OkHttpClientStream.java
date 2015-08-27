@@ -190,11 +190,14 @@ class OkHttpClientStream extends Http2ClientStream {
     }
 
     synchronized (lock) {
+      if (cancelSent) {
+        return;
+      }
       if (pendingData != null) {
         // Stream is pending start, queue the data.
         pendingData.add(new PendingData(buffer, endOfStream, flush));
       } else {
-        checkState(id() != 0, "streamId should be set");
+        checkState(id() != null, "streamId should be set");
         // If buffer > frameWriter.maxDataLength() the flow-controller will ensure that it is
         // properly chunked.
         outboundFlow.data(endOfStream, id(), buffer, flush);

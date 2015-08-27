@@ -197,7 +197,7 @@ public class OkHttpClientTransportTest {
     startTransport(3, null, true, 1);
 
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method, new Metadata.Headers(), listener).request(1);
+    clientTransport.newStream(method, new Metadata(), listener).request(1);
     assertContainStream(3);
     frameHandler().headers(false, false, 3, 0, grpcResponseHeaders(), HeadersMode.HTTP_20_HEADERS);
     assertNotNull(listener.headers);
