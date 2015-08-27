@@ -83,7 +83,6 @@ public final class ServerImpl extends Server {
   private boolean started;
   private boolean shutdown;
   private boolean terminated;
-  private Runnable terminationRunnable;
   /** Service encapsulating something similar to an accept() socket. */
   private final io.grpc.internal.Server transportServer;
   private final Object lock = new Object();
@@ -104,14 +103,6 @@ public final class ServerImpl extends Server {
     this.executor = executor;
     this.registry = Preconditions.checkNotNull(registry, "registry");
     this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");
-  }
-
-  /** Hack to allow executors to auto-shutdown. Not for general use. */
-  // TODO(ejona86): Replace with a real API.
-  void setTerminationRunnable(Runnable runnable) {
-    synchronized (lock) {
-      this.terminationRunnable = runnable;
-    }
   }
 
   /**
@@ -253,9 +244,6 @@ public final class ServerImpl extends Server {
         terminated = true;
         // TODO(carl-mastrangelo): move this outside the synchronized block.
         lock.notifyAll();
-        if (terminationRunnable != null) {
-          terminationRunnable.run();
-        }
       }
     }
   }
