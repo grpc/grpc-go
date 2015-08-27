@@ -80,7 +80,7 @@ public abstract class ClientCall<RequestT, ResponseT> {
      *
      * @param headers containing metadata sent by the server at the start of the response.
      */
-    public abstract void onHeaders(Metadata headers);
+    public void onHeaders(Metadata headers) {}
 
     /**
      * A response message has been received. May be called zero or more times depending on whether
@@ -88,21 +88,21 @@ public abstract class ClientCall<RequestT, ResponseT> {
      *
      * @param message returned by the server
      */
-    public abstract void onMessage(T message);
+    public void onMessage(T message) {}
 
     /**
      * The ClientCall has been closed. Any additional calls to the {@code ClientCall} will not be
      * processed by the server. No further receiving will occur and no further notifications will be
      * made.
      *
-     * <p>If {@code status} is not equal to {@link Status#OK}, then the call failed. An additional
-     * block of trailer metadata may be received at the end of the call from the server. An empty
-     * {@link Metadata} object is passed if no trailers are received.
+     * <p>If {@code status} returns false for {@link Status#isOk()}, then the call failed.
+     * An additional block of trailer metadata may be received at the end of the call from the
+     * server. An empty {@link Metadata} object is passed if no trailers are received.
      *
      * @param status the result of the remote call.
      * @param trailers metadata provided at call completion.
      */
-    public abstract void onClose(Status status, Metadata trailers);
+    public void onClose(Status status, Metadata trailers) {}
 
     /**
      * This indicates that the ClientCall is now capable of sending additional messages (via
