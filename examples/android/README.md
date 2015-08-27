@@ -27,14 +27,7 @@ $ cd grpc-java
 $ # follow the instructions in 'How to Build'
 ```
 
-**3 Prepare the app**
-- Clone this git repo
-```sh
-$ git clone https://github.com/grpc/grpc-java
-
-```
-
-**4 Install the app**
+**3 Install the app**
 ```sh
 $ cd examples/android
 $ ./gradlew installDebug
