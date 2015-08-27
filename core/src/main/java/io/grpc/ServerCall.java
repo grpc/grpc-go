@@ -68,12 +68,12 @@ public abstract class ServerCall<ResponseT> {
      *
      * @param message a received request message.
      */
-    public abstract void onMessage(RequestT message);
+    public void onMessage(RequestT message) {}
 
     /**
      * The client completed all message sending. However, the call may still be cancelled.
      */
-    public abstract void onHalfClose();
+    public void onHalfClose() {}
 
     /**
      * The call was cancelled and the server is encouraged to abort processing to save resources,
@@ -82,7 +82,7 @@ public abstract class ServerCall<ResponseT> {
      *
      * <p>There will be no further callbacks for the call.
      */
-    public abstract void onCancel();
+    public void onCancel() {}
 
     /**
      * The call is considered complete and {@link #onCancel} is guaranteed not to be called.
@@ -90,7 +90,7 @@ public abstract class ServerCall<ResponseT> {
      *
      * <p>There will be no further callbacks for the call.
      */
-    public abstract void onComplete();
+    public void onComplete() {}
 
     /**
      * This indicates that the call is now capable of sending additional messages (via
