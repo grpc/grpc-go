@@ -23,13 +23,6 @@ An option is provided to use GRPC over plaintext without TLS. This is convenient
 ### TLS-ALPN on Android
 On Android, it is needed to <a href="https://developer.android.com/training/articles/security-gms-provider.html">update your security provider</a> to enable ALPN support, especially for Android versions < 5.0. If the provider fails to update, ALPN may not work.
 
-After the update is done, you'll need to pass an SSLSocketFactorty to OkHttpChannelBuilder, like the code snippet below shows.
-
-```java
-OkHttpChannelBuilder channelBuilder = OkHttpChannelBuilder.forAddress(host, port)
-    .sslSocketFactory(SSLContext.getDefault().getSocketFactory());
-```
-
 ### TLS-ALPN in Jetty
 Some web containers, such as <a href="http://www.eclipse.org/jetty/documentation/current/jetty-classloading.html">Jetty</a> restrict access to server classes for web applications. A gRPC client running within such a container must be properly configured to allow access to the ALPN classes.
 
