@@ -3,7 +3,7 @@ gRPC in 3 minutes (Go)
 
 BACKGROUND
 -------------
-For this sample, we've already generated the server and client stubs from [helloworld.proto](https://github.com/grpc/grpc-common/blob/master/protos/helloworld.proto). 
+For this sample, we've already generated the server and client stubs from [helloworld.proto](https://github.com/grpc/grpc/blob/master/protos/helloworld.proto). 
 
 PREREQUISITES
 -------------
@@ -20,8 +20,8 @@ INSTALL
 -------
 
 ```sh
-$ go get -u github.com/grpc/grpc-common/go/greeter_client
-$ go get -u github.com/grpc/grpc-common/go/greeter_server
+$ go get -u github.com/grpc/grpc-go/examples/greeter_client
+$ go get -u github.com/grpc/grpc-go/examples/greeter_server
 ```
 
 TRY IT!

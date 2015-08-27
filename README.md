@@ -15,7 +15,7 @@ $ go get google.golang.org/grpc
 
 Documentation
 -------------
-You can find more detailed documentation and examples in the [grpc-common repository](http://github.com/grpc/grpc-common).
+You can find more detailed documentation and examples in the [examples directory](examples/).
 
 Status
 ------

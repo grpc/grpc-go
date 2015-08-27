@@ -37,7 +37,7 @@ import (
 	"log"
 	"net"
 
-	pb "github.com/grpc/grpc-common/go/helloworld"
+	pb "github.com/grpc/grpc-go/examples/helloworld"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
