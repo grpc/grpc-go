@@ -593,9 +593,9 @@ public abstract class AbstractTransportTest {
         requestHeadersCapture.get().get(GrpcUtil.TIMEOUT_KEY));
     Assert.assertTrue(
         "configuredTimeoutMinutes=" + configuredTimeoutMinutes
-        + ", transferredTimeoutMinutes=" + transferredTimeoutMinutes,
+            + ", transferredTimeoutMinutes=" + transferredTimeoutMinutes,
         configuredTimeoutMinutes - transferredTimeoutMinutes >= 0
-        && configuredTimeoutMinutes - transferredTimeoutMinutes <= 1);
+            && configuredTimeoutMinutes - transferredTimeoutMinutes <= 1);
   }
 
   @Test
@@ -845,6 +845,15 @@ public abstract class AbstractTransportTest {
     assertFalse(response.getOauthScope().isEmpty());
     assertTrue("Received oauth scope: " + response.getOauthScope(),
         authScope.contains(response.getOauthScope()));
+  }
+
+  /** Sends a unary rpc with "per rpc" raw oauth2 access token credentials. */
+  public void perRpcCreds(String jsonKey, InputStream credentialsStream, String oauthScope)
+      throws Exception {
+    // In gRpc Java, we don't have per Rpc credentials, user can use an intercepted stub only once
+    // for that purpose.
+    // So, this test is identical to oauth2_auth_token test.
+    oauth2AuthToken(jsonKey, credentialsStream, oauthScope);
   }
 
   protected static void assertSuccess(StreamRecorder<?> recorder) {

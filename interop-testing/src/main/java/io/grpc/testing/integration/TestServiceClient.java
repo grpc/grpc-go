@@ -168,6 +168,7 @@ public class TestServiceClient {
           + "\n      service_account_creds: large_unary with service_account auth"
           + "\n      compute_engine_creds: large_unary with compute engine auth"
           + "\n      oauth2_auth_token: raw oauth2 access token auth"
+          + "\n      per_rpc_creds: per rpc raw oauth2 access token auth"
           + "\n      cancel_after_begin: cancel stream after starting it"
           + "\n      cancel_after_first_response: cancel on first response"
           + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
@@ -233,6 +234,10 @@ public class TestServiceClient {
       String jsonKey = Files.toString(new File(serviceAccountKeyFile), Charset.forName("UTF-8"));
       FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
       tester.oauth2AuthToken(jsonKey, credentialsStream, oauthScope);
+    } else if ("per_rpc_creds".equals(testCase)) {
+      String jsonKey = Files.toString(new File(serviceAccountKeyFile), Charset.forName("UTF-8"));
+      FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
+      tester.perRpcCreds(jsonKey, credentialsStream, oauthScope);
     } else if ("cancel_after_begin".equals(testCase)) {
       tester.cancelAfterBegin();
     } else if ("cancel_after_first_response".equals(testCase)) {
