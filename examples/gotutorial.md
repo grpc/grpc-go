@@ -33,7 +33,7 @@ You also should have the relevant tools installed to generate the server and cli
 
 ## Defining the service
 
-Our first step (as you'll know from [Getting started](https://github.com/grpc/grpc/tree/master/examples)) is to define the gRPC *service* and the method *request* and *response* types using [protocol buffers] (https://developers.google.com/protocol-buffers/docs/overview). You can see the complete .proto file in [`examples/protos/route_guide.proto`](https://github.com/grpc/grpc/blob/master/protos/route_guide.proto).
+Our first step (as you'll know from [Getting started](https://github.com/grpc/grpc/tree/master/examples)) is to define the gRPC *service* and the method *request* and *response* types using [protocol buffers] (https://developers.google.com/protocol-buffers/docs/overview). You can see the complete .proto file in [`examples/protos/route_guide.proto`](examples/protos/route_guide.proto).
 
 To define a service, you specify a named `service` in your .proto file:
 
