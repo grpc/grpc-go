@@ -710,6 +710,40 @@ public abstract class AbstractTransportTest {
     verifyNoMoreInteractions(responseObserver);
   }
 
+  /** Sends an rpc to an unimplemented method on the server. */
+  @Test(timeout = 10000)
+  public void unimplementedMethod() {
+    UnimplementedServiceGrpc.UnimplementedServiceBlockingStub stub =
+        UnimplementedServiceGrpc.newBlockingStub(channel);
+    try {
+      stub.unimplementedCall(Empty.getDefaultInstance());
+      fail();
+    } catch (StatusRuntimeException e) {
+      assertEquals(Status.UNIMPLEMENTED.getCode(), e.getStatus().getCode());
+    }
+  }
+
+  /** Start a fullDuplexCall which the server will not respond, and verify the deadline expires. */
+  @Test(timeout = 10000)
+  public void timeoutOnSleepingServer() {
+    TestServiceGrpc.TestService stub = TestServiceGrpc.newStub(channel)
+        .withDeadlineAfter(1, TimeUnit.MILLISECONDS);
+    @SuppressWarnings("unchecked")
+    StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
+    StreamObserver<StreamingOutputCallRequest> requestObserver
+        = stub.fullDuplexCall(responseObserver);
+    requestObserver.onNext(StreamingOutputCallRequest.newBuilder()
+        .setPayload(Payload.newBuilder()
+            .setBody(ByteString.copyFrom(new byte[27182])))
+        .build());
+
+    ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
+    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onError(captor.capture());
+    assertEquals(Status.DEADLINE_EXCEEDED.getCode(),
+        Status.fromThrowable(captor.getValue()).getCode());
+    verifyNoMoreInteractions(responseObserver);
+  }
+
   /** Sends a large unary rpc with service account credentials. */
   public void serviceAccountCreds(String jsonKey, InputStream credentialsStream, String authScope)
       throws Exception {
@@ -811,19 +845,6 @@ public abstract class AbstractTransportTest {
     assertFalse(response.getOauthScope().isEmpty());
     assertTrue("Received oauth scope: " + response.getOauthScope(),
         authScope.contains(response.getOauthScope()));
-  }
-
-  /** Sends an rpc to an unimplemented method on the server. */
-  @Test(timeout = 10000)
-  public void unimplementedMethod() {
-    UnimplementedServiceGrpc.UnimplementedServiceBlockingStub stub =
-        UnimplementedServiceGrpc.newBlockingStub(channel);
-    try {
-      stub.unimplementedCall(Empty.getDefaultInstance());
-      fail();
-    } catch (StatusRuntimeException e) {
-      assertEquals(Status.UNIMPLEMENTED.getCode(), e.getStatus().getCode());
-    }
   }
 
   protected static void assertSuccess(StreamRecorder<?> recorder) {
