@@ -3,7 +3,7 @@ gRPC Hello World Tutorial (Android Java)
 
 BACKGROUND
 -------------
-For this sample, we've already generated the server and client stubs from [helloworld.proto](https://github.com/grpc/grpc-common/blob/master/protos/helloworld.proto). 
+For this sample, we've already generated the server and client stubs from [helloworld.proto](https://github.com/grpc/grpc/blob/master/examples/protos/helloworld.proto). 
 
 PREREQUISITES
 -------------
@@ -30,12 +30,12 @@ $ # follow the instructions in 'How to Build'
 **3 Prepare the app**
 - Clone this git repo
 ```sh
-$ git clone https://github.com/grpc/grpc-common
+$ git clone https://github.com/grpc/grpc-java
 
 ```
 
 **4 Install the app**
 ```sh
-$ cd grpc-common/java/android
+$ cd examples/android
 $ ./gradlew installDebug
 ```

@@ -299,7 +299,7 @@ public final class GrpcUtil {
    * <p>The representation is greedy with respect to precision. That is, 2 seconds will be
    * represented as `2000000u`.</p>
    *
-   * <p>See <a href="https://github.com/grpc/grpc-common/blob/master/PROTOCOL-HTTP2.md#requests">the
+   * <p>See <a href="https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests">the
    * request header definition</a></p>
    */
   @VisibleForTesting
