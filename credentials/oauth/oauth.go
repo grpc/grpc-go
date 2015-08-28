@@ -51,7 +51,7 @@ type TokenSource struct {
 }
 
 // GetRequestMetadata gets the request metadata as a map from a TokenSource.
-func (ts TokenSource) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+func (ts TokenSource) GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error) {
 	token, err := ts.Token()
 	if err != nil {
 		return nil, err
@@ -66,27 +66,28 @@ func (ts TokenSource) RequireTransportSecurity() bool {
 }
 
 type jwtAccess struct {
-	ts oauth2.TokenSource
+	jsonKey []byte
+	//ts oauth2.TokenSource
 }
 
-func NewJWTAccessFromFile(keyFile string, audience string) (credentials.Credentials, error) {
+func NewJWTAccessFromFile(keyFile string) (credentials.Credentials, error) {
 	jsonKey, err := ioutil.ReadFile(keyFile)
 	if err != nil {
 		return nil, fmt.Errorf("credentials: failed to read the service account key file: %v", err)
 	}
-	return NewJWTAccessFromKey(jsonKey, audience)
+	return NewJWTAccessFromKey(jsonKey)
 }
 
-func NewJWTAccessFromKey(jsonKey []byte, audience string) (credentials.Credentials, error) {
-	ts, err := google.JWTAccessTokenSourceFromJSON(jsonKey, audience)
+func NewJWTAccessFromKey(jsonKey []byte) (credentials.Credentials, error) {
+	return jwtAccess{ jsonKey }, nil
+}
+
+func (j jwtAccess) GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error) {
+	ts, err := google.JWTAccessTokenSourceFromJSON(j.jsonKey, audience[0])
 	if err != nil {
 		return nil, err
 	}
-	return jwtAccess{ts: ts}, nil
-}
-
-func (j jwtAccess) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
-	token, err := j.ts.Token()
+	token, err := ts.Token()
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,7 @@ func NewOauthAccess(token *oauth2.Token) credentials.Credentials {
 	return oauthAccess{token: *token}
 }
 
-func (oa oauthAccess) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+func (oa oauthAccess) GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error) {
 	return map[string]string{
 		"authorization": oa.token.TokenType + " " + oa.token.AccessToken,
 	}, nil
@@ -132,7 +133,7 @@ type serviceAccount struct {
 	config *jwt.Config
 }
 
-func (s serviceAccount) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+func (s serviceAccount) GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error) {
 	token, err := s.config.TokenSource(ctx).Token()
 	if err != nil {
 		return nil, err

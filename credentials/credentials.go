@@ -64,7 +64,7 @@ type Credentials interface {
 	// be used for timeout and cancellation.
 	// TODO(zhaoq): Define the set of the qualified keys instead of leaving
 	// it as an arbitrary string.
-	GetRequestMetadata(ctx context.Context) (map[string]string, error)
+	GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error)
 	// RequireTransportSecurity indicates whether the credentails requires
 	// transport security.
 	RequireTransportSecurity() bool
@@ -140,7 +140,7 @@ func (c tlsCreds) Info() ProtocolInfo {
 
 // GetRequestMetadata returns nil, nil since TLS credentials does not have
 // metadata.
-func (c *tlsCreds) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+func (c *tlsCreds) GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error) {
 	return nil, nil
 }
 
