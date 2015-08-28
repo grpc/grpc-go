@@ -57,7 +57,7 @@ var (
 	// ErrCredentialsMisuse indicates that users want to transmit security infomation
 	// (e.g., oauth2 token) which requires secure connection on an insecure
 	// connection.
-	ErrCredentailsMisuse = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportAuthenticator() to set)")
+	ErrCredentialsMisuse = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportAuthenticator() to set)")
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the session is closing.
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
@@ -165,7 +165,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	} else {
 		for _, c := range cc.dopts.copts.AuthOptions {
 			if c.RequireTransportSecurity() {
-				return nil, ErrCredentailsMisuse
+				return nil, ErrCredentialsMisuse
 			}
 		}
 	}

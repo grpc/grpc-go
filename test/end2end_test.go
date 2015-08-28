@@ -260,6 +260,21 @@ func TestTLSDialTimeout(t *testing.T) {
 	}
 }
 
+func TestCredentialsMisuse(t *testing.T) {
+	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+	if err != nil {
+		t.Fatalf("Failed to create credentials %v", err)
+	}
+	// Two conflicting credential configurations
+	if _, err := grpc.Dial("Non-Existent.Server:80", grpc.WithTransportCredentials(creds), grpc.WithTimeout(time.Millisecond), grpc.WithBlock(), grpc.WithInsecure()); err != grpc.ErrCredentialsMisuse {
+		t.Fatalf("grpc.Dial(_, _) = _, %v, want _, %v", err, grpc.ErrCredentialsMisuse)
+	}
+	// security info on insecure connection
+	if _, err := grpc.Dial("Non-Existent.Server:80", grpc.WithPerRPCCredentials(creds), grpc.WithTimeout(time.Millisecond), grpc.WithBlock(), grpc.WithInsecure()); err != grpc.ErrCredentialsMisuse {
+		t.Fatalf("grpc.Dial(_, _) = _, %v, want _, %v", err, grpc.ErrCredentialsMisuse)
+	}
+}
+
 func TestReconnectTimeout(t *testing.T) {
 	lis, err := net.Listen("tcp", ":0")
 	if err != nil {
