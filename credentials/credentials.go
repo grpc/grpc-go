@@ -65,7 +65,8 @@ type Credentials interface {
 	// TODO(zhaoq): Define the set of the qualified keys instead of leaving
 	// it as an arbitrary string.
 	GetRequestMetadata(ctx context.Context) (map[string]string, error)
-	// RequireTransport indicates whether the credentails requires transport security.
+	// RequireTransportSecurity indicates whether the credentails requires
+	// transport security.
 	RequireTransportSecurity() bool
 }
 
