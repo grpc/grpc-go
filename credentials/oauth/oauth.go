@@ -95,7 +95,7 @@ func (j jwtAccess) GetRequestMetadata(ctx context.Context) (map[string]string, e
 	}, nil
 }
 
-func (ts jwtAccess) RequireTransportSecurity() bool {
+func (j jwtAccess) RequireTransportSecurity() bool {
 	return true
 }
 
@@ -115,7 +115,7 @@ func (oa oauthAccess) GetRequestMetadata(ctx context.Context) (map[string]string
 	}, nil
 }
 
-func (oa jwtAccess) RequireTransportSecurity() bool {
+func (oa oauthAccess) RequireTransportSecurity() bool {
 	return true
 }
 
