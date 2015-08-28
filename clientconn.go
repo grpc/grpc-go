@@ -54,6 +54,10 @@ var (
 	// being set for ClientConn. Users should either set one or explicityly
 	// call WithInsecure DialOption to disable security.
 	ErrNoTransportSecurity = errors.New("grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)")
+	// ErrCredentialsMisuse indicates that users want to transmit security infomation
+	// (e.g., oauth2 token) which requires secure connection on an insecure
+	// connection.
+	ErrCredentialsMisuse = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportAuthenticator() to set)")
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the session is closing.
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
@@ -157,6 +161,12 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		}
 		if !ok {
 			return nil, ErrNoTransportSecurity
+		}
+	} else {
+		for _, c := range cc.dopts.copts.AuthOptions {
+			if c.RequireTransportSecurity() {
+				return nil, ErrCredentialsMisuse
+			}
 		}
 	}
 	colonPos := strings.LastIndex(target, ":")

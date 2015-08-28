@@ -61,6 +61,10 @@ func (ts TokenSource) GetRequestMetadata(ctx context.Context) (map[string]string
 	}, nil
 }
 
+func (ts TokenSource) RequireTransportSecurity() bool {
+	return true
+}
+
 type jwtAccess struct {
 	ts oauth2.TokenSource
 }
@@ -91,6 +95,10 @@ func (j jwtAccess) GetRequestMetadata(ctx context.Context) (map[string]string, e
 	}, nil
 }
 
+func (ts jwtAccess) RequireTransportSecurity() bool {
+	return true
+}
+
 // oauthAccess supplies credentials from a given token.
 type oauthAccess struct {
 	token oauth2.Token
@@ -105,6 +113,10 @@ func (oa oauthAccess) GetRequestMetadata(ctx context.Context) (map[string]string
 	return map[string]string{
 		"authorization": oa.token.TokenType + " " + oa.token.AccessToken,
 	}, nil
+}
+
+func (oa jwtAccess) RequireTransportSecurity() bool {
+	return true
 }
 
 // NewComputeEngine constructs the credentials that fetches access tokens from
@@ -128,6 +140,10 @@ func (s serviceAccount) GetRequestMetadata(ctx context.Context) (map[string]stri
 	return map[string]string{
 		"authorization": token.TokenType + " " + token.AccessToken,
 	}, nil
+}
+
+func (s serviceAccount) RequireTransportSecurity() bool {
+	return true
 }
 
 // NewServiceAccountFromKey constructs the credentials using the JSON key slice

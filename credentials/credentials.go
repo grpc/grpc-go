@@ -65,6 +65,9 @@ type Credentials interface {
 	// TODO(zhaoq): Define the set of the qualified keys instead of leaving
 	// it as an arbitrary string.
 	GetRequestMetadata(ctx context.Context) (map[string]string, error)
+	// RequireTransportSecurity indicates whether the credentails requires
+	// transport security.
+	RequireTransportSecurity() bool
 }
 
 // ProtocolInfo provides information regarding the gRPC wire protocol version,
@@ -139,6 +142,10 @@ func (c tlsCreds) Info() ProtocolInfo {
 // metadata.
 func (c *tlsCreds) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
 	return nil, nil
+}
+
+func (c *tlsCreds) RequireTransportSecurity() bool {
+	return true
 }
 
 type timeoutError struct{}
