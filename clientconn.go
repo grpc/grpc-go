@@ -53,7 +53,7 @@ var (
 	// ErrNoTransportSecurity indicates that there is no transport security
 	// being set for ClientConn. Users should either set one or explicityly
 	// call WithInsecure DialOption to disable security.
-	ErrNoTransportSecurity = errors.New("grpc: no transport security set (use grpc.WithInsecure() or set one)")
+	ErrNoTransportSecurity = errors.New("grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)")
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the session is closing.
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
