@@ -88,7 +88,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   @Override
   protected void receiveMessage(InputStream is) {
     inboundPhase(Phase.MESSAGE);
-    listener.messageRead(is);
+    listener().messageRead(is);
   }
 
   @Override
@@ -115,7 +115,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
     Preconditions.checkNotNull(trailers, "trailers");
     if (outboundPhase(Phase.STATUS) != Phase.STATUS) {
       gracefulClose = true;
-      this.stashedTrailers = trailers;
+      stashedTrailers = trailers;
       writeStatusToTrailers(status);
       closeFramer();
     }
@@ -253,7 +253,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   private void halfCloseListener() {
     if (inboundPhase(Phase.STATUS) != Phase.STATUS && !listenerClosed) {
       closeDeframer();
-      listener.halfClosed();
+      listener().halfClosed();
     }
   }
 
@@ -264,7 +264,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
     if (!listenerClosed) {
       listenerClosed = true;
       closeDeframer();
-      listener.closed(newStatus);
+      listener().closed(newStatus);
     }
   }
 }
