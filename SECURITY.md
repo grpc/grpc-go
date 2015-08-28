@@ -1,6 +1,6 @@
 # Authentication
 
-As outlined in <a href="https://github.com/grpc/grpc-common/blob/master/grpc-auth-support.md">gRPC Authentication Support</a>, gRPC supports a number of different mechanisms for asserting identity between an client and server. This document provides code samples demonstrating how to provide SSL/TLS encryption support and identity assertions in Java, as well as passing OAuth2 tokens to services that support it.
+As outlined in <a href="https://github.com/grpc/grpc/blob/master/doc/grpc-auth-support.md">gRPC Authentication Support</a>, gRPC supports a number of different mechanisms for asserting identity between an client and server. This document provides code samples demonstrating how to provide SSL/TLS encryption support and identity assertions in Java, as well as passing OAuth2 tokens to services that support it.
 
 # Java 7, HTTP2 & Crypto
 
