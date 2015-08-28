@@ -37,7 +37,7 @@ import (
 	"log"
 	"os"
 
-	pb "github.com/grpc/grpc-go/examples/helloworld"
+	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -49,7 +49,7 @@ const (
 
 func main() {
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address)
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
