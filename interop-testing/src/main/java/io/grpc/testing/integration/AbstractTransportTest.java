@@ -732,10 +732,15 @@ public abstract class AbstractTransportTest {
     StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = stub.fullDuplexCall(responseObserver);
-    requestObserver.onNext(StreamingOutputCallRequest.newBuilder()
-        .setPayload(Payload.newBuilder()
-            .setBody(ByteString.copyFrom(new byte[27182])))
-        .build());
+
+    try {
+      requestObserver.onNext(StreamingOutputCallRequest.newBuilder()
+          .setPayload(Payload.newBuilder()
+              .setBody(ByteString.copyFrom(new byte[27182])))
+          .build());
+    } catch (IllegalStateException expected) {
+      // This can happen if the stream has already been terminated due to deadline exceeded.
+    }
 
     ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
     verify(responseObserver, timeout(OPERATION_TIMEOUT)).onError(captor.capture());
