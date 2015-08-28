@@ -50,6 +50,10 @@ import (
 var (
 	// ErrUnspecTarget indicates that the target address is unspecified.
 	ErrUnspecTarget = errors.New("grpc: target is unspecified")
+	// ErrNoTransportSecurity indicates that there is no transport security
+	// being set for ClientConn. Users should either set one or explicityly
+	// call WithInsecure DialOption to disable security.
+	ErrNoTransportSecurity = errors.New("grpc: no transport security set")
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the session is closing.
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
@@ -63,9 +67,10 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	codec Codec
-	block bool
-	copts transport.ConnectOptions
+	codec    Codec
+	block    bool
+	insecure bool
+	copts    transport.ConnectOptions
 }
 
 // DialOption configures how we set up the connection.
@@ -84,6 +89,12 @@ func WithCodec(c Codec) DialOption {
 func WithBlock() DialOption {
 	return func(o *dialOptions) {
 		o.block = true
+	}
+}
+
+func WithInsecure() DialOption {
+	return func(o *dialOptions) {
+		o.insecure = true
 	}
 }
 
@@ -135,6 +146,18 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	}
 	for _, opt := range opts {
 		opt(&cc.dopts)
+	}
+	if !cc.dopts.insecure {
+		var ok bool
+		for _, c := range cc.dopts.copts.AuthOptions {
+			if _, ok := c.(credentials.TransportAuthenticator); !ok {
+				continue
+			}
+			ok = true
+		}
+		if !ok {
+			return nil, ErrNoTransportSecurity
+		}
 	}
 	colonPos := strings.LastIndex(target, ":")
 	if colonPos == -1 {

@@ -522,6 +522,8 @@ func main() {
 		} else if *testCase == "oauth2_auth_token" {
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewOauthAccess(getToken())))
 		}
+	} else {
+		opts = append(opts, grpc.WithInsecure())
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {

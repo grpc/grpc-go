@@ -237,7 +237,7 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 const tlsDir = "testdata/"
 
 func TestDialTimeout(t *testing.T) {
-	conn, err := grpc.Dial("Non-Existent.Server:80", grpc.WithTimeout(time.Millisecond), grpc.WithBlock())
+	conn, err := grpc.Dial("Non-Existent.Server:80", grpc.WithTimeout(time.Millisecond), grpc.WithBlock(), grpc.WithInsecure())
 	if err == nil {
 		conn.Close()
 	}
@@ -251,7 +251,7 @@ func TestTLSDialTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
-	conn, err := grpc.Dial("Non-Existent.Server:80", grpc.WithTransportCredentials(creds), grpc.WithTimeout(time.Millisecond), grpc.WithBlock())
+	conn, err := grpc.Dial("Non-Existent.Server:80", grpc.WithTransportCredentials(creds), grpc.WithTimeout(time.Millisecond), grpc.WithBlock(), grpc.WithInsecure())
 	if err == nil {
 		conn.Close()
 	}
@@ -270,7 +270,7 @@ func TestReconnectTimeout(t *testing.T) {
 		t.Fatalf("Failed to parse listener address: %v", err)
 	}
 	addr := "localhost:" + port
-	conn, err := grpc.Dial(addr, grpc.WithTimeout(5*time.Second), grpc.WithBlock())
+	conn, err := grpc.Dial(addr, grpc.WithTimeout(5*time.Second), grpc.WithBlock(), grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Failed to dial to the server %q: %v", addr, err)
 	}
@@ -357,7 +357,7 @@ func setUp(hs *health.HealthServer, maxStream uint32, ua string, e env) (s *grpc
 		}
 		cc, err = grpc.Dial(addr, grpc.WithTransportCredentials(creds), grpc.WithDialer(e.dialer), grpc.WithUserAgent(ua))
 	} else {
-		cc, err = grpc.Dial(addr, grpc.WithDialer(e.dialer), grpc.WithUserAgent(ua))
+		cc, err = grpc.Dial(addr, grpc.WithDialer(e.dialer), grpc.WithInsecure(), grpc.WithUserAgent(ua))
 	}
 	if err != nil {
 		grpclog.Fatalf("Dial(%q) = %v", addr, err)

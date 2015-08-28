@@ -139,7 +139,7 @@ func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService
 
 // NewClientConn creates a gRPC client connection to addr.
 func NewClientConn(addr string) *grpc.ClientConn {
-	conn, err := grpc.Dial(addr)
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
 	}
