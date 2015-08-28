@@ -37,10 +37,10 @@ import static java.lang.Math.min;
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteStreams;
 
+import io.grpc.Codec;
+import io.grpc.Compressor;
 import io.grpc.Drainable;
 import io.grpc.KnownLength;
-import io.grpc.MessageEncoding;
-import io.grpc.MessageEncoding.Compressor;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -91,7 +91,7 @@ public class MessageFramer {
    * @param bufferAllocator allocates buffers that the transport can commit to the wire.
    */
   public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator) {
-    this(sink, bufferAllocator, MessageEncoding.NONE);
+    this(sink, bufferAllocator, Codec.Identity.NONE);
   }
 
   /**
@@ -101,14 +101,13 @@ public class MessageFramer {
    * @param bufferAllocator allocates buffers that the transport can commit to the wire.
    * @param compressor the compressor to use
    */
-  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator,
-                       MessageEncoding.Compressor compressor) {
+  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator, Compressor compressor) {
     this.sink = Preconditions.checkNotNull(sink, "sink");
     this.bufferAllocator = bufferAllocator;
     this.compressor = Preconditions.checkNotNull(compressor, "compressor");
   }
 
-  public void setCompressor(MessageEncoding.Compressor compressor) {
+  public void setCompressor(Compressor compressor) {
     this.compressor = checkNotNull(compressor, "Can't pass an empty compressor");
   }
 
@@ -120,7 +119,7 @@ public class MessageFramer {
   public void writePayload(InputStream message) {
     verifyNotClosed();
     try {
-      if (compressor != MessageEncoding.NONE) {
+      if (compressor != Codec.Identity.NONE) {
         writeCompressed(message);
       } else {
         writeUncompressed(message);
@@ -192,8 +191,7 @@ public class MessageFramer {
   /**
    * Write a message that has been serialized to a sequence of buffers.
    */
-  private void writeBufferChain(BufferChainOutputStream bufferChain, boolean compressed)
-      throws IOException {
+  private void writeBufferChain(BufferChainOutputStream bufferChain, boolean compressed) {
     ByteBuffer header = ByteBuffer.wrap(headerScratch);
     header.put(compressed ? COMPRESSED : UNCOMPRESSED);
     int messageLength = bufferChain.readableBytes();

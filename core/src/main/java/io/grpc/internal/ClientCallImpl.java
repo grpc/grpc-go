@@ -41,8 +41,8 @@ import com.google.common.base.Throwables;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
-import io.grpc.MessageEncoding;
-import io.grpc.MessageEncoding.Compressor;
+import io.grpc.Codec;
+import io.grpc.Compressor;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -142,7 +142,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
     headers.removeAll(MESSAGE_ENCODING_KEY);
     Compressor compressor = callOptions.getCompressor();
-    if (compressor != null && compressor != MessageEncoding.NONE) {
+    if (compressor != null && compressor != Codec.Identity.NONE) {
       headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
     }
 

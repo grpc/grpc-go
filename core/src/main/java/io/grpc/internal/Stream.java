@@ -31,7 +31,7 @@
 
 package io.grpc.internal;
 
-import io.grpc.MessageEncoding.Compressor;
+import io.grpc.Compressor;
 
 import java.io.InputStream;
 

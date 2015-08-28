@@ -40,7 +40,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
 
-import io.grpc.MessageEncoding;
+import io.grpc.Codec;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -236,7 +236,7 @@ public class MessageFramerTest {
   @Test
   public void compressed() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
-    framer = new MessageFramer(sink, allocator, new MessageEncoding.Gzip());
+    framer = new MessageFramer(sink, allocator, new Codec.Gzip());
     writeKnownLength(framer, new byte[1000]);
     // The GRPC header is written first as a separate frame
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(false));
@@ -274,7 +274,7 @@ public class MessageFramerTest {
         }
       }
     };
-    framer = new MessageFramer(reentrant, allocator, MessageEncoding.NONE);
+    framer = new MessageFramer(reentrant, allocator, Codec.Identity.NONE);
     writeKnownLength(framer, new byte[]{3, 14});
     framer.close();
   }

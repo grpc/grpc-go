@@ -31,7 +31,7 @@
 
 package io.grpc.inprocess;
 
-import io.grpc.MessageEncoding.Compressor;
+import io.grpc.Compressor;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;

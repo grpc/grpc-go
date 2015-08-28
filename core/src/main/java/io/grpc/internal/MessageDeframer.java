@@ -35,7 +35,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.MessageEncoding;
+import io.grpc.Codec;
+import io.grpc.Decompressor;
 import io.grpc.Status;
 
 import java.io.Closeable;
@@ -96,7 +97,7 @@ public class MessageDeframer implements Closeable {
 
   private final Listener listener;
   private final int maxMessageSize;
-  private MessageEncoding.Decompressor decompressor;
+  private Decompressor decompressor;
   private State state = State.HEADER;
   private int requiredLength = HEADER_LENGTH;
   private boolean compressedFlag;
@@ -115,8 +116,7 @@ public class MessageDeframer implements Closeable {
    *  {@code NONE} meaning unsupported
    * @param maxMessageSize the maximum allowed size for received messages.
    */
-  public MessageDeframer(Listener listener, MessageEncoding.Decompressor decompressor,
-                         int maxMessageSize) {
+  public MessageDeframer(Listener listener, Decompressor decompressor, int maxMessageSize) {
     this.listener = Preconditions.checkNotNull(listener, "sink");
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
     this.maxMessageSize = maxMessageSize;
@@ -129,7 +129,7 @@ public class MessageDeframer implements Closeable {
    *
    * @param decompressor the decompressing wrapper.
    */
-  public void setDecompressor(MessageEncoding.Decompressor decompressor) {
+  public void setDecompressor(Decompressor decompressor) {
     this.decompressor = checkNotNull(decompressor, "Can't pass an empty decompressor");
   }
 
@@ -359,7 +359,7 @@ public class MessageDeframer implements Closeable {
   }
 
   private InputStream getCompressedBody() {
-    if (decompressor == MessageEncoding.NONE) {
+    if (decompressor == Codec.Identity.NONE) {
       throw Status.INTERNAL.withDescription(
           "Can't decode compressed frame as compression not configured.").asRuntimeException();
     }

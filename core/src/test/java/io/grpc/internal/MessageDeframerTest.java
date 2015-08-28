@@ -45,7 +45,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Bytes;
 
-import io.grpc.MessageEncoding;
+import io.grpc.Codec;
 import io.grpc.internal.MessageDeframer.Listener;
 
 import org.junit.Test;
@@ -68,7 +68,7 @@ import java.util.zip.GZIPOutputStream;
 @RunWith(JUnit4.class)
 public class MessageDeframerTest {
   private Listener listener = mock(Listener.class);
-  private MessageDeframer deframer = new MessageDeframer(listener, MessageEncoding.NONE,
+  private MessageDeframer deframer = new MessageDeframer(listener, Codec.Identity.NONE,
           DEFAULT_MAX_MESSAGE_SIZE);
   private ArgumentCaptor<InputStream> messages = ArgumentCaptor.forClass(InputStream.class);
 
@@ -178,7 +178,7 @@ public class MessageDeframerTest {
 
   @Test
   public void compressed() {
-    deframer = new MessageDeframer(listener, new MessageEncoding.Gzip(), DEFAULT_MAX_MESSAGE_SIZE);
+    deframer = new MessageDeframer(listener, new Codec.Gzip(), DEFAULT_MAX_MESSAGE_SIZE);
     deframer.request(1);
 
     byte[] payload = compress(new byte[1000]);

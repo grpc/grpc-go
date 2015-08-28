@@ -33,8 +33,6 @@ package io.grpc;
 
 import com.google.common.base.Objects;
 
-import io.grpc.MessageEncoding.Compressor;
-
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
