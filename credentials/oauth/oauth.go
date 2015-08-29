@@ -67,7 +67,6 @@ func (ts TokenSource) RequireTransportSecurity() bool {
 
 type jwtAccess struct {
 	jsonKey []byte
-	//ts oauth2.TokenSource
 }
 
 func NewJWTAccessFromFile(keyFile string) (credentials.Credentials, error) {
@@ -79,7 +78,7 @@ func NewJWTAccessFromFile(keyFile string) (credentials.Credentials, error) {
 }
 
 func NewJWTAccessFromKey(jsonKey []byte) (credentials.Credentials, error) {
-	return jwtAccess{ jsonKey }, nil
+	return jwtAccess{jsonKey}, nil
 }
 
 func (j jwtAccess) GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error) {
