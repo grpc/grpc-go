@@ -15,7 +15,7 @@ public  final class Mark extends
     // @@protoc_insertion_point(message_implements:grpc.testing.Mark)
     MarkOrBuilder {
   // Use Mark.newBuilder() to construct.
-  private Mark(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private Mark(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private Mark() {
@@ -82,13 +82,12 @@ public  final class Mark extends
                       throws java.io.IOException {
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -289,8 +288,8 @@ public  final class Mark extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<Mark> PARSER =
-      new com.google.protobuf.AbstractParser<Mark>() {
+  private static final com.google.protobuf.Parser<Mark>
+      PARSER = new com.google.protobuf.AbstractParser<Mark>() {
     public Mark parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

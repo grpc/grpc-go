@@ -11,7 +11,7 @@ public  final class ServerStats extends
     // @@protoc_insertion_point(message_implements:grpc.testing.ServerStats)
     ServerStatsOrBuilder {
   // Use ServerStats.newBuilder() to construct.
-  private ServerStats(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private ServerStats(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private ServerStats() {
@@ -145,9 +145,8 @@ public  final class ServerStats extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -163,7 +162,7 @@ public  final class ServerStats extends
       size += com.google.protobuf.CodedOutputStream
         .computeDoubleSize(3, timeSystem_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -492,8 +491,8 @@ public  final class ServerStats extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<ServerStats> PARSER =
-      new com.google.protobuf.AbstractParser<ServerStats>() {
+  private static final com.google.protobuf.Parser<ServerStats>
+      PARSER = new com.google.protobuf.AbstractParser<ServerStats>() {
     public ServerStats parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

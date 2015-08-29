@@ -91,8 +91,8 @@ public final class Messages {
         internalGetValueMap() {
       return internalValueMap;
     }
-    private static com.google.protobuf.Internal.EnumLiteMap<PayloadType>
-        internalValueMap =
+    private static final com.google.protobuf.Internal.EnumLiteMap<
+        PayloadType> internalValueMap =
           new com.google.protobuf.Internal.EnumLiteMap<PayloadType>() {
             public PayloadType findValueByNumber(int number) {
               return PayloadType.valueOf(number);
@@ -179,7 +179,7 @@ public final class Messages {
       // @@protoc_insertion_point(message_implements:grpc.testing.Payload)
       PayloadOrBuilder {
     // Use Payload.newBuilder() to construct.
-    private Payload(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private Payload(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private Payload() {
@@ -303,9 +303,8 @@ public final class Messages {
       }
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
@@ -317,7 +316,7 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeBytesSize(2, body_);
       }
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -635,8 +634,8 @@ public final class Messages {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<Payload> PARSER =
-        new com.google.protobuf.AbstractParser<Payload>() {
+    private static final com.google.protobuf.Parser<Payload>
+        PARSER = new com.google.protobuf.AbstractParser<Payload>() {
       public Payload parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -757,7 +756,7 @@ public final class Messages {
       // @@protoc_insertion_point(message_implements:grpc.testing.SimpleRequest)
       SimpleRequestOrBuilder {
     // Use SimpleRequest.newBuilder() to construct.
-    private SimpleRequest(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private SimpleRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private SimpleRequest() {
@@ -807,7 +806,7 @@ public final class Messages {
               if (payload_ != null) {
                 subBuilder = payload_.toBuilder();
               }
-              payload_ = input.readMessage(io.grpc.testing.integration.Messages.Payload.PARSER, extensionRegistry);
+              payload_ = input.readMessage(io.grpc.testing.integration.Messages.Payload.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(payload_);
                 payload_ = subBuilder.buildPartial();
@@ -977,9 +976,8 @@ public final class Messages {
       }
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
@@ -1003,7 +1001,7 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeBoolSize(5, fillOauthScope_);
       }
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -1581,8 +1579,8 @@ public final class Messages {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<SimpleRequest> PARSER =
-        new com.google.protobuf.AbstractParser<SimpleRequest>() {
+    private static final com.google.protobuf.Parser<SimpleRequest>
+        PARSER = new com.google.protobuf.AbstractParser<SimpleRequest>() {
       public SimpleRequest parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -1694,7 +1692,7 @@ public final class Messages {
       // @@protoc_insertion_point(message_implements:grpc.testing.SimpleResponse)
       SimpleResponseOrBuilder {
     // Use SimpleResponse.newBuilder() to construct.
-    private SimpleResponse(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private SimpleResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private SimpleResponse() {
@@ -1731,7 +1729,7 @@ public final class Messages {
               if (payload_ != null) {
                 subBuilder = payload_.toBuilder();
               }
-              payload_ = input.readMessage(io.grpc.testing.integration.Messages.Payload.PARSER, extensionRegistry);
+              payload_ = input.readMessage(io.grpc.testing.integration.Messages.Payload.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(payload_);
                 payload_ = subBuilder.buildPartial();
@@ -1740,15 +1738,15 @@ public final class Messages {
               break;
             }
             case 18: {
-              com.google.protobuf.ByteString bs = input.readBytes();
+              String s = input.readStringRequireUtf8();
 
-              username_ = bs;
+              username_ = s;
               break;
             }
             case 26: {
-              com.google.protobuf.ByteString bs = input.readBytes();
+              String s = input.readStringRequireUtf8();
 
-              oauthScope_ = bs;
+              oauthScope_ = s;
               break;
             }
           }
@@ -1826,9 +1824,7 @@ public final class Messages {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
-        if (bs.isValidUtf8()) {
-          username_ = s;
-        }
+        username_ = s;
         return s;
       }
     }
@@ -1871,9 +1867,7 @@ public final class Messages {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
-        if (bs.isValidUtf8()) {
-          oauthScope_ = s;
-        }
+        oauthScope_ = s;
         return s;
       }
     }
@@ -1914,16 +1908,15 @@ public final class Messages {
         output.writeMessage(1, getPayload());
       }
       if (!getUsernameBytes().isEmpty()) {
-        output.writeBytes(2, getUsernameBytes());
+        com.google.protobuf.GeneratedMessage.writeString(output, 2, username_);
       }
       if (!getOauthScopeBytes().isEmpty()) {
-        output.writeBytes(3, getOauthScopeBytes());
+        com.google.protobuf.GeneratedMessage.writeString(output, 3, oauthScope_);
       }
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
@@ -1932,14 +1925,12 @@ public final class Messages {
           .computeMessageSize(1, getPayload());
       }
       if (!getUsernameBytes().isEmpty()) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeBytesSize(2, getUsernameBytes());
+        size += com.google.protobuf.GeneratedMessage.computeStringSize(2, username_);
       }
       if (!getOauthScopeBytes().isEmpty()) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeBytesSize(3, getOauthScopeBytes());
+        size += com.google.protobuf.GeneratedMessage.computeStringSize(3, oauthScope_);
       }
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -2313,9 +2304,7 @@ public final class Messages {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
-          if (bs.isValidUtf8()) {
-            username_ = s;
-          }
+          username_ = s;
           return s;
         } else {
           return (java.lang.String) ref;
@@ -2387,7 +2376,8 @@ public final class Messages {
         if (value == null) {
     throw new NullPointerException();
   }
-  
+  checkByteStringIsUtf8(value);
+        
         username_ = value;
         onChanged();
         return this;
@@ -2407,9 +2397,7 @@ public final class Messages {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
-          if (bs.isValidUtf8()) {
-            oauthScope_ = s;
-          }
+          oauthScope_ = s;
           return s;
         } else {
           return (java.lang.String) ref;
@@ -2477,7 +2465,8 @@ public final class Messages {
         if (value == null) {
     throw new NullPointerException();
   }
-  
+  checkByteStringIsUtf8(value);
+        
         oauthScope_ = value;
         onChanged();
         return this;
@@ -2506,8 +2495,8 @@ public final class Messages {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<SimpleResponse> PARSER =
-        new com.google.protobuf.AbstractParser<SimpleResponse>() {
+    private static final com.google.protobuf.Parser<SimpleResponse>
+        PARSER = new com.google.protobuf.AbstractParser<SimpleResponse>() {
       public SimpleResponse parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -2562,7 +2551,7 @@ public final class Messages {
       // @@protoc_insertion_point(message_implements:grpc.testing.SimpleContext)
       SimpleContextOrBuilder {
     // Use SimpleContext.newBuilder() to construct.
-    private SimpleContext(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private SimpleContext(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private SimpleContext() {
@@ -2594,9 +2583,9 @@ public final class Messages {
               break;
             }
             case 10: {
-              com.google.protobuf.ByteString bs = input.readBytes();
+              String s = input.readStringRequireUtf8();
 
-              value_ = bs;
+              value_ = s;
               break;
             }
           }
@@ -2636,9 +2625,7 @@ public final class Messages {
         com.google.protobuf.ByteString bs = 
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
-        if (bs.isValidUtf8()) {
-          value_ = s;
-        }
+        value_ = s;
         return s;
       }
     }
@@ -2672,21 +2659,19 @@ public final class Messages {
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
       if (!getValueBytes().isEmpty()) {
-        output.writeBytes(1, getValueBytes());
+        com.google.protobuf.GeneratedMessage.writeString(output, 1, value_);
       }
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
       if (!getValueBytes().isEmpty()) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeBytesSize(1, getValueBytes());
+        size += com.google.protobuf.GeneratedMessage.computeStringSize(1, value_);
       }
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -2877,9 +2862,7 @@ public final class Messages {
           com.google.protobuf.ByteString bs =
               (com.google.protobuf.ByteString) ref;
           java.lang.String s = bs.toStringUtf8();
-          if (bs.isValidUtf8()) {
-            value_ = s;
-          }
+          value_ = s;
           return s;
         } else {
           return (java.lang.String) ref;
@@ -2931,7 +2914,8 @@ public final class Messages {
         if (value == null) {
     throw new NullPointerException();
   }
-  
+  checkByteStringIsUtf8(value);
+        
         value_ = value;
         onChanged();
         return this;
@@ -2960,8 +2944,8 @@ public final class Messages {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<SimpleContext> PARSER =
-        new com.google.protobuf.AbstractParser<SimpleContext>() {
+    private static final com.google.protobuf.Parser<SimpleContext>
+        PARSER = new com.google.protobuf.AbstractParser<SimpleContext>() {
       public SimpleContext parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -3035,7 +3019,7 @@ public final class Messages {
       // @@protoc_insertion_point(message_implements:grpc.testing.StreamingInputCallRequest)
       StreamingInputCallRequestOrBuilder {
     // Use StreamingInputCallRequest.newBuilder() to construct.
-    private StreamingInputCallRequest(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private StreamingInputCallRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private StreamingInputCallRequest() {
@@ -3070,7 +3054,7 @@ public final class Messages {
               if (payload_ != null) {
                 subBuilder = payload_.toBuilder();
               }
-              payload_ = input.readMessage(io.grpc.testing.integration.Messages.Payload.PARSER, extensionRegistry);
+              payload_ = input.readMessage(io.grpc.testing.integration.Messages.Payload.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(payload_);
                 payload_ = subBuilder.buildPartial();
@@ -3152,9 +3136,8 @@ public final class Messages {
       }
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
@@ -3162,7 +3145,7 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(1, getPayload());
       }
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -3530,8 +3513,8 @@ public final class Messages {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<StreamingInputCallRequest> PARSER =
-        new com.google.protobuf.AbstractParser<StreamingInputCallRequest>() {
+    private static final com.google.protobuf.Parser<StreamingInputCallRequest>
+        PARSER = new com.google.protobuf.AbstractParser<StreamingInputCallRequest>() {
       public StreamingInputCallRequest parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -3589,7 +3572,7 @@ public final class Messages {
       // @@protoc_insertion_point(message_implements:grpc.testing.StreamingInputCallResponse)
       StreamingInputCallResponseOrBuilder {
     // Use StreamingInputCallResponse.newBuilder() to construct.
-    private StreamingInputCallResponse(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private StreamingInputCallResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private StreamingInputCallResponse() {
@@ -3679,9 +3662,8 @@ public final class Messages {
       }
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
@@ -3689,7 +3671,7 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(1, aggregatedPayloadSize_);
       }
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -3934,8 +3916,8 @@ public final class Messages {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<StreamingInputCallResponse> PARSER =
-        new com.google.protobuf.AbstractParser<StreamingInputCallResponse>() {
+    private static final com.google.protobuf.Parser<StreamingInputCallResponse>
+        PARSER = new com.google.protobuf.AbstractParser<StreamingInputCallResponse>() {
       public StreamingInputCallResponse parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -4004,7 +3986,7 @@ public final class Messages {
       // @@protoc_insertion_point(message_implements:grpc.testing.ResponseParameters)
       ResponseParametersOrBuilder {
     // Use ResponseParameters.newBuilder() to construct.
-    private ResponseParameters(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private ResponseParameters(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private ResponseParameters() {
@@ -4118,9 +4100,8 @@ public final class Messages {
       }
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
@@ -4132,7 +4113,7 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(2, intervalUs_);
       }
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -4427,8 +4408,8 @@ public final class Messages {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<ResponseParameters> PARSER =
-        new com.google.protobuf.AbstractParser<ResponseParameters>() {
+    private static final com.google.protobuf.Parser<ResponseParameters>
+        PARSER = new com.google.protobuf.AbstractParser<ResponseParameters>() {
       public ResponseParameters parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -4569,7 +4550,7 @@ public final class Messages {
       // @@protoc_insertion_point(message_implements:grpc.testing.StreamingOutputCallRequest)
       StreamingOutputCallRequestOrBuilder {
     // Use StreamingOutputCallRequest.newBuilder() to construct.
-    private StreamingOutputCallRequest(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private StreamingOutputCallRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private StreamingOutputCallRequest() {
@@ -4612,7 +4593,7 @@ public final class Messages {
                 responseParameters_ = new java.util.ArrayList<io.grpc.testing.integration.Messages.ResponseParameters>();
                 mutable_bitField0_ |= 0x00000002;
               }
-              responseParameters_.add(input.readMessage(io.grpc.testing.integration.Messages.ResponseParameters.PARSER, extensionRegistry));
+              responseParameters_.add(input.readMessage(io.grpc.testing.integration.Messages.ResponseParameters.parser(), extensionRegistry));
               break;
             }
             case 26: {
@@ -4620,7 +4601,7 @@ public final class Messages {
               if (payload_ != null) {
                 subBuilder = payload_.toBuilder();
               }
-              payload_ = input.readMessage(io.grpc.testing.integration.Messages.Payload.PARSER, extensionRegistry);
+              payload_ = input.readMessage(io.grpc.testing.integration.Messages.Payload.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(payload_);
                 payload_ = subBuilder.buildPartial();
@@ -4797,9 +4778,8 @@ public final class Messages {
       }
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
@@ -4815,7 +4795,7 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, getPayload());
       }
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -5626,8 +5606,8 @@ public final class Messages {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<StreamingOutputCallRequest> PARSER =
-        new com.google.protobuf.AbstractParser<StreamingOutputCallRequest>() {
+    private static final com.google.protobuf.Parser<StreamingOutputCallRequest>
+        PARSER = new com.google.protobuf.AbstractParser<StreamingOutputCallRequest>() {
       public StreamingOutputCallRequest parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -5701,7 +5681,7 @@ public final class Messages {
       // @@protoc_insertion_point(message_implements:grpc.testing.StreamingOutputCallResponse)
       StreamingOutputCallResponseOrBuilder {
     // Use StreamingOutputCallResponse.newBuilder() to construct.
-    private StreamingOutputCallResponse(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private StreamingOutputCallResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private StreamingOutputCallResponse() {
@@ -5736,7 +5716,7 @@ public final class Messages {
               if (payload_ != null) {
                 subBuilder = payload_.toBuilder();
               }
-              payload_ = input.readMessage(io.grpc.testing.integration.Messages.Payload.PARSER, extensionRegistry);
+              payload_ = input.readMessage(io.grpc.testing.integration.Messages.Payload.parser(), extensionRegistry);
               if (subBuilder != null) {
                 subBuilder.mergeFrom(payload_);
                 payload_ = subBuilder.buildPartial();
@@ -5818,9 +5798,8 @@ public final class Messages {
       }
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
@@ -5828,7 +5807,7 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(1, getPayload());
       }
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -6196,8 +6175,8 @@ public final class Messages {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<StreamingOutputCallResponse> PARSER =
-        new com.google.protobuf.AbstractParser<StreamingOutputCallResponse>() {
+    private static final com.google.protobuf.Parser<StreamingOutputCallResponse>
+        PARSER = new com.google.protobuf.AbstractParser<StreamingOutputCallResponse>() {
       public StreamingOutputCallResponse parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -6266,7 +6245,7 @@ public final class Messages {
       // @@protoc_insertion_point(message_implements:grpc.testing.ReconnectInfo)
       ReconnectInfoOrBuilder {
     // Use ReconnectInfo.newBuilder() to construct.
-    private ReconnectInfo(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private ReconnectInfo(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private ReconnectInfo() {
@@ -6409,9 +6388,8 @@ public final class Messages {
       }
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
@@ -6433,7 +6411,7 @@ public final class Messages {
         }
         backoffMsMemoizedSerializedSize = dataSize;
       }
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -6755,8 +6733,8 @@ public final class Messages {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<ReconnectInfo> PARSER =
-        new com.google.protobuf.AbstractParser<ReconnectInfo>() {
+    private static final com.google.protobuf.Parser<ReconnectInfo>
+        PARSER = new com.google.protobuf.AbstractParser<ReconnectInfo>() {
       public ReconnectInfo parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)

@@ -11,7 +11,7 @@ public  final class SimpleRequest extends
     // @@protoc_insertion_point(message_implements:grpc.testing.SimpleRequest)
     SimpleRequestOrBuilder {
   // Use SimpleRequest.newBuilder() to construct.
-  private SimpleRequest(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private SimpleRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private SimpleRequest() {
@@ -59,7 +59,7 @@ public  final class SimpleRequest extends
             if (payload_ != null) {
               subBuilder = payload_.toBuilder();
             }
-            payload_ = input.readMessage(io.grpc.testing.Payload.PARSER, extensionRegistry);
+            payload_ = input.readMessage(io.grpc.testing.Payload.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(payload_);
               payload_ = subBuilder.buildPartial();
@@ -187,9 +187,8 @@ public  final class SimpleRequest extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -205,7 +204,7 @@ public  final class SimpleRequest extends
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(3, getPayload());
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -691,8 +690,8 @@ public  final class SimpleRequest extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<SimpleRequest> PARSER =
-      new com.google.protobuf.AbstractParser<SimpleRequest>() {
+  private static final com.google.protobuf.Parser<SimpleRequest>
+      PARSER = new com.google.protobuf.AbstractParser<SimpleRequest>() {
     public SimpleRequest parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

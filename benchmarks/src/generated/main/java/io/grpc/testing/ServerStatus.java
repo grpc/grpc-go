@@ -11,7 +11,7 @@ public  final class ServerStatus extends
     // @@protoc_insertion_point(message_implements:grpc.testing.ServerStatus)
     ServerStatusOrBuilder {
   // Use ServerStatus.newBuilder() to construct.
-  private ServerStatus(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private ServerStatus(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private ServerStatus() {
@@ -47,7 +47,7 @@ public  final class ServerStatus extends
             if (stats_ != null) {
               subBuilder = stats_.toBuilder();
             }
-            stats_ = input.readMessage(io.grpc.testing.ServerStats.PARSER, extensionRegistry);
+            stats_ = input.readMessage(io.grpc.testing.ServerStats.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(stats_);
               stats_ = subBuilder.buildPartial();
@@ -134,9 +134,8 @@ public  final class ServerStatus extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -148,7 +147,7 @@ public  final class ServerStatus extends
       size += com.google.protobuf.CodedOutputStream
         .computeInt32Size(2, port_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -508,8 +507,8 @@ public  final class ServerStatus extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<ServerStatus> PARSER =
-      new com.google.protobuf.AbstractParser<ServerStatus>() {
+  private static final com.google.protobuf.Parser<ServerStatus>
+      PARSER = new com.google.protobuf.AbstractParser<ServerStatus>() {
     public ServerStatus parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

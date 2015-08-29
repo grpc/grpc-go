@@ -49,8 +49,8 @@ public enum ClientType
       internalGetValueMap() {
     return internalValueMap;
   }
-  private static com.google.protobuf.Internal.EnumLiteMap<ClientType>
-      internalValueMap =
+  private static final com.google.protobuf.Internal.EnumLiteMap<
+      ClientType> internalValueMap =
         new com.google.protobuf.Internal.EnumLiteMap<ClientType>() {
           public ClientType findValueByNumber(int number) {
             return ClientType.valueOf(number);

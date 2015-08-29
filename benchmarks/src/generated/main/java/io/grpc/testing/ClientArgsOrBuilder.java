@@ -24,4 +24,6 @@ public interface ClientArgsOrBuilder extends
    * <code>optional .grpc.testing.Mark mark = 2;</code>
    */
   io.grpc.testing.MarkOrBuilder getMarkOrBuilder();
+
+  public io.grpc.testing.ClientArgs.ArgtypeCase getArgtypeCase();
 }

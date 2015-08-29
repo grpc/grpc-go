@@ -47,7 +47,7 @@ import org.junit.runners.JUnit4;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.util.Random;
+import java.util.Arrays;
 
 /** Unit tests for {@link ProtoUtils}. */
 @RunWith(JUnit4.class)
@@ -79,7 +79,7 @@ public class ProtoUtilsTest {
   public void marshallerShouldNotLimitProtoSize() throws Exception {
     // The default limit is 64MB. Using a larger proto to verify that the limit is not enforced.
     byte[] bigName = new byte[70 * 1024 * 1024];
-    new Random().nextBytes(bigName);
+    Arrays.fill(bigName, (byte) 32);
 
     proto = Type.newBuilder().setNameBytes(ByteString.copyFrom(bigName)).build();
 

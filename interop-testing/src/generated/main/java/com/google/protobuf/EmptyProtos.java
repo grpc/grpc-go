@@ -29,7 +29,7 @@ public final class EmptyProtos {
       // @@protoc_insertion_point(message_implements:grpc.testing.Empty)
       EmptyOrBuilder {
     // Use Empty.newBuilder() to construct.
-    private Empty(com.google.protobuf.GeneratedMessage.Builder builder) {
+    private Empty(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
     }
     private Empty() {
@@ -101,14 +101,13 @@ public final class EmptyProtos {
       unknownFields.writeTo(output);
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
       size += unknownFields.getSerializedSize();
-      memoizedSerializedSize = size;
+      memoizedSize = size;
       return size;
     }
 
@@ -305,8 +304,8 @@ public final class EmptyProtos {
       return DEFAULT_INSTANCE;
     }
 
-    public static final com.google.protobuf.Parser<Empty> PARSER =
-        new com.google.protobuf.AbstractParser<Empty>() {
+    @java.lang.Deprecated public static final com.google.protobuf.Parser<Empty>
+        PARSER = new com.google.protobuf.AbstractParser<Empty>() {
       public Empty parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)

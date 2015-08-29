@@ -4,13 +4,13 @@ language: java
 
 env:
   global:
-    - LDFLAGS=-L/tmp/proto3-a3/lib
-    - CXXFLAGS=-I/tmp/proto3-a3/include
-    - LD_LIBRARY_PATH=/tmp/proto3-a3/lib
-    - PATH=/tmp/proto3-a3/bin:$PATH
+    - PROTOBUF_VERSION=3.0.0-beta-1
+    - LDFLAGS=-L/tmp/protobuf-${PROTOBUF_VERSION}/lib
+    - CXXFLAGS=-I/tmp/protobuf-${PROTOBUF_VERSION}/include
+    - LD_LIBRARY_PATH=/tmp/protobuf-${PROTOBUF_VERSION}/lib
 
 before_install:
-  - buildscripts/make_dependencies.sh # build protoc into /tmp/proto3-a3
+  - buildscripts/make_dependencies.sh # build protoc into /tmp/protobuf-${PROTOBUF_VERSION}
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
 
@@ -31,7 +31,7 @@ notifications:
 
 cache:
   directories:
-    - /tmp/proto3-a3
+    - /tmp/protobuf-${PROTOBUF_VERSION}
     - $HOME/.m2/repository/io/netty
     - $HOME/.gradle/caches/modules-2
     - $HOME/.gradle/wrapper

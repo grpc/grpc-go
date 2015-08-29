@@ -49,8 +49,8 @@ public enum RpcType
       internalGetValueMap() {
     return internalValueMap;
   }
-  private static com.google.protobuf.Internal.EnumLiteMap<RpcType>
-      internalValueMap =
+  private static final com.google.protobuf.Internal.EnumLiteMap<
+      RpcType> internalValueMap =
         new com.google.protobuf.Internal.EnumLiteMap<RpcType>() {
           public RpcType findValueByNumber(int number) {
             return RpcType.valueOf(number);

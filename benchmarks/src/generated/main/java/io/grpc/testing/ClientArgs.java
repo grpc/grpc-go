@@ -11,7 +11,7 @@ public  final class ClientArgs extends
     // @@protoc_insertion_point(message_implements:grpc.testing.ClientArgs)
     ClientArgsOrBuilder {
   // Use ClientArgs.newBuilder() to construct.
-  private ClientArgs(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private ClientArgs(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private ClientArgs() {
@@ -46,7 +46,8 @@ public  final class ClientArgs extends
             if (argtypeCase_ == 1) {
               subBuilder = ((io.grpc.testing.ClientConfig) argtype_).toBuilder();
             }
-            argtype_ = input.readMessage(io.grpc.testing.ClientConfig.PARSER, extensionRegistry);
+            argtype_ =
+                input.readMessage(io.grpc.testing.ClientConfig.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom((io.grpc.testing.ClientConfig) argtype_);
               argtype_ = subBuilder.buildPartial();
@@ -59,7 +60,8 @@ public  final class ClientArgs extends
             if (argtypeCase_ == 2) {
               subBuilder = ((io.grpc.testing.Mark) argtype_).toBuilder();
             }
-            argtype_ = input.readMessage(io.grpc.testing.Mark.PARSER, extensionRegistry);
+            argtype_ =
+                input.readMessage(io.grpc.testing.Mark.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom((io.grpc.testing.Mark) argtype_);
               argtype_ = subBuilder.buildPartial();
@@ -182,9 +184,8 @@ public  final class ClientArgs extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -196,7 +197,7 @@ public  final class ClientArgs extends
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(2, (io.grpc.testing.Mark) argtype_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -698,8 +699,8 @@ public  final class ClientArgs extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<ClientArgs> PARSER =
-      new com.google.protobuf.AbstractParser<ClientArgs>() {
+  private static final com.google.protobuf.Parser<ClientArgs>
+      PARSER = new com.google.protobuf.AbstractParser<ClientArgs>() {
     public ClientArgs parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

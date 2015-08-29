@@ -11,7 +11,7 @@ public  final class StatsRequest extends
     // @@protoc_insertion_point(message_implements:grpc.testing.StatsRequest)
     StatsRequestOrBuilder {
   // Use StatsRequest.newBuilder() to construct.
-  private StatsRequest(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private StatsRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private StatsRequest() {
@@ -101,9 +101,8 @@ public  final class StatsRequest extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -111,7 +110,7 @@ public  final class StatsRequest extends
       size += com.google.protobuf.CodedOutputStream
         .computeInt32Size(1, testNum_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -352,8 +351,8 @@ public  final class StatsRequest extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<StatsRequest> PARSER =
-      new com.google.protobuf.AbstractParser<StatsRequest>() {
+  private static final com.google.protobuf.Parser<StatsRequest>
+      PARSER = new com.google.protobuf.AbstractParser<StatsRequest>() {
     public StatsRequest parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

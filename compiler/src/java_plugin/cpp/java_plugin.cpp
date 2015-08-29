@@ -49,7 +49,7 @@ class JavaGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
           + java_grpc_generator::ServiceClassName(service) + ".java";
       std::unique_ptr<google::protobuf::io::ZeroCopyOutputStream> output(
           context->Open(filename));
-      java_grpc_generator::GenerateService(service, output.get(), generate_nano);
+      java_grpc_generator::GenerateService(file, service, output.get(), generate_nano);
     }
     return true;
   }

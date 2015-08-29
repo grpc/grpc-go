@@ -11,7 +11,7 @@ public  final class ClientStats extends
     // @@protoc_insertion_point(message_implements:grpc.testing.ClientStats)
     ClientStatsOrBuilder {
   // Use ClientStats.newBuilder() to construct.
-  private ClientStats(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private ClientStats(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private ClientStats() {
@@ -49,7 +49,7 @@ public  final class ClientStats extends
             if (latencies_ != null) {
               subBuilder = latencies_.toBuilder();
             }
-            latencies_ = input.readMessage(io.grpc.testing.HistogramData.PARSER, extensionRegistry);
+            latencies_ = input.readMessage(io.grpc.testing.HistogramData.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(latencies_);
               latencies_ = subBuilder.buildPartial();
@@ -170,9 +170,8 @@ public  final class ClientStats extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -192,7 +191,7 @@ public  final class ClientStats extends
       size += com.google.protobuf.CodedOutputStream
         .computeDoubleSize(5, timeSystem_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -616,8 +615,8 @@ public  final class ClientStats extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<ClientStats> PARSER =
-      new com.google.protobuf.AbstractParser<ClientStats>() {
+  private static final com.google.protobuf.Parser<ClientStats>
+      PARSER = new com.google.protobuf.AbstractParser<ClientStats>() {
     public ClientStats parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

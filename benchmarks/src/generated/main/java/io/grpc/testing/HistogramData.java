@@ -11,7 +11,7 @@ public  final class HistogramData extends
     // @@protoc_insertion_point(message_implements:grpc.testing.HistogramData)
     HistogramDataOrBuilder {
   // Use HistogramData.newBuilder() to construct.
-  private HistogramData(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private HistogramData(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private HistogramData() {
@@ -226,9 +226,8 @@ public  final class HistogramData extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -266,7 +265,7 @@ public  final class HistogramData extends
       size += com.google.protobuf.CodedOutputStream
         .computeDoubleSize(6, count_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -710,8 +709,8 @@ public  final class HistogramData extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<HistogramData> PARSER =
-      new com.google.protobuf.AbstractParser<HistogramData>() {
+  private static final com.google.protobuf.Parser<HistogramData>
+      PARSER = new com.google.protobuf.AbstractParser<HistogramData>() {
     public HistogramData parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

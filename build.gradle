@@ -53,7 +53,8 @@ subprojects {
         protocPluginBaseName = 'protoc-gen-grpc-java'
         javaPluginPath = "$rootDir/compiler/build/binaries/java_pluginExecutable/$protocPluginBaseName$exeSuffix"
 
-        protobufVersion = '3.0.0-alpha-3.1'
+        protobufVersion = '3.0.0-beta-1'
+        protobufNanoVersion = '3.0.0-alpha-4'
 
         configureProtoCompilation = {
           String generatedSourcePath = "${projectDir}/src/generated"
@@ -129,7 +130,7 @@ subprojects {
                 oauth_client: 'com.google.auth:google-auth-library-oauth2-http:0.2.0',
                 okhttp: 'com.squareup.okhttp:okhttp:2.4.0',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
-                protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufVersion}",
+                protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufNanoVersion}",
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.0',
 
                 netty: 'io.netty:netty-codec-http2:4.1.0.Beta5',

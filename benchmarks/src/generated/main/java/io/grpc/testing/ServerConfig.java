@@ -11,7 +11,7 @@ public  final class ServerConfig extends
     // @@protoc_insertion_point(message_implements:grpc.testing.ServerConfig)
     ServerConfigOrBuilder {
   // Use ServerConfig.newBuilder() to construct.
-  private ServerConfig(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private ServerConfig(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private ServerConfig() {
@@ -141,9 +141,8 @@ public  final class ServerConfig extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -159,7 +158,7 @@ public  final class ServerConfig extends
       size += com.google.protobuf.CodedOutputStream
         .computeBoolSize(3, enableSsl_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -470,8 +469,8 @@ public  final class ServerConfig extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<ServerConfig> PARSER =
-      new com.google.protobuf.AbstractParser<ServerConfig>() {
+  private static final com.google.protobuf.Parser<ServerConfig>
+      PARSER = new com.google.protobuf.AbstractParser<ServerConfig>() {
     public ServerConfig parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

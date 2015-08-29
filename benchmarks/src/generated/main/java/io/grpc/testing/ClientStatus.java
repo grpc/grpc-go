@@ -11,7 +11,7 @@ public  final class ClientStatus extends
     // @@protoc_insertion_point(message_implements:grpc.testing.ClientStatus)
     ClientStatusOrBuilder {
   // Use ClientStatus.newBuilder() to construct.
-  private ClientStatus(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private ClientStatus(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private ClientStatus() {
@@ -46,7 +46,7 @@ public  final class ClientStatus extends
             if (stats_ != null) {
               subBuilder = stats_.toBuilder();
             }
-            stats_ = input.readMessage(io.grpc.testing.ClientStats.PARSER, extensionRegistry);
+            stats_ = input.readMessage(io.grpc.testing.ClientStats.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(stats_);
               stats_ = subBuilder.buildPartial();
@@ -116,9 +116,8 @@ public  final class ClientStatus extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -126,7 +125,7 @@ public  final class ClientStatus extends
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(1, getStats());
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -454,8 +453,8 @@ public  final class ClientStatus extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<ClientStatus> PARSER =
-      new com.google.protobuf.AbstractParser<ClientStatus>() {
+  private static final com.google.protobuf.Parser<ClientStatus>
+      PARSER = new com.google.protobuf.AbstractParser<ClientStatus>() {
     public ClientStatus parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

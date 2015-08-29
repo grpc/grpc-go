@@ -49,8 +49,8 @@ public enum ServerType
       internalGetValueMap() {
     return internalValueMap;
   }
-  private static com.google.protobuf.Internal.EnumLiteMap<ServerType>
-      internalValueMap =
+  private static final com.google.protobuf.Internal.EnumLiteMap<
+      ServerType> internalValueMap =
         new com.google.protobuf.Internal.EnumLiteMap<ServerType>() {
           public ServerType findValueByNumber(int number) {
             return ServerType.valueOf(number);

@@ -15,7 +15,7 @@ public  final class RouteNote extends
     // @@protoc_insertion_point(message_implements:routeguide.RouteNote)
     RouteNoteOrBuilder {
   // Use RouteNote.newBuilder() to construct.
-  private RouteNote(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private RouteNote(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private RouteNote() {
@@ -51,7 +51,7 @@ public  final class RouteNote extends
             if (location_ != null) {
               subBuilder = location_.toBuilder();
             }
-            location_ = input.readMessage(io.grpc.examples.routeguide.Point.PARSER, extensionRegistry);
+            location_ = input.readMessage(io.grpc.examples.routeguide.Point.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(location_);
               location_ = subBuilder.buildPartial();
@@ -60,9 +60,9 @@ public  final class RouteNote extends
             break;
           }
           case 18: {
-            com.google.protobuf.ByteString bs = input.readBytes();
+            String s = input.readStringRequireUtf8();
 
-            message_ = bs;
+            message_ = s;
             break;
           }
         }
@@ -139,9 +139,7 @@ public  final class RouteNote extends
       com.google.protobuf.ByteString bs = 
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
-      if (bs.isValidUtf8()) {
-        message_ = s;
-      }
+      message_ = s;
       return s;
     }
   }
@@ -182,13 +180,12 @@ public  final class RouteNote extends
       output.writeMessage(1, getLocation());
     }
     if (!getMessageBytes().isEmpty()) {
-      output.writeBytes(2, getMessageBytes());
+      com.google.protobuf.GeneratedMessage.writeString(output, 2, message_);
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -197,10 +194,9 @@ public  final class RouteNote extends
         .computeMessageSize(1, getLocation());
     }
     if (!getMessageBytes().isEmpty()) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeBytesSize(2, getMessageBytes());
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(2, message_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -566,9 +562,7 @@ public  final class RouteNote extends
         com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
-        if (bs.isValidUtf8()) {
-          message_ = s;
-        }
+        message_ = s;
         return s;
       } else {
         return (java.lang.String) ref;
@@ -636,7 +630,8 @@ public  final class RouteNote extends
       if (value == null) {
     throw new NullPointerException();
   }
-  
+  checkByteStringIsUtf8(value);
+      
       message_ = value;
       onChanged();
       return this;
@@ -665,8 +660,8 @@ public  final class RouteNote extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<RouteNote> PARSER =
-      new com.google.protobuf.AbstractParser<RouteNote>() {
+  private static final com.google.protobuf.Parser<RouteNote>
+      PARSER = new com.google.protobuf.AbstractParser<RouteNote>() {
     public RouteNote parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

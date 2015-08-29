@@ -18,7 +18,7 @@ public  final class RouteSummary extends
     // @@protoc_insertion_point(message_implements:routeguide.RouteSummary)
     RouteSummaryOrBuilder {
   // Use RouteSummary.newBuilder() to construct.
-  private RouteSummary(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private RouteSummary(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private RouteSummary() {
@@ -174,9 +174,8 @@ public  final class RouteSummary extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -196,7 +195,7 @@ public  final class RouteSummary extends
       size += com.google.protobuf.CodedOutputStream
         .computeInt32Size(4, elapsedTime_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -576,8 +575,8 @@ public  final class RouteSummary extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<RouteSummary> PARSER =
-      new com.google.protobuf.AbstractParser<RouteSummary>() {
+  private static final com.google.protobuf.Parser<RouteSummary>
+      PARSER = new com.google.protobuf.AbstractParser<RouteSummary>() {
     public RouteSummary parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

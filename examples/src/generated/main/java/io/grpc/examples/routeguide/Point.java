@@ -18,7 +18,7 @@ public  final class Point extends
     // @@protoc_insertion_point(message_implements:routeguide.Point)
     PointOrBuilder {
   // Use Point.newBuilder() to construct.
-  private Point(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private Point(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private Point() {
@@ -122,9 +122,8 @@ public  final class Point extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -136,7 +135,7 @@ public  final class Point extends
       size += com.google.protobuf.CodedOutputStream
         .computeInt32Size(2, longitude_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -404,8 +403,8 @@ public  final class Point extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<Point> PARSER =
-      new com.google.protobuf.AbstractParser<Point>() {
+  private static final com.google.protobuf.Parser<Point>
+      PARSER = new com.google.protobuf.AbstractParser<Point>() {
     public Point parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

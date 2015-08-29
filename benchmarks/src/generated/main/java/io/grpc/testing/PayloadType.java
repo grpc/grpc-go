@@ -82,8 +82,8 @@ public enum PayloadType
       internalGetValueMap() {
     return internalValueMap;
   }
-  private static com.google.protobuf.Internal.EnumLiteMap<PayloadType>
-      internalValueMap =
+  private static final com.google.protobuf.Internal.EnumLiteMap<
+      PayloadType> internalValueMap =
         new com.google.protobuf.Internal.EnumLiteMap<PayloadType>() {
           public PayloadType findValueByNumber(int number) {
             return PayloadType.valueOf(number);

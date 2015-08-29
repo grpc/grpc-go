@@ -11,7 +11,7 @@ public  final class ClientConfig extends
     // @@protoc_insertion_point(message_implements:grpc.testing.ClientConfig)
     ClientConfigOrBuilder {
   // Use ClientConfig.newBuilder() to construct.
-  private ClientConfig(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private ClientConfig(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private ClientConfig() {
@@ -50,12 +50,12 @@ public  final class ClientConfig extends
             break;
           }
           case 10: {
-            com.google.protobuf.ByteString bs = input.readBytes();
+            String s = input.readStringRequireUtf8();
             if (!((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
               serverTargets_ = new com.google.protobuf.LazyStringArrayList();
               mutable_bitField0_ |= 0x00000001;
             }
-            serverTargets_.add(bs);
+            serverTargets_.add(s);
             break;
           }
           case 16: {
@@ -246,7 +246,7 @@ public  final class ClientConfig extends
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
     for (int i = 0; i < serverTargets_.size(); i++) {
-      output.writeBytes(1, serverTargets_.getByteString(i));
+      com.google.protobuf.GeneratedMessage.writeString(output, 1, serverTargets_.getRaw(i));
     }
     if (clientType_ != io.grpc.testing.ClientType.SYNCHRONOUS_CLIENT.getNumber()) {
       output.writeEnum(2, clientType_);
@@ -271,17 +271,15 @@ public  final class ClientConfig extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
     {
       int dataSize = 0;
       for (int i = 0; i < serverTargets_.size(); i++) {
-        dataSize += com.google.protobuf.CodedOutputStream
-          .computeBytesSizeNoTag(serverTargets_.getByteString(i));
+        dataSize += computeStringSizeNoTag(serverTargets_.getRaw(i));
       }
       size += dataSize;
       size += 1 * getServerTargetsList().size();
@@ -314,7 +312,7 @@ public  final class ClientConfig extends
       size += com.google.protobuf.CodedOutputStream
         .computeEnumSize(8, rpcType_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -638,7 +636,8 @@ public  final class ClientConfig extends
       if (value == null) {
     throw new NullPointerException();
   }
-  ensureServerTargetsIsMutable();
+  checkByteStringIsUtf8(value);
+      ensureServerTargetsIsMutable();
       serverTargets_.add(value);
       onChanged();
       return this;
@@ -897,8 +896,8 @@ public  final class ClientConfig extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<ClientConfig> PARSER =
-      new com.google.protobuf.AbstractParser<ClientConfig>() {
+  private static final com.google.protobuf.Parser<ClientConfig>
+      PARSER = new com.google.protobuf.AbstractParser<ClientConfig>() {
     public ClientConfig parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

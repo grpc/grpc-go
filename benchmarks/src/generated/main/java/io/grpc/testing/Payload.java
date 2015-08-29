@@ -11,7 +11,7 @@ public  final class Payload extends
     // @@protoc_insertion_point(message_implements:grpc.testing.Payload)
     PayloadOrBuilder {
   // Use Payload.newBuilder() to construct.
-  private Payload(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private Payload(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private Payload() {
@@ -135,9 +135,8 @@ public  final class Payload extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -149,7 +148,7 @@ public  final class Payload extends
       size += com.google.protobuf.CodedOutputStream
         .computeBytesSize(2, body_);
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -463,8 +462,8 @@ public  final class Payload extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<Payload> PARSER =
-      new com.google.protobuf.AbstractParser<Payload>() {
+  private static final com.google.protobuf.Parser<Payload>
+      PARSER = new com.google.protobuf.AbstractParser<Payload>() {
     public Payload parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

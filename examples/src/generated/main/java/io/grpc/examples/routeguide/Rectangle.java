@@ -16,7 +16,7 @@ public  final class Rectangle extends
     // @@protoc_insertion_point(message_implements:routeguide.Rectangle)
     RectangleOrBuilder {
   // Use Rectangle.newBuilder() to construct.
-  private Rectangle(com.google.protobuf.GeneratedMessage.Builder builder) {
+  private Rectangle(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
   private Rectangle() {
@@ -51,7 +51,7 @@ public  final class Rectangle extends
             if (lo_ != null) {
               subBuilder = lo_.toBuilder();
             }
-            lo_ = input.readMessage(io.grpc.examples.routeguide.Point.PARSER, extensionRegistry);
+            lo_ = input.readMessage(io.grpc.examples.routeguide.Point.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(lo_);
               lo_ = subBuilder.buildPartial();
@@ -64,7 +64,7 @@ public  final class Rectangle extends
             if (hi_ != null) {
               subBuilder = hi_.toBuilder();
             }
-            hi_ = input.readMessage(io.grpc.examples.routeguide.Point.PARSER, extensionRegistry);
+            hi_ = input.readMessage(io.grpc.examples.routeguide.Point.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(hi_);
               hi_ = subBuilder.buildPartial();
@@ -182,9 +182,8 @@ public  final class Rectangle extends
     }
   }
 
-  private int memoizedSerializedSize = -1;
   public int getSerializedSize() {
-    int size = memoizedSerializedSize;
+    int size = memoizedSize;
     if (size != -1) return size;
 
     size = 0;
@@ -196,7 +195,7 @@ public  final class Rectangle extends
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(2, getHi());
     }
-    memoizedSerializedSize = size;
+    memoizedSize = size;
     return size;
   }
 
@@ -732,8 +731,8 @@ public  final class Rectangle extends
     return DEFAULT_INSTANCE;
   }
 
-  public static final com.google.protobuf.Parser<Rectangle> PARSER =
-      new com.google.protobuf.AbstractParser<Rectangle>() {
+  private static final com.google.protobuf.Parser<Rectangle>
+      PARSER = new com.google.protobuf.AbstractParser<Rectangle>() {
     public Rectangle parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)

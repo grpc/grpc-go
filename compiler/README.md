@@ -13,7 +13,7 @@ build your own codegen.
 
 * Linux, Mac OS X with Clang, or Windows with MSYS2
 * Java 7 or up
-* [Protobuf](https://github.com/google/protobuf) 3.0.0-alpha-3.1 or up
+* [Protobuf](https://github.com/google/protobuf) 3.0.0-beta-1 or up
 
 ## Compiling and testing the codegen
 Change to the `compiler` directory:
