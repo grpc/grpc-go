@@ -51,7 +51,7 @@ type TokenSource struct {
 }
 
 // GetRequestMetadata gets the request metadata as a map from a TokenSource.
-func (ts TokenSource) GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error) {
+func (ts TokenSource) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	token, err := ts.Token()
 	if err != nil {
 		return nil, err
@@ -81,8 +81,8 @@ func NewJWTAccessFromKey(jsonKey []byte) (credentials.Credentials, error) {
 	return jwtAccess{jsonKey}, nil
 }
 
-func (j jwtAccess) GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error) {
-	ts, err := google.JWTAccessTokenSourceFromJSON(j.jsonKey, audience[0])
+func (j jwtAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	ts, err := google.JWTAccessTokenSourceFromJSON(j.jsonKey, uri[0])
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func NewOauthAccess(token *oauth2.Token) credentials.Credentials {
 	return oauthAccess{token: *token}
 }
 
-func (oa oauthAccess) GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error) {
+func (oa oauthAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	return map[string]string{
 		"authorization": oa.token.TokenType + " " + oa.token.AccessToken,
 	}, nil
@@ -132,7 +132,7 @@ type serviceAccount struct {
 	config *jwt.Config
 }
 
-func (s serviceAccount) GetRequestMetadata(ctx context.Context, audience ...string) (map[string]string, error) {
+func (s serviceAccount) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	token, err := s.config.TokenSource(ctx).Token()
 	if err != nil {
 		return nil, err
