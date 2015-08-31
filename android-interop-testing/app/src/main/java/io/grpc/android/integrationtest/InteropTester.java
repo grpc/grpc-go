@@ -236,7 +236,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     StreamObserver<Messages.StreamingInputCallRequest> requestObserver =
         asyncStub.streamingInputCall(responseObserver);
     for (Messages.StreamingInputCallRequest request : requests) {
-      requestObserver.onValue(request);
+      requestObserver.onNext(request);
     }
     requestObserver.onCompleted();
     assertEquals(goldenResponse, responseObserver.firstValue().get());
@@ -280,7 +280,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
         new StreamObserver<Messages.StreamingOutputCallResponse>() {
 
           @Override
-          public void onValue(Messages.StreamingOutputCallResponse value) {
+          public void onNext(Messages.StreamingOutputCallResponse value) {
             responses.add(value);
           }
 
@@ -298,7 +298,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     StreamObserver<Messages.StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     for (int i = 0; i < requests.length; i++) {
-      requestObserver.onValue(requests[i]);
+      requestObserver.onNext(requests[i]);
       Object response = responses.poll(5, TimeUnit.SECONDS);
       if (!(response instanceof Messages.StreamingOutputCallResponse)) {
         Assert.fail("Unexpected: " + response);
