@@ -270,7 +270,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
    */
   void returnProcessedBytes(Http2Stream http2Stream, int bytes) {
     try {
-      decoder().flowController().consumeBytes(ctx, http2Stream, bytes);
+      decoder().flowController().consumeBytes(http2Stream, bytes);
     } catch (Http2Exception e) {
       throw new RuntimeException(e);
     }
@@ -396,7 +396,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
       Http2Stream connectionStream = connection().connectionStream();
       int currentSize = connection().local().flowController().windowSize(connectionStream);
       int delta = flowControlWindow - currentSize;
-      decoder().flowController().incrementWindowSize(ctx, connectionStream, delta);
+      decoder().flowController().incrementWindowSize(connectionStream, delta);
       flowControlWindow = -1;
     }
 

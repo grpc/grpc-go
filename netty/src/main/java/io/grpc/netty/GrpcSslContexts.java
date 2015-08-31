@@ -37,6 +37,7 @@ import io.netty.handler.ssl.ApplicationProtocolConfig;
 import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
+import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
@@ -53,20 +54,20 @@ public class GrpcSslContexts {
 
   private static ApplicationProtocolConfig ALPN = new ApplicationProtocolConfig(
       Protocol.ALPN,
-      SelectorFailureBehavior.FATAL_ALERT,
-      SelectedListenerFailureBehavior.FATAL_ALERT,
+      SelectorFailureBehavior.NO_ADVERTISE,
+      SelectedListenerFailureBehavior.ACCEPT,
       HTTP2_VERSIONS);
 
   private static ApplicationProtocolConfig NPN = new ApplicationProtocolConfig(
       Protocol.NPN,
-      SelectorFailureBehavior.FATAL_ALERT,
-      SelectedListenerFailureBehavior.FATAL_ALERT,
+      SelectorFailureBehavior.NO_ADVERTISE,
+      SelectedListenerFailureBehavior.ACCEPT,
       HTTP2_VERSIONS);
 
   private static ApplicationProtocolConfig NPN_AND_ALPN = new ApplicationProtocolConfig(
       Protocol.NPN_AND_ALPN,
-      SelectorFailureBehavior.FATAL_ALERT,
-      SelectedListenerFailureBehavior.FATAL_ALERT,
+      SelectorFailureBehavior.NO_ADVERTISE,
+      SelectedListenerFailureBehavior.ACCEPT,
       HTTP2_VERSIONS);
 
   /**
@@ -123,9 +124,7 @@ public class GrpcSslContexts {
    * Returns OpenSSL if available, otherwise returns the JDK provider.
    */
   private static SslProvider defaultSslProvider() {
-    return SslProvider.JDK;
-    // TODO(nmittler): use this once we support OpenSSL.
-    // return OpenSsl.isAvailable() ? SslProvider.OPENSSL : SslProvider.JDK;
+    return OpenSsl.isAvailable() ? SslProvider.OPENSSL : SslProvider.JDK;
   }
 
   /**
@@ -144,9 +143,7 @@ public class GrpcSslContexts {
         throw new IllegalArgumentException("Jetty ALPN/NPN has not been properly configured.");
       }
       case OPENSSL: {
-        throw new IllegalArgumentException("OpenSSL is not currently supported.");
-        // TODO(nmittler): use this once we support OpenSSL.
-        /*if (!OpenSsl.isAvailable()) {
+        if (!OpenSsl.isAvailable()) {
           throw new IllegalArgumentException("OpenSSL is not installed on the system.");
         }
 
@@ -154,7 +151,7 @@ public class GrpcSslContexts {
           return NPN_AND_ALPN;
         } else {
           return NPN;
-        }*/
+        }
       }
       default:
         throw new IllegalArgumentException("Unsupported provider: " + provider);
