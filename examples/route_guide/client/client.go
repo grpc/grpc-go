@@ -46,7 +46,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	pb "google.golang.org/grpc/examples/route_guide/proto"
+	pb "google.golang.org/grpc/examples/route_guide/routeguide"
 	"google.golang.org/grpc/grpclog"
 )
 
