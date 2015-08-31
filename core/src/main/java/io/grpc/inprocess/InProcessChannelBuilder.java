@@ -33,7 +33,8 @@ package io.grpc.inprocess;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.AbstractChannelBuilder;
+import io.grpc.ExperimentalApi;
+import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
@@ -44,7 +45,9 @@ import io.grpc.internal.ClientTransportFactory;
  *
  * <p>The channel is intended to be fully-featured, high performance, and useful in testing.
  */
-public class InProcessChannelBuilder extends AbstractChannelBuilder<InProcessChannelBuilder> {
+@ExperimentalApi("There is no plan to make this API stable.")
+public class InProcessChannelBuilder extends
+        AbstractManagedChannelImplBuilder<InProcessChannelBuilder> {
   /**
    * Create a channel builder that will connect to the server with the given name.
    *

@@ -50,7 +50,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Benchmark for {@link io.grpc.MutableHandlerRegistryImpl}.
+ * Benchmark for {@link MutableHandlerRegistryImpl}.
  */
 @State(Scope.Benchmark)
 @Fork(1)
@@ -94,7 +94,7 @@ public class HandlerRegistryBenchmark {
   }
 
   /**
-   * Benchmark the {@link io.grpc.HandlerRegistry#lookupMethod(String)} throughput.
+   * Benchmark the {@link MutableHandlerRegistryImpl#lookupMethod(String)} throughput.
    */
   @Benchmark
   public void lookupMethod(Blackhole bh) {

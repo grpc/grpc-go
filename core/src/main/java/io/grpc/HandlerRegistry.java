@@ -38,6 +38,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * Registry of services and their methods used by servers to dispatching incoming calls.
  */
 @ThreadSafe
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/933")
 public abstract class HandlerRegistry {
 
   /**

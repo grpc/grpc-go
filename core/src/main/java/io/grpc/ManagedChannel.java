@@ -31,44 +31,46 @@
 
 package io.grpc;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
-import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Test for {@link ExponentialBackoffPolicy}.
+ * A {@link Channel} that provides lifecycle management.
  */
-@RunWith(JUnit4.class)
-public class ExponentialBackoffPolicyTest {
-  private ExponentialBackoffPolicy policy = new ExponentialBackoffPolicy();
-  private Random notRandom = new Random() {
-    @Override
-    public double nextDouble() {
-      return .5;
-    }
-  };
+public abstract class ManagedChannel extends Channel {
+  /**
+   * Initiates an orderly shutdown in which preexisting calls continue but new calls are immediately
+   * cancelled.
+   */
+  public abstract ManagedChannel shutdown();
 
-  @Test
-  public void maxDelayReached() {
-    long maxBackoffMillis = 120 * 1000;
-    policy.setMaxBackoffMillis(maxBackoffMillis)
-        .setJitter(0)
-        .setRandom(notRandom);
-    for (int i = 0; i < 50; i++) {
-      if (maxBackoffMillis == policy.nextBackoffMillis()) {
-        return; // Success
-      }
-    }
-    assertEquals("max delay not reached", maxBackoffMillis, policy.nextBackoffMillis());
-  }
+  /**
+   * Returns whether the channel is shutdown. Shutdown channels immediately cancel any new calls,
+   * but may still have some calls being processed.
+   *
+   * @see #shutdown()
+   * @see #isTerminated()
+   */
+  public abstract boolean isShutdown();
 
-  @Test public void canProvide() {
-    assertNotNull(new ExponentialBackoffPolicy.Provider().get());
-  }
+  /**
+   * Returns whether the channel is terminated. Terminated channels have no running calls and
+   * relevant resources released (like TCP connections).
+   *
+   * @see #isShutdown()
+   */
+  public abstract boolean isTerminated();
+
+  /**
+   * Initiates a forceful shutdown in which preexisting and new calls are cancelled. Although
+   * forceful, the shutdown process is still not instantaneous; {@link #isTerminated()} will likely
+   * return {@code false} immediately after this method returns.
+   */
+  public abstract ManagedChannel shutdownNow();
+
+  /**
+   * Waits for the channel to become terminated, giving up if the timeout is reached.
+   *
+   * @return whether the channel is terminated, as would be done by {@link #isTerminated()}.
+   */
+  public abstract boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException;
 }
-

@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,37 +31,16 @@
 
 package io.grpc;
 
-import com.google.common.base.Preconditions;
-
 import java.util.concurrent.ExecutorService;
 
 import javax.annotation.Nullable;
 
 /**
- * The base class for server builders.
+ * A builder for {@link Server} instances.
  *
- * @param <BuilderT> The concrete type for this builder.
+ * @param <T> The concrete type of this builder.
  */
-public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuilder<BuilderT>> {
-
-  private final HandlerRegistry registry;
-  @Nullable
-  private ExecutorService executor;
-
-  /**
-   * Constructs using a given handler registry.
-   */
-  protected AbstractServerBuilder(HandlerRegistry registry) {
-    this.registry = Preconditions.checkNotNull(registry);
-  }
-
-  /**
-   * Constructs with a MutableHandlerRegistry created internally.
-   */
-  protected AbstractServerBuilder() {
-    this.registry = new MutableHandlerRegistryImpl();
-  }
-
+public abstract class ServerBuilder<T extends ServerBuilder<T>> {
   /**
    * Provides a custom executor.
    *
@@ -71,43 +50,21 @@ public abstract class AbstractServerBuilder<BuilderT extends AbstractServerBuild
    * <p>The server won't take ownership of the given executor. It's caller's responsibility to
    * shut down the executor when it's desired.
    */
-  @SuppressWarnings("unchecked")
-  public final BuilderT executor(ExecutorService executor) {
-    this.executor = executor;
-    return (BuilderT) this;
-  }
+  public abstract T executor(@Nullable ExecutorService executor);
 
   /**
    * Adds a service implementation to the handler registry.
    *
-   * <p>This is supported only if the user didn't provide a handler registry, or the provided one is
-   * a {@link MutableHandlerRegistry}. Otherwise it throws an UnsupportedOperationException.
+   * @throws UnsupportedOperationException if this builder does not support dynamically adding
+   *                                       services.
    */
-  @SuppressWarnings("unchecked")
-  public final BuilderT addService(ServerServiceDefinition service) {
-    if (registry instanceof MutableHandlerRegistry) {
-      ((MutableHandlerRegistry) registry).addService(service);
-      return (BuilderT) this;
-    }
-    throw new UnsupportedOperationException("Underlying HandlerRegistry is not mutable");
-  }
+  public abstract T addService(ServerServiceDefinition service);
 
   /**
    * Builds a server using the given parameters.
    *
    * <p>The returned service will not been started or be bound a port. You will need to start it
-   * with {@link ServerImpl#start()}.
+   * with {@link Server#start()}.
    */
-  public ServerImpl build() {
-    io.grpc.internal.Server transportServer = buildTransportServer();
-    return new ServerImpl(executor, registry, transportServer);
-  }
-
-  /**
-   * Children of AbstractServerBuilder should override this method to provide transport specific
-   * information for the server.  This method is mean for Transport implementors and should not be
-   * used by normal users.
-   */
-  @Internal
-  protected abstract io.grpc.internal.Server buildTransportServer();
+  public abstract Server build();
 }

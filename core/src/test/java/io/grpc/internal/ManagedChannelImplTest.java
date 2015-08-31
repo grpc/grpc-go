@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -47,10 +47,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import io.grpc.internal.ClientStream;
-import io.grpc.internal.ClientStreamListener;
-import io.grpc.internal.ClientTransport;
-import io.grpc.internal.ClientTransportFactory;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.IntegerMarshaller;
+import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
+import io.grpc.Status;
+import io.grpc.StringMarshaller;
 
 import org.junit.After;
 import org.junit.Before;
@@ -70,9 +76,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Unit tests for {@link ChannelImpl}. */
+/** Unit tests for {@link ManagedChannelImpl}. */
 @RunWith(JUnit4.class)
-public class ChannelImplTest {
+public class ManagedChannelImplTest {
   private MethodDescriptor<String, Integer> method = MethodDescriptor.create(
       MethodDescriptor.MethodType.UNKNOWN, "/service/method",
       new StringMarshaller(), new IntegerMarshaller());
@@ -82,7 +88,7 @@ public class ChannelImplTest {
   private ClientTransport mockTransport;
   @Mock
   private ClientTransportFactory mockTransportFactory;
-  private ChannelImpl channel;
+  private ManagedChannel channel;
 
   @Mock
   private ClientCall.Listener<Integer> mockCallListener;
@@ -99,7 +105,7 @@ public class ChannelImplTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    channel = new ChannelImpl(mockTransportFactory, executor, null,
+    channel = new ManagedChannelImpl(mockTransportFactory, executor, null,
         Collections.<ClientInterceptor>emptyList());
     when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport);
   }
@@ -280,7 +286,8 @@ public class ChannelImplTest {
         return next.newCall(method, callOptions);
       }
     };
-    channel = new ChannelImpl(mockTransportFactory, executor, null, Arrays.asList(interceptor));
+    channel = new ManagedChannelImpl(mockTransportFactory, executor, null,
+            Arrays.asList(interceptor));
     assertNotNull(channel.newCall(method, CallOptions.DEFAULT));
     assertEquals(1, atomic.get());
   }

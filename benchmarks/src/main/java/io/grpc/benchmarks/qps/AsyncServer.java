@@ -34,7 +34,7 @@ package io.grpc.benchmarks.qps;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
-import io.grpc.ServerImpl;
+import io.grpc.Server;
 import io.grpc.Status;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
@@ -81,7 +81,7 @@ public class AsyncServer {
       return;
     }
 
-    final ServerImpl server = newServer(config);
+    final Server server = newServer(config);
     server.start();
 
     System.out.println("QPS Server started on " + config.address);
@@ -100,7 +100,7 @@ public class AsyncServer {
     });
   }
 
-  static ServerImpl newServer(ServerConfiguration config) throws IOException {
+  static Server newServer(ServerConfiguration config) throws IOException {
     SslContext sslContext = null;
     if (config.tls) {
       System.out.println("Using fake CA for TLS certificate.\n"

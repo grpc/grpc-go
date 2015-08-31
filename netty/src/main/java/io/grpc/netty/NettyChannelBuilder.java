@@ -36,12 +36,12 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.AbstractChannelBuilder;
+import io.grpc.ExperimentalApi;
+import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.SharedResourceHolder;
-
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -56,7 +56,9 @@ import javax.net.ssl.SSLException;
 /**
  * A builder to help simplify construction of channels using the Netty transport.
  */
-public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChannelBuilder> {
+@ExperimentalApi("There is no plan to make this API stable, given transport API instability")
+public final class NettyChannelBuilder
+        extends AbstractManagedChannelImplBuilder<NettyChannelBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
   private final SocketAddress serverAddress;

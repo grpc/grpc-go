@@ -31,7 +31,7 @@
 
 package io.grpc.examples.helloworld;
 
-import io.grpc.ServerImpl;
+import io.grpc.Server;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 
@@ -45,7 +45,7 @@ public class HelloWorldServer {
 
   /* The port on which the server should run */
   private int port = 50051;
-  private ServerImpl server;
+  private Server server;
 
   private void start() throws Exception {
     server = NettyServerBuilder.forPort(port)

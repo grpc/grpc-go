@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
@@ -38,13 +38,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.Futures;
 
-import io.grpc.internal.SerializingExecutor;
-import io.grpc.internal.ServerListener;
-import io.grpc.internal.ServerStream;
-import io.grpc.internal.ServerStreamListener;
-import io.grpc.internal.ServerTransport;
-import io.grpc.internal.ServerTransportListener;
-import io.grpc.internal.SharedResourceHolder;
+import io.grpc.HandlerRegistry;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
+import io.grpc.ServerCall;
+import io.grpc.ServerMethodDefinition;
+import io.grpc.Status;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -58,7 +57,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Default implementation of {@link Server}, for creation by transports.
+ * Default implementation of {@link io.grpc.Server}, for creation by transports.
  *
  * <p>Expected usage (by a theoretical TCP transport):
  * <pre><code>public class TcpTransportServerFactory {
@@ -71,7 +70,7 @@ import java.util.concurrent.TimeUnit;
  * <p>Starting the server starts the underlying transport for servicing requests. Stopping the
  * server stops servicing new requests and waits for all connections to terminate.
  */
-public final class ServerImpl extends Server {
+public final class ServerImpl extends io.grpc.Server {
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
 
   private static final Future<?> DEFAULT_TIMEOUT_FUTURE = Futures.immediateCancelledFuture();
@@ -112,6 +111,7 @@ public final class ServerImpl extends Server {
    * @throws IllegalStateException if already started
    * @throws IOException if unable to bind
    */
+  @Override
   public ServerImpl start() throws IOException {
     synchronized (lock) {
       if (started) {
@@ -119,7 +119,7 @@ public final class ServerImpl extends Server {
       }
       usingSharedExecutor = executor == null;
       if (usingSharedExecutor) {
-        executor = SharedResourceHolder.get(ChannelImpl.SHARED_EXECUTOR);
+        executor = SharedResourceHolder.get(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
       }
       // Start and wait for any port to actually be bound.
       transportServer.start(new ServerListenerImpl());
@@ -131,6 +131,7 @@ public final class ServerImpl extends Server {
   /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are rejected.
    */
+  @Override
   public ServerImpl shutdown() {
     boolean shutdownTransportServer;
     synchronized (lock) {
@@ -149,42 +150,29 @@ public final class ServerImpl extends Server {
     }
     SharedResourceHolder.release(TIMER_SERVICE, timeoutService);
     if (usingSharedExecutor) {
-      SharedResourceHolder.release(ChannelImpl.SHARED_EXECUTOR, (ExecutorService) executor);
+      SharedResourceHolder.release(GrpcUtil.SHARED_CHANNEL_EXECUTOR, (ExecutorService) executor);
     }
     return this;
   }
 
   /**
-   * Initiates a forceful shutdown in which preexisting and new calls are rejected. Although
-   * forceful, the shutdown process is still not instantaneous; {@link #isTerminated()} will likely
-   * return {@code false} immediately after this method returns.
-   *
-   * <p>NOT YET IMPLEMENTED. This method currently behaves identically to shutdown().
+   * NOT YET IMPLEMENTED. This method currently behaves identically to shutdown().
    */
   // TODO(ejona86): cancel preexisting calls.
+  @Override
   public ServerImpl shutdownNow() {
     shutdown();
     return this;
   }
 
-  /**
-   * Returns whether the server is shutdown. Shutdown servers reject any new calls, but may still
-   * have some calls being processed.
-   *
-   * @see #shutdown()
-   * @see #isTerminated()
-   */
+  @Override
   public boolean isShutdown() {
     synchronized (lock) {
       return shutdown;
     }
   }
 
-  /**
-   * Waits for the server to become terminated, giving up if the timeout is reached.
-   *
-   * @return whether the server is terminated, as would be done by {@link #isTerminated()}.
-   */
+  @Override
   public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
     synchronized (lock) {
       long timeoutNanos = unit.toNanos(timeout);
@@ -196,9 +184,7 @@ public final class ServerImpl extends Server {
     }
   }
 
-  /**
-   * Waits for the server to become terminated.
-   */
+  @Override
   public void awaitTermination() throws InterruptedException {
     synchronized (lock) {
       while (!terminated) {
@@ -207,12 +193,7 @@ public final class ServerImpl extends Server {
     }
   }
 
-  /**
-   * Returns whether the server is terminated. Terminated servers have no running calls and
-   * relevant resources released (like TCP connections).
-   *
-   * @see #isShutdown()
-   */
+  @Override
   public boolean isTerminated() {
     synchronized (lock) {
       return terminated;

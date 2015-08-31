@@ -32,7 +32,6 @@
 package io.grpc.testing.integration;
 
 import static io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE;
-import static io.grpc.testing.integration.Util.assertEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -52,16 +51,16 @@ import com.google.auth.oauth2.ServiceAccountJwtAccessCredentials;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 
-import io.grpc.AbstractServerBuilder;
 import io.grpc.CallOptions;
-import io.grpc.ChannelImpl;
 import io.grpc.ClientCall;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
-import io.grpc.ServerImpl;
+import io.grpc.Server;
 import io.grpc.ServerInterceptors;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.auth.ClientAuthInterceptor;
+import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.MetadataUtils;
@@ -104,10 +103,10 @@ public abstract class AbstractTransportTest {
   private static final AtomicReference<Metadata> requestHeadersCapture =
       new AtomicReference<Metadata>();
   private static ScheduledExecutorService testServiceExecutor;
-  private static ServerImpl server;
+  private static Server server;
   private static int OPERATION_TIMEOUT = 5000;
 
-  protected static void startStaticServer(AbstractServerBuilder<?> builder) {
+  protected static void startStaticServer(AbstractServerImplBuilder<?> builder) {
     testServiceExecutor = Executors.newScheduledThreadPool(2);
 
     builder.addService(ServerInterceptors.intercept(
@@ -126,7 +125,7 @@ public abstract class AbstractTransportTest {
     testServiceExecutor.shutdown();
   }
 
-  protected ChannelImpl channel;
+  protected ManagedChannel channel;
   protected TestServiceGrpc.TestServiceBlockingStub blockingStub;
   protected TestServiceGrpc.TestService asyncStub;
 
@@ -149,7 +148,7 @@ public abstract class AbstractTransportTest {
     }
   }
 
-  protected abstract ChannelImpl createChannel();
+  protected abstract ManagedChannel createChannel();
 
   @Test(timeout = 10000)
   public void emptyUnary() throws Exception {

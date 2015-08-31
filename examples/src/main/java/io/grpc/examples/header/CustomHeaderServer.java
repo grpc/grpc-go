@@ -31,7 +31,7 @@
 
 package io.grpc.examples.header;
 
-import io.grpc.ServerImpl;
+import io.grpc.Server;
 import io.grpc.ServerInterceptors;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloRequest;
@@ -50,7 +50,7 @@ public class CustomHeaderServer {
 
   /* The port on which the server should run */
   private static final int port = 50051;
-  private ServerImpl server;
+  private Server server;
 
   private void start() throws Exception {
     server = NettyServerBuilder.forPort(port).addService(ServerInterceptors

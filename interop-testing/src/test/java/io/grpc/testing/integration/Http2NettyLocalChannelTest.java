@@ -31,7 +31,7 @@
 
 package io.grpc.testing.integration;
 
-import io.grpc.ChannelImpl;
+import io.grpc.ManagedChannel;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -67,7 +67,7 @@ public class Http2NettyLocalChannelTest extends AbstractTransportTest {
   }
 
   @Override
-  protected ChannelImpl createChannel() {
+  protected ManagedChannel createChannel() {
     return NettyChannelBuilder
         .forAddress(new LocalAddress("in-process-1"))
         .negotiationType(NegotiationType.PLAINTEXT)

@@ -40,7 +40,7 @@ import static java.lang.Math.sqrt;
 import static java.lang.Math.toRadians;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
-import io.grpc.ServerImpl;
+import io.grpc.Server;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 
@@ -63,7 +63,7 @@ public class RouteGuideServer {
 
   private final int port;
   private final Collection<Feature> features;
-  private ServerImpl grpcServer;
+  private Server grpcServer;
 
   public RouteGuideServer(int port) {
     this(port, RouteGuideUtil.getDefaultFeaturesFile());

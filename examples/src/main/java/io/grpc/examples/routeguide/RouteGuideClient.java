@@ -33,7 +33,7 @@ package io.grpc.examples.routeguide;
 
 import com.google.common.util.concurrent.SettableFuture;
 
-import io.grpc.ChannelImpl;
+import io.grpc.ManagedChannel;
 import io.grpc.examples.routeguide.RouteGuideGrpc.RouteGuideBlockingStub;
 import io.grpc.examples.routeguide.RouteGuideGrpc.RouteGuideStub;
 import io.grpc.netty.NegotiationType;
@@ -53,7 +53,7 @@ import java.util.logging.Logger;
 public class RouteGuideClient {
   private static final Logger logger = Logger.getLogger(RouteGuideClient.class.getName());
 
-  private final ChannelImpl channel;
+  private final ManagedChannel channel;
   private final RouteGuideBlockingStub blockingStub;
   private final RouteGuideStub asyncStub;
 

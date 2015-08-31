@@ -29,35 +29,46 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.testing.integration;
+package io.grpc.internal;
 
-import io.grpc.ManagedChannel;
-import io.grpc.inprocess.InProcessChannelBuilder;
-import io.grpc.inprocess.InProcessServerBuilder;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Unit tests for {@link InProcess}. */
+import java.util.Random;
+
+/**
+ * Test for {@link ExponentialBackoffPolicy}.
+ */
 @RunWith(JUnit4.class)
-public class InProcessTest extends AbstractTransportTest {
-  private static String serverName = "test";
+public class ExponentialBackoffPolicyTest {
+  private ExponentialBackoffPolicy policy = new ExponentialBackoffPolicy();
+  private Random notRandom = new Random() {
+    @Override
+    public double nextDouble() {
+      return .5;
+    }
+  };
 
-  /** Starts the in-process server. */
-  @BeforeClass
-  public static void startServer() {
-    startStaticServer(InProcessServerBuilder.forName(serverName));
+  @Test
+  public void maxDelayReached() {
+    long maxBackoffMillis = 120 * 1000;
+    policy.setMaxBackoffMillis(maxBackoffMillis)
+        .setJitter(0)
+        .setRandom(notRandom);
+    for (int i = 0; i < 50; i++) {
+      if (maxBackoffMillis == policy.nextBackoffMillis()) {
+        return; // Success
+      }
+    }
+    assertEquals("max delay not reached", maxBackoffMillis, policy.nextBackoffMillis());
   }
 
-  @AfterClass
-  public static void stopServer() {
-    stopStaticServer();
-  }
-
-  @Override
-  protected ManagedChannel createChannel() {
-    return InProcessChannelBuilder.forName(serverName).build();
+  @Test public void canProvide() {
+    assertNotNull(new ExponentialBackoffPolicy.Provider().get());
   }
 }
+

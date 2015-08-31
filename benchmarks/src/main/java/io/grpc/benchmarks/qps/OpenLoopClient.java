@@ -50,7 +50,7 @@ import static io.grpc.benchmarks.qps.Utils.newRequest;
 import static io.grpc.benchmarks.qps.Utils.saveHistogram;
 
 import io.grpc.Channel;
-import io.grpc.ChannelImpl;
+import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.SimpleRequest;
@@ -108,7 +108,7 @@ public class OpenLoopClient {
     }
     config.channels = 1;
     config.directExecutor = true;
-    Channel ch = newClientChannel(config);
+    ManagedChannel ch = newClientChannel(config);
     SimpleRequest req = newRequest(config);
     LoadGenerationWorker worker =
         new LoadGenerationWorker(ch, req, config.targetQps, config.duration);
@@ -119,7 +119,7 @@ public class OpenLoopClient {
     if (config.histogramFile != null) {
       saveHistogram(histogram, config.histogramFile);
     }
-    ((ChannelImpl) ch).shutdown();
+    ch.shutdown();
   }
 
   private void printStats(Histogram histogram, long elapsedTime) {

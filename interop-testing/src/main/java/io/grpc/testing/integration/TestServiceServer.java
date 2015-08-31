@@ -33,7 +33,7 @@ package io.grpc.testing.integration;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
-import io.grpc.ServerImpl;
+import io.grpc.Server;
 import io.grpc.ServerInterceptors;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
@@ -80,7 +80,7 @@ public class TestServiceServer {
   private boolean useTls = true;
 
   private ScheduledExecutorService executor;
-  private ServerImpl server;
+  private Server server;
 
   private void parseArgs(String[] args) {
     boolean usage = false;

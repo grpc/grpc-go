@@ -31,6 +31,9 @@
 
 package io.grpc;
 
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
+
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -38,4 +41,54 @@ import javax.annotation.concurrent.ThreadSafe;
  * application code or interceptors.
  */
 @ThreadSafe
-public abstract class Server {}
+public abstract class Server {
+  /**
+   * Bind and start the server.
+   *
+   * @return {@code this} object
+   * @throws IllegalStateException if already started
+   * @throws IOException if unable to bind
+   */
+  public abstract Server start() throws IOException;
+
+  /**
+   * Initiates an orderly shutdown in which preexisting calls continue but new calls are rejected.
+   */
+  public abstract Server shutdown();
+
+  /**
+   * Initiates a forceful shutdown in which preexisting and new calls are rejected. Although
+   * forceful, the shutdown process is still not instantaneous; {@link #isTerminated()} will likely
+   * return {@code false} immediately after this method returns.
+   */
+  public abstract Server shutdownNow();
+
+  /**
+   * Returns whether the server is shutdown. Shutdown servers reject any new calls, but may still
+   * have some calls being processed.
+   *
+   * @see #shutdown()
+   * @see #isTerminated()
+   */
+  public abstract boolean isShutdown();
+
+  /**
+   * Returns whether the server is terminated. Terminated servers have no running calls and
+   * relevant resources released (like TCP connections).
+   *
+   * @see #isShutdown()
+   */
+  public abstract boolean isTerminated();
+
+  /**
+   * Waits for the server to become terminated, giving up if the timeout is reached.
+   *
+   * @return whether the server is terminated, as would be done by {@link #isTerminated()}.
+   */
+  public abstract boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException;
+
+  /**
+   * Waits for the server to become terminated.
+   */
+  public abstract void awaitTermination() throws InterruptedException;
+}

@@ -34,7 +34,7 @@ package io.grpc;
 import java.io.InputStream;
 
 /** Marshalls decimal-encoded integers. */
-class IntegerMarshaller implements MethodDescriptor.Marshaller<Integer> {
+public class IntegerMarshaller implements MethodDescriptor.Marshaller<Integer> {
   public static IntegerMarshaller INSTANCE = new IntegerMarshaller();
 
   @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,28 +31,15 @@
 
 package io.grpc;
 
-import io.grpc.internal.ClientTransportFactory;
-
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
-import javax.annotation.Nullable;
-
 /**
- * The base class for channel builders.
+ * A builder for {@link ManagedChannel} instances.
  *
- * @param <BuilderT> The concrete type of this builder.
+ * @param <T> The concrete type of this builder.
  */
-public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBuilder<BuilderT>> {
-
-  @Nullable
-  private ExecutorService executor;
-  private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
-
-  @Nullable
-  private String userAgent;
+public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> {
 
   /**
    * Provides a custom executor.
@@ -63,61 +50,17 @@ public abstract class AbstractChannelBuilder<BuilderT extends AbstractChannelBui
    * <p>The channel won't take ownership of the given executor. It's caller's responsibility to
    * shut down the executor when it's desired.
    */
-  public final BuilderT executor(ExecutorService executor) {
-    this.executor = executor;
-    return thisT();
-  }
+  public abstract T executor(ExecutorService executor);
 
   /**
    * Adds interceptors that will be called before the channel performs its real work. This is
    * functionally equivalent to using {@link ClientInterceptors#intercept(Channel, List)}, but while
    * still having access to the original {@code ChannelImpl}.
    */
-  public final BuilderT intercept(List<ClientInterceptor> interceptors) {
-    this.interceptors.addAll(interceptors);
-    return thisT();
-  }
-
-  /**
-   * Adds interceptors that will be called before the channel performs its real work. This is
-   * functionally equivalent to using {@link ClientInterceptors#intercept(Channel,
-   * ClientInterceptor...)}, but while still having access to the original {@code ChannelImpl}.
-   */
-  public final BuilderT intercept(ClientInterceptor... interceptors) {
-    return intercept(Arrays.asList(interceptors));
-  }
-
-  private BuilderT thisT() {
-    @SuppressWarnings("unchecked")
-    BuilderT thisT = (BuilderT) this;
-    return thisT;
-  }
-
-  /**
-   * Provides a custom {@code User-Agent} for the application.
-   *
-   * <p>It's an optional parameter. If provided, the given agent will be prepended by the
-   * grpc {@code User-Agent}.
-   */
-  @SuppressWarnings("unchecked")
-  public final BuilderT userAgent(String userAgent) {
-    this.userAgent = userAgent;
-    return (BuilderT) this;
-  }
+  public abstract T intercept(List<ClientInterceptor> interceptors);
 
   /**
    * Builds a channel using the given parameters.
    */
-  public ChannelImpl build() {
-    ClientTransportFactory transportFactory = buildTransportFactory();
-    return new ChannelImpl(transportFactory, executor, userAgent, interceptors);
-  }
-
-  /**
-   * Children of AbstractChannelBuilder should override this method to provide the
-   * {@link ClientTransportFactory} appropriate for this channel.  This method is meant for
-   * Transport implementors and should not be used by normal users.
-   */
-  @Internal
-  protected abstract ClientTransportFactory buildTransportFactory();
+  public abstract ManagedChannel build();
 }

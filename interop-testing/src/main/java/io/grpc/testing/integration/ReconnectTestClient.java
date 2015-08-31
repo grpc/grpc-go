@@ -35,7 +35,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.google.protobuf.EmptyProtos.Empty;
 
-import io.grpc.ChannelImpl;
+import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
@@ -53,8 +53,8 @@ public class ReconnectTestClient {
   private int serverControlPort = 8080;
   private int serverRetryPort = 8081;
   private boolean useOkhttp = false;
-  private ChannelImpl controlChannel;
-  private ChannelImpl retryChannel;
+  private ManagedChannel controlChannel;
+  private ManagedChannel retryChannel;
   private ReconnectServiceGrpc.ReconnectServiceBlockingStub controlStub;
   private ReconnectServiceGrpc.ReconnectServiceBlockingStub retryStub;
 

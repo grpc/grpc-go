@@ -41,7 +41,8 @@ import com.squareup.okhttp.CipherSuite;
 import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.TlsVersion;
 
-import io.grpc.AbstractChannelBuilder;
+import io.grpc.ExperimentalApi;
+import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
@@ -55,7 +56,9 @@ import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocketFactory;
 
 /** Convenience class for building channels with the OkHttp transport. */
-public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpChannelBuilder> {
+@ExperimentalApi("There is no plan to make this API stable, given transport API instability")
+public final class OkHttpChannelBuilder extends
+        AbstractManagedChannelImplBuilder<OkHttpChannelBuilder> {
 
   public static final ConnectionSpec DEFAULT_CONNECTION_SPEC =
       new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)

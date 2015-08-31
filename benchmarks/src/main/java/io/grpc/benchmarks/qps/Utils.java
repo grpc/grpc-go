@@ -34,7 +34,7 @@ package io.grpc.benchmarks.qps;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
-import io.grpc.Channel;
+import io.grpc.ManagedChannel;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
@@ -128,7 +128,7 @@ final class Utils {
         .build();
   }
 
-  static Channel newClientChannel(ClientConfiguration config) throws IOException {
+  static ManagedChannel newClientChannel(ClientConfiguration config) throws IOException {
     if (config.transport == ClientConfiguration.Transport.OK_HTTP) {
       InetSocketAddress addr = (InetSocketAddress) config.address;
       OkHttpChannelBuilder builder = OkHttpChannelBuilder

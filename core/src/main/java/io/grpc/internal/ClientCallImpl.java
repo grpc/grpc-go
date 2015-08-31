@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
@@ -39,12 +39,14 @@ import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 
+import io.grpc.CallOptions;
+import io.grpc.ClientCall;
+import io.grpc.MessageEncoding;
 import io.grpc.MessageEncoding.Compressor;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
-import io.grpc.internal.ClientStream;
-import io.grpc.internal.ClientStreamListener;
-import io.grpc.internal.ClientTransport;
-import io.grpc.internal.SerializingExecutor;
+import io.grpc.Status;
 
 import java.io.InputStream;
 import java.util.concurrent.ScheduledExecutorService;

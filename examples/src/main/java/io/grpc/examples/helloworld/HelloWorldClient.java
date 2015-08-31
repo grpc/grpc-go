@@ -31,7 +31,7 @@
 
 package io.grpc.examples.helloworld;
 
-import io.grpc.ChannelImpl;
+import io.grpc.ManagedChannel;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 
@@ -45,7 +45,7 @@ import java.util.logging.Logger;
 public class HelloWorldClient {
   private static final Logger logger = Logger.getLogger(HelloWorldClient.class.getName());
 
-  private final ChannelImpl channel;
+  private final ManagedChannel channel;
   private final GreeterGrpc.GreeterBlockingStub blockingStub;
 
   /** Construct client connecting to HelloWorld server at {@code host:port}. */

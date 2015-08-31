@@ -36,13 +36,13 @@ import static io.grpc.testing.TestUtils.pickUnusedPort;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
-import io.grpc.AbstractChannelBuilder;
-import io.grpc.AbstractServerBuilder;
-import io.grpc.ChannelImpl;
-import io.grpc.ServerImpl;
+import io.grpc.ManagedChannel;
+import io.grpc.Server;
 import io.grpc.benchmarks.qps.AsyncServer;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
+import io.grpc.internal.AbstractManagedChannelImplBuilder;
+import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -80,14 +80,14 @@ public class TransportBenchmark {
   @Param({"true", "false"})
   public boolean direct;
 
-  private ChannelImpl channel;
-  private ServerImpl server;
+  private ManagedChannel channel;
+  private Server server;
   private TestServiceGrpc.TestServiceBlockingStub stub;
 
   @Setup
   public void setUp() throws Exception {
-    AbstractServerBuilder serverBuilder;
-    AbstractChannelBuilder channelBuilder;
+    AbstractServerImplBuilder serverBuilder;
+    AbstractManagedChannelImplBuilder channelBuilder;
     switch (transport) {
       case INPROCESS:
       {

@@ -44,6 +44,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * blocking method lookup.
  */
 @ThreadSafe
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/933")
 public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
   private final ConcurrentMap<String, ServerServiceDefinition> services
       = new ConcurrentHashMap<String, ServerServiceDefinition>();

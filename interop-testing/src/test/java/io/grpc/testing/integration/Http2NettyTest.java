@@ -31,7 +31,7 @@
 
 package io.grpc.testing.integration;
 
-import io.grpc.ChannelImpl;
+import io.grpc.ManagedChannel;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -73,7 +73,7 @@ public class Http2NettyTest extends AbstractTransportTest {
   }
 
   @Override
-  protected ChannelImpl createChannel() {
+  protected ManagedChannel createChannel() {
     try {
       return NettyChannelBuilder
           .forAddress(TestUtils.testServerAddress(serverPort))

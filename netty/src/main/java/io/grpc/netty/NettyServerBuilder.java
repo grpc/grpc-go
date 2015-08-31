@@ -36,9 +36,9 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.AbstractServerBuilder;
+import io.grpc.ExperimentalApi;
 import io.grpc.HandlerRegistry;
-
+import io.grpc.internal.AbstractServerImplBuilder;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -52,7 +52,8 @@ import javax.annotation.Nullable;
 /**
  * A builder to help simplify the construction of a Netty-based GRPC server.
  */
-public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerBuilder> {
+@ExperimentalApi("There is no plan to make this API stable, given transport API instability")
+public final class NettyServerBuilder extends AbstractServerImplBuilder<NettyServerBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
   private final SocketAddress address;
@@ -128,13 +129,13 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
    * <p>The server won't take ownership of the given EventLoopGroup. It's caller's responsibility
    * to shut it down when it's desired.
    *
-   * <p>Grpc uses non-daemon {@link Thread}s by default and thus a {@link io.grpc.ServerImpl} will
+   * <p>Grpc uses non-daemon {@link Thread}s by default and thus a {@link io.grpc.Server} will
    * continue to run even after the main thread has terminated. However, users have to be cautious
    * when providing their own {@link EventLoopGroup}s.
    * For example, Netty's {@link EventLoopGroup}s use daemon threads by default
    * and thus an application with only daemon threads running besides the main thread will exit as
    * soon as the main thread completes.
-   * A simple solution to this problem is to call {@link io.grpc.ServerImpl#awaitTermination()} to
+   * A simple solution to this problem is to call {@link io.grpc.Server#awaitTermination()} to
    * keep the main thread alive until the server has terminated.
    */
   public NettyServerBuilder bossEventLoopGroup(EventLoopGroup group) {
@@ -151,13 +152,13 @@ public final class NettyServerBuilder extends AbstractServerBuilder<NettyServerB
    * <p>The server won't take ownership of the given EventLoopGroup. It's caller's responsibility
    * to shut it down when it's desired.
    *
-   * <p>Grpc uses non-daemon {@link Thread}s by default and thus a {@link io.grpc.ServerImpl} will
+   * <p>Grpc uses non-daemon {@link Thread}s by default and thus a {@link io.grpc.Server} will
    * continue to run even after the main thread has terminated. However, users have to be cautious
    * when providing their own {@link EventLoopGroup}s.
    * For example, Netty's {@link EventLoopGroup}s use daemon threads by default
    * and thus an application with only daemon threads running besides the main thread will exit as
    * soon as the main thread completes.
-   * A simple solution to this problem is to call {@link io.grpc.ServerImpl#awaitTermination()} to
+   * A simple solution to this problem is to call {@link io.grpc.Server#awaitTermination()} to
    * keep the main thread alive until the server has terminated.
    */
   public NettyServerBuilder workerEventLoopGroup(EventLoopGroup group) {

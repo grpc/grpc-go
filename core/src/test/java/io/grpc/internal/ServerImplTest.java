@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -44,12 +44,17 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import io.grpc.IntegerMarshaller;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
-import io.grpc.internal.ServerListener;
-import io.grpc.internal.ServerStream;
-import io.grpc.internal.ServerStreamListener;
-import io.grpc.internal.ServerTransport;
-import io.grpc.internal.ServerTransportListener;
+import io.grpc.MutableHandlerRegistry;
+import io.grpc.MutableHandlerRegistryImpl;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerServiceDefinition;
+import io.grpc.Status;
+import io.grpc.StringMarshaller;
 
 import org.junit.After;
 import org.junit.Before;

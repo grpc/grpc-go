@@ -29,29 +29,30 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
-import io.grpc.ClientCallImpl.ClientTransportProvider;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ClientInterceptors;
+import io.grpc.ExperimentalApi;
+import io.grpc.ManagedChannel;
+import io.grpc.MessageEncoding;
 import io.grpc.MessageEncoding.Compressor;
-import io.grpc.internal.ClientStream;
-import io.grpc.internal.ClientStreamListener;
-import io.grpc.internal.ClientTransport;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
+import io.grpc.Status;
+import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 import io.grpc.internal.ClientTransport.PingCallback;
-import io.grpc.internal.ClientTransportFactory;
-import io.grpc.internal.SerializingExecutor;
-import io.grpc.internal.SharedResourceHolder;
-import io.grpc.internal.SharedResourceHolder.Resource;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -62,28 +63,8 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
-public final class ChannelImpl extends Channel {
-  private static final Logger log = Logger.getLogger(ChannelImpl.class.getName());
-
-  static final Resource<ExecutorService> SHARED_EXECUTOR =
-      new Resource<ExecutorService>() {
-        private static final String name = "grpc-default-executor";
-        @Override
-        public ExecutorService create() {
-          return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
-              .setNameFormat(name + "-%d").build());
-        }
-
-        @Override
-        public void close(ExecutorService instance) {
-          instance.shutdown();
-        }
-
-        @Override
-        public String toString() {
-          return name;
-        }
-      };
+public final class ManagedChannelImpl extends ManagedChannel {
+  private static final Logger log = Logger.getLogger(ManagedChannelImpl.class.getName());
 
   private final ClientTransportFactory transportFactory;
   private final ExecutorService executor;
@@ -133,7 +114,7 @@ public final class ChannelImpl extends Channel {
     }
   };
 
-  ChannelImpl(ClientTransportFactory transportFactory, @Nullable ExecutorService executor,
+  ManagedChannelImpl(ClientTransportFactory transportFactory, @Nullable ExecutorService executor,
       @Nullable String userAgent, List<ClientInterceptor> interceptors) {
     this.transportFactory = transportFactory;
     this.userAgent = userAgent;
@@ -142,7 +123,7 @@ public final class ChannelImpl extends Channel {
 
     if (executor == null) {
       usingSharedExecutor = true;
-      this.executor = SharedResourceHolder.get(SHARED_EXECUTOR);
+      this.executor = SharedResourceHolder.get(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
     } else {
       usingSharedExecutor = false;
       this.executor = executor;
@@ -167,7 +148,8 @@ public final class ChannelImpl extends Channel {
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are immediately
    * cancelled.
    */
-  public ChannelImpl shutdown() {
+  @Override
+  public ManagedChannelImpl shutdown() {
     ClientTransport savedActiveTransport;
     synchronized (lock) {
       if (shutdown) {
@@ -199,29 +181,20 @@ public final class ChannelImpl extends Channel {
    * <p>NOT YET IMPLEMENTED. This method currently behaves identically to shutdown().
    */
   // TODO(ejona86): cancel preexisting calls.
-  public ChannelImpl shutdownNow() {
+  @Override
+  public ManagedChannelImpl shutdownNow() {
     shutdown();
     return this;
   }
 
-  /**
-   * Returns whether the channel is shutdown. Shutdown channels immediately cancel any new calls,
-   * but may still have some calls being processed.
-   *
-   * @see #shutdown()
-   * @see #isTerminated()
-   */
+  @Override
   public boolean isShutdown() {
     synchronized (lock) {
       return shutdown;
     }
   }
 
-  /**
-   * Waits for the channel to become terminated, giving up if the timeout is reached.
-   *
-   * @return whether the channel is terminated, as would be done by {@link #isTerminated()}.
-   */
+  @Override
   public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
     synchronized (lock) {
       long timeoutNanos = unit.toNanos(timeout);
@@ -233,12 +206,7 @@ public final class ChannelImpl extends Channel {
     }
   }
 
-  /**
-   * Returns whether the channel is terminated. Terminated channels have no running calls and
-   * relevant resources released (like TCP connections).
-   *
-   * @see #isShutdown()
-   */
+  @Override
   public boolean isTerminated() {
     synchronized (lock) {
       return terminated;
@@ -250,13 +218,12 @@ public final class ChannelImpl extends Channel {
    * is received, the given callback will be invoked using the given executor.
    *
    * <p>If the underlying transport has no mechanism by when to send a ping, this method may throw
-   * an {@link UnsupportedOperationException}. The operation may
-   * {@linkplain PingCallback#pingFailed(Throwable) fail} due to transient transport errors. In
-   * that case, trying again may succeed.
+   * an {@link UnsupportedOperationException}. The operation may {@linkplain
+   * io.grpc.internal.ClientTransport.PingCallback#pingFailed(Throwable) fail} due to transient
+   * transport errors. In that case, trying again may succeed.
    *
-   * @see ClientTransport#ping(PingCallback, Executor)
+   * @see ClientTransport#ping(ClientTransport.PingCallback, Executor)
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/737")
   public void ping(final PingCallback callback, final Executor executor) {
     try {
       obtainActiveTransport().ping(callback, executor);
@@ -420,7 +387,7 @@ public final class ChannelImpl extends Channel {
    */
   private void onChannelTerminated() {
     if (usingSharedExecutor) {
-      SharedResourceHolder.release(SHARED_EXECUTOR, executor);
+      SharedResourceHolder.release(GrpcUtil.SHARED_CHANNEL_EXECUTOR, executor);
     }
     // Release the transport factory so that it can deallocate any resources.
     transportFactory.release();

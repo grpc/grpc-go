@@ -32,8 +32,7 @@
 package io.grpc;
 
 /**
- * Definition of a method bound by a {@link io.grpc.HandlerRegistry} and exposed
- * by a {@link Server}.
+ * Definition of a method exposed by a {@link Server}.
  */
 public final class ServerMethodDefinition<RequestT, ResponseT> {
   private final MethodDescriptor<RequestT, ResponseT> method;

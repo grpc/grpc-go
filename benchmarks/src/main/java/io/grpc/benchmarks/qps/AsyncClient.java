@@ -55,7 +55,7 @@ import com.google.common.base.Preconditions;
 import com.google.protobuf.ByteString;
 
 import io.grpc.Channel;
-import io.grpc.ChannelImpl;
+import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.Payload;
@@ -96,7 +96,7 @@ public class AsyncClient {
 
     SimpleRequest req = newRequest();
 
-    List<Channel> channels = new ArrayList<Channel>(config.channels);
+    List<ManagedChannel> channels = new ArrayList<ManagedChannel>(config.channels);
     for (int i = 0; i < config.channels; i++) {
       channels.add(newClientChannel(config));
     }
@@ -130,7 +130,7 @@ public class AsyncClient {
             .build();
   }
 
-  private void warmup(SimpleRequest req, List<Channel> channels) throws Exception {
+  private void warmup(SimpleRequest req, List<? extends Channel> channels) throws Exception {
     long endTime = System.nanoTime() + TimeUnit.SECONDS.toNanos(config.warmupDuration);
     doBenchmark(req, channels, endTime);
     // I don't know if this helps, but it doesn't hurt trying. We sometimes run warmups
@@ -140,7 +140,8 @@ public class AsyncClient {
   }
 
   private List<Histogram> doBenchmark(SimpleRequest req,
-                                      List<Channel> channels, long endTime) throws Exception {
+                                      List<? extends Channel> channels,
+                                      long endTime) throws Exception {
     // Initiate the concurrent calls
     List<Future<Histogram>> futures =
         new ArrayList<Future<Histogram>>(config.outstandingRpcsPerChannel);
@@ -314,9 +315,9 @@ public class AsyncClient {
     System.out.println(values);
   }
 
-  private static void shutdown(List<Channel> channels) {
-    for (Channel channel : channels) {
-      ((ChannelImpl) channel).shutdown();
+  private static void shutdown(List<ManagedChannel> channels) {
+    for (ManagedChannel channel : channels) {
+      channel.shutdown();
     }
   }
 

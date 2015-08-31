@@ -41,6 +41,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * @see MutableHandlerRegistryImpl
  */
 @ThreadSafe
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/933")
 public abstract class MutableHandlerRegistry extends HandlerRegistry {
   /**
    * Returns {@code null}, or previous service if {@code service} replaced an existing service.
@@ -51,6 +52,5 @@ public abstract class MutableHandlerRegistry extends HandlerRegistry {
   /**
    * Returns {@code false} if {@code service} was not registered.
    */
-  @Nullable
   public abstract boolean removeService(ServerServiceDefinition service);
 }

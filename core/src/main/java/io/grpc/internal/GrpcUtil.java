@@ -36,13 +36,16 @@ import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.SharedResourceHolder.Resource;
 
 import java.net.HttpURLConnection;
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -294,10 +297,33 @@ public final class GrpcUtil {
   }
 
   /**
+   * Shared executor for channels.
+   */
+  static final Resource<ExecutorService> SHARED_CHANNEL_EXECUTOR =
+      new Resource<ExecutorService>() {
+        private static final String name = "grpc-default-executor";
+        @Override
+        public ExecutorService create() {
+          return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
+              .setNameFormat(name + "-%d").build());
+        }
+
+        @Override
+        public void close(ExecutorService instance) {
+          instance.shutdown();
+        }
+
+        @Override
+        public String toString() {
+          return name;
+        }
+      };
+
+  /**
    * Shared executor for managing channel timers.
    */
-  public static final SharedResourceHolder.Resource<ScheduledExecutorService> TIMER_SERVICE =
-      new SharedResourceHolder.Resource<ScheduledExecutorService>() {
+  public static final Resource<ScheduledExecutorService> TIMER_SERVICE =
+      new Resource<ScheduledExecutorService>() {
         @Override
         public ScheduledExecutorService create() {
           return Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
