@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.verify;
@@ -235,6 +236,22 @@ public class AbstractClientStreamTest {
 
     verify(mockListener).closed(statusCaptor.capture(), isA(Metadata.class));
     assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
+  }
+
+  @Test
+  public void rstStreamClosesStream() {
+    AbstractClientStream<Integer> stream =
+        new BaseAbstractClientStream<Integer>(allocator, mockListener);
+    // The application will call request when waiting for a message, which will in turn call this
+    // on the transport thread.
+    stream.requestMessagesFromDeframer(1);
+    // Send first byte of 2 byte message
+    stream.deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 2, 1}), false);
+    Status status = Status.INTERNAL;
+    // Simulate getting a reset
+    stream.transportReportStatus(status, false /*stop delivery*/, new Metadata());
+
+    assertTrue(stream.isClosed());
   }
 
   /**
