@@ -1,6 +1,13 @@
 sudo: false
 
-language: java
+language: android
+
+android:
+  components:
+     - build-tools-21.1.1  # preinstalled in travis env
+     - android-21
+
+script: ./gradlew build
 
 env:
   global:

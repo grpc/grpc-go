@@ -5,6 +5,7 @@ buildscript {
         jcenter()
     }
     dependencies {
+        classpath 'com.jakewharton.sdkmanager:gradle-plugin:0.12.+'
         classpath 'com.android.tools.build:gradle:1.1.0'
         classpath "com.google.protobuf:protobuf-gradle-plugin:0.6.1"
 
