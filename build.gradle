@@ -4,7 +4,7 @@ buildscript {
     mavenLocal()
   }
   dependencies {
-    classpath 'com.google.gradle:osdetector-gradle-plugin:1.2.1'
+    classpath 'com.google.gradle:osdetector-gradle-plugin:1.3.0'
   }
 }
 
@@ -113,6 +113,15 @@ subprojects {
         if (osdetector.classifier in ["linux-x86_64", "osx-x86_64", "windows-x86_64"]) {
             // The native code is only pre-compiled on certain platforms.
             tcnative_suffix = ":" + osdetector.classifier
+            // Fedora variants use a different soname for OpenSSL than other linux distributions
+            // (see http://netty.io/wiki/forked-tomcat-native.html). Netty-tcnative, however
+            // assumes Fedora as the default "linux", while calling out "_debian" as a special
+            // build for debian-based systems. This should be inverted in future releases of
+            // netty-tcnative, but in the meantime we invert the logic manually here so that
+            // "debian" is used as the default linux distribution.
+            if (osdetector.os == "linux" && !osdetector.release.isLike("fedora")) {
+                tcnative_suffix += "_debian";
+            }
         }
         def epoll_suffix = "";
         if (osdetector.classifier in ["linux-x86_64"]) {
@@ -134,7 +143,7 @@ subprojects {
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.0',
 
                 netty: 'io.netty:netty-codec-http2:4.1.0.Beta5',
-                netty_tcnative: 'io.netty:netty-tcnative:1.1.33.Fork2' + tcnative_suffix,
+                netty_tcnative: 'io.netty:netty-tcnative:1.1.33.Fork6' + tcnative_suffix,
                 netty_transport_native_epoll: 'io.netty:netty-transport-native-epoll:4.1.0.Beta5' + epoll_suffix,
 
                 // Test dependencies.
