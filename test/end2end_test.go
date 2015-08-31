@@ -87,15 +87,15 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 
 func newPayload(t testpb.PayloadType, size int32) *testpb.Payload {
 	if size < 0 {
-		grpclog.Fatalf("Requested a response with invalid length %d", size)
+		grpclog.With("size", size).Fatal("Requested a response with invalid length")
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		grpclog.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+		grpclog.Fatal("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		grpclog.Fatalf("Unsupported payload type: %d", t)
+		grpclog.With("type", t).Fatal("Unsupported payload type")
 	}
 	return &testpb.Payload{
 		Type: t.Enum(),
@@ -107,7 +107,10 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	md, ok := metadata.FromContext(ctx)
 	if ok {
 		if err := grpc.SendHeader(ctx, md); err != nil {
-			grpclog.Fatalf("grpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
+			grpclog.Err(err).With(
+				"md", md,
+				"ctx", ctx,
+			).Fatal("grpc.SendHeader() expects no errors")
 		}
 		grpc.SetTrailer(ctx, md)
 	}
@@ -115,17 +118,17 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		// Check Auth info
 		authInfo, ok := credentials.FromContext(ctx)
 		if !ok {
-			grpclog.Fatalf("Failed to get AuthInfo from ctx.")
+			grpclog.Fatal("Failed to get AuthInfo from ctx.")
 		}
 		var authType string
 		switch info := authInfo.(type) {
 		case credentials.TLSInfo:
 			authType = info.AuthType()
 		default:
-			grpclog.Fatalf("Unknown AuthInfo type")
+			grpclog.Fatal("Unknown AuthInfo type")
 		}
 		if authType != s.security {
-			grpclog.Fatalf("Wrong auth type: got %q, want %q", authType, s.security)
+			grpclog.With("got_auth", authType, "want_auth", s.security).Fatal("Wrong auth type")
 		}
 	}
 
@@ -178,7 +181,7 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 	md, ok := metadata.FromContext(stream.Context())
 	if ok {
 		if err := stream.SendHeader(md); err != nil {
-			grpclog.Fatalf("%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
+			grpclog.Err(err).With("stream", stream, "md", md).Fatal("SendHeader()")
 		}
 		stream.SetTrailer(md)
 	}
@@ -340,12 +343,12 @@ func setUp(hs *health.HealthServer, maxStream uint32, ua string, e env) (s *grpc
 	}
 	lis, err := net.Listen(e.network, la)
 	if err != nil {
-		grpclog.Fatalf("Failed to listen: %v", err)
+		grpclog.Err(err).Fatal("Failed to listen")
 	}
 	if e.security == "tls" {
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
-			grpclog.Fatalf("Failed to generate credentials %v", err)
+			grpclog.Err(err).Fatal("Failed to generate credentials")
 		}
 		sopts = append(sopts, grpc.Creds(creds))
 	}
@@ -361,21 +364,21 @@ func setUp(hs *health.HealthServer, maxStream uint32, ua string, e env) (s *grpc
 	default:
 		_, port, err := net.SplitHostPort(lis.Addr().String())
 		if err != nil {
-			grpclog.Fatalf("Failed to parse listener address: %v", err)
+			grpclog.Err(err).Fatal("Failed to parse listener address")
 		}
 		addr = "localhost:" + port
 	}
 	if e.security == "tls" {
 		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 		if err != nil {
-			grpclog.Fatalf("Failed to create credentials %v", err)
+			grpclog.Err(err).Fatal("Failed to create credentials")
 		}
 		cc, err = grpc.Dial(addr, grpc.WithTransportCredentials(creds), grpc.WithDialer(e.dialer), grpc.WithUserAgent(ua))
 	} else {
 		cc, err = grpc.Dial(addr, grpc.WithDialer(e.dialer), grpc.WithInsecure(), grpc.WithUserAgent(ua))
 	}
 	if err != nil {
-		grpclog.Fatalf("Dial(%q) = %v", addr, err)
+		grpclog.Err(err).With("addr", addr).Fatal("Dial")
 	}
 	return
 }

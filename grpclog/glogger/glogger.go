@@ -37,6 +37,9 @@ Package glogger defines glog-based logging for grpc.
 package glogger
 
 import (
+	"bytes"
+	"fmt"
+
 	"github.com/golang/glog"
 	"google.golang.org/grpc/grpclog"
 )
@@ -45,28 +48,58 @@ func init() {
 	grpclog.SetLogger(&glogger{})
 }
 
-type glogger struct{}
-
-func (g *glogger) Fatal(args ...interface{}) {
-	glog.Fatal(args...)
+type glogger struct {
+	kvs [][2]string
 }
 
-func (g *glogger) Fatalf(format string, args ...interface{}) {
-	glog.Fatalf(format, args...)
+func (g *glogger) Err(err error) grpclog.Logger {
+	return g.With("err", err)
 }
 
-func (g *glogger) Fatalln(args ...interface{}) {
-	glog.Fatalln(args...)
+func (g *glogger) With(keyvals ...interface{}) grpclog.Logger {
+	if len(keyvals) == 0 {
+		return g
+	}
+	if len(keyvals)%2 != 0 {
+		keyvals = append(keyvals, "<MISSING VALUE>")
+	}
+	kvs := make([][2]string, len(g.kvs), len(g.kvs)+len(keyvals)/2)
+	copy(kvs, g.kvs)
+	for i := 0; i < len(keyvals); i += 2 {
+		k := keyvals[i].(string)
+		switch v := keyvals[i+1].(type) {
+		case string:
+			kvs = append(kvs, [2]string{k, v})
+		case []byte:
+			kvs = append(kvs, [2]string{k, fmt.Sprintf("%x", v)})
+		case fmt.Stringer:
+			kvs = append(kvs, [2]string{k, v.String()})
+		case fmt.GoStringer:
+			kvs = append(kvs, [2]string{k, v.GoString()})
+		case interface {
+			Error() string
+		}:
+			kvs = append(kvs, [2]string{k, v.Error()})
+		default:
+			kvs = append(kvs, [2]string{k, fmt.Sprintf("%#v", v)})
+		}
+	}
+	return &glogger{kvs: kvs}
 }
 
-func (g *glogger) Print(args ...interface{}) {
-	glog.Info(args...)
+func (g *glogger) Fatal(msg string) {
+	glog.Fatal(g.print(msg))
 }
 
-func (g *glogger) Printf(format string, args ...interface{}) {
-	glog.Infof(format, args...)
+func (g *glogger) Print(msg string) {
+	glog.Info(g.print(msg))
 }
 
-func (g *glogger) Println(args ...interface{}) {
-	glog.Infoln(args...)
+func (g *glogger) print(msg string) string {
+	buf := new(bytes.Buffer)
+	fmt.Fprint(buf, msg)
+	for _, kv := range g.kvs {
+		fmt.Fprintf(buf, " %q=%q", kv[0], kv[1])
+	}
+	return buf.String()
 }

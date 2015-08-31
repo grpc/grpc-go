@@ -67,7 +67,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	// Warm up connection.
 	stream, err := tc.StreamingCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+		grpclog.Err(err).With("tc", tc).Fatal("StreamingCall(_)")
 	}
 	for i := 0; i < 10; i++ {
 		streamCaller(tc, stream)
@@ -85,7 +85,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 		go func() {
 			stream, err := tc.StreamingCall(context.Background())
 			if err != nil {
-				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+				grpclog.Err(err).With("tc", tc).Fatal("StreamingCall(_)")
 			}
 			for _ = range ch {
 				start := time.Now()

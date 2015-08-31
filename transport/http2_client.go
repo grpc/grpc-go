@@ -54,6 +54,8 @@ import (
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
+	log grpclog.Logger
+
 	target    string // server name/addr
 	userAgent string
 	conn      net.Conn             // underlying communication channel
@@ -168,6 +170,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
+		log:       grpclog.With("src", "transport"),
 		target:    addr,
 		userAgent: ua,
 		conn:      conn,
@@ -612,7 +615,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	}
 	s.statusCode, ok = http2RSTErrConvTab[http2.ErrCode(f.ErrCode)]
 	if !ok {
-		grpclog.Println("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error ", f.ErrCode)
+		t.log.With("err_code", f.ErrCode).Print("http2Client.handleRSTStream found no mapped gRPC status for the received http2 error")
 	}
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
@@ -751,7 +754,7 @@ func (t *http2Client) reader() {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		default:
-			grpclog.Printf("transport: http2Client.reader got unhandled frame type %v.", frame)
+			t.log.With("frame", frame).Print("http2Client.reader got unhandled frame type")
 		}
 	}
 }
@@ -817,7 +820,7 @@ func (t *http2Client) controller() {
 					// meaningful content when this is actually in use.
 					t.framer.writePing(true, i.ack, [8]byte{})
 				default:
-					grpclog.Printf("transport: http2Client.controller got unexpected item type %v\n", i)
+					t.log.With("item_type", i).Print("http2Client.controller got unexpected item type")
 				}
 				t.writableChan <- 0
 				continue
@@ -841,6 +844,6 @@ func (t *http2Client) notifyError(err error) {
 	if t.state == reachable {
 		t.state = unreachable
 		close(t.errorChan)
-		grpclog.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
+		t.log.Err(err).Print("http2Client.notifyError got notified that the client transport was broken")
 	}
 }

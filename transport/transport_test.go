@@ -91,7 +91,7 @@ func (h *testStreamHandler) handleStream(s *Stream) {
 		if err == ErrConnClosing {
 			return
 		}
-		grpclog.Fatalf("handleStream got error: %v, want <nil>; result: %v, want %v", err, p, req)
+		grpclog.Err(err).With("result", p, "want", req).Fatal("handleStream got error")
 	}
 	// send a response back to the client.
 	h.t.Write(s, resp, &Options{})
@@ -107,7 +107,7 @@ func (h *testStreamHandler) handleStreamSuspension(s *Stream) {
 func (h *testStreamHandler) handleStreamMisbehave(s *Stream) {
 	conn, ok := s.ServerTransport().(*http2Server)
 	if !ok {
-		grpclog.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
+		grpclog.With("srv_transport", s.ServerTransport()).Fatal("Failed to convert to *http2Server")
 	}
 	size := 1
 	if s.Method() == "foo.MaxFrame" {
@@ -135,11 +135,11 @@ func (s *server) start(port int, maxStreams uint32, ht hType) {
 		s.lis, err = net.Listen("tcp", ":"+strconv.Itoa(port))
 	}
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		grpclog.Err(err).Fatal("failed to listen")
 	}
 	_, p, err := net.SplitHostPort(s.lis.Addr().String())
 	if err != nil {
-		grpclog.Fatalf("failed to parse listener address: %v", err)
+		grpclog.Err(err).Fatal("failed to parse listener address")
 	}
 	s.port = p
 	s.conns = make(map[ServerTransport]bool)

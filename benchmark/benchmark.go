@@ -49,15 +49,15 @@ import (
 
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
 	if size < 0 {
-		grpclog.Fatalf("Requested a response with invalid length %d", size)
+		grpclog.With("size", size).Fatal("Requested a response with invalid length")
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		grpclog.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+		grpclog.Fatal("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		grpclog.Fatalf("Unsupported payload type: %d", t)
+		grpclog.With("t", t).Fatal("Unsupported payload type")
 	}
 	return &testpb.Payload{
 		Type: t,
@@ -98,7 +98,7 @@ func (s *testServer) StreamingCall(stream testpb.TestService_StreamingCallServer
 func StartServer(addr string) (string, func()) {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		grpclog.Fatalf("Failed to listen: %v", err)
+		grpclog.Err(err).Fatal("Failed to listen")
 	}
 	s := grpc.NewServer(grpc.MaxConcurrentStreams(math.MaxUint32))
 	testpb.RegisterTestServiceServer(s, &testServer{})
@@ -117,7 +117,7 @@ func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
-		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		grpclog.Err(err).Fatal("/TestService/UnaryCall RPC failed")
 	}
 }
 
@@ -130,10 +130,10 @@ func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("StreamingCall(_).Send: %v", err)
+		grpclog.Err(err).Fatal("StreamingCall(_).Send")
 	}
 	if _, err := stream.Recv(); err != nil {
-		grpclog.Fatalf("StreamingCall(_).Recv: %v", err)
+		grpclog.Err(err).Fatal("StreamingCall(_).Recv")
 	}
 }
 
@@ -141,7 +141,7 @@ func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService
 func NewClientConn(addr string) *grpc.ClientConn {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
-		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
+		grpclog.Err(err).With("addr", addr).Fatal("NewClientConn(addr) failed to create a ClientConn")
 	}
 	return conn
 }

@@ -57,6 +57,8 @@ var ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHe
 
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
+	log grpclog.Logger
+
 	conn        net.Conn
 	maxStreamID uint32               // max stream ID ever seen
 	authInfo    credentials.AuthInfo // auth info about the connection
@@ -115,6 +117,7 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthI
 	}
 	var buf bytes.Buffer
 	t := &http2Server{
+		log:             grpclog.With("src", "transport"),
 		conn:            conn,
 		authInfo:        authInfo,
 		framer:          framer,
@@ -150,7 +153,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 		return nil
 	}
 	if err != nil {
-		grpclog.Printf("transport: http2Server.operateHeader found %v", err)
+		t.log.Err(err).Print("http2Server.operateHeader found")
 		if se, ok := err.(StreamError); ok {
 			t.controlBuf.put(&resetStream{s.id, statusCodeConvTab[se.Code]})
 		}
@@ -217,25 +220,25 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 	// Check the validity of client preface.
 	preface := make([]byte, len(clientPreface))
 	if _, err := io.ReadFull(t.conn, preface); err != nil {
-		grpclog.Printf("transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
+		t.log.Err(err).Print("http2Server.HandleStreams failed to receive the preface from client")
 		t.Close()
 		return
 	}
 	if !bytes.Equal(preface, clientPreface) {
-		grpclog.Printf("transport: http2Server.HandleStreams received bogus greeting from client: %q", preface)
+		t.log.With("preface", preface).Print("http2Server.HandleStreams received bogus greeting from client")
 		t.Close()
 		return
 	}
 
 	frame, err := t.framer.readFrame()
 	if err != nil {
-		grpclog.Printf("transport: http2Server.HandleStreams failed to read frame: %v", err)
+		t.log.Err(err).Print("http2Server.HandleStreams failed to read frame")
 		t.Close()
 		return
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		grpclog.Printf("transport: http2Server.HandleStreams saw invalid preface type %T from client", frame)
+		t.log.With("frame", frame).Print("http2Server.HandleStreams saw invalid preface type from client")
 		t.Close()
 		return
 	}
@@ -256,7 +259,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 			id := frame.Header().StreamID
 			if id%2 != 1 || id <= t.maxStreamID {
 				// illegal gRPC stream id.
-				grpclog.Println("transport: http2Server.HandleStreams received an illegal stream id: ", id)
+				t.log.With("id", id).Print("http2Server.HandleStreams received an illegal stream id")
 				t.Close()
 				break
 			}
@@ -289,7 +292,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		case *http2.GoAwayFrame:
 			break
 		default:
-			grpclog.Printf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
+			t.log.With("frame", frame).Print("http2Server.HandleStreams found unhandled frame type")
 		}
 	}
 }
@@ -332,7 +335,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	if size > 0 {
 		if err := s.fc.onData(uint32(size)); err != nil {
 			if _, ok := err.(ConnectionError); ok {
-				grpclog.Printf("transport: http2Server %v", err)
+				t.log.Err(err).Print("http2Server connection error")
 				t.Close()
 				return
 			}
@@ -632,7 +635,7 @@ func (t *http2Server) controller() {
 					// meaningful content when this is actually in use.
 					t.framer.writePing(true, i.ack, [8]byte{})
 				default:
-					grpclog.Printf("transport: http2Server.controller got unexpected item type %v\n", i)
+					t.log.With("item_type", i).Print("http2Server.controller got unexpected item type")
 				}
 				t.writableChan <- 0
 				continue

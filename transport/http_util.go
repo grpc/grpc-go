@@ -175,7 +175,7 @@ func newHPACKDecoder() *hpackDecoder {
 				}
 				k, v, err := metadata.DecodeKeyValue(f.Name, f.Value)
 				if err != nil {
-					grpclog.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
+					grpclog.Err(err).With("name", f.Name, "value", f.Value).Print("failed to decode")
 					return
 				}
 				d.state.mdata[k] = append(d.state.mdata[k], v)

@@ -143,7 +143,10 @@ func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
 	ht := reflect.TypeOf(sd.HandlerType).Elem()
 	st := reflect.TypeOf(ss)
 	if !st.Implements(ht) {
-		grpclog.Fatalf("grpc: Server.RegisterService found the handler of type %v that does not satisfy %v", st, ht)
+		grpclog.With(
+			"handler_type", ht,
+			"service_type", ss,
+		).Fatal("Server.RegisterService found service of a type that does not satisfy handler interface")
 	}
 	s.register(sd, ss)
 }
@@ -152,7 +155,7 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.m[sd.ServiceName]; ok {
-		grpclog.Fatalf("grpc: Server.RegisterService found duplicate service registration for %q", sd.ServiceName)
+		grpclog.With("service_name", sd.ServiceName).Fatal("Server.RegisterService found duplicate service registration")
 	}
 	srv := &service{
 		server: ss,
@@ -203,7 +206,7 @@ func (s *Server) Serve(lis net.Listener) error {
 		if creds, ok := s.opts.creds.(credentials.TransportAuthenticator); ok {
 			c, authInfo, err = creds.ServerHandshake(c)
 			if err != nil {
-				grpclog.Println("grpc: Server.Serve failed to complete security handshake.")
+				grpclog.Print("Server.Serve failed to complete security handshake")
 				continue
 			}
 		}
@@ -217,7 +220,7 @@ func (s *Server) Serve(lis net.Listener) error {
 		if err != nil {
 			s.mu.Unlock()
 			c.Close()
-			grpclog.Println("grpc: Server.Serve failed to create ServerTransport: ", err)
+			grpclog.Err(err).Print("Server.Serve failed to create ServerTransport")
 			continue
 		}
 		s.conns[st] = true
@@ -244,7 +247,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		// TODO(zhaoq): There exist other options also such as only closing the
 		// faulty stream locally and remotely (Other streams can keep going). Find
 		// the optimal option.
-		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
+		grpclog.Err(err).Fatal("Server failed to encode response")
 	}
 	return t.Write(stream, p, opts)
 }
@@ -276,7 +279,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				// Nothing to do here.
 			case transport.StreamError:
 				if err := t.WriteStatus(stream, err.Code, err.Desc); err != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", err)
+					grpclog.Err(err).Print("Server.processUnaryRPC failed to write status")
 				}
 			default:
 				panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", err, err))
@@ -300,7 +303,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					statusDesc = appErr.Error()
 				}
 				if err := t.WriteStatus(stream, statusCode, statusDesc); err != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", err)
+					grpclog.Err(err).Print("Server.processUnaryRPC failed to write status")
 					return err
 				}
 				return nil
@@ -376,7 +379,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	pos := strings.LastIndex(sm, "/")
 	if pos == -1 {
 		if err := t.WriteStatus(stream, codes.InvalidArgument, fmt.Sprintf("malformed method name: %q", stream.Method())); err != nil {
-			grpclog.Printf("grpc: Server.handleStream failed to write status: %v", err)
+			grpclog.Err(err).Print("Server.handleStream failed to write status")
 		}
 		return
 	}
@@ -385,7 +388,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	srv, ok := s.m[service]
 	if !ok {
 		if err := t.WriteStatus(stream, codes.Unimplemented, fmt.Sprintf("unknown service %v", service)); err != nil {
-			grpclog.Printf("grpc: Server.handleStream failed to write status: %v", err)
+			grpclog.Err(err).Print("Server.handleStream failed to write status")
 		}
 		return
 	}
@@ -399,7 +402,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 		return
 	}
 	if err := t.WriteStatus(stream, codes.Unimplemented, fmt.Sprintf("unknown method %v", method)); err != nil {
-		grpclog.Printf("grpc: Server.handleStream failed to write status: %v", err)
+		grpclog.Err(err).Print("Server.handleStream failed to write status")
 	}
 }
 
@@ -443,7 +446,7 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 	}
 	t := stream.ServerTransport()
 	if t == nil {
-		grpclog.Fatalf("grpc: SendHeader: %v has no ServerTransport to send header metadata.", stream)
+		grpclog.With("stream", stream).Fatal("SendHeader: stream has no ServerTransport to send header metadata")
 	}
 	return t.WriteHeader(stream, md)
 }
