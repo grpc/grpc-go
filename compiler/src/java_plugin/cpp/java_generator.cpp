@@ -107,6 +107,7 @@ static void PrintMethodFields(
       // share the same request or response messages.
       p->Print(
           *vars,
+          "@$ExperimentalApi$\n"
           "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ =\n"
           "    $MethodDescriptor$.create(\n"
@@ -132,6 +133,7 @@ static void PrintMethodFields(
     } else {
       p->Print(
           *vars,
+          "@$ExperimentalApi$\n"
           "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ =\n"
           "    $MethodDescriptor$.create(\n"
@@ -623,6 +625,7 @@ void GenerateService(const FileDescriptor* file,
       "com.google.common.util.concurrent.ListenableFuture";
   vars["CodedInputByteBufferNano"] = 
       "com.google.protobuf.nano.CodedInputByteBufferNano";
+  vars["ExperimentalApi"] = "io.grpc.ExperimentalApi";
 
   Printer printer(out, '$');
   string package_name = ServiceJavaPackage(service->file());

@@ -17,6 +17,7 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 public class WorkerGrpc {
 
   // Static method descriptors that strictly reflect the proto.
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.ClientArgs,
       io.grpc.testing.ClientStatus> METHOD_RUN_TEST =
       io.grpc.MethodDescriptor.create(
@@ -25,6 +26,7 @@ public class WorkerGrpc {
               "grpc.testing.Worker", "RunTest"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientArgs.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientStatus.parser()));
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.ServerArgs,
       io.grpc.testing.ServerStatus> METHOD_RUN_SERVER =
       io.grpc.MethodDescriptor.create(

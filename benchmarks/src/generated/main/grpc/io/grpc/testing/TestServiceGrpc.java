@@ -17,6 +17,7 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 public class TestServiceGrpc {
 
   // Static method descriptors that strictly reflect the proto.
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
       io.grpc.testing.SimpleResponse> METHOD_UNARY_CALL =
       io.grpc.MethodDescriptor.create(
@@ -25,6 +26,7 @@ public class TestServiceGrpc {
               "grpc.testing.TestService", "UnaryCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.parser()));
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
       io.grpc.testing.SimpleResponse> METHOD_STREAMING_CALL =
       io.grpc.MethodDescriptor.create(

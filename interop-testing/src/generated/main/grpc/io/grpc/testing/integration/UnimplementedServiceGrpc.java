@@ -17,6 +17,7 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 public class UnimplementedServiceGrpc {
 
   // Static method descriptors that strictly reflect the proto.
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> METHOD_UNIMPLEMENTED_CALL =
       io.grpc.MethodDescriptor.create(

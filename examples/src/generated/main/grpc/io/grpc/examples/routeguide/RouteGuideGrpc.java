@@ -17,6 +17,7 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 public class RouteGuideGrpc {
 
   // Static method descriptors that strictly reflect the proto.
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Point,
       io.grpc.examples.routeguide.Feature> METHOD_GET_FEATURE =
       io.grpc.MethodDescriptor.create(
@@ -25,6 +26,7 @@ public class RouteGuideGrpc {
               "routeguide.RouteGuide", "GetFeature"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.parser()));
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Rectangle,
       io.grpc.examples.routeguide.Feature> METHOD_LIST_FEATURES =
       io.grpc.MethodDescriptor.create(
@@ -33,6 +35,7 @@ public class RouteGuideGrpc {
               "routeguide.RouteGuide", "ListFeatures"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Rectangle.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.parser()));
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Point,
       io.grpc.examples.routeguide.RouteSummary> METHOD_RECORD_ROUTE =
       io.grpc.MethodDescriptor.create(
@@ -41,6 +44,7 @@ public class RouteGuideGrpc {
               "routeguide.RouteGuide", "RecordRoute"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteSummary.parser()));
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.RouteNote,
       io.grpc.examples.routeguide.RouteNote> METHOD_ROUTE_CHAT =
       io.grpc.MethodDescriptor.create(

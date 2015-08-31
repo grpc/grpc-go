@@ -19,6 +19,7 @@ import java.io.IOException;
 public class TestServiceGrpc {
 
   // Static method descriptors that strictly reflect the proto.
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.SimpleRequest,
       io.grpc.testing.integration.nano.Test.SimpleResponse> METHOD_UNARY_CALL =
       io.grpc.MethodDescriptor.create(
@@ -39,6 +40,7 @@ public class TestServiceGrpc {
                       return io.grpc.testing.integration.nano.Test.SimpleResponse.parseFrom(input);
                   }
           }));
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_STREAMING_OUTPUT_CALL =
       io.grpc.MethodDescriptor.create(
@@ -59,6 +61,7 @@ public class TestServiceGrpc {
                       return io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse.parseFrom(input);
                   }
           }));
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> METHOD_STREAMING_INPUT_CALL =
       io.grpc.MethodDescriptor.create(
@@ -79,6 +82,7 @@ public class TestServiceGrpc {
                       return io.grpc.testing.integration.nano.Test.StreamingInputCallResponse.parseFrom(input);
                   }
           }));
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_FULL_BIDI_CALL =
       io.grpc.MethodDescriptor.create(
@@ -99,6 +103,7 @@ public class TestServiceGrpc {
                       return io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse.parseFrom(input);
                   }
           }));
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_HALF_BIDI_CALL =
       io.grpc.MethodDescriptor.create(

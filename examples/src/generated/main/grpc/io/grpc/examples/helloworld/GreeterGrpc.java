@@ -17,6 +17,7 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 public class GreeterGrpc {
 
   // Static method descriptors that strictly reflect the proto.
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.examples.helloworld.HelloRequest,
       io.grpc.examples.helloworld.HelloResponse> METHOD_SAY_HELLO =
       io.grpc.MethodDescriptor.create(

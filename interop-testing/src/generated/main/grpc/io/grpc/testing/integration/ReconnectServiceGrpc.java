@@ -17,6 +17,7 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 public class ReconnectServiceGrpc {
 
   // Static method descriptors that strictly reflect the proto.
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> METHOD_START =
       io.grpc.MethodDescriptor.create(
@@ -25,6 +26,7 @@ public class ReconnectServiceGrpc {
               "grpc.testing.ReconnectService", "Start"),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.parser()),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.parser()));
+  @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       io.grpc.testing.integration.Messages.ReconnectInfo> METHOD_STOP =
       io.grpc.MethodDescriptor.create(
