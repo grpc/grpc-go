@@ -60,11 +60,12 @@ type Credentials interface {
 	// GetRequestMetadata gets the current request metadata, refreshing
 	// tokens if required. This should be called by the transport layer on
 	// each request, and the data should be populated in headers or other
-	// context. When supported by the underlying implementation, ctx can
-	// be used for timeout and cancellation.
+	// context. uri is the URI of the entry point for the request. When
+	// supported by the underlying implementation, ctx can be used for
+	// timeout and cancellation.
 	// TODO(zhaoq): Define the set of the qualified keys instead of leaving
 	// it as an arbitrary string.
-	GetRequestMetadata(ctx context.Context) (map[string]string, error)
+	GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error)
 	// RequireTransportSecurity indicates whether the credentails requires
 	// transport security.
 	RequireTransportSecurity() bool
@@ -140,7 +141,7 @@ func (c tlsCreds) Info() ProtocolInfo {
 
 // GetRequestMetadata returns nil, nil since TLS credentials does not have
 // metadata.
-func (c *tlsCreds) GetRequestMetadata(ctx context.Context) (map[string]string, error) {
+func (c *tlsCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	return nil, nil
 }
 

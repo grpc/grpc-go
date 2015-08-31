@@ -39,6 +39,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -243,7 +244,17 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	authData := make(map[string]string)
 	for _, c := range t.authCreds {
-		data, err := c.GetRequestMetadata(ctx)
+		// Generate the audience string.
+		var port string
+		if pos := strings.LastIndex(t.target, ":"); pos != -1 {
+			port = ":" + t.target[pos+1:]
+		}
+		pos := strings.LastIndex(callHdr.Method, "/")
+		if pos == -1 {
+			return nil, StreamErrorf(codes.InvalidArgument, "transport: malformed method name: %q", callHdr.Method)
+		}
+		audience := "https://" + callHdr.Host + port + callHdr.Method[:pos]
+		data, err := c.GetRequestMetadata(ctx, audience)
 		if err != nil {
 			return nil, StreamErrorf(codes.InvalidArgument, "transport: %v", err)
 		}
