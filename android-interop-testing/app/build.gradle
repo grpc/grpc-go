@@ -29,7 +29,7 @@ android {
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:3.0.0-alpha-2'
+        artifact = 'com.google.protobuf:protoc:3.0.0-beta-1'
     }
     plugins {
         grpc {

@@ -31,7 +31,7 @@
 
 package io.grpc.android.integrationtest;
 
-import com.google.protobuf.EmptyProtos;
+import com.google.protobuf.nano.EmptyProtos;
 import com.google.protobuf.nano.MessageNano;
 
 import android.annotation.TargetApi;
@@ -41,6 +41,7 @@ import android.os.Build;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
+import io.grpc.android.integrationtest.nano.Messages;
 import io.grpc.ChannelImpl;
 import io.grpc.stub.StreamObserver;
 import io.grpc.stub.StreamRecorder;
