@@ -46,8 +46,7 @@ string ServiceJavaPackage(const google::protobuf::FileDescriptor* file);
 string ServiceClassName(const google::protobuf::ServiceDescriptor* service);
 
 // Writes the generated service interface into the given ZeroCopyOutputStream
-void GenerateService(const google::protobuf::FileDescriptor* file,
-                     const google::protobuf::ServiceDescriptor* service,
+void GenerateService(const google::protobuf::ServiceDescriptor* service,
                      google::protobuf::io::ZeroCopyOutputStream* out,
                      bool generate_nano);
 

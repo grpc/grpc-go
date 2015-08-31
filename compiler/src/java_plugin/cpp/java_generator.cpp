@@ -56,10 +56,9 @@ static inline string MethodPropertiesFieldName(const MethodDescriptor* method) {
   return "METHOD_" + ToAllUpperCase(method->name());
 }
 
-static inline string MessageFullJavaName(
-    const FileDescriptor* file, bool nano, const Descriptor* desc) {
+static inline string MessageFullJavaName(bool nano, const Descriptor* desc) {
   string name = google::protobuf::compiler::java::ClassName(desc);
-  if (nano  && !file->options().javanano_use_deprecated_package()) {
+  if (nano && !desc->file()->options().javanano_use_deprecated_package()) {
     // XXX: Add "nano" to the original package
     // (https://github.com/grpc/grpc-java/issues/900)
     for (int i = 0; i < name.size(); ++i) {
@@ -72,7 +71,6 @@ static inline string MessageFullJavaName(
 }
 
 static void PrintMethodFields(
-    const FileDescriptor* file,
     const ServiceDescriptor* service, map<string, string>* vars, Printer* p,
     bool generate_nano) {
   p->Print("// Static method descriptors that strictly reflect the proto.\n");
@@ -80,9 +78,9 @@ static void PrintMethodFields(
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
     (*vars)["method_name"] = method->name();
-    (*vars)["input_type"] = MessageFullJavaName(file, generate_nano,
+    (*vars)["input_type"] = MessageFullJavaName(generate_nano,
                                                 method->input_type());
-    (*vars)["output_type"] = MessageFullJavaName(file, generate_nano,
+    (*vars)["output_type"] = MessageFullJavaName(generate_nano,
                                                  method->output_type());
     (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
     bool client_streaming = method->client_streaming();
@@ -165,7 +163,6 @@ enum CallType {
 
 // Prints a client interface or implementation class, or a server interface.
 static void PrintStub(
-    const FileDescriptor* file,
     const ServiceDescriptor* service,
     map<string, string>* vars,
     Printer* p, StubType type, bool generate_nano) {
@@ -273,9 +270,9 @@ static void PrintStub(
   // RPC methods
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
-    (*vars)["input_type"] = MessageFullJavaName(file, generate_nano,
+    (*vars)["input_type"] = MessageFullJavaName(generate_nano,
                                                 method->input_type());
-    (*vars)["output_type"] = MessageFullJavaName(file, generate_nano,
+    (*vars)["output_type"] = MessageFullJavaName(generate_nano,
                                                  method->output_type());
     (*vars)["lower_method_name"] = LowerMethodName(method);
     (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
@@ -412,8 +409,7 @@ static void PrintStub(
   p->Print("}\n\n");
 }
 
-static void PrintBindServiceMethod(const FileDescriptor* file,
-                                   const ServiceDescriptor* service,
+static void PrintBindServiceMethod(const ServiceDescriptor* service,
                                    map<string, string>* vars,
                                    Printer* p,
                                    bool generate_nano) {
@@ -431,9 +427,9 @@ static void PrintBindServiceMethod(const FileDescriptor* file,
     const MethodDescriptor* method = service->method(i);
     (*vars)["lower_method_name"] = LowerMethodName(method);
     (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
-    (*vars)["input_type"] = MessageFullJavaName(file, generate_nano,
+    (*vars)["input_type"] = MessageFullJavaName(generate_nano,
                                                 method->input_type());
-    (*vars)["output_type"] = MessageFullJavaName(file, generate_nano,
+    (*vars)["output_type"] = MessageFullJavaName(generate_nano,
                                                  method->output_type());
     bool client_streaming = method->client_streaming();
     bool server_streaming = method->server_streaming();
@@ -506,8 +502,7 @@ static void PrintBindServiceMethod(const FileDescriptor* file,
   p->Print("}\n");
 }
 
-static void PrintService(const FileDescriptor* file,
-                         const ServiceDescriptor* service,
+static void PrintService(const ServiceDescriptor* service,
                          map<string, string>* vars,
                          Printer* p,
                          bool generate_nano) {
@@ -519,7 +514,7 @@ static void PrintService(const FileDescriptor* file,
       "public class $service_class_name$ {\n\n");
   p->Indent();
 
-  PrintMethodFields(file, service, vars, p, generate_nano);
+  PrintMethodFields(service, vars, p, generate_nano);
 
   p->Print(
       *vars,
@@ -551,13 +546,13 @@ static void PrintService(const FileDescriptor* file,
   p->Outdent();
   p->Print("}\n\n");
 
-  PrintStub(file, service, vars, p, ASYNC_INTERFACE, generate_nano);
-  PrintStub(file, service, vars, p, BLOCKING_CLIENT_INTERFACE, generate_nano);
-  PrintStub(file, service, vars, p, FUTURE_CLIENT_INTERFACE, generate_nano);
-  PrintStub(file, service, vars, p, ASYNC_CLIENT_IMPL, generate_nano);
-  PrintStub(file, service, vars, p, BLOCKING_CLIENT_IMPL, generate_nano);
-  PrintStub(file, service, vars, p, FUTURE_CLIENT_IMPL, generate_nano);
-  PrintBindServiceMethod(file, service, vars, p, generate_nano);
+  PrintStub(service, vars, p, ASYNC_INTERFACE, generate_nano);
+  PrintStub(service, vars, p, BLOCKING_CLIENT_INTERFACE, generate_nano);
+  PrintStub(service, vars, p, FUTURE_CLIENT_INTERFACE, generate_nano);
+  PrintStub(service, vars, p, ASYNC_CLIENT_IMPL, generate_nano);
+  PrintStub(service, vars, p, BLOCKING_CLIENT_IMPL, generate_nano);
+  PrintStub(service, vars, p, FUTURE_CLIENT_IMPL, generate_nano);
+  PrintBindServiceMethod(service, vars, p, generate_nano);
   p->Outdent();
   p->Print("}\n");
 }
@@ -593,8 +588,7 @@ void PrintImports(Printer* p, bool generate_nano) {
   }
 }
 
-void GenerateService(const FileDescriptor* file,
-                     const ServiceDescriptor* service,
+void GenerateService(const ServiceDescriptor* service,
                      google::protobuf::io::ZeroCopyOutputStream* out,
                      bool generate_nano) {
   // All non-generated classes must be referred by fully qualified names to
@@ -639,7 +633,7 @@ void GenerateService(const FileDescriptor* file,
   if (!vars["Package"].empty()) {
     vars["Package"].append(".");
   }
-  PrintService(file, service, &vars, &printer, generate_nano);
+  PrintService(service, &vars, &printer, generate_nano);
 }
 
 string ServiceJavaPackage(const FileDescriptor* file) {
