@@ -130,6 +130,9 @@ checkstyleTestNano {
   source = fileTree(dir: "src/testNano", include: "**/*.java")
 }
 
+println "*** Building codegen requires Protobuf version ${protobufVersion}"
+println "*** Please refer to https://github.com/grpc/grpc-java/blob/master/COMPILING.md#how-to-build-code-generation-plugin"
+
 binaries.all {
   if (toolChain in Gcc || toolChain in Clang) {
     cppCompiler.args "--std=c++0x"
