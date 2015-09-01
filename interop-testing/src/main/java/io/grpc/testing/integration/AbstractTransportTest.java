@@ -48,6 +48,7 @@ import com.google.auth.oauth2.ComputeEngineCredentials;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.auth.oauth2.OAuth2Credentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
+import com.google.auth.oauth2.ServiceAccountJwtAccessCredentials;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 
@@ -815,6 +816,29 @@ public abstract class AbstractTransportTest {
             .setBody(ByteString.copyFrom(new byte[314159])))
         .build();
     assertEquals(goldenResponse, response);
+  }
+
+  /** Test JWT-based auth. */
+  public void jwtTokenCreds(InputStream serviceAccountJson) throws Exception {
+    final SimpleRequest request = SimpleRequest.newBuilder()
+        .setResponseType(PayloadType.COMPRESSABLE)
+        .setResponseSize(314159)
+        .setPayload(Payload.newBuilder()
+            .setBody(ByteString.copyFrom(new byte[271828])))
+        .setFillUsername(true)
+        .build();
+
+    ServiceAccountCredentials origCreds = (ServiceAccountCredentials)
+        GoogleCredentials.fromStream(serviceAccountJson);
+    ServiceAccountJwtAccessCredentials credentials = new ServiceAccountJwtAccessCredentials(
+        origCreds.getClientId(), origCreds.getClientEmail(), origCreds.getPrivateKey(),
+        origCreds.getPrivateKeyId());
+    TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
+        .withInterceptors(new ClientAuthInterceptor(credentials,
+            Executors.newSingleThreadExecutor()));
+    SimpleResponse response = stub.unaryCall(request);
+    assertEquals(origCreds.getClientEmail(), response.getUsername());
+    assertEquals(314159, response.getPayload().getBody().size());
   }
 
   /** Sends a unary rpc with raw oauth2 access token credentials. */

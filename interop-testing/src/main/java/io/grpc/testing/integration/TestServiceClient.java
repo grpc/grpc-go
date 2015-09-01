@@ -167,6 +167,7 @@ public class TestServiceClient {
           + "\n      empty_stream: A stream that has zero-messages in both directions"
           + "\n      service_account_creds: large_unary with service_account auth"
           + "\n      compute_engine_creds: large_unary with compute engine auth"
+          + "\n      jwt_token_creds: JWT-based auth"
           + "\n      oauth2_auth_token: raw oauth2 access token auth"
           + "\n      per_rpc_creds: per rpc raw oauth2 access token auth"
           + "\n      cancel_after_begin: cancel stream after starting it"
@@ -230,6 +231,9 @@ public class TestServiceClient {
       String jsonKey = Files.toString(new File(serviceAccountKeyFile), Charset.forName("UTF-8"));
       FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
       tester.serviceAccountCreds(jsonKey, credentialsStream, oauthScope);
+    } else if ("jwt_token_creds".equals(testCase)) {
+      FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
+      tester.jwtTokenCreds(credentialsStream);
     } else if ("oauth2_auth_token".equals(testCase)) {
       String jsonKey = Files.toString(new File(serviceAccountKeyFile), Charset.forName("UTF-8"));
       FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
