@@ -244,10 +244,13 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	authData := make(map[string]string)
 	for _, c := range t.authCreds {
-		// Generate the audience string.
+		// Construct URI required to get auth request metadata.
 		var port string
 		if pos := strings.LastIndex(t.target, ":"); pos != -1 {
-			port = ":" + t.target[pos+1:]
+			// Omit port if it is the default one.
+			if t.target[pos+1:] != "443" {
+				port = ":" + t.target[pos+1:]
+			}
 		}
 		pos := strings.LastIndex(callHdr.Method, "/")
 		if pos == -1 {
