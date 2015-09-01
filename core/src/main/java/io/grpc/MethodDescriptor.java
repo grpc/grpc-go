@@ -151,10 +151,10 @@ public class MethodDescriptor<RequestT, ResponseT> {
   private MethodDescriptor(MethodType type, String fullMethodName,
                            Marshaller<RequestT> requestMarshaller,
                            Marshaller<ResponseT> responseMarshaller) {
-    this.type = Preconditions.checkNotNull(type);
-    this.fullMethodName = fullMethodName;
-    this.requestMarshaller = requestMarshaller;
-    this.responseMarshaller = responseMarshaller;
+    this.type = Preconditions.checkNotNull(type, "type");
+    this.fullMethodName = Preconditions.checkNotNull(fullMethodName, "fullMethodName");
+    this.requestMarshaller = Preconditions.checkNotNull(requestMarshaller, "requestMarshaller");
+    this.responseMarshaller = Preconditions.checkNotNull(responseMarshaller, "responseMarshaller");
   }
 
   /**

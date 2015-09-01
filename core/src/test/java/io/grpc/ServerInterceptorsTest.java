@@ -234,8 +234,8 @@ public class ServerInterceptorsTest {
 
   @Test
   public void argumentsPassed() {
-    final MethodDescriptor<String, Integer> method2 =
-        MethodDescriptor.create(MethodType.UNKNOWN, "someOtherRandom/Method", null, null);
+    final MethodDescriptor<String, Integer> method2 = MethodDescriptor.create(
+        MethodType.UNKNOWN, "someOtherRandom/Method", requestMarshaller, responseMarshaller);
     @SuppressWarnings("unchecked")
     final ServerCall<Integer> call2 = mock(ServerCall.class);
     @SuppressWarnings("unchecked")
