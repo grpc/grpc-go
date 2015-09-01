@@ -1,4 +1,5 @@
 description = "gRPC: Testing"
 dependencies {
     compile project(':grpc-core')
+    compile project(':grpc-stub')
 }

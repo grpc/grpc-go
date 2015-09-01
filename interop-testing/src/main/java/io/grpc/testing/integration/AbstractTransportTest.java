@@ -65,7 +65,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
-import io.grpc.stub.StreamRecorder;
+import io.grpc.testing.StreamRecorder;
 import io.grpc.testing.TestUtils;
 import io.grpc.testing.integration.Messages.Payload;
 import io.grpc.testing.integration.Messages.PayloadType;

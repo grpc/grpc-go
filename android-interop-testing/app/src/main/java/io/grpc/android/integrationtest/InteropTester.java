@@ -44,8 +44,8 @@ import android.util.Log;
 import io.grpc.android.integrationtest.nano.Messages;
 import io.grpc.ChannelImpl;
 import io.grpc.stub.StreamObserver;
-import io.grpc.stub.StreamRecorder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
+import io.grpc.testing.StreamRecorder;
 
 import junit.framework.Assert;
 
