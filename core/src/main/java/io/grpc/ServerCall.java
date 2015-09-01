@@ -145,12 +145,12 @@ public abstract class ServerCall<ResponseT> {
   }
 
   /**
-   * Close the call with the provided status. No further sending or receiving will occur. If {@code
-   * status} is not equal to {@link Status#OK}, then the call is said to have failed.
+   * Close the call with the provided status. No further sending or receiving will occur. If {@link
+   * Status#isOk} is {@code false}, then the call is said to have failed.
    *
-   * <p>If {@code status} is not {@link Status#CANCELLED} and no errors or cancellations are known
-   * to have occurred, then a {@link Listener#onComplete} notification should be expected.
-   * Otherwise {@link Listener#onCancel} has been or will be called.
+   * <p>If no errors or cancellations are known to have occurred, then a {@link Listener#onComplete}
+   * notification should be expected, independent of {@code status}. Otherwise {@link
+   * Listener#onCancel} has been or will be called.
    *
    * @throws IllegalStateException if call is already {@code close}d
    */
