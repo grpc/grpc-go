@@ -49,6 +49,8 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -60,6 +62,7 @@ import java.io.InputStream;
  * Test for {@link AbstractClientStream}.  This class tries to test functionality in
  * AbstractClientStream, but not in any super classes.
  */
+@RunWith(JUnit4.class)
 public class AbstractClientStreamTest {
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
