@@ -88,6 +88,11 @@ public class ClientInterceptors {
         MethodDescriptor<ReqT, RespT> method, CallOptions callOptions) {
       return interceptor.interceptCall(method, callOptions, channel);
     }
+
+    @Override
+    public String authority() {
+      return channel.authority();
+    }
   }
 
   private static final ClientCall<Object, Object> NOOP_CALL = new ClientCall<Object, Object>() {

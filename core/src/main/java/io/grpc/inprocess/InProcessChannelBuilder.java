@@ -80,6 +80,11 @@ public class InProcessChannelBuilder extends AbstractChannelBuilder<InProcessCha
     }
 
     @Override
+    public String authority() {
+      return null;
+    }
+
+    @Override
     protected void deallocate() {
       // Do nothing.
     }

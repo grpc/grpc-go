@@ -186,6 +186,7 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     private final int flowControlWindow;
     private final ProtocolNegotiator negotiator;
     private final int maxMessageSize;
+    private final String authority;
 
     private NettyTransportFactory(SocketAddress serverAddress,
                                   Class<? extends Channel> channelType,
@@ -198,6 +199,14 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
       this.flowControlWindow = flowControlWindow;
       this.negotiator = negotiator;
       this.maxMessageSize = maxMessageSize;
+      if (serverAddress instanceof InetSocketAddress) {
+        InetSocketAddress address = (InetSocketAddress) serverAddress;
+        this.authority = address.getHostString() + ":" + address.getPort();
+      } else {
+        // Specialized address types are allowed to support custom Channel types so just assume
+        // their toString() values are valid :authority values
+        this.authority = serverAddress.toString();
+      }
 
       usingSharedGroup = group == null;
       if (usingSharedGroup) {
@@ -211,7 +220,12 @@ public final class NettyChannelBuilder extends AbstractChannelBuilder<NettyChann
     @Override
     public ClientTransport newClientTransport() {
       return new NettyClientTransport(serverAddress, channelType, group, negotiator,
-              flowControlWindow, maxMessageSize);
+              flowControlWindow, maxMessageSize, authority);
+    }
+
+    @Override
+    public String authority() {
+      return authority;
     }
 
     @Override

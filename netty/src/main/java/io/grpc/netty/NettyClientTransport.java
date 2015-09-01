@@ -64,7 +64,6 @@ import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.logging.LogLevel;
 import io.netty.util.AsciiString;
 
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.concurrent.Executor;
 
@@ -95,22 +94,14 @@ class NettyClientTransport implements ClientTransport {
 
   NettyClientTransport(SocketAddress address, Class<? extends Channel> channelType,
                        EventLoopGroup group, ProtocolNegotiator negotiator,
-                       int flowControlWindow, int maxMessageSize) {
+                       int flowControlWindow, int maxMessageSize, String authority) {
     Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
-
-    if (address instanceof InetSocketAddress) {
-      InetSocketAddress inetAddress = (InetSocketAddress) address;
-      authority = new AsciiString(inetAddress.getHostString() + ":" + inetAddress.getPort());
-    } else {
-      // Specialized address types are allowed to support custom Channel types so just assume their
-      // toString() values are valid :authority values
-      authority = new AsciiString(address.toString());
-    }
+    this.authority = new AsciiString(authority);
 
     handler = newHandler();
     negotiationHandler = negotiator.newHandler(handler);

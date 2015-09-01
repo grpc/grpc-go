@@ -201,6 +201,7 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
     private final SSLSocketFactory socketFactory;
     private final ConnectionSpec connectionSpec;
     private final int maxMessageSize;
+    private final String authority;
 
     private OkHttpTransportFactory(String host,
                                    int port,
@@ -215,6 +216,7 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
       this.socketFactory = socketFactory;
       this.connectionSpec = connectionSpec;
       this.maxMessageSize = maxMessageSize;
+      this.authority = authorityHost + ":" + port;
 
       usingSharedExecutor = executor == null;
       if (usingSharedExecutor) {
@@ -229,6 +231,11 @@ public final class OkHttpChannelBuilder extends AbstractChannelBuilder<OkHttpCha
     public ClientTransport newClientTransport() {
       return new OkHttpClientTransport(host, port, authorityHost, executor, socketFactory,
               connectionSpec, maxMessageSize);
+    }
+
+    @Override
+    public String authority() {
+      return authority;
     }
 
     @Override

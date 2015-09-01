@@ -168,6 +168,11 @@ public class ClientInterceptorsTest {
         order.add("channel");
         return (ClientCall<ReqT, RespT>) call;
       }
+
+      @Override
+      public String authority() {
+        return null;
+      }
     };
     ClientInterceptor interceptor1 = new ClientInterceptor() {
       @Override

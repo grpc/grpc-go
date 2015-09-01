@@ -59,4 +59,12 @@ public abstract class Channel {
    */
   public abstract <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
       MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions);
+
+  /**
+   * The authority of the destination this channel connects to. Typically this is in the format
+   * {@code host:port}.
+   *
+   * @return authority of remote, or {@code null}
+   */
+  public abstract String authority();
 }

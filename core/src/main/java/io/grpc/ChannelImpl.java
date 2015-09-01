@@ -283,6 +283,11 @@ public final class ChannelImpl extends Channel {
     return interceptorChannel.newCall(method, callOptions);
   }
 
+  @Override
+  public String authority() {
+    return interceptorChannel.authority();
+  }
+
   private ClientTransport obtainActiveTransport() {
     ClientTransport savedActiveTransport = activeTransport;
     // If we know there is an active transport and we are not in backoff mode, return quickly.
@@ -343,6 +348,11 @@ public final class ChannelImpl extends Channel {
           transportProvider,
           scheduledExecutor)
               .setUserAgent(userAgent);
+    }
+
+    @Override
+    public String authority() {
+      return transportFactory.authority();
     }
   }
 

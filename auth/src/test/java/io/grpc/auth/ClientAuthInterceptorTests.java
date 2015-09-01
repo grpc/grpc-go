@@ -34,6 +34,7 @@ package io.grpc.auth;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,6 +52,7 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
 
 import org.junit.Assert;
@@ -64,6 +66,7 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.Date;
 import java.util.concurrent.Executors;
 
@@ -82,6 +85,11 @@ public class ClientAuthInterceptorTests {
   Credentials credentials;
 
   @Mock
+  Marshaller<String> stringMarshaller;
+
+  @Mock
+  Marshaller<Integer> intMarshaller;
+
   MethodDescriptor<String, Integer> descriptor;
 
   @Mock
@@ -99,7 +107,10 @@ public class ClientAuthInterceptorTests {
   @Before
   public void startUp() throws IOException {
     MockitoAnnotations.initMocks(this);
+    descriptor = MethodDescriptor.create(
+        MethodDescriptor.MethodType.UNKNOWN, "a.service/method", stringMarshaller, intMarshaller);
     when(channel.newCall(same(descriptor), any(CallOptions.class))).thenReturn(call);
+    doReturn("localhost:443").when(channel).authority();
     interceptor = new ClientAuthInterceptor(credentials,
         Executors.newSingleThreadExecutor());
   }
@@ -111,7 +122,7 @@ public class ClientAuthInterceptorTests {
     values.put("Authorization", "token2");
     values.put("Extra-Authorization", "token3");
     values.put("Extra-Authorization", "token4");
-    when(credentials.getRequestMetadata()).thenReturn(Multimaps.asMap(values));
+    when(credentials.getRequestMetadata(any(URI.class))).thenReturn(Multimaps.asMap(values));
     ClientCall<String, Integer> interceptedCall =
         interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
     Metadata headers = new Metadata();
@@ -128,7 +139,7 @@ public class ClientAuthInterceptorTests {
 
   @Test
   public void testCredentialsThrows() throws IOException {
-    when(credentials.getRequestMetadata()).thenThrow(new IOException("Broken"));
+    when(credentials.getRequestMetadata(any(URI.class))).thenThrow(new IOException("Broken"));
     ClientCall<String, Integer> interceptedCall =
         interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
     Metadata headers = new Metadata();
@@ -159,5 +170,22 @@ public class ClientAuthInterceptorTests {
     Iterable<String> authorization = headers.getAll(AUTHORIZATION);
     Assert.assertArrayEquals(new String[]{"Bearer allyourbase"},
         Iterables.toArray(authorization, String.class));
+  }
+
+  @Test
+  public void verifyServiceUri() throws IOException {
+    ClientCall<String, Integer> interceptedCall;
+
+    doReturn("example.com:443").when(channel).authority();
+    interceptedCall = interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
+    interceptedCall.start(listener, new Metadata());
+    verify(credentials).getRequestMetadata(URI.create("https://example.com/a.service"));
+    interceptedCall.cancel();
+
+    doReturn("example.com:123").when(channel).authority();
+    interceptedCall = interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
+    interceptedCall.start(listener, new Metadata());
+    verify(credentials).getRequestMetadata(URI.create("https://example.com:123/a.service"));
+    interceptedCall.cancel();
   }
 }

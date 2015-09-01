@@ -35,4 +35,10 @@ package io.grpc.internal;
 public interface ClientTransportFactory extends ReferenceCounted {
   /** Creates an unstarted transport for exclusive use. */
   ClientTransport newClientTransport();
+
+  /**
+   * Returns the authority of the channel. Typically, this should be in the form {@code host:port}.
+   * Note that since there is not a scheme, there can't be a default port.
+   */
+  String authority();
 }

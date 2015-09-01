@@ -245,7 +245,8 @@ public class NettyClientTransportTest {
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator, int maxMsgSize) {
     NettyClientTransport transport = new NettyClientTransport(address, NioSocketChannel.class,
-            group, negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize);
+            group, negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize,
+            address.getHostString() + ":" + address.getPort());
     transports.add(transport);
     return transport;
   }
