@@ -188,7 +188,7 @@ static void PrintStub(
       interface_name += "BlockingServer";
       break;
     default:
-      FAIL << "Cannot determine class name for StubType: " << type;
+      GRPC_CODEGEN_FAIL << "Cannot determine class name for StubType: " << type;
   }
   bool impl;
   CallType call_type;
@@ -219,7 +219,7 @@ static void PrintStub(
       impl = true;
       break;
     default:
-      FAIL << "Cannot determine call type for StubType: " << type;
+      GRPC_CODEGEN_FAIL << "Cannot determine call type for StubType: " << type;
   }
   (*vars)["interface_name"] = interface_name;
   (*vars)["impl_name"] = impl_name;
@@ -300,9 +300,9 @@ static void PrintStub(
     switch (call_type) {
       case BLOCKING_CALL:
         // TODO(zhangkun83): decide the blocking server interface
-        CHECK(type != BLOCKING_SERVER_INTERFACE)
+        GRPC_CODEGEN_CHECK(type != BLOCKING_SERVER_INTERFACE)
             << "Blocking server interface is not available";
-        CHECK(!client_streaming)
+        GRPC_CODEGEN_CHECK(!client_streaming)
             << "Blocking client interface with client streaming is unavailable";
         if (server_streaming) {
           // Server streaming
@@ -333,7 +333,7 @@ static void PrintStub(
         }
         break;
       case FUTURE_CALL:
-        CHECK(!client_streaming && !server_streaming)
+        GRPC_CODEGEN_CHECK(!client_streaming && !server_streaming)
             << "Future interface doesn't support streaming. "
             << "client_streaming=" << client_streaming << ", "
             << "server_streaming=" << server_streaming;
@@ -349,7 +349,7 @@ static void PrintStub(
       p->Indent();
       switch (call_type) {
         case BLOCKING_CALL:
-          CHECK(!client_streaming)
+          GRPC_CODEGEN_CHECK(!client_streaming)
               << "Blocking client streaming interface is not available";
           if (server_streaming) {
             (*vars)["calls_method"] = "blockingServerStreamingCall";
@@ -388,7 +388,7 @@ static void PrintStub(
               "    channel.newCall($method_field_name$, callOptions), $params$);\n");
           break;
         case FUTURE_CALL:
-          CHECK(!client_streaming && !server_streaming)
+          GRPC_CODEGEN_CHECK(!client_streaming && !server_streaming)
               << "Future interface doesn't support streaming. "
               << "client_streaming=" << client_streaming << ", "
               << "server_streaming=" << server_streaming;

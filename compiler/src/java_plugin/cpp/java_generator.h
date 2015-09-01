@@ -27,12 +27,12 @@ class LogHelper {
 
 // Abort the program after logging the mesage if the given condition is not
 // true. Otherwise, do nothing.
-#define CHECK(x) !(x) && LogHelper(&std::cerr, true).get_os() \
+#define GRPC_CODEGEN_CHECK(x) !(x) && LogHelper(&std::cerr, true).get_os() \
                              << "CHECK FAILED: " << __FILE__ << ":" \
                              << __LINE__ << ": "
 
 // Abort the program after logging the mesage.
-#define FAIL CHECK(false)
+#define GRPC_CODEGEN_FAIL GRPC_CODEGEN_CHECK(false)
 
 using namespace std;
 
