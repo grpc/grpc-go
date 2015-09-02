@@ -62,6 +62,8 @@ public class Metadata {
 
   /**
    * All binary headers should have this suffix in their names. Vice versa.
+   *
+   * <p>Its value is {@code "-bin"}. An ASCII header's name must not end with this.
    */
   public static final String BINARY_HEADER_SUFFIX = "-bin";
 
@@ -386,22 +388,37 @@ public class Metadata {
 
   /**
    * Key for metadata entries. Allows for parsing and serialization of metadata.
+   *
+   * <h3>Valid characters in key names</h3>
+   *
+   * <p>Only the following ASCII characters are allowed in the names of keys:
+   * <ul>
+   *   <li>letters, i.e., {@code a-z} and {@code A-Z}</li>
+   *   <li>digits, i.e., {@code 0-9}</li>
+   *   <li>dash, i.e., {@code -}</li>
+   *   <li>underscore, i.e., {@code _}</li>
+   * </ul>
+   *
+   * <p>Note this has to be the subset of valid HTTP/2 token characters as defined in RFC7230
+   * Section 3.2.6</p>
    */
   public abstract static class Key<T> {
 
     /**
      * Creates a key for a binary header.
      *
-     * @param name must end with {@link #BINARY_HEADER_SUFFIX}
+     * @param name Must contain only the valid key characters as defined in the class comment. Must
+     *             end with {@link #BINARY_HEADER_SUFFIX}.
      */
     public static <T> Key<T> of(String name, BinaryMarshaller<T> marshaller) {
       return new BinaryKey<T>(name, marshaller);
     }
 
     /**
-     * Creates a key for a ASCII header.
+     * Creates a key for an ASCII header.
      *
-     * @param name must not end with {@link #BINARY_HEADER_SUFFIX}
+     * @param name Must contain only the valid key characters as defined in the class comment. Must
+     *             <b>not</b> end with {@link #BINARY_HEADER_SUFFIX}
      */
     public static <T> Key<T> of(String name, AsciiMarshaller<T> marshaller) {
       return new AsciiKey<T>(name, marshaller);
