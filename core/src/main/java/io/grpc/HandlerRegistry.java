@@ -41,32 +41,12 @@ import javax.annotation.concurrent.ThreadSafe;
 public abstract class HandlerRegistry {
 
   /**
-   * Lookup a {@link Method} by its fully-qualified name.
+   * Lookup a {@link ServerMethodDefinition} by its fully-qualified name.
    *
-   * @param methodName to lookup {@link Method} for.
+   * @param methodName to lookup {@link ServerMethodDefinition} for.
    * @return the resolved method or {@code null} if no method for that name exists.
    */
   @Nullable
-  public abstract Method lookupMethod(String methodName);
+  public abstract ServerMethodDefinition<?, ?> lookupMethod(String methodName);
 
-  /**
-   * A method belonging to a service to be exposed to remote callers.
-   */
-  public static final class Method {
-    private final ServerServiceDefinition serviceDef;
-    private final ServerMethodDefinition<?, ?> methodDef;
-
-    public Method(ServerServiceDefinition serviceDef, ServerMethodDefinition<?, ?> methodDef) {
-      this.serviceDef = serviceDef;
-      this.methodDef = methodDef;
-    }
-
-    public ServerServiceDefinition getServiceDefinition() {
-      return serviceDef;
-    }
-
-    public ServerMethodDefinition<?, ?> getMethodDefinition() {
-      return methodDef;
-    }
-  }
 }

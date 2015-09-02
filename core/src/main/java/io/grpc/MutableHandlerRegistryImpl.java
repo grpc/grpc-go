@@ -61,7 +61,7 @@ public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
 
   @Override
   @Nullable
-  public Method lookupMethod(String methodName) {
+  public ServerMethodDefinition<?, ?> lookupMethod(String methodName) {
     String serviceName = MethodDescriptor.extractFullServiceName(methodName);
     if (serviceName == null) {
       return null;
@@ -70,10 +70,6 @@ public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
     if (service == null) {
       return null;
     }
-    ServerMethodDefinition<?, ?> method = service.getMethod(methodName);
-    if (method == null) {
-      return null;
-    }
-    return new Method(service, method);
+    return service.getMethod(methodName);
   }
 }

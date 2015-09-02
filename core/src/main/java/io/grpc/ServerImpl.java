@@ -302,7 +302,7 @@ public final class ServerImpl extends Server {
           public void run() {
             ServerStreamListener listener = NOOP_LISTENER;
             try {
-              HandlerRegistry.Method method = registry.lookupMethod(methodName);
+              ServerMethodDefinition<?, ?> method = registry.lookupMethod(methodName);
               if (method == null) {
                 stream.close(
                     Status.UNIMPLEMENTED.withDescription("Method not found: " + methodName),
@@ -310,8 +310,7 @@ public final class ServerImpl extends Server {
                 timeout.cancel(true);
                 return;
               }
-              listener = startCall(stream, methodName, method.getMethodDefinition(), timeout,
-                  headers);
+              listener = startCall(stream, methodName, method, timeout, headers);
             } catch (Throwable t) {
               stream.close(Status.fromThrowable(t), new Metadata());
               timeout.cancel(true);
