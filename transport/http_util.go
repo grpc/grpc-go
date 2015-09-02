@@ -140,6 +140,11 @@ func newHPACKDecoder() *hpackDecoder {
 	d := &hpackDecoder{}
 	d.h = hpack.NewDecoder(http2InitHeaderTableSize, func(f hpack.HeaderField) {
 		switch f.Name {
+		case "content-type":
+			if !strings.Contains(f.Value, "application/grpc") {
+				d.err = StreamErrorf(codes.FailedPrecondition, "transport: received the unexpected header")
+				return
+			}
 		case "grpc-status":
 			code, err := strconv.Atoi(f.Value)
 			if err != nil {
