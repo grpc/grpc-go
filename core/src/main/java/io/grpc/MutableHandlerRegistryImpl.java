@@ -60,9 +60,12 @@ public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
     return services.remove(service.getName(), service);
   }
 
+  /**
+   * Note: This does not actually honor the authority provided.  It will, eventually in the future.
+   */
   @Override
   @Nullable
-  public ServerMethodDefinition<?, ?> lookupMethod(String methodName) {
+  public ServerMethodDefinition<?, ?> lookupMethod(String methodName, @Nullable String authority) {
     String serviceName = MethodDescriptor.extractFullServiceName(methodName);
     if (serviceName == null) {
       return null;

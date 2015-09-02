@@ -45,9 +45,23 @@ public abstract class HandlerRegistry {
    * Lookup a {@link ServerMethodDefinition} by its fully-qualified name.
    *
    * @param methodName to lookup {@link ServerMethodDefinition} for.
+   * @param authority the authority for the desired method (to do virtual hosting). If {@code null}
+   *        the first matching method will be returned.
    * @return the resolved method or {@code null} if no method for that name exists.
    */
   @Nullable
-  public abstract ServerMethodDefinition<?, ?> lookupMethod(String methodName);
+  public abstract ServerMethodDefinition<?, ?> lookupMethod(
+      String methodName, @Nullable String authority);
+
+  /**
+   * Lookup a {@link ServerMethodDefinition} by its fully-qualified name.
+   *
+   * @param methodName to lookup {@link ServerMethodDefinition} for.
+   * @return the resolved method or {@code null} if no method for that name exists.
+   */
+  @Nullable
+  public final ServerMethodDefinition<?, ?> lookupMethod(String methodName) {
+    return lookupMethod(methodName, null);
+  }
 
 }
