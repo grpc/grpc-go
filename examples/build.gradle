@@ -59,15 +59,10 @@ applicationDistribution.into("bin") {
     fileMode = 0755
 }
 
-// Allow intellij projects to refer to generated-sources
+// Let intellij projects refer to generated code
 idea {
     module {
-        // The whole build dir is excluded by default, but we need build/generated-sources,
-        // which contains the generated proto classes.
-        excludeDirs = [file('.gradle')]
-        if (buildDir.exists()) {
-            excludeDirs += files(buildDir.listFiles())
-            excludeDirs -= file("$buildDir/generated-sources")
-        }
+        sourceDirs += file("${projectDir}/src/generated/main/java");
+        sourceDirs += file("${projectDir}/src/generated/main/grpc");
     }
 }
