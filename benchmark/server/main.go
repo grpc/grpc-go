@@ -21,15 +21,15 @@ func main() {
 	go func() {
 		lis, err := net.Listen("tcp", ":0")
 		if err != nil {
-			grpclog.Fatalf("Failed to listen: %v", err)
+			grpclog.Err(err).Fatal("Failed to listen")
 		}
-		grpclog.Println("Server profiling address: ", lis.Addr().String())
+		grpclog.With("addr", lis.Addr()).Print("Server profiling")
 		if err := http.Serve(lis, nil); err != nil {
-			grpclog.Fatalf("Failed to serve: %v", err)
+			grpclog.Err(err).Fatal("Failed to serve")
 		}
 	}()
 	addr, stopper := benchmark.StartServer(":0") // listen on all interfaces
-	grpclog.Println("Server Address: ", addr)
+	grpclog.With("addr", addr).Print("Server benchmark")
 	<-time.After(time.Duration(*duration) * time.Second)
 	stopper()
 }

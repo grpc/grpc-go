@@ -86,7 +86,7 @@ func closeLoopUnary() {
 	close(ch)
 	wg.Wait()
 	conn.Close()
-	grpclog.Println(s.String())
+	grpclog.Print(s.String())
 
 }
 
@@ -94,7 +94,7 @@ func closeLoopStream() {
 	s, conn, tc := buildConnection()
 	stream, err := tc.StreamingCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+		grpclog.Err(err).With("tc", tc).Fatal("StreamingCall(_)")
 	}
 	for i := 0; i < 100; i++ {
 		streamCaller(tc, stream)
@@ -136,7 +136,7 @@ func closeLoopStream() {
 	close(ch)
 	wg.Wait()
 	conn.Close()
-	grpclog.Println(s.String())
+	grpclog.Print(s.String())
 }
 
 func main() {
@@ -145,11 +145,12 @@ func main() {
 	go func() {
 		lis, err := net.Listen("tcp", ":0")
 		if err != nil {
-			grpclog.Fatalf("Failed to listen: %v", err)
+			grpclog.Err(err).Fatal("Failed to listen")
 		}
-		grpclog.Println("Client profiling address: ", lis.Addr().String())
+		log := grpclog.With("addr", lis.Addr())
+		log.Print("Client profiling address")
 		if err := http.Serve(lis, nil); err != nil {
-			grpclog.Fatalf("Failed to serve: %v", err)
+			log.Err(err).Fatal("Failed to serve")
 		}
 	}()
 	switch *rpcType {

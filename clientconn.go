@@ -190,7 +190,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
 			if err := cc.resetTransport(false); err != nil {
-				grpclog.Printf("Failed to dial %s: %v; please retry.", target, err)
+				grpclog.Err(err).With("target", target).Print("failed to dial, please retry")
 				cc.Close()
 				return
 			}
@@ -353,7 +353,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			closeTransport = false
 			time.Sleep(sleepTime)
 			retries++
-			grpclog.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
+			grpclog.Err(err).With("target", cc.target).Print("ClientConn.resetTransport failed to create client transport, reconnecting")
 			continue
 		}
 		cc.mu.Lock()
@@ -392,7 +392,7 @@ func (cc *ClientConn) transportMonitor() {
 			cc.mu.Unlock()
 			if err := cc.resetTransport(true); err != nil {
 				// The ClientConn is closing.
-				grpclog.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
+				grpclog.Err(err).Print("ClientConn.transportMonitor exits")
 				return
 			}
 			continue

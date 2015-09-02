@@ -159,10 +159,10 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 func (s *routeGuideServer) loadFeatures(filePath string) {
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		grpclog.Fatalf("Failed to load default features: %v", err)
+		grpclog.Err(err).Fatal("Failed to load default features")
 	}
 	if err := json.Unmarshal(file, &s.savedFeatures); err != nil {
-		grpclog.Fatalf("Failed to load default features: %v", err)
+		grpclog.Err(err).Fatal("Failed to load default features")
 	}
 }
 
@@ -223,13 +223,13 @@ func main() {
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		grpclog.Err(err).Fatal("failed to listen")
 	}
 	var opts []grpc.ServerOption
 	if *tls {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			grpclog.Fatalf("Failed to generate credentials %v", err)
+			grpclog.Err(err).Fatal("failed to generate credentials")
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}

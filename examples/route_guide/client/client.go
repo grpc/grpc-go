@@ -59,20 +59,23 @@ var (
 
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point) {
-	grpclog.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
+	grpclog.With(
+		"lat", point.Latitude,
+		"long", point.Longitude,
+	).Print("Getting feature for point")
 	feature, err := client.GetFeature(context.Background(), point)
 	if err != nil {
-		grpclog.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
+		grpclog.Err(err).With("client", client).Fatal("GetFeatures()")
 	}
-	grpclog.Println(feature)
+	grpclog.With("feature", feature).Print("got feature")
 }
 
 // printFeatures lists all the features within the given bounding Rectangle.
 func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
-	grpclog.Printf("Looking for features within %v", rect)
+	grpclog.With("rect", rect).Print("Looking for features within rectangle")
 	stream, err := client.ListFeatures(context.Background(), rect)
 	if err != nil {
-		grpclog.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+		grpclog.Err(err).With("client", client).Fatal("ListFeatures(_)")
 	}
 	for {
 		feature, err := stream.Recv()
@@ -80,9 +83,9 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 			break
 		}
 		if err != nil {
-			grpclog.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+			grpclog.Err(err).With("client", client).Fatal("ListFeatures(_)")
 		}
-		grpclog.Println(feature)
+		grpclog.With("feature", feature).Print("got feature")
 	}
 }
 
@@ -95,21 +98,24 @@ func runRecordRoute(client pb.RouteGuideClient) {
 	for i := 0; i < pointCount; i++ {
 		points = append(points, randomPoint(r))
 	}
-	grpclog.Printf("Traversing %d points.", len(points))
+	grpclog.With("points", len(points)).Print("Traversing points")
 	stream, err := client.RecordRoute(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
+		grpclog.Err(err).With("client", client).Fatal("RecordRoute(_)")
 	}
 	for _, point := range points {
 		if err := stream.Send(point); err != nil {
-			grpclog.Fatalf("%v.Send(%v) = %v", stream, point, err)
+			grpclog.Err(err).With(
+				"stream", stream,
+				"point", point,
+			).Fatal("Send(_)")
 		}
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		grpclog.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
+		grpclog.Err(err).With("stream", stream).Fatal("CloseAndRecv(_)")
 	}
-	grpclog.Printf("Route summary: %v", reply)
+	grpclog.With("reply", reply).Print("Route summary")
 }
 
 // runRouteChat receives a sequence of route notes, while sending notes for various locations.
@@ -124,7 +130,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 	}
 	stream, err := client.RouteChat(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.RouteChat(_) = _, %v", client, err)
+		grpclog.Err(err).With("client", client).Fatal("RouteChat(_)")
 	}
 	waitc := make(chan struct{})
 	go func() {
@@ -136,14 +142,18 @@ func runRouteChat(client pb.RouteGuideClient) {
 				return
 			}
 			if err != nil {
-				grpclog.Fatalf("Failed to receive a note : %v", err)
+				grpclog.Err(err).Fatal("Failed to receive a note")
 			}
-			grpclog.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
+			grpclog.With(
+				"message", in.Message,
+				"lat", in.Location.Latitude,
+				"long", in.Location.Longitude,
+			).Print("Got message at location")
 		}
 	}()
 	for _, note := range notes {
 		if err := stream.Send(note); err != nil {
-			grpclog.Fatalf("Failed to send a note: %v", err)
+			grpclog.Err(err).Fatal("Failed to send a note")
 		}
 	}
 	stream.CloseSend()
@@ -169,7 +179,7 @@ func main() {
 			var err error
 			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
 			if err != nil {
-				grpclog.Fatalf("Failed to create TLS credentials %v", err)
+				grpclog.Err(err).Fatal("Failed to create TLS credentials")
 			}
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
@@ -180,7 +190,7 @@ func main() {
 	}
 	conn, err := grpc.Dial(*serverAddr, opts...)
 	if err != nil {
-		grpclog.Fatalf("fail to dial: %v", err)
+		grpclog.Err(err).Fatal("fail to dial")
 	}
 	defer conn.Close()
 	client := pb.NewRouteGuideClient(conn)

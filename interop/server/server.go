@@ -193,13 +193,13 @@ func main() {
 	p := strconv.Itoa(*port)
 	lis, err := net.Listen("tcp", ":"+p)
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		grpclog.Err(err).Fatal("Failed to listen")
 	}
 	var opts []grpc.ServerOption
 	if *useTLS {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			grpclog.Fatalf("Failed to generate credentials %v", err)
+			grpclog.Err(err).Fatal("Failed to generate credentials")
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
