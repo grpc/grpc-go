@@ -68,8 +68,9 @@ public class Metadata {
   /**
    * Simple metadata marshaller that encodes strings as is.
    *
-   * <p>This should be used with ASCII strings that only contain printable characters and space.
-   * Otherwise the output may be considered invalid and discarded by the transport.
+   * <p>This should be used with ASCII strings that only contain the characters listed in the class
+   * comment of {@link AsciiMarshaller}. Otherwise the output may be considered invalid and
+   * discarded by the transport, or the call may fail.
    */
   public static final AsciiMarshaller<String> ASCII_STRING_MARSHALLER =
       new AsciiMarshaller<String>() {
@@ -230,8 +231,9 @@ public class Metadata {
    * <p>It produces serialized names and values interleaved. result[i*2] are names, while
    * result[i*2+1] are values.
    *
-   * <p>Names are ASCII string bytes. If the name ends with "-bin", the value can be raw binary.
-   * Otherwise, the value must be printable ASCII characters or space.
+   * <p>Names are ASCII string bytes that contains only the characters listed in the class comment
+   * of {@link Key}. If the name ends with {@code "-bin"}, the value can be raw binary.  Otherwise,
+   * the value must contain only characters listed in the class comments of {@link AsciiMarshaller}
    *
    * <p>The returned byte arrays <em>must not</em> be modified.
    *
@@ -354,12 +356,19 @@ public class Metadata {
 
   /**
    * Marshaller for metadata values that are serialized into ASCII strings that contain only
-   * printable characters and space.
+   * following characters:
+   * <ul>
+   *   <li>Space: {@code 0x20}, but must not be at the beginning or at the end of the value.</li>
+   *   <li>ASCII visible characters ({@code 0x21-0x7E}), but excluding comma ({@code ",", 0x2C}).
+   * </ul>
+   * <p>Note this has to be the subset of valid characters in {@code field-content} from RFC 7230
+   * Section 3.2.
    */
   public interface AsciiMarshaller<T> {
     /**
-     * Serialize a metadata value to a ASCII string that contains only printable characters and
-     * space.
+     * Serialize a metadata value to a ASCII string that contains only the characters listed in the
+     * class comment of {@link AsciiMarshaller}. Otherwise the output may be considered invalid and
+     * discarded by the transport, or the call may fail.
      *
      * @param value to serialize
      * @return serialized version of value, or null if value cannot be transmitted.
