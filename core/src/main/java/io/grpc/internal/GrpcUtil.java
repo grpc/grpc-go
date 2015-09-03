@@ -48,7 +48,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
 
 import javax.annotation.Nullable;
 
@@ -305,7 +304,9 @@ public final class GrpcUtil {
         @Override
         public ExecutorService create() {
           return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
-              .setNameFormat(name + "-%d").build());
+              .setDaemon(true)
+              .setNameFormat(name + "-%d")
+              .build());
         }
 
         @Override
@@ -326,14 +327,10 @@ public final class GrpcUtil {
       new Resource<ScheduledExecutorService>() {
         @Override
         public ScheduledExecutorService create() {
-          return Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-              Thread thread = new Thread(r);
-              thread.setDaemon(true);
-              return thread;
-            }
-          });
+          return Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder()
+              .setDaemon(true)
+              .setNameFormat("grpc-timer-%d")
+              .build());
         }
 
         @Override
