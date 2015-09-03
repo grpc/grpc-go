@@ -85,7 +85,7 @@ class InProcessTransport implements ServerTransport, ClientTransport {
     if (serverTransportListener == null) {
       shutdownStatus = Status.UNAVAILABLE.withDescription("Could not find server: " + name);
       final Status localShutdownStatus = shutdownStatus;
-      new Thread(new Runnable() {
+      Thread shutdownThread = new Thread(new Runnable() {
         @Override
         public void run() {
           synchronized (InProcessTransport.this) {
@@ -93,16 +93,22 @@ class InProcessTransport implements ServerTransport, ClientTransport {
             notifyTerminated();
           }
         }
-      }).start();
+      });
+      shutdownThread.setDaemon(true);
+      shutdownThread.setName("grpc-inprocess-shutdown");
+      shutdownThread.start();
     }
-    new Thread(new Runnable() {
+    Thread readyThread = new Thread(new Runnable() {
       @Override
       public void run() {
         synchronized (InProcessTransport.this) {
           clientTransportListener.transportReady();
         }
       }
-    }).start();
+    });
+    readyThread.setDaemon(true);
+    readyThread.setName("grpc-inprocess-ready");
+    readyThread.start();
   }
 
   @Override
