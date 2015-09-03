@@ -307,37 +307,6 @@ public class Metadata {
   }
 
   /**
-   * Concrete instance for metadata attached to the start of a call.
-   *
-   * @deprecated use Metadata instead.
-   */
-  @Deprecated
-  public static class Headers extends Metadata {
-    /**
-     * Called by the application layer to construct headers prior to passing them to the
-     * transport for serialization.
-     */
-    public Headers() {
-    }
-  }
-
-  /**
-   * Concrete instance for metadata attached to the end of the call. Only provided by
-   * servers.
-   *
-   * @deprecated use Metadata instead.
-   */
-  @Deprecated
-  public static class Trailers extends Metadata {
-    /**
-     * Called by the application layer to construct trailers prior to passing them to the
-     * transport for serialization.
-     */
-    public Trailers() {
-    }
-  }
-
-  /**
    * Marshaller for metadata values that are serialized into raw binary.
    */
   public interface BinaryMarshaller<T> {
