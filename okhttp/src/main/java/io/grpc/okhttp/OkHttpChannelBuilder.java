@@ -49,6 +49,7 @@ import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -96,7 +97,7 @@ public final class OkHttpChannelBuilder extends
     return new OkHttpChannelBuilder(host, port);
   }
 
-  private ExecutorService transportExecutor;
+  private Executor transportExecutor;
   private final String host;
   private final int port;
   private String authorityHost;
@@ -117,7 +118,7 @@ public final class OkHttpChannelBuilder extends
    * <p>The channel does not take ownership of the given executor. It is the caller' responsibility
    * to shutdown the executor when appropriate.
    */
-  public OkHttpChannelBuilder transportExecutor(@Nullable ExecutorService transportExecutor) {
+  public OkHttpChannelBuilder transportExecutor(@Nullable Executor transportExecutor) {
     this.transportExecutor = transportExecutor;
     return this;
   }
@@ -200,7 +201,7 @@ public final class OkHttpChannelBuilder extends
     private final String host;
     private final int port;
     private final String authorityHost;
-    private final ExecutorService executor;
+    private final Executor executor;
     private final boolean usingSharedExecutor;
     private final SSLSocketFactory socketFactory;
     private final ConnectionSpec connectionSpec;
@@ -210,7 +211,7 @@ public final class OkHttpChannelBuilder extends
     private OkHttpTransportFactory(String host,
                                    int port,
                                    String authorityHost,
-                                   ExecutorService executor,
+                                   Executor executor,
                                    SSLSocketFactory socketFactory,
                                    ConnectionSpec connectionSpec,
                                    int maxMessageSize) {
@@ -245,7 +246,7 @@ public final class OkHttpChannelBuilder extends
     @Override
     protected void deallocate() {
       if (usingSharedExecutor) {
-        SharedResourceHolder.release(SHARED_EXECUTOR, executor);
+        SharedResourceHolder.release(SHARED_EXECUTOR, (ExecutorService) executor);
       }
     }
   }

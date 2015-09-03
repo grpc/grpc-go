@@ -32,7 +32,7 @@
 package io.grpc;
 
 import java.util.List;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 
 /**
  * A builder for {@link ManagedChannel} instances.
@@ -50,7 +50,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * <p>The channel won't take ownership of the given executor. It's caller's responsibility to
    * shut down the executor when it's desired.
    */
-  public abstract T executor(ExecutorService executor);
+  public abstract T executor(Executor executor);
 
   /**
    * Adds interceptors that will be called before the channel performs its real work. This is

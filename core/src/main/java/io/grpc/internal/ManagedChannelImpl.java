@@ -67,7 +67,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
   private static final Logger log = Logger.getLogger(ManagedChannelImpl.class.getName());
 
   private final ClientTransportFactory transportFactory;
-  private final ExecutorService executor;
+  private final Executor executor;
   private final boolean usingSharedExecutor;
   private final String userAgent;
   private final Object lock = new Object();
@@ -114,7 +114,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
     }
   };
 
-  ManagedChannelImpl(ClientTransportFactory transportFactory, @Nullable ExecutorService executor,
+  ManagedChannelImpl(ClientTransportFactory transportFactory, @Nullable Executor executor,
       @Nullable String userAgent, List<ClientInterceptor> interceptors) {
     this.transportFactory = transportFactory;
     this.userAgent = userAgent;
@@ -387,7 +387,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
    */
   private void onChannelTerminated() {
     if (usingSharedExecutor) {
-      SharedResourceHolder.release(GrpcUtil.SHARED_CHANNEL_EXECUTOR, executor);
+      SharedResourceHolder.release(GrpcUtil.SHARED_CHANNEL_EXECUTOR, (ExecutorService) executor);
     }
     // Release the transport factory so that it can deallocate any resources.
     transportFactory.release();

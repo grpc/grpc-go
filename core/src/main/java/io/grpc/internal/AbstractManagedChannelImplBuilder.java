@@ -38,7 +38,7 @@ import io.grpc.ManagedChannelBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
 
@@ -51,14 +51,14 @@ public abstract class AbstractManagedChannelImplBuilder
         <T extends AbstractManagedChannelImplBuilder<T>> extends ManagedChannelBuilder<T> {
 
   @Nullable
-  private ExecutorService executor;
+  private Executor executor;
   private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
 
   @Nullable
   private String userAgent;
 
   @Override
-  public final T executor(ExecutorService executor) {
+  public final T executor(Executor executor) {
     this.executor = executor;
     return thisT();
   }

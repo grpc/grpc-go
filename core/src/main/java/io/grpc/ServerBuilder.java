@@ -31,7 +31,7 @@
 
 package io.grpc;
 
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
 
@@ -50,7 +50,7 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * <p>The server won't take ownership of the given executor. It's caller's responsibility to
    * shut down the executor when it's desired.
    */
-  public abstract T executor(@Nullable ExecutorService executor);
+  public abstract T executor(@Nullable Executor executor);
 
   /**
    * Adds a service implementation to the handler registry.

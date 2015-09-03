@@ -39,7 +39,7 @@ import io.grpc.okhttp.NegotiationType;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 
 import java.util.List;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 
 /**
  * A {@link io.grpc.ManagedChannelBuilder} that provides a stable interface for producing
@@ -77,7 +77,7 @@ public class AndroidChannelBuilder extends ManagedChannelBuilder<AndroidChannelB
   }
 
   @Override
-  public AndroidChannelBuilder executor(ExecutorService executor) {
+  public AndroidChannelBuilder executor(Executor executor) {
     baseBuilder.executor(executor);
     return this;
   }

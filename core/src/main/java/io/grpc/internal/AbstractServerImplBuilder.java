@@ -40,7 +40,7 @@ import io.grpc.MutableHandlerRegistryImpl;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerServiceDefinition;
 
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
 
@@ -54,7 +54,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   private final HandlerRegistry registry;
   @Nullable
-  private ExecutorService executor;
+  private Executor executor;
 
   /**
    * Constructs using a given handler registry.
@@ -71,7 +71,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   }
 
   @Override
-  public final T executor(@Nullable ExecutorService executor) {
+  public final T executor(@Nullable Executor executor) {
     this.executor = executor;
     return thisT();
   }
