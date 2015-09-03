@@ -361,6 +361,7 @@ public class Metadata {
    *   <li>Space: {@code 0x20}, but must not be at the beginning or at the end of the value.</li>
    *   <li>ASCII visible characters ({@code 0x21-0x7E}), but excluding comma ({@code ",", 0x2C}).
    * </ul>
+   *
    * <p>Note this has to be the subset of valid characters in {@code field-content} from RFC 7230
    * Section 3.2.
    */
