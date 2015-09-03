@@ -55,9 +55,24 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   /**
    * Adds interceptors that will be called before the channel performs its real work. This is
    * functionally equivalent to using {@link ClientInterceptors#intercept(Channel, List)}, but while
-   * still having access to the original {@code ChannelImpl}.
+   * still having access to the original {@code ManagedChannel}.
    */
   public abstract T intercept(List<ClientInterceptor> interceptors);
+
+  /**
+   * Adds interceptors that will be called before the channel performs its real work. This is
+   * functionally equivalent to using {@link ClientInterceptors#intercept(Channel,
+   * ClientInterceptor...)}, but while still having access to the original {@code ManagedChannel}.
+   */
+  public abstract T intercept(ClientInterceptor... interceptors);
+
+  /**
+   * Provides a custom {@code User-Agent} for the application.
+   *
+   * <p>It's an optional parameter. If provided, the given agent will be prepended by the
+   * grpc {@code User-Agent}.
+   */
+  public abstract T userAgent(String userAgent);
 
   /**
    * Builds a channel using the given parameters.

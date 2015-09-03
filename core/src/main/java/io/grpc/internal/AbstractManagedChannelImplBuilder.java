@@ -57,35 +57,19 @@ public abstract class AbstractManagedChannelImplBuilder
   @Nullable
   private String userAgent;
 
-  /**
-   * Provides a custom executor.
-   *
-   * <p>It's an optional parameter. If the user has not provided an executor when the channel is
-   * built, the builder will use a static cached thread pool.
-   *
-   * <p>The channel won't take ownership of the given executor. It's caller's responsibility to
-   * shut down the executor when it's desired.
-   */
+  @Override
   public final T executor(ExecutorService executor) {
     this.executor = executor;
     return thisT();
   }
 
-  /**
-   * Adds interceptors that will be called before the channel performs its real work. This is
-   * functionally equivalent to using {@link io.grpc.ClientInterceptors#intercept(io.grpc.Channel,
-   * List)}, but while still having access to the original {@code ChannelImpl}.
-   */
+  @Override
   public final T intercept(List<ClientInterceptor> interceptors) {
     this.interceptors.addAll(interceptors);
     return thisT();
   }
 
-  /**
-   * Adds interceptors that will be called before the channel performs its real work. This is
-   * functionally equivalent to using {@link io.grpc.ClientInterceptors#intercept(io.grpc.Channel,
-   * ClientInterceptor...)}, but while still having access to the original {@code ChannelImpl}.
-   */
+  @Override
   public final T intercept(ClientInterceptor... interceptors) {
     return intercept(Arrays.asList(interceptors));
   }
@@ -96,20 +80,13 @@ public abstract class AbstractManagedChannelImplBuilder
     return thisT;
   }
 
-  /**
-   * Provides a custom {@code User-Agent} for the application.
-   *
-   * <p>It's an optional parameter. If provided, the given agent will be prepended by the
-   * grpc {@code User-Agent}.
-   */
+  @Override
   public final T userAgent(String userAgent) {
     this.userAgent = userAgent;
     return thisT();
   }
 
-  /**
-   * Builds a channel using the given parameters.
-   */
+  @Override
   public ManagedChannelImpl build() {
     ClientTransportFactory transportFactory = buildTransportFactory();
     return new ManagedChannelImpl(transportFactory, executor, userAgent, interceptors);
