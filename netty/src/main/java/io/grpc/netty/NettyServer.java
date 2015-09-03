@@ -48,6 +48,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
+import io.netty.util.AbstractReferenceCounted;
+import io.netty.util.ReferenceCounted;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -74,6 +76,7 @@ public class NettyServer implements Server {
   private Channel channel;
   private final int flowControlWindow;
   private final int maxMessageSize;
+  private final ReferenceCounted eventLoopReferenceCounter = new EventLoopReferenceCounter();
 
   NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
               @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
@@ -108,6 +111,12 @@ public class NettyServer implements Server {
     b.childHandler(new ChannelInitializer<Channel>() {
       @Override
       public void initChannel(Channel ch) throws Exception {
+        eventLoopReferenceCounter.retain();
+        ch.closeFuture().addListener(new ChannelFutureListener() {
+          public void operationComplete(ChannelFuture future) {
+            eventLoopReferenceCounter.release();
+          }
+        });
         NettyServerTransport transport
             = new NettyServerTransport(ch, sslContext, maxStreamsPerConnection, flowControlWindow,
                 maxMessageSize);
@@ -142,7 +151,7 @@ public class NettyServer implements Server {
           log.log(Level.WARNING, "Error shutting down server", future.cause());
         }
         listener.serverShutdown();
-        releaseSharedGroups();
+        eventLoopReferenceCounter.release();
       }
     });
   }
@@ -156,20 +165,28 @@ public class NettyServer implements Server {
     }
   }
 
-  private void releaseSharedGroups() {
-    try {
-      if (usingSharedBossGroup && bossGroup != null) {
-        SharedResourceHolder.release(Utils.DEFAULT_BOSS_EVENT_LOOP_GROUP, bossGroup);
-      }
-    } finally {
-      bossGroup = null;
+  class EventLoopReferenceCounter extends AbstractReferenceCounted {
+    @Override
+    protected void deallocate() {
       try {
-        if (usingSharedWorkerGroup && workerGroup != null) {
-          SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, workerGroup);
+        if (usingSharedBossGroup && bossGroup != null) {
+          SharedResourceHolder.release(Utils.DEFAULT_BOSS_EVENT_LOOP_GROUP, bossGroup);
         }
       } finally {
-        workerGroup = null;
+        bossGroup = null;
+        try {
+          if (usingSharedWorkerGroup && workerGroup != null) {
+            SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, workerGroup);
+          }
+        } finally {
+          workerGroup = null;
+        }
       }
+    }
+
+    @Override
+    public ReferenceCounted touch(Object hint) {
+      return this;
     }
   }
 }
