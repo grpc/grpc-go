@@ -26,8 +26,8 @@ public class ReconnectServiceGrpc {
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
               "grpc.testing.ReconnectService", "Start"),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()));
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       io.grpc.testing.integration.Messages.ReconnectInfo> METHOD_STOP =
@@ -35,8 +35,8 @@ public class ReconnectServiceGrpc {
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
               "grpc.testing.ReconnectService", "Stop"),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.ReconnectInfo.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.ReconnectInfo.getDefaultInstance()));
 
   public static ReconnectServiceStub newStub(io.grpc.Channel channel) {
     return new ReconnectServiceStub(channel);

@@ -26,8 +26,8 @@ public class UnimplementedServiceGrpc {
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
               "grpc.testing.UnimplementedService", "UnimplementedCall"),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()));
 
   public static UnimplementedServiceStub newStub(io.grpc.Channel channel) {
     return new UnimplementedServiceStub(channel);

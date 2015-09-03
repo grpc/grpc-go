@@ -26,8 +26,8 @@ public class GreeterGrpc {
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
               "helloworld.Greeter", "SayHello"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloResponse.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloRequest.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloResponse.getDefaultInstance()));
 
   public static GreeterStub newStub(io.grpc.Channel channel) {
     return new GreeterStub(channel);

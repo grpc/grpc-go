@@ -26,8 +26,8 @@ public class RouteGuideGrpc {
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
               "routeguide.RouteGuide", "GetFeature"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.getDefaultInstance()));
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Rectangle,
       io.grpc.examples.routeguide.Feature> METHOD_LIST_FEATURES =
@@ -35,8 +35,8 @@ public class RouteGuideGrpc {
           io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING,
           generateFullMethodName(
               "routeguide.RouteGuide", "ListFeatures"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Rectangle.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Rectangle.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.getDefaultInstance()));
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Point,
       io.grpc.examples.routeguide.RouteSummary> METHOD_RECORD_ROUTE =
@@ -44,8 +44,8 @@ public class RouteGuideGrpc {
           io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING,
           generateFullMethodName(
               "routeguide.RouteGuide", "RecordRoute"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteSummary.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteSummary.getDefaultInstance()));
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.RouteNote,
       io.grpc.examples.routeguide.RouteNote> METHOD_ROUTE_CHAT =
@@ -53,8 +53,8 @@ public class RouteGuideGrpc {
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
           generateFullMethodName(
               "routeguide.RouteGuide", "RouteChat"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.getDefaultInstance()));
 
   public static RouteGuideStub newStub(io.grpc.Channel channel) {
     return new RouteGuideStub(channel);

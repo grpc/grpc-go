@@ -26,8 +26,8 @@ public class TestServiceGrpc {
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
               "grpc.testing.TestService", "UnaryCall"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.getDefaultInstance()));
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.SimpleRequest,
       io.grpc.testing.SimpleResponse> METHOD_STREAMING_CALL =
@@ -35,8 +35,8 @@ public class TestServiceGrpc {
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
           generateFullMethodName(
               "grpc.testing.TestService", "StreamingCall"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleRequest.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.SimpleResponse.getDefaultInstance()));
 
   public static TestServiceStub newStub(io.grpc.Channel channel) {
     return new TestServiceStub(channel);

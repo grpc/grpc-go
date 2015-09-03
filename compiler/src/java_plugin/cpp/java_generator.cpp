@@ -138,8 +138,8 @@ static void PrintMethodFields(
           "        $MethodType$.$method_type$,\n"
           "        generateFullMethodName(\n"
           "            \"$Package$$service_name$\", \"$method_name$\"),\n"
-          "        $ProtoUtils$.marshaller($input_type$.parser()),\n"
-          "        $ProtoUtils$.marshaller($output_type$.parser()));\n");
+          "        $ProtoUtils$.marshaller($input_type$.getDefaultInstance()),\n"
+          "        $ProtoUtils$.marshaller($output_type$.getDefaultInstance()));\n");
     }
   }
   p->Print("\n");

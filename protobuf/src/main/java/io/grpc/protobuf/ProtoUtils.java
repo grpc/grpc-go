@@ -48,8 +48,11 @@ import java.io.InputStream;
  */
 public class ProtoUtils {
 
-  /** Adapt a {@code Parser} to a {@code Marshaller}. */
-  public static <T extends MessageLite> Marshaller<T> marshaller(final Parser<T> parser) {
+  /** Create a {@code Marshaller} for protos of the same type as {@code defaultInstance}. */
+  public static <T extends MessageLite> Marshaller<T> marshaller(final T defaultInstance) {
+    Parser<?> parserGeneric = defaultInstance.getParserForType();
+    @SuppressWarnings("unchecked")
+    final Parser<T> parser = (Parser<T>) parserGeneric;
     return new Marshaller<T>() {
       @Override
       public InputStream stream(T value) {

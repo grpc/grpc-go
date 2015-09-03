@@ -52,7 +52,7 @@ import java.util.Arrays;
 /** Unit tests for {@link ProtoUtils}. */
 @RunWith(JUnit4.class)
 public class ProtoUtilsTest {
-  private Marshaller<Type> marshaller = ProtoUtils.marshaller(Type.parser());
+  private Marshaller<Type> marshaller = ProtoUtils.marshaller(Type.getDefaultInstance());
   private Type proto = Type.newBuilder().setName("name").build();
 
   @Test
@@ -69,7 +69,7 @@ public class ProtoUtilsTest {
 
   @Test
   public void testMismatch() throws Exception {
-    Marshaller<Enum> enumMarshaller = ProtoUtils.marshaller(Enum.parser());
+    Marshaller<Enum> enumMarshaller = ProtoUtils.marshaller(Enum.getDefaultInstance());
     // Enum's name and Type's name are both strings with tag 1.
     Enum altProto = Enum.newBuilder().setName(proto.getName()).build();
     assertEquals(proto, marshaller.parse(enumMarshaller.stream(altProto)));

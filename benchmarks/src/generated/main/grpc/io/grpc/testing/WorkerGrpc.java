@@ -26,8 +26,8 @@ public class WorkerGrpc {
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
           generateFullMethodName(
               "grpc.testing.Worker", "RunTest"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientArgs.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientStatus.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientArgs.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ClientStatus.getDefaultInstance()));
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.ServerArgs,
       io.grpc.testing.ServerStatus> METHOD_RUN_SERVER =
@@ -35,8 +35,8 @@ public class WorkerGrpc {
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
           generateFullMethodName(
               "grpc.testing.Worker", "RunServer"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerArgs.parser()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerStatus.parser()));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerArgs.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.ServerStatus.getDefaultInstance()));
 
   public static WorkerStub newStub(io.grpc.Channel channel) {
     return new WorkerStub(channel);
