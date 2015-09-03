@@ -104,7 +104,8 @@ public class MethodDescriptor<RequestT, ResponseT> {
   }
 
   /**
-   * A typed abstraction over message parsing and serialization.
+   * A typed abstraction over message serialization and deserialization, a.k.a. marshalling and
+   * unmarshalling.
    *
    * <p>Stub implementations will define implementations of this interface for each of the request
    * and response messages provided by a service.
