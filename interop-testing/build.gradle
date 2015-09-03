@@ -23,8 +23,7 @@ dependencies {
             project(':grpc-testing'),
             libraries.junit,
             libraries.mockito,
-            libraries.oauth_client,
-            libraries.netty_tcnative
+            libraries.oauth_client
 }
 
 test {
@@ -34,7 +33,6 @@ test {
 task test_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.TestServiceClient"
     applicationName = "test-client"
-    // Only used when OpenSSL is not available.
     defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
@@ -43,7 +41,6 @@ task test_client(type: CreateStartScripts) {
 task test_server(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.TestServiceServer"
     applicationName = "test-server"
-    // Only used when OpenSSL is not available.
     defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
@@ -52,7 +49,6 @@ task test_server(type: CreateStartScripts) {
 task reconnect_test_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.ReconnectTestClient"
     applicationName = "reconnect-test-client"
-    // Only used when OpenSSL is not available.
     defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
