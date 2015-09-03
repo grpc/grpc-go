@@ -170,7 +170,10 @@ class Utils {
     @Override
     public EventLoopGroup create() {
       // Use the executor based constructor so we can work with both Netty4 & Netty5.
-      ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat(name + "-%d").build();
+      ThreadFactory threadFactory = new ThreadFactoryBuilder()
+          .setDaemon(true)
+          .setNameFormat(name + "-%d")
+          .build();
       int parallelism = numEventLoops == 0
           ? Runtime.getRuntime().availableProcessors() * 2 : numEventLoops;
       final ExecutorService executor = Executors.newFixedThreadPool(parallelism, threadFactory);

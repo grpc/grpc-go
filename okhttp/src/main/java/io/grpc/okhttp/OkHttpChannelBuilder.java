@@ -80,6 +80,7 @@ public final class OkHttpChannelBuilder extends
         @Override
         public ExecutorService create() {
           return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
+                  .setDaemon(true)
                   .setNameFormat("grpc-okhttp-%d")
                   .build());
         }
