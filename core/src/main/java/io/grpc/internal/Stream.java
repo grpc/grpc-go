@@ -56,12 +56,8 @@ public interface Stream {
    * {@link io.grpc.KnownLength} to improve efficiency. This method will always return immediately
    * and will not wait for the write to complete.
    *
-   * <p>
-   * When the write is "accepted" by the transport, the given callback (if provided) will be called.
-   * The definition of what it means to be "accepted" is up to the transport implementation, but
-   * this is a general indication that the transport is capable of handling more out-bound data on
-   * the stream. If the stream/connection is closed for any reason before the write could be
-   * accepted, the callback will never be invoked.
+   * <p>It is recommended that the caller consult {@link #isReady()} before calling this method to
+   * avoid excessive buffering in the transport.
    *
    * @param message stream containing the serialized message to be sent
    */
@@ -73,9 +69,11 @@ public interface Stream {
   void flush();
 
   /**
-   * If {@code true}, indicates that the transport is capable of sending additional messages
-   * without requiring excessive buffering internally. This event is
-   * just a suggestion and the application is free to ignore it, however doing so may
+   * If {@code true}, indicates that the transport is capable of sending additional messages without
+   * requiring excessive buffering internally. Otherwise, {@link StreamListener#onReady()} will be
+   * called when it turns {@code true}.
+   *
+   * <p>This is just a suggestion and the application is free to ignore it, however doing so may
    * result in excessive buffering within the transport.
    */
   boolean isReady();
