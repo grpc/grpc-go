@@ -11,7 +11,6 @@ include ":grpc-interop-testing"
 include ":grpc-all"
 include ":grpc-benchmarks"
 include ":grpc-examples"
-include ":grpc-android"
 
 project(':grpc-core').projectDir = "$rootDir/core" as File
 project(':grpc-stub').projectDir = "$rootDir/stub" as File
@@ -25,7 +24,6 @@ project(':grpc-interop-testing').projectDir = "$rootDir/interop-testing" as File
 project(':grpc-all').projectDir = "$rootDir/all" as File
 project(':grpc-benchmarks').projectDir = "$rootDir/benchmarks" as File
 project(':grpc-examples').projectDir = "$rootDir/examples" as File
-project(':grpc-android').projectDir = "$rootDir/android" as File
 
 if (settings.hasProperty('skipCodegen') && skipCodegen.toBoolean()) {
   println '*** Skipping the build of codegen and compilation of proto files because skipCodegen=true'

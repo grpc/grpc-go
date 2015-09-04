@@ -8,7 +8,7 @@ buildscript {
   }
 }
 
-configure(subprojects - project(":grpc-android")) {
+subprojects {
     apply plugin: "checkstyle"
     apply plugin: "java"
     apply plugin: "maven"
@@ -17,11 +17,8 @@ configure(subprojects - project(":grpc-android")) {
     apply plugin: "signing"
     apply plugin: "jacoco"
 
-    def properties = new Properties()
-    properties.load(new FileInputStream("version.properties"))
-
     group = "io.grpc"
-    version = properties.version
+    version = "0.9.0-SNAPSHOT"
 
     sourceCompatibility = 1.6
     targetCompatibility = 1.6

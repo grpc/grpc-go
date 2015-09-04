@@ -1,9 +1,5 @@
-apply plugin: 'android-sdk-manager'
 apply plugin: 'com.android.application'
 apply plugin: 'com.google.protobuf'
-
-def properties = new Properties()
-properties.load(new FileInputStream(file('../../version.properties')))
 
 android {
     compileSdkVersion 22
@@ -37,7 +33,7 @@ protobuf {
     }
     plugins {
         grpc {
-            artifact = "io.grpc:protoc-gen-grpc-java:${properties.version}"
+            artifact = 'io.grpc:protoc-gen-grpc-java:0.9.0-SNAPSHOT'
         }
     }
     generateProtoTasks {
@@ -68,9 +64,10 @@ dependencies {
     compile 'com.squareup.okhttp:okhttp:2.2.0'
     testCompile 'junit:junit:4.12'
     // You need to build grpc-java to obtain these libraries below.
-    compile "io.grpc:grpc-android:${properties.version}"
-    compile "io.grpc:grpc-protobuf-nano:${properties.version}"
-    compile "io.grpc:grpc-stub:${properties.version}"
-    compile "io.grpc:grpc-testing:${properties.version}"
+    compile 'io.grpc:grpc-core:0.9.0-SNAPSHOT'
+    compile 'io.grpc:grpc-protobuf-nano:0.9.0-SNAPSHOT'
+    compile 'io.grpc:grpc-okhttp:0.9.0-SNAPSHOT'
+    compile 'io.grpc:grpc-stub:0.9.0-SNAPSHOT'
+    compile 'io.grpc:grpc-testing:0.9.0-SNAPSHOT'
     compile 'javax.annotation:javax.annotation-api:1.2'
 }
