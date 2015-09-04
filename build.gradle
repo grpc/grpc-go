@@ -136,7 +136,6 @@ configure(subprojects - project(":grpc-android")) {
                 // used to collect benchmark results
                 hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.4',
                 hpack: 'com.twitter:hpack:0.10.1',
-                javaee_api: 'javax:javaee-api:7.0',
                 jsonp: 'org.glassfish:javax.json:1.0.4',
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
                 oauth_client: 'com.google.auth:google-auth-library-oauth2-http:0.3.0',

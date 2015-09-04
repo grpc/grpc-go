@@ -5,8 +5,7 @@ plugins {
 description = "gRpc: Auth"
 dependencies {
     compile project(':grpc-core'),
-            libraries.oauth_client,
-            libraries.javaee_api
+            libraries.oauth_client
 }
 
 // Configure the animal sniffer plugin
