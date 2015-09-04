@@ -614,6 +614,7 @@ class OkHttpClientTransport implements ClientTransport {
       if (stream == null) {
         if (mayHaveCreatedStream(streamId)) {
           frameWriter.rstStream(streamId, ErrorCode.INVALID_STREAM);
+          in.skip(length);
         } else {
           onError(ErrorCode.PROTOCOL_ERROR, "Received data for unknown stream: " + streamId);
           return;

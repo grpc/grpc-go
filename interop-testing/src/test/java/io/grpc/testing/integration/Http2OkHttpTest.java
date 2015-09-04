@@ -38,11 +38,15 @@ import io.grpc.ManagedChannel;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
+import io.grpc.stub.StreamObserver;
+import io.grpc.testing.StreamRecorder;
 import io.grpc.testing.TestUtils;
+
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -89,5 +93,28 @@ public class Http2OkHttpTest extends AbstractTransportTest {
       throw new RuntimeException(e);
     }
     return builder.build();
+  }
+
+  @Test(timeout = 10000)
+  public void receivedDataForFinishedStream() throws Exception {
+    Messages.ResponseParameters.Builder responseParameters =
+        Messages.ResponseParameters.newBuilder()
+        .setSize(1);
+    Messages.StreamingOutputCallRequest.Builder requestBuilder =
+        Messages.StreamingOutputCallRequest.newBuilder()
+            .setResponseType(Messages.PayloadType.COMPRESSABLE);
+    for (int i = 0; i < 10000; i++) {
+      requestBuilder.addResponseParameters(responseParameters);
+    }
+
+    StreamRecorder<Messages.StreamingOutputCallResponse> recorder = StreamRecorder.create();
+    StreamObserver<Messages.StreamingOutputCallRequest> requestStream =
+        asyncStub.fullDuplexCall(recorder);
+    requestStream.onNext(requestBuilder.build());
+    recorder.firstValue().get();
+    requestStream.onError(new Exception("failed"));
+
+    recorder.awaitCompletion();
+    emptyUnary();
   }
 }
