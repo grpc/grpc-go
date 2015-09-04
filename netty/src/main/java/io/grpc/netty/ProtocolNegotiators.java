@@ -34,6 +34,7 @@ package io.grpc.netty;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Status;
+import io.grpc.internal.GrpcUtil;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerAdapter;
@@ -54,7 +55,7 @@ import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.util.ByteString;
 
-import java.net.InetSocketAddress;
+import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Queue;
@@ -130,9 +131,9 @@ public final class ProtocolNegotiators {
    * may happen immediately, even before the TLS Handshake is complete.
    */
   public static ProtocolNegotiator tls(final SslContext sslContext,
-                                       final InetSocketAddress inetAddress) {
+                                       String authority) {
     Preconditions.checkNotNull(sslContext, "sslContext");
-    Preconditions.checkNotNull(inetAddress, "inetAddress");
+    final URI uri = GrpcUtil.authorityToUri(Preconditions.checkNotNull(authority, "authority"));
 
     return new ProtocolNegotiator() {
       @Override
@@ -140,8 +141,7 @@ public final class ProtocolNegotiators {
         ChannelHandler sslBootstrap = new ChannelHandlerAdapter() {
           @Override
           public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-            SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(),
-                inetAddress.getHostName(), inetAddress.getPort());
+            SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(), uri.getHost(), uri.getPort());
             SSLParameters sslParams = new SSLParameters();
             sslParams.setEndpointIdentificationAlgorithm("HTTPS");
             sslEngine.setSSLParameters(sslParams);

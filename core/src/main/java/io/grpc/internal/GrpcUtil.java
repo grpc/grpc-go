@@ -43,6 +43,8 @@ import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
 import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -293,6 +295,46 @@ public final class GrpcUtil {
       builder.append(version);
     }
     return builder.toString();
+  }
+
+  /**
+   * Parse an authority into a URI for retrieving the host and port.
+   */
+  public static URI authorityToUri(String authority) {
+    Preconditions.checkNotNull(authority, "authority");
+    URI uri;
+    try {
+      uri = new URI(null, authority, null, null, null);
+    } catch (URISyntaxException ex) {
+      throw new IllegalArgumentException("Invalid authority: " + authority, ex);
+    }
+    if (uri.getUserInfo() != null) {
+      throw new IllegalArgumentException(
+          "Userinfo must not be present on authority: " + authority);
+    }
+    return uri;
+  }
+
+  /**
+   * Verify {@code authority} is valid for use with gRPC. The syntax must be valid and it must not
+   * include userinfo.
+   *
+   * @return the {@code authority} provided
+   */
+  public static String checkAuthority(String authority) {
+    authorityToUri(authority);
+    return authority;
+  }
+
+  /**
+   * Combine a host and port into an authority string.
+   */
+  public static String authorityFromHostAndPort(String host, int port) {
+    try {
+      return new URI(null, null, host, port, null, null, null).getAuthority();
+    } catch (URISyntaxException ex) {
+      throw new IllegalArgumentException("Invalid host or port: " + host + " " + port, ex);
+    }
   }
 
   /**

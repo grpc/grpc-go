@@ -96,6 +96,7 @@ public class NettyClientTransportTest {
   private final List<NettyClientTransport> transports = new ArrayList<NettyClientTransport>();
   private NioEventLoopGroup group;
   private InetSocketAddress address;
+  private String authority;
   private NettyServer server;
   private EchoServerListener serverListener = new EchoServerListener();
 
@@ -105,6 +106,7 @@ public class NettyClientTransportTest {
 
     group = new NioEventLoopGroup(1);
     address = TestUtils.testServerAddress(TestUtils.pickUnusedPort());
+    authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
   }
 
   @After
@@ -236,7 +238,7 @@ public class NettyClientTransportTest {
     File clientCert = TestUtils.loadCert("ca.pem");
     SslContext clientContext = GrpcSslContexts.forClient().trustManager(clientCert)
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
-    return ProtocolNegotiators.tls(clientContext, address);
+    return ProtocolNegotiators.tls(clientContext, authority);
   }
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator) {
@@ -245,8 +247,7 @@ public class NettyClientTransportTest {
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator, int maxMsgSize) {
     NettyClientTransport transport = new NettyClientTransport(address, NioSocketChannel.class,
-            group, negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize,
-            address.getHostString() + ":" + address.getPort());
+            group, negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize, authority);
     transports.add(transport);
     return transport;
   }

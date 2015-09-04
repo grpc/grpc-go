@@ -41,6 +41,7 @@ import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
@@ -62,6 +63,7 @@ public final class NettyChannelBuilder
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
   private final SocketAddress serverAddress;
+  private String authority;
   private NegotiationType negotiationType = NegotiationType.TLS;
   private Class<? extends Channel> channelType = NioSocketChannel.class;
   @Nullable
@@ -71,21 +73,36 @@ public final class NettyChannelBuilder
   private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
 
   /**
-   * Creates a new builder with the given server address.
+   * Creates a new builder with the given server address. This factory method is primarily intended
+   * for using Netty Channel types other than SocketChannel. {@link #forAddress(String, int)} should
+   * generally be preferred over this method, since that API permits delaying DNS lookups and
+   * noticing changes to DNS.
    */
   public static NettyChannelBuilder forAddress(SocketAddress serverAddress) {
-    return new NettyChannelBuilder(serverAddress);
+    String authority;
+    if (serverAddress instanceof InetSocketAddress) {
+      InetSocketAddress address = (InetSocketAddress) serverAddress;
+      authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
+    } else {
+      // Specialized address types are allowed to support custom Channel types so just assume their
+      // toString() values are valid :authority values. We defer checking validity of authority
+      // until buildTransportFactory() to provide the user an opportunity to override the value.
+      authority = serverAddress.toString();
+    }
+    return new NettyChannelBuilder(serverAddress, authority);
   }
 
   /**
    * Creates a new builder with the given host and port.
    */
   public static NettyChannelBuilder forAddress(String host, int port) {
-    return forAddress(new InetSocketAddress(host, port));
+    return new NettyChannelBuilder(
+        new InetSocketAddress(host, port), GrpcUtil.authorityFromHostAndPort(host, port));
   }
 
-  private NettyChannelBuilder(SocketAddress serverAddress) {
+  private NettyChannelBuilder(SocketAddress serverAddress, String authority) {
     this.serverAddress = serverAddress;
+    this.authority = authority;
   }
 
   /**
@@ -149,10 +166,23 @@ public final class NettyChannelBuilder
     return this;
   }
 
+  /**
+   * Overrides the authority used with TLS and HTTP virtual hosting. It does not change what host is
+   * actually connected to. Is commonly in the form {@code host:port}.
+   *
+   * <p>Should only used by tests.
+   */
+  public NettyChannelBuilder overrideAuthority(String authority) {
+    this.authority = GrpcUtil.checkAuthority(authority);
+    return this;
+  }
+
   @Override
   protected ClientTransportFactory buildTransportFactory() {
-    return new NettyTransportFactory(serverAddress, channelType, eventLoopGroup, flowControlWindow,
-            createProtocolNegotiator(), maxMessageSize);
+    // Check authority, since non-inet ServerAddresses delay the authority check.
+    GrpcUtil.checkAuthority(authority);
+    return new NettyTransportFactory(serverAddress, authority, channelType, eventLoopGroup,
+        flowControlWindow, createProtocolNegotiator(), maxMessageSize);
   }
 
   private ProtocolNegotiator createProtocolNegotiator() {
@@ -163,9 +193,6 @@ public final class NettyChannelBuilder
       case PLAINTEXT_UPGRADE:
         return ProtocolNegotiators.plaintextUpgrade();
       case TLS:
-        if (!(serverAddress instanceof InetSocketAddress)) {
-          throw new IllegalStateException("TLS not supported for non-internet socket types");
-        }
         if (sslContext == null) {
           try {
             sslContext = GrpcSslContexts.forClient().build();
@@ -173,7 +200,7 @@ public final class NettyChannelBuilder
             throw new RuntimeException(ex);
           }
         }
-        return ProtocolNegotiators.tls(sslContext, (InetSocketAddress) serverAddress);
+        return ProtocolNegotiators.tls(sslContext, authority);
       default:
         throw new IllegalArgumentException("Unsupported negotiationType: " + negotiationType);
     }
@@ -191,6 +218,7 @@ public final class NettyChannelBuilder
     private final String authority;
 
     private NettyTransportFactory(SocketAddress serverAddress,
+                                  String authority,
                                   Class<? extends Channel> channelType,
                                   EventLoopGroup group,
                                   int flowControlWindow,
@@ -201,14 +229,7 @@ public final class NettyChannelBuilder
       this.flowControlWindow = flowControlWindow;
       this.negotiator = negotiator;
       this.maxMessageSize = maxMessageSize;
-      if (serverAddress instanceof InetSocketAddress) {
-        InetSocketAddress address = (InetSocketAddress) serverAddress;
-        this.authority = address.getHostString() + ":" + address.getPort();
-      } else {
-        // Specialized address types are allowed to support custom Channel types so just assume
-        // their toString() values are valid :authority values
-        this.authority = serverAddress.toString();
-      }
+      this.authority = authority;
 
       usingSharedGroup = group == null;
       if (usingSharedGroup) {
