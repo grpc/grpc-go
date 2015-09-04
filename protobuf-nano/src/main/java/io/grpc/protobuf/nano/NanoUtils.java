@@ -49,7 +49,8 @@ public class NanoUtils {
   private NanoUtils() {}
 
   /** Adapt {@code parser} to a {@code Marshaller}. */
-  public static <T extends MessageNano> Marshaller<T> marshaller(final Parser<T> parser) {
+  public static <T extends MessageNano> Marshaller<T> marshaller(
+      final MessageNanoFactory<T> factory) {
     return new Marshaller<T>() {
       @Override
       public InputStream stream(T value) {
@@ -63,7 +64,9 @@ public class NanoUtils {
           CodedInputByteBufferNano input =
               CodedInputByteBufferNano.newInstance(ByteStreams.toByteArray(stream));
           input.setSizeLimit(Integer.MAX_VALUE);
-          return parser.parse(input);
+          T message = factory.newInstance();
+          message.mergeFrom(input);
+          return message;
         } catch (IOException ipbe) {
           throw Status.INTERNAL.withDescription("Failed parsing nano proto message").withCause(ipbe)
               .asRuntimeException();

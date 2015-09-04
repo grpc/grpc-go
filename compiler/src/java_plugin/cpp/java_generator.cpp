@@ -113,19 +113,17 @@ static void PrintMethodFields(
           "        generateFullMethodName(\n"
           "            \"$Package$$service_name$\", \"$method_name$\"),\n"
           "        $NanoUtils$.<$input_type$>marshaller(\n"
-          "            new io.grpc.protobuf.nano.Parser<$input_type$>() {\n"
+          "            new io.grpc.protobuf.nano.MessageNanoFactory<$input_type$>() {\n"
           "                @Override\n"
-          "                public $input_type$ parse("
-          "$CodedInputByteBufferNano$ input) throws IOException {\n"
-          "                    return $input_type$.parseFrom(input);\n"
+          "                public $input_type$ newInstance() {\n"
+          "                    return new $input_type$();\n"
           "                }\n"
           "        }),\n"
           "        $NanoUtils$.<$output_type$>marshaller(\n"
-          "            new io.grpc.protobuf.nano.Parser<$output_type$>() {\n"
+          "            new io.grpc.protobuf.nano.MessageNanoFactory<$output_type$>() {\n"
           "                @Override\n"
-          "                public $output_type$ parse("
-          "$CodedInputByteBufferNano$ input) throws IOException {\n"
-          "                    return $output_type$.parseFrom(input);\n"
+          "                public $output_type$ newInstance() {\n"
+          "                    return new $output_type$();\n"
           "                }\n"
           "        }));\n");
     } else {
@@ -622,8 +620,6 @@ void GenerateService(const ServiceDescriptor* service,
   vars["Immutable"] = "javax.annotation.concurrent.Immutable";
   vars["ListenableFuture"] =
       "com.google.common.util.concurrent.ListenableFuture";
-  vars["CodedInputByteBufferNano"] = 
-      "com.google.protobuf.nano.CodedInputByteBufferNano";
   vars["ExperimentalApi"] = "io.grpc.ExperimentalApi";
 
   Printer printer(out, '$');

@@ -29,17 +29,17 @@ public class TestServiceGrpc {
           generateFullMethodName(
               "grpc.testing.TestService", "UnaryCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.SimpleRequest>marshaller(
-              new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.nano.Test.SimpleRequest>() {
+              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.SimpleRequest>() {
                   @Override
-                  public io.grpc.testing.integration.nano.Test.SimpleRequest parse(com.google.protobuf.nano.CodedInputByteBufferNano input) throws IOException {
-                      return io.grpc.testing.integration.nano.Test.SimpleRequest.parseFrom(input);
+                  public io.grpc.testing.integration.nano.Test.SimpleRequest newInstance() {
+                      return new io.grpc.testing.integration.nano.Test.SimpleRequest();
                   }
           }),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.SimpleResponse>marshaller(
-              new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.nano.Test.SimpleResponse>() {
+              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.SimpleResponse>() {
                   @Override
-                  public io.grpc.testing.integration.nano.Test.SimpleResponse parse(com.google.protobuf.nano.CodedInputByteBufferNano input) throws IOException {
-                      return io.grpc.testing.integration.nano.Test.SimpleResponse.parseFrom(input);
+                  public io.grpc.testing.integration.nano.Test.SimpleResponse newInstance() {
+                      return new io.grpc.testing.integration.nano.Test.SimpleResponse();
                   }
           }));
   @io.grpc.ExperimentalApi
@@ -50,17 +50,17 @@ public class TestServiceGrpc {
           generateFullMethodName(
               "grpc.testing.TestService", "StreamingOutputCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>marshaller(
-              new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>() {
+              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>() {
                   @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest parse(com.google.protobuf.nano.CodedInputByteBufferNano input) throws IOException {
-                      return io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest.parseFrom(input);
+                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest newInstance() {
+                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest();
                   }
           }),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>marshaller(
-              new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
+              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
                   @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse parse(com.google.protobuf.nano.CodedInputByteBufferNano input) throws IOException {
-                      return io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse.parseFrom(input);
+                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse newInstance() {
+                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse();
                   }
           }));
   @io.grpc.ExperimentalApi
@@ -71,17 +71,17 @@ public class TestServiceGrpc {
           generateFullMethodName(
               "grpc.testing.TestService", "StreamingInputCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest>marshaller(
-              new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest>() {
+              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest>() {
                   @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingInputCallRequest parse(com.google.protobuf.nano.CodedInputByteBufferNano input) throws IOException {
-                      return io.grpc.testing.integration.nano.Test.StreamingInputCallRequest.parseFrom(input);
+                  public io.grpc.testing.integration.nano.Test.StreamingInputCallRequest newInstance() {
+                      return new io.grpc.testing.integration.nano.Test.StreamingInputCallRequest();
                   }
           }),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>marshaller(
-              new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>() {
+              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>() {
                   @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingInputCallResponse parse(com.google.protobuf.nano.CodedInputByteBufferNano input) throws IOException {
-                      return io.grpc.testing.integration.nano.Test.StreamingInputCallResponse.parseFrom(input);
+                  public io.grpc.testing.integration.nano.Test.StreamingInputCallResponse newInstance() {
+                      return new io.grpc.testing.integration.nano.Test.StreamingInputCallResponse();
                   }
           }));
   @io.grpc.ExperimentalApi
@@ -92,17 +92,17 @@ public class TestServiceGrpc {
           generateFullMethodName(
               "grpc.testing.TestService", "FullBidiCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>marshaller(
-              new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>() {
+              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>() {
                   @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest parse(com.google.protobuf.nano.CodedInputByteBufferNano input) throws IOException {
-                      return io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest.parseFrom(input);
+                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest newInstance() {
+                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest();
                   }
           }),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>marshaller(
-              new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
+              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
                   @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse parse(com.google.protobuf.nano.CodedInputByteBufferNano input) throws IOException {
-                      return io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse.parseFrom(input);
+                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse newInstance() {
+                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse();
                   }
           }));
   @io.grpc.ExperimentalApi
@@ -113,17 +113,17 @@ public class TestServiceGrpc {
           generateFullMethodName(
               "grpc.testing.TestService", "HalfBidiCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>marshaller(
-              new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>() {
+              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>() {
                   @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest parse(com.google.protobuf.nano.CodedInputByteBufferNano input) throws IOException {
-                      return io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest.parseFrom(input);
+                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest newInstance() {
+                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest();
                   }
           }),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>marshaller(
-              new io.grpc.protobuf.nano.Parser<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
+              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
                   @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse parse(com.google.protobuf.nano.CodedInputByteBufferNano input) throws IOException {
-                      return io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse.parseFrom(input);
+                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse newInstance() {
+                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse();
                   }
           }));
 

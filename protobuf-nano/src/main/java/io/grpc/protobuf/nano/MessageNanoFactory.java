@@ -31,16 +31,13 @@
 
 package io.grpc.protobuf.nano;
 
-import com.google.protobuf.nano.CodedInputByteBufferNano;
 import com.google.protobuf.nano.MessageNano;
 
-import java.io.IOException;
-
 /**
- * Parser for parsing nano proto messages.
+ * Produce new message instances. Used by a marshaller to deserialize incoming messages.
  *
  * <p>Should be implemented by generated code.
  */
-public interface Parser<T extends MessageNano> {
-  T parse(CodedInputByteBufferNano input) throws IOException;
+public interface MessageNanoFactory<T extends MessageNano> {
+  T newInstance();
 }
