@@ -27,31 +27,32 @@ dependencies {
 }
 
 test {
+    // For the automated tests, use Jetty ALPN.
     jvmArgs "-Xbootclasspath/p:" + configurations.alpnboot.asPath
 }
+
+// For the generated scripts, use Netty tcnative (i.e. OpenSSL).
+// Note that OkHttp currently only supports ALPN, so OpenSSL version >= 1.0.2 is required.
 
 task test_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.TestServiceClient"
     applicationName = "test-client"
-    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = jar.outputs.files + configurations.runtime + configurations.tcnative
 }
 
 task test_server(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.TestServiceServer"
     applicationName = "test-server"
-    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = jar.outputs.files + configurations.runtime + configurations.tcnative
 }
 
 task reconnect_test_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.ReconnectTestClient"
     applicationName = "reconnect-test-client"
-    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+    classpath = jar.outputs.files + configurations.runtime + configurations.tcnative
 }
 
 applicationDistribution.into("bin") {

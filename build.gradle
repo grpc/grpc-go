@@ -166,14 +166,18 @@ configure(subprojects - project(":grpc-android")) {
     // Define a separate configuration for managing the dependency on Jetty alpnboot jar.
     configurations {
         alpnboot
+        tcnative
     }
 
     dependencies {
         testCompile libraries.junit,
                     libraries.mockito
 
-        // Make the Jetty alpnboot jar available to submodules via the alpnboot configuration.
+        // Configuration for modules that use Jetty ALPN
         alpnboot alpnboot_package_name
+
+        // Configuration for modules that use Netty tcnative (for OpenSSL).
+        tcnative libraries.netty_tcnative
     }
 
     signing {

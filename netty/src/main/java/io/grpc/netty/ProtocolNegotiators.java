@@ -47,6 +47,8 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
+import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.OpenSslEngine;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
@@ -54,6 +56,7 @@ import io.netty.util.ByteString;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.Queue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -85,17 +88,22 @@ public final class ProtocolNegotiators {
       }
 
       @Override
+      public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        fail(ctx, cause);
+      }
+
+      @Override
       public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
         if (evt instanceof SslHandshakeCompletionEvent) {
           SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
           if (handshakeEvent.isSuccess()) {
-            SslHandler handler = ctx.pipeline().get(SslHandler.class);
-            if (handler.applicationProtocol() != null) {
+            if (applicationProtocol(ctx) != null) {
               // Successfully negotiated the protocol.
               ctx.pipeline().remove(this);
             } else {
+
               fail(ctx, new Exception(
-                  "Failed ALPN negotiation: Unable to find compatible protocol."));
+                  "Failed protocol negotiation: Unable to find compatible protocol."));
             }
           } else {
             fail(ctx, handshakeEvent.cause());
@@ -105,8 +113,38 @@ public final class ProtocolNegotiators {
       }
 
       private void fail(ChannelHandlerContext ctx, Throwable exception) {
-        log.log(Level.FINEST, "TLS negotiation failed for new client.", exception);
+        log.log(Level.FINE, errorMessage(ctx), exception);
         ctx.close();
+      }
+
+      private String errorMessage(ChannelHandlerContext ctx) {
+        StringBuilder builder = new StringBuilder("TLS negotiation failed for new client. ");
+        SSLEngine engine = sslHandler(ctx).engine();
+        if (engine instanceof OpenSslEngine) {
+          builder.append("OpenSSL version: ");
+          builder.append("0x").append(Integer.toHexString(OpenSsl.version()));
+          builder.append(" [").append(OpenSsl.versionString()).append(']');
+          builder.append(". ALPN supported: ").append(OpenSsl.isAlpnSupported()).append(". ");
+        } else if (JettyTlsUtil.isJettyAlpnConfigured()) {
+          builder.append("Jetty ALPN configured. ");
+        } else if (JettyTlsUtil.isJettyNpnConfigured()) {
+          builder.append("Jetty NPN configured. ");
+        }
+        builder.append("Enabled ciphers=");
+        builder.append(Arrays.toString(enabledCiphers(ctx))).append(". ");
+        return builder.toString();
+      }
+
+      private String applicationProtocol(ChannelHandlerContext ctx) {
+        return sslHandler(ctx).applicationProtocol();
+      }
+
+      private String[] enabledCiphers(ChannelHandlerContext ctx) {
+        return sslHandler(ctx).engine().getEnabledCipherSuites();
+      }
+
+      private SslHandler sslHandler(ChannelHandlerContext ctx) {
+        return ctx.pipeline().get(SslHandler.class);
       }
     };
   }
