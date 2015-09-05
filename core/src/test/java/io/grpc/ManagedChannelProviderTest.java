@@ -113,6 +113,11 @@ public class ManagedChannelProviderTest {
     protected ManagedChannelBuilder<?> builderForAddress(String host, int port) {
       throw new UnsupportedOperationException();
     }
+
+    @Override
+    protected ManagedChannelBuilder<?> builderForTarget(String target) {
+      throw new UnsupportedOperationException();
+    }
   }
 
   public static class Available0Provider extends BaseProvider {

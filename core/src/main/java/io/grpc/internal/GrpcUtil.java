@@ -351,7 +351,7 @@ public final class GrpcUtil {
   /**
    * Shared executor for channels.
    */
-  static final Resource<ExecutorService> SHARED_CHANNEL_EXECUTOR =
+  public static final Resource<ExecutorService> SHARED_CHANNEL_EXECUTOR =
       new Resource<ExecutorService>() {
         private static final String name = "grpc-default-executor";
         @Override

@@ -39,6 +39,8 @@ import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
 
+import java.net.SocketAddress;
+
 /**
  * Builder for a channel that issues in-process requests. Clients identify the in-process server by
  * its name.
@@ -59,9 +61,9 @@ public class InProcessChannelBuilder extends
   }
 
   private final String name;
-  private String authority = "localhost";
 
   private InProcessChannelBuilder(String name) {
+    super(new InProcessSocketAddress(name), "localhost");
     this.name = Preconditions.checkNotNull(name);
   }
 
@@ -74,39 +76,39 @@ public class InProcessChannelBuilder extends
   }
 
   @Override
-  public InProcessChannelBuilder overrideAuthority(String authority) {
-    this.authority = authority;
-    return this;
-  }
-
-  @Override
   protected ClientTransportFactory buildTransportFactory() {
-    return new InProcessClientTransportFactory(name, authority);
+    return new InProcessClientTransportFactory(name);
   }
 
   private static class InProcessClientTransportFactory extends AbstractReferenceCounted
           implements ClientTransportFactory {
     private final String name;
-    private final String authority;
 
-    private InProcessClientTransportFactory(String name, String authority) {
+    private InProcessClientTransportFactory(String name) {
       this.name = name;
-      this.authority = authority;
     }
 
     @Override
-    public ClientTransport newClientTransport() {
+    public ClientTransport newClientTransport(SocketAddress addr, String authority) {
       return new InProcessTransport(name);
-    }
-
-    @Override
-    public String authority() {
-      return authority;
     }
 
     @Override
     protected void deallocate() {
       // Do nothing.
+    }
+  }
+
+  private static class InProcessSocketAddress extends SocketAddress {
+    final String name;
+
+    InProcessSocketAddress(String name) {
+      this.name = name;
+    }
+
+    @Override
+    public String toString() {
+      return name;
     }
   }
 }

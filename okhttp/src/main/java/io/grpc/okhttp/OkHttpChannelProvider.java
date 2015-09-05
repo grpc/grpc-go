@@ -61,4 +61,9 @@ public class OkHttpChannelProvider extends ManagedChannelProvider {
   protected OkHttpChannelBuilder builderForAddress(String name, int port) {
     return OkHttpChannelBuilder.forAddress(name, port);
   }
+
+  @Override
+  protected OkHttpChannelBuilder builderForTarget(String target) {
+    return OkHttpChannelBuilder.forTarget(target);
+  }
 }

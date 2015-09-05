@@ -62,6 +62,9 @@ public final class CallOptions {
   @Nullable
   private String authority;
 
+  @Nullable
+  private RequestKey requestKey;
+
   /**
    * Override the HTTP/2 authority the channel claims to be connecting to. <em>This is not
    * generally safe.</em> Overriding allows advanced users to re-use a single Channel for multiple
@@ -131,6 +134,25 @@ public final class CallOptions {
   }
 
   /**
+   * Returns a new {@code CallOptions} with a request key for affinity-based routing.
+   */
+  @ExperimentalApi
+  public CallOptions withRequestKey(@Nullable RequestKey requestKey) {
+    CallOptions newOptions = new CallOptions(this);
+    newOptions.requestKey = requestKey;
+    return newOptions;
+  }
+
+  /**
+   * Returns the request key for affinity-based routing.
+   */
+  @ExperimentalApi
+  @Nullable
+  public RequestKey getRequestKey() {
+    return requestKey;
+  }
+
+  /**
    * Override the HTTP/2 authority the channel claims to be connecting to. <em>This is not
    * generally safe.</em> Overriding allows advanced users to re-use a single Channel for multiple
    * services, even if those services are hosted on different domain names. That assumes the
@@ -155,6 +177,7 @@ public final class CallOptions {
     deadlineNanoTime = other.deadlineNanoTime;
     compressor = other.compressor;
     authority = other.authority;
+    requestKey = other.requestKey;
   }
 
   @SuppressWarnings("deprecation") // guava 14.0

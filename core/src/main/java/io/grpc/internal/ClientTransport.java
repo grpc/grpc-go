@@ -108,6 +108,8 @@ public interface ClientTransport {
      * that this method is called without {@link #shutdown} being called.  If the argument to this
      * function is {@link Status#isOk}, it is safe to immediately reconnect.
      *
+     * <p>This is called exactly once, and must be called prior to {@link #transportTerminated}.
+     *
      * @param s the reason for the shutdown.
      */
     void transportShutdown(Status s);
@@ -115,7 +117,8 @@ public interface ClientTransport {
     /**
      * The transport completed shutting down. All resources have been released.
      *
-     * <p> {@link #transportShutdown(Status)} must be called before calling this method.
+     * <p>This is called exactly once, and must be called after {@link #transportShutdown} has been
+     * called.
      */
     void transportTerminated();
 

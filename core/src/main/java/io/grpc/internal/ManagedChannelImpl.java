@@ -33,9 +33,11 @@ package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
+import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -45,11 +47,21 @@ import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.ExperimentalApi;
+import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
 import io.grpc.MethodDescriptor;
+import io.grpc.NameResolver;
+import io.grpc.ResolvedServerInfo;
+import io.grpc.Status;
+import io.grpc.TransportManager;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 
+import java.net.SocketAddress;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -90,8 +102,15 @@ public final class ManagedChannelImpl extends ManagedChannel {
    */
   private final Channel interceptorChannel;
 
+  private final NameResolver nameResolver;
+  private final LoadBalancer loadBalancer;
+
+  /**
+   * Maps addresses to transports for that server.
+   */
   @GuardedBy("lock")
-  private TransportSet transportSet;
+  private final Map<SocketAddress, TransportSet> transports =
+      new HashMap<SocketAddress, TransportSet>();
 
   @GuardedBy("lock")
   private boolean shutdown;
@@ -101,55 +120,21 @@ public final class ManagedChannelImpl extends ManagedChannel {
   private volatile Compressor defaultCompressor;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
-
     @Override
-    public ListenableFuture<ClientTransport> get() {
-      TransportSet transportSetCopy;
+    public ListenableFuture<ClientTransport> get(CallOptions callOptions) {
       synchronized (lock) {
         if (shutdown) {
           return NULL_VALUE_TRANSPORT_FUTURE;
         }
-        if (transportSet == null) {
-          transportSet = new TransportSet(backoffPolicyProvider, transportFactory,
-              scheduledExecutor, new TransportSet.Callback() {
-                @Override
-                public void onTerminated() {
-                  synchronized (lock) {
-                    if (shutdown) {
-                      transportSet = null;
-                      if (terminated) {
-                        log.warning("transportTerminated called after already terminated");
-                      }
-                      terminated = true;
-                      lock.notifyAll();
-                      onChannelTerminated();
-                    }
-                  }
-                }
-              });
-        }
-        transportSetCopy = transportSet;
       }
-      return transportSetCopy.obtainActiveTransport();
+      return loadBalancer.pickTransport(callOptions.getRequestKey());
     }
   };
 
-  // TODO(zhangkun83): remove this in favor of the one that accepts BackoffPolicy.Provider
-  ManagedChannelImpl(ClientTransportFactory transportFactory, @Nullable Executor executor,
-      @Nullable String userAgent, List<ClientInterceptor> interceptors) {
-    this(new ExponentialBackoffPolicy.Provider(), transportFactory, executor, userAgent,
-        interceptors);
-  }
-
-  ManagedChannelImpl(BackoffPolicy.Provider backoffPolicyProvider,
+  ManagedChannelImpl(URI targetUri, BackoffPolicy.Provider backoffPolicyProvider,
+      NameResolver.Factory nameResolverFactory, LoadBalancer.Factory loadBalancerFactory,
       ClientTransportFactory transportFactory, @Nullable Executor executor,
       @Nullable String userAgent, List<ClientInterceptor> interceptors) {
-    this.backoffPolicyProvider = backoffPolicyProvider;
-    this.transportFactory = transportFactory;
-    this.userAgent = userAgent;
-    this.interceptorChannel = ClientInterceptors.intercept(new RealChannel(), interceptors);
-    scheduledExecutor = SharedResourceHolder.get(TIMER_SERVICE);
-
     if (executor == null) {
       usingSharedExecutor = true;
       this.executor = SharedResourceHolder.get(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
@@ -157,7 +142,28 @@ public final class ManagedChannelImpl extends ManagedChannel {
       usingSharedExecutor = false;
       this.executor = executor;
     }
+    this.backoffPolicyProvider = backoffPolicyProvider;
+    this.nameResolver = nameResolverFactory.newNameResolver(targetUri);
+    Preconditions.checkArgument(this.nameResolver != null,
+        "The given NameResolverFactory cannot resolve %s", targetUri);
+    this.loadBalancer = loadBalancerFactory.newLoadBalancer(nameResolver.getServiceAuthority(), tm);
+    this.transportFactory = transportFactory;
+    this.userAgent = userAgent;
+    this.interceptorChannel = ClientInterceptors.intercept(new RealChannel(), interceptors);
+    scheduledExecutor = SharedResourceHolder.get(TIMER_SERVICE);
 
+    this.nameResolver.start(new NameResolver.Listener() {
+      @Override
+      public void onUpdate(List<ResolvedServerInfo> servers, Attributes config) {
+        loadBalancer.handleResolvedAddresses(servers, config);
+      }
+
+      @Override
+      public void onError(Status error) {
+        Preconditions.checkArgument(!error.isOk(), "the error status must not be OK");
+        loadBalancer.handleNameResolutionError(error);
+      }
+    });
   }
 
   /**
@@ -180,7 +186,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
    */
   @Override
   public ManagedChannelImpl shutdown() {
-    TransportSet transportSetCopy = null;
+    ArrayList<TransportSet> transportsCopy = new ArrayList<TransportSet>();
     synchronized (lock) {
       if (shutdown) {
         return this;
@@ -188,16 +194,16 @@ public final class ManagedChannelImpl extends ManagedChannel {
       shutdown = true;
       // After shutdown there are no new calls, so no new cancellation tasks are needed
       scheduledExecutor = SharedResourceHolder.release(TIMER_SERVICE, scheduledExecutor);
-      if (transportSet == null) {
+      if (transports.isEmpty()) {
         terminated = true;
         lock.notifyAll();
         onChannelTerminated();
       } else {
-        transportSetCopy = transportSet;
+        transportsCopy.addAll(transports.values());
       }
     }
-    if (transportSetCopy != null) {
-      transportSetCopy.shutdown();
+    for (TransportSet ts : transportsCopy) {
+      ts.shutdown();
     }
     return this;
   }
@@ -276,7 +282,8 @@ public final class ManagedChannelImpl extends ManagedChannel {
 
     @Override
     public String authority() {
-      return transportFactory.authority();
+      String authority = nameResolver.getServiceAuthority();
+      return Preconditions.checkNotNull(authority, "authority");
     }
   }
 
@@ -290,4 +297,43 @@ public final class ManagedChannelImpl extends ManagedChannel {
     // Release the transport factory so that it can deallocate any resources.
     transportFactory.release();
   }
+
+  private final TransportManager tm = new TransportManager() {
+    @Override
+    public void updateRetainedTransports(SocketAddress[] addrs) {
+      // TODO(zhangkun83): warm-up new servers and discard removed servers.
+    }
+
+    @Override
+    public ListenableFuture<ClientTransport> getTransport(final SocketAddress addr) {
+      TransportSet ts;
+      synchronized (lock) {
+        if (shutdown) {
+          return null;
+        }
+        ts = transports.get(addr);
+        if (ts == null) {
+          ts = new TransportSet(addr, authority(), loadBalancer, backoffPolicyProvider,
+              transportFactory, scheduledExecutor, new TransportSet.Callback() {
+                @Override
+                public void onTerminated() {
+                  synchronized (lock) {
+                    transports.remove(addr);
+                    if (shutdown && transports.isEmpty()) {
+                      if (terminated) {
+                        log.warning("transportTerminated called after already terminated");
+                      }
+                      terminated = true;
+                      lock.notifyAll();
+                      onChannelTerminated();
+                    }
+                  }
+                }
+              });
+          transports.put(addr, ts);
+        }
+      }
+      return ts.obtainActiveTransport();
+    }
+  };
 }

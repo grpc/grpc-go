@@ -29,56 +29,32 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.netty;
+package io.grpc;
 
-import io.grpc.internal.ClientTransportFactory;
+import com.google.common.util.concurrent.ListenableFuture;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import io.grpc.internal.ClientTransport;
 
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
-@RunWith(JUnit4.class)
-public class NettyChannelBuilderTest {
+/**
+ * Manages transport life-cycles and provide ready-to-use transports.
+ */
+@ExperimentalApi
+public abstract class TransportManager {
+  /**
+   * Advises this {@code TransportManager} to retain transports only to these servers, for warming
+   * up connections and discarding unused connections.
+   */
+  public abstract void updateRetainedTransports(SocketAddress[] addrs);
 
-  @Rule public final ExpectedException thrown = ExpectedException.none();
-
-  @Test
-  public void overrideAllowsInvalidAuthority() {
-    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){}) {
-      @Override
-      protected String checkAuthority(String authority) {
-        return authority;
-      }
-    };
-
-    ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .buildTransportFactory();
-  }
-
-  @Test
-  public void failOverrideInvalidAuthority() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Invalid authority:");
-
-    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){});
-
-    ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .buildTransportFactory();
-  }
-
-  @Test
-  public void failInvalidAuthority() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Invalid host or port");
-
-    NettyChannelBuilder.forAddress(new InetSocketAddress("invalid_authority", 1234));
-  }
+  /**
+   * Returns the future of a transport for the given server.
+   *
+   * <p>If the channel has been shut down, the value of the future will be {@code null}.
+   */
+  // TODO(zhangkun83): GrpcLoadBalancer will use this to get transport to connect to LB servers,
+  // which would have a different authority than the primary servers. We need to figure out how to
+  // do it.
+  public abstract ListenableFuture<ClientTransport> getTransport(SocketAddress addr);
 }
-

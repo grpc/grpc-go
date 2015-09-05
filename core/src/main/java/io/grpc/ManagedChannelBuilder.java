@@ -44,6 +44,11 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
     return ManagedChannelProvider.provider().builderForAddress(name, port);
   }
 
+  @ExperimentalApi
+  public static ManagedChannelBuilder<?> forTarget(String target) {
+    return ManagedChannelProvider.provider().builderForTarget(target);
+  }
+
   /**
    * Provides a custom executor.
    *
@@ -98,6 +103,24 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    */
   @ExperimentalApi("primarily for testing")
   public abstract T usePlaintext(boolean skipNegotiation);
+
+  /*
+   * Provides a custom {@link NameResolver.Factory} for the channel.
+   *
+   * <p>If this method is not called, the builder will look up in the global resolver registry for
+   * a factory for the provided target.
+   */
+  @ExperimentalApi
+  public abstract T nameResolverFactory(NameResolver.Factory resolverFactory);
+
+  /**
+   * Provides a custom {@link LoadBalancer.Factory} for the channel.
+   *
+   * <p>If this method is not called, the builder will use {@link SimpleLoadBalancerFactory} for the
+   * channel.
+   */
+  @ExperimentalApi
+  public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
 
   /**
    * Builds a channel using the given parameters.

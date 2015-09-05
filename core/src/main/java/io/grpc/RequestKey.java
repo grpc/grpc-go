@@ -29,56 +29,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.netty;
+package io.grpc;
 
-import io.grpc.internal.ClientTransportFactory;
+/**
+ * A key generated from an RPC request, and to be used for affinity-based
+ * routing.
+ */
+@ExperimentalApi
+public final class RequestKey {
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-
-@RunWith(JUnit4.class)
-public class NettyChannelBuilderTest {
-
-  @Rule public final ExpectedException thrown = ExpectedException.none();
-
-  @Test
-  public void overrideAllowsInvalidAuthority() {
-    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){}) {
-      @Override
-      protected String checkAuthority(String authority) {
-        return authority;
-      }
-    };
-
-    ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .buildTransportFactory();
-  }
-
-  @Test
-  public void failOverrideInvalidAuthority() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Invalid authority:");
-
-    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){});
-
-    ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .buildTransportFactory();
-  }
-
-  @Test
-  public void failInvalidAuthority() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Invalid host or port");
-
-    NettyChannelBuilder.forAddress(new InetSocketAddress("invalid_authority", 1234));
+  // TODO(zhangkun83): materialize this class once we decide the form of the affinity key.
+  private RequestKey() {
   }
 }
-

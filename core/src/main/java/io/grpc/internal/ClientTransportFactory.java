@@ -31,14 +31,15 @@
 
 package io.grpc.internal;
 
+import java.net.SocketAddress;
+
 /** Pre-configured factory for creating {@link ClientTransport} instances. */
 public interface ClientTransportFactory extends ReferenceCounted {
-  /** Creates an unstarted transport for exclusive use. */
-  ClientTransport newClientTransport();
-
   /**
-   * Returns the authority of the channel. Typically, this should be in the form {@code host:port}.
-   * Note that since there is not a scheme, there can't be a default port.
+   * Creates an unstarted transport for exclusive use.
+   *
+   * @param serverAddress the address that the transport is connected to
+   * @param authority the HTTP/2 authority of the server
    */
-  String authority();
+  ClientTransport newClientTransport(SocketAddress serverAddress, String authority);
 }

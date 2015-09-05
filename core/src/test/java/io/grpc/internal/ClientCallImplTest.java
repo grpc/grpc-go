@@ -94,7 +94,7 @@ public class ClientCallImplTest {
     final ClientStream stream = mock(ClientStream.class);
     ClientTransportProvider provider = new ClientTransportProvider() {
       @Override
-      public ListenableFuture<ClientTransport> get() {
+      public ListenableFuture<ClientTransport> get(CallOptions callOptions) {
         return Futures.immediateFuture(transport);
       }
     };

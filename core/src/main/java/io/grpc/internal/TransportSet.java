@@ -36,13 +36,16 @@ import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
+import io.grpc.LoadBalancer;
 import io.grpc.Status;
 
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
@@ -63,6 +66,8 @@ final class TransportSet {
   }
 
   private final Object lock = new Object();
+  private final SocketAddress server;
+  private final String authority;
   private final BackoffPolicy.Provider backoffPolicyProvider;
   private final Callback callback;
   private final ClientTransportFactory transportFactory;
@@ -84,6 +89,8 @@ final class TransportSet {
   @GuardedBy("lock")
   private final Collection<ClientTransport> transports = new ArrayList<ClientTransport>();
 
+  private final LoadBalancer loadBalancer;
+
   @GuardedBy("lock")
   private boolean shutdown;
 
@@ -93,9 +100,12 @@ final class TransportSet {
    */
   private volatile SettableFuture<ClientTransport> activeTransportFuture;
 
-  TransportSet(BackoffPolicy.Provider backoffPolicyProvider,
-      ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
-      Callback callback) {
+  TransportSet(SocketAddress server, String authority, LoadBalancer loadBalancer,
+      BackoffPolicy.Provider backoffPolicyProvider, ClientTransportFactory transportFactory,
+      ScheduledExecutorService scheduledExecutor, Callback callback) {
+    this.server = server;
+    this.authority = authority;
+    this.loadBalancer = loadBalancer;
     this.backoffPolicyProvider = backoffPolicyProvider;
     this.transportFactory = transportFactory;
     this.scheduledExecutor = scheduledExecutor;
@@ -156,8 +166,10 @@ final class TransportSet {
           if (shutdown) {
             return;
           }
-          ClientTransport newActiveTransport = transportFactory.newClientTransport();
-          log.info("Created transport '" + newActiveTransport);
+          ClientTransport newActiveTransport = transportFactory.newClientTransport(
+              server, authority);
+          log.log(Level.INFO, "Created transport {0} for {1}",
+              new Object[] {newActiveTransport, server});
           transports.add(newActiveTransport);
           newActiveTransport.start(
               new TransportListener(newActiveTransport, activeTransportFuture));
@@ -222,30 +234,34 @@ final class TransportSet {
     @Override
     public void transportReady() {
       synchronized (lock) {
-        log.info("Transport '" + transport + " is ready");
+        log.log(Level.INFO, "Transport {0} for {1} is ready", new Object[] {transport, server});
         Preconditions.checkState(transportFuture.isDone(), "the transport future is not done");
         if (isAttachedToActiveTransport()) {
           reconnectPolicy = null;
         }
       }
+      loadBalancer.transportReady(server, transport);
     }
 
     @Override
     public void transportShutdown(Status s) {
       synchronized (lock) {
-        log.info("Transport '" + transport + " is being shutdown");
+        log.log(Level.INFO, "Transport {0} for {1} is being shutdown",
+            new Object[] {transport, server});
         Preconditions.checkState(transportFuture.isDone(), "the transport future is not done");
         if (isAttachedToActiveTransport()) {
           createActiveTransportFuture();
         }
       }
+      loadBalancer.transportShutdown(server, transport, s);
     }
 
     @Override
     public void transportTerminated() {
       boolean runCallback = false;
       synchronized (lock) {
-        log.info("Transport '" + transport + " is terminated");
+        log.log(Level.INFO, "Transport {0} for {1} is terminated",
+            new Object[] {transport, server});
         Preconditions.checkState(!isAttachedToActiveTransport(),
             "Listener is still attached to activeTransportFuture. "
             + "Seems transportTerminated was not called.");

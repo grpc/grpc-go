@@ -51,4 +51,9 @@ public class NettyChannelProvider extends ManagedChannelProvider {
   protected NettyChannelBuilder builderForAddress(String name, int port) {
     return NettyChannelBuilder.forAddress(name, port);
   }
+
+  @Override
+  protected NettyChannelBuilder builderForTarget(String target) {
+    return NettyChannelBuilder.forTarget(target);
+  }
 }

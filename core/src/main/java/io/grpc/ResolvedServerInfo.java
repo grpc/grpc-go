@@ -29,56 +29,48 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.netty;
+package io.grpc;
 
-import io.grpc.internal.ClientTransportFactory;
-
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
-@RunWith(JUnit4.class)
-public class NettyChannelBuilderTest {
+import javax.annotation.concurrent.Immutable;
 
-  @Rule public final ExpectedException thrown = ExpectedException.none();
+/**
+ * The information about a server from a {@link NameResolver}.
+ */
+@ExperimentalApi
+@Immutable
+public final class ResolvedServerInfo {
+  private final SocketAddress address;
+  private final Attributes attributes;
 
-  @Test
-  public void overrideAllowsInvalidAuthority() {
-    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){}) {
-      @Override
-      protected String checkAuthority(String authority) {
-        return authority;
-      }
-    };
-
-    ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .buildTransportFactory();
+  /**
+   * Constructor.
+   *
+   * @param address the address object
+   * @param attributes attributes associated with this address.
+   */
+  public ResolvedServerInfo(SocketAddress address, Attributes attributes) {
+    this.address = address;
+    this.attributes = attributes;
   }
 
-  @Test
-  public void failOverrideInvalidAuthority() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Invalid authority:");
-
-    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){});
-
-    ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .buildTransportFactory();
+  /**
+   * Returns the address.
+   */
+  public SocketAddress getAddress() {
+    return address;
   }
 
-  @Test
-  public void failInvalidAuthority() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Invalid host or port");
+  /**
+   * Returns the associated attributes.
+   */
+  public Attributes getAttributes() {
+    return attributes;
+  }
 
-    NettyChannelBuilder.forAddress(new InetSocketAddress("invalid_authority", 1234));
+  @Override
+  public String toString() {
+    return "[address=" + address + ", attrs=" + attributes + "]";
   }
 }
-

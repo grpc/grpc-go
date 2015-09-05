@@ -50,6 +50,9 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.net.URI;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -99,19 +102,27 @@ public class OkHttpChannelBuilder extends
     return new OkHttpChannelBuilder(host, port);
   }
 
+  /**
+   * Creates a new builder for the given target URI that will be resolved by
+   * {@link io.grpc.NameResolver}.
+   */
+  public static OkHttpChannelBuilder forTarget(String targetUri) {
+    return new OkHttpChannelBuilder(URI.create(targetUri));
+  }
+
   private Executor transportExecutor;
-  private final String host;
-  private final int port;
-  private String authority;
+
   private SSLSocketFactory sslSocketFactory;
   private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
   private NegotiationType negotiationType = NegotiationType.TLS;
   private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
 
   protected OkHttpChannelBuilder(String host, int port) {
-    this.host = Preconditions.checkNotNull(host);
-    this.port = port;
-    this.authority = GrpcUtil.authorityFromHostAndPort(host, port);
+    this(URI.create("dns:///" + GrpcUtil.authorityFromHostAndPort(host, port)));
+  }
+
+  private OkHttpChannelBuilder(URI target) {
+    super(target);
   }
 
   /**
@@ -122,27 +133,6 @@ public class OkHttpChannelBuilder extends
    */
   public final OkHttpChannelBuilder transportExecutor(@Nullable Executor transportExecutor) {
     this.transportExecutor = transportExecutor;
-    return this;
-  }
-
-  /**
-   * Overrides the host used with TLS and HTTP virtual hosting. It does not change what host is
-   * actually connected to. This method differs from {@link #overrideAuthority(String)} in that it
-   * appends the port number to the host provided.
-   *
-   * <p>Should only used by tests.
-   *
-   * @deprecated use {@link #overrideAuthority} instead
-   */
-  @Deprecated
-  public final OkHttpChannelBuilder overrideHostForAuthority(String host) {
-    this.authority = GrpcUtil.authorityFromHostAndPort(host, this.port);
-    return this;
-  }
-
-  @Override
-  public final OkHttpChannelBuilder overrideAuthority(String authority) {
-    this.authority = checkAuthority(authority);
     return this;
   }
 
@@ -205,16 +195,8 @@ public class OkHttpChannelBuilder extends
 
   @Override
   protected final ClientTransportFactory buildTransportFactory() {
-    return new OkHttpTransportFactory(host, port, authority, transportExecutor,
+    return new OkHttpTransportFactory(transportExecutor,
             createSocketFactory(), connectionSpec, maxMessageSize);
-  }
-
-  /**
-   * Verifies the authority is valid.  This method exists as an escape hatch for putting in an
-   * authority that is valid, but would fail the default validation provided by this implementation.
-   */
-  protected String checkAuthority(String authority) {
-    return GrpcUtil.checkAuthority(authority);
   }
 
   private SSLSocketFactory createSocketFactory() {
@@ -231,25 +213,16 @@ public class OkHttpChannelBuilder extends
 
   private static class OkHttpTransportFactory extends AbstractReferenceCounted
           implements ClientTransportFactory {
-    private final String host;
-    private final int port;
-    private final String authority;
     private final Executor executor;
     private final boolean usingSharedExecutor;
     private final SSLSocketFactory socketFactory;
     private final ConnectionSpec connectionSpec;
     private final int maxMessageSize;
 
-    private OkHttpTransportFactory(String host,
-                                   int port,
-                                   String authority,
-                                   Executor executor,
+    private OkHttpTransportFactory(Executor executor,
                                    SSLSocketFactory socketFactory,
                                    ConnectionSpec connectionSpec,
                                    int maxMessageSize) {
-      this.host = host;
-      this.port = port;
-      this.authority = authority;
       this.socketFactory = socketFactory;
       this.connectionSpec = connectionSpec;
       this.maxMessageSize = maxMessageSize;
@@ -264,14 +237,10 @@ public class OkHttpChannelBuilder extends
     }
 
     @Override
-    public ClientTransport newClientTransport() {
-      return new OkHttpClientTransport(host, port, authority, executor, socketFactory,
-          Utils.convertSpec(connectionSpec), maxMessageSize);
-    }
-
-    @Override
-    public String authority() {
-      return authority;
+    public ClientTransport newClientTransport(SocketAddress addr, String authority) {
+      InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
+      return new OkHttpClientTransport(inetSocketAddr.getHostString(), inetSocketAddr.getPort(),
+          authority, executor, socketFactory, Utils.convertSpec(connectionSpec), maxMessageSize);
     }
 
     @Override

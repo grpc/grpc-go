@@ -96,7 +96,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
      * @return a future for client transport. If no more transports can be created, e.g., channel is
      *         shut down, the future's value will be {@code null}.
      */
-    ListenableFuture<ClientTransport> get();
+    ListenableFuture<ClientTransport> get(CallOptions callOptions);
   }
 
 
@@ -139,7 +139,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     }
 
     ClientStreamListener listener = new ClientStreamListenerImpl(observer);
-    ListenableFuture<ClientTransport> transportFuture = clientTransportProvider.get();
+    ListenableFuture<ClientTransport> transportFuture = clientTransportProvider.get(callOptions);
     if (transportFuture.isDone()) {
       // Try to skip DelayedStream when possible to avoid the overhead of a volatile read in the
       // fast path. If that fails, stream will stay null and DelayedStream will be created.
@@ -409,7 +409,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
       StreamCreationTask() {
         this.transportFuture = Preconditions.checkNotNull(
-            clientTransportProvider.get(), "transportFuture");
+            clientTransportProvider.get(callOptions), "transportFuture");
       }
 
       @Override

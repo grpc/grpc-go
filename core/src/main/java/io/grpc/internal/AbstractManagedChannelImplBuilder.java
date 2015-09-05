@@ -31,12 +31,23 @@
 
 package io.grpc.internal;
 
-import io.grpc.ClientInterceptor;
-import io.grpc.Internal;
-import io.grpc.ManagedChannelBuilder;
+import com.google.common.base.Preconditions;
 
+import io.grpc.Attributes;
+import io.grpc.ClientInterceptor;
+import io.grpc.DnsNameResolverFactory;
+import io.grpc.Internal;
+import io.grpc.LoadBalancer;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.NameResolver;
+import io.grpc.ResolvedServerInfo;
+import io.grpc.SimpleLoadBalancerFactory;
+
+import java.net.SocketAddress;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
 
@@ -54,8 +65,33 @@ public abstract class AbstractManagedChannelImplBuilder
   private Executor executor;
   private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
 
+  private final URI target;
+
+  @Nullable
+  private final SocketAddress directServerAddress;
+
   @Nullable
   private String userAgent;
+
+  @Nullable
+  private String authorityOverride;
+
+  @Nullable
+  private NameResolver.Factory nameResolverFactory;
+
+  @Nullable
+  private LoadBalancer.Factory loadBalancerFactory;
+
+  protected AbstractManagedChannelImplBuilder(URI target) {
+    this.target = Preconditions.checkNotNull(target);
+    this.directServerAddress = null;
+  }
+
+  protected AbstractManagedChannelImplBuilder(SocketAddress directServerAddress, String authority) {
+    this.target = URI.create("direct-address:///" + directServerAddress);
+    this.directServerAddress = directServerAddress;
+    this.nameResolverFactory = new DirectAddressNameResolverFactory(directServerAddress, authority);
+  }
 
   @Override
   public final T executor(Executor executor) {
@@ -74,6 +110,24 @@ public abstract class AbstractManagedChannelImplBuilder
     return intercept(Arrays.asList(interceptors));
   }
 
+  @Override
+  public final T nameResolverFactory(NameResolver.Factory resolverFactory) {
+    Preconditions.checkState(directServerAddress == null,
+        "directServerAddress is set (%s), which forbids the use of NameResolverFactory",
+        directServerAddress);
+    this.nameResolverFactory = resolverFactory;
+    return thisT();
+  }
+
+  @Override
+  public final T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory) {
+    Preconditions.checkState(directServerAddress == null,
+        "directServerAddress is set (%s), which forbids the use of LoadBalancerFactory",
+        directServerAddress);
+    this.loadBalancerFactory = loadBalancerFactory;
+    return thisT();
+  }
+
   private T thisT() {
     @SuppressWarnings("unchecked")
     T thisT = (T) this;
@@ -87,9 +141,32 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   @Override
+  public final T overrideAuthority(String authority) {
+    this.authorityOverride = checkAuthority(authority);
+    return thisT();
+  }
+
+  /**
+   * Verifies the authority is valid.  This method exists as an escape hatch for putting in an
+   * authority that is valid, but would fail the default validation provided by this
+   * implementation.
+   */
+  protected String checkAuthority(String authority) {
+    return GrpcUtil.checkAuthority(authority);
+  }
+
+  @Override
   public ManagedChannelImpl build() {
-    ClientTransportFactory transportFactory = buildTransportFactory();
-    return new ManagedChannelImpl(transportFactory, executor, userAgent, interceptors);
+    ClientTransportFactory transportFactory = new AuthorityOverridingTransportFactory(
+        buildTransportFactory(), authorityOverride);
+    return new ManagedChannelImpl(
+        target,
+        // TODO(carl-mastrangelo): Allow clients to pass this in
+        new ExponentialBackoffPolicy.Provider(),
+        // TODO(zhangkun83): use a NameResolver registry for the "nameResolverFactory == null" case
+        nameResolverFactory == null ? DnsNameResolverFactory.getInstance() : nameResolverFactory,
+        loadBalancerFactory == null ? SimpleLoadBalancerFactory.getInstance() : loadBalancerFactory,
+        transportFactory, executor, userAgent, interceptors);
   }
 
   /**
@@ -99,4 +176,68 @@ public abstract class AbstractManagedChannelImplBuilder
    */
   @Internal
   protected abstract ClientTransportFactory buildTransportFactory();
+
+  private static class AuthorityOverridingTransportFactory implements ClientTransportFactory {
+    final ClientTransportFactory factory;
+    @Nullable final String authorityOverride;
+
+    AuthorityOverridingTransportFactory(
+        ClientTransportFactory factory, @Nullable String authorityOverride) {
+      this.factory = factory;
+      this.authorityOverride = authorityOverride;
+    }
+
+    @Override
+    public ClientTransport newClientTransport(SocketAddress serverAddress, String authority) {
+      return factory.newClientTransport(
+          serverAddress, authorityOverride != null ? authorityOverride : authority);
+    }
+
+    @Override
+    public int referenceCount() {
+      return factory.referenceCount();
+    }
+
+    @Override
+    public ReferenceCounted retain() {
+      factory.retain();
+      return this;
+    }
+
+    @Override
+    public ReferenceCounted release() {
+      factory.release();
+      return this;
+    }
+  }
+
+  private static class DirectAddressNameResolverFactory extends NameResolver.Factory {
+    final SocketAddress address;
+    final String authority;
+
+    DirectAddressNameResolverFactory(SocketAddress address, String authority) {
+      this.address = address;
+      this.authority = authority;
+    }
+
+    @Override
+    public NameResolver newNameResolver(URI notUsedUri) {
+      return new NameResolver() {
+        @Override
+        public String getServiceAuthority() {
+          return authority;
+        }
+
+        @Override
+        public void start(final Listener listener) {
+          listener.onUpdate(
+              Collections.singletonList(new ResolvedServerInfo(address, Attributes.EMPTY)),
+              Attributes.EMPTY);
+        }
+
+        @Override
+        public void shutdown() {}
+      };
+    }
+  }
 }

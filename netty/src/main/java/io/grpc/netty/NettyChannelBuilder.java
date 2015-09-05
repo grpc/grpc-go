@@ -50,6 +50,7 @@ import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.net.URI;
 
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
@@ -61,8 +62,6 @@ import javax.net.ssl.SSLException;
 public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<NettyChannelBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
-  private final SocketAddress serverAddress;
-  private String authority;
   private NegotiationType negotiationType = NegotiationType.TLS;
   private Class<? extends Channel> channelType = NioSocketChannel.class;
   @Nullable
@@ -78,30 +77,39 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
    * noticing changes to DNS.
    */
   public static NettyChannelBuilder forAddress(SocketAddress serverAddress) {
-    String authority;
-    if (serverAddress instanceof InetSocketAddress) {
-      InetSocketAddress address = (InetSocketAddress) serverAddress;
-      authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
-    } else {
-      // Specialized address types are allowed to support custom Channel types so just assume their
-      // toString() values are valid :authority values. We defer checking validity of authority
-      // until buildTransportFactory() to provide the user an opportunity to override the value.
-      authority = serverAddress.toString();
-    }
-    return new NettyChannelBuilder(serverAddress, authority);
+    return new NettyChannelBuilder(serverAddress);
   }
 
   /**
    * Creates a new builder with the given host and port.
    */
   public static NettyChannelBuilder forAddress(String host, int port) {
-    return new NettyChannelBuilder(
-        new InetSocketAddress(host, port), GrpcUtil.authorityFromHostAndPort(host, port));
+    return forAddress(new InetSocketAddress(host, port));
   }
 
-  protected NettyChannelBuilder(SocketAddress serverAddress, String authority) {
-    this.serverAddress = serverAddress;
-    this.authority = authority;
+  /**
+   * Creates a new builder with the given target URI that will be resolved by
+   * {@link io.grpc.NameResolver}.
+   */
+  public static NettyChannelBuilder forTarget(String targetUri) {
+    return new NettyChannelBuilder(URI.create(targetUri));
+  }
+
+  private NettyChannelBuilder(URI target) {
+    super(target);
+  }
+
+  protected NettyChannelBuilder(SocketAddress address) {
+    super(address, getAuthorityFromAddress(address));
+  }
+
+  private static String getAuthorityFromAddress(SocketAddress address) {
+    if (address instanceof InetSocketAddress) {
+      InetSocketAddress inetAddress = (InetSocketAddress) address;
+      return GrpcUtil.authorityFromHostAndPort(inetAddress.getHostString(), inetAddress.getPort());
+    } else {
+      return address.toString();
+    }
   }
 
   /**
@@ -180,28 +188,14 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   }
 
   @Override
-  public final NettyChannelBuilder overrideAuthority(String authority) {
-    this.authority = checkAuthority(authority);
-    return this;
+  protected ClientTransportFactory buildTransportFactory() {
+    return new NettyTransportFactory(channelType, negotiationType, sslContext,
+        eventLoopGroup, flowControlWindow, maxMessageSize);
   }
 
-  /**
-   * Verifies the authority is valid.  This method exists as an escape hatch for putting in an
-   * authority that is valid, but would fail the default validation provided by this implementation.
-   */
-  protected String checkAuthority(String authority) {
-    return GrpcUtil.checkAuthority(authority);
-  }
-
-  @Override
-  protected final ClientTransportFactory buildTransportFactory() {
-    // Check authority, since non-inet ServerAddresses delay the authority check.
-    checkAuthority(authority);
-    return new NettyTransportFactory(serverAddress, authority, channelType, eventLoopGroup,
-        flowControlWindow, createProtocolNegotiator(), maxMessageSize);
-  }
-
-  private ProtocolNegotiator createProtocolNegotiator() {
+  private static ProtocolNegotiator createProtocolNegotiator(
+      String authority, NegotiationType negotiationType, SslContext sslContext) {
+    ProtocolNegotiator negotiator;
     switch (negotiationType) {
       case PLAINTEXT:
         return ProtocolNegotiators.plaintext();
@@ -223,29 +217,25 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
 
   private static class NettyTransportFactory extends AbstractReferenceCounted
           implements ClientTransportFactory {
-    private final SocketAddress serverAddress;
     private final Class<? extends Channel> channelType;
+    private final NegotiationType negotiationType;
+    private final SslContext sslContext;
     private final EventLoopGroup group;
     private final boolean usingSharedGroup;
     private final int flowControlWindow;
-    private final ProtocolNegotiator negotiator;
     private final int maxMessageSize;
-    private final String authority;
 
-    private NettyTransportFactory(SocketAddress serverAddress,
-                                  String authority,
-                                  Class<? extends Channel> channelType,
+    private NettyTransportFactory(Class<? extends Channel> channelType,
+                                  NegotiationType negotiationType,
+                                  SslContext sslContext,
                                   EventLoopGroup group,
                                   int flowControlWindow,
-                                  ProtocolNegotiator negotiator,
                                   int maxMessageSize) {
-      this.serverAddress = serverAddress;
       this.channelType = channelType;
+      this.negotiationType = negotiationType;
+      this.sslContext = sslContext;
       this.flowControlWindow = flowControlWindow;
-      this.negotiator = negotiator;
       this.maxMessageSize = maxMessageSize;
-      this.authority = authority;
-
       usingSharedGroup = group == null;
       if (usingSharedGroup) {
         // The group was unspecified, using the shared group.
@@ -256,14 +246,11 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     }
 
     @Override
-    public ClientTransport newClientTransport() {
-      return new NettyClientTransport(serverAddress, channelType, group, negotiator,
-              flowControlWindow, maxMessageSize, authority);
-    }
-
-    @Override
-    public String authority() {
-      return authority;
+    public ClientTransport newClientTransport(SocketAddress serverAddress, String authority) {
+      GrpcUtil.checkAuthority(authority);
+      return new NettyClientTransport(serverAddress, channelType, group,
+          createProtocolNegotiator(authority, negotiationType, sslContext),
+          flowControlWindow, maxMessageSize, authority);
     }
 
     @Override

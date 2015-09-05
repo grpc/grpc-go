@@ -31,8 +31,6 @@
 
 package io.grpc.okhttp;
 
-import static org.junit.Assert.assertEquals;
-
 import io.grpc.internal.ClientTransportFactory;
 
 import org.junit.Rule;
@@ -55,11 +53,20 @@ public class OkHttpChannelBuilderTest {
       }
     };
 
-    ClientTransportFactory factory = builder.overrideAuthority("invalid_authority")
+    ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
         .negotiationType(NegotiationType.PLAINTEXT)
         .buildTransportFactory();
+  }
 
-    assertEquals("invalid_authority", factory.authority());
+  @Test
+  public void failOverrideInvalidAuthority() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("Invalid authority:");
+    OkHttpChannelBuilder builder = new OkHttpChannelBuilder("good", 1234);
+
+    ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
+        .negotiationType(NegotiationType.PLAINTEXT)
+        .buildTransportFactory();
   }
 
   @Test

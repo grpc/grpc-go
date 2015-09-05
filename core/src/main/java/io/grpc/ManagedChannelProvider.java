@@ -106,6 +106,12 @@ public abstract class ManagedChannelProvider {
    */
   protected abstract ManagedChannelBuilder<?> builderForAddress(String name, int port);
 
+  /**
+   * Creates a new builder with the given target URI.
+   */
+  @ExperimentalApi
+  protected abstract ManagedChannelBuilder<?> builderForTarget(String target);
+
   public static final class ProviderNotFoundException extends RuntimeException {
     public ProviderNotFoundException(String msg) {
       super(msg);

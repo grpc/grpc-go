@@ -37,6 +37,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
@@ -47,6 +48,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -56,6 +58,9 @@ import io.grpc.IntegerMarshaller;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.NameResolver;
+import io.grpc.ResolvedServerInfo;
+import io.grpc.SimpleLoadBalancerFactory;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 
@@ -70,6 +75,8 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.net.SocketAddress;
+import java.net.URI;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -81,15 +88,23 @@ import java.util.concurrent.atomic.AtomicLong;
 /** Unit tests for {@link ManagedChannelImpl}. */
 @RunWith(JUnit4.class)
 public class ManagedChannelImplTest {
+  private static final List<ClientInterceptor> NO_INTERCEPTOR =
+      Collections.<ClientInterceptor>emptyList();
   private final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
       MethodDescriptor.MethodType.UNKNOWN, "/service/method",
       new StringMarshaller(), new IntegerMarshaller());
   private final ExecutorService executor = Executors.newSingleThreadExecutor();
+  private final String serviceName = "fake.example.com";
+  private final URI target = URI.create("//" + serviceName);
+  private final String authority = serviceName;
+  private final SocketAddress socketAddress = new SocketAddress() {};
+  private final ResolvedServerInfo server = new ResolvedServerInfo(socketAddress, Attributes.EMPTY);
 
   @Mock
   private ClientTransport mockTransport;
   @Mock
   private ClientTransportFactory mockTransportFactory;
+
   private ManagedChannel channel;
 
   @Mock
@@ -104,16 +119,18 @@ public class ManagedChannelImplTest {
   private ArgumentCaptor<ClientStreamListener> streamListenerCaptor =
       ArgumentCaptor.forClass(ClientStreamListener.class);
 
-  private void createChannel(List<ClientInterceptor> interceptors) throws Exception {
-    channel = new ManagedChannelImpl(new FakeBackoffPolicyProvider(), mockTransportFactory,
-        executor, null, interceptors);
+  private ManagedChannel createChannel(
+      NameResolver.Factory nameResolverFactory, List<ClientInterceptor> interceptors) {
+    return new ManagedChannelImpl(target, new FakeBackoffPolicyProvider(),
+        nameResolverFactory, SimpleLoadBalancerFactory.getInstance(),
+        mockTransportFactory, executor, null, interceptors);
   }
 
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
-    createChannel(Collections.<ClientInterceptor>emptyList());
-    when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport);
+    when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class)))
+        .thenReturn(mockTransport);
   }
 
   @After
@@ -123,6 +140,7 @@ public class ManagedChannelImplTest {
 
   @Test
   public void immediateDeadlineExceeded() {
+    ManagedChannel channel = createChannel(new FakeNameResolverFactory(server), NO_INTERCEPTOR);
     ClientCall<String, Integer> call =
         channel.newCall(method, CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime()));
     call.start(mockCallListener, new Metadata());
@@ -132,6 +150,7 @@ public class ManagedChannelImplTest {
 
   @Test
   public void shutdownWithNoTransportsEverCreated() {
+    ManagedChannel channel = createChannel(new FakeNameResolverFactory(server), NO_INTERCEPTOR);
     verifyNoMoreInteractions(mockTransportFactory);
     channel.shutdown();
     assertTrue(channel.isShutdown());
@@ -140,6 +159,8 @@ public class ManagedChannelImplTest {
 
   @Test
   public void twoCallsAndGracefulShutdown() {
+    ManagedChannel channel = createChannel(
+        new FakeNameResolverFactory(server), Collections.<ClientInterceptor>emptyList());
     verifyNoMoreInteractions(mockTransportFactory);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     verifyNoMoreInteractions(mockTransportFactory);
@@ -148,11 +169,13 @@ public class ManagedChannelImplTest {
     ClientTransport mockTransport = mock(ClientTransport.class);
     ClientStream mockStream = mock(ClientStream.class);
     Metadata headers = new Metadata();
-    when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport);
+    when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class)))
+        .thenReturn(mockTransport);
     when(mockTransport.newStream(same(method), same(headers), any(ClientStreamListener.class)))
         .thenReturn(mockStream);
     call.start(mockCallListener, headers);
-    verify(mockTransportFactory, timeout(1000)).newClientTransport();
+    verify(mockTransportFactory, timeout(1000))
+        .newClientTransport(same(socketAddress), eq(authority));
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     ClientTransport.Listener transportListener = transportListenerCaptor.getValue();
     verify(mockTransport, timeout(1000))
@@ -206,6 +229,7 @@ public class ManagedChannelImplTest {
 
   @Test
   public void transportFailsOnStart() {
+    ManagedChannel channel = createChannel(new FakeNameResolverFactory(server), NO_INTERCEPTOR);
     Status goldenStatus = Status.INTERNAL.withDescription("wanted it to fail");
 
     // mockTransport2 shuts immediately during start
@@ -230,10 +254,12 @@ public class ManagedChannelImplTest {
     when(mockTransport2.newStream(same(method), same(headers2), any(ClientStreamListener.class)))
         .thenReturn(mockStream2);
     // The factory returns the immediately shut-down transport first, then the normal one
-    when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport2, mockTransport);
+    when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class)))
+        .thenReturn(mockTransport2, mockTransport);
 
     call.start(mockCallListener2, headers2);
-    verify(mockTransportFactory, timeout(1000).times(2)).newClientTransport();
+    verify(mockTransportFactory, timeout(1000).times(2))
+        .newClientTransport(same(socketAddress), eq(authority));
     verify(mockTransport2, timeout(1000)).start(any(ClientTransport.Listener.class));
     verify(mockTransport2, timeout(1000))
         .newStream(same(method), same(headers2), streamListenerCaptor.capture());
@@ -268,7 +294,7 @@ public class ManagedChannelImplTest {
     transportListenerCaptor.getValue().transportTerminated();
     assertTrue(channel.isTerminated());
 
-    verify(mockTransportFactory, times(2)).newClientTransport();
+    verify(mockTransportFactory, times(2)).newClientTransport(same(socketAddress), eq(authority));
     verifyNoMoreInteractions(mockTransport);
     verifyNoMoreInteractions(mockTransport2);
     verifyNoMoreInteractions(mockStream2);
@@ -286,13 +312,15 @@ public class ManagedChannelImplTest {
         return next.newCall(method, callOptions);
       }
     };
-    createChannel(Arrays.asList(interceptor));
+    ManagedChannel channel = createChannel(
+        new FakeNameResolverFactory(server), Arrays.asList(interceptor));
     assertNotNull(channel.newCall(method, CallOptions.DEFAULT));
     assertEquals(1, atomic.get());
   }
 
   @Test
   public void testNoDeadlockOnShutdown() {
+    ManagedChannel channel = createChannel(new FakeNameResolverFactory(server), NO_INTERCEPTOR);
     // Force creation of transport
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     Metadata headers = new Metadata();
@@ -341,6 +369,18 @@ public class ManagedChannelImplTest {
     transportListener.transportTerminated();
   }
 
+  @Test
+  public void nameResolutionFailed() {
+    Status error = Status.UNAVAILABLE.withCause(new Throwable("fake name resolution error"));
+    ManagedChannel channel = createChannel(new FailingNameResolverFactory(error), NO_INTERCEPTOR);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
+    Status status = statusCaptor.getValue();
+    assertSame(error, status);
+  }
+
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {
     @Override
     public BackoffPolicy get() {
@@ -349,6 +389,55 @@ public class ManagedChannelImplTest {
         public long nextBackoffMillis() {
           return 1;
         }
+      };
+    }
+  }
+
+  private class FakeNameResolverFactory extends NameResolver.Factory {
+    final ResolvedServerInfo server;
+
+    FakeNameResolverFactory(ResolvedServerInfo server) {
+      this.server = server;
+    }
+
+    @Override
+    public NameResolver newNameResolver(final URI targetUri) {
+      assertEquals(null, targetUri.getScheme());
+      assertEquals(serviceName, targetUri.getAuthority());
+      return new NameResolver() {
+        @Override public String getServiceAuthority() {
+          assertNotNull(targetUri.toString() + " has authority", targetUri.getAuthority());
+          return targetUri.getAuthority();
+        }
+
+        @Override public void start(final Listener listener) {
+          listener.onUpdate(Collections.singletonList(server), Attributes.EMPTY);
+        }
+
+        @Override public void shutdown() {}
+      };
+    }
+  }
+
+  private class FailingNameResolverFactory extends NameResolver.Factory {
+    final Status error;
+
+    FailingNameResolverFactory(Status error) {
+      this.error = error;
+    }
+
+    @Override
+    public NameResolver newNameResolver(URI notUsedUri) {
+      return new NameResolver() {
+        @Override public String getServiceAuthority() {
+          return "irrelevant-authority";
+        }
+
+        @Override public void start(final Listener listener) {
+          listener.onError(error);
+        }
+
+        @Override public void shutdown() {}
       };
     }
   }
