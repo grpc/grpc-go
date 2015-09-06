@@ -117,15 +117,19 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		if !ok {
 			grpclog.Fatalf("Failed to get AuthInfo from ctx.")
 		}
-		var authType string
+		var authType, serverName string
 		switch info := authInfo.(type) {
 		case credentials.TLSInfo:
 			authType = info.AuthType()
+			serverName = info.State.ServerName
 		default:
 			grpclog.Fatalf("Unknown AuthInfo type")
 		}
 		if authType != s.security {
 			grpclog.Fatalf("Wrong auth type: got %q, want %q", authType, s.security)
+		}
+		if serverName != "x.test.youtube.com" {
+			return nil, fmt.Errorf("Unknown server name %q", serverName)
 		}
 	}
 
