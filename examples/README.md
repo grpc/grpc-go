@@ -20,8 +20,8 @@ INSTALL
 -------
 
 ```sh
-$ go get -u github.com/grpc/grpc-go/examples/greeter_client
-$ go get -u github.com/grpc/grpc-go/examples/greeter_server
+$ go get -u github.com/grpc/grpc-go/examples/helloworld/greeter_client
+$ go get -u github.com/grpc/grpc-go/examples/helloworld/greeter_server
 ```
 
 TRY IT!
