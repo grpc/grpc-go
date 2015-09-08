@@ -61,9 +61,9 @@ public interface ServerInterceptor {
    * @param next next processor in the interceptor chain
    * @return listener for processing incoming messages for {@code call}, never {@code null}.
    */
-  <RequestT, ResponseT> ServerCall.Listener<RequestT> interceptCall(
-      MethodDescriptor<RequestT, ResponseT> method,
-      ServerCall<ResponseT> call,
+  <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+      MethodDescriptor<ReqT, RespT> method,
+      ServerCall<RespT> call,
       Metadata headers,
-      ServerCallHandler<RequestT, ResponseT> next);
+      ServerCallHandler<ReqT, RespT> next);
 }

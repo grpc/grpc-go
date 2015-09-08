@@ -46,9 +46,9 @@ package io.grpc;
  *
  * <p>Methods are guaranteed to be non-blocking. Implementations are not required to be thread-safe.
  *
- * @param <ResponseT> parsed type of response message.
+ * @param <RespT> parsed type of response message.
  */
-public abstract class ServerCall<ResponseT> {
+public abstract class ServerCall<RespT> {
   /**
    * Callbacks for consuming incoming RPC messages.
    *
@@ -61,14 +61,14 @@ public abstract class ServerCall<ResponseT> {
   // TODO(ejona86): We need to decide what to do in the case of server closing with non-cancellation
   // before client half closes. It may be that we treat such a case as an error. If we permit such
   // a case then we either get to generate a half close or purposefully omit it.
-  public abstract static class Listener<RequestT> {
+  public abstract static class Listener<ReqT> {
     /**
      * A request message has been received. For streaming calls, there may be zero or more request
      * messages.
      *
      * @param message a received request message.
      */
-    public void onMessage(RequestT message) {}
+    public void onMessage(ReqT message) {}
 
     /**
      * The client completed all message sending. However, the call may still be cancelled.
@@ -130,7 +130,7 @@ public abstract class ServerCall<ResponseT> {
    * @param message response message.
    * @throws IllegalStateException if call is {@link #close}d
    */
-  public abstract void sendMessage(ResponseT message);
+  public abstract void sendMessage(RespT message);
 
   /**
    * If {@code true}, indicates that the call is capable of sending additional messages

@@ -61,10 +61,10 @@ package io.grpc;
  * {@link Status#CANCELLED CANCELLED}. Otherwise, {@link Listener#onClose Listener.onClose()} is
  * called with whatever status the RPC was finished. We ensure that at most one is called.
  *
- * @param <RequestT> type of message sent one or more times to the server.
- * @param <ResponseT> type of message received one or more times from the server.
+ * @param <ReqT> type of message sent one or more times to the server.
+ * @param <RespT> type of message received one or more times from the server.
  */
-public abstract class ClientCall<RequestT, ResponseT> {
+public abstract class ClientCall<ReqT, RespT> {
   /**
    * Callbacks for receiving metadata, response messages and completion status from the server.
    *
@@ -123,7 +123,7 @@ public abstract class ClientCall<RequestT, ResponseT> {
    * @throws IllegalStateException if a method (including {@code start()}) on this class has been
    *                               called.
    */
-  public abstract void start(Listener<ResponseT> responseListener, Metadata headers);
+  public abstract void start(Listener<RespT> responseListener, Metadata headers);
 
   /**
    * Requests up to the given number of messages from the call to be delivered to
@@ -170,7 +170,7 @@ public abstract class ClientCall<RequestT, ResponseT> {
    * @param message message to be sent to the server.
    * @throws IllegalStateException if call is {@link #halfClose}d or explicitly {@link #cancel}ed
    */
-  public abstract void sendMessage(RequestT message);
+  public abstract void sendMessage(ReqT message);
 
   /**
    * If {@code true}, indicates that the call is capable of sending additional messages

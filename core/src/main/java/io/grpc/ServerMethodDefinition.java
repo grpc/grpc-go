@@ -34,14 +34,14 @@ package io.grpc;
 /**
  * Definition of a method exposed by a {@link Server}.
  */
-public final class ServerMethodDefinition<RequestT, ResponseT> {
-  private final MethodDescriptor<RequestT, ResponseT> method;
-  private final ServerCallHandler<RequestT, ResponseT> handler;
+public final class ServerMethodDefinition<ReqT, RespT> {
+  private final MethodDescriptor<ReqT, RespT> method;
+  private final ServerCallHandler<ReqT, RespT> handler;
 
   // ServerMethodDefinition has no form of public construction. It is only created within the
   // context of a ServerServiceDefinition.Builder.
-  ServerMethodDefinition(MethodDescriptor<RequestT, ResponseT> method,
-      ServerCallHandler<RequestT, ResponseT> handler) {
+  ServerMethodDefinition(MethodDescriptor<ReqT, RespT> method,
+      ServerCallHandler<ReqT, RespT> handler) {
     this.method = method;
     this.handler = handler;
   }
@@ -53,19 +53,19 @@ public final class ServerMethodDefinition<RequestT, ResponseT> {
    * @param handler to dispatch calls to.
    * @return a new instance.
    */
-  public static <RequestT, ResponseT> ServerMethodDefinition<RequestT, ResponseT> create(
-      MethodDescriptor<RequestT, ResponseT> method,
-      ServerCallHandler<RequestT, ResponseT> handler) {
-    return new ServerMethodDefinition<RequestT, ResponseT>(method, handler);
+  public static <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> create(
+      MethodDescriptor<ReqT, RespT> method,
+      ServerCallHandler<ReqT, RespT> handler) {
+    return new ServerMethodDefinition<ReqT, RespT>(method, handler);
   }
 
   /** The {@code MethodDescriptor} for this method. */
-  public MethodDescriptor<RequestT, ResponseT> getMethodDescriptor() {
+  public MethodDescriptor<ReqT, RespT> getMethodDescriptor() {
     return method;
   }
 
   /** Handler for incoming calls. */
-  public ServerCallHandler<RequestT, ResponseT> getServerCallHandler() {
+  public ServerCallHandler<ReqT, RespT> getServerCallHandler() {
     return handler;
   }
 
@@ -75,8 +75,8 @@ public final class ServerMethodDefinition<RequestT, ResponseT> {
    * @param handler to bind to a cloned instance of this.
    * @return a cloned instance of this with the new handler bound.
    */
-  public ServerMethodDefinition<RequestT, ResponseT> withServerCallHandler(
-      ServerCallHandler<RequestT, ResponseT> handler) {
-    return new ServerMethodDefinition<RequestT, ResponseT>(method, handler);
+  public ServerMethodDefinition<ReqT, RespT> withServerCallHandler(
+      ServerCallHandler<ReqT, RespT> handler) {
+    return new ServerMethodDefinition<ReqT, RespT>(method, handler);
   }
 }

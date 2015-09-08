@@ -58,8 +58,6 @@ public interface ClientInterceptor {
    * @param next the channel which is being intercepted.
    * @return the call object for the remote operation, never {@code null}.
    */
-  <RequestT, ResponseT> ClientCall<RequestT, ResponseT> interceptCall(
-      MethodDescriptor<RequestT, ResponseT> method,
-      CallOptions callOptions,
-      Channel next);
+  <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+      MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next);
 }
