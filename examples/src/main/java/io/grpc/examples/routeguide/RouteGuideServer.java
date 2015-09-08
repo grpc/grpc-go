@@ -103,9 +103,22 @@ public class RouteGuideServer {
     }
   }
 
+  /**
+   * Await termination on the main thread since the grpc library uses daemon threads.
+   */
+  private void blockUntilShutdown() throws InterruptedException {
+    if (grpcServer != null) {
+      grpcServer.awaitTermination();
+    }
+  }
+
+  /**
+   * Main method.  This comment makes the linter happy.
+   */
   public static void main(String[] args) throws Exception {
     RouteGuideServer server = new RouteGuideServer(8980);
     server.start();
+    server.blockUntilShutdown();
   }
 
   /**

@@ -70,11 +70,21 @@ public class HelloWorldServer {
   }
 
   /**
+   * Await termination on the main thread since the grpc library uses daemon threads.
+   */
+  private void blockUntilShutdown() throws InterruptedException {
+    if (server != null) {
+      server.awaitTermination();
+    }
+  }
+
+  /**
    * Main launches the server from the command line.
    */
   public static void main(String[] args) throws Exception {
     final HelloWorldServer server = new HelloWorldServer();
     server.start();
+    server.blockUntilShutdown();
   }
 
   private class GreeterImpl implements GreeterGrpc.Greeter {

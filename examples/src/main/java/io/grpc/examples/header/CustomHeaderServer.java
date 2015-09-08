@@ -75,11 +75,21 @@ public class CustomHeaderServer {
   }
 
   /**
+   * Await termination on the main thread since the grpc library uses daemon threads.
+   */
+  private void blockUntilShutdown() throws InterruptedException {
+    if (server != null) {
+      server.awaitTermination();
+    }
+  }
+
+  /**
    * Main launches the server from the command line.
    */
   public static void main(String[] args) throws Exception {
     final CustomHeaderServer server = new CustomHeaderServer();
     server.start();
+    server.blockUntilShutdown();
   }
 
   private class GreeterImpl implements GreeterGrpc.Greeter {
