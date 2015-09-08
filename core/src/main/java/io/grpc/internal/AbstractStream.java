@@ -134,13 +134,6 @@ public abstract class AbstractStream<IdT> implements Stream {
     deframer = new MessageDeframer(inboundMessageHandler, Codec.Identity.NONE, maxMessageSize);
   }
 
-  @Override
-  public void setCompressor(Compressor c) {
-    // TODO(carl-mastrangelo): check that headers haven't already been sent.  I can't find where
-    // the client stream changes outbound phase correctly, so I am ignoring it.
-    framer.setCompressor(c);
-  }
-
   /**
    * Override this method to provide a stream listener.
    */
@@ -298,22 +291,31 @@ public abstract class AbstractStream<IdT> implements Stream {
    * after the message encoding header is provided by the remote host, but before any messages are
    * received.
    */
-  protected final void setDecompressor(Decompressor d) {
+  @Override
+  public final void setDecompressor(Decompressor d) {
     deframer.setDecompressor(d);
   }
 
   /**
    * Looks up the decompressor by its message encoding name, and sets it for this stream.
-   * Decompressors are registered with {@link DecompressorRegistry#registerDecompressor}.
+   * Decompressors are registered with {@link DecompressorRegistry#register}.
    *
    * @param messageEncoding the name of the encoding provided by the remote host
    * @throws IllegalArgumentException if the provided message encoding cannot be found.
    */
-  protected final void setDecompressor(String messageEncoding) {
+  @Override
+  public final void setDecompressor(String messageEncoding) {
     Decompressor d = DecompressorRegistry.lookupDecompressor(messageEncoding);
     checkArgument(d != null,
         "Unable to find decompressor for message encoding %s", messageEncoding);
     setDecompressor(d);
+  }
+
+  @Override
+  public void setCompressor(Compressor c) {
+    // TODO(carl-mastrangelo): check that headers haven't already been sent.  I can't find where
+    // the client stream changes outbound phase correctly, so I am ignoring it.
+    framer.setCompressor(c);
   }
 
   /**

@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import io.grpc.Compressor;
+import io.grpc.Decompressor;
 
 import java.io.InputStream;
 
@@ -83,4 +84,20 @@ public interface Stream {
    * @param c the compressor
    */
   void setCompressor(Compressor c);
+
+  /**
+   * Set the decompressor for this stream.  This may be called at most once.  Typically this is set
+   * after the message encoding header is provided by the remote host, but before any messages are
+   * received.
+   */
+  void setDecompressor(Decompressor d);
+
+  /**
+   * Looks up the decompressor by its message encoding name, and sets it for this stream.
+   * Decompressors are registered with {@link io.grpc.DecompressorRegistry#register}.
+   *
+   * @param messageEncoding the name of the encoding provided by the remote host
+   * @throws IllegalArgumentException if the provided message encoding cannot be found.
+   */
+  void setDecompressor(String messageEncoding);
 }

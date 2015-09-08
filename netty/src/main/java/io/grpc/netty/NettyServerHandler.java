@@ -163,9 +163,6 @@ class NettyServerHandler extends Http2ConnectionHandler {
       ServerStreamListener listener =
           transportListener.streamCreated(stream, method, metadata);
       stream.setListener(listener);
-      if (metadata.containsKey(GrpcUtil.MESSAGE_ENCODING_KEY)) {
-        stream.useDecompressor(metadata.get(GrpcUtil.MESSAGE_ENCODING_KEY));
-      }
       http2Stream.setProperty(streamKey, stream);
 
     } catch (Http2Exception e) {

@@ -43,6 +43,7 @@ import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Codec;
 import io.grpc.Compressor;
+import io.grpc.Decompressor;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -352,6 +353,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     @Override public boolean isReady() {
       return false;
     }
+
+    @Override
+    public void setDecompressor(Decompressor d) {}
+
+    @Override
+    public void setDecompressor(String messageEncoding) {}
   }
 }
 
