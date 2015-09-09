@@ -29,47 +29,36 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.netty;
 
-import java.util.concurrent.Executor;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
-import javax.annotation.Nullable;
+import io.grpc.ServerProvider;
 
-/**
- * A builder for {@link Server} instances.
- *
- * @param <T> The concrete type of this builder.
- */
-public abstract class ServerBuilder<T extends ServerBuilder<T>> {
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-  public static ServerBuilder<?> forPort(int port) {
-    return ServerProvider.provider().builderForPort(port);
+/** Unit tests for {@link NettyServerProvider}. */
+@RunWith(JUnit4.class)
+public class NettyServerProviderTest {
+  private NettyServerProvider provider = new NettyServerProvider();
+
+  @Test
+  public void provided() {
+    assertSame(NettyServerProvider.class, ServerProvider.provider().getClass());
   }
 
-  /**
-   * Provides a custom executor.
-   *
-   * <p>It's an optional parameter. If the user has not provided an executor when the server is
-   * built, the builder will use a static cached thread pool.
-   *
-   * <p>The server won't take ownership of the given executor. It's caller's responsibility to
-   * shut down the executor when it's desired.
-   */
-  public abstract T executor(@Nullable Executor executor);
+  @Test
+  public void basicMethods() {
+    assertTrue(provider.isAvailable());
+    assertEquals(5, provider.priority());
+  }
 
-  /**
-   * Adds a service implementation to the handler registry.
-   *
-   * @throws UnsupportedOperationException if this builder does not support dynamically adding
-   *                                       services.
-   */
-  public abstract T addService(ServerServiceDefinition service);
-
-  /**
-   * Builds a server using the given parameters.
-   *
-   * <p>The returned service will not been started or be bound a port. You will need to start it
-   * with {@link Server#start()}.
-   */
-  public abstract Server build();
+  @Test
+  public void builderIsANettyBuilder() {
+    assertSame(NettyServerBuilder.class, provider.builderForPort(443).getClass());
+  }
 }

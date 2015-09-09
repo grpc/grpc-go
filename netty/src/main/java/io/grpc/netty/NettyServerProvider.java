@@ -29,47 +29,29 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.netty;
 
-import java.util.concurrent.Executor;
+import io.grpc.Internal;
+import io.grpc.ServerProvider;
 
-import javax.annotation.Nullable;
 
-/**
- * A builder for {@link Server} instances.
- *
- * @param <T> The concrete type of this builder.
- */
-public abstract class ServerBuilder<T extends ServerBuilder<T>> {
+/** Provider for {@link NettyChannelBuilder} instances. */
+@Internal
+public final class NettyServerProvider extends ServerProvider {
 
-  public static ServerBuilder<?> forPort(int port) {
-    return ServerProvider.provider().builderForPort(port);
+  @Override
+  protected boolean isAvailable() {
+    return true;
   }
 
-  /**
-   * Provides a custom executor.
-   *
-   * <p>It's an optional parameter. If the user has not provided an executor when the server is
-   * built, the builder will use a static cached thread pool.
-   *
-   * <p>The server won't take ownership of the given executor. It's caller's responsibility to
-   * shut down the executor when it's desired.
-   */
-  public abstract T executor(@Nullable Executor executor);
+  @Override
+  protected int priority() {
+    return 5;
+  }
 
-  /**
-   * Adds a service implementation to the handler registry.
-   *
-   * @throws UnsupportedOperationException if this builder does not support dynamically adding
-   *                                       services.
-   */
-  public abstract T addService(ServerServiceDefinition service);
-
-  /**
-   * Builds a server using the given parameters.
-   *
-   * <p>The returned service will not been started or be bound a port. You will need to start it
-   * with {@link Server#start()}.
-   */
-  public abstract Server build();
+  @Override
+  protected NettyServerBuilder builderForPort(int port) {
+    return NettyServerBuilder.forPort(port);
+  }
 }
+
