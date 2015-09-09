@@ -237,9 +237,12 @@ class AsyncFrameWriter implements FrameWriter {
           throw new IOException("Unable to perform write due to unavailable frameWriter.");
         }
         doRun();
-      } catch (IOException ex) {
-        transport.onIoException(ex);
-        throw new RuntimeException(ex);
+      } catch (RuntimeException e) {
+        transport.onException(e);
+        throw e;
+      } catch (Exception e) {
+        transport.onException(e);
+        throw new RuntimeException(e);
       }
     }
 

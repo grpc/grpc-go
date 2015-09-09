@@ -56,6 +56,9 @@ public final class OkHttpTlsUpgrader {
 
   /**
    * Upgrades given Socket to be a SSLSocket.
+   *
+   * @throws IOException if an IO error was encountered during the upgrade handshake.
+   * @throws RuntimeException if the upgrade negotiation failed.
    */
   public static SSLSocket upgrade(SSLSocketFactory sslSocketFactory,
       Socket socket, String host, int port, ConnectionSpec spec) throws IOException {

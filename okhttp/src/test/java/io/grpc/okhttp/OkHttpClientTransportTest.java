@@ -1087,7 +1087,7 @@ public class OkHttpClientTransportTest {
     clientTransport.ping(callback, MoreExecutors.directExecutor());
     assertEquals(0, callback.invocationCount);
 
-    clientTransport.onIoException(new IOException());
+    clientTransport.onException(new IOException());
     // ping failed on error
     assertEquals(1, callback.invocationCount);
     assertTrue(callback.failureCause instanceof StatusException);

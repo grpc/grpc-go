@@ -75,6 +75,9 @@ public class OkHttpProtocolNegotiator {
 
   /**
    * Start and wait until the negotiation is done, returns the negotiated protocol.
+   *
+   * @throws IOException if an IO error was encountered during the handshake.
+   * @throws RuntimeException if the negotiation completed, but no protocol was selected.
    */
   public String negotiate(
       SSLSocket sslSocket, String hostname, List<Protocol> protocols) throws IOException {
