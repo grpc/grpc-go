@@ -110,7 +110,7 @@ public class ManagedChannelProviderTest {
     }
 
     @Override
-    protected ManagedChannelBuilder builderForAddress(String host, int port) {
+    protected ManagedChannelBuilder<?> builderForAddress(String host, int port) {
       throw new UnsupportedOperationException();
     }
   }

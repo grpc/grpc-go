@@ -104,7 +104,7 @@ public abstract class ManagedChannelProvider {
   /**
    * Creates a new builder with the given host and port.
    */
-  protected abstract ManagedChannelBuilder builderForAddress(String name, int port);
+  protected abstract ManagedChannelBuilder<?> builderForAddress(String name, int port);
 
   public static final class ProviderNotFoundException extends RuntimeException {
     public ProviderNotFoundException(String msg) {

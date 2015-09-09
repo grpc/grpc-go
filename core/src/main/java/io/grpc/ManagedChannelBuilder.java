@@ -31,8 +31,6 @@
 
 package io.grpc;
 
-import io.grpc.ManagedChannelProvider;
-
 import java.util.List;
 import java.util.concurrent.Executor;
 
@@ -42,7 +40,7 @@ import java.util.concurrent.Executor;
  * @param <T> The concrete type of this builder.
  */
 public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> {
-  public static ManagedChannelBuilder forAddress(String name, int port) {
+  public static ManagedChannelBuilder<?> forAddress(String name, int port) {
     return ManagedChannelProvider.provider().builderForAddress(name, port);
   }
 
