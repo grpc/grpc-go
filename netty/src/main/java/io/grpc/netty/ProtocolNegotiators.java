@@ -76,7 +76,7 @@ public final class ProtocolNegotiators {
   /**
    * Create a TLS handler for HTTP/2 capable of using ALPN/NPN.
    */
-  public static ChannelHandler serverTls(SSLEngine sslEngine) {
+  public static ChannelHandler serverTls(SSLEngine sslEngine, final ChannelHandler grpcHandler) {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
 
     final SslHandler sslHandler = new SslHandler(sslEngine, false);
@@ -97,11 +97,11 @@ public final class ProtocolNegotiators {
         if (evt instanceof SslHandshakeCompletionEvent) {
           SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
           if (handshakeEvent.isSuccess()) {
-            if (applicationProtocol(ctx) != null) {
-              // Successfully negotiated the protocol.
-              ctx.pipeline().remove(this);
+            if (sslHandler(ctx).applicationProtocol() != null) {
+              // Successfully negotiated the protocol. Replace this handler with
+              // the GRPC handler.
+              ctx.pipeline().replace(this, null, grpcHandler);
             } else {
-
               fail(ctx, new Exception(
                   "Failed protocol negotiation: Unable to find compatible protocol."));
             }
@@ -113,34 +113,16 @@ public final class ProtocolNegotiators {
       }
 
       private void fail(ChannelHandlerContext ctx, Throwable exception) {
-        log.log(Level.FINE, errorMessage(ctx), exception);
+        Level level = Level.FINE;
+        if (log.isLoggable(level)) {
+          log.log(level, errorMessage(ctx), exception);
+        }
         ctx.close();
       }
 
       private String errorMessage(ChannelHandlerContext ctx) {
-        StringBuilder builder = new StringBuilder("TLS negotiation failed for new client. ");
-        SSLEngine engine = sslHandler(ctx).engine();
-        if (engine instanceof OpenSslEngine) {
-          builder.append("OpenSSL version: ");
-          builder.append("0x").append(Integer.toHexString(OpenSsl.version()));
-          builder.append(" [").append(OpenSsl.versionString()).append(']');
-          builder.append(". ALPN supported: ").append(OpenSsl.isAlpnSupported()).append(". ");
-        } else if (JettyTlsUtil.isJettyAlpnConfigured()) {
-          builder.append("Jetty ALPN configured. ");
-        } else if (JettyTlsUtil.isJettyNpnConfigured()) {
-          builder.append("Jetty NPN configured. ");
-        }
-        builder.append("Enabled ciphers=");
-        builder.append(Arrays.toString(enabledCiphers(ctx))).append(". ");
-        return builder.toString();
-      }
-
-      private String applicationProtocol(ChannelHandlerContext ctx) {
-        return sslHandler(ctx).applicationProtocol();
-      }
-
-      private String[] enabledCiphers(ChannelHandlerContext ctx) {
-        return sslHandler(ctx).engine().getEnabledCipherSuites();
+        StringBuilder builder = new StringBuilder("TLS negotiation failed for new client.\n");
+        return sslEngineDetails(sslHandler(ctx), builder).toString();
       }
 
       private SslHandler sslHandler(ChannelHandlerContext ctx) {
@@ -211,6 +193,39 @@ public final class ProtocolNegotiators {
 
   private static RuntimeException unavailableException(String msg) {
     return Status.UNAVAILABLE.withDescription(msg).asRuntimeException();
+  }
+
+  private static StringBuilder sslEngineDetails(SslHandler sslHandler, StringBuilder builder) {
+    SSLEngine engine = sslHandler.engine();
+    builder.append("SSLEngine Details: [\n");
+    if (engine instanceof OpenSslEngine) {
+      builder.append("    OpenSSL, ");
+      builder.append("Version: 0x").append(Integer.toHexString(OpenSsl.version()));
+      builder.append(" (").append(OpenSsl.versionString()).append("), ");
+      builder.append("ALPN supported: ").append(OpenSsl.isAlpnSupported());
+    } else if (JettyTlsUtil.isJettyAlpnConfigured()) {
+      builder.append("    Jetty ALPN");
+    } else if (JettyTlsUtil.isJettyNpnConfigured()) {
+      builder.append("    Jetty NPN");
+    }
+    builder.append("\n    TLS Protocol: ");
+    builder.append(engine.getSession().getProtocol());
+    builder.append("\n    Application Protocol: ");
+    builder.append(sslHandler.applicationProtocol());
+    builder.append("\n    Need Client Auth: " );
+    builder.append(engine.getNeedClientAuth());
+    builder.append("\n    Want Client Auth: ");
+    builder.append(engine.getWantClientAuth());
+    builder.append("\n    Supported protocols=");
+    builder.append(Arrays.toString(engine.getSupportedProtocols()));
+    builder.append("\n    Enabled protocols=");
+    builder.append(Arrays.toString(engine.getEnabledProtocols()));
+    builder.append("\n    Supported ciphers=");
+    builder.append(Arrays.toString(engine.getSupportedCipherSuites()));
+    builder.append("\n    Enabled ciphers=");
+    builder.append(Arrays.toString(engine.getEnabledCipherSuites()));
+    builder.append("\n]");
+    return builder;
   }
 
   /**

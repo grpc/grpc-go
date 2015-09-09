@@ -38,6 +38,7 @@ import io.grpc.internal.ServerTransportListener;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
@@ -84,19 +85,20 @@ class NettyServerTransport implements ServerTransport {
     this.listener = listener;
 
     // Create the Netty handler for the pipeline.
-    final NettyServerHandler handler = createHandler(listener);
+    final NettyServerHandler grpcHandler = createHandler(listener);
 
     // Notify when the channel closes.
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
-        notifyTerminated(handler.connectionError());
+        notifyTerminated(grpcHandler.connectionError());
       }
     });
 
+    ChannelHandler handler = grpcHandler;
     if (sslContext != null) {
       SSLEngine sslEngine = sslContext.newEngine(channel.alloc());
-      channel.pipeline().addLast(ProtocolNegotiators.serverTls(sslEngine));
+      handler = ProtocolNegotiators.serverTls(sslEngine, grpcHandler);
     }
     channel.pipeline().addLast(handler);
   }
