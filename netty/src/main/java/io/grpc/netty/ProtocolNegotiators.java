@@ -61,6 +61,7 @@ import java.util.Queue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
 
@@ -113,16 +114,8 @@ public final class ProtocolNegotiators {
       }
 
       private void fail(ChannelHandlerContext ctx, Throwable exception) {
-        Level level = Level.FINE;
-        if (log.isLoggable(level)) {
-          log.log(level, errorMessage(ctx), exception);
-        }
+        logSslEngineDetails(Level.FINE, ctx, "TLS negotiation failed for new client.", exception);
         ctx.close();
-      }
-
-      private String errorMessage(ChannelHandlerContext ctx) {
-        StringBuilder builder = new StringBuilder("TLS negotiation failed for new client.\n");
-        return sslEngineDetails(sslHandler(ctx), builder).toString();
       }
 
       private SslHandler sslHandler(ChannelHandlerContext ctx) {
@@ -195,9 +188,17 @@ public final class ProtocolNegotiators {
     return Status.UNAVAILABLE.withDescription(msg).asRuntimeException();
   }
 
-  private static StringBuilder sslEngineDetails(SslHandler sslHandler, StringBuilder builder) {
+  private static void logSslEngineDetails(Level level, ChannelHandlerContext ctx, String msg,
+                                                @Nullable Throwable t) {
+    if (!log.isLoggable(level)) {
+      return;
+    }
+
+    SslHandler sslHandler = ctx.pipeline().get(SslHandler.class);
     SSLEngine engine = sslHandler.engine();
-    builder.append("SSLEngine Details: [\n");
+
+    StringBuilder builder = new StringBuilder(msg);
+    builder.append("\nSSLEngine Details: [\n");
     if (engine instanceof OpenSslEngine) {
       builder.append("    OpenSSL, ");
       builder.append("Version: 0x").append(Integer.toHexString(OpenSsl.version()));
@@ -225,7 +226,8 @@ public final class ProtocolNegotiators {
     builder.append("\n    Enabled ciphers=");
     builder.append(Arrays.toString(engine.getEnabledCipherSuites()));
     builder.append("\n]");
-    return builder;
+
+    log.log(level, builder.toString(), t);
   }
 
   /**
@@ -392,10 +394,13 @@ public final class ProtocolNegotiators {
           SslHandler handler = ctx.pipeline().get(SslHandler.class);
           if (handler.applicationProtocol() != null) {
             // Successfully negotiated the protocol.
+            logSslEngineDetails(Level.FINER, ctx, "TLS negotiation succeeded.", null);
             writeBufferedAndRemove(ctx);
           } else {
-            fail(ctx, new Exception(
-                "Failed ALPN negotiation: Unable to find compatible protocol."));
+            Exception ex = new Exception(
+                "Failed ALPN negotiation: Unable to find compatible protocol.");
+            logSslEngineDetails(Level.FINE, ctx, "TLS negotiation failed.", ex);
+            fail(ctx, ex);
           }
         } else {
           fail(ctx, handshakeEvent.cause());
