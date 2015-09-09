@@ -70,6 +70,7 @@ import okio.Okio;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -124,7 +125,6 @@ class OkHttpClientTransport implements ClientTransport {
 
   private final String host;
   private final int port;
-  private final String authorityHost;
   private final String defaultAuthority;
   private final Random random = new Random();
   private final Ticker ticker;
@@ -166,15 +166,14 @@ class OkHttpClientTransport implements ClientTransport {
   Runnable connectingCallback;
   SettableFuture<Void> connectedFuture;
 
-  OkHttpClientTransport(String host, int port, String authorityHost, Executor executor,
+  OkHttpClientTransport(String host, int port, String authority, Executor executor,
 
       @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec,
       int maxMessageSize) {
     this.host = Preconditions.checkNotNull(host, "host");
     this.port = port;
-    this.authorityHost = authorityHost;
+    this.defaultAuthority = authority;
     this.maxMessageSize = maxMessageSize;
-    defaultAuthority = authorityHost + ":" + port;
     this.executor = Preconditions.checkNotNull(executor, "executor");
     serializingExecutor = new SerializingExecutor(executor);
     // Client initiated streams are odd, server initiated ones are even. Server should not need to
@@ -195,7 +194,6 @@ class OkHttpClientTransport implements ClientTransport {
       int maxMessageSize) {
     host = null;
     port = 0;
-    authorityHost = null;
     this.maxMessageSize = maxMessageSize;
     defaultAuthority = "notarealauthority:80";
     this.executor = Preconditions.checkNotNull(executor);
@@ -351,8 +349,9 @@ class OkHttpClientTransport implements ClientTransport {
         try {
           sock = new Socket(host, port);
           if (sslSocketFactory != null) {
+            URI uri = GrpcUtil.authorityToUri(defaultAuthority);
             sock = OkHttpTlsUpgrader.upgrade(
-                sslSocketFactory, sock, authorityHost, port, connectionSpec);
+                sslSocketFactory, sock, uri.getHost(), uri.getPort(), connectionSpec);
           }
           sock.setTcpNoDelay(true);
           source = Okio.buffer(Okio.source(sock));

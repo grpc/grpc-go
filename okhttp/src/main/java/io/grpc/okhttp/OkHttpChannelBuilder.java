@@ -46,6 +46,7 @@ import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
@@ -100,7 +101,7 @@ public final class OkHttpChannelBuilder extends
   private Executor transportExecutor;
   private final String host;
   private final int port;
-  private String authorityHost;
+  private String authority;
   private SSLSocketFactory sslSocketFactory;
   private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
   private NegotiationType negotiationType = NegotiationType.TLS;
@@ -109,7 +110,7 @@ public final class OkHttpChannelBuilder extends
   private OkHttpChannelBuilder(String host, int port) {
     this.host = Preconditions.checkNotNull(host);
     this.port = port;
-    this.authorityHost = host;
+    this.authority = GrpcUtil.authorityFromHostAndPort(host, port);
   }
 
   /**
@@ -125,12 +126,24 @@ public final class OkHttpChannelBuilder extends
 
   /**
    * Overrides the host used with TLS and HTTP virtual hosting. It does not change what host is
-   * actually connected to.
+   * actually connected to. This method differs from {@link #overrideAuthority(String)} in that it
+   * appends the port number to the host provided.
    *
    * <p>Should only used by tests.
    */
   public OkHttpChannelBuilder overrideHostForAuthority(String host) {
-    this.authorityHost = host;
+    this.authority = GrpcUtil.authorityFromHostAndPort(host, this.port);
+    return this;
+  }
+
+  /**
+   * Overrides the authority used with TLS and HTTP virtual hosting. It does not change what host is
+   * actually connected to. Is commonly in the form {@code host:port}.
+   *
+   * <p>Should only used by tests.
+   */
+  public OkHttpChannelBuilder overrideAuthority(String authority) {
+    this.authority = GrpcUtil.checkAuthority(authority);
     return this;
   }
 
@@ -180,7 +193,7 @@ public final class OkHttpChannelBuilder extends
 
   @Override
   protected ClientTransportFactory buildTransportFactory() {
-    return new OkHttpTransportFactory(host, port, authorityHost, transportExecutor,
+    return new OkHttpTransportFactory(host, port, authority, transportExecutor,
             createSocketFactory(), connectionSpec, maxMessageSize);
   }
 
@@ -200,28 +213,26 @@ public final class OkHttpChannelBuilder extends
           implements ClientTransportFactory {
     private final String host;
     private final int port;
-    private final String authorityHost;
+    private final String authority;
     private final Executor executor;
     private final boolean usingSharedExecutor;
     private final SSLSocketFactory socketFactory;
     private final ConnectionSpec connectionSpec;
     private final int maxMessageSize;
-    private final String authority;
 
     private OkHttpTransportFactory(String host,
                                    int port,
-                                   String authorityHost,
+                                   String authority,
                                    Executor executor,
                                    SSLSocketFactory socketFactory,
                                    ConnectionSpec connectionSpec,
                                    int maxMessageSize) {
       this.host = host;
       this.port = port;
-      this.authorityHost = authorityHost;
+      this.authority = authority;
       this.socketFactory = socketFactory;
       this.connectionSpec = connectionSpec;
       this.maxMessageSize = maxMessageSize;
-      this.authority = authorityHost + ":" + port;
 
       usingSharedExecutor = executor == null;
       if (usingSharedExecutor) {
@@ -234,7 +245,7 @@ public final class OkHttpChannelBuilder extends
 
     @Override
     public ClientTransport newClientTransport() {
-      return new OkHttpClientTransport(host, port, authorityHost, executor, socketFactory,
+      return new OkHttpClientTransport(host, port, authority, executor, socketFactory,
               connectionSpec, maxMessageSize);
     }
 
