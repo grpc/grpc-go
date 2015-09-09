@@ -31,13 +31,8 @@
 
 package io.grpc.examples.experimental;
 
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
 import io.grpc.Codec;
 import io.grpc.ManagedChannel;
-import io.grpc.MethodDescriptor;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.examples.helloworld.HelloResponse;
@@ -66,16 +61,8 @@ public class CompressingHelloWorldClient {
   public CompressingHelloWorldClient(String host, int port) {
     channel =
         NettyChannelBuilder.forAddress(host, port).negotiationType(NegotiationType.PLAINTEXT)
-            .intercept(new ClientInterceptor() {
-              @Override
-              public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> interceptCall(
-                  MethodDescriptor<RequestT, ResponseT> method, CallOptions callOptions,
-                  Channel next) {
-                return next.newCall(method, callOptions.withCompressor(new Codec.Gzip()));
-              }
-            })
             .build();
-    blockingStub = GreeterGrpc.newBlockingStub(channel);
+    blockingStub = GreeterGrpc.newBlockingStub(channel).withCompressor(new Codec.Gzip());
   }
 
   public void shutdown() throws InterruptedException {
