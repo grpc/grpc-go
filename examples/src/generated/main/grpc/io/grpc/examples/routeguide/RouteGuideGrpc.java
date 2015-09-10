@@ -120,28 +120,28 @@ public class RouteGuideGrpc {
     public void getFeature(io.grpc.examples.routeguide.Point request,
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Feature> responseObserver) {
       asyncUnaryCall(
-          channel.newCall(METHOD_GET_FEATURE, callOptions), request, responseObserver);
+          getChannel().newCall(METHOD_GET_FEATURE, getCallOptions()), request, responseObserver);
     }
 
     @java.lang.Override
     public void listFeatures(io.grpc.examples.routeguide.Rectangle request,
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Feature> responseObserver) {
       asyncServerStreamingCall(
-          channel.newCall(METHOD_LIST_FEATURES, callOptions), request, responseObserver);
+          getChannel().newCall(METHOD_LIST_FEATURES, getCallOptions()), request, responseObserver);
     }
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Point> recordRoute(
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteSummary> responseObserver) {
       return asyncClientStreamingCall(
-          channel.newCall(METHOD_RECORD_ROUTE, callOptions), responseObserver);
+          getChannel().newCall(METHOD_RECORD_ROUTE, getCallOptions()), responseObserver);
     }
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> routeChat(
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> responseObserver) {
       return asyncBidiStreamingCall(
-          channel.newCall(METHOD_ROUTE_CHAT, callOptions), responseObserver);
+          getChannel().newCall(METHOD_ROUTE_CHAT, getCallOptions()), responseObserver);
     }
   }
 
@@ -165,14 +165,14 @@ public class RouteGuideGrpc {
     @java.lang.Override
     public io.grpc.examples.routeguide.Feature getFeature(io.grpc.examples.routeguide.Point request) {
       return blockingUnaryCall(
-          channel.newCall(METHOD_GET_FEATURE, callOptions), request);
+          getChannel().newCall(METHOD_GET_FEATURE, getCallOptions()), request);
     }
 
     @java.lang.Override
     public java.util.Iterator<io.grpc.examples.routeguide.Feature> listFeatures(
         io.grpc.examples.routeguide.Rectangle request) {
       return blockingServerStreamingCall(
-          channel.newCall(METHOD_LIST_FEATURES, callOptions), request);
+          getChannel().newCall(METHOD_LIST_FEATURES, getCallOptions()), request);
     }
   }
 
@@ -197,7 +197,7 @@ public class RouteGuideGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.examples.routeguide.Feature> getFeature(
         io.grpc.examples.routeguide.Point request) {
       return futureUnaryCall(
-          channel.newCall(METHOD_GET_FEATURE, callOptions), request);
+          getChannel().newCall(METHOD_GET_FEATURE, getCallOptions()), request);
     }
   }
 

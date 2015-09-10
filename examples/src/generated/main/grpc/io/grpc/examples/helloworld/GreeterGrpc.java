@@ -81,7 +81,7 @@ public class GreeterGrpc {
     public void sayHello(io.grpc.examples.helloworld.HelloRequest request,
         io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloResponse> responseObserver) {
       asyncUnaryCall(
-          channel.newCall(METHOD_SAY_HELLO, callOptions), request, responseObserver);
+          getChannel().newCall(METHOD_SAY_HELLO, getCallOptions()), request, responseObserver);
     }
   }
 
@@ -105,7 +105,7 @@ public class GreeterGrpc {
     @java.lang.Override
     public io.grpc.examples.helloworld.HelloResponse sayHello(io.grpc.examples.helloworld.HelloRequest request) {
       return blockingUnaryCall(
-          channel.newCall(METHOD_SAY_HELLO, callOptions), request);
+          getChannel().newCall(METHOD_SAY_HELLO, getCallOptions()), request);
     }
   }
 
@@ -130,7 +130,7 @@ public class GreeterGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.examples.helloworld.HelloResponse> sayHello(
         io.grpc.examples.helloworld.HelloRequest request) {
       return futureUnaryCall(
-          channel.newCall(METHOD_SAY_HELLO, callOptions), request);
+          getChannel().newCall(METHOD_SAY_HELLO, getCallOptions()), request);
     }
   }
 

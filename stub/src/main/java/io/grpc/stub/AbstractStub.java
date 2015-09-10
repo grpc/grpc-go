@@ -50,9 +50,9 @@ import javax.annotation.Nullable;
  *
  * @param <S> the concrete type of this stub.
  */
-public abstract class AbstractStub<S extends AbstractStub<?>> {
-  protected final Channel channel;
-  protected final CallOptions callOptions;
+public abstract class AbstractStub<S extends AbstractStub<S>> {
+  private final Channel channel;
+  private final CallOptions callOptions;
 
   /**
    * Constructor for use by subclasses, with the default {@code CallOptions}.
@@ -77,14 +77,14 @@ public abstract class AbstractStub<S extends AbstractStub<?>> {
   /**
    * The underlying channel of the stub.
    */
-  public Channel getChannel() {
+  public final Channel getChannel() {
     return channel;
   }
 
   /**
    * The {@code CallOptions} of the stub.
    */
-  public CallOptions getCallOptions() {
+  public final CallOptions getCallOptions() {
     return callOptions;
   }
 

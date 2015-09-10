@@ -88,14 +88,14 @@ public class WorkerGrpc {
     public io.grpc.stub.StreamObserver<io.grpc.testing.ClientArgs> runTest(
         io.grpc.stub.StreamObserver<io.grpc.testing.ClientStatus> responseObserver) {
       return asyncBidiStreamingCall(
-          channel.newCall(METHOD_RUN_TEST, callOptions), responseObserver);
+          getChannel().newCall(METHOD_RUN_TEST, getCallOptions()), responseObserver);
     }
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.testing.ServerArgs> runServer(
         io.grpc.stub.StreamObserver<io.grpc.testing.ServerStatus> responseObserver) {
       return asyncBidiStreamingCall(
-          channel.newCall(METHOD_RUN_SERVER, callOptions), responseObserver);
+          getChannel().newCall(METHOD_RUN_SERVER, getCallOptions()), responseObserver);
     }
   }
 

@@ -359,7 +359,7 @@ static void PrintStub(
           p->Print(
               *vars,
               "return $calls_method$(\n"
-              "    channel.newCall($method_field_name$, callOptions), $params$);\n");
+              "    getChannel().newCall($method_field_name$, getCallOptions()), $params$);\n");
           break;
         case ASYNC_CALL:
           if (server_streaming) {
@@ -383,7 +383,7 @@ static void PrintStub(
           p->Print(
               *vars,
               "$last_line_prefix$$calls_method$(\n"
-              "    channel.newCall($method_field_name$, callOptions), $params$);\n");
+              "    getChannel().newCall($method_field_name$, getCallOptions()), $params$);\n");
           break;
         case FUTURE_CALL:
           GRPC_CODEGEN_CHECK(!client_streaming && !server_streaming)
@@ -394,7 +394,7 @@ static void PrintStub(
           p->Print(
               *vars,
               "return $calls_method$(\n"
-              "    channel.newCall($method_field_name$, callOptions), request);\n");
+              "    getChannel().newCall($method_field_name$, getCallOptions()), request);\n");
           break;
       }
       p->Outdent();

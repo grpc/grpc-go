@@ -93,14 +93,14 @@ public class TestServiceGrpc {
     public void unaryCall(io.grpc.testing.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
       asyncUnaryCall(
-          channel.newCall(METHOD_UNARY_CALL, callOptions), request, responseObserver);
+          getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request, responseObserver);
     }
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.testing.SimpleRequest> streamingCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
       return asyncBidiStreamingCall(
-          channel.newCall(METHOD_STREAMING_CALL, callOptions), responseObserver);
+          getChannel().newCall(METHOD_STREAMING_CALL, getCallOptions()), responseObserver);
     }
   }
 
@@ -124,7 +124,7 @@ public class TestServiceGrpc {
     @java.lang.Override
     public io.grpc.testing.SimpleResponse unaryCall(io.grpc.testing.SimpleRequest request) {
       return blockingUnaryCall(
-          channel.newCall(METHOD_UNARY_CALL, callOptions), request);
+          getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request);
     }
   }
 
@@ -149,7 +149,7 @@ public class TestServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.SimpleResponse> unaryCall(
         io.grpc.testing.SimpleRequest request) {
       return futureUnaryCall(
-          channel.newCall(METHOD_UNARY_CALL, callOptions), request);
+          getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request);
     }
   }
 

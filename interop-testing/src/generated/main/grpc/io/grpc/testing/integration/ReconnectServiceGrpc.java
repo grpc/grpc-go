@@ -98,14 +98,14 @@ public class ReconnectServiceGrpc {
     public void start(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
-          channel.newCall(METHOD_START, callOptions), request, responseObserver);
+          getChannel().newCall(METHOD_START, getCallOptions()), request, responseObserver);
     }
 
     @java.lang.Override
     public void stop(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver) {
       asyncUnaryCall(
-          channel.newCall(METHOD_STOP, callOptions), request, responseObserver);
+          getChannel().newCall(METHOD_STOP, getCallOptions()), request, responseObserver);
     }
   }
 
@@ -129,13 +129,13 @@ public class ReconnectServiceGrpc {
     @java.lang.Override
     public com.google.protobuf.EmptyProtos.Empty start(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          channel.newCall(METHOD_START, callOptions), request);
+          getChannel().newCall(METHOD_START, getCallOptions()), request);
     }
 
     @java.lang.Override
     public io.grpc.testing.integration.Messages.ReconnectInfo stop(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          channel.newCall(METHOD_STOP, callOptions), request);
+          getChannel().newCall(METHOD_STOP, getCallOptions()), request);
     }
   }
 
@@ -160,14 +160,14 @@ public class ReconnectServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> start(
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
-          channel.newCall(METHOD_START, callOptions), request);
+          getChannel().newCall(METHOD_START, getCallOptions()), request);
     }
 
     @java.lang.Override
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.ReconnectInfo> stop(
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
-          channel.newCall(METHOD_STOP, callOptions), request);
+          getChannel().newCall(METHOD_STOP, getCallOptions()), request);
     }
   }
 

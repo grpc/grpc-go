@@ -81,7 +81,7 @@ public class UnimplementedServiceGrpc {
     public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
-          channel.newCall(METHOD_UNIMPLEMENTED_CALL, callOptions), request, responseObserver);
+          getChannel().newCall(METHOD_UNIMPLEMENTED_CALL, getCallOptions()), request, responseObserver);
     }
   }
 
@@ -105,7 +105,7 @@ public class UnimplementedServiceGrpc {
     @java.lang.Override
     public com.google.protobuf.EmptyProtos.Empty unimplementedCall(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
-          channel.newCall(METHOD_UNIMPLEMENTED_CALL, callOptions), request);
+          getChannel().newCall(METHOD_UNIMPLEMENTED_CALL, getCallOptions()), request);
     }
   }
 
@@ -130,7 +130,7 @@ public class UnimplementedServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> unimplementedCall(
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
-          channel.newCall(METHOD_UNIMPLEMENTED_CALL, callOptions), request);
+          getChannel().newCall(METHOD_UNIMPLEMENTED_CALL, getCallOptions()), request);
     }
   }
 
