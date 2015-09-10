@@ -98,7 +98,9 @@ message Point {
 
 Next we need to generate the gRPC client and server interfaces from our .proto service definition. We do this using the protocol buffer compiler `protoc` with a special gRPC Java plugin. You need to use the [proto3](https://github.com/google/protobuf/releases) compiler in order to generate gRPC services
 
-For simplicity, we've provided a [Gradle build file](https://github.com/grpc/grpc-java/blob/master/examples/build.gradle) that runs `protoc` for you with the appropriate plugin, input, and output (if you want to run this yourself, make sure you've installed protoc and followed the gRPC code [installation instructions](https://github.com/grpc/grpc-java) first):
+For simplicity, we've built Maven and Gradle plugins that use pre-compiled protoc binaries. For using those in your project, see our [README.md](https://github.com/grpc/grpc-java/blob/master/README.md). The example is integrated into our grpc-java build to use unstable versions of the protoc plugin, so is much harder to run protoc than if you do it in your own project.
+
+For running the codegen in the example (not recommended), make sure you've installed protoc and followed the gRPC [compiling instructions](https://github.com/grpc/grpc-java/blob/master/COMPILING.md). You would then run:
 
 ```shell
 ../gradlew build

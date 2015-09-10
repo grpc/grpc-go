@@ -4,7 +4,7 @@ grpc Examples
 To build the examples, run in this directory:
 
 ```
-$ ../gradlew installDist
+$ ../gradlew installDist -PskipCodegen=true
 ```
 
 This creates the scripts `hello-world-server`, `hello-world-client`,
