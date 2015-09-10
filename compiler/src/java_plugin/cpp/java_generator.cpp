@@ -511,6 +511,9 @@ static void PrintService(const ServiceDescriptor* service,
       "@$Generated$(\"by gRPC proto compiler\")\n"
       "public class $service_class_name$ {\n\n");
   p->Indent();
+  p->Print(
+      *vars,
+      "private $service_class_name$() {}\n\n");
 
   p->Print(
       *vars,

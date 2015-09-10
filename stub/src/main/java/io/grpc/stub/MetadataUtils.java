@@ -35,6 +35,7 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.ExperimentalApi;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.Metadata;
@@ -47,6 +48,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * Utility functions for binding and receiving headers.
  */
 public class MetadataUtils {
+  // Prevent instantiation
+  private MetadataUtils() {}
 
   /**
    * Attaches a set of request headers to a stub.
@@ -55,11 +58,11 @@ public class MetadataUtils {
    * @param extraHeaders the headers to be passed by each call on the returned stub.
    * @return an implementation of the stub with {@code extraHeaders} bound to each call.
    */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  public static <T extends AbstractStub> T attachHeaders(
+  @ExperimentalApi
+  public static <T extends AbstractStub<T>> T attachHeaders(
       T stub,
       final Metadata extraHeaders) {
-    return (T) stub.withInterceptors(newAttachHeadersInterceptor(extraHeaders));
+    return stub.withInterceptors(newAttachHeadersInterceptor(extraHeaders));
   }
 
   /**
@@ -94,12 +97,12 @@ public class MetadataUtils {
    * @param trailersCapture to record the last received trailers
    * @return an implementation of the stub with {@code extraHeaders} bound to each call.
    */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  public static <T extends AbstractStub> T captureMetadata(
+  @ExperimentalApi
+  public static <T extends AbstractStub<T>> T captureMetadata(
       T stub,
       AtomicReference<Metadata> headersCapture,
       AtomicReference<Metadata> trailersCapture) {
-    return (T) stub.withInterceptors(
+    return stub.withInterceptors(
         newCaptureMetadataInterceptor(headersCapture, trailersCapture));
   }
 

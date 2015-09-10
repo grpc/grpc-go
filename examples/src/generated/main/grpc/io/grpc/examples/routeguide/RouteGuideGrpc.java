@@ -16,6 +16,8 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 @javax.annotation.Generated("by gRPC proto compiler")
 public class RouteGuideGrpc {
 
+  private RouteGuideGrpc() {}
+
   public static final String SERVICE_NAME = "routeguide.RouteGuide";
 
   // Static method descriptors that strictly reflect the proto.

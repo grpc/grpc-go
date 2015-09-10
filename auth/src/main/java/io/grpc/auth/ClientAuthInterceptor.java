@@ -58,7 +58,7 @@ import java.util.concurrent.Executor;
  * <p> Uses the new and simplified Google auth library:
  * https://github.com/google/google-auth-library-java
  */
-public class ClientAuthInterceptor implements ClientInterceptor {
+public final class ClientAuthInterceptor implements ClientInterceptor {
 
   private final Credentials credentials;
 

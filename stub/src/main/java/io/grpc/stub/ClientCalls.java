@@ -55,6 +55,8 @@ import javax.annotation.Nullable;
  * that the runtime can vary behavior without requiring regeneration of the stub.
  */
 public class ClientCalls {
+  // Prevent instantiation
+  private ClientCalls() {}
 
   /**
    * Executes a unary call with a response {@link StreamObserver}.
