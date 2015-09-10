@@ -63,8 +63,6 @@ public abstract class Channel {
   /**
    * The authority of the destination this channel connects to. Typically this is in the format
    * {@code host:port}.
-   *
-   * @return authority of remote, or {@code null}
    */
   public abstract String authority();
 }

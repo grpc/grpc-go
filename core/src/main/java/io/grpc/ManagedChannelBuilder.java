@@ -78,6 +78,15 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   public abstract T userAgent(String userAgent);
 
   /**
+   * Overrides the authority used with TLS and HTTP virtual hosting. It does not change what host is
+   * actually connected to. Is commonly in the form {@code host:port}.
+   *
+   * <p>Should only used by tests.
+   */
+  @ExperimentalApi("primarily for testing")
+  public abstract T overrideAuthority(String authority);
+
+  /**
    * Builds a channel using the given parameters.
    */
   public abstract ManagedChannel build();

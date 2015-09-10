@@ -166,12 +166,7 @@ public final class NettyChannelBuilder
     return this;
   }
 
-  /**
-   * Overrides the authority used with TLS and HTTP virtual hosting. It does not change what host is
-   * actually connected to. Is commonly in the form {@code host:port}.
-   *
-   * <p>Should only used by tests.
-   */
+  @Override
   public NettyChannelBuilder overrideAuthority(String authority) {
     this.authority = GrpcUtil.checkAuthority(authority);
     return this;

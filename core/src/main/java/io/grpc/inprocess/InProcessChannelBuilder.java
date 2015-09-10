@@ -59,22 +59,31 @@ public class InProcessChannelBuilder extends
   }
 
   private final String name;
+  private String authority = "localhost";
 
   private InProcessChannelBuilder(String name) {
     this.name = Preconditions.checkNotNull(name);
   }
 
   @Override
+  public InProcessChannelBuilder overrideAuthority(String authority) {
+    this.authority = authority;
+    return this;
+  }
+
+  @Override
   protected ClientTransportFactory buildTransportFactory() {
-    return new InProcessClientTransportFactory(name);
+    return new InProcessClientTransportFactory(name, authority);
   }
 
   private static class InProcessClientTransportFactory extends AbstractReferenceCounted
           implements ClientTransportFactory {
     private final String name;
+    private final String authority;
 
-    private InProcessClientTransportFactory(String name) {
+    private InProcessClientTransportFactory(String name, String authority) {
       this.name = name;
+      this.authority = authority;
     }
 
     @Override
@@ -84,7 +93,7 @@ public class InProcessChannelBuilder extends
 
     @Override
     public String authority() {
-      return null;
+      return authority;
     }
 
     @Override
