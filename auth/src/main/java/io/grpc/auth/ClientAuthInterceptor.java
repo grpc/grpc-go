@@ -116,16 +116,29 @@ public final class ClientAuthInterceptor implements ClientInterceptor {
     }
     // Always use HTTPS, by definition.
     final String scheme = "https";
-    // The default port must not be present. Alternative ports should be present.
-    final String suffixToStrip = ":443";
-    if (authority.endsWith(suffixToStrip)) {
-      authority = authority.substring(0, authority.length() - suffixToStrip.length());
-    }
+    final int defaultPort = 443;
     String path = "/" + MethodDescriptor.extractFullServiceName(method.getFullMethodName());
+    URI uri;
     try {
-      return new URI(scheme, authority, path, null, null);
+      uri = new URI(scheme, authority, path, null, null);
     } catch (URISyntaxException e) {
       throw Status.UNAUTHENTICATED.withDescription("Unable to construct service URI for auth")
+          .withCause(e).asException();
+    }
+    // The default port must not be present. Alternative ports should be present.
+    if (uri.getPort() == defaultPort) {
+      uri = removePort(uri);
+    }
+    return uri;
+  }
+
+  private URI removePort(URI uri) throws StatusException {
+    try {
+      return new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), -1 /* port */,
+          uri.getPath(), uri.getQuery(), uri.getFragment());
+    } catch (URISyntaxException e) {
+      throw Status.UNAUTHENTICATED.withDescription(
+            "Unable to construct service URI after removing port")
           .withCause(e).asException();
     }
   }
