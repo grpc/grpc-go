@@ -31,6 +31,7 @@
 
 package io.grpc.testing;
 
+import io.grpc.ExperimentalApi;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -70,6 +71,7 @@ import javax.security.auth.x500.X500Principal;
 /**
  * Common utility functions useful for writing tests.
  */
+@ExperimentalApi
 public class TestUtils {
   public static final String TEST_SERVER_HOST = "foo.test.google.fr";
 
