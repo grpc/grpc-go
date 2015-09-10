@@ -31,6 +31,7 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -59,7 +60,6 @@ public final class DecompressorRegistry {
    *
    * @param d The decompressor to register
    * @param advertised If true, the message encoding will be listed in the Accept-Encoding header.
-   * @throws IllegalArgumentException if another compressor by the same name is already registered.
    */
   public static void register(Decompressor d, boolean advertised) {
     INSTANCE.internalRegister(d, advertised);
@@ -67,12 +67,9 @@ public final class DecompressorRegistry {
 
   @VisibleForTesting
   void internalRegister(Decompressor d, boolean advertised) {
-    DecompressorInfo previousInfo = decompressors.putIfAbsent(
-        d.getMessageEncoding(), new DecompressorInfo(d, advertised));
-    if (previousInfo != null) {
-      throw new IllegalArgumentException(
-          "A decompressor was already registered: " + previousInfo.decompressor);
-    }
+    String encoding = d.getMessageEncoding();
+    checkArgument(!encoding.contains(","), "Comma is currently not allowed in message encoding");
+    decompressors.put(encoding, new DecompressorInfo(d, advertised));
   }
 
   /**
@@ -90,6 +87,9 @@ public final class DecompressorRegistry {
   /**
    * Provides a list of all message encodings that have decompressors available and should be
    * advertised.
+   *
+   * <p>The specification doesn't say anything about ordering, or preference, so the returned codes
+   * can be arbitrary.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
   public static Set<String> getAdvertisedMessageEncodings() {
@@ -98,7 +98,7 @@ public final class DecompressorRegistry {
 
   @VisibleForTesting
   Set<String> internalGetAdvertisedMessageEncodings() {
-    Set<String> advertisedDecompressors = new HashSet<String>();
+    Set<String> advertisedDecompressors = new HashSet<String>(decompressors.size());
     for (Entry<String, DecompressorInfo> entry : decompressors.entrySet()) {
       if (entry.getValue().advertised) {
         advertisedDecompressors.add(entry.getKey());
@@ -132,7 +132,7 @@ public final class DecompressorRegistry {
   DecompressorRegistry() {
     decompressors = new ConcurrentHashMap<String, DecompressorInfo>();
     Decompressor gzip = new Codec.Gzip();
-    // By default, Gzip
+    // By default, Gzip is not advertised
     decompressors.put(gzip.getMessageEncoding(), new DecompressorInfo(gzip, false));
     decompressors.put(
         Codec.Identity.NONE.getMessageEncoding(), new DecompressorInfo(Codec.Identity.NONE, false));

@@ -44,6 +44,7 @@ import io.grpc.ClientCall;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
+import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -145,6 +146,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     Compressor compressor = callOptions.getCompressor();
     if (compressor != null && compressor != Codec.Identity.NONE) {
       headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
+    }
+
+    headers.removeAll(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY);
+    // TODO: Maybe move registry to the channel to ease testing.
+    for (String encoding : DecompressorRegistry.getAdvertisedMessageEncodings()) {
+      headers.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, encoding);
     }
 
     try {

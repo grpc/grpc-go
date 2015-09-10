@@ -71,6 +71,12 @@ public final class GrpcUtil {
           Metadata.Key.of(GrpcUtil.MESSAGE_ENCODING, Metadata.ASCII_STRING_MARSHALLER);
 
   /**
+   * {@link io.grpc.Metadata.Key} for the accepted message encodings header.
+   */
+  public static final Metadata.Key<String> MESSAGE_ACCEPT_ENCODING_KEY =
+          Metadata.Key.of(GrpcUtil.MESSAGE_ACCEPT_ENCODING, Metadata.ASCII_STRING_MARSHALLER);
+
+  /**
    * {@link io.grpc.Metadata.Key} for the :authority pseudo header.
    *
    * <p> Don't actually serialized this.
@@ -117,6 +123,11 @@ public final class GrpcUtil {
    * The message encoding (i.e. compression) that can be used in the stream.
    */
   public static final String MESSAGE_ENCODING = "grpc-encoding";
+
+  /**
+   * The accepted message encodings (i.e. compression) that can be used in the stream.
+   */
+  public static final String MESSAGE_ACCEPT_ENCODING = "grpc-accept-encoding";
 
   /**
    * The default maximum uncompressed size (in bytes) for inbound messages. Defaults to 100 MiB.
