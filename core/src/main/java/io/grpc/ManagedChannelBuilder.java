@@ -86,6 +86,19 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   @ExperimentalApi("primarily for testing")
   public abstract T overrideAuthority(String authority);
 
+  /*
+   * Use of a plaintext connection to the server. By default a secure connection mechanism
+   * such as TLS will be used.
+   *
+   * <p>Should only be used for testing or for APIs where the use of such API or the data
+   * exchanged is not sensitive.
+   *
+   * @param skipNegotiation @{code true} if there is a priori knowledge that the endpoint supports
+   *                        plaintext, {@code false} if plaintext use must be negotiated.
+   */
+  @ExperimentalApi("primarily for testing")
+  public abstract T usePlaintext(boolean skipNegotiation);
+
   /**
    * Builds a channel using the given parameters.
    */

@@ -65,6 +65,14 @@ public class InProcessChannelBuilder extends
     this.name = Preconditions.checkNotNull(name);
   }
 
+  /**
+   * Does nothing.
+   */
+  @Override
+  public InProcessChannelBuilder usePlaintext(boolean skipNegotiation) {
+    return this;
+  }
+
   @Override
   public InProcessChannelBuilder overrideAuthority(String authority) {
     this.authority = authority;
