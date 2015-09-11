@@ -33,11 +33,10 @@ package io.grpc.examples.experimental;
 
 import io.grpc.Codec;
 import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.examples.helloworld.HelloResponse;
-import io.grpc.netty.NegotiationType;
-import io.grpc.netty.NettyChannelBuilder;
 
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -59,9 +58,9 @@ public class CompressingHelloWorldClient {
 
   /** Construct client connecting to HelloWorld server at {@code host:port}. */
   public CompressingHelloWorldClient(String host, int port) {
-    channel =
-        NettyChannelBuilder.forAddress(host, port).negotiationType(NegotiationType.PLAINTEXT)
-            .build();
+    channel = ManagedChannelBuilder.forAddress(host, port)
+        .usePlaintext(true)
+        .build();
     blockingStub = GreeterGrpc.newBlockingStub(channel).withCompressor(new Codec.Gzip());
   }
 

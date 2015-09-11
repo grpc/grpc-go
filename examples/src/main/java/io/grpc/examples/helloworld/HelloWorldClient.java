@@ -32,8 +32,7 @@
 package io.grpc.examples.helloworld;
 
 import io.grpc.ManagedChannel;
-import io.grpc.netty.NegotiationType;
-import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.ManagedChannelBuilder;
 
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -50,9 +49,9 @@ public class HelloWorldClient {
 
   /** Construct client connecting to HelloWorld server at {@code host:port}. */
   public HelloWorldClient(String host, int port) {
-    channel =
-        NettyChannelBuilder.forAddress(host, port).negotiationType(NegotiationType.PLAINTEXT)
-            .build();
+    channel = ManagedChannelBuilder.forAddress(host, port)
+        .usePlaintext(true)
+        .build();
     blockingStub = GreeterGrpc.newBlockingStub(channel);
   }
 
