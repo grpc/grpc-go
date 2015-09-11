@@ -234,9 +234,6 @@ public class ServerCalls {
         throw Status.CANCELLED.asRuntimeException();
       }
       call.sendMessage(response);
-
-      // Request delivery of the next inbound message.
-      call.request(1);
     }
 
     @Override
