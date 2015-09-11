@@ -31,6 +31,7 @@
 
 package io.grpc.stub;
 
+import io.grpc.ExperimentalApi;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -41,6 +42,7 @@ import io.grpc.Status;
  * Utility functions for adapting {@link ServerCallHandler}s to application service implementation,
  * meant to be used by the generated code.
  */
+@ExperimentalApi
 public class ServerCalls {
 
   private ServerCalls() {

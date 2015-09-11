@@ -37,6 +37,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * Interface to initiate processing of incoming remote calls. Advanced applications and generated
  * code will implement this interface to allows {@link Server}s to invoke service methods.
  */
+@ExperimentalApi
 @ThreadSafe
 public interface ServerCallHandler<RequestT, ResponseT> {
   /**
