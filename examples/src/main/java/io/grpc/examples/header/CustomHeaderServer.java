@@ -32,11 +32,11 @@
 package io.grpc.examples.header;
 
 import io.grpc.Server;
+import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptors;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.examples.helloworld.HelloResponse;
-import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 
 import java.util.logging.Logger;
@@ -53,9 +53,11 @@ public class CustomHeaderServer {
   private Server server;
 
   private void start() throws Exception {
-    server = NettyServerBuilder.forPort(port).addService(ServerInterceptors
-            .intercept(GreeterGrpc.bindService(new GreeterImpl()), new HeaderServerInterceptor()))
-            .build().start();
+    server = ServerBuilder.forPort(port)
+        .addService(ServerInterceptors.intercept(
+            GreeterGrpc.bindService(new GreeterImpl()), new HeaderServerInterceptor()))
+        .build()
+        .start();
     logger.info("Server started, listening on " + port);
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override

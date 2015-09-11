@@ -41,7 +41,7 @@ import static java.lang.Math.toRadians;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import io.grpc.Server;
-import io.grpc.netty.NettyServerBuilder;
+import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
@@ -63,7 +63,7 @@ public class RouteGuideServer {
 
   private final int port;
   private final Collection<Feature> features;
-  private Server grpcServer;
+  private Server server;
 
   public RouteGuideServer(int port) {
     this(port, RouteGuideUtil.getDefaultFeaturesFile());
@@ -81,9 +81,10 @@ public class RouteGuideServer {
 
   /** Start serving requests. */
   public void start() throws IOException {
-    grpcServer = NettyServerBuilder.forPort(port)
+    server = ServerBuilder.forPort(port)
         .addService(RouteGuideGrpc.bindService(new RouteGuideService(features)))
-        .build().start();
+        .build()
+        .start();
     logger.info("Server started, listening on " + port);
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
@@ -98,8 +99,8 @@ public class RouteGuideServer {
 
   /** Stop serving requests and shutdown resources. */
   public void stop() {
-    if (grpcServer != null) {
-      grpcServer.shutdown();
+    if (server != null) {
+      server.shutdown();
     }
   }
 
@@ -107,8 +108,8 @@ public class RouteGuideServer {
    * Await termination on the main thread since the grpc library uses daemon threads.
    */
   private void blockUntilShutdown() throws InterruptedException {
-    if (grpcServer != null) {
-      grpcServer.awaitTermination();
+    if (server != null) {
+      server.awaitTermination();
     }
   }
 

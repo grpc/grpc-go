@@ -32,7 +32,7 @@
 package io.grpc.examples.helloworld;
 
 import io.grpc.Server;
-import io.grpc.netty.NettyServerBuilder;
+import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
 
 import java.util.logging.Logger;
@@ -48,9 +48,10 @@ public class HelloWorldServer {
   private Server server;
 
   private void start() throws Exception {
-    server = NettyServerBuilder.forPort(port)
+    server = ServerBuilder.forPort(port)
         .addService(GreeterGrpc.bindService(new GreeterImpl()))
-        .build().start();
+        .build()
+        .start();
     logger.info("Server started, listening on " + port);
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override

@@ -181,7 +181,6 @@ public final class NettyChannelBuilder
   }
 
   private ProtocolNegotiator createProtocolNegotiator() {
-    ProtocolNegotiator negotiator;
     switch (negotiationType) {
       case PLAINTEXT:
         return ProtocolNegotiators.plaintext();
