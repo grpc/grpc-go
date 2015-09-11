@@ -109,6 +109,8 @@ public abstract class ServerCall<RespT> {
    *
    * <p>Servers use this mechanism to provide back-pressure to the client for flow-control.
    *
+   * <p>This method is safe to call from multiple threads without external synchronizaton.
+   *
    * @param numMessages the requested number of messages to be delivered to the listener.
    */
   public abstract void request(int numMessages);
