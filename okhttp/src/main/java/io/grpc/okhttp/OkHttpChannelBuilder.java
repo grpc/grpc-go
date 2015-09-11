@@ -130,7 +130,10 @@ public final class OkHttpChannelBuilder extends
    * appends the port number to the host provided.
    *
    * <p>Should only used by tests.
+   *
+   * @deprecated use {@link #overrideAuthority} instead
    */
+  @Deprecated
   public OkHttpChannelBuilder overrideHostForAuthority(String host) {
     this.authority = GrpcUtil.authorityFromHostAndPort(host, this.port);
     return this;
