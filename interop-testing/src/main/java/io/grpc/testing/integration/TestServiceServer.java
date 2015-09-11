@@ -74,6 +74,7 @@ public class TestServiceServer {
     });
     server.start();
     System.out.println("Server started on port " + server.port);
+    server.blockUntilShutdown();
   }
 
   private int port = 8080;
@@ -151,5 +152,14 @@ public class TestServiceServer {
       System.err.println("Timed out waiting for server shutdown");
     }
     MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
+  }
+
+  /**
+   * Await termination on the main thread since the grpc library uses daemon threads.
+   */
+  private void blockUntilShutdown() throws InterruptedException {
+    if (server != null) {
+      server.awaitTermination();
+    }
   }
 }
