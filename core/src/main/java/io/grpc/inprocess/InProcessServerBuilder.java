@@ -37,6 +37,8 @@ import io.grpc.ExperimentalApi;
 import io.grpc.HandlerRegistry;
 import io.grpc.internal.AbstractServerImplBuilder;
 
+import java.io.File;
+
 /**
  * Builder for a server that services in-process requests. Clients identify the in-process server by
  * its name.
@@ -81,5 +83,10 @@ public final class InProcessServerBuilder
   @Override
   protected InProcessServer buildTransportServer() {
     return new InProcessServer(name);
+  }
+
+  @Override
+  public InProcessServerBuilder useTransportSecurity(File certChain, File privateKey) {
+    throw new UnsupportedOperationException("TLS not supported in InProcessServer");
   }
 }

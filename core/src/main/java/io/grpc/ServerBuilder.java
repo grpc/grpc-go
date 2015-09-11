@@ -31,6 +31,7 @@
 
 package io.grpc;
 
+import java.io.File;
 import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
@@ -64,6 +65,14 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    *                                       services.
    */
   public abstract T addService(ServerServiceDefinition service);
+
+  /**
+   * Makes the server use TLS.
+   *
+   * @param certChain file containing the full certificate chain
+   * @param privateKey file containing the private key
+   */
+  public abstract T useTransportSecurity(File certChain, File privateKey);
 
   /**
    * Builds a server using the given parameters.

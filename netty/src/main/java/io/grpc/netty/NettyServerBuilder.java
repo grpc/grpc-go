@@ -44,10 +44,12 @@ import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
 
+import java.io.File;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
 import javax.annotation.Nullable;
+import javax.net.ssl.SSLException;
 
 /**
  * A builder to help simplify the construction of a Netty-based GRPC server.
@@ -210,5 +212,16 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     return new NettyServer(address, channelType, bossEventLoopGroup,
             workerEventLoopGroup, sslContext, maxConcurrentCallsPerConnection, flowControlWindow,
             maxMessageSize);
+  }
+
+  @Override
+  public NettyServerBuilder useTransportSecurity(File certChain, File privateKey) {
+    try {
+      sslContext = GrpcSslContexts.forServer(certChain, privateKey).build();
+    } catch (SSLException e) {
+      // This should likely be some other, easier to catch exception.
+      throw new RuntimeException(e);
+    }
+    return this;
   }
 }
