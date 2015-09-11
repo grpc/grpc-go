@@ -32,6 +32,8 @@
 package io.grpc;
 
 import static com.google.common.base.Charsets.US_ASCII;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
@@ -42,6 +44,7 @@ import io.grpc.internal.GrpcUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -139,7 +142,7 @@ public final class Metadata {
    * Returns true if a value is defined for the given key.
    */
   public boolean containsKey(Key<?> key) {
-    return store.containsKey(key.name);
+    return store.containsKey(key.name());
   }
 
   /**
@@ -184,7 +187,7 @@ public final class Metadata {
   public <T> void put(Key<T> key, T value) {
     Preconditions.checkNotNull(key, "key");
     Preconditions.checkNotNull(value, "value");
-    storeAdd(key.name(), new MetadataEntry(key, value));
+    storeAdd(key.name, new MetadataEntry(key, value));
   }
 
   /**
@@ -288,14 +291,14 @@ public final class Metadata {
   public void merge(Metadata other, Set<Key<?>> keys) {
     Preconditions.checkNotNull(other);
     for (Key<?> key : keys) {
-      List<MetadataEntry> values = other.store.get(key.name);
+      List<MetadataEntry> values = other.store.get(key.name());
       if (values == null) {
         continue;
       }
       for (int i = 0; i < values.size(); i++) {
         // Must copy the MetadataEntries since they are mutated. If the two Metadata objects are
         // used from different threads it would cause thread-safety issues.
-        storeAdd(key.name, new MetadataEntry(values.get(i)));
+        storeAdd(key.name(), new MetadataEntry(values.get(i)));
       }
     }
   }
@@ -365,16 +368,30 @@ public final class Metadata {
    *
    * <p>Only the following ASCII characters are allowed in the names of keys:
    * <ul>
-   *   <li>letters, i.e., {@code a-z} and {@code A-Z}</li>
-   *   <li>digits, i.e., {@code 0-9}</li>
-   *   <li>dash, i.e., {@code -}</li>
-   *   <li>underscore, i.e., {@code _}</li>
+   *   <li>digits: {@code 0-9}</li>
+   *   <li>uppercase letters: {@code A-Z} (normalized to lower)</li>
+   *   <li>lowercase letters: {@code a-z}</li>
+   *   <li>special characters: {@code -_}</li>
    * </ul>
    *
+   * <p>This is a a strict subset of the HTTP field-name rules.  Applications may not send or
+   * receive metadata with invalid key names.  However, the gRPC library may preserve any metadata
+   * received even if it does not conform to the above limitations.  Additionally, if metadata
+   * contains non conforming field names, they will still be sent.  In this way, unknown metadata
+   * fields are parsed, serialized and preserved, but never interpreted.  They are similar to
+   * protobuf unknown fields.
+   *
    * <p>Note this has to be the subset of valid HTTP/2 token characters as defined in RFC7230
-   * Section 3.2.6</p>
+   * Section 3.2.6 and RFC5234 Section B.1</p>
+   *
+   * @see <a href="https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md">Wire Spec</a>
+   * @see <a href="https://tools.ietf.org/html/rfc7230#section-3.2.6">RFC7230</a>
+   * @see <a href="https://tools.ietf.org/html/rfc5234#appendix-B.1">RFC5234</a>
    */
   public abstract static class Key<T> {
+
+    /** Valid characters for field names as defined in RFC7230 and RFC5234. */
+    private static final BitSet VALID_T_CHARS = generateValidTChars();
 
     /**
      * Creates a key for a binary header.
@@ -396,15 +413,57 @@ public final class Metadata {
       return new AsciiKey<T>(name, marshaller);
     }
 
-    private final String name;
-    private final byte[] asciiName;
+    private final String originalName;
 
-    private Key(String name) {
-      this.name = Preconditions.checkNotNull(name, "name").toLowerCase(Locale.ROOT).intern();
-      this.asciiName = this.name.getBytes(US_ASCII);
+    private final String name;
+    private final byte[] nameBytes;
+
+    private static BitSet generateValidTChars() {
+      BitSet valid  = new BitSet(0x7f);
+      valid.set('-');
+      valid.set('_');
+      for (char c = '0'; c <= '9'; c++) {
+        valid.set(c);
+      }
+      // Only validates after normalization, so we exclude uppercase.
+      for (char c = 'a'; c <= 'z'; c++) {
+        valid.set(c);
+      }
+      return valid;
     }
 
-    public String name() {
+    private static String validateName(String n) {
+      checkNotNull(n);
+      checkArgument(n.length() != 0, "token must have at least 1 tchar");
+      for (int i = 0; i < n.length(); i++) {
+        char tChar = n.charAt(i);
+        // TODO(notcarl): remove this hack once pseudo headers are properly handled
+        if (tChar == ':' && i == 0) {
+          continue;
+        }
+
+        checkArgument(VALID_T_CHARS.get(tChar), "Invalid character '%c' in key name", tChar);
+      }
+      return n;
+    }
+
+    private Key(String name) {
+      this.originalName = checkNotNull(name);
+      this.name = validateName(this.originalName.toLowerCase(Locale.ROOT));
+      this.nameBytes = this.name.getBytes(US_ASCII);
+    }
+
+    /**
+     * @return The original name used to create this key.
+     */
+    public final String originalName() {
+      return originalName;
+    }
+
+    /**
+     * @return The normalized name for this key.
+     */
+    public final String name() {
       return name;
     }
 
@@ -418,7 +477,7 @@ public final class Metadata {
     // TODO (louiscryan): Migrate to ByteString
     @VisibleForTesting
     byte[] asciiName() {
-      return asciiName;
+      return nameBytes;
     }
 
     @Override

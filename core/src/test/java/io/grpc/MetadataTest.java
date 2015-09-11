@@ -272,7 +272,7 @@ public class MetadataTest {
   }
 
   @Test
-  public void keyEqualsHashStringWorks() {
+  public void keyEqualsHashNameWorks() {
     Key<Integer> k1 = Key.of("case", Metadata.INTEGER_MARSHALLER);
 
     Key<Integer> k2 = Key.of("CASE", Metadata.INTEGER_MARSHALLER);
@@ -282,8 +282,9 @@ public class MetadataTest {
     assertEquals(k1, k2);
 
     assertEquals(k1.hashCode(), k2.hashCode());
-    // Only here to please coverage, not actually necessary.
-    assertEquals(k1.toString(), k2.toString());
+    // Check that the casing is preserved.
+    assertEquals("CASE", k2.originalName());
+    assertEquals("case", k2.name());
   }
 
   private static class Fish {

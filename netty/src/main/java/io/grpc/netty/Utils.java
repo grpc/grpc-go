@@ -66,13 +66,14 @@ class Utils {
   public static final ByteString HTTP_METHOD = new ByteString(GrpcUtil.HTTP_METHOD.getBytes(UTF_8));
   public static final ByteString HTTPS = new ByteString("https".getBytes(UTF_8));
   public static final ByteString HTTP = new ByteString("http".getBytes(UTF_8));
-  public static final ByteString CONTENT_TYPE_HEADER = new ByteString(CONTENT_TYPE_KEY.name()
-      .getBytes(UTF_8));
-  public static final ByteString CONTENT_TYPE_GRPC = new ByteString(
-      GrpcUtil.CONTENT_TYPE_GRPC.getBytes(UTF_8));
+  public static final ByteString CONTENT_TYPE_HEADER =
+      new ByteString(CONTENT_TYPE_KEY.name().getBytes(UTF_8));
+  public static final ByteString CONTENT_TYPE_GRPC =
+      new ByteString(GrpcUtil.CONTENT_TYPE_GRPC.getBytes(UTF_8));
   public static final ByteString TE_HEADER = new ByteString("te".getBytes(UTF_8));
   public static final ByteString TE_TRAILERS = new ByteString(GrpcUtil.TE_TRAILERS.getBytes(UTF_8));
-  public static final ByteString USER_AGENT = new ByteString(USER_AGENT_KEY.name().getBytes(UTF_8));
+  public static final ByteString USER_AGENT =
+      new ByteString(USER_AGENT_KEY.name().getBytes(UTF_8));
 
   public static final Resource<EventLoopGroup> DEFAULT_BOSS_EVENT_LOOP_GROUP =
       new DefaultEventLoopGroupResource(1, "grpc-default-boss-ELG");
