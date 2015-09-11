@@ -140,29 +140,29 @@ public class WorkerGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final Worker serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_RUN_TEST,
-          asyncBidiStreamingCall(
-            new io.grpc.stub.ServerCalls.BidiStreamingMethod<
-                io.grpc.testing.ClientArgs,
-                io.grpc.testing.ClientStatus>() {
-              @java.lang.Override
-              public io.grpc.stub.StreamObserver<io.grpc.testing.ClientArgs> invoke(
-                  io.grpc.stub.StreamObserver<io.grpc.testing.ClientStatus> responseObserver) {
-                return serviceImpl.runTest(responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_RUN_SERVER,
-          asyncBidiStreamingCall(
-            new io.grpc.stub.ServerCalls.BidiStreamingMethod<
-                io.grpc.testing.ServerArgs,
-                io.grpc.testing.ServerStatus>() {
-              @java.lang.Override
-              public io.grpc.stub.StreamObserver<io.grpc.testing.ServerArgs> invoke(
-                  io.grpc.stub.StreamObserver<io.grpc.testing.ServerStatus> responseObserver) {
-                return serviceImpl.runServer(responseObserver);
-              }
-            }))).build();
+      .addMethod(
+        METHOD_RUN_TEST,
+        asyncBidiStreamingCall(
+          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+              io.grpc.testing.ClientArgs,
+              io.grpc.testing.ClientStatus>() {
+            @java.lang.Override
+            public io.grpc.stub.StreamObserver<io.grpc.testing.ClientArgs> invoke(
+                io.grpc.stub.StreamObserver<io.grpc.testing.ClientStatus> responseObserver) {
+              return serviceImpl.runTest(responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_RUN_SERVER,
+        asyncBidiStreamingCall(
+          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+              io.grpc.testing.ServerArgs,
+              io.grpc.testing.ServerStatus>() {
+            @java.lang.Override
+            public io.grpc.stub.StreamObserver<io.grpc.testing.ServerArgs> invoke(
+                io.grpc.stub.StreamObserver<io.grpc.testing.ServerStatus> responseObserver) {
+              return serviceImpl.runServer(responseObserver);
+            }
+          })).build();
   }
 }

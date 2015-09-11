@@ -452,8 +452,7 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
             "io.grpc.stub.ServerCalls.UnaryMethod";
       }
     }
-    p->Print(*vars, ".addMethod($ServerMethodDefinition$.create(\n");
-    p->Indent();
+    p->Print(*vars, ".addMethod(\n");
     p->Indent();
     p->Print(
         *vars,
@@ -486,12 +485,11 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
           "}\n");
     }
     p->Outdent();
-    p->Print("})))");
+    p->Print("}))");
     if (i == service->method_count() - 1) {
       p->Print(".build();");
     }
     p->Print("\n");
-    p->Outdent();
     p->Outdent();
     p->Outdent();
   }

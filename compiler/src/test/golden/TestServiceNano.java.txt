@@ -287,67 +287,67 @@ public class TestServiceGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_UNARY_CALL,
-          asyncUnaryCall(
-            new io.grpc.stub.ServerCalls.UnaryMethod<
-                io.grpc.testing.integration.nano.Test.SimpleRequest,
-                io.grpc.testing.integration.nano.Test.SimpleResponse>() {
-              @java.lang.Override
-              public void invoke(
-                  io.grpc.testing.integration.nano.Test.SimpleRequest request,
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.SimpleResponse> responseObserver) {
-                serviceImpl.unaryCall(request, responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_STREAMING_OUTPUT_CALL,
-          asyncServerStreamingCall(
-            new io.grpc.stub.ServerCalls.ServerStreamingMethod<
-                io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
-                io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
-              @java.lang.Override
-              public void invoke(
-                  io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest request,
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
-                serviceImpl.streamingOutputCall(request, responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_STREAMING_INPUT_CALL,
-          asyncClientStreamingCall(
-            new io.grpc.stub.ServerCalls.ClientStreamingMethod<
-                io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
-                io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>() {
-              @java.lang.Override
-              public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest> invoke(
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> responseObserver) {
-                return serviceImpl.streamingInputCall(responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_FULL_BIDI_CALL,
-          asyncBidiStreamingCall(
-            new io.grpc.stub.ServerCalls.BidiStreamingMethod<
-                io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
-                io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
-              @java.lang.Override
-              public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> invoke(
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
-                return serviceImpl.fullBidiCall(responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_HALF_BIDI_CALL,
-          asyncBidiStreamingCall(
-            new io.grpc.stub.ServerCalls.BidiStreamingMethod<
-                io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
-                io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
-              @java.lang.Override
-              public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> invoke(
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
-                return serviceImpl.halfBidiCall(responseObserver);
-              }
-            }))).build();
+      .addMethod(
+        METHOD_UNARY_CALL,
+        asyncUnaryCall(
+          new io.grpc.stub.ServerCalls.UnaryMethod<
+              io.grpc.testing.integration.nano.Test.SimpleRequest,
+              io.grpc.testing.integration.nano.Test.SimpleResponse>() {
+            @java.lang.Override
+            public void invoke(
+                io.grpc.testing.integration.nano.Test.SimpleRequest request,
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.SimpleResponse> responseObserver) {
+              serviceImpl.unaryCall(request, responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_STREAMING_OUTPUT_CALL,
+        asyncServerStreamingCall(
+          new io.grpc.stub.ServerCalls.ServerStreamingMethod<
+              io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
+              io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
+            @java.lang.Override
+            public void invoke(
+                io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest request,
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
+              serviceImpl.streamingOutputCall(request, responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_STREAMING_INPUT_CALL,
+        asyncClientStreamingCall(
+          new io.grpc.stub.ServerCalls.ClientStreamingMethod<
+              io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
+              io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>() {
+            @java.lang.Override
+            public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest> invoke(
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> responseObserver) {
+              return serviceImpl.streamingInputCall(responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_FULL_BIDI_CALL,
+        asyncBidiStreamingCall(
+          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+              io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
+              io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
+            @java.lang.Override
+            public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> invoke(
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
+              return serviceImpl.fullBidiCall(responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_HALF_BIDI_CALL,
+        asyncBidiStreamingCall(
+          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+              io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
+              io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
+            @java.lang.Override
+            public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> invoke(
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
+              return serviceImpl.halfBidiCall(responseObserver);
+            }
+          })).build();
   }
 }

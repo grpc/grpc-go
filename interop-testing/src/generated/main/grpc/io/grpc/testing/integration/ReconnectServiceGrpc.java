@@ -176,31 +176,31 @@ public class ReconnectServiceGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final ReconnectService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_START,
-          asyncUnaryCall(
-            new io.grpc.stub.ServerCalls.UnaryMethod<
-                com.google.protobuf.EmptyProtos.Empty,
-                com.google.protobuf.EmptyProtos.Empty>() {
-              @java.lang.Override
-              public void invoke(
-                  com.google.protobuf.EmptyProtos.Empty request,
-                  io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
-                serviceImpl.start(request, responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_STOP,
-          asyncUnaryCall(
-            new io.grpc.stub.ServerCalls.UnaryMethod<
-                com.google.protobuf.EmptyProtos.Empty,
-                io.grpc.testing.integration.Messages.ReconnectInfo>() {
-              @java.lang.Override
-              public void invoke(
-                  com.google.protobuf.EmptyProtos.Empty request,
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver) {
-                serviceImpl.stop(request, responseObserver);
-              }
-            }))).build();
+      .addMethod(
+        METHOD_START,
+        asyncUnaryCall(
+          new io.grpc.stub.ServerCalls.UnaryMethod<
+              com.google.protobuf.EmptyProtos.Empty,
+              com.google.protobuf.EmptyProtos.Empty>() {
+            @java.lang.Override
+            public void invoke(
+                com.google.protobuf.EmptyProtos.Empty request,
+                io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
+              serviceImpl.start(request, responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_STOP,
+        asyncUnaryCall(
+          new io.grpc.stub.ServerCalls.UnaryMethod<
+              com.google.protobuf.EmptyProtos.Empty,
+              io.grpc.testing.integration.Messages.ReconnectInfo>() {
+            @java.lang.Override
+            public void invoke(
+                com.google.protobuf.EmptyProtos.Empty request,
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver) {
+              serviceImpl.stop(request, responseObserver);
+            }
+          })).build();
   }
 }

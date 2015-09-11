@@ -158,30 +158,30 @@ public class TestServiceGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_UNARY_CALL,
-          asyncUnaryCall(
-            new io.grpc.stub.ServerCalls.UnaryMethod<
-                io.grpc.testing.SimpleRequest,
-                io.grpc.testing.SimpleResponse>() {
-              @java.lang.Override
-              public void invoke(
-                  io.grpc.testing.SimpleRequest request,
-                  io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
-                serviceImpl.unaryCall(request, responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_STREAMING_CALL,
-          asyncBidiStreamingCall(
-            new io.grpc.stub.ServerCalls.BidiStreamingMethod<
-                io.grpc.testing.SimpleRequest,
-                io.grpc.testing.SimpleResponse>() {
-              @java.lang.Override
-              public io.grpc.stub.StreamObserver<io.grpc.testing.SimpleRequest> invoke(
-                  io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
-                return serviceImpl.streamingCall(responseObserver);
-              }
-            }))).build();
+      .addMethod(
+        METHOD_UNARY_CALL,
+        asyncUnaryCall(
+          new io.grpc.stub.ServerCalls.UnaryMethod<
+              io.grpc.testing.SimpleRequest,
+              io.grpc.testing.SimpleResponse>() {
+            @java.lang.Override
+            public void invoke(
+                io.grpc.testing.SimpleRequest request,
+                io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
+              serviceImpl.unaryCall(request, responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_STREAMING_CALL,
+        asyncBidiStreamingCall(
+          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+              io.grpc.testing.SimpleRequest,
+              io.grpc.testing.SimpleResponse>() {
+            @java.lang.Override
+            public io.grpc.stub.StreamObserver<io.grpc.testing.SimpleRequest> invoke(
+                io.grpc.stub.StreamObserver<io.grpc.testing.SimpleResponse> responseObserver) {
+              return serviceImpl.streamingCall(responseObserver);
+            }
+          })).build();
   }
 }

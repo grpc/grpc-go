@@ -139,18 +139,18 @@ public class GreeterGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final Greeter serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_SAY_HELLO,
-          asyncUnaryCall(
-            new io.grpc.stub.ServerCalls.UnaryMethod<
-                io.grpc.examples.helloworld.HelloRequest,
-                io.grpc.examples.helloworld.HelloResponse>() {
-              @java.lang.Override
-              public void invoke(
-                  io.grpc.examples.helloworld.HelloRequest request,
-                  io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloResponse> responseObserver) {
-                serviceImpl.sayHello(request, responseObserver);
-              }
-            }))).build();
+      .addMethod(
+        METHOD_SAY_HELLO,
+        asyncUnaryCall(
+          new io.grpc.stub.ServerCalls.UnaryMethod<
+              io.grpc.examples.helloworld.HelloRequest,
+              io.grpc.examples.helloworld.HelloResponse>() {
+            @java.lang.Override
+            public void invoke(
+                io.grpc.examples.helloworld.HelloRequest request,
+                io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloResponse> responseObserver) {
+              serviceImpl.sayHello(request, responseObserver);
+            }
+          })).build();
   }
 }

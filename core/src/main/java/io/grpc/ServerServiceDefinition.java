@@ -42,6 +42,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 /** Definition of a service to be exposed via a Server. */
+// TODO(zhangkun83): since the handler map uses fully qualified names as keys, we should
+// consider removing ServerServiceDefinition to and let the registry to have a big map of
+// handlers.
 public final class ServerServiceDefinition {
   public static Builder builder(String serviceName) {
     return new Builder(serviceName);
@@ -92,22 +95,19 @@ public final class ServerServiceDefinition {
      */
     public <ReqT, RespT> Builder addMethod(
         MethodDescriptor<ReqT, RespT> method, ServerCallHandler<ReqT, RespT> handler) {
-      // TODO(zhangkun83): since the handler map uses fully qualified names as keys, we should
-      // consider removing ServerServiceDefinition to and let the registry to have a big map of
-      // handlers.
-      checkArgument(
-          serviceName.equals(MethodDescriptor.extractFullServiceName(method.getFullMethodName())),
-          "Service name mismatch. Expected service name: '%s'. Actual method name: '%s'.",
-          this.serviceName, method.getFullMethodName());
-
-      return addMethod(new ServerMethodDefinition<ReqT, RespT>(
+      return addMethod(ServerMethodDefinition.create(
           checkNotNull(method, "method must not be null"),
           checkNotNull(handler, "handler must not be null")));
     }
 
     /** Add a method to be supported by the service. */
     public <ReqT, RespT> Builder addMethod(ServerMethodDefinition<ReqT, RespT> def) {
-      String name = def.getMethodDescriptor().getFullMethodName();
+      MethodDescriptor<ReqT, RespT> method = def.getMethodDescriptor();
+      checkArgument(
+          serviceName.equals(MethodDescriptor.extractFullServiceName(method.getFullMethodName())),
+          "Service name mismatch. Expected service name: '%s'. Actual method name: '%s'.",
+          this.serviceName, method.getFullMethodName());
+      String name = method.getFullMethodName();
       checkState(!methods.containsKey(name), "Method by same name already registered: %s", name);
       methods.put(name, def);
       return this;

@@ -33,14 +33,14 @@ package io.grpc;
 
 /**
  * Definition of a method exposed by a {@link Server}.
+ *
+ * @see ServerServiceDefinition
  */
 public final class ServerMethodDefinition<ReqT, RespT> {
   private final MethodDescriptor<ReqT, RespT> method;
   private final ServerCallHandler<ReqT, RespT> handler;
 
-  // ServerMethodDefinition has no form of public construction. It is only created within the
-  // context of a ServerServiceDefinition.Builder.
-  ServerMethodDefinition(MethodDescriptor<ReqT, RespT> method,
+  private ServerMethodDefinition(MethodDescriptor<ReqT, RespT> method,
       ServerCallHandler<ReqT, RespT> handler) {
     this.method = method;
     this.handler = handler;

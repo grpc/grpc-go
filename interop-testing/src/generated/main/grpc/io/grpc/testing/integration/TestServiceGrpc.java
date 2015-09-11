@@ -262,80 +262,80 @@ public class TestServiceGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_EMPTY_CALL,
-          asyncUnaryCall(
-            new io.grpc.stub.ServerCalls.UnaryMethod<
-                com.google.protobuf.EmptyProtos.Empty,
-                com.google.protobuf.EmptyProtos.Empty>() {
-              @java.lang.Override
-              public void invoke(
-                  com.google.protobuf.EmptyProtos.Empty request,
-                  io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
-                serviceImpl.emptyCall(request, responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_UNARY_CALL,
-          asyncUnaryCall(
-            new io.grpc.stub.ServerCalls.UnaryMethod<
-                io.grpc.testing.integration.Messages.SimpleRequest,
-                io.grpc.testing.integration.Messages.SimpleResponse>() {
-              @java.lang.Override
-              public void invoke(
-                  io.grpc.testing.integration.Messages.SimpleRequest request,
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
-                serviceImpl.unaryCall(request, responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_STREAMING_OUTPUT_CALL,
-          asyncServerStreamingCall(
-            new io.grpc.stub.ServerCalls.ServerStreamingMethod<
-                io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-                io.grpc.testing.integration.Messages.StreamingOutputCallResponse>() {
-              @java.lang.Override
-              public void invoke(
-                  io.grpc.testing.integration.Messages.StreamingOutputCallRequest request,
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
-                serviceImpl.streamingOutputCall(request, responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_STREAMING_INPUT_CALL,
-          asyncClientStreamingCall(
-            new io.grpc.stub.ServerCalls.ClientStreamingMethod<
-                io.grpc.testing.integration.Messages.StreamingInputCallRequest,
-                io.grpc.testing.integration.Messages.StreamingInputCallResponse>() {
-              @java.lang.Override
-              public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallRequest> invoke(
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallResponse> responseObserver) {
-                return serviceImpl.streamingInputCall(responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_FULL_DUPLEX_CALL,
-          asyncBidiStreamingCall(
-            new io.grpc.stub.ServerCalls.BidiStreamingMethod<
-                io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-                io.grpc.testing.integration.Messages.StreamingOutputCallResponse>() {
-              @java.lang.Override
-              public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> invoke(
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
-                return serviceImpl.fullDuplexCall(responseObserver);
-              }
-            })))
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_HALF_DUPLEX_CALL,
-          asyncBidiStreamingCall(
-            new io.grpc.stub.ServerCalls.BidiStreamingMethod<
-                io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-                io.grpc.testing.integration.Messages.StreamingOutputCallResponse>() {
-              @java.lang.Override
-              public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> invoke(
-                  io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
-                return serviceImpl.halfDuplexCall(responseObserver);
-              }
-            }))).build();
+      .addMethod(
+        METHOD_EMPTY_CALL,
+        asyncUnaryCall(
+          new io.grpc.stub.ServerCalls.UnaryMethod<
+              com.google.protobuf.EmptyProtos.Empty,
+              com.google.protobuf.EmptyProtos.Empty>() {
+            @java.lang.Override
+            public void invoke(
+                com.google.protobuf.EmptyProtos.Empty request,
+                io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
+              serviceImpl.emptyCall(request, responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_UNARY_CALL,
+        asyncUnaryCall(
+          new io.grpc.stub.ServerCalls.UnaryMethod<
+              io.grpc.testing.integration.Messages.SimpleRequest,
+              io.grpc.testing.integration.Messages.SimpleResponse>() {
+            @java.lang.Override
+            public void invoke(
+                io.grpc.testing.integration.Messages.SimpleRequest request,
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
+              serviceImpl.unaryCall(request, responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_STREAMING_OUTPUT_CALL,
+        asyncServerStreamingCall(
+          new io.grpc.stub.ServerCalls.ServerStreamingMethod<
+              io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
+              io.grpc.testing.integration.Messages.StreamingOutputCallResponse>() {
+            @java.lang.Override
+            public void invoke(
+                io.grpc.testing.integration.Messages.StreamingOutputCallRequest request,
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
+              serviceImpl.streamingOutputCall(request, responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_STREAMING_INPUT_CALL,
+        asyncClientStreamingCall(
+          new io.grpc.stub.ServerCalls.ClientStreamingMethod<
+              io.grpc.testing.integration.Messages.StreamingInputCallRequest,
+              io.grpc.testing.integration.Messages.StreamingInputCallResponse>() {
+            @java.lang.Override
+            public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallRequest> invoke(
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallResponse> responseObserver) {
+              return serviceImpl.streamingInputCall(responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_FULL_DUPLEX_CALL,
+        asyncBidiStreamingCall(
+          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+              io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
+              io.grpc.testing.integration.Messages.StreamingOutputCallResponse>() {
+            @java.lang.Override
+            public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> invoke(
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
+              return serviceImpl.fullDuplexCall(responseObserver);
+            }
+          }))
+      .addMethod(
+        METHOD_HALF_DUPLEX_CALL,
+        asyncBidiStreamingCall(
+          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+              io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
+              io.grpc.testing.integration.Messages.StreamingOutputCallResponse>() {
+            @java.lang.Override
+            public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> invoke(
+                io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
+              return serviceImpl.halfDuplexCall(responseObserver);
+            }
+          })).build();
   }
 }

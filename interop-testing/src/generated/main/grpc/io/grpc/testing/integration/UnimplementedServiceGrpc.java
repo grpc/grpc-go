@@ -139,18 +139,18 @@ public class UnimplementedServiceGrpc {
   public static io.grpc.ServerServiceDefinition bindService(
       final UnimplementedService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(io.grpc.ServerMethodDefinition.create(
-          METHOD_UNIMPLEMENTED_CALL,
-          asyncUnaryCall(
-            new io.grpc.stub.ServerCalls.UnaryMethod<
-                com.google.protobuf.EmptyProtos.Empty,
-                com.google.protobuf.EmptyProtos.Empty>() {
-              @java.lang.Override
-              public void invoke(
-                  com.google.protobuf.EmptyProtos.Empty request,
-                  io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
-                serviceImpl.unimplementedCall(request, responseObserver);
-              }
-            }))).build();
+      .addMethod(
+        METHOD_UNIMPLEMENTED_CALL,
+        asyncUnaryCall(
+          new io.grpc.stub.ServerCalls.UnaryMethod<
+              com.google.protobuf.EmptyProtos.Empty,
+              com.google.protobuf.EmptyProtos.Empty>() {
+            @java.lang.Override
+            public void invoke(
+                com.google.protobuf.EmptyProtos.Empty request,
+                io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
+              serviceImpl.unimplementedCall(request, responseObserver);
+            }
+          })).build();
   }
 }
