@@ -102,9 +102,8 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
 
   @Override
   public final void writeMessage(InputStream message) {
-    if (!headersSent) {
-      writeHeaders(new Metadata());
-      headersSent = true;
+    if (outboundPhase() != Phase.MESSAGE) {
+      throw new IllegalStateException("Messages are only permitted after headers and before close");
     }
     super.writeMessage(message);
   }

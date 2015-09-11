@@ -339,6 +339,7 @@ public class NettyClientTransportTest {
       this.stream = stream;
       this.method = method;
       this.headers = headers;
+      stream.writeHeaders(new Metadata());
       stream.request(1);
     }
 

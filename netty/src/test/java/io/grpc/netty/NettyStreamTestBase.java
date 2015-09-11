@@ -71,7 +71,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Base class for Netty stream unit tests.
  */
-public abstract class NettyStreamTestBase {
+public abstract class NettyStreamTestBase<T extends AbstractStream<Integer>> {
   protected static final String MESSAGE = "hello world";
   protected static final int STREAM_ID = 1;
 
@@ -99,7 +99,7 @@ public abstract class NettyStreamTestBase {
   @Mock
   protected WriteQueue writeQueue;
 
-  protected AbstractStream<Integer> stream;
+  protected T stream;
 
   /** Set up for test. */
   @Before
@@ -160,6 +160,7 @@ public abstract class NettyStreamTestBase {
 
   @Test
   public void notifiedOnReadyAfterWriteCompletes() throws IOException {
+    sendHeadersIfServer();
     assertTrue(stream.isReady());
     byte[] msg = largeMessage();
     // The future is set up to automatically complete, indicating that the write is done.
@@ -171,6 +172,7 @@ public abstract class NettyStreamTestBase {
 
   @Test
   public void shouldBeReadyForDataAfterWritingSmallMessage() throws IOException {
+    sendHeadersIfServer();
     // Make sure the writes don't complete so we "back up"
     reset(future);
 
@@ -184,6 +186,7 @@ public abstract class NettyStreamTestBase {
 
   @Test
   public void shouldNotBeReadyForDataAfterWritingLargeMessage() throws IOException {
+    sendHeadersIfServer();
     // Make sure the writes don't complete so we "back up"
     reset(future);
 
@@ -209,7 +212,9 @@ public abstract class NettyStreamTestBase {
     return largeMessage;
   }
 
-  protected abstract AbstractStream<Integer> createStream();
+  protected abstract T createStream();
+
+  protected abstract void sendHeadersIfServer();
 
   protected abstract StreamListener listener();
 

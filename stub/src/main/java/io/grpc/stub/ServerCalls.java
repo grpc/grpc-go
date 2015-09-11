@@ -223,6 +223,7 @@ public class ServerCalls {
   private static class ResponseObserver<RespT> implements StreamObserver<RespT> {
     final ServerCall<RespT> call;
     volatile boolean cancelled;
+    private boolean sentHeaders;
 
     ResponseObserver(ServerCall<RespT> call) {
       this.call = call;
@@ -232,6 +233,10 @@ public class ServerCalls {
     public void onNext(RespT response) {
       if (cancelled) {
         throw Status.CANCELLED.asRuntimeException();
+      }
+      if (!sentHeaders) {
+        call.sendHeaders(new Metadata());
+        sentHeaders = true;
       }
       call.sendMessage(response);
     }

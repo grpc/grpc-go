@@ -90,21 +90,10 @@ public class TestUtils {
           ServerCallHandler<ReqT, RespT> next) {
         return next.startCall(method,
             new SimpleForwardingServerCall<RespT>(call) {
-              boolean sentHeaders;
-
               @Override
               public void sendHeaders(Metadata responseHeaders) {
                 responseHeaders.merge(requestHeaders, keySet);
                 super.sendHeaders(responseHeaders);
-                sentHeaders = true;
-              }
-
-              @Override
-              public void sendMessage(RespT message) {
-                if (!sentHeaders) {
-                  sendHeaders(new Metadata());
-                }
-                super.sendMessage(message);
               }
 
               @Override

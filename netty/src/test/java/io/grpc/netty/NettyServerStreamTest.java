@@ -71,7 +71,7 @@ import java.io.ByteArrayInputStream;
 
 /** Unit tests for {@link NettyServerStream}. */
 @RunWith(JUnit4.class)
-public class NettyServerStreamTest extends NettyStreamTestBase {
+public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream> {
   @Mock
   protected ServerStreamListener serverListener;
 
@@ -92,13 +92,14 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
 
   @Test
   public void writeMessageShouldSendResponse() throws Exception {
-    byte[] msg = smallMessage();
-    stream.writeMessage(new ByteArrayInputStream(msg));
-    stream.flush();
+    stream.writeHeaders(new Metadata());
     Http2Headers headers = new DefaultHttp2Headers()
         .status(Utils.STATUS_OK)
         .set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_GRPC);
     verify(writeQueue).enqueue(new SendResponseHeadersCommand(STREAM_ID, headers, false), true);
+    byte[] msg = smallMessage();
+    stream.writeMessage(new ByteArrayInputStream(msg));
+    stream.flush();
     verify(writeQueue).enqueue(eq(new SendGrpcFrameCommand(stream, messageFrame(MESSAGE), false)),
         any(ChannelPromise.class),
         eq(true));
@@ -264,6 +265,11 @@ public class NettyServerStreamTest extends NettyStreamTestBase {
     verify(serverListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(serverListener);
     return stream;
+  }
+
+  @Override
+  protected void sendHeadersIfServer() {
+    stream.writeHeaders(new Metadata());
   }
 
   @Override

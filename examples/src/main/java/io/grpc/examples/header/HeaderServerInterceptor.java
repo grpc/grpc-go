@@ -37,7 +37,6 @@ import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
-import io.grpc.Status;
 
 import java.util.logging.Logger;
 
@@ -60,26 +59,10 @@ public class HeaderServerInterceptor implements ServerInterceptor {
       ServerCallHandler<ReqT, RespT> next) {
     logger.info("header received from client:" + requestHeaders.toString());
     return next.startCall(method, new SimpleForwardingServerCall<RespT>(call) {
-      boolean sentHeaders = false;
-
       @Override
       public void sendHeaders(Metadata responseHeaders) {
         responseHeaders.put(customHeadKey, "customRespondValue");
         super.sendHeaders(responseHeaders);
-        sentHeaders = true;
-      }
-
-      @Override
-      public void sendMessage(RespT message) {
-        if (!sentHeaders) {
-          sendHeaders(new Metadata());
-        }
-        super.sendMessage(message);
-      }
-
-      @Override
-      public void close(Status status, Metadata trailers) {
-        super.close(status, trailers);
       }
     }, requestHeaders);
   }

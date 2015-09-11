@@ -170,6 +170,7 @@ public class AbstractServerStreamTest {
         capturedHeaders.set(captured);
       }
     };
+    stream.writeHeaders(new Metadata());
 
     stream.writeMessage(new ByteArrayInputStream(new byte[]{}));
 
@@ -204,6 +205,7 @@ public class AbstractServerStreamTest {
         sendCalled.set(true);
       }
     };
+    stream.writeHeaders(new Metadata());
     stream.closeFramer();
 
     stream.writeMessage(new ByteArrayInputStream(new byte[]{}));
@@ -220,6 +222,7 @@ public class AbstractServerStreamTest {
         sendCalled.set(true);
       }
     };
+    stream.writeHeaders(new Metadata());
 
     stream.writeMessage(new ByteArrayInputStream(new byte[]{}));
     // Force the message to be flushed

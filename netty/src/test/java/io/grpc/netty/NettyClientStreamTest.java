@@ -80,7 +80,7 @@ import java.io.InputStream;
  * Tests for {@link NettyClientStream}.
  */
 @RunWith(JUnit4.class)
-public class NettyClientStreamTest extends NettyStreamTestBase {
+public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream> {
   @Mock
   protected ClientStreamListener listener;
 
@@ -370,6 +370,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase {
     reset(listener);
     return stream;
   }
+
+  @Override
+  protected void sendHeadersIfServer() {}
 
   @Override
   protected void closeStream() {
