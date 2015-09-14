@@ -46,6 +46,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * </ul>
  */
 @ThreadSafe
+@ExperimentalApi
 public interface ServerInterceptor {
   /**
    * Intercept {@link ServerCall} dispatch by the {@code next} {@link ServerCallHandler}. General

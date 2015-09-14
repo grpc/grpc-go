@@ -36,6 +36,7 @@ package io.grpc;
  *
  * @see ServerServiceDefinition
  */
+@ExperimentalApi
 public final class ServerMethodDefinition<ReqT, RespT> {
   private final MethodDescriptor<ReqT, RespT> method;
   private final ServerCallHandler<ReqT, RespT> handler;
