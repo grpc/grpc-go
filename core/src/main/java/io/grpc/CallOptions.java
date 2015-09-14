@@ -71,7 +71,7 @@ public final class CallOptions {
    * verification of the overridden value, such as making sure the authority matches the server's
    * TLS certificate.</em>
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/67")
   public CallOptions withAuthority(@Nullable String authority) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.authority = authority;
@@ -140,6 +140,7 @@ public final class CallOptions {
    * TLS certificate.</em>
    */
   @Nullable
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/67")
   public String getAuthority() {
     return authority;
   }

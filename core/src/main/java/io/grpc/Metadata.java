@@ -58,7 +58,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * </p>
  */
 @NotThreadSafe
-public class Metadata {
+public final class Metadata {
 
   /**
    * All binary headers should have this suffix in their names. Vice versa.
@@ -91,7 +91,7 @@ public class Metadata {
   /**
    * Simple metadata marshaller that encodes an integer as a signed decimal string.
    */
-  public static final AsciiMarshaller<Integer> INTEGER_MARSHALLER = new AsciiMarshaller<Integer>() {
+  static final AsciiMarshaller<Integer> INTEGER_MARSHALLER = new AsciiMarshaller<Integer>() {
 
     @Override
     public String toAsciiString(Integer value) {
@@ -113,6 +113,7 @@ public class Metadata {
    * Constructor called by the transport layer when it receives binary metadata.
    */
   // TODO(louiscryan): Convert to use ByteString so we can cache transformations
+  @Internal
   public Metadata(byte[]... binaryValues) {
     for (int i = 0; i < binaryValues.length; i++) {
       String name = new String(binaryValues[i], US_ASCII);
@@ -241,6 +242,7 @@ public class Metadata {
    *
    * <p>This method is intended for transport use only.
    */
+  @Internal
   public byte[][] serialize() {
     // One *2 for keys+values, one *2 to prevent resizing if a single key has multiple values
     List<byte[]> serialized = new ArrayList<byte[]>(store.size() * 2 * 2);

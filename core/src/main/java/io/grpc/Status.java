@@ -310,12 +310,14 @@ public final class Status {
   /**
    * Key to bind status code to trailing metadata.
    */
+  @Internal
   public static final Metadata.Key<Status> CODE_KEY
       = Metadata.Key.of("grpc-status", new StatusCodeMarshaller());
 
   /**
    * Key to bind status message to trailing metadata.
    */
+  @Internal
   public static final Metadata.Key<String> MESSAGE_KEY
       = Metadata.Key.of("grpc-message", Metadata.ASCII_STRING_MARSHALLER);
 

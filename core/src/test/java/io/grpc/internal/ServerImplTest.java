@@ -178,8 +178,8 @@ public class ServerImplTest {
 
   @Test
   public void basicExchangeSuccessful() throws Exception {
-    final Metadata.Key<Integer> metadataKey
-        = Metadata.Key.of("inception", Metadata.INTEGER_MARSHALLER);
+    final Metadata.Key<String> metadataKey
+        = Metadata.Key.of("inception", Metadata.ASCII_STRING_MARSHALLER);
     final AtomicReference<ServerCall<Integer>> callReference
         = new AtomicReference<ServerCall<Integer>>();
     registry.addService(ServerServiceDefinition.builder("Waiter")
@@ -195,7 +195,7 @@ public class ServerImplTest {
                 assertEquals("Waiter/serve", method.getFullMethodName());
                 assertNotNull(call);
                 assertNotNull(headers);
-                assertEquals(0, headers.get(metadataKey).intValue());
+                assertEquals("value", headers.get(metadataKey));
                 callReference.set(call);
                 return callListener;
               }
@@ -203,10 +203,10 @@ public class ServerImplTest {
     ServerTransportListener transportListener
         = transportServer.registerNewServerTransport(new SimpleServerTransport());
 
-    Metadata headers = new Metadata();
-    headers.put(metadataKey, 0);
+    Metadata requestHeaders = new Metadata();
+    requestHeaders.put(metadataKey, "value");
     ServerStreamListener streamListener
-        = transportListener.streamCreated(stream, "Waiter/serve", headers);
+        = transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
     assertNotNull(streamListener);
 
     executeBarrier(executor).await();
@@ -216,6 +216,11 @@ public class ServerImplTest {
     String order = "Lots of pizza, please";
     streamListener.messageRead(STRING_MARSHALLER.stream(order));
     verify(callListener, timeout(2000)).onMessage(order);
+
+    Metadata responseHeaders = new Metadata();
+    responseHeaders.put(metadataKey, "response value");
+    call.sendHeaders(responseHeaders);
+    verify(stream).writeHeaders(responseHeaders);
 
     call.sendMessage(314);
     ArgumentCaptor<InputStream> inputCaptor = ArgumentCaptor.forClass(InputStream.class);
@@ -233,7 +238,7 @@ public class ServerImplTest {
     assertEquals(50, INTEGER_MARSHALLER.parse(inputCaptor.getValue()).intValue());
 
     Metadata trailers = new Metadata();
-    trailers.put(metadataKey, 3);
+    trailers.put(metadataKey, "another value");
     Status status = Status.OK.withDescription("A okay");
     call.close(status, trailers);
     verify(stream).close(status, trailers);

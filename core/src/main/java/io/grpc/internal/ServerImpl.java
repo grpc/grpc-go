@@ -488,6 +488,7 @@ public final class ServerImpl extends io.grpc.Server {
 
     @Override
     public void sendMessage(RespT message) {
+      Preconditions.checkState(sendHeadersCalled, "sendHeaders has not been called");
       Preconditions.checkState(!closeCalled, "call is closed");
       sendMessageCalled = true;
       try {

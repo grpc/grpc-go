@@ -130,7 +130,7 @@ public abstract class ServerCall<RespT> {
    * RPCs. Multiple response messages may exist for streaming calls.
    *
    * @param message response message.
-   * @throws IllegalStateException if call is {@link #close}d
+   * @throws IllegalStateException if headers not sent or call is {@link #close}d
    */
   public abstract void sendMessage(RespT message);
 
