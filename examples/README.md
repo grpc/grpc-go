@@ -26,5 +26,5 @@ $ ./build/install/grpc-examples/bin/hello-world-client
 
 That's it!
 
-Please refer to [Getting Started Guide for Java](examples/javatutorial.md)
+Please refer to [Getting Started Guide for Java](javatutorial.md)
 for more information.
