@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
@@ -114,9 +115,8 @@ public final class ServerImpl extends io.grpc.Server {
   @Override
   public ServerImpl start() throws IOException {
     synchronized (lock) {
-      if (started) {
-        throw new IllegalStateException("Already started");
-      }
+      checkState(!started, "Already started");
+      checkState(!shutdown, "Shutting down");
       usingSharedExecutor = executor == null;
       if (usingSharedExecutor) {
         executor = SharedResourceHolder.get(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
