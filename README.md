@@ -7,7 +7,7 @@ The Go implementation of [gRPC](https://github.com/grpc/grpc)
 Installation
 ------------
 
-To install this package, you need to install Go 1.4 and setup your Go workspace on your computer. The simplest way to install the library is to run:
+To install this package, you need to install Go 1.4 or above and setup your Go workspace on your computer. The simplest way to install the library is to run:
 
 ```
 $ go get google.golang.org/grpc
