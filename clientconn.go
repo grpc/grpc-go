@@ -43,7 +43,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
+	"go.pedge.io/dlog"
 	"google.golang.org/grpc/transport"
 )
 
@@ -190,7 +190,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
 			if err := cc.resetTransport(false); err != nil {
-				grpclog.Printf("Failed to dial %s: %v; please retry.", target, err)
+				dlog.Printf("Failed to dial %s: %v; please retry.", target, err)
 				cc.Close()
 				return
 			}
@@ -355,7 +355,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			closeTransport = false
 			time.Sleep(sleepTime)
 			retries++
-			grpclog.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
+			dlog.Printf("grpc: ClientConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, cc.target)
 			continue
 		}
 		cc.mu.Lock()
@@ -394,7 +394,7 @@ func (cc *ClientConn) transportMonitor() {
 			cc.mu.Unlock()
 			if err := cc.resetTransport(true); err != nil {
 				// The ClientConn is closing.
-				grpclog.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
+				dlog.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
 				return
 			}
 			continue

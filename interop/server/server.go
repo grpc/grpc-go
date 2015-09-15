@@ -45,7 +45,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
+	"go.pedge.io/dlog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
@@ -193,13 +193,13 @@ func main() {
 	p := strconv.Itoa(*port)
 	lis, err := net.Listen("tcp", ":"+p)
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		dlog.Fatalf("failed to listen: %v", err)
 	}
 	var opts []grpc.ServerOption
 	if *useTLS {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			grpclog.Fatalf("Failed to generate credentials %v", err)
+			dlog.Fatalf("Failed to generate credentials %v", err)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
