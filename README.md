@@ -24,5 +24,5 @@ You can find more detailed documentation and examples in the [examples directory
 
 Status
 ------
-Alpha - ready for early adopters.
+Beta release
 
