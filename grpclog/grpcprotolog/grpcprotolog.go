@@ -31,42 +31,52 @@
  *
  */
 
-/*
-Package glogger defines glog-based logging for grpc.
-*/
-package glogger
+package grpcprotolog // import "google.golang.org/grpc/grpclog/grpcprotolog"
 
 import (
-	"github.com/golang/glog"
+	"os"
+
+	"go.pedge.io/protolog"
 	"google.golang.org/grpc/grpclog"
 )
 
 func init() {
-	grpclog.SetLogger(&glogger{})
+	grpclog.SetLogger(NewLogger(protolog.NewStandardLogger(protolog.NewFileFlusher(os.Stderr))))
 }
 
-type glogger struct{}
-
-func (g *glogger) Fatal(args ...interface{}) {
-	glog.Fatal(args...)
+type logger struct {
+	protolog.Logger
 }
 
-func (g *glogger) Fatalf(format string, args ...interface{}) {
-	glog.Fatalf(format, args...)
+// NewLogger creates a new grpclog.Logger using a protolog.Logger.
+func NewLogger(l protolog.Logger) grpclog.Logger {
+	return &logger{l}
 }
 
-func (g *glogger) Fatalln(args ...interface{}) {
-	glog.Fatalln(args...)
+func (l *logger) Debug(args ...interface{}) {
+	l.Debugln(args...)
 }
 
-func (g *glogger) Print(args ...interface{}) {
-	glog.Info(args...)
+func (l *logger) Info(args ...interface{}) {
+	l.Infoln(args...)
 }
 
-func (g *glogger) Printf(format string, args ...interface{}) {
-	glog.Infof(format, args...)
+func (l *logger) Warn(args ...interface{}) {
+	l.Warnln(args...)
 }
 
-func (g *glogger) Println(args ...interface{}) {
-	glog.Infoln(args...)
+func (l *logger) Error(args ...interface{}) {
+	l.Errorln(args...)
+}
+
+func (l *logger) Fatal(args ...interface{}) {
+	l.Fatalln(args...)
+}
+
+func (l *logger) Panic(args ...interface{}) {
+	l.Panicln(args...)
+}
+
+func (l *logger) Print(args ...interface{}) {
+	l.Println(args...)
 }
