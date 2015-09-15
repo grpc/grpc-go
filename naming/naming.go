@@ -1,13 +1,43 @@
 package naming
 
-// Resolver dose name resolution and watches for the resolution changes.
+// OP defines the corresponding operations for a name resolution change.
+type OP uint8
+
+const (
+	// No indicates there are no changes.
+	No OP = iota
+	// Add indicates a new address is added.
+	Add
+	// Delete indicates an exisiting address is deleted.
+	Delete
+	// Modify indicates an existing address is modified.
+	Modify
+)
+
+type ServiceConfig interface{}
+
+// Update defines a name resolution change.
+type Update struct {
+	// Op indicates the operation of the update.
+	Op     OP
+	Key    string
+	Val    string
+	Config ServiceConfig
+}
+
+// Resolver does one-shot name resolution and creates a Watcher to
+// watch the future updates.
 type Resolver interface {
-	// Get gets a snapshot of the current name resolution results for target.
-	Get(target string) map[string]string
-	// Watch watches for the name resolution changes on target. It blocks until Stop() is invoked. The watch results are obtained via GetUpdate().
-	Watch(target string)
-	// GetUpdate returns a name resolution change when watch is triggered. It blocks until it observes a change. The caller needs to call it again to get the next change.
-	GetUpdate() (string, string)
-	// Stop shuts down the NameResolver.
+	// Resolve returns the name resolution results.
+	Resolve(target string) ([]*Update, error)
+	// NewWatcher creates a Watcher to watch the changes on target.
+	NewWatcher(target string) Watcher
+}
+
+// Watcher watches the updates for a particular target.
+type Watcher interface {
+	// Next blocks until an update or error happens.
+	Next() (*Update, error)
+	// Stop stops the Watcher.
 	Stop()
 }
