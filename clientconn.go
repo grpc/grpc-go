@@ -297,14 +297,16 @@ func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState Conn
 func (cc *ClientConn) resetTransport(closeTransport bool) error {
 	var retries int
 	start := time.Now()
+	cc.mu.Lock()
+	ts := cc.transportSeq
+	// Avoid wait() picking up a dying transport unnecessarily.
+	cc.transportSeq = 0
+	cc.mu.Unlock()
 	for {
 		cc.mu.Lock()
 		cc.state = Connecting
 		cc.stateCV.Broadcast()
 		t := cc.transport
-		ts := cc.transportSeq
-		// Avoid wait() picking up a dying transport unnecessarily.
-		cc.transportSeq = 0
 		if cc.state == Shutdown {
 			cc.mu.Unlock()
 			return ErrClientConnClosing
