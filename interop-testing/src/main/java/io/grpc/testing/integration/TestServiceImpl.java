@@ -35,6 +35,7 @@ import com.google.common.collect.Queues;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos;
 
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.integration.Messages.PayloadType;
 import io.grpc.testing.integration.Messages.ResponseParameters;
@@ -205,10 +206,11 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
    * available, the stream is half-closed.
    */
   private class ResponseDispatcher {
+    private final Chunk completionChunk = new Chunk(0, 0, 0, false);
     private final Queue<Chunk> chunks;
     private final StreamObserver<StreamingOutputCallResponse> responseStream;
-    private volatile boolean isInputComplete;
     private boolean scheduled;
+    private Throwable failure;
     private Runnable dispatchTask = new Runnable() {
       @Override
       public void run() {
@@ -247,6 +249,7 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
      * needed.
      */
     public synchronized ResponseDispatcher enqueue(Queue<Chunk> moreChunks) {
+      assertNotFailed();
       chunks.addAll(moreChunks);
       scheduleNextChunk();
       return this;
@@ -257,7 +260,8 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
      * remain to be scheduled for dispatch to the client.
      */
     public ResponseDispatcher completeInput() {
-      isInputComplete = true;
+      assertNotFailed();
+      chunks.add(completionChunk);
       scheduleNextChunk();
       return this;
     }
@@ -266,15 +270,24 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
      * Dispatches the current response chunk to the client. This is only called by the executor. At
      * any time, a given dispatch task should only be registered with the executor once.
      */
-    private void dispatchChunk() {
+    private synchronized void dispatchChunk() {
       try {
-
         // Pop off the next chunk and send it to the client.
         Chunk chunk = chunks.remove();
-        responseStream.onNext(chunk.toResponse());
-
+        if (chunk == completionChunk) {
+          responseStream.onCompleted();
+        } else {
+          responseStream.onNext(chunk.toResponse());
+        }
       } catch (Throwable e) {
-        responseStream.onError(e);
+        failure = e;
+        if (Status.fromThrowable(e).getCode() == Status.CANCELLED.getCode()) {
+          // Stream was cancelled by client, responseStream.onError() might be called already or
+          // will be called soon by inbounding StreamObserver.
+          chunks.clear();
+        } else {
+          responseStream.onError(e);
+        }
       }
     }
 
@@ -297,14 +310,12 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
           return;
         }
       }
+    }
 
-      if (isInputComplete) {
-        // All of the response chunks have been enqueued but there is no chunks left. Close the
-        // stream.
-        responseStream.onCompleted();
+    private void assertNotFailed() {
+      if (failure != null) {
+        throw new IllegalStateException("Stream already failed", failure);
       }
-
-      // Otherwise, the input is not yet complete - wait for more chunks to arrive.
     }
   }
 

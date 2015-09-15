@@ -202,10 +202,10 @@ public class ServerCalls {
 
           @Override
           public void onCancel() {
+            responseObserver.cancelled = true;
             if (!halfClosed) {
               requestObserver.onError(Status.CANCELLED.asException());
             }
-            responseObserver.cancelled = true;
           }
         };
       }
