@@ -199,6 +199,7 @@ subprojects {
         if (rootProject.hasProperty("checkstyle.ignoreFailures")) {
             ignoreFailures = rootProject.properties["checkstyle.ignoreFailures"].toBoolean()
         }
+        configProperties["rootDir"] = rootDir
     }
 
     checkstyleMain {
