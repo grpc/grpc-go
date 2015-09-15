@@ -50,7 +50,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1alpha"
 	"google.golang.org/grpc/metadata"
@@ -85,29 +84,29 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 	return new(testpb.Empty), nil
 }
 
-func newPayload(t testpb.PayloadType, size int32) *testpb.Payload {
+func newPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error) {
 	if size < 0 {
-		grpclog.Fatalf("Requested a response with invalid length %d", size)
+		return nil, fmt.Errorf("Requested a response with invalid length %d", size)
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		grpclog.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+		return nil, fmt.Errorf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		grpclog.Fatalf("Unsupported payload type: %d", t)
+		return nil, fmt.Errorf("Unsupported payload type: %d", t)
 	}
 	return &testpb.Payload{
 		Type: t.Enum(),
 		Body: body,
-	}
+	}, nil
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	md, ok := metadata.FromContext(ctx)
 	if ok {
 		if err := grpc.SendHeader(ctx, md); err != nil {
-			grpclog.Fatalf("grpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
+			return nil, fmt.Errorf("grpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
 		}
 		grpc.SetTrailer(ctx, md)
 	}
@@ -115,7 +114,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		// Check Auth info
 		authInfo, ok := credentials.FromContext(ctx)
 		if !ok {
-			grpclog.Fatalf("Failed to get AuthInfo from ctx.")
+			return nil, fmt.Errorf("Failed to get AuthInfo from ctx.")
 		}
 		var authType, serverName string
 		switch info := authInfo.(type) {
@@ -123,10 +122,10 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 			authType = info.AuthType()
 			serverName = info.State.ServerName
 		default:
-			grpclog.Fatalf("Unknown AuthInfo type")
+			return nil, fmt.Errorf("Unknown AuthInfo type")
 		}
 		if authType != s.security {
-			grpclog.Fatalf("Wrong auth type: got %q, want %q", authType, s.security)
+			return nil, fmt.Errorf("Wrong auth type: got %q, want %q", authType, s.security)
 		}
 		if serverName != "x.test.youtube.com" {
 			return nil, fmt.Errorf("Unknown server name %q", serverName)
@@ -135,8 +134,14 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 
 	// Simulate some service delay.
 	time.Sleep(time.Second)
+
+	payload, err := newPayload(in.GetResponseType(), in.GetResponseSize())
+	if err != nil {
+		return nil, err
+	}
+
 	return &testpb.SimpleResponse{
-		Payload: newPayload(in.GetResponseType(), in.GetResponseSize()),
+		Payload: payload,
 	}, nil
 }
 
@@ -152,8 +157,14 @@ func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest
 		if us := c.GetIntervalUs(); us > 0 {
 			time.Sleep(time.Duration(us) * time.Microsecond)
 		}
+
+		payload, err := newPayload(args.GetResponseType(), c.GetSize())
+		if err != nil {
+			return err
+		}
+
 		if err := stream.Send(&testpb.StreamingOutputCallResponse{
-			Payload: newPayload(args.GetResponseType(), c.GetSize()),
+			Payload: payload,
 		}); err != nil {
 			return err
 		}
@@ -182,7 +193,7 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 	md, ok := metadata.FromContext(stream.Context())
 	if ok {
 		if err := stream.SendHeader(md); err != nil {
-			grpclog.Fatalf("%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
+			return fmt.Errorf("%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
 		}
 		stream.SetTrailer(md)
 	}
@@ -200,8 +211,14 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 			if us := c.GetIntervalUs(); us > 0 {
 				time.Sleep(time.Duration(us) * time.Microsecond)
 			}
+
+			payload, err := newPayload(in.GetResponseType(), c.GetSize())
+			if err != nil {
+				return err
+			}
+
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: newPayload(in.GetResponseType(), c.GetSize()),
+				Payload: payload,
 			}); err != nil {
 				return err
 			}
@@ -228,8 +245,14 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 			if us := c.GetIntervalUs(); us > 0 {
 				time.Sleep(time.Duration(us) * time.Microsecond)
 			}
+
+			payload, err := newPayload(m.GetResponseType(), c.GetSize())
+			if err != nil {
+				return err
+			}
+
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: newPayload(m.GetResponseType(), c.GetSize()),
+				Payload: payload,
 			}); err != nil {
 				return err
 			}
@@ -301,10 +324,16 @@ func TestReconnectTimeout(t *testing.T) {
 		defer close(waitC)
 		argSize := 271828
 		respSize := 314159
+
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize))
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		req := &testpb.SimpleRequest{
 			ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 			ResponseSize: proto.Int32(int32(respSize)),
-			Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
+			Payload:      payload,
 		}
 		if _, err := tc.UnaryCall(context.Background(), req); err == nil {
 			t.Fatalf("TestService/UnaryCall(_, _) = _, <nil>, want _, non-nil")
@@ -329,12 +358,12 @@ type env struct {
 
 func listTestEnv() []env {
 	if runtime.GOOS == "windows" {
-		return []env{env{"tcp", nil, ""}, env{"tcp", nil, "tls"}}
+		return []env{{"tcp", nil, ""}, {"tcp", nil, "tls"}}
 	}
-	return []env{env{"tcp", nil, ""}, env{"tcp", nil, "tls"}, env{"unix", unixDialer, ""}, env{"unix", unixDialer, "tls"}}
+	return []env{{"tcp", nil, ""}, {"tcp", nil, "tls"}, {"unix", unixDialer, ""}, {"unix", unixDialer, "tls"}}
 }
 
-func setUp(hs *health.HealthServer, maxStream uint32, ua string, e env) (s *grpc.Server, cc *grpc.ClientConn) {
+func setUp(t *testing.T, hs *health.HealthServer, maxStream uint32, ua string, e env) (s *grpc.Server, cc *grpc.ClientConn) {
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(maxStream)}
 	la := ":0"
 	switch e.network {
@@ -344,12 +373,12 @@ func setUp(hs *health.HealthServer, maxStream uint32, ua string, e env) (s *grpc
 	}
 	lis, err := net.Listen(e.network, la)
 	if err != nil {
-		grpclog.Fatalf("Failed to listen: %v", err)
+		t.Fatalf("Failed to listen: %v", err)
 	}
 	if e.security == "tls" {
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
-			grpclog.Fatalf("Failed to generate credentials %v", err)
+			t.Fatalf("Failed to generate credentials %v", err)
 		}
 		sopts = append(sopts, grpc.Creds(creds))
 	}
@@ -365,21 +394,21 @@ func setUp(hs *health.HealthServer, maxStream uint32, ua string, e env) (s *grpc
 	default:
 		_, port, err := net.SplitHostPort(lis.Addr().String())
 		if err != nil {
-			grpclog.Fatalf("Failed to parse listener address: %v", err)
+			t.Fatalf("Failed to parse listener address: %v", err)
 		}
 		addr = "localhost:" + port
 	}
 	if e.security == "tls" {
 		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 		if err != nil {
-			grpclog.Fatalf("Failed to create credentials %v", err)
+			t.Fatalf("Failed to create credentials %v", err)
 		}
 		cc, err = grpc.Dial(addr, grpc.WithTransportCredentials(creds), grpc.WithDialer(e.dialer), grpc.WithUserAgent(ua))
 	} else {
 		cc, err = grpc.Dial(addr, grpc.WithDialer(e.dialer), grpc.WithInsecure(), grpc.WithUserAgent(ua))
 	}
 	if err != nil {
-		grpclog.Fatalf("Dial(%q) = %v", addr, err)
+		t.Fatalf("Dial(%q) = %v", addr, err)
 	}
 	return
 }
@@ -396,7 +425,7 @@ func TestTimeoutOnDeadServer(t *testing.T) {
 }
 
 func testTimeoutOnDeadServer(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	if ok := cc.WaitForStateChange(time.Second, grpc.Idle); !ok {
 		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Idle, ok)
@@ -446,7 +475,7 @@ func TestHealthCheckOnSuccess(t *testing.T) {
 func testHealthCheckOnSuccess(t *testing.T, e env) {
 	hs := health.NewHealthServer()
 	hs.SetServingStatus("grpc.health.v1alpha.HealthCheck", 1)
-	s, cc := setUp(hs, math.MaxUint32, "", e)
+	s, cc := setUp(t, hs, math.MaxUint32, "", e)
 	defer tearDown(s, cc)
 	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.HealthCheck"); err != nil {
 		t.Fatalf("HealthCheck/Check(_, _) = _, %v, want _, <nil>", err)
@@ -462,7 +491,7 @@ func TestHealthCheckOnFailure(t *testing.T) {
 func testHealthCheckOnFailure(t *testing.T, e env) {
 	hs := health.NewHealthServer()
 	hs.SetServingStatus("grpc.health.v1alpha.HealthCheck", 1)
-	s, cc := setUp(hs, math.MaxUint32, "", e)
+	s, cc := setUp(t, hs, math.MaxUint32, "", e)
 	defer tearDown(s, cc)
 	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1alpha.HealthCheck"); err != grpc.Errorf(codes.DeadlineExceeded, "context deadline exceeded") {
 		t.Fatalf("HealthCheck/Check(_, _) = _, %v, want _, error code %d", err, codes.DeadlineExceeded)
@@ -476,7 +505,7 @@ func TestHealthCheckOff(t *testing.T) {
 }
 
 func testHealthCheckOff(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	defer tearDown(s, cc)
 	if _, err := healthCheck(1*time.Second, cc, ""); err != grpc.Errorf(codes.Unimplemented, "unknown service grpc.health.v1alpha.HealthCheck") {
 		t.Fatalf("HealthCheck/Check(_, _) = _, %v, want _, error code %d", err, codes.Unimplemented)
@@ -491,7 +520,7 @@ func TestHealthCheckServingStatus(t *testing.T) {
 
 func testHealthCheckServingStatus(t *testing.T, e env) {
 	hs := health.NewHealthServer()
-	s, cc := setUp(hs, math.MaxUint32, "", e)
+	s, cc := setUp(t, hs, math.MaxUint32, "", e)
 	defer tearDown(s, cc)
 	out, err := healthCheck(1*time.Second, cc, "")
 	if err != nil {
@@ -529,7 +558,7 @@ func TestEmptyUnaryWithUserAgent(t *testing.T) {
 }
 
 func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, testAppUA, e)
+	s, cc := setUp(t, nil, math.MaxUint32, testAppUA, e)
 	// Wait until cc is connected.
 	if ok := cc.WaitForStateChange(time.Second, grpc.Idle); !ok {
 		t.Fatalf("cc.WaitForStateChange(_, %s) = %t, want true", grpc.Idle, ok)
@@ -568,7 +597,7 @@ func TestFailedEmptyUnary(t *testing.T) {
 }
 
 func testFailedEmptyUnary(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	ctx := metadata.NewContext(context.Background(), testMetadata)
@@ -584,15 +613,21 @@ func TestLargeUnary(t *testing.T) {
 }
 
 func testLargeUnary(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	argSize := 271828
 	respSize := 314159
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
-		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
+		Payload:      payload,
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
@@ -612,20 +647,25 @@ func TestMetadataUnaryRPC(t *testing.T) {
 }
 
 func testMetadataUnaryRPC(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	argSize := 2718
 	respSize := 314
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
-		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
+		Payload:      payload,
 	}
 	var header, trailer metadata.MD
 	ctx := metadata.NewContext(context.Background(), testMetadata)
-	_, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.Trailer(&trailer))
-	if err != nil {
+	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.Trailer(&trailer)); err != nil {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
 	if !reflect.DeepEqual(testMetadata, header) {
@@ -639,10 +679,16 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup) {
 	argSize := 2718
 	respSize := 314
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
-		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
+		Payload:      payload,
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
@@ -666,7 +712,7 @@ func TestRetry(t *testing.T) {
 // TODO(zhaoq): Refactor to make this clearer and add more cases to test racy
 // and error-prone paths.
 func testRetry(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	var wg sync.WaitGroup
@@ -696,15 +742,21 @@ func TestRPCTimeout(t *testing.T) {
 
 // TODO(zhaoq): Have a better test coverage of timeout and cancellation mechanism.
 func testRPCTimeout(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	argSize := 2718
 	respSize := 314
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
-		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
+		Payload:      payload,
 	}
 	for i := -1; i <= 10; i++ {
 		ctx, _ := context.WithTimeout(context.Background(), time.Duration(i)*time.Millisecond)
@@ -722,15 +774,21 @@ func TestCancel(t *testing.T) {
 }
 
 func testCancel(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	argSize := 2718
 	respSize := 314
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(respSize)),
-		Payload:      newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize)),
+		Payload:      payload,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(1*time.Millisecond, cancel)
@@ -754,7 +812,7 @@ func TestPingPong(t *testing.T) {
 }
 
 func testPingPong(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	stream, err := tc.FullDuplexCall(context.Background())
@@ -768,10 +826,16 @@ func testPingPong(t *testing.T, e env) {
 				Size: proto.Int32(int32(respSizes[index])),
 			},
 		}
+
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index]))
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		req := &testpb.StreamingOutputCallRequest{
 			ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
 			ResponseParameters: respParam,
-			Payload:            newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index])),
+			Payload:            payload,
 		}
 		if err := stream.Send(req); err != nil {
 			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
@@ -805,7 +869,7 @@ func TestMetadataStreamingRPC(t *testing.T) {
 }
 
 func testMetadataStreamingRPC(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	ctx := metadata.NewContext(context.Background(), testMetadata)
@@ -833,10 +897,16 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 					Size: proto.Int32(int32(respSizes[index])),
 				},
 			}
+
+			payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index]))
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			req := &testpb.StreamingOutputCallRequest{
 				ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
 				ResponseParameters: respParam,
-				Payload:            newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index])),
+				Payload:            payload,
 			}
 			if err := stream.Send(req); err != nil {
 				t.Errorf("%v.Send(%v) = %v, want <nil>", stream, req, err)
@@ -865,7 +935,7 @@ func TestServerStreaming(t *testing.T) {
 }
 
 func testServerStreaming(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	respParam := make([]*testpb.ResponseParameters, len(respSizes))
@@ -917,7 +987,7 @@ func TestFailedServerStreaming(t *testing.T) {
 }
 
 func testFailedServerStreaming(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	respParam := make([]*testpb.ResponseParameters, len(respSizes))
@@ -947,7 +1017,7 @@ func TestClientStreaming(t *testing.T) {
 }
 
 func testClientStreaming(t *testing.T, e env) {
-	s, cc := setUp(nil, math.MaxUint32, "", e)
+	s, cc := setUp(t, nil, math.MaxUint32, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	stream, err := tc.StreamingInputCall(context.Background())
@@ -955,10 +1025,15 @@ func testClientStreaming(t *testing.T, e env) {
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
 	}
 	var sum int
+
 	for _, s := range reqSizes {
-		pl := newPayload(testpb.PayloadType_COMPRESSABLE, int32(s))
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(s))
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		req := &testpb.StreamingInputCallRequest{
-			Payload: pl,
+			Payload: payload,
 		}
 		if err := stream.Send(req); err != nil {
 			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
@@ -982,7 +1057,7 @@ func TestExceedMaxStreamsLimit(t *testing.T) {
 
 func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	// Only allows 1 live stream per server transport.
-	s, cc := setUp(nil, 1, "", e)
+	s, cc := setUp(t, nil, 1, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	done := make(chan struct{})
