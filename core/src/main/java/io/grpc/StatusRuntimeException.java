@@ -46,7 +46,7 @@ public class StatusRuntimeException extends RuntimeException {
     this.status = status;
   }
 
-  public Status getStatus() {
+  public final Status getStatus() {
     return status;
   }
 }

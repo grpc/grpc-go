@@ -47,7 +47,7 @@ public class StatusException extends Exception {
     this.status = status;
   }
 
-  public Status getStatus() {
+  public final Status getStatus() {
     return status;
   }
 }
