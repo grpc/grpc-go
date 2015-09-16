@@ -1,10 +1,6 @@
 gRPC Hello World Tutorial (Android Java)
 ========================
 
-BACKGROUND
--------------
-For this sample, we've already generated the server and client stubs from [helloworld.proto](examples/protos/helloworld.proto). 
-
 PREREQUISITES
 -------------
 - [Java gRPC](https://github.com/grpc/grpc-java)

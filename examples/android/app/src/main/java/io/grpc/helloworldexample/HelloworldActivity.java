@@ -12,9 +12,10 @@ import android.widget.EditText;
 import android.widget.TextView;
 
 import io.grpc.ManagedChannel;
-import io.grpc.helloworldexample.Helloworld.HelloReply;
-import io.grpc.helloworldexample.Helloworld.HelloRequest;
-import io.grpc.transport.okhttp.OkHttpChannelBuilder;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.android.examples.GreeterGrpc;
+import io.grpc.android.examples.nano.Helloworld.HelloReply;
+import io.grpc.android.examples.nano.Helloworld.HelloRequest;
 
 import java.util.concurrent.TimeUnit;
 
@@ -69,7 +70,9 @@ public class HelloworldActivity extends ActionBarActivity {
         @Override
         protected String doInBackground(Void... nothing) {
             try {
-                mChannel = OkHttpChannelBuilder.forAddress(mHost, mPort).build();
+                mChannel = ManagedChannelBuilder.forAddress(mHost, mPort)
+                    .usePlaintext(true)
+                    .build();
                 return sayHello(mChannel);
             } catch (Exception e) {
                 return "Failed... : " + e.getMessage();
@@ -79,7 +82,7 @@ public class HelloworldActivity extends ActionBarActivity {
         @Override
         protected void onPostExecute(String result) {
             try {
-                mChannel.shutdown().awaitTerminated(1, TimeUnit.SECONDS);
+                mChannel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
