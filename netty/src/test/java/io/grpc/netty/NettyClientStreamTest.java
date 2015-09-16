@@ -267,11 +267,13 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     Http2Headers headers = new DefaultHttp2Headers().status(STATUS_OK).set(CONTENT_TYPE_HEADER,
             new ByteString("application/bad", UTF_8));
     stream().transportHeadersReceived(headers, false);
-    stream().transportHeadersReceived(new DefaultHttp2Headers(), true);
+    Http2Headers trailers = new DefaultHttp2Headers()
+        .set(new ByteString("grpc-status", UTF_8), new ByteString("0", UTF_8));
+    stream().transportHeadersReceived(trailers, true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.class));
     Status status = captor.getValue();
-    assertEquals(status.getCode(), Status.Code.INTERNAL);
+    assertEquals(Status.Code.INTERNAL, status.getCode());
     assertTrue(status.getDescription().contains("content-type"));
   }
 
