@@ -161,6 +161,7 @@ public final class Metadata {
    * may not be accurate if Metadata is mutated.
    */
   public <T> Iterable<T> getAll(final Key<T> key) {
+
     if (containsKey(key)) {
       return Iterables.transform(
           store.get(key.name()),
@@ -332,7 +333,7 @@ public final class Metadata {
    * following characters:
    * <ul>
    *   <li>Space: {@code 0x20}, but must not be at the beginning or at the end of the value.</li>
-   *   <li>ASCII visible characters ({@code 0x21-0x7E}), but excluding comma ({@code ",", 0x2C}).
+   *   <li>ASCII visible characters ({@code 0x21-0x7E}).
    * </ul>
    *
    * <p>Note this has to be the subset of valid characters in {@code field-content} from RFC 7230
