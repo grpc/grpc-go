@@ -95,7 +95,7 @@ buildscript {
 }
 
 // Use the osdetector-gradle-plugin
-apply plugin: "osdetector"
+apply plugin: "com.google.osdetector"
 
 // Configure a special classifier on Fedora-"like" systems.
 osdetector.classifierWithLikes = ['fedora']
