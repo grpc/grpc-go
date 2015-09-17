@@ -48,7 +48,7 @@ func (x HealthCheckResponse_ServingStatus) String() string {
 }
 
 type HealthCheckRequest struct {
-	Service string `protobuf:"bytes,2,opt,name=service" json:"service,omitempty"`
+	Service string `protobuf:"bytes,1,opt,name=service" json:"service,omitempty"`
 }
 
 func (m *HealthCheckRequest) Reset()         { *m = HealthCheckRequest{} }
