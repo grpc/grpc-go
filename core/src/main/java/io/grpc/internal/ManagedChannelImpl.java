@@ -40,6 +40,7 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
 import io.grpc.Codec;
 import io.grpc.Compressor;
+import io.grpc.DecompressorRegistry;
 import io.grpc.ExperimentalApi;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
@@ -71,6 +72,9 @@ public final class ManagedChannelImpl extends ManagedChannel {
   private final boolean usingSharedExecutor;
   private final String userAgent;
   private final Object lock = new Object();
+
+  private final DecompressorRegistry decompressorRegistry =
+      DecompressorRegistry.getDefaultInstance();
 
   /**
    * Executor that runs deadline timers for requests.
@@ -314,7 +318,8 @@ public final class ManagedChannelImpl extends ManagedChannel {
           callOptions,
           transportProvider,
           scheduledExecutor)
-              .setUserAgent(userAgent);
+              .setUserAgent(userAgent)
+              .setDecompressorRegistry(decompressorRegistry);
     }
 
     @Override

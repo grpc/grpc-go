@@ -44,14 +44,26 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Encloses classes related to the compression and decompression of messages.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
+@ThreadSafe
 public final class DecompressorRegistry {
 
-  private static final DecompressorRegistry INSTANCE = new DecompressorRegistry();
+  private static final DecompressorRegistry DEFAULT_INSTANCE = new DecompressorRegistry(
+      new DecompressorInfo(new Codec.Gzip(), false),
+      new DecompressorInfo(Codec.Identity.NONE, false));
+
+  public static DecompressorRegistry getDefaultInstance() {
+    return DEFAULT_INSTANCE;
+  }
+
+  public static DecompressorRegistry newEmptyInstance() {
+    return new DecompressorRegistry();
+  }
 
   private final ConcurrentMap<String, DecompressorInfo> decompressors;
 
@@ -61,12 +73,7 @@ public final class DecompressorRegistry {
    * @param d The decompressor to register
    * @param advertised If true, the message encoding will be listed in the Accept-Encoding header.
    */
-  public static void register(Decompressor d, boolean advertised) {
-    INSTANCE.internalRegister(d, advertised);
-  }
-
-  @VisibleForTesting
-  void internalRegister(Decompressor d, boolean advertised) {
+  public void register(Decompressor d, boolean advertised) {
     String encoding = d.getMessageEncoding();
     checkArgument(!encoding.contains(","), "Comma is currently not allowed in message encoding");
     decompressors.put(encoding, new DecompressorInfo(d, advertised));
@@ -75,12 +82,7 @@ public final class DecompressorRegistry {
   /**
    * Provides a list of all message encodings that have decompressors available.
    */
-  public static Set<String> getKnownMessageEncodings() {
-    return INSTANCE.internalGetKnownMessageEncodings();
-  }
-
-  @VisibleForTesting
-  Set<String> internalGetKnownMessageEncodings() {
+  public Set<String> getKnownMessageEncodings() {
     return Collections.unmodifiableSet(decompressors.keySet());
   }
 
@@ -92,12 +94,7 @@ public final class DecompressorRegistry {
    * can be arbitrary.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
-  public static Set<String> getAdvertisedMessageEncodings() {
-    return INSTANCE.internalGetAdvertisedMessageEncodings();
-  }
-
-  @VisibleForTesting
-  Set<String> internalGetAdvertisedMessageEncodings() {
+  public Set<String> getAdvertisedMessageEncodings() {
     Set<String> advertisedDecompressors = new HashSet<String>(decompressors.size());
     for (Entry<String, DecompressorInfo> entry : decompressors.entrySet()) {
       if (entry.getValue().advertised) {
@@ -116,26 +113,17 @@ public final class DecompressorRegistry {
    * encodings sent to the remote host.
    */
   @Nullable
-  public static Decompressor lookupDecompressor(String messageEncoding) {
-    return INSTANCE.internalLookupDecompressor(messageEncoding);
-  }
-
-  @Nullable
-  @VisibleForTesting
-  Decompressor internalLookupDecompressor(String messageEncoding) {
+  public Decompressor lookupDecompressor(String messageEncoding) {
     DecompressorInfo info = decompressors.get(messageEncoding);
     return info != null ? info.decompressor : null;
   }
 
-
   @VisibleForTesting
-  DecompressorRegistry() {
+  DecompressorRegistry(DecompressorInfo ...ds) {
     decompressors = new ConcurrentHashMap<String, DecompressorInfo>();
-    Decompressor gzip = new Codec.Gzip();
-    // By default, Gzip is not advertised
-    decompressors.put(gzip.getMessageEncoding(), new DecompressorInfo(gzip, false));
-    decompressors.put(
-        Codec.Identity.NONE.getMessageEncoding(), new DecompressorInfo(Codec.Identity.NONE, false));
+    for (DecompressorInfo d : ds) {
+      decompressors.put(d.decompressor.getMessageEncoding(), d);
+    }
   }
 
   /**

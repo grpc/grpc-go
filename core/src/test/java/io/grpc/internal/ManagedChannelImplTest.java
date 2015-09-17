@@ -37,6 +37,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -51,6 +52,7 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.DecompressorRegistry;
 import io.grpc.IntegerMarshaller;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
@@ -151,6 +153,7 @@ public class ManagedChannelImplTest {
     ClientTransport.Listener transportListener = transportListenerCaptor.getValue();
     verify(mockTransport)
         .newStream(same(method), same(headers), streamListenerCaptor.capture());
+    verify(mockStream).setDecompressionRegistry(isA(DecompressorRegistry.class));
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
 
     // Second call
@@ -235,6 +238,7 @@ public class ManagedChannelImplTest {
     verify(mockTransportFactory, times(2)).newClientTransport();
     verify(mockTransport2).start(any(ClientTransport.Listener.class));
     verify(mockTransport2).newStream(same(method), same(headers2), streamListenerCaptor.capture());
+    verify(mockStream2).setDecompressionRegistry(isA(DecompressorRegistry.class));
     Metadata trailers2 = new Metadata();
     streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers2);
     verify(mockCallListener2, timeout(1000)).onClose(Status.CANCELLED, trailers2);
@@ -251,6 +255,7 @@ public class ManagedChannelImplTest {
     verify(mockTransportFactory, times(3)).newClientTransport();
     verify(mockTransport3).start(transportListenerCaptor.capture());
     verify(mockTransport3).newStream(same(method), same(headers3), streamListenerCaptor.capture());
+    verify(mockStream3).setDecompressionRegistry(isA(DecompressorRegistry.class));
     Metadata trailers3 = new Metadata();
     streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers3);
     verify(mockCallListener3, timeout(1000)).onClose(Status.CANCELLED, trailers3);

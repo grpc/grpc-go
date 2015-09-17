@@ -52,15 +52,15 @@ import java.util.Set;
 public class DecompressorRegistryTest {
 
   private final Dummy dummyDecompressor = new Dummy();
-  private final DecompressorRegistry registry = new DecompressorRegistry();
+  private final DecompressorRegistry registry = DecompressorRegistry.newEmptyInstance();
 
   @Test
   public void lookupDecompressor_checkDefaultMessageEncodingsExist() {
     // Explicitly put the names in, rather than link against MessageEncoding
     assertNotNull("Expected identity to be registered",
-        registry.internalLookupDecompressor("identity"));
+        DecompressorRegistry.getDefaultInstance().lookupDecompressor("identity"));
     assertNotNull("Expected gzip to be registered",
-        registry.internalLookupDecompressor("gzip"));
+        DecompressorRegistry.getDefaultInstance().lookupDecompressor("gzip"));
   }
 
   @Test
@@ -69,7 +69,8 @@ public class DecompressorRegistryTest {
     knownEncodings.add("identity");
     knownEncodings.add("gzip");
 
-    assertEquals(knownEncodings, registry.internalGetKnownMessageEncodings());
+    assertEquals(knownEncodings,
+        DecompressorRegistry.getDefaultInstance().getKnownMessageEncodings());
   }
 
   /*
@@ -77,22 +78,22 @@ public class DecompressorRegistryTest {
    */
   @Test
   public void getAdvertisedMessageEncodings_noEncodingsAdvertised() {
-    assertTrue(registry.internalGetAdvertisedMessageEncodings().isEmpty());
+    assertTrue(registry.getAdvertisedMessageEncodings().isEmpty());
   }
 
   @Test
   public void registerDecompressor_advertisedDecompressor() {
-    registry.internalRegister(dummyDecompressor, true);
+    registry.register(dummyDecompressor, true);
 
-    assertTrue(registry.internalGetAdvertisedMessageEncodings()
+    assertTrue(registry.getAdvertisedMessageEncodings()
         .contains(dummyDecompressor.getMessageEncoding()));
   }
 
   @Test
   public void registerDecompressor_nonadvertisedDecompressor() {
-    DecompressorRegistry.register(dummyDecompressor, false);
+    registry.register(dummyDecompressor, false);
 
-    assertFalse(registry.internalGetAdvertisedMessageEncodings()
+    assertFalse(registry.getAdvertisedMessageEncodings()
         .contains(dummyDecompressor.getMessageEncoding()));
   }
 

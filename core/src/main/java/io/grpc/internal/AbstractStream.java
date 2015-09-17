@@ -100,6 +100,8 @@ public abstract class AbstractStream<IdT> implements Stream {
   private boolean allocated;
 
   private final Object onReadyLock = new Object();
+  private volatile DecompressorRegistry decompressorRegistry =
+      DecompressorRegistry.getDefaultInstance();
 
   AbstractStream(WritableBufferAllocator bufferAllocator, int maxMessageSize) {
     MessageDeframer.Listener inboundMessageHandler = new MessageDeframer.Listener() {
@@ -305,10 +307,15 @@ public abstract class AbstractStream<IdT> implements Stream {
    */
   @Override
   public final void setDecompressor(String messageEncoding) {
-    Decompressor d = DecompressorRegistry.lookupDecompressor(messageEncoding);
+    Decompressor d = decompressorRegistry.lookupDecompressor(messageEncoding);
     checkArgument(d != null,
         "Unable to find decompressor for message encoding %s", messageEncoding);
     setDecompressor(d);
+  }
+
+  @Override
+  public final void setDecompressionRegistry(DecompressorRegistry registry) {
+    decompressorRegistry = checkNotNull(registry);
   }
 
   @Override

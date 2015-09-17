@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
+import io.grpc.DecompressorRegistry;
 
 import java.io.InputStream;
 
@@ -100,4 +101,14 @@ public interface Stream {
    * @throws IllegalArgumentException if the provided message encoding cannot be found.
    */
   void setDecompressor(String messageEncoding);
+
+  /**
+   * Sets the decompressor registry to use when resolving {@link #setDecompressor(String)}.  If
+   * unset, the default DecompressorRegistry will be used.
+   *
+   * @see DecompressorRegistry#getDefaultInstance()
+   *
+   * @param registry the decompressors to use.
+   */
+  void setDecompressionRegistry(DecompressorRegistry registry);
 }

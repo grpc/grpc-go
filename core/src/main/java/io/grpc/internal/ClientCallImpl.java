@@ -70,6 +70,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   private ClientTransportProvider clientTransportProvider;
   private String userAgent;
   private ScheduledExecutorService deadlineCancellationExecutor;
+  private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
 
   ClientCallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor,
       CallOptions callOptions, ClientTransportProvider clientTransportProvider,
@@ -95,6 +96,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   ClientCallImpl<ReqT, RespT> setUserAgent(String userAgent) {
     this.userAgent = userAgent;
+    return this;
+  }
+
+  ClientCallImpl<ReqT, RespT> setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
+    this.decompressorRegistry = decompressorRegistry;
     return this;
   }
 
@@ -149,8 +155,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     }
 
     headers.removeAll(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY);
-    // TODO: Maybe move registry to the channel to ease testing.
-    for (String encoding : DecompressorRegistry.getAdvertisedMessageEncodings()) {
+    for (String encoding : decompressorRegistry.getAdvertisedMessageEncodings()) {
       headers.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, encoding);
     }
 
@@ -162,8 +167,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       closeCallPrematurely(listener, Status.fromThrowable(ex));
     }
 
-    if (stream != null && compressor != null) {
-      stream.setCompressor(compressor);
+    if (stream != null) {
+      // TODO: this can race with the callbacks.  Fix the race ~eventually~ by decoupling stream
+      // creation and stream starting.
+      stream.setDecompressionRegistry(decompressorRegistry);
+      if (compressor != null) {
+        stream.setCompressor(compressor);
+      }
     }
 
     // Start the deadline timer after stream creation because it will close the stream
@@ -366,6 +376,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
     @Override
     public void setDecompressor(String messageEncoding) {}
+
+    @Override
+    public void setDecompressionRegistry(DecompressorRegistry registry) {}
   }
 }
 

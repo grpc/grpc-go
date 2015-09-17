@@ -33,6 +33,7 @@ package io.grpc.inprocess;
 
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
+import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -225,6 +226,9 @@ class InProcessTransport implements ServerTransport, ClientTransport {
 
       @Override
       public void setDecompressor(String messageEncoding) {}
+
+      @Override
+      public void setDecompressionRegistry(DecompressorRegistry registry) {}
 
       @Override
       public void request(int numMessages) {
@@ -451,6 +455,9 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       public void setDecompressor(String messageEncoding) {
         // nop
       }
+
+      @Override
+      public void setDecompressionRegistry(DecompressorRegistry registry) {}
     }
   }
 
@@ -489,5 +496,8 @@ class InProcessTransport implements ServerTransport, ClientTransport {
     public void setDecompressor(String messageEncoding) {
       // nop
     }
+
+    @Override
+    public void setDecompressionRegistry(DecompressorRegistry registry) {}
   }
 }

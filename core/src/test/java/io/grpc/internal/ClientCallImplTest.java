@@ -71,10 +71,12 @@ public class ClientCallImplTest {
       new SerializingExecutor(MoreExecutors.newDirectExecutorService());
   private final ScheduledExecutorService deadlineCancellationExecutor =
       Executors.newScheduledThreadPool(0);
+  private final DecompressorRegistry decompressorRegistry =
+      DecompressorRegistry.getDefaultInstance();
 
   @Before
   public void setUp() {
-    DecompressorRegistry.register(new Codec.Gzip(), true);
+    decompressorRegistry.register(new Codec.Gzip(), true);
   }
 
   @Test
@@ -96,7 +98,8 @@ public class ClientCallImplTest {
         executor,
         CallOptions.DEFAULT,
         provider,
-        deadlineCancellationExecutor);
+        deadlineCancellationExecutor)
+            .setDecompressorRegistry(decompressorRegistry);
 
     call.start(new TestClientCallListener<Void>(), new Metadata());
 
@@ -107,7 +110,7 @@ public class ClientCallImplTest {
 
     Set<String> acceptedEncodings =
         ImmutableSet.copyOf(actual.getAll(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
-    assertEquals(DecompressorRegistry.getAdvertisedMessageEncodings(), acceptedEncodings);
+    assertEquals(decompressorRegistry.getAdvertisedMessageEncodings(), acceptedEncodings);
   }
 
   private static class TestMarshaller<T> implements Marshaller<T> {
