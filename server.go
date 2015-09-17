@@ -43,8 +43,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
@@ -60,11 +58,11 @@ type methodHandler func(srv interface{}, ctx context.Context, codec Codec, buf [
 type Interceptor interface {
 	Intercept(
 		methodName string,
-		request proto.Message,
-		response proto.Message,
+		request interface{},
+		response interface{},
 		err error,
 		duration time.Duration,
-	) error
+	)
 }
 
 // MethodDesc represents an RPC service's method specification.
