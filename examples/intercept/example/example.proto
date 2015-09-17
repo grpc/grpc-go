@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+import "examples/intercept/intercept.proto";
+
+package example;
+
+message Foo {
+  uint64 one = 1;
+  string two = 2;
+}
+
+message Bar {
+  uint64 one = 1;
+  string two = 2;
+}
+
+service Api {
+  option (grpc.intercept.intercept) = grpc.intercept.INTERCEPT_TYPE_UNARY;
+  // this method will be intercepted since INTERCEPT_TYPE_UNARY is set on the service.
+  rpc One(Foo) returns (Bar) {}
+  // this method will not be intercepted since no_intercept is set.
+  rpc Two(Foo) returns (Bar) { option (grpc.intercept.no_intercept) = true; }
+  // this method will not be intercepted since only INTERCEPT_TYPE_UNARY is set.
+  rpc Three(stream One) returns (Bar) {}
+  // this method will be intercepted since intercept is set.
+  rpc Four(One) returns (stream Bar) { option (grpc.intercept.intercept) = true; }
+}

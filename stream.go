@@ -56,6 +56,7 @@ type StreamDesc struct {
 	// At least one of these is true.
 	ServerStreams bool
 	ClientStreams bool
+	Intercept     bool
 }
 
 // Stream defines the common interface a client or server stream has to satisfy.
