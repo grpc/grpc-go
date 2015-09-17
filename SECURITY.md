@@ -52,12 +52,6 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
 
 ```xml
 <project>
-  <properties>
-    <!-- Configure the os-maven-plugin extension to expand the classifier on -->
-    <!-- Fedora-"like" systems. -->
-    <os.detection.classifierWithLikes>fedora</os.detection.classifierWithLikes>
-  </properties>
-
   <dependencies>
     <dependency>
       <groupId>io.netty</groupId>
@@ -76,6 +70,31 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
         <version>1.4.0.Final</version>
       </extension>
     </extensions>
+    <plugins>
+      <!-- Use Ant to configure the appropriate "tcnative.classifier" property -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>initialize</phase>
+            <configuration>
+              <exportAntProperties>true</exportAntProperties>
+              <target>
+                <condition property="tcnative.classifier"
+                           value="${os.detected.classifier}-fedora"
+                           else="${os.detected.classifier}">
+                  <isset property="os.detected.release.fedora"/>
+                </condition>
+              </target>
+            </configuration>
+            <goals>
+              <goal>run</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
   </build>
 </project>
 ```
@@ -97,11 +116,15 @@ buildscript {
 // Use the osdetector-gradle-plugin
 apply plugin: "com.google.osdetector"
 
-// Configure a special classifier on Fedora-"like" systems.
-osdetector.classifierWithLikes = ['fedora']
+def tcnative_classifier = osdetector.classifier;
+// Fedora variants use a different soname for OpenSSL than other linux distributions
+// (see http://netty.io/wiki/forked-tomcat-native.html).
+if (osdetector.os == "linux" && osdetector.release.isLike("fedora")) {
+  tcnative_classifier += "_fedora";
+}
 
 dependencies {
-    compile 'io.netty:netty-tcnative:1.1.33.Fork7:' + osdetector.classifier
+    compile 'io.netty:netty-tcnative:1.1.33.Fork7:' + tcnative_classifier
 }
 ```
 
