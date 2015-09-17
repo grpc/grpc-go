@@ -62,6 +62,7 @@ type Interceptor interface {
 		methodName string,
 		request proto.Message,
 		response proto.Message,
+		err error,
 		duration time.Duration,
 	) error
 }
