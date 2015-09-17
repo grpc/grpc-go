@@ -50,7 +50,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
-	"google.golang.org/grpc/grpclog"
+	"go.pedge.io/dlog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
 )
@@ -91,15 +91,15 @@ var (
 
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
 	if size < 0 {
-		grpclog.Fatalf("Requested a response with invalid length %d", size)
+		dlog.Fatalf("Requested a response with invalid length %d", size)
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		grpclog.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+		dlog.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		grpclog.Fatalf("Unsupported payload type: %d", t)
+		dlog.Fatalf("Unsupported payload type: %d", t)
 	}
 	return &testpb.Payload{
 		Type: t.Enum(),
@@ -110,12 +110,12 @@ func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
 func doEmptyUnaryCall(tc testpb.TestServiceClient) {
 	reply, err := tc.EmptyCall(context.Background(), &testpb.Empty{})
 	if err != nil {
-		grpclog.Fatal("/TestService/EmptyCall RPC failed: ", err)
+		dlog.Fatal("/TestService/EmptyCall RPC failed: ", err)
 	}
 	if !proto.Equal(&testpb.Empty{}, reply) {
-		grpclog.Fatalf("/TestService/EmptyCall receives %v, want %v", reply, testpb.Empty{})
+		dlog.Fatalf("/TestService/EmptyCall receives %v, want %v", reply, testpb.Empty{})
 	}
-	grpclog.Println("EmptyUnaryCall done")
+	dlog.Println("EmptyUnaryCall done")
 }
 
 func doLargeUnaryCall(tc testpb.TestServiceClient) {
@@ -127,20 +127,20 @@ func doLargeUnaryCall(tc testpb.TestServiceClient) {
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
-		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		dlog.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
 	t := reply.GetPayload().GetType()
 	s := len(reply.GetPayload().GetBody())
 	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
-		grpclog.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
+		dlog.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
 	}
-	grpclog.Println("LargeUnaryCall done")
+	dlog.Println("LargeUnaryCall done")
 }
 
 func doClientStreaming(tc testpb.TestServiceClient) {
 	stream, err := tc.StreamingInputCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.StreamingInputCall(_) = _, %v", tc, err)
+		dlog.Fatalf("%v.StreamingInputCall(_) = _, %v", tc, err)
 	}
 	var sum int
 	for _, s := range reqSizes {
@@ -149,20 +149,20 @@ func doClientStreaming(tc testpb.TestServiceClient) {
 			Payload: pl,
 		}
 		if err := stream.Send(req); err != nil {
-			grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+			dlog.Fatalf("%v.Send(%v) = %v", stream, req, err)
 		}
 		sum += s
-		grpclog.Printf("Sent a request of size %d, aggregated size %d", s, sum)
+		dlog.Printf("Sent a request of size %d, aggregated size %d", s, sum)
 
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		grpclog.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
+		dlog.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
 	}
 	if reply.GetAggregatedPayloadSize() != int32(sum) {
-		grpclog.Fatalf("%v.CloseAndRecv().GetAggregatePayloadSize() = %v; want %v", stream, reply.GetAggregatedPayloadSize(), sum)
+		dlog.Fatalf("%v.CloseAndRecv().GetAggregatePayloadSize() = %v; want %v", stream, reply.GetAggregatedPayloadSize(), sum)
 	}
-	grpclog.Println("ClientStreaming done")
+	dlog.Println("ClientStreaming done")
 }
 
 func doServerStreaming(tc testpb.TestServiceClient) {
@@ -178,7 +178,7 @@ func doServerStreaming(tc testpb.TestServiceClient) {
 	}
 	stream, err := tc.StreamingOutputCall(context.Background(), req)
 	if err != nil {
-		grpclog.Fatalf("%v.StreamingOutputCall(_) = _, %v", tc, err)
+		dlog.Fatalf("%v.StreamingOutputCall(_) = _, %v", tc, err)
 	}
 	var rpcStatus error
 	var respCnt int
@@ -191,28 +191,28 @@ func doServerStreaming(tc testpb.TestServiceClient) {
 		}
 		t := reply.GetPayload().GetType()
 		if t != testpb.PayloadType_COMPRESSABLE {
-			grpclog.Fatalf("Got the reply of type %d, want %d", t, testpb.PayloadType_COMPRESSABLE)
+			dlog.Fatalf("Got the reply of type %d, want %d", t, testpb.PayloadType_COMPRESSABLE)
 		}
 		size := len(reply.GetPayload().GetBody())
 		if size != int(respSizes[index]) {
-			grpclog.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
+			dlog.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
 		}
 		index++
 		respCnt++
 	}
 	if rpcStatus != io.EOF {
-		grpclog.Fatalf("Failed to finish the server streaming rpc: %v", err)
+		dlog.Fatalf("Failed to finish the server streaming rpc: %v", err)
 	}
 	if respCnt != len(respSizes) {
-		grpclog.Fatalf("Got %d reply, want %d", len(respSizes), respCnt)
+		dlog.Fatalf("Got %d reply, want %d", len(respSizes), respCnt)
 	}
-	grpclog.Println("ServerStreaming done")
+	dlog.Println("ServerStreaming done")
 }
 
 func doPingPong(tc testpb.TestServiceClient) {
 	stream, err := tc.FullDuplexCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
+		dlog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
 	}
 	var index int
 	for index < len(reqSizes) {
@@ -228,43 +228,43 @@ func doPingPong(tc testpb.TestServiceClient) {
 			Payload:            pl,
 		}
 		if err := stream.Send(req); err != nil {
-			grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+			dlog.Fatalf("%v.Send(%v) = %v", stream, req, err)
 		}
 		reply, err := stream.Recv()
 		if err != nil {
-			grpclog.Fatalf("%v.Recv() = %v", stream, err)
+			dlog.Fatalf("%v.Recv() = %v", stream, err)
 		}
 		t := reply.GetPayload().GetType()
 		if t != testpb.PayloadType_COMPRESSABLE {
-			grpclog.Fatalf("Got the reply of type %d, want %d", t, testpb.PayloadType_COMPRESSABLE)
+			dlog.Fatalf("Got the reply of type %d, want %d", t, testpb.PayloadType_COMPRESSABLE)
 		}
 		size := len(reply.GetPayload().GetBody())
 		if size != int(respSizes[index]) {
-			grpclog.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
+			dlog.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
 		}
 		index++
 	}
 	if err := stream.CloseSend(); err != nil {
-		grpclog.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
+		dlog.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
 	}
 	if _, err := stream.Recv(); err != io.EOF {
-		grpclog.Fatalf("%v failed to complele the ping pong test: %v", stream, err)
+		dlog.Fatalf("%v failed to complele the ping pong test: %v", stream, err)
 	}
-	grpclog.Println("Pingpong done")
+	dlog.Println("Pingpong done")
 }
 
 func doEmptyStream(tc testpb.TestServiceClient) {
 	stream, err := tc.FullDuplexCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
+		dlog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
 	}
 	if err := stream.CloseSend(); err != nil {
-		grpclog.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
+		dlog.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
 	}
 	if _, err := stream.Recv(); err != io.EOF {
-		grpclog.Fatalf("%v failed to complete the empty stream test: %v", stream, err)
+		dlog.Fatalf("%v failed to complete the empty stream test: %v", stream, err)
 	}
-	grpclog.Println("Emptystream done")
+	dlog.Println("Emptystream done")
 }
 
 func doTimeoutOnSleepingServer(tc testpb.TestServiceClient) {
@@ -272,10 +272,10 @@ func doTimeoutOnSleepingServer(tc testpb.TestServiceClient) {
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		if grpc.Code(err) == codes.DeadlineExceeded {
-			grpclog.Println("TimeoutOnSleepingServer done")
+			dlog.Println("TimeoutOnSleepingServer done")
 			return
 		}
-		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
+		dlog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
 	}
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, 27182)
 	req := &testpb.StreamingOutputCallRequest{
@@ -283,12 +283,12 @@ func doTimeoutOnSleepingServer(tc testpb.TestServiceClient) {
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+		dlog.Fatalf("%v.Send(%v) = %v", stream, req, err)
 	}
 	if _, err := stream.Recv(); grpc.Code(err) != codes.DeadlineExceeded {
-		grpclog.Fatalf("%v.Recv() = _, %v, want error code %d", stream, err, codes.DeadlineExceeded)
+		dlog.Fatalf("%v.Recv() = _, %v, want error code %d", stream, err, codes.DeadlineExceeded)
 	}
-	grpclog.Println("TimeoutOnSleepingServer done")
+	dlog.Println("TimeoutOnSleepingServer done")
 }
 
 func doComputeEngineCreds(tc testpb.TestServiceClient) {
@@ -302,23 +302,23 @@ func doComputeEngineCreds(tc testpb.TestServiceClient) {
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
-		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		dlog.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
 	user := reply.GetUsername()
 	scope := reply.GetOauthScope()
 	if user != *defaultServiceAccount {
-		grpclog.Fatalf("Got user name %q, want %q.", user, *defaultServiceAccount)
+		dlog.Fatalf("Got user name %q, want %q.", user, *defaultServiceAccount)
 	}
 	if !strings.Contains(*oauthScope, scope) {
-		grpclog.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
+		dlog.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
 	}
-	grpclog.Println("ComputeEngineCreds done")
+	dlog.Println("ComputeEngineCreds done")
 }
 
 func getServiceAccountJSONKey() []byte {
 	jsonKey, err := ioutil.ReadFile(*serviceAccountKeyFile)
 	if err != nil {
-		grpclog.Fatalf("Failed to read the service account key file: %v", err)
+		dlog.Fatalf("Failed to read the service account key file: %v", err)
 	}
 	return jsonKey
 }
@@ -334,18 +334,18 @@ func doServiceAccountCreds(tc testpb.TestServiceClient) {
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
-		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		dlog.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
 	jsonKey := getServiceAccountJSONKey()
 	user := reply.GetUsername()
 	scope := reply.GetOauthScope()
 	if !strings.Contains(string(jsonKey), user) {
-		grpclog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
+		dlog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
 	}
 	if !strings.Contains(*oauthScope, scope) {
-		grpclog.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
+		dlog.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
 	}
-	grpclog.Println("ServiceAccountCreds done")
+	dlog.Println("ServiceAccountCreds done")
 }
 
 func doJWTTokenCreds(tc testpb.TestServiceClient) {
@@ -358,25 +358,25 @@ func doJWTTokenCreds(tc testpb.TestServiceClient) {
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
-		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		dlog.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
 	jsonKey := getServiceAccountJSONKey()
 	user := reply.GetUsername()
 	if !strings.Contains(string(jsonKey), user) {
-		grpclog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
+		dlog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
 	}
-	grpclog.Println("JWTtokenCreds done")
+	dlog.Println("JWTtokenCreds done")
 }
 
 func getToken() *oauth2.Token {
 	jsonKey := getServiceAccountJSONKey()
 	config, err := google.JWTConfigFromJSON(jsonKey, *oauthScope)
 	if err != nil {
-		grpclog.Fatalf("Failed to get the config: %v", err)
+		dlog.Fatalf("Failed to get the config: %v", err)
 	}
 	token, err := config.TokenSource(context.Background()).Token()
 	if err != nil {
-		grpclog.Fatalf("Failed to get the token: %v", err)
+		dlog.Fatalf("Failed to get the token: %v", err)
 	}
 	return token
 }
@@ -392,18 +392,18 @@ func doOauth2TokenCreds(tc testpb.TestServiceClient) {
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
-		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		dlog.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
 	jsonKey := getServiceAccountJSONKey()
 	user := reply.GetUsername()
 	scope := reply.GetOauthScope()
 	if !strings.Contains(string(jsonKey), user) {
-		grpclog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
+		dlog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
 	}
 	if !strings.Contains(*oauthScope, scope) {
-		grpclog.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
+		dlog.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
 	}
-	grpclog.Println("Oauth2TokenCreds done")
+	dlog.Println("Oauth2TokenCreds done")
 }
 
 func doPerRPCCreds(tc testpb.TestServiceClient) {
@@ -421,17 +421,17 @@ func doPerRPCCreds(tc testpb.TestServiceClient) {
 	ctx := metadata.NewContext(context.Background(), metadata.MD{"authorization": []string{kv["authorization"]}})
 	reply, err := tc.UnaryCall(ctx, req)
 	if err != nil {
-		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		dlog.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
 	user := reply.GetUsername()
 	scope := reply.GetOauthScope()
 	if !strings.Contains(string(jsonKey), user) {
-		grpclog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
+		dlog.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
 	}
 	if !strings.Contains(*oauthScope, scope) {
-		grpclog.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
+		dlog.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
 	}
-	grpclog.Println("PerRPCCreds done")
+	dlog.Println("PerRPCCreds done")
 }
 
 var (
@@ -445,21 +445,21 @@ func doCancelAfterBegin(tc testpb.TestServiceClient) {
 	ctx, cancel := context.WithCancel(metadata.NewContext(context.Background(), testMetadata))
 	stream, err := tc.StreamingInputCall(ctx)
 	if err != nil {
-		grpclog.Fatalf("%v.StreamingInputCall(_) = _, %v", tc, err)
+		dlog.Fatalf("%v.StreamingInputCall(_) = _, %v", tc, err)
 	}
 	cancel()
 	_, err = stream.CloseAndRecv()
 	if grpc.Code(err) != codes.Canceled {
-		grpclog.Fatalf("%v.CloseAndRecv() got error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
+		dlog.Fatalf("%v.CloseAndRecv() got error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
 	}
-	grpclog.Println("CancelAfterBegin done")
+	dlog.Println("CancelAfterBegin done")
 }
 
 func doCancelAfterFirstResponse(tc testpb.TestServiceClient) {
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
-		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
+		dlog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
@@ -473,16 +473,16 @@ func doCancelAfterFirstResponse(tc testpb.TestServiceClient) {
 		Payload:            pl,
 	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+		dlog.Fatalf("%v.Send(%v) = %v", stream, req, err)
 	}
 	if _, err := stream.Recv(); err != nil {
-		grpclog.Fatalf("%v.Recv() = %v", stream, err)
+		dlog.Fatalf("%v.Recv() = %v", stream, err)
 	}
 	cancel()
 	if _, err := stream.Recv(); grpc.Code(err) != codes.Canceled {
-		grpclog.Fatalf("%v compleled with error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
+		dlog.Fatalf("%v compleled with error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
 	}
-	grpclog.Println("CancelAfterFirstResponse done")
+	dlog.Println("CancelAfterFirstResponse done")
 }
 
 func main() {
@@ -499,7 +499,7 @@ func main() {
 			var err error
 			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
 			if err != nil {
-				grpclog.Fatalf("Failed to create TLS credentials %v", err)
+				dlog.Fatalf("Failed to create TLS credentials %v", err)
 			}
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
@@ -510,13 +510,13 @@ func main() {
 		} else if *testCase == "service_account_creds" {
 			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
 			if err != nil {
-				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
+				dlog.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		} else if *testCase == "jwt_token_creds" {
 			jwtCreds, err := oauth.NewJWTAccessFromFile(*serviceAccountKeyFile)
 			if err != nil {
-				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
+				dlog.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		} else if *testCase == "oauth2_auth_token" {
@@ -527,7 +527,7 @@ func main() {
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
-		grpclog.Fatalf("Fail to dial: %v", err)
+		dlog.Fatalf("Fail to dial: %v", err)
 	}
 	defer conn.Close()
 	tc := testpb.NewTestServiceClient(conn)
@@ -548,27 +548,27 @@ func main() {
 		doTimeoutOnSleepingServer(tc)
 	case "compute_engine_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute compute_engine_creds test case.")
+			dlog.Fatalf("TLS is not enabled. TLS is required to execute compute_engine_creds test case.")
 		}
 		doComputeEngineCreds(tc)
 	case "service_account_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+			dlog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
 		}
 		doServiceAccountCreds(tc)
 	case "jwt_token_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute jwt_token_creds test case.")
+			dlog.Fatalf("TLS is not enabled. TLS is required to execute jwt_token_creds test case.")
 		}
 		doJWTTokenCreds(tc)
 	case "per_rpc_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute per_rpc_creds test case.")
+			dlog.Fatalf("TLS is not enabled. TLS is required to execute per_rpc_creds test case.")
 		}
 		doPerRPCCreds(tc)
 	case "oauth2_auth_token":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute oauth2_auth_token test case.")
+			dlog.Fatalf("TLS is not enabled. TLS is required to execute oauth2_auth_token test case.")
 		}
 		doOauth2TokenCreds(tc)
 	case "cancel_after_begin":
@@ -576,6 +576,6 @@ func main() {
 	case "cancel_after_first_response":
 		doCancelAfterFirstResponse(tc)
 	default:
-		grpclog.Fatal("Unsupported test case: ", *testCase)
+		dlog.Fatal("Unsupported test case: ", *testCase)
 	}
 }

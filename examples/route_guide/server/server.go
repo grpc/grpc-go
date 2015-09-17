@@ -51,7 +51,7 @@ import (
 	"google.golang.org/grpc"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
+	"go.pedge.io/dlog"
 
 	"github.com/golang/protobuf/proto"
 
@@ -159,10 +159,10 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 func (s *routeGuideServer) loadFeatures(filePath string) {
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		grpclog.Fatalf("Failed to load default features: %v", err)
+		dlog.Fatalf("Failed to load default features: %v", err)
 	}
 	if err := json.Unmarshal(file, &s.savedFeatures); err != nil {
-		grpclog.Fatalf("Failed to load default features: %v", err)
+		dlog.Fatalf("Failed to load default features: %v", err)
 	}
 }
 
@@ -223,13 +223,13 @@ func main() {
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		dlog.Fatalf("failed to listen: %v", err)
 	}
 	var opts []grpc.ServerOption
 	if *tls {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			grpclog.Fatalf("Failed to generate credentials %v", err)
+			dlog.Fatalf("Failed to generate credentials %v", err)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}

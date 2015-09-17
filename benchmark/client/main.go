@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/benchmark"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/stats"
-	"google.golang.org/grpc/grpclog"
+	"go.pedge.io/dlog"
 )
 
 var (
@@ -86,7 +86,7 @@ func closeLoopUnary() {
 	close(ch)
 	wg.Wait()
 	conn.Close()
-	grpclog.Println(s.String())
+	dlog.Println(s.String())
 
 }
 
@@ -94,7 +94,7 @@ func closeLoopStream() {
 	s, conn, tc := buildConnection()
 	stream, err := tc.StreamingCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+		dlog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 	}
 	for i := 0; i < 100; i++ {
 		streamCaller(tc, stream)
@@ -136,7 +136,7 @@ func closeLoopStream() {
 	close(ch)
 	wg.Wait()
 	conn.Close()
-	grpclog.Println(s.String())
+	dlog.Println(s.String())
 }
 
 func main() {
@@ -145,11 +145,11 @@ func main() {
 	go func() {
 		lis, err := net.Listen("tcp", ":0")
 		if err != nil {
-			grpclog.Fatalf("Failed to listen: %v", err)
+			dlog.Fatalf("Failed to listen: %v", err)
 		}
-		grpclog.Println("Client profiling address: ", lis.Addr().String())
+		dlog.Println("Client profiling address: ", lis.Addr().String())
 		if err := http.Serve(lis, nil); err != nil {
-			grpclog.Fatalf("Failed to serve: %v", err)
+			dlog.Fatalf("Failed to serve: %v", err)
 		}
 	}()
 	switch *rpcType {

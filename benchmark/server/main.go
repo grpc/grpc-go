@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/benchmark"
-	"google.golang.org/grpc/grpclog"
+	"go.pedge.io/dlog"
 )
 
 var (
@@ -21,15 +21,15 @@ func main() {
 	go func() {
 		lis, err := net.Listen("tcp", ":0")
 		if err != nil {
-			grpclog.Fatalf("Failed to listen: %v", err)
+			dlog.Fatalf("Failed to listen: %v", err)
 		}
-		grpclog.Println("Server profiling address: ", lis.Addr().String())
+		dlog.Println("Server profiling address: ", lis.Addr().String())
 		if err := http.Serve(lis, nil); err != nil {
-			grpclog.Fatalf("Failed to serve: %v", err)
+			dlog.Fatalf("Failed to serve: %v", err)
 		}
 	}()
 	addr, stopper := benchmark.StartServer(":0") // listen on all interfaces
-	grpclog.Println("Server Address: ", addr)
+	dlog.Println("Server Address: ", addr)
 	<-time.After(time.Duration(*duration) * time.Second)
 	stopper()
 }
