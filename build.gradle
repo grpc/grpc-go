@@ -114,7 +114,7 @@ subprojects {
         // Fedora variants use a different soname for OpenSSL than other linux distributions
         // (see http://netty.io/wiki/forked-tomcat-native.html).
         if (osdetector.os == "linux" && osdetector.release.isLike("fedora")) {
-            tcnative_suffix += "_fedora";
+            tcnative_suffix += "-fedora";
         }
 
         def epoll_suffix = "";

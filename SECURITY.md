@@ -120,7 +120,7 @@ def tcnative_classifier = osdetector.classifier;
 // Fedora variants use a different soname for OpenSSL than other linux distributions
 // (see http://netty.io/wiki/forked-tomcat-native.html).
 if (osdetector.os == "linux" && osdetector.release.isLike("fedora")) {
-  tcnative_classifier += "_fedora";
+  tcnative_classifier += "-fedora";
 }
 
 dependencies {
