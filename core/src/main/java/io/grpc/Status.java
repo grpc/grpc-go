@@ -232,7 +232,7 @@ public final class Status {
   }
 
   // Create the canonical list of Status instances indexed by their code values.
-  private static List<Status> STATUS_LIST;
+  private static final List<Status> STATUS_LIST;
 
   static {
     TreeMap<Integer, Status> canonicalizer = new TreeMap<Integer, Status>();
