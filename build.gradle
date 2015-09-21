@@ -131,6 +131,7 @@ subprojects {
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
                 oauth_client: 'com.google.auth:google-auth-library-oauth2-http:0.3.0',
                 okhttp: 'com.squareup.okhttp:okhttp:2.5.0',
+                okio: 'com.squareup.okio:okio:1.6.0',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufNanoVersion}",
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.0',

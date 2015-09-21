@@ -31,10 +31,11 @@
 
 package io.grpc.okhttp;
 
-import com.squareup.okhttp.internal.framed.Header;
-
 import io.grpc.Metadata;
 import io.grpc.internal.TransportFrameUtil;
+import io.grpc.okhttp.internal.CipherSuite;
+import io.grpc.okhttp.internal.ConnectionSpec;
+import io.grpc.okhttp.internal.framed.Header;
 
 import java.util.List;
 
@@ -61,6 +62,26 @@ class Utils {
       headerValues[i++] = header.value.toByteArray();
     }
     return TransportFrameUtil.toRawSerializedHeaders(headerValues);
+  }
+
+  static ConnectionSpec convertSpec(com.squareup.okhttp.ConnectionSpec spec) {
+    List<com.squareup.okhttp.TlsVersion> tlsVersionList = spec.tlsVersions();
+    String[] tlsVersions = new String[tlsVersionList.size()];
+    for (int i = 0; i < tlsVersions.length; i++) {
+      tlsVersions[i] = tlsVersionList.get(i).javaName();
+    }
+
+    List<com.squareup.okhttp.CipherSuite> cipherSuiteList = spec.cipherSuites();
+    CipherSuite[] cipherSuites = new CipherSuite[cipherSuiteList.size()];
+    for (int i = 0; i < cipherSuites.length; i++) {
+      cipherSuites[i] = CipherSuite.valueOf(cipherSuiteList.get(i).name());
+    }
+
+    return new ConnectionSpec.Builder(spec.isTls())
+        .supportsTlsExtensions(spec.supportsTlsExtensions())
+        .tlsVersions(tlsVersions)
+        .cipherSuites(cipherSuites)
+        .build();
   }
 
   private Utils() {

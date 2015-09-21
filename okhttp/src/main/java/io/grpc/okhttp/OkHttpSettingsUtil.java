@@ -29,12 +29,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.squareup.okhttp.internal.framed;
+package io.grpc.okhttp;
+
+import io.grpc.okhttp.internal.framed.Settings;
 
 /**
  * A utility class help gRPC get/set the necessary fields of OkHttp's Settings.
  */
-public class OkHttpSettingsUtil {
+class OkHttpSettingsUtil {
   public static final int MAX_CONCURRENT_STREAMS = Settings.MAX_CONCURRENT_STREAMS;
   public static final int INITIAL_WINDOW_SIZE = Settings.INITIAL_WINDOW_SIZE;
 

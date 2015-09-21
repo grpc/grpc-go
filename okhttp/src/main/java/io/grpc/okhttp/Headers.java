@@ -37,11 +37,10 @@ import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 
 import com.google.common.base.Preconditions;
 
-import com.squareup.okhttp.internal.framed.Header;
-
 import io.grpc.Metadata;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.TransportFrameUtil;
+import io.grpc.okhttp.internal.framed.Header;
 
 import okio.ByteString;
 

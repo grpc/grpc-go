@@ -29,11 +29,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.squareup.okhttp;
+package io.grpc.okhttp;
 
 import com.google.common.base.Preconditions;
 
-import com.squareup.okhttp.internal.OkHttpProtocolNegotiator;
+import io.grpc.okhttp.internal.ConnectionSpec;
+import io.grpc.okhttp.internal.Protocol;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -48,7 +49,7 @@ import javax.net.ssl.SSLSocketFactory;
  * A helper class that located in package com.squareup.okhttp, so that we can use OkHttp internals
  * to do TLS upgrading.
  */
-public final class OkHttpTlsUpgrader {
+final class OkHttpTlsUpgrader {
 
   private static final String HTTP2_PROTOCOL_NAME = "h2";
   private static final List<Protocol> TLS_PROTOCOLS =

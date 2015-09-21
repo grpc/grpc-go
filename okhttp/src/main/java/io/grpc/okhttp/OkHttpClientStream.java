@@ -34,15 +34,14 @@ package io.grpc.okhttp;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import com.squareup.okhttp.internal.framed.ErrorCode;
-import com.squareup.okhttp.internal.framed.Header;
-
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.Http2ClientStream;
 import io.grpc.internal.WritableBuffer;
+import io.grpc.okhttp.internal.framed.ErrorCode;
+import io.grpc.okhttp.internal.framed.Header;
 
 import okio.Buffer;
 

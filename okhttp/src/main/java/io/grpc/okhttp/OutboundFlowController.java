@@ -39,7 +39,7 @@ import static java.lang.Math.min;
 
 import com.google.common.base.Preconditions;
 
-import com.squareup.okhttp.internal.framed.FrameWriter;
+import io.grpc.okhttp.internal.framed.FrameWriter;
 
 import okio.Buffer;
 

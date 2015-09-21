@@ -29,9 +29,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.squareup.okhttp.internal;
+package io.grpc.okhttp;
 
-import com.squareup.okhttp.Protocol;
+import io.grpc.okhttp.internal.OptionalMethod;
+import io.grpc.okhttp.internal.Platform;
+import io.grpc.okhttp.internal.Protocol;
+import io.grpc.okhttp.internal.Util;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -44,7 +47,7 @@ import javax.net.ssl.SSLSocket;
 /**
  * A helper class located in package com.squareup.okhttp.internal for TLS negotiation.
  */
-public class OkHttpProtocolNegotiator {
+class OkHttpProtocolNegotiator {
   private static final Platform PLATFORM = Platform.get();
   private static OkHttpProtocolNegotiator NEGOTIATOR = createNegotiator();
 

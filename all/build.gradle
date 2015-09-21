@@ -75,6 +75,10 @@ jacocoTestReport {
     additionalSourceDirs = files(subprojects.sourceSets.main.allSource.srcDirs)
     sourceDirectories = files(subprojects.sourceSets.main.allSource.srcDirs)
     classDirectories = files(subprojects.sourceSets.main.output)
+    classDirectories = files(classDirectories.files.collect {
+        fileTree(dir: it,
+                exclude: ['**/io/grpc/okhttp/internal/**'])
+    })
 }
 
 coveralls {

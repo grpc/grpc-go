@@ -63,14 +63,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 
-import com.squareup.okhttp.internal.framed.ErrorCode;
-import com.squareup.okhttp.internal.framed.FrameReader;
-import com.squareup.okhttp.internal.framed.FrameWriter;
-import com.squareup.okhttp.internal.framed.Header;
-import com.squareup.okhttp.internal.framed.HeadersMode;
-import com.squareup.okhttp.internal.framed.OkHttpSettingsUtil;
-import com.squareup.okhttp.internal.framed.Settings;
-
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -81,6 +73,13 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.okhttp.OkHttpClientTransport.ClientFrameHandler;
+import io.grpc.okhttp.internal.ConnectionSpec;
+import io.grpc.okhttp.internal.framed.ErrorCode;
+import io.grpc.okhttp.internal.framed.FrameReader;
+import io.grpc.okhttp.internal.framed.FrameWriter;
+import io.grpc.okhttp.internal.framed.Header;
+import io.grpc.okhttp.internal.framed.HeadersMode;
+import io.grpc.okhttp.internal.framed.Settings;
 
 import okio.Buffer;
 

@@ -77,6 +77,7 @@ public class OkHttpChannelBuilder extends
           .tlsVersions(TlsVersion.TLS_1_2)
           .supportsTlsExtensions(true)
           .build();
+
   private static final Resource<ExecutorService> SHARED_EXECUTOR =
       new Resource<ExecutorService>() {
         @Override
@@ -172,7 +173,7 @@ public class OkHttpChannelBuilder extends
    * For secure connection, provides a ConnectionSpec to specify Cipher suite and
    * TLS versions.
    *
-   * <p>By default DEFAULT_CONNECTION_SPEC will be used.
+   * <p>By default {@link #DEFAULT_CONNECTION_SPEC} will be used.
    */
   public final OkHttpChannelBuilder connectionSpec(ConnectionSpec connectionSpec) {
     this.connectionSpec = connectionSpec;
@@ -265,7 +266,7 @@ public class OkHttpChannelBuilder extends
     @Override
     public ClientTransport newClientTransport() {
       return new OkHttpClientTransport(host, port, authority, executor, socketFactory,
-              connectionSpec, maxMessageSize);
+          Utils.convertSpec(connectionSpec), maxMessageSize);
     }
 
     @Override

@@ -5,16 +5,27 @@ plugins {
 description = "gRPC: OkHttp"
 dependencies {
     compile project(':grpc-core'),
-            libraries.okhttp
+            libraries.okhttp,
+            libraries.okio
 
     // Tests depend on base class defined by core module.
     testCompile project(':grpc-core').sourceSets.test.output
 }
+
+project.sourceSets {
+    main {
+        java {
+            srcDir "${projectDir}/third_party/okhttp/java"
+        }
+    }
+}
+
+checkstyleMain.exclude '**/io/grpc/okhttp/internal/**'
 
 // Configure the animal sniffer plugin
 animalsniffer {
     signature = "org.codehaus.mojo.signature:java16:+@signature"
 }
 
-javadoc.exclude 'com/squareup/**'
+javadoc.exclude 'io/grpc/okhttp/internal/**'
 javadoc.options.links 'http://square.github.io/okhttp/javadoc/'

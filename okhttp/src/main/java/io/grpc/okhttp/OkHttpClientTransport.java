@@ -39,18 +39,6 @@ import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
 import com.google.common.util.concurrent.SettableFuture;
 
-import com.squareup.okhttp.ConnectionSpec;
-import com.squareup.okhttp.OkHttpTlsUpgrader;
-import com.squareup.okhttp.internal.framed.ErrorCode;
-import com.squareup.okhttp.internal.framed.FrameReader;
-import com.squareup.okhttp.internal.framed.FrameWriter;
-import com.squareup.okhttp.internal.framed.Header;
-import com.squareup.okhttp.internal.framed.HeadersMode;
-import com.squareup.okhttp.internal.framed.Http2;
-import com.squareup.okhttp.internal.framed.OkHttpSettingsUtil;
-import com.squareup.okhttp.internal.framed.Settings;
-import com.squareup.okhttp.internal.framed.Variant;
-
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -61,6 +49,15 @@ import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
 import io.grpc.internal.SerializingExecutor;
+import io.grpc.okhttp.internal.ConnectionSpec;
+import io.grpc.okhttp.internal.framed.ErrorCode;
+import io.grpc.okhttp.internal.framed.FrameReader;
+import io.grpc.okhttp.internal.framed.FrameWriter;
+import io.grpc.okhttp.internal.framed.Header;
+import io.grpc.okhttp.internal.framed.HeadersMode;
+import io.grpc.okhttp.internal.framed.Http2;
+import io.grpc.okhttp.internal.framed.Settings;
+import io.grpc.okhttp.internal.framed.Variant;
 
 import okio.Buffer;
 import okio.BufferedSink;
