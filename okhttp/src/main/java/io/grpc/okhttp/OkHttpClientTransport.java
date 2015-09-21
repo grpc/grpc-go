@@ -41,15 +41,15 @@ import com.google.common.util.concurrent.SettableFuture;
 
 import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.OkHttpTlsUpgrader;
-import com.squareup.okhttp.internal.spdy.ErrorCode;
-import com.squareup.okhttp.internal.spdy.FrameReader;
-import com.squareup.okhttp.internal.spdy.FrameWriter;
-import com.squareup.okhttp.internal.spdy.Header;
-import com.squareup.okhttp.internal.spdy.HeadersMode;
-import com.squareup.okhttp.internal.spdy.Http2;
-import com.squareup.okhttp.internal.spdy.OkHttpSettingsUtil;
-import com.squareup.okhttp.internal.spdy.Settings;
-import com.squareup.okhttp.internal.spdy.Variant;
+import com.squareup.okhttp.internal.framed.ErrorCode;
+import com.squareup.okhttp.internal.framed.FrameReader;
+import com.squareup.okhttp.internal.framed.FrameWriter;
+import com.squareup.okhttp.internal.framed.Header;
+import com.squareup.okhttp.internal.framed.HeadersMode;
+import com.squareup.okhttp.internal.framed.Http2;
+import com.squareup.okhttp.internal.framed.OkHttpSettingsUtil;
+import com.squareup.okhttp.internal.framed.Settings;
+import com.squareup.okhttp.internal.framed.Variant;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;

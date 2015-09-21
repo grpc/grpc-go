@@ -31,7 +31,7 @@
 
 package io.grpc.okhttp;
 
-import com.squareup.okhttp.internal.spdy.Header;
+import com.squareup.okhttp.internal.framed.Header;
 
 import io.grpc.Metadata;
 import io.grpc.internal.TransportFrameUtil;

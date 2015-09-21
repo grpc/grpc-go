@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.squareup.okhttp.internal.spdy;
+package com.squareup.okhttp.internal.framed;
 
 /**
  * A utility class help gRPC get/set the necessary fields of OkHttp's Settings.

@@ -33,10 +33,10 @@ package io.grpc.okhttp;
 
 import com.google.common.base.Preconditions;
 
-import com.squareup.okhttp.internal.spdy.ErrorCode;
-import com.squareup.okhttp.internal.spdy.FrameWriter;
-import com.squareup.okhttp.internal.spdy.Header;
-import com.squareup.okhttp.internal.spdy.Settings;
+import com.squareup.okhttp.internal.framed.ErrorCode;
+import com.squareup.okhttp.internal.framed.FrameWriter;
+import com.squareup.okhttp.internal.framed.Header;
+import com.squareup.okhttp.internal.framed.Settings;
 
 import io.grpc.internal.SerializingExecutor;
 

@@ -34,8 +34,8 @@ package io.grpc.okhttp;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import com.squareup.okhttp.internal.spdy.ErrorCode;
-import com.squareup.okhttp.internal.spdy.Header;
+import com.squareup.okhttp.internal.framed.ErrorCode;
+import com.squareup.okhttp.internal.framed.Header;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.MethodType;
