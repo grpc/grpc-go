@@ -3,7 +3,7 @@ gRPC in 3 minutes (Go)
 
 BACKGROUND
 -------------
-For this sample, we've already generated the server and client stubs from [helloworld.proto](examples/helloworld/proto/helloworld.proto).
+For this sample, we've already generated the server and client stubs from [helloworld.proto](helloworld/helloworld/helloworld.proto).
 
 PREREQUISITES
 -------------
