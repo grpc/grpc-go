@@ -246,10 +246,6 @@ type ClientConn struct {
 	// ready is closed and becomes nil when a new transport is up or failed
 	// due to timeout.
 	ready chan struct{}
-	// Every time a new transport is created, this is incremented by 1. Used
-	// to avoid trying to recreate a transport while the new one is already
-	// under construction.
-	transportSeq int
 	transport    transport.ClientTransport
 }
 
@@ -297,11 +293,6 @@ func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState Conn
 func (cc *ClientConn) resetTransport(closeTransport bool) error {
 	var retries int
 	start := time.Now()
-	cc.mu.Lock()
-	ts := cc.transportSeq
-	// Avoid wait() picking up a dying transport unnecessarily.
-	cc.transportSeq = 0
-	cc.mu.Unlock()
 	for {
 		cc.mu.Lock()
 		cc.state = Connecting
@@ -368,7 +359,6 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		cc.state = Ready
 		cc.stateCV.Broadcast()
 		cc.transport = newTransport
-		cc.transportSeq = ts + 1
 		if cc.ready != nil {
 			close(cc.ready)
 			cc.ready = nil
