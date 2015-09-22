@@ -114,7 +114,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 		cs.traceInfo.tr.LazyLog(&cs.traceInfo.firstLine, false)
 	}
-	t, _, err := cc.wait(ctx, 0)
+	t, err := cc.wait(ctx)
 	if err != nil {
 		return nil, toRPCErr(err)
 	}

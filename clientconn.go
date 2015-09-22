@@ -403,19 +403,17 @@ func (cc *ClientConn) transportMonitor() {
 }
 
 // When wait returns, either the new transport is up or ClientConn is
-// closing. Used to avoid working on a dying transport. It updates and
-// returns the transport and its version when there is no error.
-func (cc *ClientConn) wait(ctx context.Context, ts int) (transport.ClientTransport, int, error) {
+// closing.
+func (cc *ClientConn) wait(ctx context.Context) (transport.ClientTransport, error) {
 	for {
 		cc.mu.Lock()
 		switch {
 		case cc.state == Shutdown:
 			cc.mu.Unlock()
-			return nil, 0, ErrClientConnClosing
-		case ts < cc.transportSeq:
-			// Worked on a dying transport. Try the new one immediately.
-			defer cc.mu.Unlock()
-			return cc.transport, cc.transportSeq, nil
+			return nil, ErrClientConnClosing
+		case cc.state == Ready:
+			cc.mu.Unlock()
+			return cc.transport, nil
 		default:
 			ready := cc.ready
 			if ready == nil {
@@ -425,7 +423,7 @@ func (cc *ClientConn) wait(ctx context.Context, ts int) (transport.ClientTranspo
 			cc.mu.Unlock()
 			select {
 			case <-ctx.Done():
-				return nil, 0, transport.ContextErr(ctx.Err())
+				return nil, transport.ContextErr(ctx.Err())
 			// Wait until the new transport is ready or failed.
 			case <-ready:
 			}
