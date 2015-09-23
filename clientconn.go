@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/transport"
@@ -148,6 +149,9 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		target:       target,
 		shutdownChan: make(chan struct{}),
 	}
+	if EnableTracing {
+		cc.events = trace.NewEventLog("grpc.ClientConn", target)
+	}
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
@@ -181,6 +185,9 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	cc.stateCV = sync.NewCond(&cc.mu)
 	if cc.dopts.block {
 		if err := cc.resetTransport(false); err != nil {
+			cc.mu.Lock()
+			cc.errorf("dial failed: %v", err)
+			cc.mu.Unlock()
 			cc.Close()
 			return nil, err
 		}
@@ -190,6 +197,9 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
 			if err := cc.resetTransport(false); err != nil {
+				cc.mu.Lock()
+				cc.errorf("dial failed: %v", err)
+				cc.mu.Unlock()
 				grpclog.Printf("Failed to dial %s: %v; please retry.", target, err)
 				cc.Close()
 				return
@@ -198,6 +208,22 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		}()
 	}
 	return cc, nil
+}
+
+// printf records an event in cc's event log, unless cc has been closed.
+// REQUIRES cc.mu is held.
+func (cc *ClientConn) printf(format string, a ...interface{}) {
+	if cc.events != nil {
+		cc.events.Printf(format, a...)
+	}
+}
+
+// errorf records an error in cc's event log, unless cc has been closed.
+// REQUIRES cc.mu is held.
+func (cc *ClientConn) errorf(format string, a ...interface{}) {
+	if cc.events != nil {
+		cc.events.Errorf(format, a...)
+	}
 }
 
 // ConnectivityState indicates the state of a client connection.
@@ -239,14 +265,15 @@ type ClientConn struct {
 	authority    string
 	dopts        dialOptions
 	shutdownChan chan struct{}
+	events       trace.EventLog
 
 	mu      sync.Mutex
 	state   ConnectivityState
 	stateCV *sync.Cond
 	// ready is closed and becomes nil when a new transport is up or failed
 	// due to timeout.
-	ready chan struct{}
-	transport    transport.ClientTransport
+	ready     chan struct{}
+	transport transport.ClientTransport
 }
 
 // State returns the connectivity state of the ClientConn
@@ -295,6 +322,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 	start := time.Now()
 	for {
 		cc.mu.Lock()
+		cc.printf("connecting")
 		if cc.state == Shutdown {
 			cc.mu.Unlock()
 			return ErrClientConnClosing
@@ -330,6 +358,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 		newTransport, err := transport.NewClientTransport(cc.target, &copts)
 		if err != nil {
 			cc.mu.Lock()
+			cc.errorf("transient failure: %v", err)
 			cc.state = TransientFailure
 			cc.stateCV.Broadcast()
 			cc.mu.Unlock()
@@ -339,6 +368,9 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			}
 			// Fail early before falling into sleep.
 			if cc.dopts.copts.Timeout > 0 && cc.dopts.copts.Timeout < sleepTime+time.Since(start) {
+				cc.mu.Lock()
+				cc.errorf("connection timeout")
+				cc.mu.Unlock()
 				cc.Close()
 				return ErrClientConnTimeout
 			}
@@ -349,6 +381,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 			continue
 		}
 		cc.mu.Lock()
+		cc.printf("ready")
 		if cc.state == Shutdown {
 			// cc.Close() has been invoked.
 			cc.mu.Unlock()
@@ -383,6 +416,9 @@ func (cc *ClientConn) transportMonitor() {
 			cc.mu.Unlock()
 			if err := cc.resetTransport(true); err != nil {
 				// The ClientConn is closing.
+				cc.mu.Lock()
+				cc.printf("transport exiting: %v", err)
+				cc.mu.Unlock()
 				grpclog.Printf("grpc: ClientConn.transportMonitor exits due to: %v", err)
 				return
 			}
@@ -433,6 +469,10 @@ func (cc *ClientConn) Close() error {
 	}
 	cc.state = Shutdown
 	cc.stateCV.Broadcast()
+	if cc.events != nil {
+		cc.events.Finish()
+		cc.events = nil
+	}
 	if cc.ready != nil {
 		close(cc.ready)
 		cc.ready = nil
