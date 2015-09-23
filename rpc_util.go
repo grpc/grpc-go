@@ -217,9 +217,9 @@ func Code(err error) codes.Code {
 	return codes.Unknown
 }
 
-// Desc returns the error description of err if it was produced by the rpc system.
+// ErrorDesc returns the error description of err if it was produced by the rpc system.
 // Otherwise, it returns err.Error() or empty string when err is nil.
-func Desc(err error) string {
+func ErrorDesc(err error) string {
 	if err == nil {
 		return ""
 	}
