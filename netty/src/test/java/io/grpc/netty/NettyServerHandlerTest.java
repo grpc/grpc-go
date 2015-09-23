@@ -39,8 +39,6 @@ import static io.grpc.netty.Utils.HTTP_METHOD;
 import static io.grpc.netty.Utils.TE_HEADER;
 import static io.grpc.netty.Utils.TE_TRAILERS;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
-import static io.netty.handler.codec.http2.Http2CodecUtil.toByteBuf;
-import static io.netty.handler.codec.http2.Http2Exception.connectionError;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -219,23 +217,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     verify(streamListener).closed(captor.capture());
     assertEquals(e, captor.getValue().asException().getCause());
     assertEquals(Code.UNKNOWN, captor.getValue().getCode());
-  }
-
-  @Test
-  public void connectionErrorShouldCloseChannel() throws Exception {
-    createStream();
-
-    // Read a bad frame to trigger the exception.
-    channelRead(badFrame());
-
-    // Verify the expected GO_AWAY frame was written.
-    Exception e = connectionError(Http2Error.PROTOCOL_ERROR,
-        "Frame length 0 incorrect size for ping.");
-    verifyWrite().writeGoAway(eq(ctx()), eq(STREAM_ID), eq(Http2Error.FRAME_SIZE_ERROR.code()),
-        eq(toByteBuf(ctx(), e)), any(ChannelPromise.class));
-
-    // Verify that the context was closed.
-    assertFalse(channel().isOpen());
   }
 
   @Test
