@@ -104,7 +104,7 @@ public class Http2OkHttpTest extends AbstractTransportTest {
     Messages.StreamingOutputCallRequest.Builder requestBuilder =
         Messages.StreamingOutputCallRequest.newBuilder()
             .setResponseType(Messages.PayloadType.COMPRESSABLE);
-    for (int i = 0; i < 10000; i++) {
+    for (int i = 0; i < 1000; i++) {
       requestBuilder.addResponseParameters(responseParameters);
     }
 
