@@ -326,11 +326,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     }
   }
 
-  private ByteBuf badFrame() throws Exception {
-    // Write an empty PING frame - this is invalid.
-    return super.pingFrame(false, Unpooled.EMPTY_BUFFER);
-  }
-
   @Override
   protected NettyServerHandler newHandler() {
     Http2Connection connection = new DefaultHttp2Connection(true);
