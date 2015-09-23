@@ -295,16 +295,15 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 	start := time.Now()
 	for {
 		cc.mu.Lock()
-		cc.state = Connecting
-		cc.stateCV.Broadcast()
-		t := cc.transport
 		if cc.state == Shutdown {
 			cc.mu.Unlock()
 			return ErrClientConnClosing
 		}
+		cc.state = Connecting
+		cc.stateCV.Broadcast()
 		cc.mu.Unlock()
 		if closeTransport {
-			t.Close()
+			cc.transport.Close()
 		}
 		// Adjust timeout for the current try.
 		copts := cc.dopts.copts
