@@ -48,7 +48,6 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -93,7 +92,6 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.util.List;
 
 /**
  * Unit tests for {@link NettyServerHandler}.
@@ -236,11 +234,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     setUp();
 
     ArgumentCaptor<Http2Settings> captor = ArgumentCaptor.forClass(Http2Settings.class);
-    verifyWrite(times(2)).writeSettings(
+    verifyWrite().writeSettings(
         any(ChannelHandlerContext.class), captor.capture(), any(ChannelPromise.class));
 
-    List<Http2Settings> settings = captor.getAllValues();
-    assertEquals(maxConcurrentStreams, settings.get(1).maxConcurrentStreams().intValue());
+    assertEquals(maxConcurrentStreams, captor.getValue().maxConcurrentStreams().intValue());
   }
 
   @Test
