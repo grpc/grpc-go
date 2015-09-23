@@ -113,6 +113,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			cs.traceInfo.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		cs.traceInfo.tr.LazyLog(&cs.traceInfo.firstLine, false)
+		ctx = trace.NewContext(ctx, cs.traceInfo.tr)
 	}
 	t, err := cc.wait(ctx)
 	if err != nil {
@@ -283,7 +284,8 @@ type serverStream struct {
 	statusCode codes.Code
 	statusDesc string
 
-	tracing bool // set to EnableTracing when the serverStream is created.
+	tracing bool            // set to EnableTracing when the serverStream is created.
+	ctx     context.Context // provides trace.FromContext when tracing
 
 	mu sync.Mutex // protects traceInfo
 	// traceInfo.tr is set when the serverStream is created (if EnableTracing is true),
@@ -292,7 +294,7 @@ type serverStream struct {
 }
 
 func (ss *serverStream) Context() context.Context {
-	return ss.s.Context()
+	return ss.ctx
 }
 
 func (ss *serverStream) SendHeader(md metadata.MD) error {
@@ -317,7 +319,6 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 				ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 				ss.traceInfo.tr.SetError()
 			}
-
 			ss.mu.Unlock()
 		}
 	}()
