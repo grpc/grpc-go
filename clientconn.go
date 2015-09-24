@@ -196,6 +196,7 @@ type ClientConn struct {
 }
 
 // State returns the connectivity state of the Conn used for next upcoming RPC.
+// This is EXPERIMENTAL API.
 func (cc *ClientConn) State() ConnectivityState {
 	c := cc.picker.Peek()
 	if c == nil {
@@ -207,6 +208,7 @@ func (cc *ClientConn) State() ConnectivityState {
 // WaitForStateChange blocks until the state changes to something other than the sourceState
 // or timeout fires on the Conn used for next upcoming RPC. It returns false if the Conn is nil
 // or timeout fires, and true otherwise.
+// This is EXPERIEMENTAL API.
 func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
 	c := cc.picker.Peek()
 	if c == nil {
