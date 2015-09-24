@@ -274,6 +274,7 @@ public abstract class AbstractBenchmark {
                       MethodDescriptor<ByteBuf, ByteBuf> method,
                       final ServerCall<ByteBuf> call,
                       Metadata headers) {
+                    call.sendHeaders(new Metadata());
                     call.request(1);
                     return new ServerCall.Listener<ByteBuf>() {
                       @Override
@@ -306,6 +307,7 @@ public abstract class AbstractBenchmark {
                       MethodDescriptor<ByteBuf, ByteBuf> method,
                       final ServerCall<ByteBuf> call,
                       Metadata headers) {
+                    call.sendHeaders(new Metadata());
                     call.request(1);
                     return new ServerCall.Listener<ByteBuf>() {
                       @Override
@@ -340,6 +342,7 @@ public abstract class AbstractBenchmark {
                       MethodDescriptor<ByteBuf, ByteBuf> method,
                       final ServerCall<ByteBuf> call,
                       Metadata headers) {
+                    call.sendHeaders(new Metadata());
                     call.request(1);
                     return new ServerCall.Listener<ByteBuf>() {
                       @Override
