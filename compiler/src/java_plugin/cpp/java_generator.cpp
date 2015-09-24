@@ -61,6 +61,10 @@ static inline string MessageFullJavaName(bool nano, const Descriptor* desc) {
   if (nano && !desc->file()->options().javanano_use_deprecated_package()) {
     // XXX: Add "nano" to the original package
     // (https://github.com/grpc/grpc-java/issues/900)
+    if (isupper(name[0])) {
+      // No java package specified.
+      return "nano." + name;
+    }
     for (int i = 0; i < name.size(); ++i) {
       if ((name[i] == '.') && (i < (name.size() - 1)) && isupper(name[i + 1])) {
         return name.substr(0, i + 1) + "nano." + name.substr(i + 1);
@@ -624,10 +628,12 @@ void GenerateService(const ServiceDescriptor* service,
   vars["ExperimentalApi"] = "io.grpc.ExperimentalApi";
 
   Printer printer(out, '$');
-  string package_name = ServiceJavaPackage(service->file());
-  printer.Print(
-      "package $package_name$;\n\n",
-      "package_name", package_name);
+  string package_name = ServiceJavaPackage(service->file(), generate_nano);
+  if (!package_name.empty()) {
+    printer.Print(
+        "package $package_name$;\n\n",
+        "package_name", package_name);
+  }
   PrintImports(&printer, generate_nano);
 
   // Package string is used to fully qualify method names.
@@ -638,11 +644,19 @@ void GenerateService(const ServiceDescriptor* service,
   PrintService(service, &vars, &printer, generate_nano);
 }
 
-string ServiceJavaPackage(const FileDescriptor* file) {
+string ServiceJavaPackage(const FileDescriptor* file, bool nano) {
   string result = google::protobuf::compiler::java::ClassName(file);
   size_t last_dot_pos = result.find_last_of('.');
   if (last_dot_pos != string::npos) {
     result.resize(last_dot_pos);
+  } else {
+    result = "";
+  }
+  if (nano && !file->options().javanano_use_deprecated_package()) {
+    if (!result.empty()) {
+      result += ".";
+    }
+    result += "nano";
   }
   return result;
 }

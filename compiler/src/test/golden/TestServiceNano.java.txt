@@ -1,4 +1,4 @@
-package io.grpc.testing.integration;
+package io.grpc.testing.integration.nano;
 
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;

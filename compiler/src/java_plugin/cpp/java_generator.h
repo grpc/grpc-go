@@ -39,7 +39,7 @@ using namespace std;
 namespace java_grpc_generator {
 
 // Returns the package name of the gRPC services defined in the given file.
-string ServiceJavaPackage(const google::protobuf::FileDescriptor* file);
+string ServiceJavaPackage(const google::protobuf::FileDescriptor* file, bool nano);
 
 // Returns the name of the outer class that wraps in all the generated code for
 // the given service.

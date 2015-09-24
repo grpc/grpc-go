@@ -8,8 +8,8 @@
 #include "java_generator.h"
 #include <google/protobuf/compiler/code_generator.h>
 #include <google/protobuf/compiler/plugin.h>
-#include <google/protobuf/io/zero_copy_stream.h>
 #include <google/protobuf/descriptor.h>
+#include <google/protobuf/io/zero_copy_stream.h>
 
 static string JavaPackageToDir(const string& package_name) {
   string package_dir = package_name;
@@ -41,7 +41,7 @@ class JavaGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
       }
     }
 
-    string package_name = java_grpc_generator::ServiceJavaPackage(file);
+    string package_name = java_grpc_generator::ServiceJavaPackage(file, generate_nano);
     string package_filename = JavaPackageToDir(package_name);
     for (int i = 0; i < file->service_count(); ++i) {
       const google::protobuf::ServiceDescriptor* service = file->service(i);

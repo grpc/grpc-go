@@ -60,6 +60,8 @@ import io.grpc.android.integrationtest.nano.Messages.StreamingInputCallRequest;
 import io.grpc.android.integrationtest.nano.Messages.StreamingInputCallResponse;
 import io.grpc.android.integrationtest.nano.Messages.StreamingOutputCallRequest;
 import io.grpc.android.integrationtest.nano.Messages.StreamingOutputCallResponse;
+import io.grpc.android.integrationtest.nano.TestServiceGrpc;
+import io.grpc.android.integrationtest.nano.UnimplementedServiceGrpc;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.StreamRecorder;

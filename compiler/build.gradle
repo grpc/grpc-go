@@ -208,7 +208,7 @@ artifacts {
 
 test.dependsOn('testGolden', 'testNanoGolden')
 
-def configureTestTask(Task task, String suffix) {
+def configureTestTask(Task task, String suffix, String extraPackage) {
   task.dependsOn "generateTest${suffix}Proto"
   if (osdetector.os != 'windows') {
     task.executable "diff"
@@ -217,11 +217,11 @@ def configureTestTask(Task task, String suffix) {
   }
   // File isn't found on Windows if last slash is forward-slash
   def slash = System.getProperty("file.separator")
-  task.args "$buildDir/generated/source/proto/test${suffix}/grpc/io/grpc/testing/integration${slash}TestServiceGrpc.java",
+  task.args "$buildDir/generated/source/proto/test${suffix}/grpc/io/grpc/testing/integration${extraPackage}${slash}TestServiceGrpc.java",
        "$projectDir/src/test/golden/TestService${suffix}.java.txt"
 }
 
 task testGolden(type: Exec)
 task testNanoGolden(type: Exec)
-configureTestTask(testGolden, '')
-configureTestTask(testNanoGolden, 'Nano')
+configureTestTask(testGolden, '', '')
+configureTestTask(testNanoGolden, 'Nano', '/nano')
