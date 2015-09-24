@@ -96,14 +96,18 @@ type ClientStream interface {
 // NewClientStream creates a new Stream for the client side. This is called
 // by generated code.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
+	conn, err := cc.picker.Pick()
+	if err != nil {
+		return nil, toRPCErr(err)
+	}
 	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
 	callHdr := &transport.CallHdr{
-		Host:   cc.authority,
+		Host:   conn.authority,
 		Method: method,
 	}
 	cs := &clientStream{
 		desc:    desc,
-		codec:   cc.dopts.codec,
+		codec:   conn.dopts.codec,
 		tracing: EnableTracing,
 	}
 	if cs.tracing {
@@ -114,7 +118,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 		cs.traceInfo.tr.LazyLog(&cs.traceInfo.firstLine, false)
 	}
-	t, err := cc.wait(ctx)
+	t, err := conn.wait(ctx)
 	if err != nil {
 		return nil, toRPCErr(err)
 	}

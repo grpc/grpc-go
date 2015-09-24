@@ -73,6 +73,7 @@ var (
 // values passed to Dial.
 type dialOptions struct {
 	codec    Codec
+	picker   Picker
 	block    bool
 	insecure bool
 	copts    transport.ConnectOptions
@@ -142,88 +143,18 @@ func WithUserAgent(s string) DialOption {
 
 // Dial creates a client connection the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
-	if target == "" {
-		return nil, ErrUnspecTarget
-	}
-	cc := &ClientConn{
-		target:       target,
-		shutdownChan: make(chan struct{}),
-	}
-	if EnableTracing {
-		cc.events = trace.NewEventLog("grpc.ClientConn", target)
-	}
+	var dopts dialOptions
 	for _, opt := range opts {
-		opt(&cc.dopts)
+		opt(&dopts)
 	}
-	if !cc.dopts.insecure {
-		var ok bool
-		for _, c := range cc.dopts.copts.AuthOptions {
-			if _, ok := c.(credentials.TransportAuthenticator); !ok {
-				continue
-			}
-			ok = true
-		}
-		if !ok {
-			return nil, ErrNoTransportSecurity
-		}
-	} else {
-		for _, c := range cc.dopts.copts.AuthOptions {
-			if c.RequireTransportSecurity() {
-				return nil, ErrCredentialsMisuse
-			}
-		}
-	}
-	colonPos := strings.LastIndex(target, ":")
-	if colonPos == -1 {
-		colonPos = len(target)
-	}
-	cc.authority = target[:colonPos]
-	if cc.dopts.codec == nil {
-		// Set the default codec.
-		cc.dopts.codec = protoCodec{}
-	}
-	cc.stateCV = sync.NewCond(&cc.mu)
-	if cc.dopts.block {
-		if err := cc.resetTransport(false); err != nil {
-			cc.mu.Lock()
-			cc.errorf("dial failed: %v", err)
-			cc.mu.Unlock()
-			cc.Close()
+	if dopts.picker == nil {
+		p, err := newSimplePicker(target, dopts)
+		if err != nil {
 			return nil, err
 		}
-		// Start to monitor the error status of transport.
-		go cc.transportMonitor()
-	} else {
-		// Start a goroutine connecting to the server asynchronously.
-		go func() {
-			if err := cc.resetTransport(false); err != nil {
-				cc.mu.Lock()
-				cc.errorf("dial failed: %v", err)
-				cc.mu.Unlock()
-				grpclog.Printf("Failed to dial %s: %v; please retry.", target, err)
-				cc.Close()
-				return
-			}
-			go cc.transportMonitor()
-		}()
+		dopts.picker = p
 	}
-	return cc, nil
-}
-
-// printf records an event in cc's event log, unless cc has been closed.
-// REQUIRES cc.mu is held.
-func (cc *ClientConn) printf(format string, a ...interface{}) {
-	if cc.events != nil {
-		cc.events.Printf(format, a...)
-	}
-}
-
-// errorf records an error in cc's event log, unless cc has been closed.
-// REQUIRES cc.mu is held.
-func (cc *ClientConn) errorf(format string, a ...interface{}) {
-	if cc.events != nil {
-		cc.events.Errorf(format, a...)
-	}
+	return &ClientConn{dopts.picker}, nil
 }
 
 // ConnectivityState indicates the state of a client connection.
@@ -261,6 +192,36 @@ func (s ConnectivityState) String() string {
 
 // ClientConn represents a client connection to an RPC service.
 type ClientConn struct {
+	picker Picker
+}
+
+// State returns the connectivity state of the Conn used for next upcoming RPC.
+func (cc *ClientConn) State() ConnectivityState {
+	c := cc.picker.Peek()
+	if c == nil {
+		return Idle
+	}
+	return c.getState()
+}
+
+// WaitForStateChange blocks until the state changes to something other than the sourceState
+// or timeout fires on the Conn used for next upcoming RPC. It returns false if the Conn is nil
+// or timeout fires, and true otherwise.
+func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
+	c := cc.picker.Peek()
+	if c == nil {
+		return false
+	}
+	return c.waitForStateChange(timeout, sourceState)
+}
+
+// Close starts to tear down the ClientConn.
+func (cc *ClientConn) Close() error {
+	return cc.picker.Close()
+}
+
+// Conn is a client connection to a single destination.
+type Conn struct {
 	target       string
 	authority    string
 	dopts        dialOptions
@@ -276,16 +237,94 @@ type ClientConn struct {
 	transport transport.ClientTransport
 }
 
-// State returns the connectivity state of the ClientConn
-func (cc *ClientConn) State() ConnectivityState {
+// NewConn creates a Conn.
+func NewConn(target string, dopts dialOptions) (*Conn, error) {
+	if target == "" {
+		return nil, ErrUnspecTarget
+	}
+	c := &Conn{
+		target:       target,
+		dopts:        dopts,
+		shutdownChan: make(chan struct{}),
+	}
+	if EnableTracing {
+		c.events = trace.NewEventLog("grpc.ClientConn", target)
+	}
+	if !c.dopts.insecure {
+		var ok bool
+		for _, cd := range c.dopts.copts.AuthOptions {
+			if _, ok := cd.(credentials.TransportAuthenticator); !ok {
+				continue
+			}
+			ok = true
+		}
+		if !ok {
+			return nil, ErrNoTransportSecurity
+		}
+	} else {
+		for _, cd := range c.dopts.copts.AuthOptions {
+			if cd.RequireTransportSecurity() {
+				return nil, ErrCredentialsMisuse
+			}
+		}
+	}
+	colonPos := strings.LastIndex(target, ":")
+	if colonPos == -1 {
+		colonPos = len(target)
+	}
+	c.authority = target[:colonPos]
+	if c.dopts.codec == nil {
+		// Set the default codec.
+		c.dopts.codec = protoCodec{}
+	}
+	c.stateCV = sync.NewCond(&c.mu)
+	if c.dopts.block {
+		if err := c.resetTransport(false); err != nil {
+			c.Close()
+			return nil, err
+		}
+		// Start to monitor the error status of transport.
+		go c.transportMonitor()
+	} else {
+		// Start a goroutine connecting to the server asynchronously.
+		go func() {
+			if err := c.resetTransport(false); err != nil {
+				grpclog.Printf("Failed to dial %s: %v; please retry.", target, err)
+				c.Close()
+				return
+			}
+			go c.transportMonitor()
+		}()
+	}
+	return c, nil
+}
+
+// printf records an event in cc's event log, unless cc has been closed.
+// REQUIRES cc.mu is held.
+func (cc *Conn) printf(format string, a ...interface{}) {
+	if cc.events != nil {
+		cc.events.Printf(format, a...)
+	}
+}
+
+// errorf records an error in cc's event log, unless cc has been closed.
+// REQUIRES cc.mu is held.
+func (cc *Conn) errorf(format string, a ...interface{}) {
+	if cc.events != nil {
+		cc.events.Errorf(format, a...)
+	}
+}
+
+// getState returns the connectivity state of the Conn
+func (cc *Conn) getState() ConnectivityState {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	return cc.state
 }
 
-// WaitForStateChange blocks until the state changes to something other than the sourceState
+// waitForStateChange blocks until the state changes to something other than the sourceState
 // or timeout fires. It returns false if timeout fires and true otherwise.
-func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
+func (cc *Conn) waitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
 	start := time.Now()
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
@@ -317,7 +356,7 @@ func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState Conn
 	return true
 }
 
-func (cc *ClientConn) resetTransport(closeTransport bool) error {
+func (cc *Conn) resetTransport(closeTransport bool) error {
 	var retries int
 	start := time.Now()
 	for {
@@ -402,7 +441,7 @@ func (cc *ClientConn) resetTransport(closeTransport bool) error {
 
 // Run in a goroutine to track the error in transport and create the
 // new transport if an error happens. It returns when the channel is closing.
-func (cc *ClientConn) transportMonitor() {
+func (cc *Conn) transportMonitor() {
 	for {
 		select {
 		// shutdownChan is needed to detect the teardown when
@@ -429,7 +468,7 @@ func (cc *ClientConn) transportMonitor() {
 
 // When wait returns, either the new transport is up or ClientConn is
 // closing.
-func (cc *ClientConn) wait(ctx context.Context) (transport.ClientTransport, error) {
+func (cc *Conn) wait(ctx context.Context) (transport.ClientTransport, error) {
 	for {
 		cc.mu.Lock()
 		switch {
@@ -456,12 +495,12 @@ func (cc *ClientConn) wait(ctx context.Context) (transport.ClientTransport, erro
 	}
 }
 
-// Close starts to tear down the ClientConn. Returns ErrClientConnClosing if
+// Close starts to tear down the Conn. Returns ErrClientConnClosing if
 // it has been closed (mostly due to dial time-out).
 // TODO(zhaoq): Make this synchronous to avoid unbounded memory consumption in
 // some edge cases (e.g., the caller opens and closes many ClientConn's in a
 // tight loop.
-func (cc *ClientConn) Close() error {
+func (cc *Conn) Close() error {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	if cc.state == Shutdown {
