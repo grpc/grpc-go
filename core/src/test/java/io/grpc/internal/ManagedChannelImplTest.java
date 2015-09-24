@@ -40,7 +40,6 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -73,6 +72,7 @@ import org.mockito.stubbing.Answer;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -81,10 +81,10 @@ import java.util.concurrent.atomic.AtomicLong;
 /** Unit tests for {@link ManagedChannelImpl}. */
 @RunWith(JUnit4.class)
 public class ManagedChannelImplTest {
-  private MethodDescriptor<String, Integer> method = MethodDescriptor.create(
+  private final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
       MethodDescriptor.MethodType.UNKNOWN, "/service/method",
       new StringMarshaller(), new IntegerMarshaller());
-  private ExecutorService executor = Executors.newSingleThreadExecutor();
+  private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
   @Mock
   private ClientTransport mockTransport;
@@ -104,11 +104,15 @@ public class ManagedChannelImplTest {
   private ArgumentCaptor<ClientStreamListener> streamListenerCaptor =
       ArgumentCaptor.forClass(ClientStreamListener.class);
 
+  private void createChannel(List<ClientInterceptor> interceptors) throws Exception {
+    channel = new ManagedChannelImpl(new FakeBackoffPolicyProvider(), mockTransportFactory,
+        executor, null, interceptors);
+  }
+
   @Before
-  public void setUp() {
+  public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
-    channel = new ManagedChannelImpl(mockTransportFactory, executor, null,
-        Collections.<ClientInterceptor>emptyList());
+    createChannel(Collections.<ClientInterceptor>emptyList());
     when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport);
   }
 
@@ -148,10 +152,10 @@ public class ManagedChannelImplTest {
     when(mockTransport.newStream(same(method), same(headers), any(ClientStreamListener.class)))
         .thenReturn(mockStream);
     call.start(mockCallListener, headers);
-    verify(mockTransportFactory).newClientTransport();
-    verify(mockTransport).start(transportListenerCaptor.capture());
+    verify(mockTransportFactory, timeout(1000)).newClientTransport();
+    verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     ClientTransport.Listener transportListener = transportListenerCaptor.getValue();
-    verify(mockTransport)
+    verify(mockTransport, timeout(1000))
         .newStream(same(method), same(headers), streamListenerCaptor.capture());
     verify(mockStream).setDecompressionRegistry(isA(DecompressorRegistry.class));
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
@@ -163,7 +167,7 @@ public class ManagedChannelImplTest {
     when(mockTransport.newStream(same(method), same(headers2), any(ClientStreamListener.class)))
         .thenReturn(mockStream2);
     call2.start(mockCallListener2, headers2);
-    verify(mockTransport)
+    verify(mockTransport, timeout(1000))
         .newStream(same(method), same(headers2), streamListenerCaptor.capture());
     ClientStreamListener streamListener2 = streamListenerCaptor.getValue();
     Metadata trailers = new Metadata();
@@ -194,7 +198,8 @@ public class ManagedChannelImplTest {
     transportListener.transportTerminated();
     assertTrue(channel.isTerminated());
 
-    verify(mockTransportFactory).newClientTransport();
+    verify(mockTransportFactory).release();
+    verifyNoMoreInteractions(mockTransportFactory);
     verifyNoMoreInteractions(mockTransport);
     verifyNoMoreInteractions(mockStream);
   }
@@ -203,84 +208,74 @@ public class ManagedChannelImplTest {
   public void transportFailsOnStart() {
     Status goldenStatus = Status.INTERNAL.withDescription("wanted it to fail");
 
-    // Have transport throw exception on start
+    // mockTransport2 shuts immediately during start
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
-    ClientTransport mockTransport = mock(ClientTransport.class);
-    when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport);
-    doThrow(goldenStatus.asRuntimeException())
-        .when(mockTransport).start(any(ClientTransport.Listener.class));
-    call.start(mockCallListener, new Metadata());
-    verify(mockTransportFactory).newClientTransport();
-    verify(mockTransport).start(any(ClientTransport.Listener.class));
-    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-    verify(mockCallListener, timeout(1000))
-        .onClose(statusCaptor.capture(), any(Metadata.class));
-    assertSame(goldenStatus, statusCaptor.getValue());
-
-    // Have transport shutdown immediately during start
-    call = channel.newCall(method, CallOptions.DEFAULT);
     ClientTransport mockTransport2 = mock(ClientTransport.class);
     ClientStream mockStream2 = mock(ClientStream.class);
     Metadata headers2 = new Metadata();
-    when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport2);
     doAnswer(new Answer<Void>() {
       @Override
       public Void answer(InvocationOnMock invocation) {
-        ClientTransport.Listener listener = (ClientTransport.Listener) invocation.getArguments()[0];
-        listener.transportShutdown(Status.INTERNAL);
-        listener.transportTerminated();
+        final ClientTransport.Listener listener =
+            (ClientTransport.Listener) invocation.getArguments()[0];
+        executor.execute(new Runnable() {
+          @Override public void run() {
+            listener.transportShutdown(Status.INTERNAL);
+            listener.transportTerminated();
+          }
+        });
         return null;
       }
     }).when(mockTransport2).start(any(ClientTransport.Listener.class));
     when(mockTransport2.newStream(same(method), same(headers2), any(ClientStreamListener.class)))
         .thenReturn(mockStream2);
+    // The factory returns the immediately shut-down transport first, then the normal one
+    when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport2, mockTransport);
+
     call.start(mockCallListener2, headers2);
-    verify(mockTransportFactory, times(2)).newClientTransport();
-    verify(mockTransport2).start(any(ClientTransport.Listener.class));
-    verify(mockTransport2).newStream(same(method), same(headers2), streamListenerCaptor.capture());
+    verify(mockTransportFactory, timeout(1000).times(2)).newClientTransport();
+    verify(mockTransport2, timeout(1000)).start(any(ClientTransport.Listener.class));
+    verify(mockTransport2, timeout(1000))
+        .newStream(same(method), same(headers2), streamListenerCaptor.capture());
     verify(mockStream2).setDecompressionRegistry(isA(DecompressorRegistry.class));
     Metadata trailers2 = new Metadata();
     streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers2);
     verify(mockCallListener2, timeout(1000)).onClose(Status.CANCELLED, trailers2);
 
-    // Make sure the Channel can still handle new calls
+    // The second call will go through on mockTransport
     call = channel.newCall(method, CallOptions.DEFAULT);
-    ClientTransport mockTransport3 = mock(ClientTransport.class);
-    ClientStream mockStream3 = mock(ClientStream.class);
-    Metadata headers3 = new Metadata();
-    when(mockTransportFactory.newClientTransport()).thenReturn(mockTransport3);
-    when(mockTransport3.newStream(same(method), same(headers3), any(ClientStreamListener.class)))
-        .thenReturn(mockStream3);
-    call.start(mockCallListener3, headers3);
-    verify(mockTransportFactory, times(3)).newClientTransport();
-    verify(mockTransport3).start(transportListenerCaptor.capture());
-    verify(mockTransport3).newStream(same(method), same(headers3), streamListenerCaptor.capture());
-    verify(mockStream3).setDecompressionRegistry(isA(DecompressorRegistry.class));
-    Metadata trailers3 = new Metadata();
-    streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers3);
-    verify(mockCallListener3, timeout(1000)).onClose(Status.CANCELLED, trailers3);
+    ClientStream mockStream = mock(ClientStream.class);
+    Metadata headers = new Metadata();
+    when(mockTransport.newStream(same(method), same(headers), any(ClientStreamListener.class)))
+        .thenReturn(mockStream);
+    call.start(mockCallListener, headers);
+    verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
+    verify(mockTransport, timeout(1000))
+        .newStream(same(method), same(headers), streamListenerCaptor.capture());
+    verify(mockStream).setDecompressionRegistry(isA(DecompressorRegistry.class));
+    Metadata trailers = new Metadata();
+    streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers);
+    verify(mockCallListener, timeout(1000)).onClose(Status.CANCELLED, trailers);
 
     // Make sure shutdown still works
     channel.shutdown();
     assertTrue(channel.isShutdown());
     assertFalse(channel.isTerminated());
-    verify(mockTransport3).shutdown();
+    verify(mockTransport).shutdown();
     transportListenerCaptor.getValue().transportShutdown(Status.CANCELLED);
     assertFalse(channel.isTerminated());
 
     transportListenerCaptor.getValue().transportTerminated();
     assertTrue(channel.isTerminated());
 
-    verify(mockTransportFactory, times(3)).newClientTransport();
+    verify(mockTransportFactory, times(2)).newClientTransport();
     verifyNoMoreInteractions(mockTransport);
     verifyNoMoreInteractions(mockTransport2);
-    verifyNoMoreInteractions(mockTransport3);
     verifyNoMoreInteractions(mockStream2);
-    verifyNoMoreInteractions(mockStream3);
   }
 
   @Test
-  public void interceptor() {
+  public void interceptor() throws Exception {
     final AtomicLong atomic = new AtomicLong();
     ClientInterceptor interceptor = new ClientInterceptor() {
       @Override
@@ -291,8 +286,7 @@ public class ManagedChannelImplTest {
         return next.newCall(method, callOptions);
       }
     };
-    channel = new ManagedChannelImpl(mockTransportFactory, executor, null,
-            Arrays.asList(interceptor));
+    createChannel(Arrays.asList(interceptor));
     assertNotNull(channel.newCall(method, CallOptions.DEFAULT));
     assertEquals(1, atomic.get());
   }
@@ -304,7 +298,7 @@ public class ManagedChannelImplTest {
     call.start(mockCallListener, new Metadata());
     call.cancel();
 
-    verify(mockTransport).start(transportListenerCaptor.capture());
+    verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     final ClientTransport.Listener transportListener = transportListenerCaptor.getValue();
     final Object lock = new Object();
     final CyclicBarrier barrier = new CyclicBarrier(2);
@@ -341,5 +335,17 @@ public class ManagedChannelImplTest {
     channel.shutdown();
 
     transportListener.transportTerminated();
+  }
+
+  private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {
+    @Override
+    public BackoffPolicy get() {
+      return new BackoffPolicy() {
+        @Override
+        public long nextBackoffMillis() {
+          return 1;
+        }
+      };
+    }
   }
 }

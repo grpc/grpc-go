@@ -33,6 +33,9 @@ package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -43,14 +46,9 @@ import io.grpc.Compressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.ExperimentalApi;
 import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
-import io.grpc.internal.ClientTransport.PingCallback;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -67,6 +65,9 @@ import javax.annotation.concurrent.ThreadSafe;
 public final class ManagedChannelImpl extends ManagedChannel {
   private static final Logger log = Logger.getLogger(ManagedChannelImpl.class.getName());
 
+  private static final ListenableFuture<ClientTransport> NULL_VALUE_TRANSPORT_FUTURE =
+        Futures.immediateFuture(null);
+
   private final ClientTransportFactory transportFactory;
   private final Executor executor;
   private final boolean usingSharedExecutor;
@@ -81,45 +82,69 @@ public final class ManagedChannelImpl extends ManagedChannel {
    */
   private ScheduledExecutorService scheduledExecutor;
 
-  // TODO(carl-mastrangelo): Allow clients to pass this in
-  private final BackoffPolicy.Provider backoffPolicyProvider =
-      new ExponentialBackoffPolicy.Provider();
+  private final BackoffPolicy.Provider backoffPolicyProvider;
+
   /**
    * We delegate to this channel, so that we can have interceptors as necessary. If there aren't
    * any interceptors this will just be {@link RealChannel}.
    */
   private final Channel interceptorChannel;
-  /**
-   * All transports that are not stopped. At the very least {@link #activeTransport} will be
-   * present, but previously used transports that still have streams or are stopping may also be
-   * present.
-   */
+
   @GuardedBy("lock")
-  private Collection<ClientTransport> transports = new ArrayList<ClientTransport>();
-  /**
-   * The transport for new outgoing requests. 'this' lock must be held when assigning to
-   * activeTransport.
-   */
-  private volatile ClientTransport activeTransport;
+  private TransportSet transportSet;
+
   @GuardedBy("lock")
   private boolean shutdown;
   @GuardedBy("lock")
   private boolean terminated;
 
-  private long reconnectTimeMillis;
-  private BackoffPolicy reconnectPolicy;
-
   private volatile Compressor defaultCompressor;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
+
     @Override
-    public ClientTransport get() {
-      return obtainActiveTransport();
+    public ListenableFuture<ClientTransport> get() {
+      TransportSet transportSetCopy;
+      synchronized (lock) {
+        if (shutdown) {
+          return NULL_VALUE_TRANSPORT_FUTURE;
+        }
+        if (transportSet == null) {
+          transportSet = new TransportSet(backoffPolicyProvider, transportFactory,
+              scheduledExecutor, new TransportSet.Callback() {
+                @Override
+                public void onTerminated() {
+                  synchronized (lock) {
+                    if (shutdown) {
+                      transportSet = null;
+                      if (terminated) {
+                        log.warning("transportTerminated called after already terminated");
+                      }
+                      terminated = true;
+                      lock.notifyAll();
+                      onChannelTerminated();
+                    }
+                  }
+                }
+              });
+        }
+        transportSetCopy = transportSet;
+      }
+      return transportSetCopy.obtainActiveTransport();
     }
   };
 
+  // TODO(zhangkun83): remove this in favor of the one that accepts BackoffPolicy.Provider
   ManagedChannelImpl(ClientTransportFactory transportFactory, @Nullable Executor executor,
       @Nullable String userAgent, List<ClientInterceptor> interceptors) {
+    this(new ExponentialBackoffPolicy.Provider(), transportFactory, executor, userAgent,
+        interceptors);
+  }
+
+  ManagedChannelImpl(BackoffPolicy.Provider backoffPolicyProvider,
+      ClientTransportFactory transportFactory, @Nullable Executor executor,
+      @Nullable String userAgent, List<ClientInterceptor> interceptors) {
+    this.backoffPolicyProvider = backoffPolicyProvider;
     this.transportFactory = transportFactory;
     this.userAgent = userAgent;
     this.interceptorChannel = ClientInterceptors.intercept(new RealChannel(), interceptors);
@@ -132,6 +157,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
       usingSharedExecutor = false;
       this.executor = executor;
     }
+
   }
 
   /**
@@ -154,7 +180,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
    */
   @Override
   public ManagedChannelImpl shutdown() {
-    ClientTransport savedActiveTransport;
+    TransportSet transportSetCopy = null;
     synchronized (lock) {
       if (shutdown) {
         return this;
@@ -162,17 +188,16 @@ public final class ManagedChannelImpl extends ManagedChannel {
       shutdown = true;
       // After shutdown there are no new calls, so no new cancellation tasks are needed
       scheduledExecutor = SharedResourceHolder.release(TIMER_SERVICE, scheduledExecutor);
-      savedActiveTransport = activeTransport;
-      if (savedActiveTransport != null) {
-        activeTransport = null;
-      } else if (transports.isEmpty()) {
+      if (transportSet == null) {
         terminated = true;
         lock.notifyAll();
         onChannelTerminated();
+      } else {
+        transportSetCopy = transportSet;
       }
     }
-    if (savedActiveTransport != null) {
-      savedActiveTransport.shutdown();
+    if (transportSetCopy != null) {
+      transportSetCopy.shutdown();
     }
     return this;
   }
@@ -217,30 +242,6 @@ public final class ManagedChannelImpl extends ManagedChannel {
     }
   }
 
-  /**
-   * Pings the remote endpoint to verify that the transport is still active. When an acknowledgement
-   * is received, the given callback will be invoked using the given executor.
-   *
-   * <p>If the underlying transport has no mechanism by when to send a ping, this method may throw
-   * an {@link UnsupportedOperationException}. The operation may {@linkplain
-   * io.grpc.internal.ClientTransport.PingCallback#pingFailed(Throwable) fail} due to transient
-   * transport errors. In that case, trying again may succeed.
-   *
-   * @see ClientTransport#ping(ClientTransport.PingCallback, Executor)
-   */
-  public void ping(final PingCallback callback, final Executor executor) {
-    try {
-      obtainActiveTransport().ping(callback, executor);
-    } catch (final RuntimeException ex) {
-      executor.execute(new Runnable() {
-        @Override
-        public void run() {
-          callback.pingFailed(ex);
-        }
-      });
-    }
-  }
-
   /*
    * Creates a new outgoing call on the channel.
    */
@@ -257,55 +258,6 @@ public final class ManagedChannelImpl extends ManagedChannel {
   @Override
   public String authority() {
     return interceptorChannel.authority();
-  }
-
-  private ClientTransport obtainActiveTransport() {
-    ClientTransport savedActiveTransport = activeTransport;
-    // If we know there is an active transport and we are not in backoff mode, return quickly.
-    if (savedActiveTransport != null && !(savedActiveTransport instanceof InactiveTransport)) {
-      return savedActiveTransport;
-    }
-    synchronized (lock) {
-      if (shutdown) {
-        return null;
-      }
-      savedActiveTransport = activeTransport;
-      if (savedActiveTransport instanceof InactiveTransport) {
-        if (System.nanoTime() > TimeUnit.MILLISECONDS.toNanos(reconnectTimeMillis)) {
-          // The timeout expired, clear the inactive transport and update the shutdown status to
-          // something that is retryable.
-          activeTransport = null;
-          savedActiveTransport = activeTransport;
-        } else {
-          // We are still in backoff mode, just return the inactive transport.
-          return savedActiveTransport;
-        }
-      }
-
-      if (savedActiveTransport != null) {
-        return savedActiveTransport;
-      }
-      // There is no active transport, or we just finished backoff.  Create a new transport.
-      ClientTransport newActiveTransport = transportFactory.newClientTransport();
-      transports.add(newActiveTransport);
-      boolean failed = true;
-      try {
-        newActiveTransport.start(new TransportListener(newActiveTransport));
-        failed = false;
-      } finally {
-        if (failed) {
-          transports.remove(newActiveTransport);
-        }
-      }
-      // It's possible that start() called transportShutdown() and transportTerminated(). If so, we
-      // wouldn't want to make it the active transport.
-      if (transports.contains(newActiveTransport)) {
-        // start() must return before we set activeTransport, since activeTransport is accessed
-        // without a lock.
-        activeTransport = newActiveTransport;
-      }
-      return newActiveTransport;
-    }
   }
 
   private class RealChannel extends Channel {
@@ -328,65 +280,6 @@ public final class ManagedChannelImpl extends ManagedChannel {
     }
   }
 
-  private class TransportListener implements ClientTransport.Listener {
-    private final ClientTransport transport;
-
-    public TransportListener(ClientTransport transport) {
-      this.transport = transport;
-    }
-
-    @Override
-    public void transportReady() {
-      synchronized (lock) {
-        if (activeTransport == transport) {
-          reconnectPolicy = null;
-        }
-      }
-    }
-
-    @Override
-    public void transportShutdown(Status s) {
-      synchronized (lock) {
-        if (activeTransport == transport) {
-          activeTransport = null;
-          // This transport listener was attached to the active transport.
-          if (s.isOk()) {
-            return;
-          }
-          // Alright, something bad has happened.
-          if (reconnectPolicy == null) {
-            // This happens the first time something bad has happened.
-            reconnectPolicy = backoffPolicyProvider.get();
-            reconnectTimeMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
-          }
-          activeTransport = new InactiveTransport(s);
-          reconnectTimeMillis += reconnectPolicy.nextBackoffMillis();
-        }
-      }
-    }
-
-    @Override
-    public void transportTerminated() {
-      synchronized (lock) {
-        if (activeTransport == transport) {
-          log.warning("transportTerminated called without previous transportShutdown");
-          activeTransport = null;
-        }
-        // TODO(notcarl): replace this with something more meaningful
-        transportShutdown(Status.UNKNOWN.withDescription("transport shutdown for unknown reason"));
-        transports.remove(transport);
-        if (shutdown && transports.isEmpty()) {
-          if (terminated) {
-            log.warning("transportTerminated called after already terminated");
-          }
-          terminated = true;
-          lock.notifyAll();
-          onChannelTerminated();
-        }
-      }
-    }
-  }
-
   /**
    * If we're using the shared executor, returns its reference.
    */
@@ -396,40 +289,5 @@ public final class ManagedChannelImpl extends ManagedChannel {
     }
     // Release the transport factory so that it can deallocate any resources.
     transportFactory.release();
-  }
-
-  private static final class InactiveTransport implements ClientTransport {
-    private final Status shutdownStatus;
-
-    private InactiveTransport(Status s) {
-      shutdownStatus = s;
-    }
-
-    @Override
-    public ClientStream newStream(
-        MethodDescriptor<?, ?> method, Metadata headers, ClientStreamListener listener) {
-      listener.closed(shutdownStatus, new Metadata());
-      return new ClientCallImpl.NoopClientStream();
-    }
-
-    @Override
-    public void start(Listener listener) {
-      throw new IllegalStateException();
-    }
-
-    @Override
-    public void ping(final PingCallback callback, Executor executor) {
-      executor.execute(new Runnable() {
-        @Override
-        public void run() {
-          callback.pingFailed(shutdownStatus.asException());
-        }
-      });
-    }
-
-    @Override
-    public void shutdown() {
-      // no-op
-    }
   }
 }

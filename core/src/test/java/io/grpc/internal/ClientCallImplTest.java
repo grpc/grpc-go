@@ -34,10 +34,14 @@ package io.grpc.internal;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.CallOptions;
@@ -87,12 +91,15 @@ public class ClientCallImplTest {
         new TestMarshaller<Void>(),
         new TestMarshaller<Void>());
     final ClientTransport transport = mock(ClientTransport.class);
+    final ClientStream stream = mock(ClientStream.class);
     ClientTransportProvider provider = new ClientTransportProvider() {
       @Override
-      public ClientTransport get() {
-        return transport;
+      public ListenableFuture<ClientTransport> get() {
+        return Futures.immediateFuture(transport);
       }
     };
+    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
+          any(ClientStreamListener.class))).thenReturn(stream);
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         descriptor,
         executor,
