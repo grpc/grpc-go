@@ -1,12 +1,23 @@
 gRPC-Java - An RPC library and framework
 ========================================
 
-[![Build Status](https://travis-ci.org/grpc/grpc-java.svg?branch=master)](https://travis-ci.org/grpc/grpc-java)
-[![Coverage Status](https://coveralls.io/repos/grpc/grpc-java/badge.svg?branch=master&service=github)](https://coveralls.io/github/grpc/grpc-java?branch=master)
-
 gRPC-Java works with JDK 6. TLS usage typically requires using Java 8, or Play
 Services Dynamic Security Provider on Android. Please see the [Security
 Readme](SECURITY.md).
+
+<table>
+  <tr>
+    <td><b>Homepage:</b></td>
+    <td><a href="http://www.grpc.io/">www.grpc.io</a></td>
+  </tr>
+  <tr>
+    <td><b>Mailing List:</b></td>
+    <td><a href="https://groups.google.com/forum/#!forum/grpc-io">grpc-io@googlegroups.com</a></td>
+  </tr>
+</table>
+
+[![Build Status](https://travis-ci.org/grpc/grpc-java.svg?branch=master)](https://travis-ci.org/grpc/grpc-java)
+[![Coverage Status](https://coveralls.io/repos/grpc/grpc-java/badge.svg?branch=master&service=github)](https://coveralls.io/github/grpc/grpc-java?branch=master)
 
 Download
 --------
