@@ -43,8 +43,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bradfitz/http2"
-	"github.com/bradfitz/http2/hpack"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
@@ -143,10 +143,10 @@ func newHPACKDecoder() *hpackDecoder {
 		case "content-type":
 			// TODO(zhaoq): Tentatively disable the check until a bug is fixed.
 			/*
-			if !strings.Contains(f.Value, "application/grpc") {
-				d.err = StreamErrorf(codes.FailedPrecondition, "transport: received the unexpected header")
-				return
-			}
+				if !strings.Contains(f.Value, "application/grpc") {
+					d.err = StreamErrorf(codes.FailedPrecondition, "transport: received the unexpected header")
+					return
+				}
 			*/
 		case "grpc-status":
 			code, err := strconv.Atoi(f.Value)
