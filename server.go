@@ -282,7 +282,8 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc) (err error) {
-	ctx := stream.Context()
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
 	var traceInfo traceInfo
 	if EnableTracing {
 		traceInfo.tr = trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
@@ -345,7 +346,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				return nil
 			}
 			if traceInfo.tr != nil {
-				traceInfo.tr.LazyLog(stringer("OK"), true)
+				traceInfo.tr.LazyLog(stringer("OK"), false)
 			}
 			opts := &transport.Options{
 				Last:  true,
@@ -375,13 +376,15 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc) (err error) {
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
 	ss := &serverStream{
 		t:       t,
 		s:       stream,
+		ctx:     ctx,
 		p:       &parser{s: stream},
 		codec:   s.opts.codec,
 		tracing: EnableTracing,
-		ctx:     stream.Context(),
 	}
 	if ss.tracing {
 		ss.traceInfo.tr = trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
@@ -414,17 +417,13 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			ss.traceInfo.tr.LazyLog(stringer(ss.statusDesc), true)
 			ss.traceInfo.tr.SetError()
 		} else {
-			ss.traceInfo.tr.LazyLog(stringer("OK"), true)
+			ss.traceInfo.tr.LazyLog(stringer("OK"), false)
 		}
 		ss.mu.Unlock()
 	}
 	return t.WriteStatus(ss.s, ss.statusCode, ss.statusDesc)
 
 }
-
-type stringer string
-
-func (s stringer) String() string { return string(s) }
 
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream) {
 	sm := stream.Method()

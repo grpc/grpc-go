@@ -279,13 +279,13 @@ type ServerStream interface {
 type serverStream struct {
 	t          transport.ServerTransport
 	s          *transport.Stream
+	ctx        context.Context // provides trace.FromContext when tracing
 	p          *parser
 	codec      Codec
 	statusCode codes.Code
 	statusDesc string
 
-	tracing bool            // set to EnableTracing when the serverStream is created.
-	ctx     context.Context // provides trace.FromContext when tracing
+	tracing bool // set to EnableTracing when the serverStream is created.
 
 	mu sync.Mutex // protects traceInfo
 	// traceInfo.tr is set when the serverStream is created (if EnableTracing is true),
