@@ -18,6 +18,11 @@ Prerequisites
 
 This requires Go 1.4 or above.
 
+Design Constraints
+------------------
+
+The `google.golang.org/grpc` Go package must not depend on any external Go libraries. This is to simplify use when vendored into other Go projects.
+
 Documentation
 -------------
 You can find more detailed documentation and examples in the [examples directory](examples/).
