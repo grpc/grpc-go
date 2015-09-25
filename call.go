@@ -116,10 +116,10 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			o.after(&c)
 		}
 	}()
-	conn, err := cc.picker.Pick()
-	if err != nil {
-		return toRPCErr(err)
-	}
+	//conn, err := cc.picker.Pick()
+	//if err != nil {
+	//	return toRPCErr(err)
+	//}
 	if EnableTracing {
 		c.traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
 		defer c.traceInfo.tr.Finish()
@@ -136,10 +136,10 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 		}()
 	}
-	callHdr := &transport.CallHdr{
-		Host:   conn.authority,
-		Method: method,
-	}
+	//callHdr := &transport.CallHdr{
+	//	Host:   conn.authority,
+	//	Method: method,
+	//}
 	topts := &transport.Options{
 		Last:  true,
 		Delay: false,
@@ -152,13 +152,25 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			err    error
 			t      transport.ClientTransport
 			stream *transport.Stream
+			conn   *Conn
 		)
 		// TODO(zhaoq): Need a formal spec of retry strategy for non-failfast rpcs.
 		if lastErr != nil && c.failFast {
 			return toRPCErr(lastErr)
 		}
-		t, err = conn.wait(ctx)
+		conn, err = cc.picker.Pick()
 		if err != nil {
+			return toRPCErr(err)
+		}
+		callHdr := &transport.CallHdr{
+			Host:   conn.authority,
+			Method: method,
+		}
+		t, err = conn.Wait(ctx)
+		if err != nil {
+			if err == ErrTransientFailure {
+				continue
+			}
 			if lastErr != nil {
 				// This was a retry; return the error from the last attempt.
 				return toRPCErr(lastErr)

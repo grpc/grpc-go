@@ -65,6 +65,8 @@ var (
 	// ErrClientConnTimeout indicates that the connection could not be
 	// established or re-established within the specified timeout.
 	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
+	// ErrTransientFailure indicates the connection failed due to a transient error.
+	ErrTransientFailure = errors.New("transient connection failure")
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
 )
@@ -148,7 +150,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		opt(&dopts)
 	}
 	if dopts.picker == nil {
-		p, err := newSimplePicker(target, dopts)
+		p, err := newUnicastPicker(target, dopts)
 		if err != nil {
 			return nil, err
 		}
@@ -198,11 +200,7 @@ type ClientConn struct {
 // State returns the connectivity state of the Conn used for next upcoming RPC.
 // This is EXPERIMENTAL API.
 func (cc *ClientConn) State() ConnectivityState {
-	c := cc.picker.Peek()
-	if c == nil {
-		return Idle
-	}
-	return c.getState()
+	return cc.picker.State()
 }
 
 // WaitForStateChange blocks until the state changes to something other than the sourceState
@@ -210,11 +208,7 @@ func (cc *ClientConn) State() ConnectivityState {
 // or timeout fires, and true otherwise.
 // This is EXPERIEMENTAL API.
 func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
-	c := cc.picker.Peek()
-	if c == nil {
-		return false
-	}
-	return c.waitForStateChange(timeout, sourceState)
+	return cc.picker.WaitForStateChange(timeout, sourceState)
 }
 
 // Close starts to tear down the ClientConn.
@@ -317,16 +311,17 @@ func (cc *Conn) errorf(format string, a ...interface{}) {
 	}
 }
 
-// getState returns the connectivity state of the Conn
-func (cc *Conn) getState() ConnectivityState {
+// State returns the connectivity state of the Conn
+func (cc *Conn) State() ConnectivityState {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	return cc.state
 }
 
-// waitForStateChange blocks until the state changes to something other than the sourceState
+// WaitForStateChange blocks until the state changes to something other than the sourceState
 // or timeout fires. It returns false if timeout fires and true otherwise.
-func (cc *Conn) waitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
+// TODO(zhaoq): Rewrite for complex Picker.
+func (cc *Conn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
 	start := time.Now()
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
@@ -402,6 +397,10 @@ func (cc *Conn) resetTransport(closeTransport bool) error {
 			cc.errorf("transient failure: %v", err)
 			cc.state = TransientFailure
 			cc.stateCV.Broadcast()
+			if cc.ready != nil {
+				close(cc.ready)
+				cc.ready = nil
+			}
 			cc.mu.Unlock()
 			sleepTime -= time.Since(connectTime)
 			if sleepTime < 0 {
@@ -468,9 +467,8 @@ func (cc *Conn) transportMonitor() {
 	}
 }
 
-// When wait returns, either the new transport is up or ClientConn is
-// closing.
-func (cc *Conn) wait(ctx context.Context) (transport.ClientTransport, error) {
+// Wait blocks until i) the new transport is up or ii) ctx is done or iii)
+func (cc *Conn) Wait(ctx context.Context) (transport.ClientTransport, error) {
 	for {
 		cc.mu.Lock()
 		switch {
@@ -480,6 +478,11 @@ func (cc *Conn) wait(ctx context.Context) (transport.ClientTransport, error) {
 		case cc.state == Ready:
 			cc.mu.Unlock()
 			return cc.transport, nil
+		case cc.state == TransientFailure:
+			cc.mu.Unlock()
+			// Break out so that the caller gets chance to pick another transport to
+			// perform rpc instead of sticking to this transport.
+			return nil, ErrTransientFailure
 		default:
 			ready := cc.ready
 			if ready == nil {
