@@ -205,7 +205,7 @@ func (cc *ClientConn) State() ConnectivityState {
 
 // WaitForStateChange blocks until the state changes to something other than the sourceState
 // or timeout fires on cc. It returns false if timeout fires, and true otherwise.
-// This is EXPERIEMENTAL API.
+// This is EXPERIMENTAL API.
 func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
 	return cc.picker.WaitForStateChange(timeout, sourceState)
 }
