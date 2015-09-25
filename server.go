@@ -229,7 +229,8 @@ func (s *Server) Serve(lis net.Listener) error {
 		}
 		var authInfo credentials.AuthInfo
 		if creds, ok := s.opts.creds.(credentials.TransportAuthenticator); ok {
-			c, authInfo, err = creds.ServerHandshake(c)
+			var conn net.Conn
+			conn, authInfo, err = creds.ServerHandshake(c)
 			if err != nil {
 				s.mu.Lock()
 				s.errorf("ServerHandshake(%q) failed: %v", c.RemoteAddr(), err)
@@ -237,6 +238,7 @@ func (s *Server) Serve(lis net.Listener) error {
 				grpclog.Println("grpc: Server.Serve failed to complete security handshake.")
 				continue
 			}
+			c = conn
 		}
 		s.mu.Lock()
 		if s.conns == nil {
