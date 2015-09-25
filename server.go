@@ -232,7 +232,7 @@ func (s *Server) Serve(lis net.Listener) error {
 			c, authInfo, err = creds.ServerHandshake(c)
 			if err != nil {
 				s.mu.Lock()
-				s.errorf("ServerHandshake(%q) failed: %v", c.RemoteAddr(), err)
+				s.errorf("ServerHandshake failed: %v", err)
 				s.mu.Unlock()
 				grpclog.Println("grpc: Server.Serve failed to complete security handshake.")
 				continue
