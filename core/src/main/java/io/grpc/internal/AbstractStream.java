@@ -176,7 +176,7 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   @Override
-  public final boolean isReady() {
+  public boolean isReady() {
     if (listener() != null && outboundPhase() != Phase.STATUS) {
       synchronized (onReadyLock) {
         return allocated && numSentBytesQueued < onReadyThreshold;

@@ -60,6 +60,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   private Status status;
   private Metadata trailers;
   private Runnable closeListenerTask;
+  private volatile boolean cancelled;
 
   protected AbstractClientStream(WritableBufferAllocator bufferAllocator,
                                  ClientStreamListener listener,
@@ -293,9 +294,14 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   @Override
   public final void cancel(Status reason) {
     checkArgument(CANCEL_REASONS.contains(reason.getCode()), "Invalid cancellation reason");
-    outboundPhase(Phase.STATUS);
+    cancelled = true;
     sendCancel(reason);
     dispose();
+  }
+
+  @Override
+  public final boolean isReady() {
+    return !cancelled && super.isReady();
   }
 
   /**
