@@ -10,7 +10,11 @@ type Picker interface {
 	// Pick returns the Conn to use for the upcoming RPC. It may return different
 	// Conn's up to the implementation.
 	Pick() (*Conn, error)
+	// State returns the connectivity state of the underlying connections.
 	State() ConnectivityState
+	// WaitForStateChange blocks until the state changes to something other than
+	// the sourceState or timeout fires on cc. It returns false if timeout fires,
+	// and true otherwise.
 	WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool
 	// Close closes all the Conn's owned by this Picker.
 	Close() error

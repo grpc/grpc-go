@@ -116,10 +116,6 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			o.after(&c)
 		}
 	}()
-	//conn, err := cc.picker.Pick()
-	//if err != nil {
-	//	return toRPCErr(err)
-	//}
 	if EnableTracing {
 		c.traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
 		defer c.traceInfo.tr.Finish()
@@ -136,10 +132,6 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 		}()
 	}
-	//callHdr := &transport.CallHdr{
-	//	Host:   conn.authority,
-	//	Method: method,
-	//}
 	topts := &transport.Options{
 		Last:  true,
 		Delay: false,
