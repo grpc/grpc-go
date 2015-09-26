@@ -367,7 +367,7 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
   private Http2Exception newStreamException(int streamId, Throwable cause) {
     return Http2Exception.streamError(
-        streamId, Http2Error.INTERNAL_ERROR, cause.getMessage(), cause);
+        streamId, Http2Error.INTERNAL_ERROR, cause, cause.getMessage());
   }
 
   /**
