@@ -293,8 +293,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    * after the message encoding header is provided by the remote host, but before any messages are
    * received.
    */
-  @Override
-  public final void setDecompressor(Decompressor d) {
+  protected final void setDecompressor(Decompressor d) {
     deframer.setDecompressor(d);
   }
 
@@ -305,7 +304,6 @@ public abstract class AbstractStream<IdT> implements Stream {
    * @param messageEncoding the name of the encoding provided by the remote host
    * @throws IllegalArgumentException if the provided message encoding cannot be found.
    */
-  @Override
   public final void setDecompressor(String messageEncoding) {
     Decompressor d = decompressorRegistry.lookupDecompressor(messageEncoding);
     checkArgument(d != null,

@@ -325,19 +325,6 @@ public final class ServerImpl extends io.grpc.Server {
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Future<?> timeout,
         Metadata headers) {
-
-      String messageEncoding = headers.get(GrpcUtil.MESSAGE_ENCODING_KEY);
-      if (messageEncoding != null) {
-        try {
-          stream.setDecompressor(messageEncoding);
-        } catch (IllegalArgumentException e) {
-          throw Status.INVALID_ARGUMENT
-              .withDescription("Unable to decompress message with encoding: " + messageEncoding)
-              .withCause(e)
-              .asRuntimeException();
-        }
-      }
-
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
           stream, methodDef.getMethodDescriptor());
