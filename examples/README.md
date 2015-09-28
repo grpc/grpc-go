@@ -26,5 +26,6 @@ $ ./build/install/grpc-examples/bin/hello-world-client
 
 That's it!
 
-Please refer to [Getting Started Guide for Java](javatutorial.md)
-for more information.
+Please refer to gRPC Java's [README](../README.md) and
+[tutorial](http://www.grpc.io/docs/tutorials/basic/java.html) for more
+information.
