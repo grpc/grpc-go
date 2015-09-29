@@ -55,6 +55,10 @@ public class GrpcSslContexts {
 
   static final Set<String> HTTP2_VERSIONS = ImmutableSet.of("h2");
 
+  /*
+   * These configs use ACCEPT due to limited support in OpenSSL.  Actual protocol enforcement is
+   * done in ProtocolNegotiators.
+   */
   private static ApplicationProtocolConfig ALPN = new ApplicationProtocolConfig(
       Protocol.ALPN,
       SelectorFailureBehavior.NO_ADVERTISE,

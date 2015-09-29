@@ -31,6 +31,8 @@
 
 package io.grpc.netty;
 
+import static io.grpc.netty.GrpcSslContexts.HTTP2_VERSIONS;
+
 import com.google.common.base.Preconditions;
 
 import io.grpc.Status;
@@ -100,7 +102,7 @@ public final class ProtocolNegotiators {
         if (evt instanceof SslHandshakeCompletionEvent) {
           SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
           if (handshakeEvent.isSuccess()) {
-            if (GrpcSslContexts.HTTP2_VERSIONS.contains(sslHandler(ctx).applicationProtocol())) {
+            if (HTTP2_VERSIONS.contains(sslHandler(ctx).applicationProtocol())) {
               // Successfully negotiated the protocol. Replace this handler with
               // the GRPC handler.
               ctx.pipeline().replace(this, null, grpcHandler);
