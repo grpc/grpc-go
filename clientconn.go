@@ -66,7 +66,7 @@ var (
 	// established or re-established within the specified timeout.
 	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
 	// ErrTransientFailure indicates the connection failed due to a transient error.
-	ErrTransientFailure = errors.New("transient connection failure")
+	ErrTransientFailure = errors.New("grpc: transient connection failure")
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
 )
@@ -145,18 +145,19 @@ func WithUserAgent(s string) DialOption {
 
 // Dial creates a client connection the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
-	var dopts dialOptions
+	cc := &ClientConn{
+		target: target,
+	}
 	for _, opt := range opts {
-		opt(&dopts)
+		opt(&cc.dopts)
 	}
-	if dopts.picker == nil {
-		p, err := newUnicastPicker(target, dopts)
-		if err != nil {
-			return nil, err
-		}
-		dopts.picker = p
+	if cc.dopts.picker == nil {
+		cc.dopts.picker = &unicastPicker{}
 	}
-	return &ClientConn{dopts.picker}, nil
+	if err := cc.dopts.picker.Init(cc); err != nil {
+		return nil, err
+	}
+	return cc, nil
 }
 
 // ConnectivityState indicates the state of a client connection.
@@ -194,25 +195,26 @@ func (s ConnectivityState) String() string {
 
 // ClientConn represents a client connection to an RPC service.
 type ClientConn struct {
-	picker Picker
+	target string
+	dopts  dialOptions
 }
 
 // State returns the connectivity state of cc.
 // This is EXPERIMENTAL API.
 func (cc *ClientConn) State() ConnectivityState {
-	return cc.picker.State()
+	return cc.dopts.picker.State()
 }
 
 // WaitForStateChange blocks until the state changes to something other than the sourceState
 // or timeout fires on cc. It returns false if timeout fires, and true otherwise.
 // This is EXPERIMENTAL API.
 func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
-	return cc.picker.WaitForStateChange(timeout, sourceState)
+	return cc.dopts.picker.WaitForStateChange(timeout, sourceState)
 }
 
 // Close starts to tear down the ClientConn.
 func (cc *ClientConn) Close() error {
-	return cc.picker.Close()
+	return cc.dopts.picker.Close()
 }
 
 // Conn is a client connection to a single destination.
@@ -233,17 +235,17 @@ type Conn struct {
 }
 
 // NewConn creates a Conn.
-func NewConn(target string, dopts dialOptions) (*Conn, error) {
-	if target == "" {
+func NewConn(cc *ClientConn) (*Conn, error) {
+	if cc.target == "" {
 		return nil, ErrUnspecTarget
 	}
 	c := &Conn{
-		target:       target,
-		dopts:        dopts,
+		target:       cc.target,
+		dopts:        cc.dopts,
 		shutdownChan: make(chan struct{}),
 	}
 	if EnableTracing {
-		c.events = trace.NewEventLog("grpc.ClientConn", target)
+		c.events = trace.NewEventLog("grpc.ClientConn", c.target)
 	}
 	if !c.dopts.insecure {
 		var ok bool
@@ -263,11 +265,11 @@ func NewConn(target string, dopts dialOptions) (*Conn, error) {
 			}
 		}
 	}
-	colonPos := strings.LastIndex(target, ":")
+	colonPos := strings.LastIndex(c.target, ":")
 	if colonPos == -1 {
-		colonPos = len(target)
+		colonPos = len(c.target)
 	}
-	c.authority = target[:colonPos]
+	c.authority = c.target[:colonPos]
 	if c.dopts.codec == nil {
 		// Set the default codec.
 		c.dopts.codec = protoCodec{}
@@ -284,7 +286,7 @@ func NewConn(target string, dopts dialOptions) (*Conn, error) {
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
 			if err := c.resetTransport(false); err != nil {
-				grpclog.Printf("Failed to dial %s: %v; please retry.", target, err)
+				grpclog.Printf("Failed to dial %s: %v; please retry.", c.target, err)
 				c.Close()
 				return
 			}

@@ -150,7 +150,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if lastErr != nil && c.failFast {
 			return toRPCErr(lastErr)
 		}
-		conn, err = cc.picker.Pick()
+		conn, err = cc.dopts.picker.Pick()
 		if err != nil {
 			return toRPCErr(err)
 		}

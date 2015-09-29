@@ -40,6 +40,8 @@ import (
 // Picker picks a Conn for RPC requests.
 // This is EXPERIMENTAL and Please do not implement your own Picker for now.
 type Picker interface {
+	// Init does initial processing for the Picker, e.g., initiate some connections.
+	Init(cc *ClientConn) error
 	// Pick returns the Conn to use for the upcoming RPC. It may return different
 	// Conn's up to the implementation.
 	Pick() (*Conn, error)
@@ -53,20 +55,19 @@ type Picker interface {
 	Close() error
 }
 
-func newUnicastPicker(target string, dopts dialOptions) (Picker, error) {
-	c, err := NewConn(target, dopts)
-	if err != nil {
-		return nil, err
-	}
-	return &unicastPicker{
-		conn: c,
-	}, nil
-}
-
 // unicastPicker is the default Picker which is used when there is no custom Picker
 // specified by users. It always picks the same Conn.
 type unicastPicker struct {
 	conn *Conn
+}
+
+func (p *unicastPicker) Init(cc *ClientConn) error {
+	c, err := NewConn(cc)
+	if err != nil {
+		return err
+	}
+	p.conn = c
+	return nil
 }
 
 func (p *unicastPicker) Pick() (*Conn, error) {
