@@ -31,6 +31,8 @@
 
 package io.grpc.netty;
 
+import com.google.common.collect.ImmutableSet;
+
 import io.grpc.ExperimentalApi;
 import io.netty.handler.codec.http2.Http2SecurityUtil;
 import io.netty.handler.ssl.ApplicationProtocolConfig;
@@ -43,6 +45,7 @@ import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import java.io.File;
+import java.util.Set;
 
 /**
  * Utility for configuring SslContext for gRPC.
@@ -50,7 +53,7 @@ import java.io.File;
 public class GrpcSslContexts {
   private GrpcSslContexts() {}
 
-  private static String[] HTTP2_VERSIONS = {"h2"};
+  static final Set<String> HTTP2_VERSIONS = ImmutableSet.of("h2");
 
   private static ApplicationProtocolConfig ALPN = new ApplicationProtocolConfig(
       Protocol.ALPN,

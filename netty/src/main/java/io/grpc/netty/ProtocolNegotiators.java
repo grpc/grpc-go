@@ -100,7 +100,7 @@ public final class ProtocolNegotiators {
         if (evt instanceof SslHandshakeCompletionEvent) {
           SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
           if (handshakeEvent.isSuccess()) {
-            if ("h2".equals(sslHandler(ctx).applicationProtocol())) {
+            if (GrpcSslContexts.HTTP2_VERSIONS.contains(sslHandler(ctx).applicationProtocol())) {
               // Successfully negotiated the protocol. Replace this handler with
               // the GRPC handler.
               ctx.pipeline().replace(this, null, grpcHandler);
