@@ -6,4 +6,4 @@ before_install:
   - go get golang.org/x/tools/cmd/cover
 script:
   - make test testrace
-  - goveralls google.golang.org/grpc/...
+  - make coverage
