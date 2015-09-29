@@ -63,6 +63,7 @@ import io.grpc.android.integrationtest.nano.Messages.StreamingOutputCallResponse
 import io.grpc.android.integrationtest.nano.TestServiceGrpc;
 import io.grpc.android.integrationtest.nano.UnimplementedServiceGrpc;
 import io.grpc.okhttp.OkHttpChannelBuilder;
+import io.grpc.okhttp.NegotiationType;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.StreamRecorder;
 
@@ -135,7 +136,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     OkHttpChannelBuilder channelBuilder = OkHttpChannelBuilder.forAddress(host, port);
     if (serverHostOverride != null) {
       // Force the hostname to match the cert the server uses.
-      channelBuilder.overrideHostForAuthority(serverHostOverride);
+      channelBuilder.overrideAuthority(serverHostOverride);
     }
     if (useTls) {
       try {
@@ -145,10 +146,13 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
         } else {
           factory = getSslSocketFactory(testCa);
         }
+        channelBuilder.negotiationType(NegotiationType.TLS);
         channelBuilder.sslSocketFactory(factory);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
+    } else {
+      channelBuilder.negotiationType(NegotiationType.PLAINTEXT);
     }
 
     channel = channelBuilder.build();
