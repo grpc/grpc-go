@@ -81,6 +81,7 @@ public final class ProtocolNegotiators {
   public static ChannelHandler serverTls(SSLEngine sslEngine, final ChannelHandler grpcHandler) {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
 
+
     final SslHandler sslHandler = new SslHandler(sslEngine, false);
     return new ChannelInboundHandlerAdapter() {
       @Override
@@ -99,7 +100,7 @@ public final class ProtocolNegotiators {
         if (evt instanceof SslHandshakeCompletionEvent) {
           SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
           if (handshakeEvent.isSuccess()) {
-            if (sslHandler(ctx).applicationProtocol() != null) {
+            if ("h2".equals(sslHandler(ctx).applicationProtocol())) {
               // Successfully negotiated the protocol. Replace this handler with
               // the GRPC handler.
               ctx.pipeline().replace(this, null, grpcHandler);
