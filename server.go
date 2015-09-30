@@ -320,11 +320,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 			return err
 		}
-		//if traceInfo.tr != nil {
-			// TODO: set payload.msg to something that
-			// prints usefully with %s; req is a []byte.
-			//traceInfo.tr.LazyLog(&payload{sent: false}, true)
-		//}
 		switch pf {
 		case compressionNone:
 			statusCode := codes.OK

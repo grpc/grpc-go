@@ -421,7 +421,6 @@ func RegisterTestServiceServer(s *grpc.Server, srv TestServiceServer) {
 
 func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, decodeFunc func([]byte, interface{}) error, buf []byte) (interface{}, error) {
 	in := new(SimpleRequest)
-	//if err := codec.Unmarshal(buf, in); err != nil {
 	if err := decodeFunc(buf, in); err != nil {
 		return nil, err
 	}
