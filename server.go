@@ -52,7 +52,7 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
-type methodHandler func(srv interface{}, ctx context.Context, decodeFunc func([]byte, interface{}) error, buf []byte) (interface{}, error)
+type methodHandler func(srv interface{}, ctx context.Context, decodeFunc func(interface{}) error) (interface{}, error)
 
 // MethodDesc represents an RPC service's method specification.
 type MethodDesc struct {
@@ -324,8 +324,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		case compressionNone:
 			statusCode := codes.OK
 			statusDesc := ""
-			df := func(b []byte, v interface{}) error {
-				if err := s.opts.codec.Unmarshal(b, v); err != nil {
+			df := func(v interface{}) error {
+				if err := s.opts.codec.Unmarshal(req, v); err != nil {
 					return err
 				}
 				if traceInfo.tr != nil {
@@ -333,7 +333,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 				return nil
 			}
-			reply, appErr := md.Handler(srv.server, ctx, df, req)
+			reply, appErr := md.Handler(srv.server, ctx, df)
 			if appErr != nil {
 				if err, ok := appErr.(rpcError); ok {
 					statusCode = err.code
