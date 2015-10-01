@@ -108,9 +108,9 @@ func RegisterHealthServer(s *grpc.Server, srv HealthServer) {
 	s.RegisterService(&_Health_serviceDesc, srv)
 }
 
-func _Health_Check_Handler(srv interface{}, ctx context.Context, decodeFunc func(interface{}) error) (interface{}, error) {
+func _Health_Check_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(HealthCheckRequest)
-	if err := decodeFunc(in); err != nil {
+	if err := dec(in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(HealthServer).Check(ctx, in)
