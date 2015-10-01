@@ -1,7 +1,9 @@
 REM installer http://www.7-zip.org/a/7z1507-x64.exe
 REM 7za is in http://www.7-zip.org/a/7z1507-extra.7z
 
-REM Prerequisite: 7za.exe in current directory or PATH
+REM Prerequisite:
+REM   7za.exe in current directory or PATH
+REM   Install http://slproweb.com/download/Win64OpenSSL_Light-1_0_2d.exe
 
 set PROTOBUF_VER=3.0.0-beta-1
 set CMAKE_NAME=cmake-3.3.2-win32-x86
@@ -9,7 +11,9 @@ set CMAKE_NAME=cmake-3.3.2-win32-x86
 if not exist "protobuf-%PROTOBUF_VER%\cmake\Release\" (
   call :installProto
 )
-set PROTOCDIR=%cd%\protobuf-%PROTOBUF_VER%\cmake\Release\
+
+echo Compile gRPC-Java with something like:
+echo -PtargetArch=x86_32 -PvcProtobufLibs=%cd%\protobuf-%PROTOBUF_VER%\cmake\build\Release -PvcProtobufInclude=%cd%\protobuf-%PROTOBUF_VER%\cmake\build\include
 goto :eof
 
 
@@ -38,6 +42,3 @@ powershell -command "& { iwr https://cmake.org/files/v3.3/%CMAKE_NAME%.zip -OutF
 7za X cmake.zip
 del cmake.zip
 goto :eof
-
-REM Compile gRPC-Java with something like:
-REM -PtargetArch=x86_32 -PvcProtobufLibs=%cd%\protobuf-3.0.0-beta-1\cmake\build\Release -PvcProtobufInclude=%cd%\protobuf-3.0.0-beta-1\cmake\build\include
