@@ -295,7 +295,11 @@ public class ManagedChannelImplTest {
   public void testNoDeadlockOnShutdown() {
     // Force creation of transport
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
-    call.start(mockCallListener, new Metadata());
+    Metadata headers = new Metadata();
+    ClientStream mockStream = mock(ClientStream.class);
+    when(mockTransport.newStream(same(method), same(headers), any(ClientStreamListener.class)))
+        .thenReturn(mockStream);
+    call.start(mockCallListener, headers);
     call.cancel();
 
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
