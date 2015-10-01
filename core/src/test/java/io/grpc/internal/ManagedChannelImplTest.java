@@ -237,7 +237,7 @@ public class ManagedChannelImplTest {
     verify(mockTransport2, timeout(1000)).start(any(ClientTransport.Listener.class));
     verify(mockTransport2, timeout(1000))
         .newStream(same(method), same(headers2), streamListenerCaptor.capture());
-    verify(mockStream2).setDecompressionRegistry(isA(DecompressorRegistry.class));
+    verify(mockStream2, timeout(1000)).setDecompressionRegistry(isA(DecompressorRegistry.class));
     Metadata trailers2 = new Metadata();
     streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers2);
     verify(mockCallListener2, timeout(1000)).onClose(Status.CANCELLED, trailers2);
@@ -252,7 +252,7 @@ public class ManagedChannelImplTest {
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     verify(mockTransport, timeout(1000))
         .newStream(same(method), same(headers), streamListenerCaptor.capture());
-    verify(mockStream).setDecompressionRegistry(isA(DecompressorRegistry.class));
+    verify(mockStream, timeout(1000)).setDecompressionRegistry(isA(DecompressorRegistry.class));
     Metadata trailers = new Metadata();
     streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers);
     verify(mockCallListener, timeout(1000)).onClose(Status.CANCELLED, trailers);
