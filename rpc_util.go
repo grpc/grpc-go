@@ -187,8 +187,11 @@ func recv(p *parser, c Codec, m interface{}) error {
 	switch pf {
 	case compressionNone:
 		if err := c.Unmarshal(d, m); err != nil {
-			return Errorf(codes.Internal, "grpc: %v", err)
-		}
+			if rErr, ok := err.(rpcError); ok {
+				return rErr
+			} else {
+				return Errorf(codes.Internal, "grpc: %v", err)
+			}
 	default:
 		return Errorf(codes.Internal, "gprc: compression is not supported yet.")
 	}
