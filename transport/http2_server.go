@@ -207,7 +207,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	}
 	s.method = hDec.state.method
 	if t.tracing {
-		s.tr = trace.New("grpc.Recv."+methodFamily(s.method), s.method)
+		s.tr = trace.New("grpc.Recv."+MethodFamily(s.method), s.method)
 		s.ctx = trace.NewContext(s.ctx, s.tr)
 	}
 	wg.Add(1)
