@@ -58,8 +58,7 @@ import javax.net.ssl.SSLException;
  * A builder to help simplify construction of channels using the Netty transport.
  */
 @ExperimentalApi("There is no plan to make this API stable, given transport API instability")
-public final class NettyChannelBuilder
-        extends AbstractManagedChannelImplBuilder<NettyChannelBuilder> {
+public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<NettyChannelBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
   private final SocketAddress serverAddress;
@@ -100,7 +99,7 @@ public final class NettyChannelBuilder
         new InetSocketAddress(host, port), GrpcUtil.authorityFromHostAndPort(host, port));
   }
 
-  private NettyChannelBuilder(SocketAddress serverAddress, String authority) {
+  protected NettyChannelBuilder(SocketAddress serverAddress, String authority) {
     this.serverAddress = serverAddress;
     this.authority = authority;
   }
@@ -108,7 +107,7 @@ public final class NettyChannelBuilder
   /**
    * Specify the channel type to use, by default we use {@link NioSocketChannel}.
    */
-  public NettyChannelBuilder channelType(Class<? extends Channel> channelType) {
+  public final NettyChannelBuilder channelType(Class<? extends Channel> channelType) {
     this.channelType = Preconditions.checkNotNull(channelType);
     return this;
   }
@@ -118,7 +117,7 @@ public final class NettyChannelBuilder
    *
    * <p>Default: <code>TLS</code>
    */
-  public NettyChannelBuilder negotiationType(NegotiationType type) {
+  public final NettyChannelBuilder negotiationType(NegotiationType type) {
     negotiationType = type;
     return this;
   }
@@ -132,7 +131,7 @@ public final class NettyChannelBuilder
    * <p>The channel won't take ownership of the given EventLoopGroup. It's caller's responsibility
    * to shut it down when it's desired.
    */
-  public NettyChannelBuilder eventLoopGroup(@Nullable EventLoopGroup eventLoopGroup) {
+  public final NettyChannelBuilder eventLoopGroup(@Nullable EventLoopGroup eventLoopGroup) {
     this.eventLoopGroup = eventLoopGroup;
     return this;
   }
@@ -141,7 +140,7 @@ public final class NettyChannelBuilder
    * SSL/TLS context to use instead of the system default. It must have been configured with {@link
    * GrpcSslContexts}, but options could have been overridden.
    */
-  public NettyChannelBuilder sslContext(SslContext sslContext) {
+  public final NettyChannelBuilder sslContext(SslContext sslContext) {
     this.sslContext = sslContext;
     return this;
   }
@@ -150,7 +149,7 @@ public final class NettyChannelBuilder
    * Sets the flow control window in bytes. If not called, the default value
    * is {@link #DEFAULT_FLOW_CONTROL_WINDOW}).
    */
-  public NettyChannelBuilder flowControlWindow(int flowControlWindow) {
+  public final NettyChannelBuilder flowControlWindow(int flowControlWindow) {
     Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
     this.flowControlWindow = flowControlWindow;
     return this;
@@ -160,7 +159,7 @@ public final class NettyChannelBuilder
    * Sets the maximum message size allowed to be received on the channel. If not called,
    * defaults to {@link io.grpc.internal.GrpcUtil#DEFAULT_MAX_MESSAGE_SIZE}.
    */
-  public NettyChannelBuilder maxMessageSize(int maxMessageSize) {
+  public final NettyChannelBuilder maxMessageSize(int maxMessageSize) {
     checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
     this.maxMessageSize = maxMessageSize;
     return this;
@@ -171,7 +170,7 @@ public final class NettyChannelBuilder
    * {@code PLAINTEXT_UPGRADE}.
    */
   @Override
-  public NettyChannelBuilder usePlaintext(boolean skipNegotiation) {
+  public final NettyChannelBuilder usePlaintext(boolean skipNegotiation) {
     if (skipNegotiation) {
       negotiationType(NegotiationType.PLAINTEXT);
     } else {
@@ -181,15 +180,23 @@ public final class NettyChannelBuilder
   }
 
   @Override
-  public NettyChannelBuilder overrideAuthority(String authority) {
-    this.authority = GrpcUtil.checkAuthority(authority);
+  public final NettyChannelBuilder overrideAuthority(String authority) {
+    this.authority = checkAuthority(authority);
     return this;
   }
 
+  /**
+   * Verifies the authority is valid.  This method exists as an escape hatch for putting in an
+   * authority that is valid, but would fail the default validation provided by this implementation.
+   */
+  protected String checkAuthority(String authority) {
+    return GrpcUtil.checkAuthority(authority);
+  }
+
   @Override
-  protected ClientTransportFactory buildTransportFactory() {
+  protected final ClientTransportFactory buildTransportFactory() {
     // Check authority, since non-inet ServerAddresses delay the authority check.
-    GrpcUtil.checkAuthority(authority);
+    checkAuthority(authority);
     return new NettyTransportFactory(serverAddress, authority, channelType, eventLoopGroup,
         flowControlWindow, createProtocolNegotiator(), maxMessageSize);
   }
