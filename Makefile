@@ -45,3 +45,6 @@ testrace: testdeps
 
 clean:
 	go clean google.golang.org/grpc/...
+
+coverage: testdeps
+	goveralls -v google.golang.org/grpc/...
