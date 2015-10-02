@@ -689,3 +689,7 @@ func (t *http2Server) closeStream(s *Stream) {
 	// other goroutines.
 	s.cancel()
 }
+
+func (t *http2Server) RemoteAddr() net.Addr {
+	return t.conn.RemoteAddr()
+}
