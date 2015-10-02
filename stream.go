@@ -294,7 +294,7 @@ type ServerStream interface {
 type serverStream struct {
 	t          transport.ServerTransport
 	s          *transport.Stream
-	ctx        context.Context // provides trace.FromContext when tracing
+	//ctx        context.Context // provides trace.FromContext when tracing
 	p          *parser
 	codec      Codec
 	statusCode codes.Code
@@ -309,7 +309,7 @@ type serverStream struct {
 }
 
 func (ss *serverStream) Context() context.Context {
-	return ss.ctx
+	return ss.s.Context()
 }
 
 func (ss *serverStream) SendHeader(md metadata.MD) error {

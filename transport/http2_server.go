@@ -44,6 +44,7 @@ import (
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
+	"golang.org/x/net/trace"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -80,6 +81,8 @@ type http2Server struct {
 	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
+	// tracing indicates whether tracing is on for this http2Server transport.
+	tracing bool
 
 	mu            sync.Mutex // guard the following
 	state         transportState
@@ -90,7 +93,7 @@ type http2Server struct {
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
 // returned if something goes wrong.
-func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo) (_ ServerTransport, err error) {
+func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo, tracing bool) (_ ServerTransport, err error) {
 	framer := newFramer(conn)
 	// Send initial settings as connection preface to client.
 	var settings []http2.Setting
@@ -124,6 +127,7 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthI
 		controlBuf:      newRecvBuffer(),
 		fc:              &inFlow{limit: initialConnWindowSize},
 		sendQuotaPool:   newQuotaPool(defaultWindowSize),
+		tracing:         tracing,
 		state:           reachable,
 		writableChan:    make(chan int, 1),
 		shutdownChan:    make(chan struct{}),
@@ -202,7 +206,10 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 		recv: s.buf,
 	}
 	s.method = hDec.state.method
-
+	if t.tracing {
+		s.tr = trace.New("grpc.Recv."+methodFamily(s.method), s.method)
+		s.ctx = trace.NewContext(s.ctx, s.tr)
+	}
 	wg.Add(1)
 	go func() {
 		handle(s)

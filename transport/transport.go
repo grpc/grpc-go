@@ -47,6 +47,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -198,6 +199,8 @@ type Stream struct {
 	// the status received from the server.
 	statusCode codes.Code
 	statusDesc string
+	// tracing information
+	tr trace.Trace
 }
 
 // Header acquires the key-value pairs of header metadata once it
@@ -230,6 +233,11 @@ func (s *Stream) ServerTransport() ServerTransport {
 // Context returns the context of the stream.
 func (s *Stream) Context() context.Context {
 	return s.ctx
+}
+
+// Trace returns the trace.Trace of the stream.
+func (s *Stream) Trace() trace.Trace {
+	return s.tr
 }
 
 // Method returns the method for the stream.
@@ -308,8 +316,8 @@ const (
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
 // if it fails.
-func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo) (ServerTransport, error) {
-	return newHTTP2Server(conn, maxStreams, authInfo)
+func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo, tracing bool) (ServerTransport, error) {
+	return newHTTP2Server(conn, maxStreams, authInfo, tracing)
 }
 
 // ConnectOptions covers all relevant options for dialing a server.
