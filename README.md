@@ -24,7 +24,7 @@ The grpc package should only depend on standard Go packages and a small number o
 
 Documentation
 -------------
-You can find more detailed [API documentation](https://godoc.org/google.golang.org/grpc) and examples in the [examples directory](examples/).
+See [API documentation](https://godoc.org/google.golang.org/grpc) for package and API descriptions and find examples in the [examples directory](examples/).
 
 Status
 ------
