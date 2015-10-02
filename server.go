@@ -403,7 +403,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		ss.traceInfo.firstLine.client = false
 		ss.traceInfo.firstLine.remoteAddr = t.RemoteAddr()
 		if dl, ok := ctx.Deadline(); ok {
-			traceInfo.firstLine.deadline = dl.Sub(time.Now())
+			ss.traceInfo.firstLine.deadline = dl.Sub(time.Now())
 		}
 		ss.traceInfo.tr.LazyLog(&ss.traceInfo.firstLine, false)
 		ss.ctx = trace.NewContext(ss.ctx, ss.traceInfo.tr)
