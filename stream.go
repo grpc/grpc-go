@@ -294,7 +294,6 @@ type ServerStream interface {
 type serverStream struct {
 	t          transport.ServerTransport
 	s          *transport.Stream
-	//ctx        context.Context // provides trace.FromContext when tracing
 	p          *parser
 	codec      Codec
 	statusCode codes.Code
