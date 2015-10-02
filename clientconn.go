@@ -290,7 +290,7 @@ func NewConn(cc *ClientConn) (*Conn, error) {
 				c.Close()
 				return
 			}
-			go c.transportMonitor()
+			c.transportMonitor()
 		}()
 	}
 	return c, nil
