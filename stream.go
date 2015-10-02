@@ -126,7 +126,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		tracing: EnableTracing,
 	}
 	if cs.tracing {
-		cs.traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
+		cs.traceInfo.tr = trace.New("grpc.Sent."+transport.MethodFamily(method), method)
 		cs.traceInfo.firstLine.client = true
 		if deadline, ok := ctx.Deadline(); ok {
 			cs.traceInfo.firstLine.deadline = deadline.Sub(time.Now())
@@ -294,7 +294,6 @@ type ServerStream interface {
 type serverStream struct {
 	t          transport.ServerTransport
 	s          *transport.Stream
-	ctx        context.Context // provides trace.FromContext when tracing
 	p          *parser
 	codec      Codec
 	statusCode codes.Code
@@ -309,7 +308,7 @@ type serverStream struct {
 }
 
 func (ss *serverStream) Context() context.Context {
-	return ss.ctx
+	return ss.s.Context()
 }
 
 func (ss *serverStream) SendHeader(md metadata.MD) error {

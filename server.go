@@ -247,7 +247,7 @@ func (s *Server) Serve(lis net.Listener) error {
 			c.Close()
 			return nil
 		}
-		st, err := transport.NewServerTransport("http2", c, s.opts.maxConcurrentStreams, authInfo)
+		st, err := transport.NewServerTransport("http2", c, s.opts.maxConcurrentStreams, authInfo, EnableTracing)
 		if err != nil {
 			s.errorf("NewServerTransport(%q) failed: %v", c.RemoteAddr(), err)
 			s.mu.Unlock()
@@ -285,19 +285,16 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc) (err error) {
-	ctx, cancel := context.WithCancel(stream.Context())
-	defer cancel()
 	var traceInfo traceInfo
 	if EnableTracing {
-		traceInfo.tr = trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
+		traceInfo.tr = stream.Trace()
 		defer traceInfo.tr.Finish()
 		traceInfo.firstLine.client = false
 		traceInfo.firstLine.remoteAddr = t.RemoteAddr()
-		if dl, ok := ctx.Deadline(); ok {
+		if dl, ok := stream.Context().Deadline(); ok {
 			traceInfo.firstLine.deadline = dl.Sub(time.Now())
 		}
 		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
-		ctx = trace.NewContext(ctx, traceInfo.tr)
 		defer func() {
 			if err != nil && err != io.EOF {
 				traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
@@ -338,7 +335,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 				return nil
 			}
-			reply, appErr := md.Handler(srv.server, ctx, df)
+			reply, appErr := md.Handler(srv.server, stream.Context(), df)
 			if appErr != nil {
 				if err, ok := appErr.(rpcError); ok {
 					statusCode = err.code
@@ -389,25 +386,21 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc) (err error) {
-	ctx, cancel := context.WithCancel(stream.Context())
-	defer cancel()
 	ss := &serverStream{
 		t:       t,
 		s:       stream,
-		ctx:     ctx,
 		p:       &parser{s: stream},
 		codec:   s.opts.codec,
 		tracing: EnableTracing,
 	}
 	if ss.tracing {
-		ss.traceInfo.tr = trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
+		ss.traceInfo.tr = stream.Trace()
 		ss.traceInfo.firstLine.client = false
 		ss.traceInfo.firstLine.remoteAddr = t.RemoteAddr()
-		if dl, ok := ctx.Deadline(); ok {
+		if dl, ok := stream.Context().Deadline(); ok {
 			ss.traceInfo.firstLine.deadline = dl.Sub(time.Now())
 		}
 		ss.traceInfo.tr.LazyLog(&ss.traceInfo.firstLine, false)
-		ss.ctx = trace.NewContext(ss.ctx, ss.traceInfo.tr)
 		defer func() {
 			ss.mu.Lock()
 			if err != nil && err != io.EOF {
