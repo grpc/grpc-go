@@ -43,6 +43,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,6 +53,19 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
+
+// MethodFamily returns the trace family for the given method.
+// It turns "/pkg.Service/GetFoo" into "pkg.Service".
+func MethodFamily(m string) string {
+	m = strings.TrimPrefix(m, "/") // remove leading slash
+	if i := strings.Index(m, "/"); i >= 0 {
+		m = m[:i] // remove everything from second slash
+	}
+	if i := strings.LastIndex(m, "."); i >= 0 {
+		m = m[i+1:] // cut down to last dotted component
+	}
+	return m
+}
 
 // recvMsg represents the received msg from the transport. All transport
 // protocol specific info has been removed.
