@@ -20,7 +20,7 @@ This requires Go 1.4 or above.
 
 Constraints
 -----------
-The grpc package should only depend on standard Go packages and a short list of exceptions. If your contribution introduce a new dependency which is NOT in the [list](http://godoc.org/google.golang.org/grpc?imports), you need a discussion with gRPC-Go authors and consultants.
+The grpc package should only depend on standard Go packages and a small number of exceptions. If your contribution introduce a new dependency which is NOT in the [list](http://godoc.org/google.golang.org/grpc?imports), you need a discussion with gRPC-Go authors and consultants.
 
 Documentation
 -------------
