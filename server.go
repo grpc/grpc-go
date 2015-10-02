@@ -42,6 +42,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -290,6 +291,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		defer traceInfo.tr.Finish()
 		traceInfo.firstLine.client = false
 		traceInfo.firstLine.remoteAddr = t.RemoteAddr()
+		if dl, ok := ctx.Deadline(); ok {
+			traceInfo.firstLine.deadline = dl.Sub(time.Now())
+		}
 		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
 		defer func() {
 			if err != nil && err != io.EOF {
@@ -395,6 +399,9 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		ss.traceInfo.tr = stream.Trace()
 		ss.traceInfo.firstLine.client = false
 		ss.traceInfo.firstLine.remoteAddr = t.RemoteAddr()
+		if dl, ok := ctx.Deadline(); ok {
+			ss.traceInfo.firstLine.deadline = dl.Sub(time.Now())
+		}
 		ss.traceInfo.tr.LazyLog(&ss.traceInfo.firstLine, false)
 		ss.ctx = trace.NewContext(ss.ctx, ss.traceInfo.tr)
 		defer func() {
