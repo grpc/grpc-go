@@ -6,7 +6,6 @@ before_install:
   - go get golang.org/x/tools/cmd/cover
 
 install:
-  - export GOPATH="$HOME/gopath"
   - mkdir -p "$GOPATH/src/google.golang.org"
   - mv "$TRAVIS_BUILD_DIR" "$GOPATH/src/google.golang.org/grpc"
 

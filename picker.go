@@ -31,44 +31,60 @@
  *
  */
 
-// Package naming defines the naming API and related data structures for gRPC.
-// The interface is EXPERIMENTAL and may be suject to change.
-package naming
+package grpc
 
-// OP defines the corresponding operations for a name resolution change.
-type OP uint8
-
-const (
-	// Add indicates a new address is added.
-	Add = iota
-	// Delete indicates an exisiting address is deleted.
-	Delete
+import (
+	"time"
 )
 
-type ServiceConfig interface{}
-
-// Update defines a name resolution change.
-type Update struct {
-	// Op indicates the operation of the update.
-	Op     OP
-	Addr   string
-	Config ServiceConfig
+// Picker picks a Conn for RPC requests.
+// This is EXPERIMENTAL and Please do not implement your own Picker for now.
+type Picker interface {
+	// Init does initial processing for the Picker, e.g., initiate some connections.
+	Init(cc *ClientConn) error
+	// Pick returns the Conn to use for the upcoming RPC. It may return different
+	// Conn's up to the implementation.
+	Pick() (*Conn, error)
+	// State returns the connectivity state of the underlying connections.
+	State() ConnectivityState
+	// WaitForStateChange blocks until the state changes to something other than
+	// the sourceState or timeout fires on cc. It returns false if timeout fires,
+	// and true otherwise.
+	WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool
+	// Close closes all the Conn's owned by this Picker.
+	Close() error
 }
 
-// Resolver does one-shot name resolution and creates a Watcher to
-// watch the future updates.
-type Resolver interface {
-	// Resolve returns the name resolution results.
-	Resolve(target string) ([]*Update, error)
-	// NewWatcher creates a Watcher to watch the changes on target.
-	NewWatcher(target string) Watcher
+// unicastPicker is the default Picker which is used when there is no custom Picker
+// specified by users. It always picks the same Conn.
+type unicastPicker struct {
+	conn *Conn
 }
 
-// Watcher watches the updates for a particular target.
-type Watcher interface {
-	// Next blocks until an update or error happens. It may return one or more
-	// updates.
-	Next() ([]*Update, error)
-	// Stop stops the Watcher.
-	Stop()
+func (p *unicastPicker) Init(cc *ClientConn) error {
+	c, err := NewConn(cc)
+	if err != nil {
+		return err
+	}
+	p.conn = c
+	return nil
+}
+
+func (p *unicastPicker) Pick() (*Conn, error) {
+	return p.conn, nil
+}
+
+func (p *unicastPicker) State() ConnectivityState {
+	return p.conn.State()
+}
+
+func (p *unicastPicker) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
+	return p.conn.WaitForStateChange(timeout, sourceState)
+}
+
+func (p *unicastPicker) Close() error {
+	if p.conn != nil {
+		return p.conn.Close()
+	}
+	return nil
 }

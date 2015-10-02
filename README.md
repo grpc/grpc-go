@@ -18,6 +18,10 @@ Prerequisites
 
 This requires Go 1.4 or above.
 
+Constraints
+-----------
+The grpc package should only depend on standard Go packages and a short list of exceptions. A new addition to the list requires a discussion with gRPC-Go authors and consultants.
+
 Documentation
 -------------
 You can find more detailed documentation and examples in the [examples directory](examples/).

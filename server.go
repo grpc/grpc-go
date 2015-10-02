@@ -42,6 +42,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -52,7 +53,7 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
-type methodHandler func(srv interface{}, ctx context.Context, codec Codec, buf []byte) (interface{}, error)
+type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)
 
 // MethodDesc represents an RPC service's method specification.
 type MethodDesc struct {
@@ -284,12 +285,19 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc) (err error) {
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
 	var traceInfo traceInfo
 	if EnableTracing {
 		traceInfo.tr = trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
 		defer traceInfo.tr.Finish()
 		traceInfo.firstLine.client = false
+		traceInfo.firstLine.remoteAddr = t.RemoteAddr()
+		if dl, ok := ctx.Deadline(); ok {
+			traceInfo.firstLine.deadline = dl.Sub(time.Now())
+		}
 		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
+		ctx = trace.NewContext(ctx, traceInfo.tr)
 		defer func() {
 			if err != nil && err != io.EOF {
 				traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
@@ -317,14 +325,20 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 			return err
 		}
-		if traceInfo.tr != nil {
-			traceInfo.tr.LazyLog(&payload{sent: false, msg: req}, true)
-		}
 		switch pf {
 		case compressionNone:
 			statusCode := codes.OK
 			statusDesc := ""
-			reply, appErr := md.Handler(srv.server, stream.Context(), s.opts.codec, req)
+			df := func(v interface{}) error {
+				if err := s.opts.codec.Unmarshal(req, v); err != nil {
+					return err
+				}
+				if traceInfo.tr != nil {
+					traceInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)
+				}
+				return nil
+			}
+			reply, appErr := md.Handler(srv.server, ctx, df)
 			if appErr != nil {
 				if err, ok := appErr.(rpcError); ok {
 					statusCode = err.code
@@ -333,11 +347,19 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					statusCode = convertCode(appErr)
 					statusDesc = appErr.Error()
 				}
+				if traceInfo.tr != nil && statusCode != codes.OK {
+					traceInfo.tr.LazyLog(stringer(statusDesc), true)
+					traceInfo.tr.SetError()
+				}
+
 				if err := t.WriteStatus(stream, statusCode, statusDesc); err != nil {
 					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", err)
 					return err
 				}
 				return nil
+			}
+			if traceInfo.tr != nil {
+				traceInfo.tr.LazyLog(stringer("OK"), false)
 			}
 			opts := &transport.Options{
 				Last:  true,
@@ -367,9 +389,12 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc) (err error) {
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
 	ss := &serverStream{
 		t:       t,
 		s:       stream,
+		ctx:     ctx,
 		p:       &parser{s: stream},
 		codec:   s.opts.codec,
 		tracing: EnableTracing,
@@ -377,7 +402,12 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	if ss.tracing {
 		ss.traceInfo.tr = trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
 		ss.traceInfo.firstLine.client = false
+		ss.traceInfo.firstLine.remoteAddr = t.RemoteAddr()
+		if dl, ok := ctx.Deadline(); ok {
+			ss.traceInfo.firstLine.deadline = dl.Sub(time.Now())
+		}
 		ss.traceInfo.tr.LazyLog(&ss.traceInfo.firstLine, false)
+		ss.ctx = trace.NewContext(ss.ctx, ss.traceInfo.tr)
 		defer func() {
 			ss.mu.Lock()
 			if err != nil && err != io.EOF {
@@ -397,6 +427,16 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			ss.statusCode = convertCode(appErr)
 			ss.statusDesc = appErr.Error()
 		}
+	}
+	if ss.tracing {
+		ss.mu.Lock()
+		if ss.statusCode != codes.OK {
+			ss.traceInfo.tr.LazyLog(stringer(ss.statusDesc), true)
+			ss.traceInfo.tr.SetError()
+		} else {
+			ss.traceInfo.tr.LazyLog(stringer("OK"), false)
+		}
+		ss.mu.Unlock()
 	}
 	return t.WriteStatus(ss.s, ss.statusCode, ss.statusDesc)
 
