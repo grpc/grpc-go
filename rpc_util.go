@@ -192,6 +192,7 @@ func recv(p *parser, c Codec, m interface{}) error {
 			} else {
 				return Errorf(codes.Internal, "grpc: %v", err)
 			}
+		}
 	default:
 		return Errorf(codes.Internal, "gprc: compression is not supported yet.")
 	}
