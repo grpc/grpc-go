@@ -289,6 +289,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		traceInfo.tr = stream.Trace()
 		defer traceInfo.tr.Finish()
 		traceInfo.firstLine.client = false
+		traceInfo.firstLine.remoteAddr = t.RemoteAddr()
 		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
 		defer func() {
 			if err != nil && err != io.EOF {
@@ -393,6 +394,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		//ss.traceInfo.tr = trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
 		ss.traceInfo.tr = stream.Trace()
 		ss.traceInfo.firstLine.client = false
+		ss.traceInfo.firstLine.remoteAddr = t.RemoteAddr()
 		ss.traceInfo.tr.LazyLog(&ss.traceInfo.firstLine, false)
 		ss.ctx = trace.NewContext(ss.ctx, ss.traceInfo.tr)
 		defer func() {
