@@ -23,6 +23,8 @@ public class TestServiceGrpc {
   public static final String SERVICE_NAME = "grpc.testing.TestService";
 
   // Static method descriptors that strictly reflect the proto.
+  private static final int ARG_IN_METHOD_UNARY_CALL = 0;
+  private static final int ARG_OUT_METHOD_UNARY_CALL = 1;
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.SimpleRequest,
       io.grpc.testing.integration.nano.Test.SimpleResponse> METHOD_UNARY_CALL =
@@ -31,19 +33,12 @@ public class TestServiceGrpc {
           generateFullMethodName(
               "grpc.testing.TestService", "UnaryCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.SimpleRequest>marshaller(
-              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.SimpleRequest>() {
-                  @Override
-                  public io.grpc.testing.integration.nano.Test.SimpleRequest newInstance() {
-                      return new io.grpc.testing.integration.nano.Test.SimpleRequest();
-                  }
-          }),
+              new NanoFactory<io.grpc.testing.integration.nano.Test.SimpleRequest>(ARG_IN_METHOD_UNARY_CALL)),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.SimpleResponse>marshaller(
-              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.SimpleResponse>() {
-                  @Override
-                  public io.grpc.testing.integration.nano.Test.SimpleResponse newInstance() {
-                      return new io.grpc.testing.integration.nano.Test.SimpleResponse();
-                  }
-          }));
+              new NanoFactory<io.grpc.testing.integration.nano.Test.SimpleResponse>(ARG_OUT_METHOD_UNARY_CALL))
+          );
+  private static final int ARG_IN_METHOD_STREAMING_OUTPUT_CALL = 2;
+  private static final int ARG_OUT_METHOD_STREAMING_OUTPUT_CALL = 3;
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_STREAMING_OUTPUT_CALL =
@@ -52,19 +47,12 @@ public class TestServiceGrpc {
           generateFullMethodName(
               "grpc.testing.TestService", "StreamingOutputCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>marshaller(
-              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>() {
-                  @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest newInstance() {
-                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest();
-                  }
-          }),
+              new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>(ARG_IN_METHOD_STREAMING_OUTPUT_CALL)),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>marshaller(
-              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
-                  @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse newInstance() {
-                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse();
-                  }
-          }));
+              new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>(ARG_OUT_METHOD_STREAMING_OUTPUT_CALL))
+          );
+  private static final int ARG_IN_METHOD_STREAMING_INPUT_CALL = 4;
+  private static final int ARG_OUT_METHOD_STREAMING_INPUT_CALL = 5;
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> METHOD_STREAMING_INPUT_CALL =
@@ -73,19 +61,12 @@ public class TestServiceGrpc {
           generateFullMethodName(
               "grpc.testing.TestService", "StreamingInputCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest>marshaller(
-              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest>() {
-                  @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingInputCallRequest newInstance() {
-                      return new io.grpc.testing.integration.nano.Test.StreamingInputCallRequest();
-                  }
-          }),
+              new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest>(ARG_IN_METHOD_STREAMING_INPUT_CALL)),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>marshaller(
-              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>() {
-                  @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingInputCallResponse newInstance() {
-                      return new io.grpc.testing.integration.nano.Test.StreamingInputCallResponse();
-                  }
-          }));
+              new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>(ARG_OUT_METHOD_STREAMING_INPUT_CALL))
+          );
+  private static final int ARG_IN_METHOD_FULL_BIDI_CALL = 6;
+  private static final int ARG_OUT_METHOD_FULL_BIDI_CALL = 7;
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_FULL_BIDI_CALL =
@@ -94,19 +75,12 @@ public class TestServiceGrpc {
           generateFullMethodName(
               "grpc.testing.TestService", "FullBidiCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>marshaller(
-              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>() {
-                  @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest newInstance() {
-                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest();
-                  }
-          }),
+              new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>(ARG_IN_METHOD_FULL_BIDI_CALL)),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>marshaller(
-              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
-                  @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse newInstance() {
-                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse();
-                  }
-          }));
+              new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>(ARG_OUT_METHOD_FULL_BIDI_CALL))
+          );
+  private static final int ARG_IN_METHOD_HALF_BIDI_CALL = 8;
+  private static final int ARG_OUT_METHOD_HALF_BIDI_CALL = 9;
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_HALF_BIDI_CALL =
@@ -115,19 +89,61 @@ public class TestServiceGrpc {
           generateFullMethodName(
               "grpc.testing.TestService", "HalfBidiCall"),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>marshaller(
-              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>() {
-                  @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest newInstance() {
-                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest();
-                  }
-          }),
+              new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>(ARG_IN_METHOD_HALF_BIDI_CALL)),
           io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>marshaller(
-              new io.grpc.protobuf.nano.MessageNanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>() {
-                  @Override
-                  public io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse newInstance() {
-                      return new io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse();
-                  }
-          }));
+              new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>(ARG_OUT_METHOD_HALF_BIDI_CALL))
+          );
+
+  private static final class NanoFactory<T extends com.google.protobuf.nano.MessageNano>
+      implements io.grpc.protobuf.nano.MessageNanoFactory<T> {
+    private final int id;
+
+    NanoFactory(int id) {
+      this.id = id;
+    }
+
+    @Override
+    public T newInstance() {
+      Object o;
+      switch (id) {
+      case ARG_IN_METHOD_UNARY_CALL:
+        o = new io.grpc.testing.integration.nano.Test.SimpleRequest();
+        break;
+      case ARG_OUT_METHOD_UNARY_CALL:
+        o = new io.grpc.testing.integration.nano.Test.SimpleResponse();
+        break;
+      case ARG_IN_METHOD_STREAMING_OUTPUT_CALL:
+        o = new io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest();
+        break;
+      case ARG_OUT_METHOD_STREAMING_OUTPUT_CALL:
+        o = new io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse();
+        break;
+      case ARG_IN_METHOD_STREAMING_INPUT_CALL:
+        o = new io.grpc.testing.integration.nano.Test.StreamingInputCallRequest();
+        break;
+      case ARG_OUT_METHOD_STREAMING_INPUT_CALL:
+        o = new io.grpc.testing.integration.nano.Test.StreamingInputCallResponse();
+        break;
+      case ARG_IN_METHOD_FULL_BIDI_CALL:
+        o = new io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest();
+        break;
+      case ARG_OUT_METHOD_FULL_BIDI_CALL:
+        o = new io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse();
+        break;
+      case ARG_IN_METHOD_HALF_BIDI_CALL:
+        o = new io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest();
+        break;
+      case ARG_OUT_METHOD_HALF_BIDI_CALL:
+        o = new io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse();
+        break;
+      default:
+        throw new AssertionError();
+      }
+      @java.lang.SuppressWarnings("unchecked")
+      T t = (T) o;
+      return t;
+    }
+  }
 
   public static TestServiceStub newStub(io.grpc.Channel channel) {
     return new TestServiceStub(channel);

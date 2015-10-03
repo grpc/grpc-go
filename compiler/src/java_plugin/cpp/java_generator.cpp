@@ -81,6 +81,8 @@ static void PrintMethodFields(
   (*vars)["service_name"] = service->name();
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
+    (*vars)["arg_in_id"] = to_string(2 * i);
+    (*vars)["arg_out_id"] = to_string(2 * i + 1);
     (*vars)["method_name"] = method->name();
     (*vars)["input_type"] = MessageFullJavaName(generate_nano,
                                                 method->input_type());
@@ -109,6 +111,8 @@ static void PrintMethodFields(
       // share the same request or response messages.
       p->Print(
           *vars,
+          "private static final int ARG_IN_$method_field_name$ = $arg_in_id$;\n"
+          "private static final int ARG_OUT_$method_field_name$ = $arg_out_id$;\n"
           "@$ExperimentalApi$\n"
           "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ =\n"
@@ -117,19 +121,10 @@ static void PrintMethodFields(
           "        generateFullMethodName(\n"
           "            \"$Package$$service_name$\", \"$method_name$\"),\n"
           "        $NanoUtils$.<$input_type$>marshaller(\n"
-          "            new io.grpc.protobuf.nano.MessageNanoFactory<$input_type$>() {\n"
-          "                @Override\n"
-          "                public $input_type$ newInstance() {\n"
-          "                    return new $input_type$();\n"
-          "                }\n"
-          "        }),\n"
+          "            new NanoFactory<$input_type$>(ARG_IN_$method_field_name$)),\n"
           "        $NanoUtils$.<$output_type$>marshaller(\n"
-          "            new io.grpc.protobuf.nano.MessageNanoFactory<$output_type$>() {\n"
-          "                @Override\n"
-          "                public $output_type$ newInstance() {\n"
-          "                    return new $output_type$();\n"
-          "                }\n"
-          "        }));\n");
+          "            new NanoFactory<$output_type$>(ARG_OUT_$method_field_name$))\n"
+          "        );\n");
     } else {
       p->Print(
           *vars,
@@ -145,6 +140,48 @@ static void PrintMethodFields(
     }
   }
   p->Print("\n");
+
+  if (generate_nano) {
+    p->Print(
+        "private static final class NanoFactory<T extends com.google.protobuf.nano.MessageNano>\n"
+        "    implements io.grpc.protobuf.nano.MessageNanoFactory<T> {\n"
+        "  private final int id;\n"
+        "\n"
+        "  NanoFactory(int id) {\n"
+        "    this.id = id;\n"
+        "  }\n"
+        "\n"
+        "  @Override\n"
+        "  public T newInstance() {\n"
+        "    Object o;\n"
+        "    switch (id) {\n");
+    for (int i = 0; i < service->method_count(); ++i) {
+      const MethodDescriptor* method = service->method(i);
+      (*vars)["input_type"] = MessageFullJavaName(generate_nano,
+                                                  method->input_type());
+      (*vars)["output_type"] = MessageFullJavaName(generate_nano,
+                                                   method->output_type());
+      (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
+      p->Print(
+          *vars,
+          "    case ARG_IN_$method_field_name$:\n"
+          "      o = new $input_type$();\n"
+          "      break;\n"
+          "    case ARG_OUT_$method_field_name$:\n"
+          "      o = new $output_type$();\n"
+          "      break;\n");
+    }
+    p->Print(
+        "    default:\n"
+        "      throw new AssertionError();\n"
+        "    }\n"
+        "    @java.lang.SuppressWarnings(\"unchecked\")\n"
+        "    T t = (T) o;\n"
+        "    return t;\n"
+        "  }\n"
+        "}\n"
+        "\n");
+  }
 }
 
 enum StubType {
