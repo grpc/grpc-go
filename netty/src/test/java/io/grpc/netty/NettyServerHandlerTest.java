@@ -229,6 +229,17 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   }
 
   @Test
+  public void exceptionCaughtShouldCloseConnection() throws Exception {
+    handler().exceptionCaught(ctx(), new RuntimeException("fake exception"));
+
+    // TODO(nmittler): EmbeddedChannel does not currently invoke the channelInactive processing,
+    // so exceptionCaught() will not close streams properly in this test.
+    // Once https://github.com/netty/netty/issues/4316 is resolved, we should also verify that
+    // any open streams are closed properly.
+    assertFalse(channel().isOpen());
+  }
+
+  @Test
   public void shouldAdvertiseMaxConcurrentStreams() throws Exception {
     maxConcurrentStreams = 314;
     setUp();

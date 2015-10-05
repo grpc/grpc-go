@@ -31,7 +31,6 @@
 
 package io.grpc.netty;
 
-import static io.netty.handler.codec.http2.Http2CodecUtil.getEmbeddedHttp2Exception;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -55,7 +54,6 @@ import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
-import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameAdapter;
@@ -76,7 +74,7 @@ import javax.annotation.Nullable;
  * Client-side Netty handler for GRPC processing. All event handlers are executed entirely within
  * the context of the Netty Channel thread.
  */
-class NettyClientHandler extends Http2ConnectionHandler {
+class NettyClientHandler extends AbstractNettyHandler {
   private static final Logger logger = Logger.getLogger(NettyClientHandler.class.getName());
 
   /**
@@ -95,17 +93,14 @@ class NettyClientHandler extends Http2ConnectionHandler {
   private final Ticker ticker;
   private final Random random = new Random();
   private WriteQueue clientWriteQueue;
-  private int initialConnectionWindow;
   private Http2Ping ping;
   private Status goAwayStatus;
-  private ChannelHandlerContext ctx;
   private int nextStreamId;
 
   public NettyClientHandler(BufferingHttp2ConnectionEncoder encoder, Http2Connection connection,
                             Http2FrameReader frameReader,
                             int flowControlWindow) {
-    this(encoder, connection, frameReader, flowControlWindow,
-         Ticker.systemTicker());
+    this(encoder, connection, frameReader, flowControlWindow, Ticker.systemTicker());
   }
 
   @VisibleForTesting
@@ -114,7 +109,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
     super(new DefaultHttp2ConnectionDecoder(connection, encoder, frameReader,
         new LazyFrameListener()), encoder, createInitialSettings(flowControlWindow));
     this.ticker = ticker;
-    this.initialConnectionWindow = flowControlWindow;
 
     initListener();
 
@@ -142,21 +136,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
   @Nullable
   public Status errorStatus() {
     return goAwayStatus;
-  }
-
-  @Override
-  public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-    this.ctx = ctx;
-    // Sends the connection preface if we haven't already.
-    super.handlerAdded(ctx);
-    sendInitialConnectionWindow();
-  }
-
-  @Override
-  public void channelActive(ChannelHandlerContext ctx) throws Exception {
-    // Sends connection preface if we haven't already.
-    super.channelActive(ctx);
-    sendInitialConnectionWindow();
   }
 
   /**
@@ -258,17 +237,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
   }
 
   @Override
-  public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-    if (getEmbeddedHttp2Exception(cause) == null) {
-      // Kill the connection instead of propagating the exceptionCaught(). Http2ConnectionHandler
-      // only handles Http2Exceptions and propagates everything else.
-      goAwayStatus(Status.fromThrowable(cause));
-      cause = new Http2Exception(Http2Error.INTERNAL_ERROR, null, cause);
-    }
-    super.exceptionCaught(ctx, cause);
-  }
-
-  @Override
   protected void onConnectionError(ChannelHandlerContext ctx, Throwable cause,
       Http2Exception http2Ex) {
     logger.log(Level.FINE, "Caught a connection error", cause);
@@ -319,7 +287,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
       if (!connection().goAwaySent()) {
         logger.fine("Stream IDs have been exhausted for this connection. "
                 + "Initiating graceful shutdown of the connection.");
-        super.close(ctx, ctx.newPromise());
+        super.close(ctx(), ctx().newPromise());
       }
       return;
     }
@@ -327,7 +295,7 @@ class NettyClientHandler extends Http2ConnectionHandler {
     final NettyClientStream stream = command.stream();
     final Http2Headers headers = command.headers();
     stream.id(streamId);
-    encoder().writeHeaders(ctx, streamId, headers, 0, false, promise)
+    encoder().writeHeaders(ctx(), streamId, headers, 0, false, promise)
             .addListener(new ChannelFutureListener() {
               @Override
               public void operationComplete(ChannelFuture future) throws Exception {
@@ -499,20 +467,6 @@ class NettyClientHandler extends Http2ConnectionHandler {
       throw new AssertionError("Stream does not exist: " + streamId);
     }
     return stream;
-  }
-
-  /**
-   * Sends initial connection window to the remote endpoint if necessary.
-   */
-  private void sendInitialConnectionWindow() throws Http2Exception {
-    if (ctx.channel().isActive() && initialConnectionWindow > 0) {
-      Http2Stream connectionStream = connection().connectionStream();
-      int currentSize = connection().local().flowController().windowSize(connectionStream);
-      int delta = initialConnectionWindow - currentSize;
-      decoder().flowController().incrementWindowSize(connectionStream, delta);
-      initialConnectionWindow = -1;
-      ctx.flush();
-    }
   }
 
   private static class LazyFrameListener extends Http2FrameAdapter {

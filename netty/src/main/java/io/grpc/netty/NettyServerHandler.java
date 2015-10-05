@@ -51,8 +51,10 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
+import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2Connection;
-import io.netty.handler.codec.http2.Http2ConnectionHandler;
+import io.netty.handler.codec.http2.Http2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Exception.StreamException;
@@ -75,7 +77,7 @@ import javax.annotation.Nullable;
  * Server-side Netty handler for GRPC processing. All event handlers are executed entirely within
  * the context of the Netty Channel thread.
  */
-class NettyServerHandler extends Http2ConnectionHandler {
+class NettyServerHandler extends AbstractNettyHandler {
 
   private static Logger logger = Logger.getLogger(NettyServerHandler.class.getName());
 
@@ -85,25 +87,30 @@ class NettyServerHandler extends Http2ConnectionHandler {
   private final ServerTransportListener transportListener;
   private final int maxMessageSize;
   private Throwable connectionError;
-  private ChannelHandlerContext ctx;
   private boolean teWarningLogged;
-  private int connectionWindow;
   private WriteQueue serverWriteQueue;
 
   NettyServerHandler(ServerTransportListener transportListener,
-      Http2Connection connection,
-      Http2FrameReader frameReader,
-      Http2FrameWriter frameWriter,
-      int maxStreams,
-      int flowControlWindow,
-      int maxMessageSize) {
-    super(connection, frameReader, frameWriter, new LazyFrameListener(),
-          createInitialSettings(flowControlWindow, maxStreams));
-    this.connectionWindow = flowControlWindow;
+                     Http2Connection connection,
+                     Http2FrameReader frameReader,
+                     Http2FrameWriter frameWriter,
+                     int maxStreams,
+                     int flowControlWindow,
+                     int maxMessageSize) {
+    this(transportListener, new DefaultHttp2ConnectionEncoder(connection, frameWriter), frameReader,
+        createInitialSettings(flowControlWindow, maxStreams), maxMessageSize);
+  }
+
+  private NettyServerHandler(ServerTransportListener transportListener,
+                             Http2ConnectionEncoder encoder,
+                             Http2FrameReader frameReader, Http2Settings settings,
+                             int maxMessageSize) {
+    super(new DefaultHttp2ConnectionDecoder(encoder.connection(), encoder, frameReader,
+        new LazyFrameListener()), encoder, settings);
     checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
     this.maxMessageSize = maxMessageSize;
 
-    streamKey = connection.newKey();
+    streamKey = encoder.connection().newKey();
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
     initListener();
   }
@@ -127,17 +134,8 @@ class NettyServerHandler extends Http2ConnectionHandler {
 
   @Override
   public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-    this.ctx = ctx;
     serverWriteQueue = new WriteQueue(ctx.channel());
     super.handlerAdded(ctx);
-    sendInitialConnectionWindow();
-  }
-
-  @Override
-  public void channelActive(ChannelHandlerContext ctx) throws Exception {
-    // Sends connection preface if we haven't already.
-    super.channelActive(ctx);
-    sendInitialConnectionWindow();
   }
 
   private void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers)
@@ -381,21 +379,6 @@ class NettyServerHandler extends Http2ConnectionHandler {
   private Http2Exception newStreamException(int streamId, Throwable cause) {
     return Http2Exception.streamError(
         streamId, Http2Error.INTERNAL_ERROR, cause, cause.getMessage());
-  }
-
-  /**
-   * Sends initial connection window to the remote endpoint, if necessary.
-   */
-  private void sendInitialConnectionWindow() throws Http2Exception {
-    // Send the initial connection window if different than the default.
-    if (ctx.channel().isActive() && connectionWindow > 0) {
-      Http2Stream connectionStream = connection().connectionStream();
-      int currentSize = connection().local().flowController().windowSize(connectionStream);
-      int delta = connectionWindow - currentSize;
-      decoder().flowController().incrementWindowSize(connectionStream, delta);
-      connectionWindow = -1;
-      ctx.flush();
-    }
   }
 
   private static class LazyFrameListener extends Http2FrameAdapter {
