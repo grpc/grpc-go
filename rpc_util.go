@@ -139,9 +139,15 @@ type msgFixedHeader struct {
 // non-nil error is returned if something is wrong on reading.
 func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
 	var hdr msgFixedHeader
-	if err := binary.Read(p.s, binary.BigEndian, &hdr); err != nil {
+	var buf [5]byte
+
+	if _, err := io.ReadFull(p.s, buf[:]); err != nil {
 		return 0, nil, err
 	}
+
+	hdr.T = payloadFormat(uint8(buf[0]))
+	hdr.Length = binary.BigEndian.Uint32(buf[1:])
+
 	if hdr.Length == 0 {
 		return hdr.T, nil, nil
 	}
