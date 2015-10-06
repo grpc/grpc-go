@@ -80,8 +80,6 @@ type http2Server struct {
 	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
-	// tracing indicates whether tracing is on for this http2Server transport.
-	//tracing bool
 
 	mu            sync.Mutex // guard the following
 	state         transportState
@@ -126,7 +124,6 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthI
 		controlBuf:    newRecvBuffer(),
 		fc:            &inFlow{limit: initialConnWindowSize},
 		sendQuotaPool: newQuotaPool(defaultWindowSize),
-		//tracing:         tracing,
 		state:           reachable,
 		writableChan:    make(chan int, 1),
 		shutdownChan:    make(chan struct{}),
