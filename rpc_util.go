@@ -145,7 +145,7 @@ func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
 		return 0, nil, err
 	}
 
-	hdr.T = payloadFormat(uint8(buf[0]))
+	hdr.T = payloadFormat(buf[0])
 	hdr.Length = binary.BigEndian.Uint32(buf[1:])
 
 	if hdr.Length == 0 {
