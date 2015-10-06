@@ -126,13 +126,13 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		tracing: EnableTracing,
 	}
 	if cs.tracing {
-		cs.traceInfo.tr = trace.New("grpc.Sent."+transport.MethodFamily(method), method)
-		cs.traceInfo.firstLine.client = true
+		cs.trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
+		cs.trInfo.firstLine.client = true
 		if deadline, ok := ctx.Deadline(); ok {
-			cs.traceInfo.firstLine.deadline = deadline.Sub(time.Now())
+			cs.trInfo.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		cs.traceInfo.tr.LazyLog(&cs.traceInfo.firstLine, false)
-		ctx = trace.NewContext(ctx, cs.traceInfo.tr)
+		cs.trInfo.tr.LazyLog(&cs.trInfo.firstLine, false)
+		ctx = trace.NewContext(ctx, cs.trInfo.tr)
 	}
 	s, err := t.NewStream(ctx, callHdr)
 	if err != nil {
@@ -154,10 +154,10 @@ type clientStream struct {
 
 	tracing bool // set to EnableTracing when the clientStream is created.
 
-	mu sync.Mutex // protects traceInfo
-	// traceInfo.tr is set when the clientStream is created (if EnableTracing is true),
+	mu sync.Mutex // protects trInfo.tr
+	// trInfo.tr is set when the clientStream is created (if EnableTracing is true),
 	// and is set to nil when the clientStream's finish method is called.
-	traceInfo traceInfo
+	trInfo traceInfo
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -181,8 +181,8 @@ func (cs *clientStream) Trailer() metadata.MD {
 func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if cs.tracing {
 		cs.mu.Lock()
-		if cs.traceInfo.tr != nil {
-			cs.traceInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+		if cs.trInfo.tr != nil {
+			cs.trInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
 		}
 		cs.mu.Unlock()
 	}
@@ -213,8 +213,8 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	if err == nil {
 		if cs.tracing {
 			cs.mu.Lock()
-			if cs.traceInfo.tr != nil {
-				cs.traceInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
+			if cs.trInfo.tr != nil {
+				cs.trInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
 			}
 			cs.mu.Unlock()
 		}
@@ -266,15 +266,15 @@ func (cs *clientStream) finish(err error) {
 	}
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	if cs.traceInfo.tr != nil {
+	if cs.trInfo.tr != nil {
 		if err == nil || err == io.EOF {
-			cs.traceInfo.tr.LazyPrintf("RPC: [OK]")
+			cs.trInfo.tr.LazyPrintf("RPC: [OK]")
 		} else {
-			cs.traceInfo.tr.LazyPrintf("RPC: [%v]", err)
-			cs.traceInfo.tr.SetError()
+			cs.trInfo.tr.LazyPrintf("RPC: [%v]", err)
+			cs.trInfo.tr.SetError()
 		}
-		cs.traceInfo.tr.Finish()
-		cs.traceInfo.tr = nil
+		cs.trInfo.tr.Finish()
+		cs.trInfo.tr = nil
 	}
 }
 
@@ -298,13 +298,9 @@ type serverStream struct {
 	codec      Codec
 	statusCode codes.Code
 	statusDesc string
+	trInfo     *traceInfo
 
-	tracing bool // set to EnableTracing when the serverStream is created.
-
-	mu sync.Mutex // protects traceInfo
-	// traceInfo.tr is set when the serverStream is created (if EnableTracing is true),
-	// and is set to nil when the serverStream's finish method is called.
-	traceInfo traceInfo
+	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 }
 
 func (ss *serverStream) Context() context.Context {
@@ -325,13 +321,15 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 
 func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	defer func() {
-		if ss.tracing {
+		if ss.trInfo != nil {
 			ss.mu.Lock()
-			if err == nil {
-				ss.traceInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
-			} else {
-				ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-				ss.traceInfo.tr.SetError()
+			if ss.trInfo.tr != nil {
+				if err == nil {
+					ss.trInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+				} else {
+					ss.trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+					ss.trInfo.tr.SetError()
+				}
 			}
 			ss.mu.Unlock()
 		}
@@ -346,13 +344,15 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 
 func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
-		if ss.tracing {
+		if ss.trInfo != nil {
 			ss.mu.Lock()
-			if err == nil {
-				ss.traceInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
-			} else if err != io.EOF {
-				ss.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-				ss.traceInfo.tr.SetError()
+			if ss.trInfo.tr != nil {
+				if err == nil {
+					ss.trInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
+				} else if err != io.EOF {
+					ss.trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+					ss.trInfo.tr.SetError()
+				}
 			}
 			ss.mu.Unlock()
 		}

@@ -117,7 +117,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 	}()
 	if EnableTracing {
-		c.traceInfo.tr = trace.New("grpc.Sent."+transport.MethodFamily(method), method)
+		c.traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
 		defer c.traceInfo.tr.Finish()
 		c.traceInfo.firstLine.client = true
 		if deadline, ok := ctx.Deadline(); ok {

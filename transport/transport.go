@@ -43,7 +43,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -53,19 +52,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
-
-// MethodFamily returns the trace family for the given method.
-// It turns "/pkg.Service/GetFoo" into "pkg.Service".
-func MethodFamily(m string) string {
-	m = strings.TrimPrefix(m, "/") // remove leading slash
-	if i := strings.Index(m, "/"); i >= 0 {
-		m = m[:i] // remove everything from second slash
-	}
-	if i := strings.LastIndex(m, "."); i >= 0 {
-		m = m[i+1:] // cut down to last dotted component
-	}
-	return m
-}
 
 // recvMsg represents the received msg from the transport. All transport
 // protocol specific info has been removed.
@@ -213,8 +199,6 @@ type Stream struct {
 	// the status received from the server.
 	statusCode codes.Code
 	statusDesc string
-	// tracing information
-	tr trace.Trace
 }
 
 // Header acquires the key-value pairs of header metadata once it
@@ -249,9 +233,9 @@ func (s *Stream) Context() context.Context {
 	return s.ctx
 }
 
-// Trace returns the trace.Trace of the stream.
-func (s *Stream) Trace() trace.Trace {
-	return s.tr
+// TraceContext recreates the context of s with a trace.Trace.
+func (s *Stream) TraceContext(tr trace.Trace) {
+	s.ctx = trace.NewContext(s.ctx, tr)
 }
 
 // Method returns the method for the stream.
@@ -330,8 +314,8 @@ const (
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
 // if it fails.
-func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo, tracing bool) (ServerTransport, error) {
-	return newHTTP2Server(conn, maxStreams, authInfo, tracing)
+func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo) (ServerTransport, error) {
+	return newHTTP2Server(conn, maxStreams, authInfo)
 }
 
 // ConnectOptions covers all relevant options for dialing a server.
@@ -407,7 +391,7 @@ type ServerTransport interface {
 	// WriteHeader sends the header metedata for the given stream.
 	WriteHeader(s *Stream, md metadata.MD) error
 	// HandleStreams receives incoming streams using the given handler.
-	HandleStreams(func(*Stream))
+	HandleStreams(func(*Stream, *sync.WaitGroup))
 	// Close tears down the transport. Once it is called, the transport
 	// should not be accessed any more. All the pending streams and their
 	// handlers will be terminated asynchronously.
