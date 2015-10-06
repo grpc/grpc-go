@@ -38,6 +38,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -46,6 +47,19 @@ import (
 // EnableTracing controls whether to trace RPCs using the golang.org/x/net/trace package.
 // This should only be set before any RPCs are sent or received by this program.
 var EnableTracing = true
+
+// methodFamily returns the trace family for the given method.
+// It turns "/pkg.Service/GetFoo" into "pkg.Service".
+func methodFamily(m string) string {
+	m = strings.TrimPrefix(m, "/") // remove leading slash
+	if i := strings.Index(m, "/"); i >= 0 {
+		m = m[:i] // remove everything from second slash
+	}
+	if i := strings.LastIndex(m, "."); i >= 0 {
+		m = m[i+1:] // cut down to last dotted component
+	}
+	return m
+}
 
 // traceInfo contains tracing information for an RPC.
 type traceInfo struct {

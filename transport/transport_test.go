@@ -77,7 +77,8 @@ const (
 	misbehaved
 )
 
-func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
+func (h *testStreamHandler) handleStream(t *testing.T, s *Stream, wg *sync.WaitGroup) {
+	defer wg.Done()
 	req := expectedRequest
 	resp := expectedResponse
 	if s.Method() == "foo.Large" {
@@ -99,11 +100,16 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 }
 
 // handleStreamSuspension blocks until s.ctx is canceled.
-func (h *testStreamHandler) handleStreamSuspension(s *Stream) {
-	<-s.ctx.Done()
+func (h *testStreamHandler) handleStreamSuspension(s *Stream, wg *sync.WaitGroup) {
+	wg.Add(1)
+	go func() {
+		<-s.ctx.Done()
+		wg.Done()
+	}()
 }
 
-func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
+func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream, wg *sync.WaitGroup) {
+	defer wg.Done()
 	conn, ok := s.ServerTransport().(*http2Server)
 	if !ok {
 		t.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
@@ -150,7 +156,7 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
 		if err != nil {
 			return
 		}
-		transport, err := NewServerTransport("http2", conn, maxStreams, nil, false)
+		transport, err := NewServerTransport("http2", conn, maxStreams, nil)
 		if err != nil {
 			return
 		}
@@ -167,12 +173,14 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
 		case suspended:
 			go transport.HandleStreams(h.handleStreamSuspension)
 		case misbehaved:
-			go transport.HandleStreams(func(s *Stream) {
-				h.handleStreamMisbehave(t, s)
+			go transport.HandleStreams(func(s *Stream, wg *sync.WaitGroup) {
+				wg.Add(1)
+				go h.handleStreamMisbehave(t, s, wg)
 			})
 		default:
-			go transport.HandleStreams(func(s *Stream) {
-				h.handleStream(t, s)
+			go transport.HandleStreams(func(s *Stream, wg *sync.WaitGroup) {
+				wg.Add(1)
+				go h.handleStream(t, s, wg)
 			})
 		}
 	}

@@ -45,7 +45,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -82,7 +81,7 @@ type http2Server struct {
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
 	// tracing indicates whether tracing is on for this http2Server transport.
-	tracing bool
+	//tracing bool
 
 	mu            sync.Mutex // guard the following
 	state         transportState
@@ -93,7 +92,7 @@ type http2Server struct {
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
 // returned if something goes wrong.
-func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo, tracing bool) (_ ServerTransport, err error) {
+func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo) (_ ServerTransport, err error) {
 	framer := newFramer(conn)
 	// Send initial settings as connection preface to client.
 	var settings []http2.Setting
@@ -127,7 +126,7 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthI
 		controlBuf:      newRecvBuffer(),
 		fc:              &inFlow{limit: initialConnWindowSize},
 		sendQuotaPool:   newQuotaPool(defaultWindowSize),
-		tracing:         tracing,
+		//tracing:         tracing,
 		state:           reachable,
 		writableChan:    make(chan int, 1),
 		shutdownChan:    make(chan struct{}),
@@ -142,7 +141,7 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthI
 // operateHeader takes action on the decoded headers. It returns the current
 // stream if there are remaining headers on the wire (in the following
 // Continuation frame).
-func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame headerFrame, endStream bool, handle func(*Stream), wg *sync.WaitGroup) (pendingStream *Stream) {
+func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame headerFrame, endStream bool, handle func(*Stream, *sync.WaitGroup), wg *sync.WaitGroup) (pendingStream *Stream) {
 	defer func() {
 		if pendingStream == nil {
 			hDec.state = decodeState{}
@@ -206,21 +205,13 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 		recv: s.buf,
 	}
 	s.method = hDec.state.method
-	if t.tracing {
-		s.tr = trace.New("grpc.Recv."+MethodFamily(s.method), s.method)
-		s.ctx = trace.NewContext(s.ctx, s.tr)
-	}
-	wg.Add(1)
-	go func() {
-		handle(s)
-		wg.Done()
-	}()
+	handle(s, wg)
 	return nil
 }
 
 // HandleStreams receives incoming streams using the given handler. This is
 // typically run in a separate goroutine.
-func (t *http2Server) HandleStreams(handle func(*Stream)) {
+func (t *http2Server) HandleStreams(handle func(*Stream, *sync.WaitGroup)) {
 	// Check the validity of client preface.
 	preface := make([]byte, len(clientPreface))
 	if _, err := io.ReadFull(t.conn, preface); err != nil {
