@@ -298,7 +298,7 @@ type serverStream struct {
 	codec      Codec
 	statusCode codes.Code
 	statusDesc string
-	trInfo *traceInfo
+	trInfo     *traceInfo
 
 	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 }

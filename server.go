@@ -397,10 +397,10 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
 	ss := &serverStream{
-		t:       t,
-		s:       stream,
-		p:       &parser{s: stream},
-		codec:   s.opts.codec,
+		t:      t,
+		s:      stream,
+		p:      &parser{s: stream},
+		codec:  s.opts.codec,
 		trInfo: trInfo,
 	}
 	if trInfo != nil {
