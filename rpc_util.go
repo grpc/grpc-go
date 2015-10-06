@@ -127,7 +127,8 @@ type parser struct {
 	s io.Reader
 }
 
-// msgFixedHeader defines the header of a gRPC message (go/grpc-wirefmt).
+// msgFixedHeader defines the header of a gRPC message. Find more detail
+// at http://www.grpc.io/docs/guides/wire.html.
 type msgFixedHeader struct {
 	T      payloadFormat
 	Length uint32
