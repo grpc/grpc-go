@@ -138,7 +138,7 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthI
 // operateHeader takes action on the decoded headers. It returns the current
 // stream if there are remaining headers on the wire (in the following
 // Continuation frame).
-func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame headerFrame, endStream bool, handle func(*Stream, *sync.WaitGroup), wg *sync.WaitGroup) (pendingStream *Stream) {
+func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame headerFrame, endStream bool, handle func(*Stream)) (pendingStream *Stream) {
 	defer func() {
 		if pendingStream == nil {
 			hDec.state = decodeState{}
@@ -202,13 +202,13 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 		recv: s.buf,
 	}
 	s.method = hDec.state.method
-	handle(s, wg)
+	handle(s)
 	return nil
 }
 
 // HandleStreams receives incoming streams using the given handler. This is
 // typically run in a separate goroutine.
-func (t *http2Server) HandleStreams(handle func(*Stream, *sync.WaitGroup)) {
+func (t *http2Server) HandleStreams(handle func(*Stream)) {
 	// Check the validity of client preface.
 	preface := make([]byte, len(clientPreface))
 	if _, err := io.ReadFull(t.conn, preface); err != nil {
@@ -238,8 +238,6 @@ func (t *http2Server) HandleStreams(handle func(*Stream, *sync.WaitGroup)) {
 
 	hDec := newHPACKDecoder()
 	var curStream *Stream
-	var wg sync.WaitGroup
-	defer wg.Wait()
 	for {
 		frame, err := t.framer.readFrame()
 		if err != nil {
@@ -268,9 +266,9 @@ func (t *http2Server) HandleStreams(handle func(*Stream, *sync.WaitGroup)) {
 				fc:  fc,
 			}
 			endStream := frame.Header().Flags.Has(http2.FlagHeadersEndStream)
-			curStream = t.operateHeaders(hDec, curStream, frame, endStream, handle, &wg)
+			curStream = t.operateHeaders(hDec, curStream, frame, endStream, handle)
 		case *http2.ContinuationFrame:
-			curStream = t.operateHeaders(hDec, curStream, frame, false, handle, &wg)
+			curStream = t.operateHeaders(hDec, curStream, frame, false, handle)
 		case *http2.DataFrame:
 			t.handleData(frame)
 		case *http2.RSTStreamFrame:
