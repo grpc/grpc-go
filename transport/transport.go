@@ -391,7 +391,7 @@ type ServerTransport interface {
 	// WriteHeader sends the header metedata for the given stream.
 	WriteHeader(s *Stream, md metadata.MD) error
 	// HandleStreams receives incoming streams using the given handler.
-	HandleStreams(func(*Stream, *sync.WaitGroup))
+	HandleStreams(func(*Stream))
 	// Close tears down the transport. Once it is called, the transport
 	// should not be accessed any more. All the pending streams and their
 	// handlers will be terminated asynchronously.

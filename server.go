@@ -259,7 +259,8 @@ func (s *Server) Serve(lis net.Listener) error {
 		s.mu.Unlock()
 
 		go func() {
-			st.HandleStreams(func(stream *transport.Stream, wg *sync.WaitGroup) {
+			var wg sync.WaitGroup
+			st.HandleStreams(func(stream *transport.Stream) {
 				var trInfo *traceInfo
 				if EnableTracing {
 					trInfo = &traceInfo{
@@ -278,6 +279,7 @@ func (s *Server) Serve(lis net.Listener) error {
 					wg.Done()
 				}()
 			})
+			wg.Wait()
 			s.mu.Lock()
 			delete(s.conns, st)
 			s.mu.Unlock()
