@@ -35,40 +35,41 @@
 // The interface is EXPERIMENTAL and may be suject to change.
 package naming
 
-// OP defines the corresponding operations for a name resolution change.
-type OP uint8
+import (
+	"golang.org/x/net/context"
+)
+
+// Operation defines the corresponding operations for a name resolution change.
+type Operation uint8
 
 const (
 	// Add indicates a new address is added.
-	Add = iota
+	Add Operation = iota
 	// Delete indicates an exisiting address is deleted.
 	Delete
 )
 
-type ServiceConfig interface{}
-
-// Update defines a name resolution change.
+// Update defines a name resolution update. Notice that it is not valid having both
+// empty string Addr and nil Metadata in an Update.
 type Update struct {
 	// Op indicates the operation of the update.
-	Op     OP
-	Addr   string
-	Config ServiceConfig
+	Op Operation
+	// Addr is the updated address. It is empty string if there is no address update.
+	Addr string
+	// Metadata is the updated metadata. It is nil if there is no metadata update.
+	// Metadata is not required for a custom naming implementation.
+	Metadata interface{}
 }
 
-// Resolver does one-shot name resolution and creates a Watcher to
-// watch the future updates.
+// Resolver creates a Watcher for a target to track its resolution changes.
 type Resolver interface {
-	// Resolve returns the name resolution results.
-	Resolve(target string) ([]*Update, error)
-	// NewWatcher creates a Watcher to watch the changes on target.
-	NewWatcher(target string) Watcher
+	// Resolve creates a Watcher for target.
+	Resolve(target string) (Watcher, error)
 }
 
-// Watcher watches the updates for a particular target.
+// Watcher watches for the updates on the specified target.
 type Watcher interface {
 	// Next blocks until an update or error happens. It may return one or more
-	// updates.
-	Next() ([]*Update, error)
-	// Stop stops the Watcher.
-	Stop()
+	// updates. The first call should get the full set of the results.
+	Next(ctx context.Context) ([]*Update, error)
 }
