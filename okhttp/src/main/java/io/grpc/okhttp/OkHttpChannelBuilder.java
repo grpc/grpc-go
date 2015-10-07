@@ -59,7 +59,7 @@ import javax.net.ssl.SSLSocketFactory;
 
 /** Convenience class for building channels with the OkHttp transport. */
 @ExperimentalApi("There is no plan to make this API stable, given transport API instability")
-public final class OkHttpChannelBuilder extends
+public class OkHttpChannelBuilder extends
         AbstractManagedChannelImplBuilder<OkHttpChannelBuilder> {
 
   public static final ConnectionSpec DEFAULT_CONNECTION_SPEC =
@@ -107,7 +107,7 @@ public final class OkHttpChannelBuilder extends
   private NegotiationType negotiationType = NegotiationType.TLS;
   private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
 
-  private OkHttpChannelBuilder(String host, int port) {
+  protected OkHttpChannelBuilder(String host, int port) {
     this.host = Preconditions.checkNotNull(host);
     this.port = port;
     this.authority = GrpcUtil.authorityFromHostAndPort(host, port);
@@ -119,7 +119,7 @@ public final class OkHttpChannelBuilder extends
    * <p>The channel does not take ownership of the given executor. It is the caller' responsibility
    * to shutdown the executor when appropriate.
    */
-  public OkHttpChannelBuilder transportExecutor(@Nullable Executor transportExecutor) {
+  public final OkHttpChannelBuilder transportExecutor(@Nullable Executor transportExecutor) {
     this.transportExecutor = transportExecutor;
     return this;
   }
@@ -134,14 +134,14 @@ public final class OkHttpChannelBuilder extends
    * @deprecated use {@link #overrideAuthority} instead
    */
   @Deprecated
-  public OkHttpChannelBuilder overrideHostForAuthority(String host) {
+  public final OkHttpChannelBuilder overrideHostForAuthority(String host) {
     this.authority = GrpcUtil.authorityFromHostAndPort(host, this.port);
     return this;
   }
 
   @Override
-  public OkHttpChannelBuilder overrideAuthority(String authority) {
-    this.authority = GrpcUtil.checkAuthority(authority);
+  public final OkHttpChannelBuilder overrideAuthority(String authority) {
+    this.authority = checkAuthority(authority);
     return this;
   }
 
@@ -150,7 +150,7 @@ public final class OkHttpChannelBuilder extends
    *
    * <p>Default: <code>TLS</code>
    */
-  public OkHttpChannelBuilder negotiationType(NegotiationType type) {
+  public final OkHttpChannelBuilder negotiationType(NegotiationType type) {
     negotiationType = Preconditions.checkNotNull(type);
     return this;
   }
@@ -162,7 +162,7 @@ public final class OkHttpChannelBuilder extends
    *
    * <p>{@link NegotiationType#TLS} will be applied by calling this method.
    */
-  public OkHttpChannelBuilder sslSocketFactory(SSLSocketFactory factory) {
+  public final OkHttpChannelBuilder sslSocketFactory(SSLSocketFactory factory) {
     this.sslSocketFactory = factory;
     negotiationType(NegotiationType.TLS);
     return this;
@@ -174,7 +174,7 @@ public final class OkHttpChannelBuilder extends
    *
    * <p>By default DEFAULT_CONNECTION_SPEC will be used.
    */
-  public OkHttpChannelBuilder connectionSpec(ConnectionSpec connectionSpec) {
+  public final OkHttpChannelBuilder connectionSpec(ConnectionSpec connectionSpec) {
     this.connectionSpec = connectionSpec;
     return this;
   }
@@ -183,7 +183,7 @@ public final class OkHttpChannelBuilder extends
    * Sets the maximum message size allowed to be received on the channel. If not called,
    * defaults to {@link io.grpc.internal.GrpcUtil#DEFAULT_MAX_MESSAGE_SIZE}.
    */
-  public OkHttpChannelBuilder maxMessageSize(int maxMessageSize) {
+  public final OkHttpChannelBuilder maxMessageSize(int maxMessageSize) {
     checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
     this.maxMessageSize = maxMessageSize;
     return this;
@@ -193,7 +193,7 @@ public final class OkHttpChannelBuilder extends
    * Equivalent to using {@link #negotiationType(NegotiationType)} with {@code PLAINTEXT}.
    */
   @Override
-  public OkHttpChannelBuilder usePlaintext(boolean skipNegotiation) {
+  public final OkHttpChannelBuilder usePlaintext(boolean skipNegotiation) {
     if (skipNegotiation) {
       negotiationType(NegotiationType.PLAINTEXT);
     } else {
@@ -203,9 +203,17 @@ public final class OkHttpChannelBuilder extends
   }
 
   @Override
-  protected ClientTransportFactory buildTransportFactory() {
+  protected final ClientTransportFactory buildTransportFactory() {
     return new OkHttpTransportFactory(host, port, authority, transportExecutor,
             createSocketFactory(), connectionSpec, maxMessageSize);
+  }
+
+  /**
+   * Verifies the authority is valid.  This method exists as an escape hatch for putting in an
+   * authority that is valid, but would fail the default validation provided by this implementation.
+   */
+  protected String checkAuthority(String authority) {
+    return GrpcUtil.checkAuthority(authority);
   }
 
   private SSLSocketFactory createSocketFactory() {
