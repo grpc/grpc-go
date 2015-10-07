@@ -36,6 +36,13 @@ Or for Gradle, add to your dependencies:
 compile 'io.grpc:grpc-all:0.9.0'
 ```
 
+For Android client, you only need to depend on the needed sub-projects, such as:
+```gradle
+compile 'io.grpc:grpc-okhttp:0.9.0'
+compile 'io.grpc:grpc-protobuf-nano:0.9.0'
+compile 'io.grpc:grpc-stub:0.9.0'
+```
+
 [the JAR]: https://search.maven.org/remote_content?g=io.grpc&a=grpc-all&v=0.9.0
 
 Development snapshots are available in [Sonatypes's snapshot
