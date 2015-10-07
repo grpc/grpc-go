@@ -18,9 +18,10 @@ This is currently the recommended approach for using gRPC over TLS (on non-Andro
 
 ### Benefits of using OpenSSL
 
-1. **Speed**: In local testing, we've seen performance improvements of 3x over the JDK.
-2. **Ciphers**: OpenSSL has its own ciphers and is not dependent on the limitations of the JDK (see section on TLS with JDK). Also, the GCM codec (the main codec recommended by the HTTP/2 spec) in OpenSSL does not suffer from the performance problems in Java 8.
+1. **Speed**: In local testing, we've seen performance improvements of 3x over the JDK. GCM, which is used by the only cipher suite required by the HTTP/2 spec, is 10-500x faster.
+2. **Ciphers**: OpenSSL has its own ciphers and is not dependent on the limitations of the JDK. This allows supporting GCM on Java 7.
 3. **ALPN to NPN Fallback**: if the remote endpoint doesn't support ALPN.
+4. **Version Independence**: does not require using a different library version depending on the JDK update.
 
 ### Requirements for using OpenSSL
 
@@ -144,7 +145,7 @@ Note that you must use the [release of the Jetty-ALPN jar](http://www.eclipse.or
 
 Java 7 does not support [the cipher suites recommended](https://tools.ietf.org/html/draft-ietf-httpbis-http2-17#section-9.2.2) by the HTTP2 specification. To address this we suggest servers use Java 8 where possible or use an alternative JCE implementation such as [Bouncy Castle](https://www.bouncycastle.org/java.html). If this is not practical it is possible to use other ciphers but you need to ensure that the services you intend to call have [allowed out-of-spec ciphers](https://github.com/grpc/grpc/issues/681) and have evaluated the security risks of doing so.
 
-Users should be aware that GCM is [_very_ slow (1 MB/s)](https://bugzilla.redhat.com/show_bug.cgi?id=1135504) in Java 8. GCM cipher suites are the only suites available that comply with HTTP2's cipher requirements.
+Users should be aware that GCM is [_very_ slow (1 MB/s)](https://bugzilla.redhat.com/show_bug.cgi?id=1135504) before Java 8u60. With Java 8u60 GCM is 10x faster (10-20 MB/s), but that is still slow compared to OpenSSL (~200 MB/s), especially with AES-NI support (~1 GB/s). GCM cipher suites are the only suites available that comply with HTTP2's cipher requirements.
 
 ### Configuring Jetty ALPN in Web Containers
 
