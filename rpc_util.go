@@ -139,10 +139,21 @@ type msgFixedHeader struct {
 // EOF is returned with nil msg and 0 pf if the entire stream is done. Other
 // non-nil error is returned if something is wrong on reading.
 func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
+	const (
+		headerSize  = 5
+		formatIndex = 1
+	)
+
 	var hdr msgFixedHeader
-	if err := binary.Read(p.s, binary.BigEndian, &hdr); err != nil {
+	var buf [headerSize]byte
+
+	if _, err := io.ReadFull(p.s, buf[:]); err != nil {
 		return 0, nil, err
 	}
+
+	hdr.T = payloadFormat(buf[formatIndex])
+	hdr.Length = binary.BigEndian.Uint32(buf[formatIndex:])
+
 	if hdr.Length == 0 {
 		return hdr.T, nil, nil
 	}
