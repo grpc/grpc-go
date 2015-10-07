@@ -138,8 +138,10 @@ type msgFixedHeader struct {
 // EOF is returned with nil msg and 0 pf if the entire stream is done. Other
 // non-nil error is returned if something is wrong on reading.
 func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
-	const headerSize = 5
-	const formatIndex = 1
+	const (
+		headerSize  = 5
+		formatIndex = 1
+	)
 
 	var hdr msgFixedHeader
 	var buf [headerSize]byte
