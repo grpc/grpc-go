@@ -92,6 +92,7 @@ func NewResolver(cfg etcdcl.Config) (naming.Resolver, error) {
 
 type watcher struct {
 	wr etcdcl.Watcher
+	mu sync.Mutex
 	kv map[string]string
 }
 
@@ -123,6 +124,7 @@ func (w *watcher) Next(ctx context.Context) (nu []*naming.Update, err error) {
 		if resp.Node.Dir {
 			continue
 		}
+		w.mu.Lock()
 		switch resp.Action {
 		case "set":
 			if resp.PrevNode == nil {
@@ -149,6 +151,7 @@ func (w *watcher) Next(ctx context.Context) (nu []*naming.Update, err error) {
 			})
 			delete(w.kv, resp.Node.Key)
 		}
+		w.mu.Unlock()
 		return nu, nil
 	}
 }
