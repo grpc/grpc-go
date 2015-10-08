@@ -167,7 +167,6 @@ class OkHttpClientTransport implements ClientTransport {
   SettableFuture<Void> connectedFuture;
 
   OkHttpClientTransport(String host, int port, String authority, Executor executor,
-
       @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec,
       int maxMessageSize) {
     this.host = Preconditions.checkNotNull(host, "host");
@@ -349,9 +348,8 @@ class OkHttpClientTransport implements ClientTransport {
         try {
           sock = new Socket(host, port);
           if (sslSocketFactory != null) {
-            URI uri = GrpcUtil.authorityToUri(defaultAuthority);
             sock = OkHttpTlsUpgrader.upgrade(
-                sslSocketFactory, sock, uri.getHost(), uri.getPort(), connectionSpec);
+                sslSocketFactory, sock, getOverridenHost(), getOverridenPort(), connectionSpec);
           }
           sock.setTcpNoDelay(true);
           source = Okio.buffer(Okio.source(sock));
@@ -404,6 +402,39 @@ class OkHttpClientTransport implements ClientTransport {
         startPendingStreams();
       }
     });
+  }
+
+  /**
+   * Gets the overriden authority hostname.  If the authority is overriden to be an invalid
+   * authority, uri.getHost() will (rightly) return null, since the authority is no longer
+   * an actual service.  This method overrides the behavior for practical reasons.  For example,
+   * if an authority is in the form "invalid_authority" (note the "_"), rather than return null,
+   * we return the input.  This is because the return value, in conjunction with getOverridenPort,
+   * are used by the SSL library to reconstruct the actual authority.  It /already/ has a
+   * connection to the port, independent of this function.
+   *
+   * <p>Note: if the defaultAuthority has a port number in it and is also bad, this code will do
+   * the wrong thing.  An example wrong behavior would be "invalid_host:443".   Registry based
+   * authorities do not have ports, so this is even more wrong than before.  Sorry.
+   */
+  @VisibleForTesting
+  String getOverridenHost() {
+    URI uri = GrpcUtil.authorityToUri(defaultAuthority);
+    if (uri.getHost() != null) {
+      return uri.getHost();
+    }
+
+    return defaultAuthority;
+  }
+
+  @VisibleForTesting
+  int getOverridenPort() {
+    URI uri = GrpcUtil.authorityToUri(defaultAuthority);
+    if (uri.getPort() != -1) {
+      return uri.getPort();
+    }
+
+    return port;
   }
 
   @Override

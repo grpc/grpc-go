@@ -63,6 +63,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 
+import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.internal.spdy.ErrorCode;
 import com.squareup.okhttp.internal.spdy.FrameReader;
 import com.squareup.okhttp.internal.spdy.FrameWriter;
@@ -149,6 +150,11 @@ public class OkHttpClientTransportTest {
     frameReader = new MockFrameReader();
   }
 
+  @After
+  public void tearDown() {
+    executor.shutdownNow();
+  }
+
   private void initTransport() throws Exception {
     startTransport(3, null, true, DEFAULT_MAX_MESSAGE_SIZE);
   }
@@ -181,16 +187,6 @@ public class OkHttpClientTransportTest {
     }
   }
 
-  /** Final test checks and clean up. */
-  @After
-  public void tearDown() throws Exception {
-    clientTransport.shutdown();
-    assertEquals(0, activeStreamCount());
-    verify(frameWriter, timeout(TIME_OUT_MS)).close();
-    frameReader.assertClosed();
-    executor.shutdown();
-  }
-
   @Test
   public void maxMessageSizeShouldBeEnforced() throws Exception {
     // Allow the response payloads of up to 1 byte.
@@ -209,6 +205,7 @@ public class OkHttpClientTransportTest {
 
     listener.waitUntilStreamClosed();
     assertEquals(INTERNAL, listener.status.getCode());
+    shutdownAndVerify();
   }
 
   /**
@@ -234,6 +231,7 @@ public class OkHttpClientTransportTest {
     assertEquals(NETWORK_ISSUE_MESSAGE, listener2.status.getCause().getMessage());
     verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+    shutdownAndVerify();
   }
 
   @Test
@@ -258,6 +256,7 @@ public class OkHttpClientTransportTest {
     for (int i = 0; i < numMessages; i++) {
       assertEquals(message + i, listener.messages.get(i));
     }
+    shutdownAndVerify();
   }
 
   @Test
@@ -270,6 +269,7 @@ public class OkHttpClientTransportTest {
         .goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
     verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+    shutdownAndVerify();
   }
 
   @Test
@@ -280,6 +280,7 @@ public class OkHttpClientTransportTest {
         .goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
     verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+    shutdownAndVerify();
   }
 
   @Test
@@ -298,6 +299,7 @@ public class OkHttpClientTransportTest {
     assertNull(listener.headers);
     assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
     assertNotNull(listener.trailers);
+    shutdownAndVerify();
   }
 
   @Test
@@ -309,6 +311,7 @@ public class OkHttpClientTransportTest {
     frameHandler().headers(true, true, 3, 0, grpcResponseTrailers(), HeadersMode.HTTP_20_HEADERS);
     listener.waitUntilStreamClosed();
     assertEquals(Status.Code.OK, listener.status.getCode());
+    shutdownAndVerify();
   }
 
   @Test
@@ -320,6 +323,7 @@ public class OkHttpClientTransportTest {
     frameHandler().rstStream(3, ErrorCode.PROTOCOL_ERROR);
     listener.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.PROTOCOL_ERROR), listener.status);
+    shutdownAndVerify();
   }
 
   @Test
@@ -332,6 +336,7 @@ public class OkHttpClientTransportTest {
     listener.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
         listener.status.getCode());
+    shutdownAndVerify();
   }
 
   @Test
@@ -348,6 +353,7 @@ public class OkHttpClientTransportTest {
     verify(frameWriter, timeout(TIME_OUT_MS))
         .synStream(eq(false), eq(false), eq(3), eq(0), eq(expectedHeaders));
     getStream(3).cancel(Status.CANCELLED);
+    shutdownAndVerify();
   }
 
   @Test
@@ -367,6 +373,7 @@ public class OkHttpClientTransportTest {
     verify(frameWriter, timeout(TIME_OUT_MS))
         .synStream(eq(false), eq(false), eq(3), eq(0), eq(expectedHeaders));
     getStream(3).cancel(Status.CANCELLED);
+    shutdownAndVerify();
   }
 
   @Test
@@ -377,6 +384,7 @@ public class OkHttpClientTransportTest {
     getStream(3).cancel(Status.DEADLINE_EXCEEDED);
     verify(frameWriter, timeout(TIME_OUT_MS)).rstStream(eq(3), eq(ErrorCode.CANCEL));
     listener.waitUntilStreamClosed();
+    shutdownAndVerify();
   }
 
   @Test
@@ -396,6 +404,7 @@ public class OkHttpClientTransportTest {
     Buffer sentFrame = captor.getValue();
     assertEquals(createMessageFrame(message), sentFrame);
     stream.cancel(Status.CANCELLED);
+    shutdownAndVerify();
   }
 
   @Test
@@ -455,6 +464,7 @@ public class OkHttpClientTransportTest {
     listener2.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
         listener2.status.getCode());
+    shutdownAndVerify();
   }
 
   @Test
@@ -479,6 +489,7 @@ public class OkHttpClientTransportTest {
     listener.waitUntilStreamClosed();
     assertEquals(OkHttpClientTransport.toGrpcStatus(ErrorCode.CANCEL).getCode(),
         listener.status.getCode());
+    shutdownAndVerify();
   }
 
   @Test
@@ -514,6 +525,7 @@ public class OkHttpClientTransportTest {
 
     stream.cancel(Status.CANCELLED);
     listener.waitUntilStreamClosed();
+    shutdownAndVerify();
   }
 
   @Test
@@ -557,6 +569,7 @@ public class OkHttpClientTransportTest {
 
     stream.cancel(Status.CANCELLED);
     listener.waitUntilStreamClosed();
+    shutdownAndVerify();
   }
 
   @Test
@@ -583,6 +596,7 @@ public class OkHttpClientTransportTest {
     assertEquals(Status.CANCELLED.getCode(), listener1.status.getCode());
     assertEquals(Status.CANCELLED.getCode(), listener2.status.getCode());
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+    shutdownAndVerify();
   }
 
   @Test
@@ -636,6 +650,7 @@ public class OkHttpClientTransportTest {
 
     // The transport should be stopped after all active streams finished.
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+    shutdownAndVerify();
   }
 
   @Test
@@ -668,6 +683,7 @@ public class OkHttpClientTransportTest {
     verify(frameWriter, timeout(TIME_OUT_MS)).rstStream(eq(startId), eq(ErrorCode.CANCEL));
     verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+    shutdownAndVerify();
   }
 
   @Test
@@ -706,6 +722,7 @@ public class OkHttpClientTransportTest {
     assertEquals(createMessageFrame(sentMessage), sentFrame);
     verify(frameWriter, timeout(TIME_OUT_MS)).data(eq(true), eq(5), any(Buffer.class), eq(0));
     stream2.sendCancel(Status.CANCELLED);
+    shutdownAndVerify();
   }
 
   @Test
@@ -722,6 +739,7 @@ public class OkHttpClientTransportTest {
     listener.waitUntilStreamClosed();
     assertEquals(0, clientTransport.getPendingStreamSize());
     assertEquals(Status.CANCELLED.getCode(), listener.status.getCode());
+    shutdownAndVerify();
   }
 
   @Test
@@ -747,6 +765,7 @@ public class OkHttpClientTransportTest {
     // active stream should not be affected.
     assertEquals(1, activeStreamCount());
     getStream(3).sendCancel(Status.CANCELLED);
+    shutdownAndVerify();
   }
 
   @Test
@@ -763,6 +782,7 @@ public class OkHttpClientTransportTest {
     listener.waitUntilStreamClosed();
     assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
     assertEquals(0, clientTransport.getPendingStreamSize());
+    shutdownAndVerify();
   }
 
   @Test
@@ -795,6 +815,7 @@ public class OkHttpClientTransportTest {
     assertEquals(1, activeStreamCount());
     OkHttpClientStream stream2 = getStream(startId + 2);
     stream2.cancel(Status.CANCELLED);
+    shutdownAndVerify();
   }
 
   @Test
@@ -816,30 +837,35 @@ public class OkHttpClientTransportTest {
     assertEquals("Received data size exceeded our receiving window size",
         listener.status.getDescription());
     verify(frameWriter, timeout(TIME_OUT_MS)).rstStream(eq(3), eq(ErrorCode.FLOW_CONTROL_ERROR));
+    shutdownAndVerify();
   }
 
   @Test
   public void unaryHeadersShouldNotBeFlushed() throws Exception {
     // By default the method is a Unary call
     shouldHeadersBeFlushed(false);
+    shutdownAndVerify();
   }
 
   @Test
   public void serverStreamingHeadersShouldNotBeFlushed() throws Exception {
     when(method.getType()).thenReturn(MethodType.SERVER_STREAMING);
     shouldHeadersBeFlushed(false);
+    shutdownAndVerify();
   }
 
   @Test
   public void clientStreamingHeadersShouldBeFlushed() throws Exception {
     when(method.getType()).thenReturn(MethodType.CLIENT_STREAMING);
     shouldHeadersBeFlushed(true);
+    shutdownAndVerify();
   }
 
   @Test
   public void duplexStreamingHeadersShouldNotBeFlushed() throws Exception {
     when(method.getType()).thenReturn(MethodType.BIDI_STREAMING);
     shouldHeadersBeFlushed(true);
+    shutdownAndVerify();
   }
 
   private void shouldHeadersBeFlushed(boolean shouldBeFlushed) throws Exception {
@@ -872,6 +898,7 @@ public class OkHttpClientTransportTest {
     assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
     assertTrue(listener.status.getDescription().startsWith("no headers received prior to data"));
     assertEquals(0, listener.messages.size());
+    shutdownAndVerify();
   }
 
   @Test
@@ -890,6 +917,7 @@ public class OkHttpClientTransportTest {
     assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
     assertTrue(listener.status.getDescription().startsWith("no headers received prior to data"));
     assertEquals(0, listener.messages.size());
+    shutdownAndVerify();
   }
 
   @Test
@@ -907,6 +935,7 @@ public class OkHttpClientTransportTest {
     assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
     assertTrue(listener.status.getDescription().startsWith("no headers received prior to data"));
     assertEquals(0, listener.messages.size());
+    shutdownAndVerify();
   }
 
   @Test
@@ -931,6 +960,7 @@ public class OkHttpClientTransportTest {
         .goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
     verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+    shutdownAndVerify();
   }
 
   @Test
@@ -948,6 +978,7 @@ public class OkHttpClientTransportTest {
         .goAway(eq(0), eq(ErrorCode.PROTOCOL_ERROR), any(byte[].class));
     verify(transportListener).transportShutdown(isA(Status.class));
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+    shutdownAndVerify();
   }
 
   @Test
@@ -960,6 +991,7 @@ public class OkHttpClientTransportTest {
     assertTrue(listener.isOnReadyCalled());
     stream.cancel(Status.CANCELLED);
     assertFalse(stream.isReady());
+    shutdownAndVerify();
   }
 
   @Test
@@ -1004,6 +1036,7 @@ public class OkHttpClientTransportTest {
     assertTrue(listener.isOnReadyCalled());
 
     stream.cancel(Status.CANCELLED);
+    shutdownAndVerify();
   }
 
   @Test
@@ -1012,6 +1045,7 @@ public class OkHttpClientTransportTest {
     verifyZeroInteractions(transportListener);
     frameHandler().settings(false, new Settings());
     verify(transportListener).transportReady();
+    shutdownAndVerify();
   }
 
   @Test
@@ -1055,6 +1089,7 @@ public class OkHttpClientTransportTest {
     callback1 = new PingCallbackImpl();
     clientTransport.ping(callback1, MoreExecutors.directExecutor());
     assertEquals(0, callback1.invocationCount);
+    shutdownAndVerify();
   }
 
   @Test
@@ -1078,6 +1113,7 @@ public class OkHttpClientTransportTest {
     assertTrue(callback.failureCause instanceof StatusException);
     assertEquals(Status.Code.UNAVAILABLE,
         ((StatusException) callback.failureCause).getStatus().getCode());
+    shutdownAndVerify();
   }
 
   @Test
@@ -1101,6 +1137,7 @@ public class OkHttpClientTransportTest {
     assertTrue(callback.failureCause instanceof StatusException);
     assertEquals(Status.Code.UNAVAILABLE,
         ((StatusException) callback.failureCause).getStatus().getCode());
+    shutdownAndVerify();
   }
 
   @Test
@@ -1124,6 +1161,7 @@ public class OkHttpClientTransportTest {
     Buffer sentFrame = captor.getValue();
     assertEquals(createMessageFrame(message), sentFrame);
     stream.cancel(Status.CANCELLED);
+    shutdownAndVerify();
   }
 
   @Test
@@ -1140,6 +1178,7 @@ public class OkHttpClientTransportTest {
 
     allowTransportConnected();
     verifyNoMoreInteractions(frameWriter);
+    shutdownAndVerify();
   }
 
   @Test
@@ -1155,6 +1194,25 @@ public class OkHttpClientTransportTest {
     assertNewStreamFail();
     listener.waitUntilStreamClosed();
     assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
+    shutdownAndVerify();
+  }
+
+  @Test
+  public void invalidAuthorityPropagates() {
+    clientTransport = new OkHttpClientTransport(
+        "host",
+        1234,
+        "invalid_authority",
+        executor,
+        null,
+        ConnectionSpec.CLEARTEXT,
+        DEFAULT_MAX_MESSAGE_SIZE);
+
+    String host = clientTransport.getOverridenHost();
+    int port = clientTransport.getOverridenPort();
+
+    assertEquals("invalid_authority", host);
+    assertEquals(1234, port);
   }
 
   private int activeStreamCount() {
@@ -1383,6 +1441,18 @@ public class OkHttpClientTransportTest {
 
   private void allowTransportConnected() {
     delayConnectedCallback.allowConnected();
+  }
+
+  private void shutdownAndVerify() {
+    clientTransport.shutdown();
+    assertEquals(0, activeStreamCount());
+    try {
+      verify(frameWriter, timeout(TIME_OUT_MS)).close();
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+
+    }
+    frameReader.assertClosed();
   }
 
   private class DelayConnectedCallback implements Runnable {
