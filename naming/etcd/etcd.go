@@ -34,115 +34,49 @@
 package etcd
 
 import (
+	"sync"
+
 	etcdcl "github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/naming"
 )
-// update defines an etcd key-value update.
-type update struct {
-	key, val string
-}
 
-// getNode reports the set of changes starting from node recursively.
-func getNode(node *etcdcl.Node) (updates []*update) {
-	for _, v := range node.Nodes {
-		updates = append(updates, getNode(v)...)
-	}
+// getNode builds the key-value map starting from node recursively. It returns the
+// max etcdcl.Node.ModifiedIndex starting from that node.
+func getNode(node *etcdcl.Node, kv map[string]string) uint64 {
 	if !node.Dir {
-		u := &update{
-			key: node.Key,
-			val: node.Value,
-		}
-		updates = []*update{u}
+		kv[node.Key] = node.Value
+		return node.ModifiedIndex
 	}
-	return
-}
-
-type watcher struct {
-	wr     etcdcl.Watcher
-	ctx    context.Context
-	cancel context.CancelFunc
-	kv     map[string]string
-}
-
-func (w *watcher) Next() (nu []*naming.Update, _ error) {
-	for {
-		resp, err := w.wr.Next(w.ctx)
-		if err != nil {
-			return nil, err
-		}
-		updates := getNode(resp.Node)
-		for _, u := range updates {
-			switch resp.Action {
-			case "set":
-				if resp.PrevNode == nil {
-					w.kv[u.key] = u.val
-					nu = append(nu, &naming.Update{
-						Op:   naming.Add,
-						Addr: u.val,
-					})
-				} else {
-					nu = append(nu, &naming.Update{
-						Op:   naming.Delete,
-						Addr: w.kv[u.key],
-					})
-					nu = append(nu, &naming.Update{
-						Op:   naming.Add,
-						Addr: u.val,
-					})
-					w.kv[u.key] = u.val
-				}
-			case "delete":
-				nu = append(nu, &naming.Update{
-					Op:   naming.Delete,
-					Addr: w.kv[u.key],
-				})
-				delete(w.kv, u.key)
-			}
-		}
-		if len(nu) > 0 {
-			break
+	var max uint64
+	for _, v := range node.Nodes {
+		i := getNode(v, kv)
+		if max < i {
+			max = i
 		}
 	}
-	return nu, nil
-}
-
-func (w *watcher) Stop() {
-	w.cancel()
+	return max
 }
 
 type resolver struct {
 	kapi etcdcl.KeysAPI
-	kv   map[string]string
 }
 
-func (r *resolver) NewWatcher(target string) naming.Watcher {
-	ctx, cancel := context.WithCancel(context.Background())
-	w := &watcher{
-		wr:     r.kapi.Watcher(target, &etcdcl.WatcherOptions{Recursive: true}),
-		ctx:    ctx,
-		cancel: cancel,
-	}
-	for k, v := range r.kv {
-		w.kv[k] = v
-	}
-	return w
-}
-
-func (r *resolver) Resolve(target string) (nu []*naming.Update, _ error) {
+func (r *resolver) Resolve(target string) (naming.Watcher, error) {
 	resp, err := r.kapi.Get(context.Background(), target, &etcdcl.GetOptions{Recursive: true})
 	if err != nil {
 		return nil, err
 	}
-	updates := getNode(resp.Node)
-	for _, u := range updates {
-		r.kv[u.key] = u.val
-		nu = append(nu, &naming.Update{
-			Op:   naming.Add,
-			Addr: u.val,
-		})
-	}
-	return nu, nil
+	kv := make(map[string]string)
+	// Record the index in order to avoid missing updates between Get returning and
+	// watch starting.
+	index := getNode(resp.Node, kv)
+	return &watcher{
+		wr: r.kapi.Watcher(target, &etcdcl.WatcherOptions{
+			AfterIndex: index,
+			Recursive:  true}),
+		kv: kv,
+	}, nil
 }
 
 // NewResolver creates an etcd-based naming.Resolver.
@@ -153,6 +87,71 @@ func NewResolver(cfg etcdcl.Config) (naming.Resolver, error) {
 	}
 	return &resolver{
 		kapi: etcdcl.NewKeysAPI(c),
-		kv:   make(map[string]string),
 	}, nil
+}
+
+type watcher struct {
+	wr etcdcl.Watcher
+	mu sync.Mutex
+	kv map[string]string
+}
+
+var once sync.Once
+
+func (w *watcher) Next(ctx context.Context) (nu []*naming.Update, err error) {
+	once.Do(func() {
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+		default:
+			for _, v := range w.kv {
+				nu = append(nu, &naming.Update{
+					Op:   naming.Add,
+					Addr: v,
+				})
+			}
+		}
+	})
+	if len(nu) > 0 || err != nil {
+		// once.Do ran. Return directly.
+		return
+	}
+	for {
+		resp, err := w.wr.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if resp.Node.Dir {
+			continue
+		}
+		w.mu.Lock()
+		switch resp.Action {
+		case "set":
+			if resp.PrevNode == nil {
+				nu = append(nu, &naming.Update{
+					Op:   naming.Add,
+					Addr: resp.Node.Value,
+				})
+				w.kv[resp.Node.Key] = resp.Node.Value
+			} else {
+				nu = append(nu, &naming.Update{
+					Op:   naming.Delete,
+					Addr: w.kv[resp.Node.Key],
+				})
+				nu = append(nu, &naming.Update{
+					Op:   naming.Add,
+					Addr: resp.Node.Value,
+				})
+				w.kv[resp.Node.Key] = resp.Node.Value
+			}
+		case "delete":
+			nu = append(nu, &naming.Update{
+				Op:   naming.Delete,
+				Addr: resp.Node.Value,
+			})
+			delete(w.kv, resp.Node.Key)
+		}
+		w.mu.Unlock()
+		return nu, nil
+	}
 }
