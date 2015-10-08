@@ -108,9 +108,6 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 		t, err = conn.Wait(ctx)
 		if err != nil {
-			if err == ErrTransientFailure {
-				continue
-			}
 			return nil, toRPCErr(err)
 		}
 		break
