@@ -466,7 +466,7 @@ func (cc *Conn) transportMonitor() {
 	}
 }
 
-// Wait blocks until i) the new transport is up or ii) ctx is done or iii)
+// Wait blocks until i) the new transport is up or ii) ctx is done or iii) cc is closed.
 func (cc *Conn) Wait(ctx context.Context) (transport.ClientTransport, error) {
 	for {
 		cc.mu.Lock()
