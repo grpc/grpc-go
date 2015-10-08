@@ -35,6 +35,9 @@ package grpc
 
 import (
 	"time"
+
+	"golang.org/x/net/context"
+	"google.golang.org/grpc/transport"
 )
 
 // Picker picks a Conn for RPC requests.
@@ -42,9 +45,9 @@ import (
 type Picker interface {
 	// Init does initial processing for the Picker, e.g., initiate some connections.
 	Init(cc *ClientConn) error
-	// Pick returns the Conn to use for the upcoming RPC. It may return different
-	// Conn's up to the implementation.
-	Pick() (*Conn, error)
+	// Pick blocks until either a transport.ClientTransport is ready for the upcoming RPC
+	// or some error happens.
+	Pick(ctx context.Context) (transport.ClientTransport, error)
 	// State returns the connectivity state of the underlying connections.
 	State() ConnectivityState
 	// WaitForStateChange blocks until the state changes to something other than
@@ -70,8 +73,8 @@ func (p *unicastPicker) Init(cc *ClientConn) error {
 	return nil
 }
 
-func (p *unicastPicker) Pick() (*Conn, error) {
-	return p.conn, nil
+func (p *unicastPicker) Pick(ctx context.Context) (transport.ClientTransport, error) {
+	return p.conn.Wait(ctx)
 }
 
 func (p *unicastPicker) State() ConnectivityState {

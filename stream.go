@@ -97,29 +97,21 @@ type ClientStream interface {
 // by generated code.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
 	var (
-		conn *Conn
-		t    transport.ClientTransport
-		err  error
+		t   transport.ClientTransport
+		err error
 	)
-	for {
-		conn, err = cc.dopts.picker.Pick()
-		if err != nil {
-			return nil, toRPCErr(err)
-		}
-		t, err = conn.Wait(ctx)
-		if err != nil {
-			return nil, toRPCErr(err)
-		}
-		break
+	t, err = cc.dopts.picker.Pick(ctx)
+	if err != nil {
+		return nil, toRPCErr(err)
 	}
 	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
 	callHdr := &transport.CallHdr{
-		Host:   conn.authority,
+		Host:   cc.authority,
 		Method: method,
 	}
 	cs := &clientStream{
 		desc:    desc,
-		codec:   conn.dopts.codec,
+		codec:   cc.dopts.codec,
 		tracing: EnableTracing,
 	}
 	if cs.tracing {
