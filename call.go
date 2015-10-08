@@ -160,9 +160,6 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		t, err = conn.Wait(ctx)
 		if err != nil {
-			if err == ErrTransientFailure {
-				continue
-			}
 			if lastErr != nil {
 				// This was a retry; return the error from the last attempt.
 				return toRPCErr(lastErr)

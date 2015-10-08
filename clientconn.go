@@ -65,8 +65,6 @@ var (
 	// ErrClientConnTimeout indicates that the connection could not be
 	// established or re-established within the specified timeout.
 	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
-	// ErrTransientFailure indicates the connection failed due to a transient error.
-	ErrTransientFailure = errors.New("grpc: transient connection failure")
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
 )
@@ -479,11 +477,6 @@ func (cc *Conn) Wait(ctx context.Context) (transport.ClientTransport, error) {
 		case cc.state == Ready:
 			cc.mu.Unlock()
 			return cc.transport, nil
-		case cc.state == TransientFailure:
-			cc.mu.Unlock()
-			// Break out so that the caller gets chance to pick another transport to
-			// perform rpc instead of sticking to this transport.
-			return nil, ErrTransientFailure
 		default:
 			ready := cc.ready
 			if ready == nil {
