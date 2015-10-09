@@ -235,6 +235,19 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
+  public void nextFrameReturnFalse() throws Exception {
+    initTransport();
+    MockStreamListener listener = new MockStreamListener();
+    clientTransport.newStream(method, new Metadata(), listener).request(1);
+    frameReader.nextFrameAtEndOfStream();
+    listener.waitUntilStreamClosed();
+    assertEquals(Status.UNAVAILABLE.getCode(), listener.status.getCode());
+    verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(isA(Status.class));
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+    shutdownAndVerify();
+  }
+
+  @Test
   public void readMessages() throws Exception {
     initTransport();
     final int numMessages = 10;

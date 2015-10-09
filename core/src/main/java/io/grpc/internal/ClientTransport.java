@@ -114,6 +114,8 @@ public interface ClientTransport {
 
     /**
      * The transport completed shutting down. All resources have been released.
+     *
+     * <p> {@link #transportShutdown(Status)} must be called before calling this method.
      */
     void transportTerminated();
 

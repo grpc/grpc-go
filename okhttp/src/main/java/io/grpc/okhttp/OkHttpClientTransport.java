@@ -144,9 +144,14 @@ class OkHttpClientTransport implements ClientTransport {
   private final int maxMessageSize;
   private int connectionUnacknowledgedBytesRead;
   private ClientFrameHandler clientFrameHandler;
-  // The status used to finish all active streams when the transport is closed.
+  // Indicates the transport is in go-away state: no new streams will be processed,
+  // but existing streams may continue.
   @GuardedBy("lock")
   private boolean goAway;
+  // Used to indicate the special phase while we are going to enter go-away state but before
+  // goAway is turned to true, see the comment at where this is set about why it is needed.
+  @GuardedBy("lock")
+  private boolean startedGoAway;
   @GuardedBy("lock")
   private Status goAwayStatus;
   @GuardedBy("lock")
@@ -284,7 +289,7 @@ class OkHttpClientTransport implements ClientTransport {
       // Make sure nextStreamId greater than all used id, so that mayHaveCreatedStream() performs
       // correctly.
       nextStreamId = Integer.MAX_VALUE;
-      onGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream ids exhausted"));
+      startGoAway(Integer.MAX_VALUE, Status.INTERNAL.withDescription("Stream ids exhausted"));
     } else {
       nextStreamId += 2;
     }
@@ -449,7 +454,7 @@ class OkHttpClientTransport implements ClientTransport {
     // The GOAWAY is part of graceful shutdown.
     frameWriter.goAway(0, ErrorCode.NO_ERROR, new byte[0]);
 
-    onGoAway(Integer.MAX_VALUE, Status.UNAVAILABLE.withDescription("Transport stopped"));
+    startGoAway(Integer.MAX_VALUE, Status.UNAVAILABLE.withDescription("Transport stopped"));
   }
 
   /**
@@ -477,8 +482,8 @@ class OkHttpClientTransport implements ClientTransport {
    * Finish all active streams due to an IOException, then close the transport.
    */
   void onException(Throwable failureCause) {
-    log.log(Level.SEVERE, "Transport failed", failureCause);
-    onGoAway(0, Status.UNAVAILABLE.withCause(failureCause));
+    log.log(Level.WARNING, "Transport failed", failureCause);
+    startGoAway(0, Status.UNAVAILABLE.withCause(failureCause));
   }
 
   /**
@@ -486,13 +491,24 @@ class OkHttpClientTransport implements ClientTransport {
    */
   private void onError(ErrorCode errorCode, String moreDetail) {
     frameWriter.goAway(0, errorCode, new byte[0]);
-    onGoAway(0, toGrpcStatus(errorCode).augmentDescription(moreDetail));
+    startGoAway(0, toGrpcStatus(errorCode).augmentDescription(moreDetail));
   }
 
-  private void onGoAway(int lastKnownStreamId, Status status) {
-    boolean notifyShutdown;
+  private void startGoAway(int lastKnownStreamId, Status status) {
     synchronized (lock) {
-      notifyShutdown = !goAway;
+      if (startedGoAway) {
+        // Another go-away is in progress, ignore this one.
+        return;
+      }
+      // We use startedGoAway here instead of goAway, because once the goAway becomes true, other
+      // thread in stopIfNecessary() may stop the transport and cause the
+      // listener.transportTerminated() be called before listener.transportShutdown().
+      startedGoAway = true;
+    }
+
+    listener.transportShutdown(status);
+
+    synchronized (lock) {
       goAway = true;
       goAwayStatus = status;
       Iterator<Map.Entry<Integer, OkHttpClientStream>> it = streams.entrySet().iterator();
@@ -508,12 +524,6 @@ class OkHttpClientTransport implements ClientTransport {
         stream.transportReportStatus(status, true, new Metadata());
       }
       pendingStreams.clear();
-    }
-
-    if (notifyShutdown) {
-      // TODO(madongfly): Another thread may called stopIfNecessary() and closed the socket, so that
-      // the reading thread calls listener.transportTerminated() and race with this call.
-      listener.transportShutdown(status);
     }
 
     stopIfNecessary();
@@ -552,7 +562,7 @@ class OkHttpClientTransport implements ClientTransport {
   }
 
   /**
-   * When the transport is in goAway states, we should stop it once all active streams finish.
+   * When the transport is in goAway state, we should stop it once all active streams finish.
    */
   void stopIfNecessary() {
     synchronized (lock) {
@@ -624,6 +634,12 @@ class OkHttpClientTransport implements ClientTransport {
         // Read until the underlying socket closes.
         while (frameReader.nextFrame(this)) {
         }
+        // frameReader.nextFrame() returns false when the underlying read encounters an IOException,
+        // it may be triggered by the socket closing, in such case, the startGoAway() will do
+        // nothing, otherwise, we finish all streams since it's a real IO issue.
+        // We don't call onException() here since we don't want to log the warning in case this is
+        // triggered by socket closing.
+        startGoAway(0, Status.UNAVAILABLE);
       } catch (Exception t) {
         // TODO(madongfly): Send the exception message to the server.
         frameWriter.goAway(0, ErrorCode.PROTOCOL_ERROR, new byte[0]);
@@ -770,7 +786,7 @@ class OkHttpClientTransport implements ClientTransport {
         // If a debug message was provided, use it.
         status.augmentDescription(debugData.utf8());
       }
-      onGoAway(lastGoodStreamId, status);
+      startGoAway(lastGoodStreamId, status);
     }
 
     @Override
