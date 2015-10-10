@@ -34,7 +34,6 @@
 package grpc
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -160,11 +159,8 @@ func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
 // encode serializes msg and prepends the message header. If msg is nil, it
 // generates the message header of 0 message length.
 func encode(c Codec, msg interface{}, pf payloadFormat) ([]byte, error) {
-	var buf bytes.Buffer
-	// Write message into the fixed header.
-	buf.WriteByte(uint8(pf))
 	var b []byte
-	var length uint
+	var length uint32
 	if msg != nil {
 		var err error
 		// TODO(zhaoq): optimize to reduce memory alloc and copying.
@@ -172,16 +168,27 @@ func encode(c Codec, msg interface{}, pf payloadFormat) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		length = uint(len(b))
+		length = uint32(len(b))
 	}
 	if length > math.MaxUint32 {
 		return nil, Errorf(codes.InvalidArgument, "grpc: message too large (%d bytes)", length)
 	}
-	var szHdr [4]byte
-	binary.BigEndian.PutUint32(szHdr[:], uint32(length))
-	buf.Write(szHdr[:])
-	buf.Write(b)
-	return buf.Bytes(), nil
+
+	const (
+		payloadLen = 1
+		sizeLen    = 4
+	)
+
+	var buf = make([]byte, payloadLen+sizeLen+len(b))
+
+	// Write payload format
+	buf[0] = byte(pf)
+	// Write length of msg into buf
+	binary.BigEndian.PutUint32(buf[1:], length)
+	// Copy encoded msg to buf
+	copy(buf[5:], b)
+
+	return buf, nil
 }
 
 func recv(p *parser, c Codec, m interface{}) error {
