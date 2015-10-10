@@ -183,7 +183,7 @@ func encode(c Codec, msg interface{}, pf payloadFormat) ([]byte, error) {
 
 	// Write payload format
 	buf[0] = byte(pf)
-	// Write length of msg into buf
+	// Write length of b into buf
 	binary.BigEndian.PutUint32(buf[1:], length)
 	// Copy encoded msg to buf
 	copy(buf[5:], b)
