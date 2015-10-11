@@ -100,7 +100,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		t   transport.ClientTransport
 		err error
 	)
-	t, err = cc.dopts.picker.Pick(ctx)
+	t, err = cc.Picker().Pick(ctx)
 	if err != nil {
 		return nil, toRPCErr(err)
 	}
