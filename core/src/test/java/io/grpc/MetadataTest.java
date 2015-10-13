@@ -36,10 +36,15 @@ import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.Lists;
+
+import io.grpc.Metadata.Key;
+import io.grpc.internal.GrpcUtil;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -235,6 +240,50 @@ public class MetadataTest {
     } finally {
       Locale.setDefault(originalLocale);
     }
+  }
+
+  @Test
+  public void removeIgnoresMissingValue() {
+    Metadata m = new Metadata();
+    // Any key will work.
+    Key<String> key = GrpcUtil.USER_AGENT_KEY;
+
+    boolean success = m.remove(key, "agent");
+    assertFalse(success);
+  }
+
+  @Test
+  public void removeAllIgnoresMissingValue() {
+    Metadata m = new Metadata();
+    // Any key will work.
+    Key<String> key = GrpcUtil.USER_AGENT_KEY;
+
+    Iterable<String> removed = m.removeAll(key);
+    assertNull(removed);
+  }
+
+  @Test
+  public void serializeSkipsAuthority() {
+    Metadata m = new Metadata();
+    m.put(GrpcUtil.AUTHORITY_KEY, "authority");
+    byte[][] values = m.serialize();
+
+    assertEquals(0, values.length);
+  }
+
+  @Test
+  public void keyEqualsHashStringWorks() {
+    Key<Integer> k1 = Key.of("case", Metadata.INTEGER_MARSHALLER);
+
+    Key<Integer> k2 = Key.of("CASE", Metadata.INTEGER_MARSHALLER);
+    assertEquals(k1, k1);
+    assertNotEquals(k1, null);
+    assertNotEquals(k1, new Object(){});
+    assertEquals(k1, k2);
+
+    assertEquals(k1.hashCode(), k2.hashCode());
+    // Only here to please coverage, not actually necessary.
+    assertEquals(k1.toString(), k2.toString());
   }
 
   private static class Fish {
