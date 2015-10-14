@@ -173,6 +173,7 @@ public class TestServiceClient {
           + "\n      per_rpc_creds: per rpc raw oauth2 access token auth"
           + "\n      cancel_after_begin: cancel stream after starting it"
           + "\n      cancel_after_first_response: cancel on first response"
+          + "\n      timeout_on_sleeping_server: timeout before receiving a response"
           + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
           + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Default " + c.useTestCa
           + "\n  --use_okhttp=true|false     Whether to use OkHttp instead of Netty. Default "
@@ -247,6 +248,8 @@ public class TestServiceClient {
       tester.cancelAfterBegin();
     } else if ("cancel_after_first_response".equals(testCase)) {
       tester.cancelAfterFirstResponse();
+    } else  if ("timeout_on_sleeping_server".equals(testCase)) {
+      tester.timeoutOnSleepingServer();
     } else {
       throw new IllegalArgumentException("Unknown test case: " + testCase);
     }
