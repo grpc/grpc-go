@@ -106,8 +106,8 @@ static void PrintMethodFields(
     }
 
     if (generate_nano) {
-      // TODO(zsurocking): we're creating two Parsers for each method right now.
-      // We could instead create static Parsers and reuse them if some methods
+      // TODO(zsurocking): we're creating two NanoFactories for each method right now.
+      // We could instead create static NanoFactories and reuse them if some methods
       // share the same request or response messages.
       p->Print(
           *vars,
