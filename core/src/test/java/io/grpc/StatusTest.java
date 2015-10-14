@@ -32,6 +32,9 @@
 package io.grpc;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+
+import io.grpc.Status.Code;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -48,5 +51,26 @@ public class StatusTest {
     assertEquals("UNKNOWN", Status.UNKNOWN.asException().getMessage());
     assertEquals("CANCELLED: This is a test",
         Status.CANCELLED.withDescription("This is a test").asException().getMessage());
+  }
+
+  @Test
+  public void impossibleCodeValue() {
+    assertEquals(Code.UNKNOWN, Status.fromCodeValue(-1).getCode());
+  }
+
+  @Test
+  public void sameCauseReturnsSelf() {
+    assertSame(Status.CANCELLED, Status.CANCELLED.withCause(null));
+  }
+
+  @Test
+  public void sameDescriptionReturnsSelf() {
+    assertSame(Status.CANCELLED, Status.CANCELLED.withDescription(null));
+    assertSame(Status.CANCELLED, Status.CANCELLED.augmentDescription(null));
+  }
+
+  @Test
+  public void useObjectHashCode() {
+    assertEquals(Status.CANCELLED.hashCode(), System.identityHashCode(Status.CANCELLED));
   }
 }

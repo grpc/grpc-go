@@ -173,6 +173,11 @@ public class MutableHandlerRegistryImplTest {
   }
 
   @Test
+  public void missingMethodLookupReturnsNull() {
+    assertNull(registry.lookupMethod("bad"));
+  }
+
+  @Test
   public void addAfterRemoveReturnsNull() {
     assertNull(registry.addService(basicServiceDefinition));
     assertTrue(registry.removeService(basicServiceDefinition));

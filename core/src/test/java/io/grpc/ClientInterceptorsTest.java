@@ -32,6 +32,7 @@
 package io.grpc;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.any;
@@ -351,6 +352,34 @@ public class ClientInterceptorsTest {
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).onClose(captor.capture(), any(Metadata.class));
     assertSame(error, captor.getValue().getCause());
+
+    // Make sure nothing bad happens after the exception.
+    ClientCall<?, ?> noop = ((CheckedForwardingClientCall<?, ?>)interceptedCall).delegate();
+    // Should not throw, even on bad input
+    noop.cancel();
+    noop.start(null, null);
+    noop.request(-1);
+    noop.halfClose();
+    noop.sendMessage(null);
+    assertFalse(noop.isReady());
+    verifyNoMoreInteractions(call);
+  }
+
+  @Test
+  public void authorityIsDelegated() {
+    ClientInterceptor interceptor = new ClientInterceptor() {
+      @Override
+      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+          MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
+          Channel next) {
+        return next.newCall(method, callOptions);
+      }
+    };
+
+    when(channel.authority()).thenReturn("auth");
+    Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
+    assertEquals("auth", intercepted.authority());
   }
 
   private static class NoopInterceptor implements ClientInterceptor {
@@ -360,5 +389,4 @@ public class ClientInterceptorsTest {
       return next.newCall(method, callOptions);
     }
   }
-
 }
