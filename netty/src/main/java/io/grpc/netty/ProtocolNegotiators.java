@@ -82,52 +82,61 @@ public final class ProtocolNegotiators {
   /**
    * Create a TLS handler for HTTP/2 capable of using ALPN/NPN.
    */
-  public static ChannelHandler serverTls(SSLEngine sslEngine, final ChannelHandler grpcHandler) {
+  public static ChannelHandler serverTls(SSLEngine sslEngine, ChannelHandler grpcHandler) {
     Preconditions.checkNotNull(sslEngine, "sslEngine");
 
+    return new TlsChannelInboundHandlerAdapter(new SslHandler(sslEngine, false), grpcHandler);
+  }
 
-    final SslHandler sslHandler = new SslHandler(sslEngine, false);
-    return new ChannelInboundHandlerAdapter() {
-      @Override
-      public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-        super.handlerAdded(ctx);
-        ctx.pipeline().addFirst(sslHandler);
-      }
+  @VisibleForTesting
+  static final class TlsChannelInboundHandlerAdapter extends ChannelInboundHandlerAdapter {
+    private final ChannelHandler grpcHandler;
+    private final SslHandler sslHandler;
 
-      @Override
-      public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        fail(ctx, cause);
-      }
+    TlsChannelInboundHandlerAdapter(SslHandler sslHandler, ChannelHandler grpcHandler) {
+      this.sslHandler = sslHandler;
+      this.grpcHandler = grpcHandler;
+    }
 
-      @Override
-      public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-        if (evt instanceof SslHandshakeCompletionEvent) {
-          SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
-          if (handshakeEvent.isSuccess()) {
-            if (HTTP2_VERSIONS.contains(sslHandler(ctx).applicationProtocol())) {
-              // Successfully negotiated the protocol. Replace this handler with
-              // the GRPC handler.
-              ctx.pipeline().replace(this, null, grpcHandler);
-            } else {
-              fail(ctx, new Exception(
-                  "Failed protocol negotiation: Unable to find compatible protocol."));
-            }
+    @Override
+    public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+      super.handlerAdded(ctx);
+      ctx.pipeline().addFirst(sslHandler);
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+      fail(ctx, cause);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+      if (evt instanceof SslHandshakeCompletionEvent) {
+        SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
+        if (handshakeEvent.isSuccess()) {
+          if (HTTP2_VERSIONS.contains(sslHandler(ctx).applicationProtocol())) {
+            // Successfully negotiated the protocol. Replace this handler with
+            // the GRPC handler.
+            ctx.pipeline().replace(this, null, grpcHandler);
           } else {
-            fail(ctx, handshakeEvent.cause());
+            fail(ctx, new Exception(
+                "Failed protocol negotiation: Unable to find compatible protocol."));
           }
+        } else {
+          fail(ctx, handshakeEvent.cause());
         }
-        super.userEventTriggered(ctx, evt);
       }
+      super.userEventTriggered(ctx, evt);
+    }
 
-      private void fail(ChannelHandlerContext ctx, Throwable exception) {
-        logSslEngineDetails(Level.FINE, ctx, "TLS negotiation failed for new client.", exception);
-        ctx.close();
-      }
+    private void fail(ChannelHandlerContext ctx, Throwable exception) {
+      logSslEngineDetails(Level.FINE, ctx, "TLS negotiation failed for new client.", exception);
+      ctx.close();
+    }
 
-      private SslHandler sslHandler(ChannelHandlerContext ctx) {
-        return ctx.pipeline().get(SslHandler.class);
-      }
-    };
+    private SslHandler sslHandler(ChannelHandlerContext ctx) {
+      return ctx.pipeline().get(SslHandler.class);
+    }
   }
 
   /**
@@ -235,7 +244,8 @@ public final class ProtocolNegotiators {
     return Status.UNAVAILABLE.withDescription(msg).asRuntimeException();
   }
 
-  private static void logSslEngineDetails(Level level, ChannelHandlerContext ctx, String msg,
+  @VisibleForTesting
+  static void logSslEngineDetails(Level level, ChannelHandlerContext ctx, String msg,
                                                 @Nullable Throwable t) {
     if (!log.isLoggable(level)) {
       return;
