@@ -47,6 +47,7 @@ import (
 )
 
 func TestSimpleParsing(t *testing.T) {
+	bigMsg := bytes.Repeat([]byte{'x'}, 1<<24)
 	for _, test := range []struct {
 		// input
 		p []byte
@@ -60,6 +61,8 @@ func TestSimpleParsing(t *testing.T) {
 		{[]byte{0, 0, 0, 0, 1, 'a'}, nil, []byte{'a'}, compressionNone},
 		{[]byte{1, 0}, io.ErrUnexpectedEOF, nil, compressionNone},
 		{[]byte{0, 0, 0, 0, 10, 'a'}, io.ErrUnexpectedEOF, nil, compressionNone},
+		// Check that messages with length >= 2^24 are parsed.
+		{append([]byte{0, 1, 0, 0, 0}, bigMsg...), nil, bigMsg, compressionNone},
 	} {
 		buf := bytes.NewReader(test.p)
 		parser := &parser{buf}
