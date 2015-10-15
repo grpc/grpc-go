@@ -164,7 +164,7 @@ func encode(c Codec, msg interface{}, pf payloadFormat) ([]byte, error) {
 	// Write message into the fixed header.
 	buf.WriteByte(uint8(pf))
 	var b []byte
-	var length uint32
+	var length uint
 	if msg != nil {
 		var err error
 		// TODO(zhaoq): optimize to reduce memory alloc and copying.
@@ -172,13 +172,13 @@ func encode(c Codec, msg interface{}, pf payloadFormat) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		length = uint32(len(b))
+		length = uint(len(b))
 	}
 	if length > math.MaxUint32 {
 		return nil, Errorf(codes.InvalidArgument, "grpc: message too large (%d bytes)", length)
 	}
 	var szHdr [4]byte
-	binary.BigEndian.PutUint32(szHdr[:], length)
+	binary.BigEndian.PutUint32(szHdr[:], uint32(length))
 	buf.Write(szHdr[:])
 	buf.Write(b)
 	return buf.Bytes(), nil
