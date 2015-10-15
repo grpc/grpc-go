@@ -11,6 +11,7 @@ mkdir -p $DOWNLOAD_DIR
 # Can't check for presence of directory as cache auto-creates it.
 if [ -f ${INSTALL_DIR}/bin/protoc ]; then
   echo "Not building protobuf. Already built"
+# TODO(ejona): swap to `brew install --devel protobuf` once it is up-to-date
 else
   wget -O - https://github.com/google/protobuf/archive/v${PROTOBUF_VERSION}.tar.gz | tar xz -C $DOWNLOAD_DIR
   pushd $DOWNLOAD_DIR/protobuf-${PROTOBUF_VERSION}
@@ -26,6 +27,8 @@ INSTALL_DIR=/tmp/openssl-${OPENSSL_VERSION}
 
 if [ -f ${INSTALL_DIR}/lib/libssl.so ]; then
   echo "Not building openssl. Already built"
+elif [ "$(uname)" = Darwin ]; then
+  brew install openssl
 else
   wget -O - https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz | tar xz -C $DOWNLOAD_DIR
   pushd $DOWNLOAD_DIR/openssl-${OPENSSL_VERSION}

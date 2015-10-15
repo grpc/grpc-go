@@ -11,6 +11,9 @@ env:
     - LD_LIBRARY_PATH=/tmp/protobuf-${PROTOBUF_VERSION}/lib:/tmp/openssl-${OPENSSL_VERSION}/lib
 
 before_install:
+    # Work around https://github.com/travis-ci/travis-ci/issues/2317
+  - if \[ "$TRAVIS_OS_NAME" = linux \]; then jdk_switcher use oraclejdk8; fi
+  - if \[ "$TRAVIS_OS_NAME" = osx \]; then brew update; fi
   - buildscripts/make_dependencies.sh # build protoc into /tmp/protobuf-${PROTOBUF_VERSION}
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
@@ -19,17 +22,20 @@ before_script:
   - test -z "$(git status --porcelain)" || (git status && echo Error Working directory is not clean. Forget to commit generated files? && false)
 
 after_success:
-  - ./gradlew :grpc-all:coveralls
-
-jdk:
-  - oraclejdk8
+  - if \[ "$TRAVIS_OS_NAME" = linux \]; then ./gradlew :grpc-all:coveralls; fi
 
 os:
   - linux
+  - osx
+
+# This image comes with jdk8
+osx_image: xcode7
 
 notifications:
   email: false
 
+# Caching does not work for public repositories with OS X:
+# https://github.com/travis-ci/travis-ci/issues/4011
 cache:
   directories:
     - /tmp/protobuf-${PROTOBUF_VERSION}
