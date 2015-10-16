@@ -171,6 +171,7 @@ public class TestServiceClient {
           + "\n      jwt_token_creds: JWT-based auth"
           + "\n      oauth2_auth_token: raw oauth2 access token auth"
           + "\n      per_rpc_creds: per rpc raw oauth2 access token auth"
+          + "\n      unimplemented_method: call an unimplemented RPC method"
           + "\n      cancel_after_begin: cancel stream after starting it"
           + "\n      cancel_after_first_response: cancel on first response"
           + "\n      timeout_on_sleeping_server: timeout before receiving a response"
@@ -244,6 +245,8 @@ public class TestServiceClient {
       String jsonKey = Files.toString(new File(serviceAccountKeyFile), Charset.forName("UTF-8"));
       FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
       tester.perRpcCreds(jsonKey, credentialsStream, oauthScope);
+    } else if ("unimplemented_method".equals(testCase)) {
+      tester.unimplementedMethod();
     } else if ("cancel_after_begin".equals(testCase)) {
       tester.cancelAfterBegin();
     } else if ("cancel_after_first_response".equals(testCase)) {
