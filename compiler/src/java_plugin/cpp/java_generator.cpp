@@ -14,6 +14,7 @@ using google::protobuf::ServiceDescriptor;
 using google::protobuf::MethodDescriptor;
 using google::protobuf::Descriptor;
 using google::protobuf::io::Printer;
+using std::to_string;
 
 // Adjust a method name prefix identifier to follow the JavaBean spec:
 //   - decapitalize the first letter
