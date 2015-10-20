@@ -329,6 +329,9 @@ public class AbstractServerStreamTest {
 
     @Override
     protected void returnProcessedBytes(int processedBytes) {}
+
+    @Override
+    protected void sendStreamAbortToClient(Status status, Metadata trailers) {}
   }
 }
 

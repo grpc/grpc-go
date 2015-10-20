@@ -181,6 +181,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       throw e;
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onHeadersRead()", e);
+      // Throw an exception that will get handled by onStreamError.
       throw newStreamException(streamId, e);
     }
   }
@@ -191,6 +192,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       stream.inboundDataReceived(data, endOfStream);
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onDataRead()", e);
+      // Throw an exception that will get handled by onStreamError.
       throw newStreamException(streamId, e);
     }
   }
@@ -201,6 +203,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       stream.abortStream(Status.CANCELLED, false);
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onRstStreamRead()", e);
+      // Throw an exception that will get handled by onStreamError.
       throw newStreamException(streamId, e);
     }
   }
@@ -221,8 +224,6 @@ class NettyServerHandler extends AbstractNettyHandler {
     NettyServerStream serverStream = stream != null ? serverStream(stream) : null;
     if (serverStream != null) {
       // Abort the stream with a status to help the client with debugging.
-      // Don't need to send a RST_STREAM since the end-of-stream flag will
-      // be sent.
       serverStream.abortStream(cause instanceof Http2Exception
           ? Status.INTERNAL.withCause(cause) : Status.fromThrowable(cause), true);
     } else {
@@ -320,7 +321,9 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   private void cancelStream(ChannelHandlerContext ctx, CancelServerStreamCommand cmd,
       ChannelPromise promise) {
+    // Notify the listener if we haven't already.
     cmd.stream().abortStream(cmd.reason(), false);
+    // Terminate the stream.
     encoder().writeRstStream(ctx, cmd.stream().id(), Http2Error.CANCEL.code(), promise);
   }
 

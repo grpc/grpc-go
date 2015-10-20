@@ -141,8 +141,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
       frame.close();
       return;
     }
-    // TODO(zhangkun83): It sounds sub-optimal to deframe in the network thread. That means
-    // decompression is serialized.
+    // Deframe the message. If a failure occurs, deframeFailed will be called.
     deframe(frame, endOfStream);
   }
 
@@ -235,9 +234,7 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
         stashedTrailers = new Metadata();
       }
       writeStatusToTrailers(status);
-      closeFramer();
-    } else {
-      dispose();
+      sendStreamAbortToClient(status, stashedTrailers);
     }
   }
 
@@ -245,6 +242,11 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   public boolean isClosed() {
     return super.isClosed() || listenerClosed;
   }
+
+  /**
+   * Notifies the remote client that this stream has aborted.
+   */
+  protected abstract void sendStreamAbortToClient(Status status, Metadata trailers);
 
   /**
    * Fires a half-closed event to the listener and frees inbound resources.

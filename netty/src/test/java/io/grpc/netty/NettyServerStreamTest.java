@@ -190,13 +190,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream().abortStream(status, true);
     assertTrue(stream().isClosed());
     verify(serverListener).closed(same(status));
-    verify(writeQueue).enqueue(
-        new SendResponseHeadersCommand(STREAM_ID, new DefaultHttp2Headers()
-            .status(new AsciiString("200"))
-            .set(new AsciiString("content-type"), new AsciiString("application/grpc"))
-            .set(new AsciiString("grpc-status"), new AsciiString("" + status.getCode().value())),
-            true),
-        true);
+    verify(writeQueue).enqueue(new CancelServerStreamCommand(stream(), status), true);
     verifyNoMoreInteractions(serverListener);
   }
 
@@ -283,6 +277,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
   }
 
   private NettyServerStream stream() {
-    return (NettyServerStream) stream;
+    return stream;
   }
 }

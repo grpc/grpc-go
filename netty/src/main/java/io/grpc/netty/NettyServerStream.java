@@ -125,6 +125,13 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   }
 
   @Override
+  protected void sendStreamAbortToClient(Status status, Metadata trailers) {
+    // Cancel the stream.
+    // TODO(nmittler): Consider sending trailers.
+    cancel(status);
+  }
+
+  @Override
   public void cancel(Status status) {
     writeQueue.enqueue(new CancelServerStreamCommand(this, status), true);
   }

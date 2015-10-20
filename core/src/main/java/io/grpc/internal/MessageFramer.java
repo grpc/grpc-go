@@ -272,8 +272,7 @@ public class MessageFramer {
       // With the current code we don't expect readableBytes > 0 to be possible here, added
       // defensively to prevent buffer leak issues if the framer code changes later.
       if (buffer != null && buffer.readableBytes() == 0) {
-        buffer.release();
-        buffer = null;
+        releaseBuffer();
       }
       commitToSink(true, true);
     }
@@ -285,6 +284,10 @@ public class MessageFramer {
    */
   public void dispose() {
     closed = true;
+    releaseBuffer();
+  }
+
+  private void releaseBuffer() {
     if (buffer != null) {
       buffer.release();
       buffer = null;
@@ -292,8 +295,9 @@ public class MessageFramer {
   }
 
   private void commitToSink(boolean endOfStream, boolean flush) {
-    sink.deliverFrame(buffer, endOfStream, flush);
+    WritableBuffer buf = buffer;
     buffer = null;
+    sink.deliverFrame(buf, endOfStream, flush);
   }
 
   private void verifyNotClosed() {
