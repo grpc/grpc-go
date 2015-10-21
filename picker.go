@@ -41,7 +41,7 @@ import (
 )
 
 // Picker picks a Conn for RPC requests.
-// This is EXPERIMENTAL and Please do not implement your own Picker for now.
+// This is EXPERIMENTAL and please do not implement your own Picker for now.
 type Picker interface {
 	// Init does initial processing for the Picker, e.g., initiate some connections.
 	Init(cc *ClientConn) error
