@@ -1078,7 +1078,6 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	for {
 		select {
 		case <-ch:
-			//grpclog.Println("start a stream...")
 			ctx, _ := context.WithTimeout(context.Background(), time.Second)
 			if _, err := tc.StreamingInputCall(ctx); err != nil {
 				if grpc.Code(err) == codes.DeadlineExceeded {
