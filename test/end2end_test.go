@@ -1063,11 +1063,12 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	done := make(chan struct{})
 	ch := make(chan int)
 	go func() {
+		timer := time.After(5 * time.Second)
 		for {
 			select {
 			case <-time.After(5 * time.Millisecond):
 				ch <- 0
-			case <-time.After(5 * time.Second):
+			case <-timer:
 				close(done)
 				return
 			}
