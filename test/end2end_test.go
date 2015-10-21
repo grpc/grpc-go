@@ -1063,11 +1063,12 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	done := make(chan struct{})
 	ch := make(chan int)
 	go func() {
+		timer := time.After(5 * time.Second)
 		for {
 			select {
 			case <-time.After(5 * time.Millisecond):
 				ch <- 0
-			case <-time.After(5 * time.Second):
+			case <-timer:
 				close(done)
 				return
 			}
@@ -1077,6 +1078,7 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	for {
 		select {
 		case <-ch:
+			//grpclog.Println("start a stream...")
 			ctx, _ := context.WithTimeout(context.Background(), time.Second)
 			if _, err := tc.StreamingInputCall(ctx); err != nil {
 				if grpc.Code(err) == codes.DeadlineExceeded {
