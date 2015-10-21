@@ -34,6 +34,7 @@ package io.grpc.netty;
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import io.grpc.ExperimentalApi;
@@ -193,9 +194,11 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
         eventLoopGroup, flowControlWindow, maxMessageSize);
   }
 
-  private static ProtocolNegotiator createProtocolNegotiator(
-      String authority, NegotiationType negotiationType, SslContext sslContext) {
-    ProtocolNegotiator negotiator;
+  @VisibleForTesting
+  static ProtocolNegotiator createProtocolNegotiator(
+      String authority,
+      NegotiationType negotiationType,
+      SslContext sslContext) {
     switch (negotiationType) {
       case PLAINTEXT:
         return ProtocolNegotiators.plaintext();
@@ -247,9 +250,9 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
 
     @Override
     public ClientTransport newClientTransport(SocketAddress serverAddress, String authority) {
-      GrpcUtil.checkAuthority(authority);
-      return new NettyClientTransport(serverAddress, channelType, group,
-          createProtocolNegotiator(authority, negotiationType, sslContext),
+      ProtocolNegotiator negotiator =
+          createProtocolNegotiator(authority, negotiationType, sslContext);
+      return new NettyClientTransport(serverAddress, channelType, group, negotiator,
           flowControlWindow, maxMessageSize, authority);
     }
 

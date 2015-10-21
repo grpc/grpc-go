@@ -31,8 +31,10 @@
 
 package io.grpc.netty;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.netty.GrpcSslContexts.HTTP2_VERSIONS;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Status;
@@ -133,44 +135,84 @@ public final class ProtocolNegotiators {
    * be negotiated, the {@code handler} is added and writes to the {@link io.netty.channel.Channel}
    * may happen immediately, even before the TLS Handshake is complete.
    */
-  public static ProtocolNegotiator tls(final SslContext sslContext,
-                                       String authority) {
+  public static ProtocolNegotiator tls(SslContext sslContext, String authority) {
     Preconditions.checkNotNull(sslContext, "sslContext");
-    final URI uri = GrpcUtil.authorityToUri(Preconditions.checkNotNull(authority, "authority"));
+    URI uri = GrpcUtil.authorityToUri(Preconditions.checkNotNull(authority, "authority"));
+    String host;
+    int port;
+    if (uri.getHost() != null) {
+      host = uri.getHost();
+      port = uri.getPort();
+    } else {
+     /*
+      * Implementation note: We pick -1 as the port here rather than deriving it from the original
+      * socket address.  The SSL engine doens't use this port number when contacting the remote
+      * server, but rather it is used for other things like SSL Session caching.  When an invalid
+      * authority is provided (like "bad_cert"), picking the original port and passing it in would
+      * mean that the port might used under the assumption that it was correct.   By using -1 here,
+      * it forces the SSL implementation to treat it as invalid.
+      */
+      host = authority;
+      port = -1;
+    }
 
-    return new ProtocolNegotiator() {
-      @Override
-      public Handler newHandler(Http2ConnectionHandler handler) {
-        ChannelHandler sslBootstrap = new ChannelHandlerAdapter() {
-          @Override
-          public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-            SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(), uri.getHost(), uri.getPort());
-            SSLParameters sslParams = new SSLParameters();
-            sslParams.setEndpointIdentificationAlgorithm("HTTPS");
-            sslEngine.setSSLParameters(sslParams);
-            ctx.pipeline().replace(this, null, new SslHandler(sslEngine, false));
-          }
-        };
-        return new BufferUntilTlsNegotiatedHandler(sslBootstrap, handler);
-      }
-    };
+    return new TlsNegotiator(sslContext, host, port);
+  }
+
+  static final class TlsNegotiator implements ProtocolNegotiator {
+    private final SslContext sslContext;
+    private final String host;
+    private final int port;
+
+    TlsNegotiator(SslContext sslContext, String host, int port) {
+      this.sslContext = checkNotNull(sslContext);
+      this.host = checkNotNull(host);
+      this.port = port;
+    }
+
+    @VisibleForTesting
+    String getHost() {
+      return host;
+    }
+
+    @VisibleForTesting
+    int getPort() {
+      return port;
+    }
+
+    @Override
+    public Handler newHandler(Http2ConnectionHandler handler) {
+      ChannelHandler sslBootstrap = new ChannelHandlerAdapter() {
+        @Override
+        public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+          SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(), host, port);
+          SSLParameters sslParams = new SSLParameters();
+          sslParams.setEndpointIdentificationAlgorithm("HTTPS");
+          sslEngine.setSSLParameters(sslParams);
+          ctx.pipeline().replace(this, null, new SslHandler(sslEngine, false));
+        }
+      };
+      return new BufferUntilTlsNegotiatedHandler(sslBootstrap, handler);
+    }
   }
 
   /**
    * Returns a {@link ProtocolNegotiator} used for upgrading to HTTP/2 from HTTP/1.x.
    */
   public static ProtocolNegotiator plaintextUpgrade() {
-    return new ProtocolNegotiator() {
-      @Override
-      public Handler newHandler(Http2ConnectionHandler handler) {
-        // Register the plaintext upgrader
-        Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(handler);
-        HttpClientCodec httpClientCodec = new HttpClientCodec();
-        final HttpClientUpgradeHandler upgrader =
-            new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
-        return new BufferingHttp2UpgradeHandler(upgrader);
-      }
-    };
+    return new PlaintextUpgradeNegotiator();
+  }
+
+  static final class PlaintextUpgradeNegotiator implements ProtocolNegotiator {
+    @Override
+    public Handler newHandler(Http2ConnectionHandler handler) {
+      // Register the plaintext upgrader
+      Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(handler);
+      HttpClientCodec httpClientCodec = new HttpClientCodec();
+      final HttpClientUpgradeHandler upgrader =
+          new HttpClientUpgradeHandler(httpClientCodec, upgradeCodec, 1000);
+      return new BufferingHttp2UpgradeHandler(upgrader);
+    }
   }
 
   /**
@@ -179,12 +221,14 @@ public final class ProtocolNegotiators {
    * is active.
    */
   public static ProtocolNegotiator plaintext() {
-    return new ProtocolNegotiator() {
-      @Override
-      public Handler newHandler(Http2ConnectionHandler handler) {
-        return new BufferUntilChannelActiveHandler(handler);
-      }
-    };
+    return new PlaintextNegotiator();
+  }
+
+  static final class PlaintextNegotiator implements ProtocolNegotiator {
+    @Override
+    public Handler newHandler(Http2ConnectionHandler handler) {
+      return new BufferUntilChannelActiveHandler(handler);
+    }
   }
 
   private static RuntimeException unavailableException(String msg) {

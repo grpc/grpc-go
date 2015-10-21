@@ -31,7 +31,12 @@
 
 package io.grpc.netty;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.netty.ProtocolNegotiators.TlsNegotiator;
+import io.netty.handler.ssl.SslContext;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -42,10 +47,13 @@ import org.junit.runners.JUnit4;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
+import javax.net.ssl.SSLException;
+
 @RunWith(JUnit4.class)
 public class NettyChannelBuilderTest {
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
+  private final SslContext noSslContext = null;
 
   @Test
   public void overrideAllowsInvalidAuthority() {
@@ -80,5 +88,66 @@ public class NettyChannelBuilderTest {
 
     NettyChannelBuilder.forAddress(new InetSocketAddress("invalid_authority", 1234));
   }
-}
 
+  @Test
+  public void createProtocolNegotiator_plaintext() {
+    ProtocolNegotiator negotiator = NettyChannelBuilder.createProtocolNegotiator(
+        "authority",
+        NegotiationType.PLAINTEXT,
+        noSslContext);
+    // just check that the classes are the same, and that negotiator is not null.
+    assertTrue(negotiator instanceof ProtocolNegotiators.PlaintextNegotiator);
+  }
+
+  @Test
+  public void createProtocolNegotiator_plaintextUpgrade() {
+    ProtocolNegotiator negotiator = NettyChannelBuilder.createProtocolNegotiator(
+        "authority",
+        NegotiationType.PLAINTEXT_UPGRADE,
+        noSslContext);
+    // just check that the classes are the same, and that negotiator is not null.
+    assertTrue(negotiator instanceof ProtocolNegotiators.PlaintextUpgradeNegotiator);
+  }
+
+  @Test
+  public void createProtocolNegotiator_tlsWithNoContext() {
+    ProtocolNegotiator negotiator = NettyChannelBuilder.createProtocolNegotiator(
+        "authority:1234",
+        NegotiationType.TLS,
+        noSslContext);
+
+    assertTrue(negotiator instanceof ProtocolNegotiators.TlsNegotiator);
+    ProtocolNegotiators.TlsNegotiator n = (TlsNegotiator) negotiator;
+
+    assertEquals("authority", n.getHost());
+    assertEquals(1234, n.getPort());
+  }
+
+  @Test
+  public void createProtocolNegotiator_tlsWithClientContext() throws SSLException {
+    ProtocolNegotiator negotiator = NettyChannelBuilder.createProtocolNegotiator(
+        "authority:1234",
+        NegotiationType.TLS,
+        GrpcSslContexts.forClient().build());
+
+    assertTrue(negotiator instanceof ProtocolNegotiators.TlsNegotiator);
+    ProtocolNegotiators.TlsNegotiator n = (TlsNegotiator) negotiator;
+
+    assertEquals("authority", n.getHost());
+    assertEquals(1234, n.getPort());
+  }
+
+  @Test
+  public void createProtocolNegotiator_tlsWithAuthorityFallback() {
+    ProtocolNegotiator negotiator = NettyChannelBuilder.createProtocolNegotiator(
+        "bad_authority",
+        NegotiationType.TLS,
+        noSslContext);
+
+    assertTrue(negotiator instanceof ProtocolNegotiators.TlsNegotiator);
+    ProtocolNegotiators.TlsNegotiator n = (TlsNegotiator) negotiator;
+
+    assertEquals("bad_authority", n.getHost());
+    assertEquals(-1, n.getPort());
+  }
+}
