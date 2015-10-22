@@ -798,6 +798,51 @@ func testCancel(t *testing.T, e env) {
 	}
 }
 
+func TestCancelNoIO(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testCancelNoIO(t, e)
+	}
+}
+
+func testCancelNoIO(t *testing.T, e env) {
+	// Only allows 1 live stream per server transport.
+	s, cc := setUp(t, nil, 1, "", e)
+	tc := testpb.NewTestServiceClient(cc)
+	defer tearDown(s, cc)
+	ctx, cancel := context.WithCancel(context.Background())
+	_, err := tc.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
+	}
+	// Loop until receiving the new max stream setting from the server.
+	for {
+		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		_, err := tc.StreamingInputCall(ctx)
+		if err == nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		if grpc.Code(err) == codes.DeadlineExceeded {
+			break
+		}
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %d", tc, err, codes.DeadlineExceeded)
+	}
+	// If there are any RPCs slipping before the client receives the max streams setting,
+	// let them be expired.
+	time.Sleep(2 * time.Second)
+	ch := make(chan struct{})
+	go func() {
+		defer close(ch)
+		// This should be blocked until the 1st is canceled.
+		ctx, _ := context.WithTimeout(context.Background(), 2 * time.Second)
+		if _, err := tc.StreamingInputCall(ctx); err != nil {
+			t.Errorf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
+		}
+	}()
+	cancel();
+	<-ch
+}
+
 // The following tests the gRPC streaming RPC implementations.
 // TODO(zhaoq): Have better coverage on error cases.
 var (

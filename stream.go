@@ -130,6 +130,12 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	cs.t = t
 	cs.s = s
 	cs.p = &parser{s: s}
+	// Listen on ctx.Done() to detect cancellation when there is no pending
+	// I/O operations on this stream.
+	go func() {
+		<-s.Context().Done()
+		cs.closeTransportStream(transport.ContextErr(s.Context().Err()))
+	}()
 	return cs, nil
 }
 
@@ -143,7 +149,8 @@ type clientStream struct {
 
 	tracing bool // set to EnableTracing when the clientStream is created.
 
-	mu sync.Mutex // protects trInfo.tr
+	mu sync.Mutex
+	closed bool
 	// trInfo.tr is set when the clientStream is created (if EnableTracing is true),
 	// and is set to nil when the clientStream's finish method is called.
 	trInfo traceInfo
@@ -157,7 +164,7 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 	m, err := cs.s.Header()
 	if err != nil {
 		if _, ok := err.(transport.ConnectionError); !ok {
-			cs.t.CloseStream(cs.s, err)
+			cs.closeTransportStream(err)
 		}
 	}
 	return m, err
@@ -180,7 +187,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 			return
 		}
 		if _, ok := err.(transport.ConnectionError); !ok {
-			cs.t.CloseStream(cs.s, err)
+			cs.closeTransportStream(err)
 		}
 		err = toRPCErr(err)
 	}()
@@ -212,7 +219,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		}
 		// Special handling for client streaming rpc.
 		err = recv(cs.p, cs.codec, m)
-		cs.t.CloseStream(cs.s, err)
+		cs.closeTransportStream(err)
 		if err == nil {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 		}
@@ -225,7 +232,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		return toRPCErr(err)
 	}
 	if _, ok := err.(transport.ConnectionError); !ok {
-		cs.t.CloseStream(cs.s, err)
+		cs.closeTransportStream(err)
 	}
 	if err == io.EOF {
 		if cs.s.StatusCode() == codes.OK {
@@ -243,10 +250,21 @@ func (cs *clientStream) CloseSend() (err error) {
 		return
 	}
 	if _, ok := err.(transport.ConnectionError); !ok {
-		cs.t.CloseStream(cs.s, err)
+		cs.closeTransportStream(err)
 	}
 	err = toRPCErr(err)
 	return
+}
+
+func (cs *clientStream) closeTransportStream(err error) {
+	cs.mu.Lock()
+	if cs.closed {
+		cs.mu.Unlock()
+		return
+	}
+	cs.closed = true
+	cs.mu.Unlock()
+	cs.t.CloseStream(cs.s, err)
 }
 
 func (cs *clientStream) finish(err error) {
