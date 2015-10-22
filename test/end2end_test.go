@@ -1060,33 +1060,24 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	s, cc := setUp(t, nil, 1, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
-	done := make(chan struct{})
-	ch := make(chan int)
+	stream, err := tc.StreamingInputCall(context.Background())
+	if err != nil {
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
+	}
 	go func() {
-		timer := time.After(5 * time.Second)
-		for {
-			select {
-			case <-time.After(5 * time.Millisecond):
-				ch <- 0
-			case <-timer:
-				close(done)
-				return
-			}
-		}
+		stream.Header()
 	}()
-	// Loop until a stream creation hangs due to the new max stream setting.
+	// Loop until receiving the new max stream setting from the server.
 	for {
-		select {
-		case <-ch:
-			ctx, _ := context.WithTimeout(context.Background(), time.Second)
-			if _, err := tc.StreamingInputCall(ctx); err != nil {
-				if grpc.Code(err) == codes.DeadlineExceeded {
-					return
-				}
-				t.Fatalf("%v.StreamingInputCall(_) = %v, want <nil>", tc, err)
-			}
-		case <-done:
-			t.Fatalf("Client has not received the max stream setting in 5 seconds.")
+		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		_, err := tc.StreamingInputCall(ctx)
+		if err == nil {
+			time.Sleep(time.Second)
+			continue
 		}
+		if grpc.Code(err) == codes.DeadlineExceeded {
+			break
+		}
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %d", tc, err, codes.DeadlineExceeded)
 	}
 }
