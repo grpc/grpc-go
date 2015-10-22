@@ -52,7 +52,6 @@ import io.grpc.internal.SharedResourceHolder.Resource;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.net.URI;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -103,11 +102,11 @@ public class OkHttpChannelBuilder extends
   }
 
   /**
-   * Creates a new builder for the given target URI that will be resolved by
+   * Creates a new builder for the given target that will be resolved by
    * {@link io.grpc.NameResolver}.
    */
-  public static OkHttpChannelBuilder forTarget(String targetUri) {
-    return new OkHttpChannelBuilder(URI.create(targetUri));
+  public static OkHttpChannelBuilder forTarget(String target) {
+    return new OkHttpChannelBuilder(target);
   }
 
   private Executor transportExecutor;
@@ -118,10 +117,10 @@ public class OkHttpChannelBuilder extends
   private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
 
   protected OkHttpChannelBuilder(String host, int port) {
-    this(URI.create("dns:///" + GrpcUtil.authorityFromHostAndPort(host, port)));
+    this(GrpcUtil.authorityFromHostAndPort(host, port));
   }
 
-  private OkHttpChannelBuilder(URI target) {
+  private OkHttpChannelBuilder(String target) {
     super(target);
   }
 

@@ -51,7 +51,6 @@ import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.net.URI;
 
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
@@ -89,14 +88,14 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   }
 
   /**
-   * Creates a new builder with the given target URI that will be resolved by
+   * Creates a new builder with the given target string that will be resolved by
    * {@link io.grpc.NameResolver}.
    */
-  public static NettyChannelBuilder forTarget(String targetUri) {
-    return new NettyChannelBuilder(URI.create(targetUri));
+  public static NettyChannelBuilder forTarget(String target) {
+    return new NettyChannelBuilder(target);
   }
 
-  private NettyChannelBuilder(URI target) {
+  private NettyChannelBuilder(String target) {
     super(target);
   }
 

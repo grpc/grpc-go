@@ -41,10 +41,12 @@ import javax.annotation.concurrent.ThreadSafe;
  * A pluggable component that resolves a target URI (which is broken down into 3 parts as described
  * below) and return addresses to the caller.
  *
- * <p>The format of the target URI is {@code "[<scheme>:]<scheme-specific-string>"}
+ * <p>The target URI is a {@link URI} instance. A {@code NameResolver} uses the scheme to determine
+ * whether it can resolve a given URI, and uses the components after the scheme for actual
+ * resolution.
  *
- * <p>{@code NameResolver} has no knowledge of load-balancing. The addresses of a target may be
- * changed over time, thus the caller registers a {@link Listener} to receive continuous updates.
+ * <p>The addresses and attributes of a target may be changed over time, thus the caller registers a
+ * {@link Listener} to receive continuous updates.
  */
 @ExperimentalApi
 @ThreadSafe
@@ -71,7 +73,10 @@ public abstract class NameResolver {
   public abstract static class Factory {
     /**
      * Creates a {@link NameResolver} for the given target URI, or {@code null} if the given URI
-     * cannot be resolved by this factory.
+     * cannot be resolved by this factory. The decision should be solely based on the scheme of the
+     * URI.
+     *
+     * @param targetUri the target URI to be resolved, whose scheme must not be {@code null}
      */
     @Nullable
     public abstract NameResolver newNameResolver(URI targetUri);

@@ -58,6 +58,7 @@ import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 
 import java.net.SocketAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -131,7 +132,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
     }
   };
 
-  ManagedChannelImpl(URI targetUri, BackoffPolicy.Provider backoffPolicyProvider,
+  ManagedChannelImpl(String target, BackoffPolicy.Provider backoffPolicyProvider,
       NameResolver.Factory nameResolverFactory, LoadBalancer.Factory loadBalancerFactory,
       ClientTransportFactory transportFactory, @Nullable Executor executor,
       @Nullable String userAgent, List<ClientInterceptor> interceptors) {
@@ -143,9 +144,38 @@ public final class ManagedChannelImpl extends ManagedChannel {
       this.executor = executor;
     }
     this.backoffPolicyProvider = backoffPolicyProvider;
-    this.nameResolver = nameResolverFactory.newNameResolver(targetUri);
-    Preconditions.checkArgument(this.nameResolver != null,
-        "The given NameResolverFactory cannot resolve %s", targetUri);
+
+    // Finding a NameResolver. Try using the target string as the URI. If that fails, try prepending
+    // "dns:///".
+    NameResolver nameResolver = null;
+    URI targetUri;
+    StringBuilder uriSyntaxErrors = new StringBuilder();
+    try {
+      targetUri = new URI(target);
+      nameResolver = nameResolverFactory.newNameResolver(targetUri);
+      // For "localhost:8080" this would likely return null, because "localhost" is parsed as the
+      // scheme. Will fall into the next branch and try "dns:///localhost:8080".
+    } catch (URISyntaxException e) {
+      // "foo.googleapis.com:8080" will trigger this exception, because "foo.googleapis.com" is an
+      // invalid scheme. Just fall through and will try "dns:///foo.googleapis.com:8080"
+      uriSyntaxErrors.append(e.getMessage());
+    }
+    if (nameResolver == null) {
+      try {
+        targetUri = new URI("dns:///" + target);
+        nameResolver = nameResolverFactory.newNameResolver(targetUri);
+      } catch (URISyntaxException e) {
+        if (uriSyntaxErrors.length() > 0) {
+          uriSyntaxErrors.append("; ");
+        }
+        uriSyntaxErrors.append(e.getMessage());
+      }
+    }
+    Preconditions.checkArgument(nameResolver != null,
+        "cannot find a NameResolver for %s%s", target,
+        uriSyntaxErrors.length() > 0 ? " (" + uriSyntaxErrors.toString() + ")" : "");
+    this.nameResolver = nameResolver;
+
     this.loadBalancer = loadBalancerFactory.newLoadBalancer(nameResolver.getServiceAuthority(), tm);
     this.transportFactory = transportFactory;
     this.userAgent = userAgent;

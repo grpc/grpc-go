@@ -35,11 +35,11 @@ import com.google.common.base.Preconditions;
 
 import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
-import io.grpc.DnsNameResolverFactory;
 import io.grpc.Internal;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
+import io.grpc.NameResolverRegistry;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.SimpleLoadBalancerFactory;
 
@@ -65,7 +65,7 @@ public abstract class AbstractManagedChannelImplBuilder
   private Executor executor;
   private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
 
-  private final URI target;
+  private final String target;
 
   @Nullable
   private final SocketAddress directServerAddress;
@@ -82,13 +82,13 @@ public abstract class AbstractManagedChannelImplBuilder
   @Nullable
   private LoadBalancer.Factory loadBalancerFactory;
 
-  protected AbstractManagedChannelImplBuilder(URI target) {
+  protected AbstractManagedChannelImplBuilder(String target) {
     this.target = Preconditions.checkNotNull(target);
     this.directServerAddress = null;
   }
 
   protected AbstractManagedChannelImplBuilder(SocketAddress directServerAddress, String authority) {
-    this.target = URI.create("direct-address:///" + directServerAddress);
+    this.target = "directaddress:///" + directServerAddress;
     this.directServerAddress = directServerAddress;
     this.nameResolverFactory = new DirectAddressNameResolverFactory(directServerAddress, authority);
   }
@@ -163,9 +163,10 @@ public abstract class AbstractManagedChannelImplBuilder
         target,
         // TODO(carl-mastrangelo): Allow clients to pass this in
         new ExponentialBackoffPolicy.Provider(),
-        // TODO(zhangkun83): use a NameResolver registry for the "nameResolverFactory == null" case
-        nameResolverFactory == null ? DnsNameResolverFactory.getInstance() : nameResolverFactory,
-        loadBalancerFactory == null ? SimpleLoadBalancerFactory.getInstance() : loadBalancerFactory,
+        nameResolverFactory == null ? NameResolverRegistry.getDefaultRegistry()
+            : nameResolverFactory,
+        loadBalancerFactory == null ? SimpleLoadBalancerFactory.getInstance()
+            : loadBalancerFactory,
         transportFactory, executor, userAgent, interceptors);
   }
 

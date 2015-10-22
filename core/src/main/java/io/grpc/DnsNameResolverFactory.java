@@ -47,7 +47,16 @@ import javax.annotation.Nullable;
 /**
  * A factory for DNS-based {@link NameResolver}s.
  *
- * <p>The format of the target URI is {@code "[dns://[<DNS_server_address>]/]<name>"}.
+ * <p>It resolves a target URI whose scheme is {@code "dns"}. The (optional) authority of the target
+ * URI is reserved for the address of alternative DNS server (not implemented yet). The path of the
+ * target URI, exluding the leading slash {@code '/'}, is treated as the host name to be resolved by
+ * DNS. Example target URIs:
+ * <ul>
+ *   <li>{@code "dns:///foo.googleapis.com:8080"} (using default DNS)</li>
+ *   <li>{@code "dns://8.8.8.8/foo.googleapis.com:8080"} (using alternative DNS (not implemented
+ *   yet))</li>
+ *   <li>{@code "dns:///foo.googleapis.com"} (without port)</li>
+ * </ul>
  */
 @ExperimentalApi
 public final class DnsNameResolverFactory extends NameResolver.Factory {
@@ -56,10 +65,7 @@ public final class DnsNameResolverFactory extends NameResolver.Factory {
 
   @Override
   public NameResolver newNameResolver(URI targetUri) {
-    String scheme = targetUri.getScheme();
-    if (scheme == null) {
-      return new DnsNameResolver(null, targetUri.toString());
-    } else if (scheme.equals("dns")) {
+    if ("dns".equals(targetUri.getScheme())) {
       String targetPath = Preconditions.checkNotNull(targetUri.getPath(), "targetPath");
       Preconditions.checkArgument(targetPath.startsWith("/"),
           "the path component (%s) of the target (%s) must start with '/'", targetPath, targetUri);

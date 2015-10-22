@@ -44,6 +44,31 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
     return ManagedChannelProvider.provider().builderForAddress(name, port);
   }
 
+  /**
+   * Creates a channel with a target string, which can be either a valid {@link
+   * NameResolver}-compliant URI, or a HOST:PORT string.
+   *
+   * <p>Example {@code NameResolver}-compliant URIs:
+   * <ul>
+   *   <li>{@code "dns:///foo.googleapis.com:8080"}</li>
+   *   <li>{@code "dns:///foo.googleapis.com"}</li>
+   *   <li>{@code "dns://8.8.8.8/foo.googleapis.com:8080"}</li>
+   *   <li>{@code "dns://8.8.8.8/foo.googleapis.com"}</li>
+   *   <li>{@code "zookeeper://zk.example.com:9900/example_service"}</li>
+   * </ul>
+   *
+   * <p>Example HOST:PORT strings, which will be converted to {@code NameResolver}-compliant URIs by
+   * prepending {@code "dns:///"}.
+   * <ul>
+   *   <li>{@code "localhost"}</li>
+   *   <li>{@code "127.0.0.1"}</li>
+   *   <li>{@code "localhost:8080"}</li>
+   *   <li>{@code "foo.googleapis.com:8080"}</li>
+   *   <li>{@code "127.0.0.1:8080"}</li>
+   *   <li>{@code "[2001:db8:85a3:8d3:1319:8a2e:370:7348]"}</li>
+   *   <li>{@code "[2001:db8:85a3:8d3:1319:8a2e:370:7348]:443"}</li>
+   * </ul>
+   */
   @ExperimentalApi
   public static ManagedChannelBuilder<?> forTarget(String target) {
     return ManagedChannelProvider.provider().builderForTarget(target);

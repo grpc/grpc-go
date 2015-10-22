@@ -94,8 +94,8 @@ public class ManagedChannelImplTest {
       new StringMarshaller(), new IntegerMarshaller());
   private final ExecutorService executor = Executors.newSingleThreadExecutor();
   private final String serviceName = "fake.example.com";
-  private final URI target = URI.create("//" + serviceName);
   private final String authority = serviceName;
+  private final String target = "fake://" + serviceName;
   private final SocketAddress socketAddress = new SocketAddress() {};
   private final ResolvedServerInfo server = new ResolvedServerInfo(socketAddress, Attributes.EMPTY);
 
@@ -328,12 +328,11 @@ public class ManagedChannelImplTest {
 
     @Override
     public NameResolver newNameResolver(final URI targetUri) {
-      assertEquals(null, targetUri.getScheme());
+      assertEquals("fake", targetUri.getScheme());
       assertEquals(serviceName, targetUri.getAuthority());
       return new NameResolver() {
         @Override public String getServiceAuthority() {
-          assertNotNull(targetUri.toString() + " has authority", targetUri.getAuthority());
-          return targetUri.getAuthority();
+          return serviceName;
         }
 
         @Override public void start(final Listener listener) {
