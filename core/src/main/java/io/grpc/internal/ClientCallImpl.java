@@ -161,7 +161,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       }
     }
     if (stream == null) {
-      stream = new DelayedStream(headers, listener);
+      stream = new DelayedStream(transportFuture, headers, listener);
     }
 
     stream.setDecompressionRegistry(decompressorRegistry);
@@ -407,9 +407,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     private class StreamCreationTask implements Runnable {
       final ListenableFuture<ClientTransport> transportFuture;
 
-      StreamCreationTask() {
-        this.transportFuture = Preconditions.checkNotNull(
-            clientTransportProvider.get(callOptions), "transportFuture");
+      StreamCreationTask(ListenableFuture<ClientTransport> transportFuture) {
+        this.transportFuture = Preconditions.checkNotNull(transportFuture);
       }
 
       @Override
@@ -436,10 +435,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       }
     }
 
-    DelayedStream(Metadata headers, ClientStreamListener listener) {
+    DelayedStream(ListenableFuture<ClientTransport> initialTransportFuture, Metadata headers,
+        ClientStreamListener listener) {
       this.headers = headers;
       this.listener = listener;
-      new StreamCreationTask().run();
+      new StreamCreationTask(initialTransportFuture).run();
     }
 
     /**
@@ -462,7 +462,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
           // The transport is already shut down. This may due to a race condition between Channel
           // shutting down idle transports. Retry StreamCreationTask with a new transport, but
           // schedule it in an executor to avoid recursion.
-          callExecutor.execute(new StreamCreationTask());
+          ListenableFuture<ClientTransport> transportFuture =
+              clientTransportProvider.get(callOptions);
+          callExecutor.execute(new StreamCreationTask(transportFuture));
           return;
         }
         Preconditions.checkNotNull(realStream, transport.toString() + " returned null stream");
