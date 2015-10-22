@@ -1060,13 +1060,10 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	s, cc := setUp(t, nil, 1, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
-	stream, err := tc.StreamingInputCall(context.Background())
+	_, err := tc.StreamingInputCall(context.Background())
 	if err != nil {
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
 	}
-	go func() {
-		stream.Header()
-	}()
 	// Loop until receiving the new max stream setting from the server.
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), time.Second)
