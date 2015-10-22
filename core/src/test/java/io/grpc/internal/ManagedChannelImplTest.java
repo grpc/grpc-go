@@ -43,7 +43,6 @@ import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -225,79 +224,6 @@ public class ManagedChannelImplTest {
     verifyNoMoreInteractions(mockTransportFactory);
     verifyNoMoreInteractions(mockTransport);
     verifyNoMoreInteractions(mockStream);
-  }
-
-  @Test
-  public void transportFailsOnStart() {
-    ManagedChannel channel = createChannel(new FakeNameResolverFactory(server), NO_INTERCEPTOR);
-    Status goldenStatus = Status.INTERNAL.withDescription("wanted it to fail");
-
-    // mockTransport2 shuts immediately during start
-    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
-    ClientTransport mockTransport2 = mock(ClientTransport.class);
-    ClientStream mockStream2 = mock(ClientStream.class);
-    Metadata headers2 = new Metadata();
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) {
-        final ClientTransport.Listener listener =
-            (ClientTransport.Listener) invocation.getArguments()[0];
-        executor.execute(new Runnable() {
-          @Override public void run() {
-            listener.transportShutdown(Status.INTERNAL);
-            listener.transportTerminated();
-          }
-        });
-        return null;
-      }
-    }).when(mockTransport2).start(any(ClientTransport.Listener.class));
-    when(mockTransport2.newStream(same(method), same(headers2), any(ClientStreamListener.class)))
-        .thenReturn(mockStream2);
-    // The factory returns the immediately shut-down transport first, then the normal one
-    when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class)))
-        .thenReturn(mockTransport2, mockTransport);
-
-    call.start(mockCallListener2, headers2);
-    verify(mockTransportFactory, timeout(1000).times(2))
-        .newClientTransport(same(socketAddress), eq(authority));
-    verify(mockTransport2, timeout(1000)).start(any(ClientTransport.Listener.class));
-    verify(mockTransport2, timeout(1000))
-        .newStream(same(method), same(headers2), streamListenerCaptor.capture());
-    verify(mockStream2, timeout(1000)).setDecompressionRegistry(isA(DecompressorRegistry.class));
-    Metadata trailers2 = new Metadata();
-    streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers2);
-    verify(mockCallListener2, timeout(1000)).onClose(Status.CANCELLED, trailers2);
-
-    // The second call will go through on mockTransport
-    call = channel.newCall(method, CallOptions.DEFAULT);
-    ClientStream mockStream = mock(ClientStream.class);
-    Metadata headers = new Metadata();
-    when(mockTransport.newStream(same(method), same(headers), any(ClientStreamListener.class)))
-        .thenReturn(mockStream);
-    call.start(mockCallListener, headers);
-    verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
-    verify(mockTransport, timeout(1000))
-        .newStream(same(method), same(headers), streamListenerCaptor.capture());
-    verify(mockStream, timeout(1000)).setDecompressionRegistry(isA(DecompressorRegistry.class));
-    Metadata trailers = new Metadata();
-    streamListenerCaptor.getValue().closed(Status.CANCELLED, trailers);
-    verify(mockCallListener, timeout(1000)).onClose(Status.CANCELLED, trailers);
-
-    // Make sure shutdown still works
-    channel.shutdown();
-    assertTrue(channel.isShutdown());
-    assertFalse(channel.isTerminated());
-    verify(mockTransport).shutdown();
-    transportListenerCaptor.getValue().transportShutdown(Status.CANCELLED);
-    assertFalse(channel.isTerminated());
-
-    transportListenerCaptor.getValue().transportTerminated();
-    assertTrue(channel.isTerminated());
-
-    verify(mockTransportFactory, times(2)).newClientTransport(same(socketAddress), eq(authority));
-    verifyNoMoreInteractions(mockTransport);
-    verifyNoMoreInteractions(mockTransport2);
-    verifyNoMoreInteractions(mockStream2);
   }
 
   @Test
