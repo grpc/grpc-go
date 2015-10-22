@@ -150,16 +150,7 @@ final class TransportSet {
     Preconditions.checkState(!shutdown, "Already shut down");
     Preconditions.checkState(reconnectTask == null || reconnectTask.isDone(),
         "previous reconnectTask is not done");
-    long delayMillis;
-    if (reconnectPolicy == null) {
-      // First connect attempt
-      delayMillis = 0;
-      reconnectPolicy = backoffPolicyProvider.get();
-    } else {
-      // Reconnect attempts
-      delayMillis = reconnectPolicy.nextBackoffMillis();
-    }
-    reconnectTask = scheduledExecutor.schedule(new Runnable() {
+    Runnable createTransportRunnable = new Runnable() {
       @Override
       public void run() {
         synchronized (lock) {
@@ -177,7 +168,18 @@ final class TransportSet {
               "failed to set the new transport to the future");
         }
       }
-    }, delayMillis, TimeUnit.MILLISECONDS);
+    };
+    if (reconnectPolicy == null) {
+      // First connect attempt
+      reconnectPolicy = backoffPolicyProvider.get();
+      createTransportRunnable.run();
+      reconnectTask = null;
+    } else {
+      // Reconnect attempts
+      long delayMillis = reconnectPolicy.nextBackoffMillis();
+      reconnectTask = scheduledExecutor.schedule(
+          createTransportRunnable, delayMillis, TimeUnit.MILLISECONDS);
+    }
   }
 
   /**
@@ -196,7 +198,9 @@ final class TransportSet {
       if (transports.isEmpty()) {
         runCallback = true;
       }
-      reconnectTask.cancel(false);
+      if (reconnectTask != null) {
+        reconnectTask.cancel(false);
+      }
       // else: the callback will be run once all transports have been terminated
     }
     if (savedActiveTransportFuture != null) {
