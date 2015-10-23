@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.Status.Code.CANCELLED;
 import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
 
@@ -319,10 +320,6 @@ public final class GrpcUtil {
     } catch (URISyntaxException ex) {
       throw new IllegalArgumentException("Invalid authority: " + authority, ex);
     }
-    if (uri.getUserInfo() != null) {
-      throw new IllegalArgumentException(
-          "Userinfo must not be present on authority: " + authority);
-    }
     return uri;
   }
 
@@ -333,7 +330,10 @@ public final class GrpcUtil {
    * @return the {@code authority} provided
    */
   public static String checkAuthority(String authority) {
-    authorityToUri(authority);
+    URI uri = authorityToUri(authority);
+    checkArgument(uri.getHost() != null, "No host in authority '%s'", authority);
+    checkArgument(uri.getUserInfo() == null,
+        "Userinfo must not be present on authority: '%s'", authority);
     return authority;
   }
 

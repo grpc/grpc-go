@@ -40,13 +40,18 @@ import static org.junit.Assert.assertTrue;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil.Http2Error;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /** Unit tests for {@link GrpcUtil}. */
 @RunWith(JUnit4.class)
 public class GrpcUtilTest {
+
+  @Rule public final ExpectedException thrown = ExpectedException.none();
+
   @Test
   public void http2ErrorForCode() {
     // Try edge cases manually, to make the test obviously correct for important cases.
@@ -116,5 +121,57 @@ public class GrpcUtilTest {
   @Test
   public void contentTypeShouldNotBeValid() {
     assertFalse(GrpcUtil.isGrpcContentType("application/bad"));
+  }
+
+  @Test
+  public void checkAuthority_failsOnNull() {
+    thrown.expect(NullPointerException.class);
+
+    GrpcUtil.checkAuthority(null);
+  }
+
+  @Test
+  public void checkAuthority_succeedsOnHostAndPort() {
+    String actual = GrpcUtil.checkAuthority("valid:1234");
+
+    assertEquals("valid:1234", actual);
+  }
+
+  @Test
+  public void checkAuthority_succeedsOnHost() {
+    String actual = GrpcUtil.checkAuthority("valid");
+
+    assertEquals("valid", actual);
+  }
+
+  @Test
+  public void checkAuthority_succeedsOnIpV6() {
+    String actual = GrpcUtil.checkAuthority("[::1]");
+
+    assertEquals("[::1]", actual);
+  }
+
+  @Test
+  public void checkAuthority_failsOnInvalidAuthority() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("Invalid authority");
+
+    GrpcUtil.checkAuthority("[ : : 1]");
+  }
+
+  @Test
+  public void checkAuthority_failsOnInvalidHost() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("No host in authority");
+
+    GrpcUtil.checkAuthority("bad_host");
+  }
+
+  @Test
+  public void checkAuthority_userInfoNotAllowed() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("Userinfo");
+
+    GrpcUtil.checkAuthority("foo@valid");
   }
 }
