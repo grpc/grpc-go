@@ -8,7 +8,7 @@ REM   Install http://slproweb.com/download/Win64OpenSSL_Light-1_0_2d.exe
 set PROTOBUF_VER=3.0.0-beta-1
 set CMAKE_NAME=cmake-3.3.2-win32-x86
 
-if not exist "protobuf-%PROTOBUF_VER%\cmake\Release\" (
+if not exist "protobuf-%PROTOBUF_VER%\cmake\build\Release\" (
   call :installProto
 )
 
