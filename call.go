@@ -153,7 +153,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			Host:   cc.authority,
 			Method: method,
 		}
-		t, err = cc.dopts.picker.Pick(ctx)
+		t, err = cc.Picker().Pick(ctx)
 		if err != nil {
 			if lastErr != nil {
 				// This was a retry; return the error from the last attempt.

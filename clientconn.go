@@ -210,19 +210,24 @@ type ClientConn struct {
 // State returns the connectivity state of cc.
 // This is EXPERIMENTAL API.
 func (cc *ClientConn) State() ConnectivityState {
-	return cc.dopts.picker.State()
+	return cc.Picker().State()
 }
 
 // WaitForStateChange blocks until the state changes to something other than the sourceState
 // or timeout fires on cc. It returns false if timeout fires, and true otherwise.
 // This is EXPERIMENTAL API.
 func (cc *ClientConn) WaitForStateChange(timeout time.Duration, sourceState ConnectivityState) bool {
-	return cc.dopts.picker.WaitForStateChange(timeout, sourceState)
+	return cc.Picker().WaitForStateChange(timeout, sourceState)
 }
 
 // Close starts to tear down the ClientConn.
 func (cc *ClientConn) Close() error {
-	return cc.dopts.picker.Close()
+	return cc.Picker().Close()
+}
+
+// Picker returns the picker of the connection.
+func (cc *ClientConn) Picker() Picker {
+	return cc.dopts.picker
 }
 
 // Conn is a client connection to a single destination.
