@@ -364,7 +364,7 @@ public class ContextTest {
     child.addListener(cancellationListener, MoreExecutors.directExecutor());
     assertFalse(base.isCancelled());
     assertFalse(child.isCancelled());
-    deadlineLatch.await(2, TimeUnit.SECONDS);
+    assertTrue(deadlineLatch.await(2, TimeUnit.SECONDS));
     assertTrue(base.isCancelled());
     assertTrue(base.cause() instanceof TimeoutException);
     assertSame(child, listenerNotifedContext);
@@ -379,7 +379,7 @@ public class ContextTest {
     child.addListener(cancellationListener, MoreExecutors.directExecutor());
     assertFalse(base.isCancelled());
     assertFalse(child.isCancelled());
-    deadlineLatch.await(2, TimeUnit.SECONDS);
+    assertTrue(deadlineLatch.await(2, TimeUnit.SECONDS));
     assertTrue(base.isCancelled());
     assertTrue(base.cause() instanceof TimeoutException);
     assertSame(child, listenerNotifedContext);
@@ -394,7 +394,7 @@ public class ContextTest {
     child.addListener(cancellationListener, MoreExecutors.directExecutor());
     assertFalse(base.isCancelled());
     assertFalse(child.isCancelled());
-    deadlineLatch.await(2, TimeUnit.SECONDS);
+    assertTrue(deadlineLatch.await(2, TimeUnit.SECONDS));
     assertFalse(base.isCancelled());
     assertSame(child, listenerNotifedContext);
     assertTrue(child.isCancelled());
@@ -402,7 +402,7 @@ public class ContextTest {
 
     deadlineLatch = new CountDownLatch(1);
     base.addListener(cancellationListener, MoreExecutors.directExecutor());
-    deadlineLatch.await(2, TimeUnit.SECONDS);
+    assertTrue(deadlineLatch.await(2, TimeUnit.SECONDS));
     assertTrue(base.isCancelled());
     assertTrue(base.cause() instanceof TimeoutException);
     assertNotSame(base.cause(), child.cause());
