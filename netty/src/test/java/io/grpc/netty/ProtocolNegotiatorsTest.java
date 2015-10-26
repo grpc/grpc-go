@@ -40,11 +40,13 @@ import static org.junit.Assert.assertTrue;
 import com.google.common.collect.Iterables;
 
 import io.grpc.netty.ProtocolNegotiators.TlsChannelInboundHandlerAdapter;
+import io.grpc.netty.ProtocolNegotiators.TlsNegotiator;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 
@@ -65,6 +67,7 @@ import java.util.logging.Logger;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLException;
 
 @RunWith(JUnit4.class)
 public class ProtocolNegotiatorsTest {
@@ -214,5 +217,41 @@ public class ProtocolNegotiatorsTest {
     } finally {
       logger.setFilter(oldFilter);
     }
+  }
+
+  @Test
+  public void tls_failsOnNullSslContext() {
+    thrown.expect(NullPointerException.class);
+
+    ProtocolNegotiators.tls(null, "authority");
+  }
+
+  @Test
+  public void tls_hostAndPort() throws SSLException {
+    SslContext ctx = GrpcSslContexts.forClient().build();
+    TlsNegotiator negotiator = (TlsNegotiator) ProtocolNegotiators.tls(ctx, "authority:1234");
+
+    assertEquals("authority", negotiator.getHost());
+    assertEquals(1234, negotiator.getPort());
+  }
+
+  @Test
+  public void tls_host() throws SSLException {
+    SslContext ctx = GrpcSslContexts.forClient().build();
+    TlsNegotiator negotiator = (TlsNegotiator) ProtocolNegotiators.tls(ctx, "[::1]");
+
+    assertEquals("[::1]", negotiator.getHost());
+    assertEquals(-1, negotiator.getPort());
+  }
+
+  @Test
+  public void tls_invalidHost() throws SSLException {
+    SslContext ctx = GrpcSslContexts.forClient().build();
+    TlsNegotiator negotiator = (TlsNegotiator) ProtocolNegotiators.tls(ctx, "bad_host:1234");
+
+    // Even though it looks like a port, we treat it as part of the authority, since the host is
+    // invalid.
+    assertEquals("bad_host:1234", negotiator.getHost());
+    assertEquals(-1, negotiator.getPort());
   }
 }
