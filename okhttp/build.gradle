@@ -28,4 +28,4 @@ animalsniffer {
 }
 
 javadoc.exclude 'io/grpc/okhttp/internal/**'
-javadoc.options.links 'http://square.github.io/okhttp/javadoc/'
+javadoc.options.links 'http://square.github.io/okhttp/2.x/okhttp/'
