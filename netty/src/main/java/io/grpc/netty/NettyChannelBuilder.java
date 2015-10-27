@@ -37,7 +37,9 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
+import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransport;
@@ -191,6 +193,24 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   protected ClientTransportFactory buildTransportFactory() {
     return new NettyTransportFactory(channelType, negotiationType, sslContext,
         eventLoopGroup, flowControlWindow, maxMessageSize);
+  }
+
+  @Override
+  protected Attributes getNameResolverParams() {
+    int defaultPort;
+    switch (negotiationType) {
+      case PLAINTEXT:
+      case PLAINTEXT_UPGRADE:
+        defaultPort = GrpcUtil.DEFAULT_PORT_PLAINTEXT;
+        break;
+      case TLS:
+        defaultPort = GrpcUtil.DEFAULT_PORT_SSL;
+        break;
+      default:
+        throw new AssertionError(negotiationType + " not handled");
+    }
+    return Attributes.newBuilder()
+        .set(NameResolver.Factory.PARAMS_DEFAULT_PORT, defaultPort).build();
   }
 
   @VisibleForTesting

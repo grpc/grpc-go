@@ -89,6 +89,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class ManagedChannelImplTest {
   private static final List<ClientInterceptor> NO_INTERCEPTOR =
       Collections.<ClientInterceptor>emptyList();
+  private static final Attributes NAME_RESOLVER_PARAMS =
+      Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, 447).build();
   private final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
       MethodDescriptor.MethodType.UNKNOWN, "/service/method",
       new StringMarshaller(), new IntegerMarshaller());
@@ -121,7 +123,7 @@ public class ManagedChannelImplTest {
   private ManagedChannel createChannel(
       NameResolver.Factory nameResolverFactory, List<ClientInterceptor> interceptors) {
     return new ManagedChannelImpl(target, new FakeBackoffPolicyProvider(),
-        nameResolverFactory, SimpleLoadBalancerFactory.getInstance(),
+        nameResolverFactory, NAME_RESOLVER_PARAMS, SimpleLoadBalancerFactory.getInstance(),
         mockTransportFactory, executor, null, interceptors);
   }
 
@@ -327,9 +329,10 @@ public class ManagedChannelImplTest {
     }
 
     @Override
-    public NameResolver newNameResolver(final URI targetUri) {
+    public NameResolver newNameResolver(final URI targetUri, Attributes params) {
       assertEquals("fake", targetUri.getScheme());
       assertEquals(serviceName, targetUri.getAuthority());
+      assertSame(NAME_RESOLVER_PARAMS, params);
       return new NameResolver() {
         @Override public String getServiceAuthority() {
           return serviceName;
@@ -352,7 +355,7 @@ public class ManagedChannelImplTest {
     }
 
     @Override
-    public NameResolver newNameResolver(URI notUsedUri) {
+    public NameResolver newNameResolver(URI notUsedUri, Attributes params) {
       return new NameResolver() {
         @Override public String getServiceAuthority() {
           return "irrelevant-authority";

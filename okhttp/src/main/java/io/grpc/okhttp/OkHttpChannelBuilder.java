@@ -41,7 +41,9 @@ import com.squareup.okhttp.CipherSuite;
 import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.TlsVersion;
 
+import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
+import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransport;
@@ -196,6 +198,23 @@ public class OkHttpChannelBuilder extends
   protected final ClientTransportFactory buildTransportFactory() {
     return new OkHttpTransportFactory(transportExecutor,
             createSocketFactory(), connectionSpec, maxMessageSize);
+  }
+
+  @Override
+  protected Attributes getNameResolverParams() {
+    int defaultPort;
+    switch (negotiationType) {
+      case PLAINTEXT:
+        defaultPort = GrpcUtil.DEFAULT_PORT_PLAINTEXT;
+        break;
+      case TLS:
+        defaultPort = GrpcUtil.DEFAULT_PORT_SSL;
+        break;
+      default:
+        throw new AssertionError(negotiationType + " not handled");
+    }
+    return Attributes.newBuilder()
+        .set(NameResolver.Factory.PARAMS_DEFAULT_PORT, defaultPort).build();
   }
 
   private SSLSocketFactory createSocketFactory() {

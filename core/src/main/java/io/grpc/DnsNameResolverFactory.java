@@ -49,8 +49,9 @@ import javax.annotation.Nullable;
  *
  * <p>It resolves a target URI whose scheme is {@code "dns"}. The (optional) authority of the target
  * URI is reserved for the address of alternative DNS server (not implemented yet). The path of the
- * target URI, exluding the leading slash {@code '/'}, is treated as the host name to be resolved by
- * DNS. Example target URIs:
+ * target URI, exluding the leading slash {@code '/'}, is treated as the host name and the optional
+ * port to be resolved by DNS. Example target URIs:
+ *
  * <ul>
  *   <li>{@code "dns:///foo.googleapis.com:8080"} (using default DNS)</li>
  *   <li>{@code "dns://8.8.8.8/foo.googleapis.com:8080"} (using alternative DNS (not implemented
@@ -64,13 +65,13 @@ public final class DnsNameResolverFactory extends NameResolver.Factory {
   private static final DnsNameResolverFactory instance = new DnsNameResolverFactory();
 
   @Override
-  public NameResolver newNameResolver(URI targetUri) {
+  public NameResolver newNameResolver(URI targetUri, Attributes params) {
     if ("dns".equals(targetUri.getScheme())) {
       String targetPath = Preconditions.checkNotNull(targetUri.getPath(), "targetPath");
       Preconditions.checkArgument(targetPath.startsWith("/"),
           "the path component (%s) of the target (%s) must start with '/'", targetPath, targetUri);
       String name = targetPath.substring(1);
-      return new DnsNameResolver(targetUri.getAuthority(), name);
+      return new DnsNameResolver(targetUri.getAuthority(), name, params);
     } else {
       return null;
     }
@@ -89,7 +90,7 @@ public final class DnsNameResolverFactory extends NameResolver.Factory {
     private final int port;
     private ExecutorService executor;
 
-    DnsNameResolver(@Nullable String nsAuthority, String name) {
+    DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params) {
       // TODO: if a DNS server is provided as nsAuthority, use it.
       // https://www.captechconsulting.com/blogs/accessing-the-dusty-corners-of-dns-with-java
 
@@ -99,8 +100,17 @@ public final class DnsNameResolverFactory extends NameResolver.Factory {
       authority = Preconditions.checkNotNull(nameUri.getAuthority(),
           "nameUri (%s) doesn't have an authority", nameUri);
       host = Preconditions.checkNotNull(nameUri.getHost(), "host");
-      port = nameUri.getPort();
-      Preconditions.checkArgument(port > 0, "port (%s) must be positive", port);
+      if (nameUri.getPort() == -1) {
+        Integer defaultPort = params.get(NameResolver.Factory.PARAMS_DEFAULT_PORT);
+        if (defaultPort != null) {
+          port = defaultPort;
+        } else {
+          throw new IllegalArgumentException(
+              "name '" + name + "' doesn't contain a port, and default port is not set in params");
+        }
+      } else {
+        port = nameUri.getPort();
+      }
     }
 
     @Override

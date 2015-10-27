@@ -35,7 +35,6 @@ import com.google.common.base.Preconditions;
 
 import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
-import io.grpc.Internal;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
@@ -165,18 +164,27 @@ public abstract class AbstractManagedChannelImplBuilder
         new ExponentialBackoffPolicy.Provider(),
         nameResolverFactory == null ? NameResolverRegistry.getDefaultRegistry()
             : nameResolverFactory,
+        getNameResolverParams(),
         loadBalancerFactory == null ? SimpleLoadBalancerFactory.getInstance()
             : loadBalancerFactory,
         transportFactory, executor, userAgent, interceptors);
   }
 
   /**
-   * Children of AbstractChannelBuilder should override this method to provide the
-   * {@link ClientTransportFactory} appropriate for this channel.  This method is meant for
-   * Transport implementors and should not be used by normal users.
+   * Subclasses should override this method to provide the {@link ClientTransportFactory}
+   * appropriate for this channel. This method is meant for Transport implementors and should not
+   * be used by normal users.
    */
-  @Internal
   protected abstract ClientTransportFactory buildTransportFactory();
+
+  /**
+   * Subclasses can override this method to provide additional parameters to {@link
+   * NameResolver.Factory#newNameResolver}. The default implementation returns {@link
+   * Attributes.EMPTY}.
+   */
+  protected Attributes getNameResolverParams() {
+    return Attributes.EMPTY;
+  }
 
   private static class AuthorityOverridingTransportFactory implements ClientTransportFactory {
     final ClientTransportFactory factory;
@@ -222,7 +230,7 @@ public abstract class AbstractManagedChannelImplBuilder
     }
 
     @Override
-    public NameResolver newNameResolver(URI notUsedUri) {
+    public NameResolver newNameResolver(URI notUsedUri, Attributes params) {
       return new NameResolver() {
         @Override
         public String getServiceAuthority() {

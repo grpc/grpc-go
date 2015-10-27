@@ -74,9 +74,9 @@ public final class NameResolverRegistry extends NameResolver.Factory {
    * <p>The factory that was registered later has higher priority.
    */
   @Override
-  public NameResolver newNameResolver(URI targetUri) {
+  public NameResolver newNameResolver(URI targetUri, Attributes params) {
     for (NameResolver.Factory factory : registry) {
-      NameResolver resolver = factory.newNameResolver(targetUri);
+      NameResolver resolver = factory.newNameResolver(targetUri, params);
       if (resolver != null) {
         return resolver;
       }

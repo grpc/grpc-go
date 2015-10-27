@@ -72,14 +72,23 @@ public abstract class NameResolver {
 
   public abstract static class Factory {
     /**
+     * The port number used in case the target or the underlying naming system doesn't provide a
+     * port number.
+     */
+    public static final Attributes.Key<Integer> PARAMS_DEFAULT_PORT =
+        new Attributes.Key<Integer>("io.grpc.NameResolverDefaultPort");
+
+    /**
      * Creates a {@link NameResolver} for the given target URI, or {@code null} if the given URI
      * cannot be resolved by this factory. The decision should be solely based on the scheme of the
      * URI.
      *
      * @param targetUri the target URI to be resolved, whose scheme must not be {@code null}
+     * @param params optional parameters. Canonical keys are defined as {@code PARAMS_*} fields in
+     *               {@link Factory}.
      */
     @Nullable
-    public abstract NameResolver newNameResolver(URI targetUri);
+    public abstract NameResolver newNameResolver(URI targetUri, Attributes params);
   }
 
   /**

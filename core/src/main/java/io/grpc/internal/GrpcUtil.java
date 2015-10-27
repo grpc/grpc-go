@@ -101,6 +101,16 @@ public final class GrpcUtil {
           Metadata.Key.of("user-agent", Metadata.ASCII_STRING_MARSHALLER);
 
   /**
+   * The default port for plain-text connections.
+   */
+  public static final int DEFAULT_PORT_PLAINTEXT = 80;
+
+  /**
+   * The default port for SSL connections.
+   */
+  public static final int DEFAULT_PORT_SSL = 443;
+
+  /**
    * Content-Type used for GRPC-over-HTTP/2.
    */
   public static final String CONTENT_TYPE_GRPC = "application/grpc";

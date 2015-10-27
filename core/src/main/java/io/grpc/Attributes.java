@@ -99,8 +99,9 @@ public final class Attributes {
       this.product = new Attributes();
     }
 
-    public <T> void set(Key<T> key, T value) {
+    public <T> Builder set(Key<T> key, T value) {
       product.data.put(key.name, value);
+      return this;
     }
 
     /**

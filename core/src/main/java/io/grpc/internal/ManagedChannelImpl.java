@@ -133,7 +133,8 @@ public final class ManagedChannelImpl extends ManagedChannel {
   };
 
   ManagedChannelImpl(String target, BackoffPolicy.Provider backoffPolicyProvider,
-      NameResolver.Factory nameResolverFactory, LoadBalancer.Factory loadBalancerFactory,
+      NameResolver.Factory nameResolverFactory, Attributes nameResolverParams,
+      LoadBalancer.Factory loadBalancerFactory,
       ClientTransportFactory transportFactory, @Nullable Executor executor,
       @Nullable String userAgent, List<ClientInterceptor> interceptors) {
     if (executor == null) {
@@ -152,7 +153,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
     StringBuilder uriSyntaxErrors = new StringBuilder();
     try {
       targetUri = new URI(target);
-      nameResolver = nameResolverFactory.newNameResolver(targetUri);
+      nameResolver = nameResolverFactory.newNameResolver(targetUri, nameResolverParams);
       // For "localhost:8080" this would likely return null, because "localhost" is parsed as the
       // scheme. Will fall into the next branch and try "dns:///localhost:8080".
     } catch (URISyntaxException e) {
@@ -163,7 +164,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
     if (nameResolver == null) {
       try {
         targetUri = new URI("dns:///" + target);
-        nameResolver = nameResolverFactory.newNameResolver(targetUri);
+        nameResolver = nameResolverFactory.newNameResolver(targetUri, nameResolverParams);
       } catch (URISyntaxException e) {
         if (uriSyntaxErrors.length() > 0) {
           uriSyntaxErrors.append("; ");
