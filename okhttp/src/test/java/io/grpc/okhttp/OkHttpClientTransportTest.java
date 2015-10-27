@@ -116,7 +116,7 @@ import javax.annotation.Nullable;
  */
 @RunWith(JUnit4.class)
 public class OkHttpClientTransportTest {
-  private static final int TIME_OUT_MS = 500;
+  private static final int TIME_OUT_MS = 2000;
   private static final String NETWORK_ISSUE_MESSAGE = "network issue";
   // The gRPC header length, which includes 1 byte compression flag and 4 bytes message length.
   private static final int HEADER_LENGTH = 5;
