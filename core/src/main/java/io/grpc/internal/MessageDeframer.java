@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Codec;
@@ -366,8 +367,9 @@ public class MessageDeframer implements Closeable {
 
     try {
       // Enforce the maxMessageSize limit on the returned stream.
-      return new SizeEnforcingInputStream(decompressor.decompress(
-              ReadableBuffers.openStream(nextFrame, true)));
+      InputStream unlimitedStream =
+          decompressor.decompress(ReadableBuffers.openStream(nextFrame, true));
+      return new SizeEnforcingInputStream(unlimitedStream, maxMessageSize);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -376,12 +378,15 @@ public class MessageDeframer implements Closeable {
   /**
    * An {@link InputStream} that enforces the {@link #maxMessageSize} limit for compressed frames.
    */
-  private final class SizeEnforcingInputStream extends FilterInputStream {
+  @VisibleForTesting
+  static final class SizeEnforcingInputStream extends FilterInputStream {
+    private final int maxMessageSize;
     private long count;
     private long mark = -1;
 
-    public SizeEnforcingInputStream(InputStream in) {
+    SizeEnforcingInputStream(InputStream in, int maxMessageSize) {
       super(in);
+      this.maxMessageSize = maxMessageSize;
     }
 
     @Override
