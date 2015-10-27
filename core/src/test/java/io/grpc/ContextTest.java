@@ -42,17 +42,27 @@ import static org.junit.Assert.fail;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
+import io.grpc.internal.SharedResourceHolder;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.Closeable;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 /**
  * Tests for {@link Context}.
@@ -63,7 +73,7 @@ public class ContextTest {
   private static final Context.Key<String> PET = Context.key("pet");
   private static final Context.Key<String> FOOD = Context.keyWithDefault("food", "lasagna");
   private static final Context.Key<String> COLOR = Context.key("color");
-  private static final Context.Key<Object> OBSERVED = Context.key("observed");
+  private static final Context.Key<Object> FAVORITE = Context.key("favorite");
 
   private Context listenerNotifedContext;
   private CountDownLatch deadlineLatch = new CountDownLatch(1);
@@ -75,17 +85,13 @@ public class ContextTest {
     }
   };
 
-  private CountDownLatch observableLatch = new CountDownLatch(1);
-  private Object observed;
+  private Context observed;
   private Runnable runner = new Runnable() {
     @Override
     public void run() {
-      observed = OBSERVED.get();
-      observableLatch.countDown();
+      observed = Context.current();
     }
   };
-
-  private ExecutorService executorService = Executors.newCachedThreadPool();
 
   @Before
   public void setUp() throws Exception {
@@ -139,6 +145,12 @@ public class ContextTest {
   }
 
   @Test
+  public void rootIsNotCancelled() {
+    assertFalse(Context.ROOT.isCancelled());
+    assertNull(Context.ROOT.cause());
+  }
+
+  @Test
   public void attachedCancellableContextCannotBeCastFromCurrent() {
     Context initial = Context.current();
     Context.CancellableContext base = Context.current().withCancellation();
@@ -151,13 +163,25 @@ public class ContextTest {
 
   @Test
   public void detachingNonCurrentThrowsIllegalStateException() {
-    Context base = Context.current().fork();
+    Context current = Context.current();
+    Context base = Context.current().withValue(PET, "dog");
     try {
       base.detach();
+      fail("Expected exception");
     } catch (IllegalStateException ise) {
-      return;
+      // expected
     }
-    fail("Expected exception");
+    assertSame(current, Context.current());
+
+    base.attach();
+    try {
+      current.withValue(PET, "cat").detach();
+      fail("Expected exception");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
+    assertSame(base, Context.current());
+    base.detach();
   }
 
   @Test
@@ -215,6 +239,22 @@ public class ContextTest {
   }
 
   @Test
+  public void withValuesThree() {
+    Object fav = new Object();
+    Context base = Context.current().withValues(PET, "dog", COLOR, "blue");
+    Context child = base.withValues(PET, "cat", FOOD, "cheese", FAVORITE, fav);
+
+    child.attach();
+
+    assertEquals("cat", PET.get());
+    assertEquals("cheese", FOOD.get());
+    assertEquals("blue", COLOR.get());
+    assertEquals(fav, FAVORITE.get());
+
+    child.detach();
+  }
+
+  @Test
   public void cancelReturnsFalseIfAlreadyCancelled() {
     Context.CancellableContext base = Context.current().withCancellation();
     assertTrue(base.cancel(null));
@@ -223,12 +263,92 @@ public class ContextTest {
   }
 
   @Test
-  public void notifyListenerOnCancel() {
+  public void notifyListenersOnCancel() {
+    class SetContextCancellationListener implements Context.CancellationListener {
+      private final AtomicReference<Context> observed;
+
+      public SetContextCancellationListener(AtomicReference<Context> observed) {
+        this.observed = observed;
+      }
+
+      @Override
+      public void cancelled(Context context) {
+        observed.set(context);
+      }
+    }
+
     Context.CancellableContext base = Context.current().withCancellation();
-    base.attach();
-    base.addListener(cancellationListener, MoreExecutors.directExecutor());
-    base.detachAndCancel(null);
-    assertSame(base, listenerNotifedContext);
+    final AtomicReference<Context> observed1 = new AtomicReference<Context>();
+    base.addListener(new SetContextCancellationListener(observed1), MoreExecutors.directExecutor());
+    final AtomicReference<Context> observed2 = new AtomicReference<Context>();
+    base.addListener(new SetContextCancellationListener(observed2), MoreExecutors.directExecutor());
+    assertNull(observed1.get());
+    assertNull(observed2.get());
+    base.cancel(null);
+    assertSame(base, observed1.get());
+    assertSame(base, observed2.get());
+
+    final AtomicReference<Context> observed3 = new AtomicReference<Context>();
+    base.addListener(new SetContextCancellationListener(observed3), MoreExecutors.directExecutor());
+    assertSame(base, observed3.get());
+  }
+
+  @Test
+  public void exceptionOfExecutorDoesntThrow() {
+    final AtomicReference<Throwable> loggedThrowable = new AtomicReference<Throwable>();
+    Handler logHandler = new Handler() {
+      @Override
+      public void publish(LogRecord record) {
+        Throwable thrown = record.getThrown();
+        if (thrown != null) {
+          if (loggedThrowable.get() == null) {
+            loggedThrowable.set(thrown);
+          } else {
+            loggedThrowable.set(new RuntimeException("Too many exceptions", thrown));
+          }
+        }
+      }
+
+      @Override
+      public void close() {}
+
+      @Override
+      public void flush() {}
+    };
+    Logger logger = Logger.getLogger(Context.class.getName());
+    logger.addHandler(logHandler);
+    try {
+      Context.CancellableContext base = Context.current().withCancellation();
+      final AtomicReference<Runnable> observed1 = new AtomicReference<Runnable>();
+      final Error err = new Error();
+      base.addListener(cancellationListener, new Executor() {
+        @Override
+        public void execute(Runnable runnable) {
+          observed1.set(runnable);
+          throw err;
+        }
+      });
+      assertNull(observed1.get());
+      assertNull(loggedThrowable.get());
+      base.cancel(null);
+      assertNotNull(observed1.get());
+      assertSame(err, loggedThrowable.get());
+
+      final Error err2 = new Error();
+      loggedThrowable.set(null);
+      final AtomicReference<Runnable> observed2 = new AtomicReference<Runnable>();
+      base.addListener(cancellationListener, new Executor() {
+        @Override
+        public void execute(Runnable runnable) {
+          observed2.set(runnable);
+          throw err2;
+        }
+      });
+      assertNotNull(observed2.get());
+      assertSame(err2, loggedThrowable.get());
+    } finally {
+      logger.removeHandler(logHandler);
+    }
   }
 
   @Test
@@ -255,6 +375,40 @@ public class ContextTest {
   }
 
   @Test
+  public void cascadingCancellationWithoutListener() {
+    Context.CancellableContext base = Context.current().withCancellation();
+    Context child = base.withCancellation();
+    Throwable t = new Throwable();
+    base.cancel(t);
+    assertTrue(child.isCancelled());
+    assertSame(t, child.cause());
+  }
+
+  @Test
+  public void cancellableContextIsAttached() {
+    Context.CancellableContext base = Context.current().withValue(FOOD, "fish").withCancellation();
+    assertFalse(base.isCurrent());
+    base.attach();
+
+    Context attached = Context.current();
+    assertSame("fish", FOOD.get());
+    assertFalse(attached.isCancelled());
+    assertNull(attached.cause());
+    assertTrue(attached.canBeCancelled());
+    assertTrue(attached.isCurrent());
+    assertTrue(base.isCurrent());
+
+    attached.addListener(cancellationListener, MoreExecutors.directExecutor());
+    Throwable t = new Throwable();
+    base.cancel(t);
+    assertTrue(attached.isCancelled());
+    assertSame(t, attached.cause());
+    assertSame(attached, listenerNotifedContext);
+
+    base.detach();
+  }
+
+  @Test
   public void cancellableContextCascadesFromCancellableParent() {
     // Root is not cancellable so we can't cascade from it
     Context.CancellableContext base = Context.current().withCancellation();
@@ -278,24 +432,82 @@ public class ContextTest {
     Context.CancellableContext base = Context.current().withCancellation();
     Context fork = base.fork();
     fork.addListener(cancellationListener, MoreExecutors.directExecutor());
-    assertTrue(base.cancel(null));
+    assertTrue(base.cancel(new Throwable()));
     assertNull(listenerNotifedContext);
     assertFalse(fork.isCancelled());
+    assertNull(fork.cause());
     assertEquals(1, fork.listenerCount());
   }
 
   @Test
   public void testWrapRunnable() throws Exception {
-    Context base = Context.current().withValue(OBSERVED, "cat");
+    Context base = Context.current().withValue(PET, "cat");
+    Context current = Context.current().withValue(PET, "fish");
+    current.attach();
 
-    executorService.execute(base.wrap(runner));
-    observableLatch.await();
-    assertEquals("cat", observed);
+    base.wrap(runner).run();
+    assertSame(base, observed);
+    assertSame(current, Context.current());
 
-    observableLatch = new CountDownLatch(1);
-    executorService.execute(Context.current().wrap(runner));
-    observableLatch.await();
-    assertNull(observed);
+    current.wrap(runner).run();
+    assertSame(current, observed);
+    assertSame(current, Context.current());
+
+    final Error err = new Error();
+    try {
+      base.wrap(new Runnable() {
+        @Override
+        public void run() {
+          throw err;
+        }
+      }).run();
+      fail("Expected exception");
+    } catch (Error ex) {
+      assertSame(err, ex);
+    }
+    assertSame(current, Context.current());
+
+    current.detach();
+  }
+
+  @Test
+  public void testWrapCallable() throws Exception {
+    Context base = Context.current().withValue(PET, "cat");
+    Context current = Context.current().withValue(PET, "fish");
+    current.attach();
+
+    final Object ret = new Object();
+    Callable<Object> callable = new Callable<Object>() {
+      @Override
+      public Object call() {
+        runner.run();
+        return ret;
+      }
+    };
+
+    assertSame(ret, base.wrap(callable).call());
+    assertSame(base, observed);
+    assertSame(current, Context.current());
+
+    assertSame(ret, current.wrap(callable).call());
+    assertSame(current, observed);
+    assertSame(current, Context.current());
+
+    final Error err = new Error();
+    try {
+      base.wrap(new Callable<Object>() {
+        @Override
+        public Object call() {
+          throw err;
+        }
+      }).call();
+      fail("Excepted exception");
+    } catch (Error ex) {
+      assertSame(err, ex);
+    }
+    assertSame(current, Context.current());
+
+    current.detach();
   }
 
   @Test
@@ -327,6 +539,27 @@ public class ContextTest {
     assertNotNull(base.cause());
   }
 
+  @Test
+  public void testAttachAsCloseable() throws Exception {
+    Context current = Context.current();
+    Context.CancellableContext base = Context.current().withValue(FOOD, "fish").withCancellation();
+
+    base.attach();
+    Context baseAttached = Context.current();
+    // Should not be able to get back the CancellableContext
+    assertNotSame(baseAttached, base);
+    base.detach();
+
+    Closeable c = base.attachAsCloseable();
+    assertEquals("fish", FOOD.get());
+    assertFalse(base.isCancelled());
+    assertNull(base.cause());
+
+    c.close();
+    assertSame(current, Context.current());
+    assertTrue(base.isCancelled());
+    assertNull(base.cause());
+  }
 
   /*
   public void testTryWithResource() throws Exception {
@@ -372,6 +605,11 @@ public class ContextTest {
     assertSame(base.cause(), child.cause());
   }
 
+  @Test(expected = IllegalArgumentException.class)
+  public void negativeDeadlineFails() {
+    Context.current().withDeadlineAfter(-1, TimeUnit.NANOSECONDS);
+  }
+
   @Test
   public void relativeDeadlineTriggersAndPropagates() throws Exception {
     Context base = Context.current().withDeadlineAfter(1, TimeUnit.SECONDS);
@@ -406,5 +644,59 @@ public class ContextTest {
     assertTrue(base.isCancelled());
     assertTrue(base.cause() instanceof TimeoutException);
     assertNotSame(base.cause(), child.cause());
+  }
+
+  @Test
+  public void cancellationCancelsScheduledTask() {
+    ScheduledExecutorService service = SharedResourceHolder.get(Context.SCHEDULER);
+    try {
+      ThreadPoolExecutor executor = (ThreadPoolExecutor) service;
+      executor.purge();
+      assertEquals(0, executor.getQueue().size());
+      Context.CancellableContext base = Context.current().withDeadlineAfter(1, TimeUnit.DAYS);
+      assertEquals(1, executor.getQueue().size());
+      base.cancel(null);
+      executor.purge();
+      assertEquals(0, executor.getQueue().size());
+    } finally {
+      SharedResourceHolder.release(Context.SCHEDULER, service);
+    }
+  }
+
+  @Test
+  public void testScheduler() throws Exception {
+    assertEquals("context-scheduler", Context.SCHEDULER.toString());
+    ScheduledExecutorService service = Context.SCHEDULER.create();
+    try {
+      assertFalse(service.isShutdown());
+      final AtomicReference<String> threadName = new AtomicReference<String>();
+      final AtomicReference<Boolean> threadIsDaemon = new AtomicReference<Boolean>();
+      Future<?> ran = service.submit(new Runnable() {
+        @Override
+        public void run() {
+          threadName.set(Thread.currentThread().getName());
+          threadIsDaemon.set(Thread.currentThread().isDaemon());
+        }
+      });
+      ran.get();
+      assertNotNull(threadName.get());
+      assertTrue(threadName.get(), threadName.get().startsWith(Context.SCHEDULER.toString()));
+      assertNotNull(threadIsDaemon.get());
+      assertTrue(threadIsDaemon.get());
+    } finally {
+      Context.SCHEDULER.close(service);
+    }
+    assertTrue(service.isShutdown());
+  }
+
+  @Test
+  public void testKeyEqualsHashCode() {
+    assertTrue(PET.equals(PET));
+    assertTrue(PET.equals(Context.key("pet")));
+    assertFalse(PET.equals(FOOD));
+    assertFalse(PET.equals("pet"));
+    assertFalse(PET.equals(null));
+
+    assertEquals(PET.hashCode(), Context.key("pet").hashCode());
   }
 }

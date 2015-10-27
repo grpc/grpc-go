@@ -471,11 +471,7 @@ public class Context {
       listeners = null;
     }
     for (int i = 0; i < tmpListeners.size(); i++) {
-      try {
-        tmpListeners.get(i).deliver();
-      } catch (Throwable t) {
-        LOG.log(Level.INFO, "Exception notifying context listener", t);
-      }
+      tmpListeners.get(i).deliver();
     }
     parent.removeListener(parentListener);
   }
@@ -565,7 +561,7 @@ public class Context {
     private CancellableContext(Context parent, long delayNanos) {
       this(parent);
       final ScheduledExecutorService scheduler = SharedResourceHolder.get(SCHEDULER);
-      scheduler.schedule(new Runnable() {
+      scheduledFuture = scheduler.schedule(new Runnable() {
         @Override
         public void run() {
           try {
@@ -652,7 +648,7 @@ public class Context {
     }
 
     @Override
-    protected boolean canBeCancelled() {
+    boolean canBeCancelled() {
       return true;
     }
 
@@ -759,7 +755,11 @@ public class Context {
     }
 
     private void deliver() {
-      executor.execute(this);
+      try {
+        executor.execute(this);
+      } catch (Throwable t) {
+        LOG.log(Level.INFO, "Exception notifying context listener", t);
+      }
     }
 
     @Override
