@@ -340,7 +340,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
       TransportSet ts;
       synchronized (lock) {
         if (shutdown) {
-          return null;
+          return NULL_VALUE_TRANSPORT_FUTURE;
         }
         ts = transports.get(addr);
         if (ts == null) {
