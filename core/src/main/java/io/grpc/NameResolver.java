@@ -38,12 +38,10 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * A pluggable component that resolves a target URI (which is broken down into 3 parts as described
- * below) and return addresses to the caller.
+ * A pluggable component that resolves a target {@link URI} and return addresses to the caller.
  *
- * <p>The target URI is a {@link URI} instance. A {@code NameResolver} uses the scheme to determine
- * whether it can resolve a given URI, and uses the components after the scheme for actual
- * resolution.
+ * <p>A {@code NameResolver} uses the URI's scheme to determine whether it can resolve it, and uses
+ * the components after the scheme for actual resolution.
  *
  * <p>The addresses and attributes of a target may be changed over time, thus the caller registers a
  * {@link Listener} to receive continuous updates.
