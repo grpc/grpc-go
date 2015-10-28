@@ -61,6 +61,7 @@ import io.grpc.testing.TestUtils;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
@@ -154,14 +155,15 @@ public class NettyClientTransportTest {
     assertEquals(1, serverListener.streamListeners.size());
     Metadata receivedHeaders = serverListener.streamListeners.get(0).headers;
     assertEquals(GrpcUtil.getGrpcUserAgent("netty", userAgent),
-            receivedHeaders.get(USER_AGENT_KEY));
+        receivedHeaders.get(USER_AGENT_KEY));
   }
 
   @Test
   public void maxMessageSizeShouldBeEnforced() throws Throwable {
     startServer();
     // Allow the response payloads of up to 1 byte.
-    NettyClientTransport transport = newTransport(newNegotiator(), 1);
+    NettyClientTransport transport = newTransport(newNegotiator(),
+        1, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE);
     transport.start(clientTransportListener);
 
     try {
@@ -205,7 +207,7 @@ public class NettyClientTransportTest {
   @Test
   public void bufferedStreamsShouldBeClosedWhenConnectionTerminates() throws Exception {
     // Only allow a single stream active at a time.
-    startServer(1);
+    startServer(1, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE);
 
     NettyClientTransport transport = newTransport(newNegotiator());
     transport.start(clientTransportListener);
@@ -234,6 +236,51 @@ public class NettyClientTransportTest {
     }
   }
 
+  @Test
+  public void maxHeaderListSizeShouldBeEnforcedOnClient() throws Exception {
+    startServer();
+
+    NettyClientTransport transport = newTransport(newNegotiator(), DEFAULT_MAX_MESSAGE_SIZE, 1);
+    transport.start(clientTransportListener);
+
+    try {
+      // Send a single RPC and wait for the response.
+      new Rpc(transport, new Metadata()).halfClose().waitForResponse();
+      fail("The stream should have been failed due to client received header exceeds header list"
+          + " size limit!");
+    } catch (Exception e) {
+      Throwable rootCause = getRootCause(e);
+      assertTrue(rootCause instanceof Http2Exception);
+      assertEquals("Header size exceeded max allowed size (1)", rootCause.getMessage());
+    }
+  }
+
+  @Test
+  public void maxHeaderListSizeShouldBeEnforcedOnServer()  throws Exception {
+    startServer(100, 1);
+
+    NettyClientTransport transport = newTransport(newNegotiator());
+    transport.start(clientTransportListener);
+
+    try {
+      // Send a single RPC and wait for the response.
+      new Rpc(transport, new Metadata()).halfClose().waitForResponse();
+      fail("The stream should have been failed due to server received header exceeds header list"
+          + " size limit!");
+    } catch (Exception e) {
+      Throwable rootCause = getRootCause(e);
+      assertTrue(rootCause.getMessage(),
+          rootCause.getMessage().contains("Header size exceeded max allowed size (1)"));
+    }
+  }
+
+  private Throwable getRootCause(Throwable t) {
+    if (t.getCause() == null) {
+      return t;
+    }
+    return getRootCause(t.getCause());
+  }
+
   private ProtocolNegotiator newNegotiator() throws IOException {
     File clientCert = TestUtils.loadCert("ca.pem");
     SslContext clientContext = GrpcSslContexts.forClient().trustManager(clientCert)
@@ -242,28 +289,30 @@ public class NettyClientTransportTest {
   }
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator) {
-    return newTransport(negotiator, DEFAULT_MAX_MESSAGE_SIZE);
+    return newTransport(negotiator,
+        DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE);
   }
 
-  private NettyClientTransport newTransport(ProtocolNegotiator negotiator, int maxMsgSize) {
+  private NettyClientTransport newTransport(ProtocolNegotiator negotiator,
+      int maxMsgSize, int maxHeaderListSize) {
     NettyClientTransport transport = new NettyClientTransport(address, NioSocketChannel.class,
-            group, negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize, authority);
+            group, negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize, authority);
     transports.add(transport);
     return transport;
   }
 
   private void startServer() throws IOException {
-    startServer(100);
+    startServer(100, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE);
   }
 
-  private void startServer(int maxStreamsPerConnection) throws IOException {
+  private void startServer(int maxStreamsPerConnection, int maxHeaderListSize) throws IOException {
     File serverCert = TestUtils.loadCert("server1.pem");
     File key = TestUtils.loadCert("server1.key");
     SslContext serverContext = GrpcSslContexts.forServer(serverCert, key)
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
     server = new NettyServer(address, NioServerSocketChannel.class,
             group, group, serverContext, maxStreamsPerConnection,
-            DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE);
+            DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, maxHeaderListSize);
     server.start(serverListener);
   }
 

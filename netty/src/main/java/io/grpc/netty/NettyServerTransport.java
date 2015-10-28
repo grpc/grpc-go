@@ -42,10 +42,13 @@ import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
+import io.netty.handler.codec.http2.DefaultHttp2HeadersDecoder;
+import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
+import io.netty.handler.codec.http2.Http2HeadersDecoder;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.logging.LogLevel;
@@ -70,14 +73,16 @@ class NettyServerTransport implements ServerTransport {
   private boolean terminated;
   private final int flowControlWindow;
   private final int maxMessageSize;
+  private final int maxHeaderListSize;
 
   NettyServerTransport(Channel channel, @Nullable SslContext sslContext, int maxStreams,
-                       int flowControlWindow, int maxMessageSize) {
+                       int flowControlWindow, int maxMessageSize, int maxHeaderListSize) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
     this.sslContext = sslContext;
     this.maxStreams = maxStreams;
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
+    this.maxHeaderListSize = maxHeaderListSize;
   }
 
   public void start(ServerTransportListener listener) {
@@ -133,8 +138,10 @@ class NettyServerTransport implements ServerTransport {
   private NettyServerHandler createHandler(ServerTransportListener transportListener) {
     Http2Connection connection = new DefaultHttp2Connection(true);
     Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, getClass());
-    Http2FrameReader frameReader =
-        new Http2InboundFrameLogger(new DefaultHttp2FrameReader(), frameLogger);
+    Http2HeadersDecoder headersDecoder =
+        new DefaultHttp2HeadersDecoder(maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE);
+    Http2FrameReader frameReader = new Http2InboundFrameLogger(
+        new DefaultHttp2FrameReader(headersDecoder), frameLogger);
     Http2FrameWriter frameWriter =
         new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
 

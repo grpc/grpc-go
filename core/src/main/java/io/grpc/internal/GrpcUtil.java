@@ -146,6 +146,11 @@ public final class GrpcUtil {
   public static final int DEFAULT_MAX_MESSAGE_SIZE = 100 * 1024 * 1024;
 
   /**
+   * The default maximum size (in bytes) for inbound header/trailer.
+   */
+  public static final int DEFAULT_MAX_HEADER_LIST_SIZE = 8192;
+
+  /**
    * The set of valid status codes for client cancellation.
    */
   public static final Set<Status.Code> CANCEL_REASONS =

@@ -54,11 +54,14 @@ import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
+import io.netty.handler.codec.http2.DefaultHttp2HeadersDecoder;
+import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2HeadersDecoder;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.logging.LogLevel;
@@ -81,6 +84,7 @@ class NettyClientTransport implements ClientTransport {
   private final AsciiString authority;
   private final int flowControlWindow;
   private final int maxMessageSize;
+  private final int maxHeaderListSize;
   // We should not send on the channel until negotiation completes. This is a hard requirement
   // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
   private Channel channel;
@@ -94,13 +98,15 @@ class NettyClientTransport implements ClientTransport {
 
   NettyClientTransport(SocketAddress address, Class<? extends Channel> channelType,
                        EventLoopGroup group, ProtocolNegotiator negotiator,
-                       int flowControlWindow, int maxMessageSize, String authority) {
+                       int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
+                       String authority) {
     Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
+    this.maxHeaderListSize = maxHeaderListSize;
     this.authority = new AsciiString(authority);
 
     handler = newHandler();
@@ -244,7 +250,9 @@ class NettyClientTransport implements ClientTransport {
 
   private NettyClientHandler newHandler() {
     Http2Connection connection = new DefaultHttp2Connection(false);
-    Http2FrameReader frameReader = new DefaultHttp2FrameReader();
+    Http2HeadersDecoder headersDecoder =
+        new DefaultHttp2HeadersDecoder(maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE);
+    Http2FrameReader frameReader = new DefaultHttp2FrameReader(headersDecoder);
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
 
     Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, getClass());

@@ -71,6 +71,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   private SslContext sslContext;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
   private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
+  private int maxHeaderListSize = GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
 
   /**
    * Creates a new builder with the given server address. This factory method is primarily intended
@@ -160,18 +161,28 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
    * is {@link #DEFAULT_FLOW_CONTROL_WINDOW}).
    */
   public final NettyChannelBuilder flowControlWindow(int flowControlWindow) {
-    Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
+    checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
     this.flowControlWindow = flowControlWindow;
     return this;
   }
 
   /**
    * Sets the maximum message size allowed to be received on the channel. If not called,
-   * defaults to {@link io.grpc.internal.GrpcUtil#DEFAULT_MAX_MESSAGE_SIZE}.
+   * defaults to {@link GrpcUtil#DEFAULT_MAX_MESSAGE_SIZE}.
    */
   public final NettyChannelBuilder maxMessageSize(int maxMessageSize) {
     checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
     this.maxMessageSize = maxMessageSize;
+    return this;
+  }
+
+  /**
+   * Sets the maximum size of header list allowed to be received on the channel. If not called,
+   * defaults to {@link GrpcUtil#DEFAULT_MAX_HEADER_LIST_SIZE}.
+   */
+  public final NettyChannelBuilder maxHeaderListSize(int maxHeaderListSize) {
+    checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be > 0");
+    this.maxHeaderListSize = maxHeaderListSize;
     return this;
   }
 
@@ -192,7 +203,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   @Override
   protected ClientTransportFactory buildTransportFactory() {
     return new NettyTransportFactory(channelType, negotiationType, sslContext,
-        eventLoopGroup, flowControlWindow, maxMessageSize);
+        eventLoopGroup, flowControlWindow, maxMessageSize, maxHeaderListSize);
   }
 
   @Override
@@ -246,18 +257,21 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     private final boolean usingSharedGroup;
     private final int flowControlWindow;
     private final int maxMessageSize;
+    private final int maxHeaderListSize;
 
     private NettyTransportFactory(Class<? extends Channel> channelType,
                                   NegotiationType negotiationType,
                                   SslContext sslContext,
                                   EventLoopGroup group,
                                   int flowControlWindow,
-                                  int maxMessageSize) {
+                                  int maxMessageSize,
+                                  int maxHeaderListSize) {
       this.channelType = channelType;
       this.negotiationType = negotiationType;
       this.sslContext = sslContext;
       this.flowControlWindow = flowControlWindow;
       this.maxMessageSize = maxMessageSize;
+      this.maxHeaderListSize = maxHeaderListSize;
       usingSharedGroup = group == null;
       if (usingSharedGroup) {
         // The group was unspecified, using the shared group.
@@ -272,7 +286,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
       ProtocolNegotiator negotiator =
           createProtocolNegotiator(authority, negotiationType, sslContext);
       return new NettyClientTransport(serverAddress, channelType, group, negotiator,
-          flowControlWindow, maxMessageSize, authority);
+          flowControlWindow, maxMessageSize, maxHeaderListSize, authority);
     }
 
     @Override
