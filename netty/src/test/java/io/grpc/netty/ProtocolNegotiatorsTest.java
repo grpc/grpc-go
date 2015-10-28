@@ -36,6 +36,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import com.google.common.collect.Iterables;
 
@@ -56,9 +57,6 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
 
 import java.util.logging.Filter;
 import java.util.logging.Level;
@@ -72,9 +70,8 @@ import javax.net.ssl.SSLException;
 @RunWith(JUnit4.class)
 public class ProtocolNegotiatorsTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
-  @Rule public final MockitoRule mocks = MockitoJUnit.rule();
 
-  @Mock private ChannelHandler grpcHandler;
+  private ChannelHandler grpcHandler = mock(ChannelHandler.class);
 
   private EmbeddedChannel channel = new EmbeddedChannel();
   private ChannelPipeline pipeline = channel.pipeline();
