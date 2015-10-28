@@ -199,8 +199,10 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   private void onRstStreamRead(int streamId) throws Http2Exception {
     try {
-      NettyServerStream stream = serverStream(requireHttp2Stream(streamId));
-      stream.abortStream(Status.CANCELLED, false);
+      NettyServerStream stream = serverStream(connection().stream(streamId));
+      if (stream != null) {
+        stream.abortStream(Status.CANCELLED, false);
+      }
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onRstStreamRead()", e);
       // Throw an exception that will get handled by onStreamError.
@@ -220,8 +222,8 @@ class NettyServerHandler extends AbstractNettyHandler {
   protected void onStreamError(ChannelHandlerContext ctx, Throwable cause,
       StreamException http2Ex) {
     logger.log(Level.WARNING, "Stream Error", cause);
-    Http2Stream stream = connection().stream(Http2Exception.streamId(http2Ex));
-    NettyServerStream serverStream = stream != null ? serverStream(stream) : null;
+    NettyServerStream serverStream = serverStream(
+        connection().stream(Http2Exception.streamId(http2Ex)));
     if (serverStream != null) {
       // Abort the stream with a status to help the client with debugging.
       serverStream.abortStream(cause instanceof Http2Exception
@@ -242,7 +244,10 @@ class NettyServerHandler extends AbstractNettyHandler {
     connection().forEachActiveStream(new Http2StreamVisitor() {
       @Override
       public boolean visit(Http2Stream stream) throws Http2Exception {
-        serverStream(stream).abortStream(GOAWAY_STATUS, false);
+        NettyServerStream serverStream = serverStream(stream);
+        if (serverStream != null) {
+          serverStream.abortStream(GOAWAY_STATUS, false);
+        }
         return true;
       }
     });
@@ -376,7 +381,7 @@ class NettyServerHandler extends AbstractNettyHandler {
    * Returns the server stream associated to the given HTTP/2 stream object.
    */
   private NettyServerStream serverStream(Http2Stream stream) {
-    return stream.getProperty(streamKey);
+    return stream == null ? null : (NettyServerStream) stream.getProperty(streamKey);
   }
 
   private Http2Exception newStreamException(int streamId, Throwable cause) {

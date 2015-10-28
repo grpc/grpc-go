@@ -202,9 +202,11 @@ class NettyClientHandler extends AbstractNettyHandler {
    * Handler for an inbound HTTP/2 RST_STREAM frame, terminating a stream.
    */
   private void onRstStreamRead(int streamId, long errorCode) throws Http2Exception {
-    NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
-    Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode);
-    stream.transportReportStatus(status, false /*stop delivery*/, new Metadata());
+    NettyClientStream stream = clientStream(connection().stream(streamId));
+    if (stream != null) {
+      Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode);
+      stream.transportReportStatus(status, false /*stop delivery*/, new Metadata());
+    }
   }
 
   @Override
@@ -226,7 +228,10 @@ class NettyClientHandler extends AbstractNettyHandler {
       connection().forEachActiveStream(new Http2StreamVisitor() {
         @Override
         public boolean visit(Http2Stream stream) throws Http2Exception {
-          clientStream(stream).transportReportStatus(goAwayStatus, false, new Metadata());
+          NettyClientStream clientStream = clientStream(stream);
+          if (clientStream != null) {
+            clientStream.transportReportStatus(goAwayStatus, false, new Metadata());
+          }
           return true;
         }
       });
@@ -248,9 +253,9 @@ class NettyClientHandler extends AbstractNettyHandler {
   protected void onStreamError(ChannelHandlerContext ctx, Throwable cause,
       Http2Exception.StreamException http2Ex) {
     // Close the stream with a status that contains the cause.
-    Http2Stream stream = connection().stream(http2Ex.streamId());
+    NettyClientStream stream = clientStream(connection().stream(http2Ex.streamId()));
     if (stream != null) {
-      clientStream(stream).transportReportStatus(statusFromError(cause), false, new Metadata());
+      stream.transportReportStatus(statusFromError(cause), false, new Metadata());
     }
 
     // Delegate to the base class to send a RST_STREAM.
@@ -398,8 +403,10 @@ class NettyClientHandler extends AbstractNettyHandler {
         @Override
         public boolean visit(Http2Stream stream) throws Http2Exception {
           if (stream.id() > lastKnownStream) {
-            clientStream(stream)
-                .transportReportStatus(goAwayStatus, false, new Metadata());
+            NettyClientStream clientStream = clientStream(stream);
+            if (clientStream != null) {
+              clientStream.transportReportStatus(goAwayStatus, false, new Metadata());
+            }
             stream.close();
           }
           return true;
@@ -445,7 +452,7 @@ class NettyClientHandler extends AbstractNettyHandler {
    * Gets the client stream associated to the given HTTP/2 stream object.
    */
   private NettyClientStream clientStream(Http2Stream stream) {
-    return stream.getProperty(streamKey);
+    return stream == null ? null : (NettyClientStream) stream.getProperty(streamKey);
   }
 
   private int getAndIncrementNextStreamId() throws StatusException {
