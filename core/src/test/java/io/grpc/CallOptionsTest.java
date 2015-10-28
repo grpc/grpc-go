@@ -33,17 +33,57 @@ package io.grpc;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import com.google.common.base.Objects;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.OutputStream;
+import java.util.concurrent.TimeUnit;
+
 /** Unit tests for {@link CallOptions}. */
 @RunWith(JUnit4.class)
 public class CallOptionsTest {
+  private String sampleAuthority = "authority";
+  private Long sampleDeadlineNanoTime = 1L;
+  private Compressor sampleCompressor = new Codec.Gzip();
+  private RequestKey sampleRequestKey = new RequestKey();
+  private CallOptions allSet = CallOptions.DEFAULT
+      .withAuthority(sampleAuthority)
+      .withDeadlineNanoTime(sampleDeadlineNanoTime)
+      .withCompressor(sampleCompressor)
+      .withRequestKey(sampleRequestKey);
+
   @Test
   public void defaultsAreAllNull() {
     assertNull(CallOptions.DEFAULT.getDeadlineNanoTime());
+    assertNull(CallOptions.DEFAULT.getCompressor());
+    assertNull(CallOptions.DEFAULT.getAuthority());
+    assertNull(CallOptions.DEFAULT.getRequestKey());
+  }
+
+  @Test
+  public void allWiths() {
+    assertSame(sampleAuthority, allSet.getAuthority());
+    assertSame(sampleDeadlineNanoTime, allSet.getDeadlineNanoTime());
+    assertSame(sampleCompressor, allSet.getCompressor());
+    assertSame(sampleRequestKey, allSet.getRequestKey());
+  }
+
+  @Test
+  public void noStrayModifications() {
+    assertTrue(equal(allSet,
+          allSet.withAuthority("blah").withAuthority(sampleAuthority)));
+    assertTrue(equal(allSet,
+          allSet.withDeadlineNanoTime(314L).withDeadlineNanoTime(sampleDeadlineNanoTime)));
+    assertTrue(equal(allSet,
+          allSet.withCompressor(Codec.Identity.NONE).withCompressor(sampleCompressor)));
+    assertTrue(equal(allSet,
+          allSet.withRequestKey(new RequestKey()).withRequestKey(sampleRequestKey)));
   }
 
   @Test
@@ -54,5 +94,48 @@ public class CallOptionsTest {
     CallOptions options2 = options1.withDeadlineNanoTime(null);
     assertEquals(10L, (long) options1.getDeadlineNanoTime());
     assertNull(options2.getDeadlineNanoTime());
+  }
+
+  @Test
+  public void testWithDeadlineAfter() {
+    long deadline = CallOptions.DEFAULT
+        .withDeadlineAfter(1, TimeUnit.MINUTES).getDeadlineNanoTime();
+    long expected = System.nanoTime() + 1L * 60 * 1000 * 1000 * 1000;
+    long delta = deadline - expected;
+    assertTrue(delta < 100 * 1000);
+    assertTrue(delta > -100 * 1000);
+  }
+
+  @Test
+  public void testToString() {
+    Compressor gzip = new Compressor() {
+      @Override
+      public String toString() {
+        return "GziP";
+      }
+
+      @Override
+      public String getMessageEncoding() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public OutputStream compress(OutputStream os) {
+        throw new UnsupportedOperationException();
+      }
+    };
+    assertEquals("CallOptions{deadlineNanoTime=null, compressor=null, authority=null}",
+        CallOptions.DEFAULT.toString());
+    // Deadline makes it hard to check string for equality.
+    assertEquals("CallOptions{deadlineNanoTime=null, compressor=GziP, authority=authority}",
+        allSet.withCompressor(gzip).withDeadlineNanoTime(null).toString());
+    assertTrue(allSet.toString().contains("deadlineNanoTime=" + sampleDeadlineNanoTime + ","));
+  }
+
+  private static boolean equal(CallOptions o1, CallOptions o2) {
+    return Objects.equal(o1.getDeadlineNanoTime(), o2.getDeadlineNanoTime())
+        && Objects.equal(o1.getCompressor(), o2.getCompressor())
+        && Objects.equal(o1.getAuthority(), o2.getAuthority())
+        && Objects.equal(o1.getRequestKey(), o2.getRequestKey());
   }
 }

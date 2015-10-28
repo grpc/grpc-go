@@ -190,6 +190,7 @@ public final class CallOptions {
       toStringHelper.addValue(remainingNanos + " ns from now");
     }
     toStringHelper.add("compressor", compressor);
+    toStringHelper.add("authority", authority);
 
     return toStringHelper.toString();
   }

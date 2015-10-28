@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import com.google.common.annotations.VisibleForTesting;
+
 /**
  * A key generated from an RPC request, and to be used for affinity-based
  * routing.
@@ -39,6 +41,7 @@ package io.grpc;
 public final class RequestKey {
 
   // TODO(zhangkun83): materialize this class once we decide the form of the affinity key.
-  private RequestKey() {
+  @VisibleForTesting
+  RequestKey() {
   }
 }
