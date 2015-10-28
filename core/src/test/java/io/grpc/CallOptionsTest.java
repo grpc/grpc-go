@@ -37,6 +37,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.base.Objects;
+import com.google.common.collect.Range;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -102,8 +103,10 @@ public class CallOptionsTest {
         .withDeadlineAfter(1, TimeUnit.MINUTES).getDeadlineNanoTime();
     long expected = System.nanoTime() + 1L * 60 * 1000 * 1000 * 1000;
     long delta = deadline - expected;
-    assertTrue(delta < 100 * 1000);
-    assertTrue(delta > -100 * 1000);
+    // 10 milliseconds of leeway
+    long epsilon = 1000 * 1000 * 10;
+
+    assertTrue(Range.closed(-epsilon, epsilon).contains(delta));
   }
 
   @Test
