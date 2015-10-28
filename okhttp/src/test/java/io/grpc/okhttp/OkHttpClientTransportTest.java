@@ -482,7 +482,7 @@ public class OkHttpClientTransportTest {
   public void windowUpdateWithInboundFlowControl() throws Exception {
     initTransport();
     MockStreamListener listener = new MockStreamListener();
-    clientTransport.newStream(method, new Metadata(), listener).request(1);
+    OkHttpClientStream stream = clientTransport.newStream(method, new Metadata(), listener);
 
     int messageLength = Utils.DEFAULT_WINDOW_SIZE / 2 + 1;
     byte[] fakeMessage = new byte[messageLength];
@@ -491,7 +491,14 @@ public class OkHttpClientTransportTest {
     Buffer buffer = createMessageFrame(fakeMessage);
     long messageFrameLength = buffer.size();
     frameHandler().data(false, 3, buffer, (int) messageFrameLength);
-    verify(frameWriter, timeout(TIME_OUT_MS)).windowUpdate(eq(0), eq(messageFrameLength));
+    ArgumentCaptor<Integer> idCaptor = ArgumentCaptor.forClass(Integer.class);
+    verify(frameWriter, timeout(TIME_OUT_MS)).windowUpdate(
+        idCaptor.capture(), eq(messageFrameLength));
+    // Should only send window update for the connection.
+    assertEquals(1, idCaptor.getAllValues().size());
+    assertEquals(new Integer(0), idCaptor.getValue());
+
+    stream.request(1);
     // We return the bytes for the stream window as we read the message.
     verify(frameWriter, timeout(TIME_OUT_MS)).windowUpdate(eq(3), eq(messageFrameLength));
 
