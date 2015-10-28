@@ -103,7 +103,15 @@ subprojects {
               main {
                 java {
                   srcDir "${generatedSourcePath}/main/java"
+                  srcDir "${generatedSourcePath}/main/javanano"
                   srcDir "${generatedSourcePath}/main/grpc"
+                }
+              }
+              test {
+                java {
+                  srcDir "${generatedSourcePath}/test/java"
+                  srcDir "${generatedSourcePath}/test/javanano"
+                  srcDir "${generatedSourcePath}/test/grpc"
                 }
               }
             }

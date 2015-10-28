@@ -29,73 +29,89 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.protobuf;
+package io.grpc.protobuf.nano;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-import com.google.common.io.ByteStreams;
-import com.google.protobuf.ByteString;
-import com.google.protobuf.Empty;
-import com.google.protobuf.Enum;
-import com.google.protobuf.Type;
+import com.google.protobuf.nano.MessageNano;
 
 import io.grpc.MethodDescriptor.Marshaller;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+import io.grpc.protobuf.nano.Messages.Message;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
 
-/** Unit tests for {@link ProtoUtils}. */
+/** Unit tests for {@link NanoUtils}. */
 @RunWith(JUnit4.class)
-public class ProtoUtilsTest {
-  private Marshaller<Type> marshaller = ProtoUtils.marshaller(Type.getDefaultInstance());
-  private Type proto = Type.newBuilder().setName("name").build();
+public class NanoUtilsTest {
+  private Marshaller<Message> marshaller = NanoUtils.marshaller(new MessageNanoFactory<Message>() {
+    @Override
+    public Message newInstance() {
+      return new Message();
+    }
+  });
 
   @Test
-  public void testPassthrough() {
-    assertSame(proto, marshaller.parse(marshaller.stream(proto)));
+  public void testRoundTrip() {
+    Message m = new Message();
+    m.i = 2;
+    m.b = true;
+    m.s = "string";
+    Message m2 = marshaller.parse(marshaller.stream(m));
+    assertNotSame(m, m2);
+    assertEquals(2, m2.i);
+    assertEquals(true, m2.b);
+    assertEquals("string", m2.s);
+    assertTrue(MessageNano.messageNanoEquals(m, m2));
   }
 
   @Test
-  public void testRoundtrip() throws Exception {
-    InputStream is = marshaller.stream(proto);
-    is = new ByteArrayInputStream(ByteStreams.toByteArray(is));
-    assertEquals(proto, marshaller.parse(is));
+  public void testIoException() {
+    final IOException ioException = new IOException();
+    InputStream is = new InputStream() {
+      @Override
+      public int read() throws IOException {
+        throw ioException;
+      }
+    };
+    try {
+      marshaller.parse(is);
+      fail("Expected exception");
+    } catch (StatusRuntimeException ex) {
+      assertEquals(Status.Code.INTERNAL, ex.getStatus().getCode());
+      assertSame(ioException, ex.getCause());
+    }
   }
 
   @Test
-  public void testMismatch() throws Exception {
-    Marshaller<Enum> enumMarshaller = ProtoUtils.marshaller(Enum.getDefaultInstance());
-    // Enum's name and Type's name are both strings with tag 1.
-    Enum altProto = Enum.newBuilder().setName(proto.getName()).build();
-    assertEquals(proto, marshaller.parse(enumMarshaller.stream(altProto)));
-  }
-
-  @Test
-  public void marshallerShouldNotLimitProtoSize() throws Exception {
+  public void testLarge() {
+    Message m = new Message();
     // The default limit is 64MB. Using a larger proto to verify that the limit is not enforced.
-    byte[] bigName = new byte[70 * 1024 * 1024];
-    Arrays.fill(bigName, (byte) 32);
-
-    proto = Type.newBuilder().setNameBytes(ByteString.copyFrom(bigName)).build();
-
-    // Just perform a round trip to verify that it works.
-    testRoundtrip();
+    m.bs = new byte[70 * 1024 * 1024];
+    Message m2 = marshaller.parse(marshaller.stream(m));
+    assertNotSame(m, m2);
+    assertArrayEquals(m.bs, m2.bs);
   }
 
   @Test
   public void testAvailable() throws Exception {
-    InputStream is = marshaller.stream(proto);
-    assertEquals(proto.getSerializedSize(), is.available());
+    Message m = new Message();
+    m.s = "string";
+    InputStream is = marshaller.stream(m);
+    assertEquals(m.getSerializedSize(), is.available());
     is.read();
-    assertEquals(proto.getSerializedSize() - 1, is.available());
+    assertEquals(m.getSerializedSize() - 1, is.available());
     while (is.read() != -1) {}
     assertEquals(-1, is.read());
     assertEquals(0, is.available());
@@ -103,8 +119,7 @@ public class ProtoUtilsTest {
 
   @Test
   public void testEmpty() throws IOException {
-    Marshaller<Empty> marshaller = ProtoUtils.marshaller(Empty.getDefaultInstance());
-    InputStream is = marshaller.stream(Empty.getDefaultInstance());
+    InputStream is = marshaller.stream(new Message());
     assertEquals(0, is.available());
     byte[] b = new byte[10];
     assertEquals(-1, is.read(b));

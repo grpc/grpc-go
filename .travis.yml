@@ -18,6 +18,9 @@ before_install:
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
 
+install:
+  - ./gradlew assemble generateTestProto
+
 before_script:
   - test -z "$(git status --porcelain)" || (git status && echo Error Working directory is not clean. Forget to commit generated files? && false)
 
