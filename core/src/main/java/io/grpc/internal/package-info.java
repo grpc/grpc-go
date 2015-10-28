@@ -30,9 +30,10 @@
  */
 
 /**
- * Interfaces and implementations that are used inside gRPC.
+ * Interfaces and implementations that are internal to gRPC.
  *
- * <p>All interfaces under this package are not public API, and should not be used outside of gRPC.
+ * <p>All the content under this package and its subpackages are considered annotated with {@link
+ * io.grpc.Internal}.
  */
 @io.grpc.Internal
 package io.grpc.internal;

@@ -38,8 +38,13 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Annotates a program element which is internal to gRPC, not part of the public API, and should not
- * be used outside of gRPC codebase.
+ * Annotates a program element (class, method, package etc) which is internal to gRPC, not part of
+ * the public API, and should not be used by users of gRPC.
+ *
+ * <p>However, if you want to implement a custom {@link LoadBalancer}, an alternative transport, or
+ * anything else that will be wired into gRPC library, you may use the internal parts.  Please
+ * consult the gRPC team first, because internal APIs don't have the same API stability guarantee as
+ * the public APIs do.
  */
 @Internal
 @Retention(RetentionPolicy.SOURCE)
