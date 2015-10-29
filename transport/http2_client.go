@@ -383,6 +383,11 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	if updateStreams {
 		t.streamsQuota.add(1)
 	}
+	// In case stream sending and receiving are invoked in separate
+	// goroutines (e.g., bi-directional streaming), the caller needs
+	// to call cancel on the stream to interrupt the blocking on
+	// other goroutines.
+	s.cancel()
 	s.mu.Lock()
 	if q := s.fc.restoreConn(); q > 0 {
 		t.controlBuf.put(&windowUpdate{0, q})
@@ -397,11 +402,6 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	}
 	s.state = streamDone
 	s.mu.Unlock()
-	// In case stream sending and receiving are invoked in separate
-	// goroutines (e.g., bi-directional streaming), the caller needs
-	// to call cancel on the stream to interrupt the blocking on
-	// other goroutines.
-	s.cancel()
 	if _, ok := err.(StreamError); ok {
 		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
 	}
