@@ -305,7 +305,7 @@ public final class ProtocolNegotiators {
      * @param handlers the ChannelHandlers are added to the pipeline on channelRegistered and
      *                 before this handler.
      */
-    AbstractBufferingHandler(ChannelHandler... handlers) {
+    protected AbstractBufferingHandler(ChannelHandler... handlers) {
       this.handlers = handlers;
     }
 
