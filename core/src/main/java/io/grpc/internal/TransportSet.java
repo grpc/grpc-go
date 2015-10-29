@@ -141,10 +141,8 @@ final class TransportSet {
   /**
    * Returns a future for the active transport that will be used to create new streams.
    *
-   * <p>If this {@code TransportSet} has been shut down, the returned future will have {@code null}
-   * value.
-   *
-   * <p>Cancelling the return future has no effect.
+   * <p>Cancelling the return future has no effect. The future will never fail. If this {@code
+   * TransportSet} has been shut down, the returned future will have {@code null} value.
    */
   final ListenableFuture<ClientTransport> obtainActiveTransport() {
     UncancellableTransportFuture savedTransportFuture = activeTransportFuture;

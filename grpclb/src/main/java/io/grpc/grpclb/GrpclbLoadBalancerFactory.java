@@ -29,36 +29,34 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.grpclb;
 
-import com.google.common.util.concurrent.ListenableFuture;
-
-import io.grpc.internal.ClientTransport;
-
-import java.util.Collection;
+import io.grpc.ExperimentalApi;
+import io.grpc.LoadBalancer;
+import io.grpc.TransportManager;
 
 /**
- * Manages transport life-cycles and provide ready-to-use transports.
+ * A factory for {@link LoadBalancer}s that uses the GRPCLB protocol.
+ *
+ * <p><b>Experimental:</b>This only works with the GRPCLB load-balancer service, which is not
+ * available yet. Right now it's only good for internal testing. It's not feature-complete either,
+ * so before using it, make sure you have read all the {@code TODO} comments in {@link
+ * GrpclbLoadBalancer}.
  */
 @ExperimentalApi
-public abstract class TransportManager {
-  /**
-   * Advises this {@code TransportManager} to retain transports only to these servers, for warming
-   * up connections and discarding unused connections.
-   */
-  public abstract void updateRetainedTransports(Collection<EquivalentAddressGroup> addrs);
+public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
 
-  /**
-   * Returns the future of a transport for any of the addresses from the given address group.
-   *
-   * <p>If the channel has been shut down, the value of the future will be {@code null}.
-   *
-   * <p>Cancelling the returned future has no effect. The future will never fail. If the channel has
-   * been shut down, the value of the future will be {@code null}.
-   */
-  // TODO(zhangkun83): GrpcLoadBalancer will use this to get transport to connect to LB servers,
-  // which would have a different authority than the primary servers. We need to figure out how to
-  // do it.
-  public abstract ListenableFuture<ClientTransport> getTransport(
-      EquivalentAddressGroup addressGroup);
+  private static final GrpclbLoadBalancerFactory instance = new GrpclbLoadBalancerFactory();
+
+  private GrpclbLoadBalancerFactory() {
+  }
+
+  public static GrpclbLoadBalancerFactory getInstance() {
+    return instance;
+  }
+
+  @Override
+  public LoadBalancer newLoadBalancer(String serviceName, TransportManager tm) {
+    return new GrpclbLoadBalancer(serviceName, tm);
+  }
 }

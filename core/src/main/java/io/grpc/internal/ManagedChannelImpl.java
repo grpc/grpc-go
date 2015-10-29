@@ -56,10 +56,10 @@ import io.grpc.Status;
 import io.grpc.TransportManager;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 
-import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -355,13 +355,14 @@ public final class ManagedChannelImpl extends ManagedChannel {
 
   private final TransportManager tm = new TransportManager() {
     @Override
-    public void updateRetainedTransports(SocketAddress[] addrs) {
+    public void updateRetainedTransports(Collection<EquivalentAddressGroup> addrs) {
       // TODO(zhangkun83): warm-up new servers and discard removed servers.
     }
 
     @Override
     public ListenableFuture<ClientTransport> getTransport(
         final EquivalentAddressGroup addressGroup) {
+      Preconditions.checkNotNull(addressGroup, "addressGroup");
       TransportSet ts;
       synchronized (lock) {
         if (shutdown) {
