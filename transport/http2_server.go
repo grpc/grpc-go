@@ -163,22 +163,6 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	if !endHeaders {
 		return s
 	}
-	t.mu.Lock()
-	if t.state != reachable {
-		t.mu.Unlock()
-		return nil
-	}
-	if uint32(len(t.activeStreams)) >= t.maxStreams {
-		t.mu.Unlock()
-		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
-		return nil
-	}
-	s.sendQuotaPool = newQuotaPool(int(t.streamSendQuota))
-	t.activeStreams[s.id] = s
-	t.mu.Unlock()
-	s.windowHandler = func(n int) {
-		t.updateWindow(s, uint32(n))
-	}
 	if hDec.state.timeoutSet {
 		s.ctx, s.cancel = context.WithTimeout(context.TODO(), hDec.state.timeout)
 	} else {
@@ -202,6 +186,22 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 		recv: s.buf,
 	}
 	s.method = hDec.state.method
+	t.mu.Lock()
+	if t.state != reachable {
+		t.mu.Unlock()
+		return nil
+	}
+	if uint32(len(t.activeStreams)) >= t.maxStreams {
+		t.mu.Unlock()
+		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
+		return nil
+	}
+	s.sendQuotaPool = newQuotaPool(int(t.streamSendQuota))
+	t.activeStreams[s.id] = s
+	t.mu.Unlock()
+	s.windowHandler = func(n int) {
+		t.updateWindow(s, uint32(n))
+	}
 	handle(s)
 	return nil
 }
@@ -660,9 +660,9 @@ func (t *http2Server) Close() (err error) {
 	t.mu.Unlock()
 	close(t.shutdownChan)
 	err = t.conn.Close()
-	// Notify all active streams.
+	// Cancel all active streams.
 	for _, s := range streams {
-		s.write(recvMsg{err: ErrConnClosing})
+		s.cancel()
 	}
 	return
 }
@@ -684,9 +684,8 @@ func (t *http2Server) closeStream(s *Stream) {
 	s.state = streamDone
 	s.mu.Unlock()
 	// In case stream sending and receiving are invoked in separate
-	// goroutines (e.g., bi-directional streaming), the caller needs
-	// to call cancel on the stream to interrupt the blocking on
-	// other goroutines.
+	// goroutines (e.g., bi-directional streaming), cancel needs to be
+	// called to interrupt the potential blocking on other goroutines.
 	s.cancel()
 }
 

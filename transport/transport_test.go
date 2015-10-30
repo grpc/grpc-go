@@ -86,11 +86,11 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 	}
 	p := make([]byte, len(req))
 	_, err := io.ReadFull(s, p)
-	if err != nil || !bytes.Equal(p, req) {
-		if err == ErrConnClosing {
-			return
-		}
-		t.Fatalf("handleStream got error: %v, want <nil>; result: %v, want %v", err, p, req)
+	if err != nil {
+		return
+	}
+	if !bytes.Equal(p, req) {
+		t.Fatalf("handleStream got %v, want %v", p, req)
 	}
 	// send a response back to the client.
 	h.t.Write(s, resp, &Options{})
@@ -427,6 +427,69 @@ func TestMaxStreams(t *testing.T) {
 	}
 	ct.Close()
 	server.stop()
+}
+
+func TestServerContextCanceledOnClosedConnection(t *testing.T) {
+	server, ct := setUp(t, 0, math.MaxUint32, suspended)
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo",
+	}
+	var sc *http2Server
+	// Wait until the server transport is setup.
+	for {
+		server.mu.Lock()
+		if len(server.conns) == 0 {
+			server.mu.Unlock()
+			time.Sleep(time.Millisecond)
+			continue
+		}
+		for k := range server.conns {
+			var ok bool
+			sc, ok = k.(*http2Server)
+			if !ok {
+				t.Fatalf("Failed to convert %v to *http2Server", k)
+			}
+		}
+		server.mu.Unlock()
+		break
+	}
+	cc, ok := ct.(*http2Client)
+	if !ok {
+		t.Fatalf("Failed to convert %v to *http2Client", ct)
+	}
+	s, err := ct.NewStream(context.Background(), callHdr)
+	if err != nil {
+		t.Fatalf("Failed to open stream: %v", err)
+	}
+	// Make sure the headers frame is flushed out.
+	<-cc.writableChan
+	if err = cc.framer.writeData(true, s.id, false, make([]byte, http2MaxFrameLen)); err != nil {
+		t.Fatalf("Failed to write data: %v", err)
+	}
+	cc.writableChan <- 0
+	// Loop until the server side stream is created.
+	var ss *Stream
+	for {
+		time.Sleep(time.Second)
+		sc.mu.Lock()
+		if len(sc.activeStreams) == 0 {
+			sc.mu.Unlock()
+			continue
+		}
+		ss = sc.activeStreams[s.id]
+		sc.mu.Unlock()
+		break
+	}
+	cc.Close()
+	select {
+		case <-ss.Context().Done():
+			if ss.Context().Err() != context.Canceled {
+				t.Fatalf("ss.Context().Err() got %v, want %v", ss.Context().Err(), context.Canceled)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("Failed to cancel the context of the sever side stream.")
+	}
 }
 
 func TestServerWithMisbehavedClient(t *testing.T) {
