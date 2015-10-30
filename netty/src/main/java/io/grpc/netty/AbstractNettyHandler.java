@@ -56,9 +56,8 @@ abstract class AbstractNettyHandler extends Http2ConnectionHandler {
                        Http2Settings initialSettings) {
     super(decoder, encoder, initialSettings);
 
-    // If a stream window was specified, update the connection window to match it.
-    this.initialConnectionWindow = initialSettings.initialWindowSize() == null ? -1 :
-        initialSettings.initialWindowSize();
+    // TODO(nmittler): Use auto-refill once https://github.com/grpc/grpc-java/issues/1175 is fixed.
+    this.initialConnectionWindow = Integer.MAX_VALUE;
   }
 
   @Override
