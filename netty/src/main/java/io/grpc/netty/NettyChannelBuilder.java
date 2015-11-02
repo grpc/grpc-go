@@ -65,6 +65,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
   private NegotiationType negotiationType = NegotiationType.TLS;
+  private ProtocolNegotiator protocolNegotiator;
   private Class<? extends Channel> channelType = NioSocketChannel.class;
   @Nullable
   private EventLoopGroup eventLoopGroup;
@@ -130,6 +131,18 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
    */
   public final NettyChannelBuilder negotiationType(NegotiationType type) {
     negotiationType = type;
+    return this;
+  }
+
+  /**
+   * Sets the {@link ProtocolNegotiator} to be used. If non-{@code null}, overrides the value
+   * specified in {@link #negotiationType(NegotiationType)} or {@link #usePlaintext(boolean)}.
+   *
+   * <p>Default: {@code null}.
+   */
+  public final NettyChannelBuilder protocolNegotiator(
+          @Nullable ProtocolNegotiator protocolNegotiator) {
+    this.protocolNegotiator = protocolNegotiator;
     return this;
   }
 
@@ -202,7 +215,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
 
   @Override
   protected ClientTransportFactory buildTransportFactory() {
-    return new NettyTransportFactory(channelType, negotiationType, sslContext,
+    return new NettyTransportFactory(channelType, negotiationType, protocolNegotiator, sslContext,
         eventLoopGroup, flowControlWindow, maxMessageSize, maxHeaderListSize);
   }
 
@@ -252,6 +265,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
           implements ClientTransportFactory {
     private final Class<? extends Channel> channelType;
     private final NegotiationType negotiationType;
+    private final ProtocolNegotiator protocolNegotiator;
     private final SslContext sslContext;
     private final EventLoopGroup group;
     private final boolean usingSharedGroup;
@@ -261,6 +275,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
 
     private NettyTransportFactory(Class<? extends Channel> channelType,
                                   NegotiationType negotiationType,
+                                  ProtocolNegotiator protocolNegotiator,
                                   SslContext sslContext,
                                   EventLoopGroup group,
                                   int flowControlWindow,
@@ -268,6 +283,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
                                   int maxHeaderListSize) {
       this.channelType = channelType;
       this.negotiationType = negotiationType;
+      this.protocolNegotiator = protocolNegotiator;
       this.sslContext = sslContext;
       this.flowControlWindow = flowControlWindow;
       this.maxMessageSize = maxMessageSize;
@@ -283,7 +299,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
 
     @Override
     public ClientTransport newClientTransport(SocketAddress serverAddress, String authority) {
-      ProtocolNegotiator negotiator =
+      ProtocolNegotiator negotiator = protocolNegotiator != null ? protocolNegotiator :
           createProtocolNegotiator(authority, negotiationType, sslContext);
       return new NettyClientTransport(serverAddress, channelType, group, negotiator,
           flowControlWindow, maxMessageSize, maxHeaderListSize, authority);
