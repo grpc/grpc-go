@@ -13,7 +13,8 @@ env:
 before_install:
     # Work around https://github.com/travis-ci/travis-ci/issues/2317
   - if \[ "$TRAVIS_OS_NAME" = linux \]; then jdk_switcher use oraclejdk8; fi
-  - if \[ "$TRAVIS_OS_NAME" = osx \]; then brew update; fi
+    # Update twice to work around https://github.com/Homebrew/homebrew/issues/45616
+  - if \[ "$TRAVIS_OS_NAME" = osx \]; then brew update || brew update; fi
   - buildscripts/make_dependencies.sh # build protoc into /tmp/protobuf-${PROTOBUF_VERSION}
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
