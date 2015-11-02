@@ -174,7 +174,7 @@ public class AsyncServer {
         .channelType(channelType)
         .addService(TestServiceGrpc.bindService(new TestServiceImpl()))
         .sslContext(sslContext)
-        .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null)
+        .executor(config.directExecutor ? MoreExecutors.directExecutor() : null)
         .flowControlWindow(config.flowControlWindow)
         .build();
   }

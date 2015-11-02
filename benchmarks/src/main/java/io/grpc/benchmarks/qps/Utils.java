@@ -134,7 +134,7 @@ final class Utils {
       InetSocketAddress addr = (InetSocketAddress) config.address;
       OkHttpChannelBuilder builder = OkHttpChannelBuilder
           .forAddress(addr.getHostName(), addr.getPort())
-          .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null);
+          .executor(config.directExecutor ? MoreExecutors.directExecutor() : null);
       builder.negotiationType(config.tls ? io.grpc.okhttp.NegotiationType.TLS
           : io.grpc.okhttp.NegotiationType.PLAINTEXT);
       if (config.tls) {
@@ -201,7 +201,7 @@ final class Utils {
         .eventLoopGroup(group)
         .channelType(channelType)
         .negotiationType(negotiationType)
-        .executor(config.directExecutor ? MoreExecutors.newDirectExecutorService() : null)
+        .executor(config.directExecutor ? MoreExecutors.directExecutor() : null)
         .sslContext(sslContext)
         .flowControlWindow(config.flowControlWindow)
         .build();

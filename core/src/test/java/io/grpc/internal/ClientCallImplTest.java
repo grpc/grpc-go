@@ -76,7 +76,7 @@ import java.util.concurrent.ScheduledExecutorService;
 public class ClientCallImplTest {
 
   private final SerializingExecutor executor =
-      new SerializingExecutor(MoreExecutors.newDirectExecutorService());
+      new SerializingExecutor(MoreExecutors.directExecutor());
   private final ScheduledExecutorService deadlineCancellationExecutor =
       Executors.newScheduledThreadPool(0);
   private final DecompressorRegistry decompressorRegistry =
