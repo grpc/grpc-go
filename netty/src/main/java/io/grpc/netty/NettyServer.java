@@ -38,7 +38,6 @@ import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 import io.grpc.internal.Server;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.SharedResourceHolder;
-
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -47,7 +46,6 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.handler.ssl.SslContext;
 import io.netty.util.AbstractReferenceCounted;
 import io.netty.util.ReferenceCounted;
 
@@ -66,7 +64,7 @@ public class NettyServer implements Server {
 
   private final SocketAddress address;
   private final Class<? extends ServerChannel> channelType;
-  private final SslContext sslContext;
+  private final ProtocolNegotiator protocolNegotiator;
   private final int maxStreamsPerConnection;
   private final boolean usingSharedBossGroup;
   private final boolean usingSharedWorkerGroup;
@@ -81,13 +79,13 @@ public class NettyServer implements Server {
 
   NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
               @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
-              @Nullable SslContext sslContext, int maxStreamsPerConnection, int flowControlWindow,
-              int maxMessageSize, int maxHeaderListSize) {
+              ProtocolNegotiator protocolNegotiator, int maxStreamsPerConnection,
+              int flowControlWindow, int maxMessageSize, int maxHeaderListSize) {
     this.address = address;
     this.channelType = checkNotNull(channelType, "channelType");
     this.bossGroup = bossGroup;
     this.workerGroup = workerGroup;
-    this.sslContext = sslContext;
+    this.protocolNegotiator = checkNotNull(protocolNegotiator, "protocolNegotiator");
     this.usingSharedBossGroup = bossGroup == null;
     this.usingSharedWorkerGroup = workerGroup == null;
     this.maxStreamsPerConnection = maxStreamsPerConnection;
@@ -120,8 +118,8 @@ public class NettyServer implements Server {
           }
         });
         NettyServerTransport transport
-            = new NettyServerTransport(ch, sslContext, maxStreamsPerConnection, flowControlWindow,
-                maxMessageSize, maxHeaderListSize);
+            = new NettyServerTransport(ch, protocolNegotiator, maxStreamsPerConnection,
+                flowControlWindow, maxMessageSize, maxHeaderListSize);
         transport.start(listener.transportCreated(transport));
       }
     });

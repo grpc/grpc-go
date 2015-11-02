@@ -39,6 +39,7 @@ import com.google.common.base.Preconditions;
 
 import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
+import io.grpc.Internal;
 import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
@@ -140,6 +141,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
    *
    * <p>Default: {@code null}.
    */
+  @Internal
   public final NettyChannelBuilder protocolNegotiator(
           @Nullable ProtocolNegotiator protocolNegotiator) {
     this.protocolNegotiator = protocolNegotiator;

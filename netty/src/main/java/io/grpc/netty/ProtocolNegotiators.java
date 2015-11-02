@@ -37,6 +37,7 @@ import static io.grpc.netty.GrpcSslContexts.HTTP2_VERSIONS;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import io.grpc.Internal;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.netty.channel.ChannelDuplexHandler;
@@ -44,6 +45,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpClientCodec;
@@ -73,6 +75,7 @@ import javax.net.ssl.SSLParameters;
 /**
  * Common {@link ProtocolNegotiator}s used by gRPC.
  */
+@Internal
 public final class ProtocolNegotiators {
   private static final Logger log = Logger.getLogger(ProtocolNegotiators.class.getName());
 
@@ -80,28 +83,69 @@ public final class ProtocolNegotiators {
   }
 
   /**
-   * Create a TLS handler for HTTP/2 capable of using ALPN/NPN.
+   * Create a server plaintext handler for gRPC.
    */
-  public static ChannelHandler serverTls(SSLEngine sslEngine, ChannelHandler grpcHandler) {
-    Preconditions.checkNotNull(sslEngine, "sslEngine");
+  public static ProtocolNegotiator serverPlaintext() {
+    return new ProtocolNegotiator() {
+      @Override
+      public Handler newHandler(final Http2ConnectionHandler handler) {
+        return new Handler() {
+          @Override
+          public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+            // Just replace this handler with the gRPC handler.
+            ctx.pipeline().replace(this, null, handler);
+          }
 
-    return new TlsChannelInboundHandlerAdapter(new SslHandler(sslEngine, false), grpcHandler);
+          @Override
+          public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
+            // Don't care.
+          }
+
+          @Override
+          public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+            // Should never happen.
+            ctx.fireExceptionCaught(cause);
+          }
+
+          @Override
+          public ByteString scheme() {
+            return Utils.HTTP;
+          }
+        };
+      }
+    };
+  }
+
+  /**
+   * Create a server TLS handler for HTTP/2 capable of using ALPN/NPN.
+   */
+  public static ProtocolNegotiator serverTls(final SslContext sslContext) {
+    Preconditions.checkNotNull(sslContext, "sslContext");
+    return new ProtocolNegotiator() {
+      @Override
+      public Handler newHandler(Http2ConnectionHandler handler) {
+        return new ServerTlsHandler(sslContext, handler);
+      }
+    };
   }
 
   @VisibleForTesting
-  static final class TlsChannelInboundHandlerAdapter extends ChannelInboundHandlerAdapter {
+  static final class ServerTlsHandler extends ChannelInboundHandlerAdapter
+          implements ProtocolNegotiator.Handler {
     private final ChannelHandler grpcHandler;
-    private final SslHandler sslHandler;
+    private final SslContext sslContext;
 
-    TlsChannelInboundHandlerAdapter(SslHandler sslHandler, ChannelHandler grpcHandler) {
-      this.sslHandler = sslHandler;
+    ServerTlsHandler(SslContext sslContext, ChannelHandler grpcHandler) {
+      this.sslContext = sslContext;
       this.grpcHandler = grpcHandler;
     }
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
       super.handlerAdded(ctx);
-      ctx.pipeline().addFirst(sslHandler);
+
+      SSLEngine sslEngine = sslContext.newEngine(ctx.alloc());
+      ctx.pipeline().addFirst(new SslHandler(sslEngine, false));
     }
 
     @Override
@@ -114,7 +158,7 @@ public final class ProtocolNegotiators {
       if (evt instanceof SslHandshakeCompletionEvent) {
         SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
         if (handshakeEvent.isSuccess()) {
-          if (HTTP2_VERSIONS.contains(sslHandler(ctx).applicationProtocol())) {
+          if (HTTP2_VERSIONS.contains(sslHandler(ctx.pipeline()).applicationProtocol())) {
             // Successfully negotiated the protocol. Replace this handler with
             // the GRPC handler.
             ctx.pipeline().replace(this, null, grpcHandler);
@@ -129,13 +173,18 @@ public final class ProtocolNegotiators {
       super.userEventTriggered(ctx, evt);
     }
 
+    private SslHandler sslHandler(ChannelPipeline pipeline) {
+      return pipeline.get(SslHandler.class);
+    }
+
     private void fail(ChannelHandlerContext ctx, Throwable exception) {
       logSslEngineDetails(Level.FINE, ctx, "TLS negotiation failed for new client.", exception);
       ctx.close();
     }
 
-    private SslHandler sslHandler(ChannelHandlerContext ctx) {
-      return ctx.pipeline().get(SslHandler.class);
+    @Override
+    public ByteString scheme() {
+      return Utils.HTTPS;
     }
   }
 

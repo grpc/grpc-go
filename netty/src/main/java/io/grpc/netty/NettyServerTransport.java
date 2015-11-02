@@ -52,13 +52,9 @@ import io.netty.handler.codec.http2.Http2HeadersDecoder;
 import io.netty.handler.codec.http2.Http2InboundFrameLogger;
 import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.logging.LogLevel;
-import io.netty.handler.ssl.SslContext;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import javax.annotation.Nullable;
-import javax.net.ssl.SSLEngine;
 
 /**
  * The Netty-based server transport.
@@ -67,7 +63,7 @@ class NettyServerTransport implements ServerTransport {
   private static final Logger log = Logger.getLogger(NettyServerTransport.class.getName());
 
   private final Channel channel;
-  private final SslContext sslContext;
+  private final ProtocolNegotiator protocolNegotiator;
   private final int maxStreams;
   private ServerTransportListener listener;
   private boolean terminated;
@@ -75,10 +71,10 @@ class NettyServerTransport implements ServerTransport {
   private final int maxMessageSize;
   private final int maxHeaderListSize;
 
-  NettyServerTransport(Channel channel, @Nullable SslContext sslContext, int maxStreams,
+  NettyServerTransport(Channel channel, ProtocolNegotiator protocolNegotiator, int maxStreams,
                        int flowControlWindow, int maxMessageSize, int maxHeaderListSize) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
-    this.sslContext = sslContext;
+    this.protocolNegotiator = Preconditions.checkNotNull(protocolNegotiator, "protocolNegotiator");
     this.maxStreams = maxStreams;
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
@@ -100,12 +96,8 @@ class NettyServerTransport implements ServerTransport {
       }
     });
 
-    ChannelHandler handler = grpcHandler;
-    if (sslContext != null) {
-      SSLEngine sslEngine = sslContext.newEngine(channel.alloc());
-      handler = ProtocolNegotiators.serverTls(sslEngine, grpcHandler);
-    }
-    channel.pipeline().addLast(handler);
+    ChannelHandler negotiationHandler = protocolNegotiator.newHandler(grpcHandler);
+    channel.pipeline().addLast(negotiationHandler);
   }
 
   @Override

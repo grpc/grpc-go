@@ -310,8 +310,9 @@ public class NettyClientTransportTest {
     File key = TestUtils.loadCert("server1.key");
     SslContext serverContext = GrpcSslContexts.forServer(serverCert, key)
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
+    ProtocolNegotiator negotiator = ProtocolNegotiators.serverTls(serverContext);
     server = new NettyServer(address, NioServerSocketChannel.class,
-            group, group, serverContext, maxStreamsPerConnection,
+            group, group, negotiator, maxStreamsPerConnection,
             DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, maxHeaderListSize);
     server.start(serverListener);
   }

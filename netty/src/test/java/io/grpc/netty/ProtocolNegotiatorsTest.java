@@ -38,18 +38,17 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
-import com.google.common.collect.Iterables;
-
-import io.grpc.netty.ProtocolNegotiators.TlsChannelInboundHandlerAdapter;
+import io.grpc.netty.ProtocolNegotiators.ServerTlsHandler;
 import io.grpc.netty.ProtocolNegotiators.TlsNegotiator;
+import io.grpc.testing.TestUtils;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
+import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -58,6 +57,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.File;
 import java.util.logging.Filter;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
@@ -75,20 +75,17 @@ public class ProtocolNegotiatorsTest {
 
   private EmbeddedChannel channel = new EmbeddedChannel();
   private ChannelPipeline pipeline = channel.pipeline();
-  private SslHandler sslHandler;
+  private SslContext sslContext;
   private SSLEngine engine;
   private ChannelHandlerContext channelHandlerCtx;
 
   @Before
   public void setUp() throws Exception {
+    File serverCert = TestUtils.loadCert("server1.pem");
+    File key = TestUtils.loadCert("server1.key");
+    sslContext = GrpcSslContexts.forServer(serverCert, key)
+            .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
     engine = SSLContext.getDefault().createSSLEngine();
-    sslHandler = new SslHandler(engine, false) {
-      @Override
-      public String applicationProtocol() {
-        // Just get any of them.
-        return Iterables.getFirst(GrpcSslContexts.HTTP2_VERSIONS, "");
-      }
-    };
   }
 
   @Test
@@ -96,13 +93,12 @@ public class ProtocolNegotiatorsTest {
     thrown.expect(NullPointerException.class);
     thrown.expectMessage("ssl");
 
-    ProtocolNegotiators.serverTls(null, null);
+    ProtocolNegotiators.serverTls(null);
   }
 
   @Test
   public void tlsAdapter_exceptionClosesChannel() throws Exception {
-    ChannelInboundHandlerAdapter handler =
-        new TlsChannelInboundHandlerAdapter(sslHandler, grpcHandler);
+    ChannelHandler handler = new ServerTlsHandler(sslContext, grpcHandler);
 
     // Use addFirst due to the funny error handling in EmbeddedChannel.
     pipeline.addFirst(handler);
@@ -114,18 +110,16 @@ public class ProtocolNegotiatorsTest {
 
   @Test
   public void tlsHandler_handlerAddedAddsSslHandler() throws Exception {
-    ChannelInboundHandlerAdapter handler =
-        new TlsChannelInboundHandlerAdapter(sslHandler, grpcHandler);
+    ChannelHandler handler = new ServerTlsHandler(sslContext, grpcHandler);
 
     pipeline.addLast(handler);
 
-    assertEquals(sslHandler, pipeline.first());
+    assertTrue(pipeline.first() instanceof SslHandler);
   }
 
   @Test
   public void tlsHandler_userEventTriggeredNonSslEvent() throws Exception {
-    ChannelInboundHandlerAdapter handler =
-        new TlsChannelInboundHandlerAdapter(sslHandler, grpcHandler);
+    ChannelHandler handler = new ServerTlsHandler(sslContext, grpcHandler);
     pipeline.addLast(handler);
     channelHandlerCtx = pipeline.context(handler);
     Object nonSslEvent = new Object();
@@ -146,9 +140,10 @@ public class ProtocolNegotiatorsTest {
       }
     };
 
-    ChannelInboundHandlerAdapter handler =
-        new TlsChannelInboundHandlerAdapter(badSslHandler, grpcHandler);
+    ChannelHandler handler = new ServerTlsHandler(sslContext, grpcHandler);
     pipeline.addLast(handler);
+
+    pipeline.replace(SslHandler.class, null, badSslHandler);
     channelHandlerCtx = pipeline.context(handler);
     Object sslEvent = SslHandshakeCompletionEvent.SUCCESS;
 
@@ -162,8 +157,7 @@ public class ProtocolNegotiatorsTest {
 
   @Test
   public void tlsHandler_userEventTriggeredSslEvent_handshakeFailure() throws Exception {
-    ChannelInboundHandlerAdapter handler =
-        new TlsChannelInboundHandlerAdapter(sslHandler, grpcHandler);
+    ChannelHandler handler = new ServerTlsHandler(sslContext, grpcHandler);
     pipeline.addLast(handler);
     channelHandlerCtx = pipeline.context(handler);
     Object sslEvent = new SslHandshakeCompletionEvent(new RuntimeException("bad"));
@@ -178,9 +172,17 @@ public class ProtocolNegotiatorsTest {
 
   @Test
   public void tlsHandler_userEventTriggeredSslEvent_supportedProtocol() throws Exception {
-    ChannelInboundHandlerAdapter handler =
-        new TlsChannelInboundHandlerAdapter(sslHandler, grpcHandler);
+    SslHandler goodSslHandler = new SslHandler(engine, false) {
+      @Override
+      public String applicationProtocol() {
+        return "h2";
+      }
+    };
+
+    ChannelHandler handler = new ServerTlsHandler(sslContext, grpcHandler);
     pipeline.addLast(handler);
+
+    pipeline.replace(SslHandler.class, null, goodSslHandler);
     channelHandlerCtx = pipeline.context(handler);
     Object sslEvent = SslHandshakeCompletionEvent.SUCCESS;
 
@@ -193,8 +195,7 @@ public class ProtocolNegotiatorsTest {
 
   @Test
   public void engineLog() {
-    ChannelInboundHandlerAdapter handler =
-        new TlsChannelInboundHandlerAdapter(sslHandler, grpcHandler);
+    ChannelHandler handler = new ServerTlsHandler(sslContext, grpcHandler);
     pipeline.addLast(handler);
     channelHandlerCtx = pipeline.context(handler);
 
