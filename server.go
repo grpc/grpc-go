@@ -51,6 +51,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
+	"github.com/YotpoLtd/grpc-go/middleware"
 )
 
 type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)
@@ -87,6 +88,7 @@ type Server struct {
 	conns  map[transport.ServerTransport]bool
 	m      map[string]*service // service name -> service info
 	events trace.EventLog
+	mc     middleware.MiddlewareChain
 }
 
 type options struct {
@@ -136,6 +138,7 @@ func NewServer(opt ...ServerOption) *Server {
 		opts:  opts,
 		conns: make(map[transport.ServerTransport]bool),
 		m:     make(map[string]*service),
+		mc:    middleware.NewMiddlewareChain(),
 	}
 	if EnableTracing {
 		_, file, line, _ := runtime.Caller(1)
@@ -347,7 +350,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 				return nil
 			}
-			reply, appErr := md.Handler(srv.server, stream.Context(), df)
+			reply, appErr :=  s.wrapMiddleware(md.Handler)(srv.server, stream.Context(), df)
 			if appErr != nil {
 				if err, ok := appErr.(rpcError); ok {
 					statusCode = err.code
@@ -508,6 +511,13 @@ func (s *Server) TestingCloseConns() {
 	}
 	s.conns = make(map[transport.ServerTransport]bool)
 	s.mu.Unlock()
+}
+func (s *Server) AddMiddleware(name string, md middleware.MiddlewareFn) {
+	s.mc.AddMiddleware(name, md)
+}
+
+func (s *Server) wrapMiddleware(next methodHandler) (methodHandler){
+	return s.mc.Wrap(next)
 }
 
 // SendHeader sends header metadata. It may be called at most once from a unary
