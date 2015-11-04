@@ -36,7 +36,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Objects;
+import com.google.common.base.MoreObjects;
 
 import io.grpc.Codec;
 import io.grpc.Compressor;
@@ -449,10 +449,8 @@ public abstract class AbstractStream<IdT> implements Stream {
     return toStringHelper().toString();
   }
 
-  // We support Guava 14
-  @SuppressWarnings("deprecation")
-  protected Objects.ToStringHelper toStringHelper() {
-    return Objects.toStringHelper(this)
+  protected MoreObjects.ToStringHelper toStringHelper() {
+    return MoreObjects.toStringHelper(this)
         .add("id", id())
         .add("inboundPhase", inboundPhase().name())
         .add("outboundPhase", outboundPhase().name());

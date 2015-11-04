@@ -31,7 +31,7 @@
 
 package io.grpc;
 
-import com.google.common.base.Objects;
+import com.google.common.base.MoreObjects;
 
 import java.util.concurrent.TimeUnit;
 
@@ -180,10 +180,9 @@ public final class CallOptions {
     requestKey = other.requestKey;
   }
 
-  @SuppressWarnings("deprecation") // guava 14.0
   @Override
   public String toString() {
-    Objects.ToStringHelper toStringHelper = Objects.toStringHelper(this);
+    MoreObjects.ToStringHelper toStringHelper = MoreObjects.toStringHelper(this);
     toStringHelper.add("deadlineNanoTime", deadlineNanoTime);
     if (deadlineNanoTime != null) {
       long remainingNanos = deadlineNanoTime - System.nanoTime();

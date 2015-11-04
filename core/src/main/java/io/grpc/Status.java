@@ -31,6 +31,7 @@
 
 package io.grpc;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -439,11 +440,9 @@ public final class Status {
   }
 
   /** A string representation of the status useful for debugging. */
-  // We support Guava 14
-  @SuppressWarnings("deprecation")
   @Override
   public String toString() {
-    return Objects.toStringHelper(this)
+    return MoreObjects.toStringHelper(this)
         .add("code", code.name())
         .add("description", description)
         .add("cause", cause)

@@ -34,7 +34,7 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.internal.GrpcUtil.CANCEL_REASONS;
 
-import com.google.common.base.Objects;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Metadata;
@@ -311,11 +311,9 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    */
   protected abstract void sendCancel(Status reason);
 
-  // We support Guava 14
-  @SuppressWarnings("deprecation")
   @Override
-  protected Objects.ToStringHelper toStringHelper() {
-    Objects.ToStringHelper toStringHelper = super.toStringHelper();
+  protected MoreObjects.ToStringHelper toStringHelper() {
+    MoreObjects.ToStringHelper toStringHelper = super.toStringHelper();
     if (status != null) {
       toStringHelper.add("status", status);
     }
