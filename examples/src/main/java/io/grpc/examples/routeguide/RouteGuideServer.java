@@ -138,7 +138,7 @@ public class RouteGuideServer {
 
     /**
      * Gets the {@link Feature} at the requested {@link Point}. If no feature at that location
-     * exists, an unnammed feature is returned at the provided location.
+     * exists, an unnamed feature is returned at the provided location.
      *
      * @param request the requested location for the feature.
      * @param responseObserver the observer that will receive the feature at the requested point.
