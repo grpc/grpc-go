@@ -56,11 +56,11 @@ import io.grpc.ClientCall;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Server;
+import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptors;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.auth.ClientAuthInterceptor;
-import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.MetadataUtils;
@@ -106,7 +106,7 @@ public abstract class AbstractTransportTest {
   private static Server server;
   private static int OPERATION_TIMEOUT = 5000;
 
-  protected static void startStaticServer(AbstractServerImplBuilder<?> builder) {
+  protected static void startStaticServer(ServerBuilder<?> builder) {
     testServiceExecutor = Executors.newScheduledThreadPool(2);
 
     builder.addService(ServerInterceptors.intercept(
