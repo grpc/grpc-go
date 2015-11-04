@@ -1,6 +1,5 @@
 package middleware
 import (
-	"fmt"
 	"golang.org/x/net/context"
 )
 
@@ -22,8 +21,7 @@ func (mdc MiddlewareChain) AddMiddleware(name string, md MiddlewareFn) {
 
 func (mdc MiddlewareChain) Wrap(next func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)) (func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)) {
 	return func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
-		for name, middleware := range mdc.middlewares {
-			fmt.Println("Executing", name)
+		for _, middleware := range mdc.middlewares {
 			next = middleware(next)
 		}
 		return next(srv, ctx, dec)

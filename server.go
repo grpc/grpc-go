@@ -200,6 +200,13 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
+func (s *Server) AddMiddlewareToService(sn string, mn string, mfn middleware.MiddlewareFn) {
+	srv, ok :=s.m[sn]
+	if ok {
+		srv.AddMiddleware(mn, mfn)
+	}
+}
+
 var (
 	// ErrServerStopped indicates that the operation is now illegal because of
 	// the server being stopped.
