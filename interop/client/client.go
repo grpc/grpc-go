@@ -89,7 +89,7 @@ var (
 	largeRespSize = 314159
 
 	// The test CA root cert file
-	testCAFile  = "testdata/ca.pem"
+	testCAFile = "testdata/ca.pem"
 )
 
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
