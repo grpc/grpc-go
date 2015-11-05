@@ -203,7 +203,7 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 func (s *Server) AddMiddlewareToService(sn string, mn string, mfn middleware.MiddlewareFn) {
 	srv, ok :=s.m[sn]
 	if ok {
-		srv.AddMiddleware(mn, mfn)
+		srv.AddUnaryMiddleware(mn, mfn)
 	}
 }
 
@@ -359,7 +359,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 				return nil
 			}
-			reply, appErr :=  s.Wrap(srv.Wrap(md.Handler))(srv.server, stream.Context(), df)
+			reply, appErr :=  s.WrapUnary(srv.WrapUnary(md.Handler))(srv.server, stream.Context(), df)
 			if appErr != nil {
 				if err, ok := appErr.(rpcError); ok {
 					statusCode = err.code

@@ -1,29 +1,42 @@
 package middleware
+
 import (
 	"golang.org/x/net/context"
 )
 
-type MiddlewareFn func(next func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)) (func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error))
+type MiddlewareFn func(next func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)) func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)
+type MiddlewareStreamFn func(next func(srv interface{}, stream interface{}) error) func(srv interface{}, stream interface{}) error
 
 type MiddlewareChain struct {
-	middlewares map[string]MiddlewareFn
+	unaryMW     map[string]MiddlewareFn
+	streamingMW map[string]MiddlewareStreamFn
 }
 
 func NewMiddlewareChain() MiddlewareChain {
 	return MiddlewareChain{
-		middlewares: make(map[string]MiddlewareFn),
+		unaryMW:     make(map[string]MiddlewareFn),
+		streamingMW: make(map[string]MiddlewareStreamFn),
 	}
 }
 
-func (mdc MiddlewareChain) AddMiddleware(name string, md MiddlewareFn) {
-	mdc.middlewares[name] = md
+func (mdc MiddlewareChain) AddUnaryMiddleware(name string, md MiddlewareFn) {
+	mdc.unaryMW[name] = md
 }
 
-func (mdc MiddlewareChain) Wrap(next func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)) (func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)) {
+func (mdc MiddlewareChain) WrapUnary(next func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)) func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	return func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
-		for _, middleware := range mdc.middlewares {
+		for _, middleware := range mdc.unaryMW {
 			next = middleware(next)
 		}
 		return next(srv, ctx, dec)
+	}
+}
+
+func (mdc MiddlewareChain) WrapStream(next func(srv interface{}, stream interface{}) error) func(srv interface{}, stream interface{}) error {
+	return func(srv interface{}, stream interface{}) error {
+		for _, middleware := range mdc.streamingMW {
+			next = middleware(next)
+		}
+		return next(srv, stream)
 	}
 }
