@@ -51,7 +51,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
-	"github.com/YotpoLtd/grpc-go/middleware"
+	"google.golang.org/grpc/middleware"
 )
 
 type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)
@@ -200,6 +200,9 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
+
+// AddMiddlewareToService adds a middleware to a specific service.
+// Should be called only after RegisterService had been called
 func (s *Server) AddMiddlewareToService(sn string, mn string, mfn middleware.MiddlewareFn) {
 	srv, ok :=s.m[sn]
 	if ok {
