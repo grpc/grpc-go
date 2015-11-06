@@ -31,6 +31,8 @@
 
 package io.grpc.internal;
 
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.isA;
@@ -40,6 +42,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.io.CharStreams;
 
+import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
@@ -65,6 +68,7 @@ public class ServerCallImplTest {
   @Mock private ServerStream stream;
 
   private ServerCallImpl<Long, Long> call;
+  private Context.CancellableContext context;
 
   private final MethodDescriptor<Long, Long> method = MethodDescriptor.create(
       MethodType.UNARY, "/service/method", new LongMarshaller(), new LongMarshaller());
@@ -72,7 +76,8 @@ public class ServerCallImplTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    call = new ServerCallImpl<Long, Long>(stream, method);
+    context = Context.ROOT.withCancellation();
+    call = new ServerCallImpl<Long, Long>(stream, method, context);
   }
 
   @Test
@@ -158,6 +163,20 @@ public class ServerCallImplTest {
     when(stream.isReady()).thenReturn(true);
 
     assertTrue(call.isReady());
+  }
+
+  @Test
+  public void closeWithOkCancelsContextWithNoCause() {
+    call.close(Status.OK, new Metadata());
+    assertTrue(context.isCancelled());
+    assertNull(context.cause());
+  }
+
+  @Test
+  public void closeWithErrorCancelsContextWithCause() {
+    call.close(Status.CANCELLED, new Metadata());
+    assertTrue(context.isCancelled());
+    assertNotNull(context.cause());
   }
 
   @Test

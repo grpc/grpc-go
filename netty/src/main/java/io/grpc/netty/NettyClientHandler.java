@@ -360,6 +360,14 @@ class NettyClientHandler extends AbstractNettyHandler {
                   Http2Stream http2Stream = connection().stream(streamId);
                   if (http2Stream != null) {
                     http2Stream.setProperty(streamKey, stream);
+                  } else if (stream.isClosed()) {
+                    // The stream has been cancelled and Netty is sending a RST_STREAM frame which
+                    // causes it to purge pending writes from the flow-controller and delete the
+                    // http2Stream. The stream listener has already been notified of cancellation
+                    // so there is nothing to do.
+                    return;
+                  } else {
+                    throw new IllegalStateException("Stream closed but http2 stream not defined");
                   }
                   // Attach the client stream to the HTTP/2 stream object as user data.
                   stream.setHttp2Stream(http2Stream);

@@ -34,9 +34,12 @@ package io.grpc.internal;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.isA;
+import static org.mockito.Matchers.isNotNull;
 import static org.mockito.Matchers.notNull;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.timeout;
@@ -44,6 +47,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.google.common.util.concurrent.MoreExecutors;
+
+import io.grpc.Context;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -65,13 +71,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Unit tests for {@link ServerImpl}. */
@@ -79,11 +88,20 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ServerImplTest {
   private static final IntegerMarshaller INTEGER_MARSHALLER = IntegerMarshaller.INSTANCE;
   private static final StringMarshaller STRING_MARSHALLER = StringMarshaller.INSTANCE;
+  private static final Context.Key<String> SERVER_ONLY = Context.key("serverOnly");
+  private static final Context.CancellableContext SERVER_CONTEXT =
+      Context.ROOT.withValue(SERVER_ONLY, "yes").withCancellation();
+
+  static {
+    // Cancel the root context. Server will fork it so the per-call context should not
+    // be cancelled.
+    SERVER_CONTEXT.cancel(null);
+  }
 
   private ExecutorService executor = Executors.newSingleThreadExecutor();
   private MutableHandlerRegistry registry = new MutableHandlerRegistryImpl();
   private SimpleServer transportServer = new SimpleServer();
-  private ServerImpl server = new ServerImpl(executor, registry, transportServer);
+  private ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT);
 
   @Mock
   private ServerStream stream;
@@ -111,7 +129,7 @@ public class ServerImplTest {
       @Override
       public void shutdown() {}
     };
-    ServerImpl server = new ServerImpl(executor, registry, transportServer);
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT);
     server.start();
     server.shutdown();
     assertTrue(server.isShutdown());
@@ -128,7 +146,7 @@ public class ServerImplTest {
         throw new AssertionError("Should not be called, because wasn't started");
       }
     };
-    ServerImpl server = new ServerImpl(executor, registry, transportServer);
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT);
     server.shutdown();
     assertTrue(server.isShutdown());
     assertTrue(server.isTerminated());
@@ -136,7 +154,7 @@ public class ServerImplTest {
 
   @Test
   public void startStopImmediateWithChildTransport() throws IOException {
-    ServerImpl server = new ServerImpl(executor, registry, transportServer);
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
       boolean shutdown;
@@ -167,7 +185,8 @@ public class ServerImplTest {
       }
     }
 
-    ServerImpl server = new ServerImpl(executor, registry, new FailingStartupServer());
+    ServerImpl server = new ServerImpl(executor, registry, new FailingStartupServer(),
+        SERVER_CONTEXT);
     try {
       server.start();
       fail("expected exception");
@@ -303,7 +322,7 @@ public class ServerImplTest {
     }
 
     transportServer = new MaybeDeadlockingServer();
-    ServerImpl server = new ServerImpl(executor, registry, transportServer);
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT);
     server.start();
     new Thread() {
       @Override
@@ -360,6 +379,122 @@ public class ServerImplTest {
       }
     }.start();
     server.shutdown();
+  }
+
+  @Test
+  public void testCallContextIsBoundInListenerCallbacks() throws Exception {
+    registry.addService(ServerServiceDefinition.builder("Waiter")
+        .addMethod(
+            MethodDescriptor.create(
+                MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
+            new ServerCallHandler<String, Integer>() {
+              @Override
+              public ServerCall.Listener<String> startCall(
+                  MethodDescriptor<String, Integer> method,
+                  ServerCall<Integer> call,
+                  Metadata headers) {
+                // Check that the current context is a descendant of SERVER_CONTEXT
+                final Context initial = Context.current();
+                assertEquals("yes", SERVER_ONLY.get(initial));
+                assertNotSame(SERVER_CONTEXT, initial);
+                assertFalse(initial.isCancelled());
+                return new ServerCall.Listener<String>() {
+
+                  @Override
+                  public void onReady() {
+                    checkContext();
+                    super.onReady();
+                  }
+
+                  @Override
+                  public void onMessage(String message) {
+                    checkContext();
+                    super.onMessage(message);
+                  }
+
+                  @Override
+                  public void onHalfClose() {
+                    checkContext();
+                    super.onHalfClose();
+                  }
+
+                  @Override
+                  public void onCancel() {
+                    checkContext();
+                    super.onCancel();
+                  }
+
+                  @Override
+                  public void onComplete() {
+                    checkContext();
+                    super.onComplete();
+                  }
+
+                  private void checkContext() {
+                    // Check that the bound context is the same as the initial one.
+                    assertSame(initial, Context.current());
+                  }
+                };
+              }
+            }).build());
+    ServerTransportListener transportListener
+        = transportServer.registerNewServerTransport(new SimpleServerTransport());
+
+    ServerStreamListener streamListener
+        = transportListener.streamCreated(stream, "Waiter/serve", new Metadata());
+    assertNotNull(streamListener);
+
+    streamListener.onReady();
+    streamListener.messageRead(new ByteArrayInputStream(new byte[0]));
+    streamListener.halfClosed();
+    streamListener.closed(Status.CANCELLED);
+
+    // Close should never be called if asserts in listener pass.
+    verify(stream, times(0)).close(isA(Status.class), isNotNull(Metadata.class));
+  }
+
+  @Test
+  public void testClientCancelTriggersContextCancellation() throws Exception {
+    final CountDownLatch latch = new CountDownLatch(1);
+    callListener = new ServerCall.Listener<String>() {
+      @Override
+      public void onReady() {
+        Context.current().addListener(new Context.CancellationListener() {
+          @Override
+          public void cancelled(Context context) {
+            latch.countDown();
+          }
+        }, MoreExecutors.directExecutor());
+      }
+    };
+
+    final AtomicReference<ServerCall<Integer>> callReference
+        = new AtomicReference<ServerCall<Integer>>();
+    registry.addService(ServerServiceDefinition.builder("Waiter")
+        .addMethod(
+            MethodDescriptor.create(
+                MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
+            new ServerCallHandler<String, Integer>() {
+              @Override
+              public ServerCall.Listener<String> startCall(
+                  MethodDescriptor<String, Integer> method,
+                  ServerCall<Integer> call,
+                  Metadata headers) {
+                callReference.set(call);
+                return callListener;
+              }
+            }).build());
+    ServerTransportListener transportListener
+        = transportServer.registerNewServerTransport(new SimpleServerTransport());
+
+    ServerStreamListener streamListener
+        = transportListener.streamCreated(stream, "Waiter/serve", new Metadata());
+    assertNotNull(streamListener);
+
+    streamListener.onReady();
+    streamListener.closed(Status.CANCELLED);
+
+    assertTrue(latch.await(5, TimeUnit.SECONDS));
   }
 
   /**

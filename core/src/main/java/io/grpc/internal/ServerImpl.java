@@ -40,6 +40,7 @@ import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 
+import io.grpc.Context;
 import io.grpc.HandlerRegistry;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
@@ -56,6 +57,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Default implementation of {@link io.grpc.Server}, for creation by transports.
@@ -76,6 +78,15 @@ public final class ServerImpl extends io.grpc.Server {
 
   private static final Future<?> DEFAULT_TIMEOUT_FUTURE = Futures.immediateCancelledFuture();
 
+  private static final TimeoutException TIMEOUT_EXCEPTION =
+      new TimeoutException("request timed out") {
+        @Override
+        public synchronized Throwable fillInStackTrace() {
+          // Suppress the stack trace as it would be confusing.
+          return this;
+        }
+      };
+
   /** Executor for application processing. */
   private Executor executor;
   private boolean usingSharedExecutor;
@@ -91,6 +102,7 @@ public final class ServerImpl extends io.grpc.Server {
   private final Collection<ServerTransport> transports = new HashSet<ServerTransport>();
 
   private final ScheduledExecutorService timeoutService = SharedResourceHolder.get(TIMER_SERVICE);
+  private final Context rootContext;
 
   /**
    * Construct a server.
@@ -99,10 +111,13 @@ public final class ServerImpl extends io.grpc.Server {
    * @param registry of methods to expose to remote clients.
    */
   ServerImpl(Executor executor, HandlerRegistry registry,
-      io.grpc.internal.Server transportServer) {
+      io.grpc.internal.Server transportServer, Context rootContext) {
     this.executor = executor;
     this.registry = Preconditions.checkNotNull(registry, "registry");
     this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");
+    // Fork from the passed in context so that it does not propagate cancellation, it only
+    // inherits values.
+    this.rootContext = Preconditions.checkNotNull(rootContext).fork();
   }
 
   /**
@@ -271,7 +286,8 @@ public final class ServerImpl extends io.grpc.Server {
     @Override
     public ServerStreamListener streamCreated(final ServerStream stream, final String methodName,
         final Metadata headers) {
-      final Future<?> timeout = scheduleTimeout(stream, headers);
+      final Context.CancellableContext context = rootContext.withCancellation();
+      final Future<?> timeout = scheduleTimeout(stream, headers, context);
       final Executor wrappedExecutor;
       // This is a performance optimization that avoids the synchronization and queuing overhead
       // that comes with SerializingExecutor.
@@ -280,14 +296,15 @@ public final class ServerImpl extends io.grpc.Server {
       } else {
         wrappedExecutor = new SerializingExecutor(executor);
       }
+
       final JumpToApplicationThreadServerStreamListener jumpListener
-          = new JumpToApplicationThreadServerStreamListener(wrappedExecutor, stream);
+          = new JumpToApplicationThreadServerStreamListener(wrappedExecutor, stream, context);
       // Run in wrappedExecutor so jumpListener.setListener() is called before any callbacks
       // are delivered, including any errors. Callbacks can still be triggered, but they will be
       // queued.
-      wrappedExecutor.execute(new Runnable() {
+      wrappedExecutor.execute(new ContextRunnable(context) {
           @Override
-          public void run() {
+          public void runInContext() {
             ServerStreamListener listener = NOOP_LISTENER;
             try {
               ServerMethodDefinition<?, ?> method = registry.lookupMethod(methodName);
@@ -298,7 +315,7 @@ public final class ServerImpl extends io.grpc.Server {
                 timeout.cancel(true);
                 return;
               }
-              listener = startCall(stream, methodName, method, timeout, headers);
+              listener = startCall(stream, methodName, method, timeout, headers, context);
             } catch (Throwable t) {
               stream.close(Status.fromThrowable(t), new Metadata());
               timeout.cancel(true);
@@ -311,7 +328,8 @@ public final class ServerImpl extends io.grpc.Server {
       return jumpListener;
     }
 
-    private Future<?> scheduleTimeout(final ServerStream stream, Metadata headers) {
+    private Future<?> scheduleTimeout(final ServerStream stream, Metadata headers,
+                                      final Context.CancellableContext context) {
       Long timeoutMicros = headers.get(TIMEOUT_KEY);
       if (timeoutMicros == null) {
         return DEFAULT_TIMEOUT_FUTURE;
@@ -322,6 +340,9 @@ public final class ServerImpl extends io.grpc.Server {
             // This should rarely get run, since the client will likely cancel the stream before
             // the timeout is reached.
             stream.cancel(Status.DEADLINE_EXCEEDED);
+            // Cancel the context using a statically created exception as this event may occur
+            // often enough that stack trace alloc impacts performance.
+            context.cancel(TIMEOUT_EXCEPTION);
           }
         },
         timeoutMicros,
@@ -331,10 +352,10 @@ public final class ServerImpl extends io.grpc.Server {
     /** Never returns {@code null}. */
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Future<?> timeout,
-        Metadata headers) {
+        Metadata headers, Context.CancellableContext context) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
-          stream, methodDef.getMethodDescriptor());
+          stream, methodDef.getMethodDescriptor(), context);
       ServerCall.Listener<ReqT> listener = methodDef.getServerCallHandler()
           .startCall(methodDef.getMethodDescriptor(), call, headers);
       if (listener == null) {
@@ -371,14 +392,16 @@ public final class ServerImpl extends io.grpc.Server {
    */
   private static class JumpToApplicationThreadServerStreamListener implements ServerStreamListener {
     private final Executor callExecutor;
+    private final Context.CancellableContext context;
     private final ServerStream stream;
     // Only accessed from callExecutor.
     private ServerStreamListener listener;
 
     public JumpToApplicationThreadServerStreamListener(Executor executor,
-        ServerStream stream) {
+        ServerStream stream, Context.CancellableContext context) {
       this.callExecutor = executor;
       this.stream = stream;
+      this.context = context;
     }
 
     private ServerStreamListener getListener() {
@@ -404,9 +427,9 @@ public final class ServerImpl extends io.grpc.Server {
 
     @Override
     public void messageRead(final InputStream message) {
-      callExecutor.execute(new Runnable() {
+      callExecutor.execute(new ContextRunnable(context) {
         @Override
-        public void run() {
+        public void runInContext() {
           try {
             getListener().messageRead(message);
           } catch (Throwable t) {
@@ -419,9 +442,9 @@ public final class ServerImpl extends io.grpc.Server {
 
     @Override
     public void halfClosed() {
-      callExecutor.execute(new Runnable() {
+      callExecutor.execute(new ContextRunnable(context) {
         @Override
-        public void run() {
+        public void runInContext() {
           try {
             getListener().halfClosed();
           } catch (Throwable t) {
@@ -434,19 +457,25 @@ public final class ServerImpl extends io.grpc.Server {
 
     @Override
     public void closed(final Status status) {
-      callExecutor.execute(new Runnable() {
+      callExecutor.execute(new ContextRunnable(context) {
         @Override
-        public void run() {
-          getListener().closed(status);
+        public void runInContext() {
+          try {
+            getListener().closed(status);
+          } finally {
+            // Regardless of the status code we cancel the context so that listeners
+            // are aware that the call is done.
+            context.cancel(status.getCause());
+          }
         }
       });
     }
 
     @Override
     public void onReady() {
-      callExecutor.execute(new Runnable() {
+      callExecutor.execute(new ContextRunnable(context) {
         @Override
-        public void run() {
+        public void runInContext() {
           getListener().onReady();
         }
       });

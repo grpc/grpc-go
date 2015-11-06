@@ -36,6 +36,7 @@ import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.base.Throwables;
 
+import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -48,14 +49,17 @@ import java.util.concurrent.Future;
 final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
   private final ServerStream stream;
   private final MethodDescriptor<ReqT, RespT> method;
+  private final Context.CancellableContext context;
   // state
   private volatile boolean cancelled;
   private boolean sendHeadersCalled;
   private boolean closeCalled;
 
-  ServerCallImpl(ServerStream stream, MethodDescriptor<ReqT, RespT> method) {
+  ServerCallImpl(ServerStream stream, MethodDescriptor<ReqT, RespT> method,
+                 Context.CancellableContext context) {
     this.stream = stream;
     this.method = method;
+    this.context = context;
   }
 
   @Override
@@ -99,9 +103,17 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
 
   @Override
   public void close(Status status, Metadata trailers) {
-    checkState(!closeCalled, "call already closed");
-    closeCalled = true;
-    stream.close(status, trailers);
+    try {
+      checkState(!closeCalled, "call already closed");
+      closeCalled = true;
+      stream.close(status, trailers);
+    } finally {
+      if (status.getCode() == Status.Code.OK) {
+        context.cancel(null);
+      } else {
+        context.cancel(status.getCause() != null ? status.getCause() : status.asRuntimeException());
+      }
+    }
   }
 
   @Override

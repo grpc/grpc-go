@@ -34,6 +34,7 @@ package io.grpc.testing.integration;
 import static io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -517,11 +518,11 @@ public abstract class AbstractTransportTest {
   }
 
   @Test(timeout = 10000)
-  public void exchangeContextUnaryCall() throws Exception {
+  public void exchangeMetadataUnaryCall() throws Exception {
     TestServiceGrpc.TestServiceBlockingStub stub =
         TestServiceGrpc.newBlockingStub(channel);
 
-    // Capture the context exchange
+    // Capture the metadata exchange
     Metadata fixedHeaders = new Metadata();
     // Send a context proto (as it's in the default extension registry)
     Messages.SimpleContext contextValue =
@@ -533,7 +534,7 @@ public abstract class AbstractTransportTest {
     AtomicReference<Metadata> headersCapture = new AtomicReference<Metadata>();
     stub = MetadataUtils.captureMetadata(stub, headersCapture, trailersCapture);
 
-    Assert.assertNotNull(stub.emptyCall(Empty.getDefaultInstance()));
+    assertNotNull(stub.emptyCall(Empty.getDefaultInstance()));
 
     // Assert that our side channel object is echoed back in both headers and trailers
     Assert.assertEquals(contextValue, headersCapture.get().get(METADATA_KEY));
@@ -541,10 +542,10 @@ public abstract class AbstractTransportTest {
   }
 
   @Test(timeout = 10000)
-  public void exchangeContextStreamingCall() throws Exception {
+  public void exchangeMetadataStreamingCall() throws Exception {
     TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
 
-    // Capture the context exchange
+    // Capture the metadata exchange
     Metadata fixedHeaders = new Metadata();
     // Send a context proto (as it's in the default extension registry)
     Messages.SimpleContext contextValue =

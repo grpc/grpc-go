@@ -34,6 +34,7 @@ package io.grpc.internal;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 
+import io.grpc.Context;
 import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
 import io.grpc.MutableHandlerRegistry;
@@ -100,7 +101,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   @Override
   public ServerImpl build() {
     io.grpc.internal.Server transportServer = buildTransportServer();
-    return new ServerImpl(executor, registry, transportServer);
+    return new ServerImpl(executor, registry, transportServer, Context.ROOT);
   }
 
   /**

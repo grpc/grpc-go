@@ -47,6 +47,7 @@ import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Codec;
 import io.grpc.Compressor;
+import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -67,9 +68,11 @@ import javax.annotation.concurrent.GuardedBy;
 /**
  * Implementation of {@link ClientCall}.
  */
-final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
+final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
+    implements Context.CancellationListener {
   private final MethodDescriptor<ReqT, RespT> method;
   private final Executor callExecutor;
+  private final Context context;
   private final boolean unaryRequest;
   private final CallOptions callOptions;
   private ClientStream stream;
@@ -91,11 +94,18 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     this.callExecutor = executor == MoreExecutors.directExecutor()
         ? new SerializeReentrantCallsDirectExecutor()
         : new SerializingExecutor(executor);
+    // Propagate the context from the thread which initiated the call to all callbacks.
+    this.context = Context.current();
     this.unaryRequest = method.getType() == MethodType.UNARY
         || method.getType() == MethodType.SERVER_STREAMING;
     this.callOptions = callOptions;
     this.clientTransportProvider = clientTransportProvider;
     this.deadlineCancellationExecutor = deadlineCancellationExecutor;
+  }
+
+  @Override
+  public void cancelled(Context context) {
+    cancel();
   }
 
   /**
@@ -150,9 +160,23 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   }
 
   @Override
-  public void start(Listener<RespT> observer, Metadata headers) {
+  public void start(final Listener<RespT> observer, Metadata headers) {
     Preconditions.checkState(stream == null, "Already started");
 
+    if (context.isCancelled()) {
+      // Context is already cancelled so no need to create a stream, just notify the observer of
+      // cancellation via callback on the executor
+      callExecutor.execute(new ContextRunnable(context) {
+        @Override
+        public void runInContext() {
+          // Must call onHeaders per API contract
+          observer.onHeaders(new Metadata());
+          // then notify of immediate closure.
+          observer.onClose(Status.CANCELLED.withCause(context.cause()), new Metadata());
+        }
+      });
+      return;
+    }
     prepareHeaders(headers, callOptions, userAgent, decompressorRegistry);
 
     ClientStreamListener listener = new ClientStreamListenerImpl(observer);
@@ -190,6 +214,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     if (timeoutMicros != null) {
       deadlineCancellationFuture = startDeadlineTimer(timeoutMicros);
     }
+    // Propagate later Context cancellation to the remote side.
+    this.context.addListener(this, MoreExecutors.directExecutor());
   }
 
   /**
@@ -238,10 +264,14 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       return;
     }
     cancelCalled = true;
-    // Cancel is called in exception handling cases, so it may be the case that the
-    // stream was never successfully created.
-    if (stream != null) {
-      stream.cancel(Status.CANCELLED);
+    try {
+      // Cancel is called in exception handling cases, so it may be the case that the
+      // stream was never successfully created.
+      if (stream != null) {
+        stream.cancel(Status.CANCELLED);
+      }
+    } finally {
+      context.removeListener(ClientCallImpl.this);
     }
   }
 
@@ -305,9 +335,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
     @Override
     public void headersRead(final Metadata headers) {
-      callExecutor.execute(new Runnable() {
+      callExecutor.execute(new ContextRunnable(context) {
         @Override
-        public void run() {
+        public final void runInContext() {
           try {
             if (closed) {
               return;
@@ -324,9 +354,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
     @Override
     public void messageRead(final InputStream message) {
-      callExecutor.execute(new Runnable() {
+      callExecutor.execute(new ContextRunnable(context) {
         @Override
-        public void run() {
+        public final void runInContext() {
           try {
             if (closed) {
               return;
@@ -360,25 +390,29 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       }
       final Status savedStatus = status;
       final Metadata savedTrailers = trailers;
-      callExecutor.execute(new Runnable() {
+      callExecutor.execute(new ContextRunnable(context) {
         @Override
-        public void run() {
-          closed = true;
-          // manually optimize the volatile read
-          ScheduledFuture<?> future = deadlineCancellationFuture;
-          if (future != null) {
-            future.cancel(false);
+        public final void runInContext() {
+          try {
+            closed = true;
+            // manually optimize the volatile read
+            ScheduledFuture<?> future = deadlineCancellationFuture;
+            if (future != null) {
+              future.cancel(false);
+            }
+            observer.onClose(savedStatus, savedTrailers);
+          } finally {
+            context.removeListener(ClientCallImpl.this);
           }
-          observer.onClose(savedStatus, savedTrailers);
         }
       });
     }
 
     @Override
     public void onReady() {
-      callExecutor.execute(new Runnable() {
+      callExecutor.execute(new ContextRunnable(context) {
         @Override
-        public void run() {
+        public final void runInContext() {
           observer.onReady();
         }
       });
@@ -431,15 +465,16 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     /**
      * Get a transport and try to create a stream on it.
      */
-    private class StreamCreationTask implements Runnable {
+    private class StreamCreationTask extends ContextRunnable {
       final ListenableFuture<ClientTransport> transportFuture;
 
-      StreamCreationTask(ListenableFuture<ClientTransport> transportFuture) {
+      StreamCreationTask(Context context, ListenableFuture<ClientTransport> transportFuture) {
+        super(context);
         this.transportFuture = Preconditions.checkNotNull(transportFuture);
       }
 
       @Override
-      public void run() {
+      public void runInContext() {
         if (transportFuture.isDone()) {
           ClientTransport transport;
           try {
@@ -466,7 +501,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         ClientStreamListener listener) {
       this.headers = headers;
       this.listener = listener;
-      new StreamCreationTask(initialTransportFuture).run();
+      new StreamCreationTask(context, initialTransportFuture).run();
     }
 
     /**
@@ -517,10 +552,14 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       synchronized (this) {
         if (realStream == null) {
           realStream = NOOP_CLIENT_STREAM;
-          callExecutor.execute(new Runnable() {
+          callExecutor.execute(new ContextRunnable(context) {
             @Override
-            public void run() {
-              listener.closed(reason, new Metadata());
+            public void runInContext() {
+              try {
+                listener.closed(reason, new Metadata());
+              } finally {
+                context.removeListener(ClientCallImpl.this);
+              }
             }
           });
         }

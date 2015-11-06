@@ -32,12 +32,17 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Splitter;
@@ -45,29 +50,40 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.SettableFuture;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Codec;
+import io.grpc.Context;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
+import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Test for {@link ClientCallImpl}.
@@ -75,35 +91,51 @@ import java.util.concurrent.ScheduledExecutorService;
 @RunWith(JUnit4.class)
 public class ClientCallImplTest {
 
+  private static final MethodDescriptor<Void, Void> DESCRIPTOR = MethodDescriptor.create(
+      MethodType.UNARY,
+      "service/method",
+      new TestMarshaller<Void>(),
+      new TestMarshaller<Void>());
+
   private final ScheduledExecutorService deadlineCancellationExecutor =
       Executors.newScheduledThreadPool(0);
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance();
 
+  @Mock
+  private ClientTransport transport;
+
+  private final ClientTransportProvider provider = new ClientTransportProvider() {
+    @Override
+    public ListenableFuture<ClientTransport> get(CallOptions callOptions) {
+      return Futures.immediateFuture(transport);
+    }
+  };
+
+  @Mock
+  private ClientStream stream;
+
+  @Captor
+  private ArgumentCaptor<ClientStreamListener> listenerArgumentCaptor;
+
   @Before
   public void setUp() {
+    MockitoAnnotations.initMocks(this);
     decompressorRegistry.register(new Codec.Gzip(), true);
+  }
+
+  @After
+  public void tearDown() {
+    Context.ROOT.attach();
   }
 
   @Test
   public void advertisedEncodingsAreSent() {
-    MethodDescriptor<Void, Void> descriptor = MethodDescriptor.create(
-        MethodType.UNARY,
-        "service/method",
-        new TestMarshaller<Void>(),
-        new TestMarshaller<Void>());
-    final ClientTransport transport = mock(ClientTransport.class);
-    final ClientStream stream = mock(ClientStream.class);
-    ClientTransportProvider provider = new ClientTransportProvider() {
-      @Override
-      public ListenableFuture<ClientTransport> get(CallOptions callOptions) {
-        return Futures.immediateFuture(transport);
-      }
-    };
     when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
-          any(ClientStreamListener.class))).thenReturn(stream);
+        any(ClientStreamListener.class))).thenReturn(stream);
+
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        descriptor,
+        DESCRIPTOR,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
         provider,
@@ -114,7 +146,7 @@ public class ClientCallImplTest {
 
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
     verify(transport).newStream(
-        eq(descriptor), metadataCaptor.capture(), isA(ClientStreamListener.class));
+        eq(DESCRIPTOR), metadataCaptor.capture(), isA(ClientStreamListener.class));
     Metadata actual = metadataCaptor.getValue();
 
     Set<String> acceptedEncodings =
@@ -223,6 +255,173 @@ public class ClientCallImplTest {
     assertNull(m.get(GrpcUtil.USER_AGENT_KEY));
     assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));
     assertNull(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
+  }
+
+  @Test
+  public void callerContextPropagatedToListener() throws Exception {
+    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
+        listenerArgumentCaptor.capture())).thenReturn(stream);
+
+    // Attach the context which is recorded when the call is created
+    final Context.Key<String> testKey = Context.key("testing");
+    Context.current().withValue(testKey, "testValue").attach();
+
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        new SerializingExecutor(Executors.newSingleThreadExecutor()),
+        CallOptions.DEFAULT,
+        provider,
+        deadlineCancellationExecutor)
+        .setDecompressorRegistry(decompressorRegistry);
+
+    Context.ROOT.attach();
+
+    // Override the value after creating the call, this should not be seen by callbacks
+    Context.current().withValue(testKey, "badValue").attach();
+
+    final AtomicBoolean onHeadersCalled = new AtomicBoolean();
+    final AtomicBoolean onMessageCalled = new AtomicBoolean();
+    final AtomicBoolean onReadyCalled = new AtomicBoolean();
+    final AtomicBoolean observedIncorrectContext = new AtomicBoolean();
+    final CountDownLatch latch = new CountDownLatch(1);
+
+    call.start(new ClientCall.Listener<Void>() {
+      @Override
+      public void onHeaders(Metadata headers) {
+        onHeadersCalled.set(true);
+        checkContext();
+      }
+
+      @Override
+      public void onMessage(Void message) {
+        onMessageCalled.set(true);
+        checkContext();
+      }
+
+      @Override
+      public void onClose(Status status, Metadata trailers) {
+        checkContext();
+        latch.countDown();
+      }
+
+      @Override
+      public void onReady() {
+        onReadyCalled.set(true);
+        checkContext();
+      }
+
+      private void checkContext() {
+        if (!"testValue".equals(testKey.get())) {
+          observedIncorrectContext.set(true);
+        }
+      }
+    }, new Metadata());
+
+    ClientStreamListener listener = listenerArgumentCaptor.getValue();
+    listener.onReady();
+    listener.headersRead(new Metadata());
+    listener.messageRead(new ByteArrayInputStream(new byte[0]));
+    listener.messageRead(new ByteArrayInputStream(new byte[0]));
+    listener.closed(Status.OK, new Metadata());
+
+    assertTrue(latch.await(5, TimeUnit.SECONDS));
+
+    assertTrue(onHeadersCalled.get());
+    assertTrue(onMessageCalled.get());
+    assertTrue(onReadyCalled.get());
+    assertFalse(observedIncorrectContext.get());
+  }
+
+  @Test
+  public void contextCancellationCancelsStream() throws Exception {
+    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
+        listenerArgumentCaptor.capture())).thenReturn(stream);
+
+    // Attach the context which is recorded when the call is created
+    Context.CancellableContext cancellableContext = Context.current().withCancellation();
+    Context previous = cancellableContext.attach();
+
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        new SerializingExecutor(Executors.newSingleThreadExecutor()),
+        CallOptions.DEFAULT,
+        provider,
+        deadlineCancellationExecutor)
+        .setDecompressorRegistry(decompressorRegistry);
+
+    previous.attach();
+
+    call.start(new ClientCall.Listener<Void>() {}, new Metadata());
+
+    ClientStreamListener listener = listenerArgumentCaptor.getValue();
+    listener.onReady();
+    listener.headersRead(new Metadata());
+    listener.messageRead(new ByteArrayInputStream(new byte[0]));
+
+    cancellableContext.cancel(new Throwable());
+
+    verify(stream, times(1)).cancel(Status.CANCELLED);
+
+    try {
+      call.sendMessage(null);
+      fail("Call has been cancelled");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
+  }
+
+  @Test
+  public void contextAlreadyCancelledNotifiesImmediately() throws Exception {
+    // Attach the context which is recorded when the call is created
+    Context.CancellableContext cancellableContext = Context.current().withCancellation();
+    Throwable cause = new Throwable();
+    cancellableContext.cancel(cause);
+    Context previous = cancellableContext.attach();
+
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        new SerializingExecutor(Executors.newSingleThreadExecutor()),
+        CallOptions.DEFAULT,
+        provider,
+        deadlineCancellationExecutor)
+        .setDecompressorRegistry(decompressorRegistry);
+
+    previous.attach();
+
+    final SettableFuture<Status> statusFuture = SettableFuture.create();
+    call.start(new ClientCall.Listener<Void>() {
+      boolean headersCalled;
+      @Override
+      public void onHeaders(Metadata headers) {
+        headersCalled = true;
+      }
+
+      @Override
+      public void onClose(Status status, Metadata trailers) {
+        if (headersCalled) {
+          statusFuture.set(status);
+        } else {
+          statusFuture.setException(
+              new AssertionError("Headers must be called before close"));
+        }
+
+      }
+    }, new Metadata());
+
+    // Caller should receive onClose callback.
+    Status status = statusFuture.get(5, TimeUnit.SECONDS);
+    assertEquals(Status.Code.CANCELLED, status.getCode());
+    assertSame(cause, status.getCause());
+
+    // Stream should never be created.
+    verifyZeroInteractions(transport);
+
+    try {
+      call.sendMessage(null);
+      fail("Call has been cancelled");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
   }
 
   private static class TestMarshaller<T> implements Marshaller<T> {
