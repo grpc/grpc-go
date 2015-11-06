@@ -31,6 +31,10 @@
 
 package io.grpc.okhttp;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import com.google.common.annotations.VisibleForTesting;
+
 import io.grpc.okhttp.internal.OptionalMethod;
 import io.grpc.okhttp.internal.Platform;
 import io.grpc.okhttp.internal.Protocol;
@@ -48,10 +52,16 @@ import javax.net.ssl.SSLSocket;
  * A helper class located in package com.squareup.okhttp.internal for TLS negotiation.
  */
 class OkHttpProtocolNegotiator {
-  private static final Platform PLATFORM = Platform.get();
-  private static OkHttpProtocolNegotiator NEGOTIATOR = createNegotiator();
+  private static final Platform DEFAULT_PLATFORM = Platform.get();
+  private static OkHttpProtocolNegotiator NEGOTIATOR =
+      createNegotiator(OkHttpProtocolNegotiator.class.getClassLoader());
 
-  private OkHttpProtocolNegotiator() {}
+  private final Platform platform;
+
+  @VisibleForTesting
+  OkHttpProtocolNegotiator(Platform platform) {
+    this.platform = checkNotNull(platform);
+  }
 
   public static OkHttpProtocolNegotiator get() {
     return NEGOTIATOR;
@@ -60,20 +70,23 @@ class OkHttpProtocolNegotiator {
   /**
    * Creates corresponding negotiator according to whether on Android.
    */
-  private static OkHttpProtocolNegotiator createNegotiator() {
+  @VisibleForTesting
+  static OkHttpProtocolNegotiator createNegotiator(ClassLoader loader) {
     boolean android = true;
     try {
       // Attempt to find Android 2.3+ APIs.
-      Class.forName("com.android.org.conscrypt.OpenSSLSocketImpl");
+      loader.loadClass("com.android.org.conscrypt.OpenSSLSocketImpl");
     } catch (ClassNotFoundException ignored) {
       try {
         // Older platform before being unbundled.
-        Class.forName("org.apache.harmony.xnet.provider.jsse.OpenSSLSocketImpl");
+        loader.loadClass("org.apache.harmony.xnet.provider.jsse.OpenSSLSocketImpl");
       } catch (ClassNotFoundException ignored2) {
         android = false;
       }
     }
-    return android ? new AndroidNegotiator() : new OkHttpProtocolNegotiator();
+    return android
+        ? new AndroidNegotiator(DEFAULT_PLATFORM)
+        : new OkHttpProtocolNegotiator(DEFAULT_PLATFORM);
   }
 
   /**
@@ -95,22 +108,27 @@ class OkHttpProtocolNegotiator {
       }
       return negotiatedProtocol;
     } finally {
-      PLATFORM.afterHandshake(sslSocket);
+      platform.afterHandshake(sslSocket);
     }
   }
 
   /** Configure TLS extensions. */
   protected void configureTlsExtensions(
       SSLSocket sslSocket, String hostname, List<Protocol> protocols) {
-    PLATFORM.configureTlsExtensions(sslSocket, hostname, protocols);
+    platform.configureTlsExtensions(sslSocket, hostname, protocols);
   }
 
   /** Returns the negotiated protocol, or null if no protocol was negotiated. */
   public String getSelectedProtocol(SSLSocket socket) {
-    return PLATFORM.getSelectedProtocol(socket);
+    return platform.getSelectedProtocol(socket);
   }
 
-  private static class AndroidNegotiator extends OkHttpProtocolNegotiator {
+  @VisibleForTesting
+  static final class AndroidNegotiator extends OkHttpProtocolNegotiator {
+    AndroidNegotiator(Platform platform) {
+      super(platform);
+    }
+
     // setUseSessionTickets(boolean)
     private static final OptionalMethod<Socket> SET_USE_SESSION_TICKETS =
         new OptionalMethod<Socket>(null, "setUseSessionTickets", Boolean.TYPE);
