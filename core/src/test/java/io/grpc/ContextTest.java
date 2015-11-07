@@ -41,6 +41,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.SettableFuture;
 
 import io.grpc.internal.SharedResourceHolder;
 
@@ -63,6 +64,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Handler;
+import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
@@ -97,10 +99,7 @@ public class ContextTest {
 
   @Before
   public void setUp() throws Exception {
-    // Detach all contexts back to the root.
-    while (Context.current() != Context.ROOT) {
-      Context.current().detach();
-    }
+    Context.ROOT.attach();
   }
 
   @After
@@ -114,29 +113,25 @@ public class ContextTest {
   }
 
   @Test
-  public void rootIsAlwaysBound() {
-    Context root = Context.current();
-    try {
-      root.detach();
-    } catch (IllegalStateException ise) {
-      // Expected
-      assertTrue(Context.ROOT.isCurrent());
-      return;
-    }
-    fail("Attempting to detach root should fail");
+  public void rootIsAlwaysBound() throws Exception {
+    final SettableFuture<Boolean> rootIsBound = SettableFuture.create();
+    new Thread(new Runnable() {
+      @Override
+      public void run() {
+        rootIsBound.set(Context.current() == Context.ROOT);
+      }
+    }).start();
+    assertTrue(rootIsBound.get(5, TimeUnit.SECONDS));
   }
 
   @Test
   public void rootCanBeAttached() {
-    Context root = Context.current();
-    Context.CancellableContext fork = root.fork();
+    Context.CancellableContext fork = Context.ROOT.fork();
     fork.attach();
-    root.attach();
-    assertTrue(root.isCurrent());
-    root.detach();
+    Context.ROOT.attach();
+    assertTrue(Context.ROOT.isCurrent());
+    fork.attach();
     assertTrue(fork.isCurrent());
-    fork.detach();
-    assertTrue(root.isCurrent());
   }
 
   @Test
@@ -155,58 +150,53 @@ public class ContextTest {
   @Test
   public void attachedCancellableContextCannotBeCastFromCurrent() {
     Context initial = Context.current();
-    Context.CancellableContext base = Context.current().withCancellation();
+    Context.CancellableContext base = initial.withCancellation();
     base.attach();
     assertFalse(Context.current() instanceof Context.CancellableContext);
+    assertNotSame(base, Context.current());
     assertNotSame(initial, Context.current());
-    base.detachAndCancel(null);
-    assertTrue(initial.isCurrent());
+    base.detachAndCancel(initial, null);
+    assertSame(initial, Context.current());
   }
 
   @Test
-  public void detachingNonCurrentThrowsIllegalStateException() {
-    Context current = Context.current();
-    Context base = Context.current().withValue(PET, "dog");
-    try {
-      base.detach();
-      fail("Expected exception");
-    } catch (IllegalStateException ise) {
-      // expected
-    }
-    assertSame(current, Context.current());
-
-    base.attach();
-    try {
-      current.withValue(PET, "cat").detach();
-      fail("Expected exception");
-    } catch (IllegalStateException ise) {
-      // expected
-    }
-    assertSame(base, Context.current());
-    base.detach();
+  public void attachingNonCurrentReturnsCurrent() {
+    Context initial = Context.current();
+    Context base = initial.withValue(PET, "dog");
+    assertSame(initial, base.attach());
+    assertSame(base, initial.attach());
   }
 
   @Test
-  public void detachUnwindsAttach() {
-    Context base = Context.current().fork();
-    Context child = base.withValue(COLOR, "red");
-    Context grandchild = child.withValue(COLOR, "blue");
-    base.attach();
-    base.attach();
-    child.attach();
-    base.attach();
-    grandchild.attach();
-    assertTrue(grandchild.isCurrent());
-    grandchild.detach();
-    assertTrue(base.isCurrent());
-    base.detach();
-    assertTrue(child.isCurrent());
-    child.detach();
-    assertTrue(base.isCurrent());
-    base.detach();
-    assertTrue(base.isCurrent());
-    base.detach();
-    assertTrue(Context.ROOT.isCurrent());
+  public void detachingNonCurrentLogsSevereMessage() {
+    final AtomicReference<LogRecord> logRef = new AtomicReference<LogRecord>();
+    Handler handler = new Handler() {
+      @Override
+      public void publish(LogRecord record) {
+        logRef.set(record);
+      }
+
+      @Override
+      public void flush() {
+      }
+
+      @Override
+      public void close() throws SecurityException {
+      }
+    };
+    Logger logger = Logger.getLogger(Context.class.getName());
+    try {
+      logger.addHandler(handler);
+      Context initial = Context.current();
+      Context base = initial.withValue(PET, "dog");
+      // Base is not attached
+      base.detach(initial);
+      assertSame(initial, Context.current());
+      assertNotNull(logRef.get());
+      assertEquals(Level.SEVERE, logRef.get().getLevel());
+    } finally {
+      logger.removeHandler(handler);
+    }
   }
 
   @Test
@@ -226,14 +216,14 @@ public class ContextTest {
     assertEquals("cheese", FOOD.get());
     assertNull(COLOR.get());
 
-    child.detach();
+    child.detach(base);
 
     // Should have values from base
     assertEquals("dog", PET.get());
     assertEquals("lasagna", FOOD.get());
     assertNull(COLOR.get());
 
-    base.detach();
+    base.detach(Context.ROOT);
 
     assertNull(PET.get());
     assertEquals("lasagna", FOOD.get());
@@ -253,7 +243,7 @@ public class ContextTest {
     assertEquals("blue", COLOR.get());
     assertEquals(fav, FAVORITE.get());
 
-    child.detach();
+    base.attach();
   }
 
   @Test
@@ -407,7 +397,7 @@ public class ContextTest {
     assertSame(t, attached.cause());
     assertSame(attached, listenerNotifedContext);
 
-    base.detach();
+    Context.ROOT.attach();
   }
 
   @Test
@@ -469,7 +459,7 @@ public class ContextTest {
     }
     assertSame(current, Context.current());
 
-    current.detach();
+    current.detach(Context.ROOT);
   }
 
   @Test
@@ -509,7 +499,7 @@ public class ContextTest {
     }
     assertSame(current, Context.current());
 
-    current.detach();
+    current.detach(Context.ROOT);
   }
 
   @Test
@@ -517,11 +507,11 @@ public class ContextTest {
     QueuedExecutor queuedExecutor = new QueuedExecutor();
     Executor executor = Context.propagate(queuedExecutor);
     Context base = Context.current().withValue(PET, "cat");
-    base.attach();
+    Context previous = base.attach();
     try {
       executor.execute(runner);
     } finally {
-      base.detach();
+      base.detach(previous);
     }
     assertEquals(1, queuedExecutor.runnables.size());
     queuedExecutor.runnables.remove().run();
@@ -541,12 +531,12 @@ public class ContextTest {
   @Test
   public void typicalTryFinallyHandling() throws Exception {
     Context base = Context.current().withValue(COLOR, "blue");
-    base.attach();
+    Context previous = base.attach();
     try {
       assertTrue(base.isCurrent());
       // Do something
     } finally {
-      base.detach();
+      base.detach(previous);
     }
     assertFalse(base.isCurrent());
   }
@@ -554,14 +544,14 @@ public class ContextTest {
   @Test
   public void typicalCancellableTryCatchFinallyHandling() throws Exception {
     Context.CancellableContext base = Context.current().withCancellation();
-    base.attach();
+    Context previous = base.attach();
     try {
       // Do something
       throw new IllegalStateException("Argh");
     } catch (IllegalStateException ise) {
       base.cancel(ise);
     } finally {
-      base.detachAndCancel(null);
+      base.detachAndCancel(previous, null);
     }
     assertTrue(base.isCancelled());
     assertNotNull(base.cause());
@@ -572,11 +562,11 @@ public class ContextTest {
     Context current = Context.current();
     Context.CancellableContext base = Context.current().withValue(FOOD, "fish").withCancellation();
 
-    base.attach();
+    Context previous = base.attach();
     Context baseAttached = Context.current();
     // Should not be able to get back the CancellableContext
     assertNotSame(baseAttached, base);
-    base.detach();
+    base.detach(previous);
 
     Closeable c = base.attachAsCloseable();
     assertEquals("fish", FOOD.get());

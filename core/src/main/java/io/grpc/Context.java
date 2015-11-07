@@ -39,7 +39,6 @@ import io.grpc.internal.SharedResourceHolder;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
@@ -88,7 +87,7 @@ import javax.annotation.Nullable;
  * <pre>
  *   CancellableContext withCancellation = Context.current().withCancellation();
  *   try {
-   *   executorService.execute(withCancellation.wrap(new Runnable() {
+ *     executorService.execute(withCancellation.wrap(new Runnable() {
  *       public void run() {
  *         while (waitingForData() &amp;&amp; !Context.current().isCancelled()) {}
  *       }
@@ -142,17 +141,6 @@ public class Context {
         }
       };
 
-  /**
-   * Stack of context objects which is used to record attach & detach history on a thread.
-   */
-  private static final ThreadLocal<ArrayDeque<Context>> contextStack =
-      new ThreadLocal<ArrayDeque<Context>>() {
-    @Override
-    protected ArrayDeque<Context> initialValue() {
-      return new ArrayDeque<Context>();
-    }
-  };
-
   private static final Object[][] EMPTY_ENTRIES = new Object[0][2];
 
   /**
@@ -160,6 +148,16 @@ public class Context {
    * is not cancellable and so will not cascade cancellation or retain listeners.
    */
   public static final Context ROOT = new Context(null);
+
+  /**
+   * Currently bound context.
+   */
+  private static final ThreadLocal<Context> localContext = new ThreadLocal<Context>() {
+    @Override
+    protected Context initialValue() {
+      return ROOT;
+    }
+  };
 
   /**
    * Create a {@link Key} with the given name.
@@ -184,11 +182,11 @@ public class Context {
    * code stealing the ability to cancel arbitrarily.
    */
   public static Context current() {
-    ArrayDeque<Context> stack = contextStack.get();
-    if (stack.isEmpty()) {
+    Context current = localContext.get();
+    if (current == null) {
       return ROOT;
     }
-    return stack.peekLast();
+    return current;
   }
 
   private final Context parent;
@@ -229,8 +227,8 @@ public class Context {
   /**
    * Create a new context which is independently cancellable and also cascades cancellation from
    * its parent. Callers should ensure that either {@link CancellableContext#cancel(Throwable)}
-   * or {@link CancellableContext#detachAndCancel(Throwable)} are called to notify listeners and
-   * release the resources associated with them.
+   * or {@link CancellableContext#detachAndCancel(Context, Throwable)} are called to notify
+   * listeners and release the resources associated with them.
    *
    * <p>Sample usage:
    * <pre>
@@ -343,37 +341,35 @@ public class Context {
 
   /**
    * Attach this context to the thread and make it {@link #current}, the previously current context
-   * will be restored when detach is called. It is allowed to attach contexts where
-   * {@link #isCancelled()} is {@code true}.
+   * is returned. It is allowed to attach contexts where {@link #isCancelled()} is {@code true}.
    */
-  public void attach() {
-    contextStack.get().addLast(this);
+  public Context attach() {
+    Context previous = current();
+    localContext.set(this);
+    return previous;
+  }
+
+  /**
+   * Detach the current context from the thread and attach the provided replacement. If this
+   * context is not {@link #current()} a SEVERE message will be logged but the context to attach
+   * will still be bound.
+   */
+  public void detach(Context toAttach) {
+    Preconditions.checkNotNull(toAttach);
+    Context previous = current();
+    if (previous != this) {
+      // Log a severe message instead of throwing an exception as the context to attach is assumed
+      // to be the correct one and the unbalanced state represents a coding mistake in a lower
+      // layer in the stack that cannot be recovered from here.
+      LOG.log(Level.SEVERE, "Context was not attached when detaching",
+          new Throwable().fillInStackTrace());
+    }
+    localContext.set(toAttach);
   }
 
   // Visible for testing
   boolean isCurrent() {
     return current() == this;
-  }
-
-  /**
-   * Detach the current context from the thread and restore the context that was previously
-   * attached to the thread as the 'current' context.
-   *
-   * @throws java.lang.IllegalStateException if this context is not {@link #current()}.
-   */
-  public void detach() {
-    ArrayDeque<Context> stack = contextStack.get();
-    if (stack.isEmpty()) {
-      if (this == ROOT) {
-        throw new IllegalStateException("Cannot detach root");
-      } else {
-        throw new IllegalStateException("Cannot detach non-root context when root is current");
-      }
-    }
-    if (stack.peekLast() != this) {
-      throw new IllegalStateException("Cannot detach a context that is not current");
-    }
-    stack.removeLast();
   }
 
   /**
@@ -492,11 +488,11 @@ public class Context {
     return new Runnable() {
       @Override
       public void run() {
-        attach();
+        Context previous = attach();
         try {
           r.run();
         } finally {
-          detach();
+          detach(previous);
         }
       }
     };
@@ -509,11 +505,11 @@ public class Context {
     return new Callable<C>() {
       @Override
       public C call() throws Exception {
-        attach();
+        Context previous = attach();
         try {
           return c.call();
         } finally {
-          detach();
+          detach(previous);
         }
       }
     };
@@ -586,7 +582,7 @@ public class Context {
      */
     private CancellableContext(Context parent) {
       super(parent, EMPTY_ENTRIES);
-      // Create a dummy that inherits from this to attach and detach so that you cannot retrieve a
+      // Create a dummy that inherits from this to attach so that you cannot retrieve a
       // cancellable context from Context.current()
       dummy = new Context(this, EMPTY_ENTRIES);
     }
@@ -611,13 +607,13 @@ public class Context {
 
 
     @Override
-    public void attach() {
-      dummy.attach();
+    public Context attach() {
+      return dummy.attach();
     }
 
     @Override
-    public void detach() {
-      dummy.detach();
+    public void detach(Context toAttach) {
+      dummy.detach(toAttach);
     }
 
     @Override
@@ -627,17 +623,17 @@ public class Context {
 
     /**
      * Attach this context to the thread and return a {@link AutoCloseable} that can be
-     * used with try-with-resource statements to properly {@link #detach} and {@link #cancel}
-     * the context on completion.
+     * used with try-with-resource statements to properly attach the previously bound context
+     * when {@link AutoCloseable#close()} is called.
      *
      * @return a {@link java.io.Closeable} which can be used with try-with-resource blocks.
      */
     public Closeable attachAsCloseable() {
-      attach();
+      final Context previous = attach();
       return new Closeable() {
         @Override
         public void close() throws IOException {
-          detachAndCancel(null);
+          detachAndCancel(previous, null);
         }
       };
     }
@@ -670,14 +666,14 @@ public class Context {
     }
 
     /**
-     * Cancel this context and detach it from the current context from the thread and restore the
-     * context that was previously attached to the thread as the 'current' context.
+     * Cancel this context and detach it as the current context from the thread.
      *
-     * @throws java.lang.IllegalStateException if this context is not {@link #current()}.
+     * @param toAttach context to make current.
+     * @param cause of cancellation, can be {@code null}.
      */
-    public void detachAndCancel(@Nullable Throwable cause) {
+    public void detachAndCancel(Context toAttach, @Nullable Throwable cause) {
       try {
-        detach();
+        detach(toAttach);
       } finally {
         cancel(cause);
       }
