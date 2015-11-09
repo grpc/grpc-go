@@ -85,7 +85,7 @@ class OkHttpProtocolNegotiator {
       }
     }
     return android
-        ? new AndroidNegotiator(DEFAULT_PLATFORM)
+        ? new AndroidNegotiator(DEFAULT_PLATFORM, AndroidNegotiator.DEFAULT_TLS_EXTENSION_TYPE)
         : new OkHttpProtocolNegotiator(DEFAULT_PLATFORM);
   }
 
@@ -125,10 +125,6 @@ class OkHttpProtocolNegotiator {
 
   @VisibleForTesting
   static final class AndroidNegotiator extends OkHttpProtocolNegotiator {
-    AndroidNegotiator(Platform platform) {
-      super(platform);
-    }
-
     // setUseSessionTickets(boolean)
     private static final OptionalMethod<Socket> SET_USE_SESSION_TICKETS =
         new OptionalMethod<Socket>(null, "setUseSessionTickets", Boolean.TYPE);
@@ -148,46 +144,19 @@ class OkHttpProtocolNegotiator {
     private static final OptionalMethod<Socket> SET_NPN_PROTOCOLS =
         new OptionalMethod<Socket>(null, "setNpnProtocols", byte[].class);
 
-    private enum TlsExtensionType {
+    private static final TlsExtensionType DEFAULT_TLS_EXTENSION_TYPE =
+        pickTlsExtensionType(AndroidNegotiator.class.getClassLoader());
+
+    enum TlsExtensionType {
       ALPN_AND_NPN,
       NPN,
     }
 
-    private static TlsExtensionType tlsExtensionType;
+    private final TlsExtensionType tlsExtensionType;
 
-    static {
-      // Decide which TLS Extension (APLN and NPN) we will use, follow the rules:
-      // 1. If Google Play Services Security Provider is installed, use both
-      // 2. If on Android 5.0 or later, use both, else
-      // 3. If on Android 4.1 or later, use NPN, else
-      // 4. Fail.
-      // TODO(madongfly): Logging.
-
-      // Check if Google Play Services Security Provider is installed.
-      Provider provider = Security.getProvider("GmsCore_OpenSSL");
-      if (provider != null) {
-        tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
-      }
-
-      // Check if on Android 5.0 or later.
-      if (tlsExtensionType == null) {
-        try {
-          Class.forName("android.net.Network"); // Arbitrary class added in Android 5.0.
-          tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
-        } catch (ClassNotFoundException ignored) {
-          // making checkstyle happy.
-        }
-      }
-
-      // Check if on Android 4.1 or later.
-      if (tlsExtensionType == null) {
-        try {
-          Class.forName("android.app.ActivityOptions"); // Arbitrary class added in Android 4.1.
-          tlsExtensionType = TlsExtensionType.NPN;
-        } catch (ClassNotFoundException ignored) {
-          // making checkstyle happy.
-        }
-      }
+    AndroidNegotiator(Platform platform, TlsExtensionType tlsExtensionType) {
+      super(platform);
+      this.tlsExtensionType = checkNotNull(tlsExtensionType, "Unable to pick a TLS extension");
     }
 
     @Override
@@ -255,6 +224,41 @@ class OkHttpProtocolNegotiator {
           // exception.
         }
       }
+      return null;
+    }
+
+    @VisibleForTesting
+    static TlsExtensionType pickTlsExtensionType(ClassLoader loader) {
+      // Decide which TLS Extension (APLN and NPN) we will use, follow the rules:
+      // 1. If Google Play Services Security Provider is installed, use both
+      // 2. If on Android 5.0 or later, use both, else
+      // 3. If on Android 4.1 or later, use NPN, else
+      // 4. Fail.
+      // TODO(madongfly): Logging.
+
+      // Check if Google Play Services Security Provider is installed.
+      Provider provider = Security.getProvider("GmsCore_OpenSSL");
+      if (provider != null) {
+        return TlsExtensionType.ALPN_AND_NPN;
+      }
+
+      // Check if on Android 5.0 or later.
+      try {
+        loader.loadClass("android.net.Network"); // Arbitrary class added in Android 5.0.
+        return TlsExtensionType.ALPN_AND_NPN;
+      } catch (ClassNotFoundException ignored) {
+        // making checkstyle happy.
+      }
+
+      // Check if on Android 4.1 or later.
+      try {
+        loader.loadClass("android.app.ActivityOptions"); // Arbitrary class added in Android 4.1.
+        return TlsExtensionType.NPN;
+      } catch (ClassNotFoundException ignored) {
+        // making checkstyle happy.
+      }
+
+      // This will be caught by the constructor.
       return null;
     }
   }
