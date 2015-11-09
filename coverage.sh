@@ -29,7 +29,6 @@ push_to_coveralls() {
 
 generate_cover_data $(go list ./...)
 show_cover_report func
-push_to_coveralls
 case "$1" in
 "")
     ;;
