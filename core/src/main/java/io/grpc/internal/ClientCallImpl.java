@@ -36,6 +36,8 @@ import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -110,10 +112,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     return this;
   }
 
-  @Override
-  public void start(Listener<RespT> observer, Metadata headers) {
-    Preconditions.checkState(stream == null, "Already started");
-
+  @VisibleForTesting
+  static void prepareHeaders(Metadata headers, CallOptions callOptions, String userAgent,
+      DecompressorRegistry decompressorRegistry) {
     // Hack to propagate authority.  This should be properly pass to the transport.newStream
     // somehow.
     headers.removeAll(AUTHORITY_KEY);
@@ -134,9 +135,18 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     }
 
     headers.removeAll(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY);
-    for (String encoding : decompressorRegistry.getAdvertisedMessageEncodings()) {
-      headers.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, encoding);
+    if (!decompressorRegistry.getAdvertisedMessageEncodings().isEmpty()) {
+      String acceptEncoding =
+          Joiner.on(',').join(decompressorRegistry.getAdvertisedMessageEncodings());
+      headers.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, acceptEncoding);
     }
+  }
+
+  @Override
+  public void start(Listener<RespT> observer, Metadata headers) {
+    Preconditions.checkState(stream == null, "Already started");
+
+    prepareHeaders(headers, callOptions, userAgent, decompressorRegistry);
 
     ClientStreamListener listener = new ClientStreamListenerImpl(observer);
     ListenableFuture<ClientTransport> transportFuture = clientTransportProvider.get(callOptions);
@@ -165,6 +175,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     }
 
     stream.setDecompressionRegistry(decompressorRegistry);
+    Compressor compressor = callOptions.getCompressor();
     if (compressor != null) {
       stream.setCompressor(compressor);
     }

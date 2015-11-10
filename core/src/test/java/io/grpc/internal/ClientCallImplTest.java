@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.any;
@@ -39,6 +40,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -47,6 +49,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Codec;
+import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -60,6 +63,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -118,6 +122,109 @@ public class ClientCallImplTest {
     Set<String> acceptedEncodings =
         ImmutableSet.copyOf(actual.getAll(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
     assertEquals(decompressorRegistry.getAdvertisedMessageEncodings(), acceptedEncodings);
+  }
+
+  @Test
+  public void prepareHeaders_authorityAdded() {
+    Metadata m = new Metadata();
+    CallOptions callOptions = CallOptions.DEFAULT.withAuthority("auth");
+    ClientCallImpl.prepareHeaders(
+        m, callOptions, "user agent", DecompressorRegistry.getDefaultInstance());
+
+    assertEquals(m.get(GrpcUtil.AUTHORITY_KEY), "auth");
+  }
+
+  @Test
+  public void prepareHeaders_userAgentAdded() {
+    Metadata m = new Metadata();
+    ClientCallImpl.prepareHeaders(
+        m, CallOptions.DEFAULT, "user agent", DecompressorRegistry.getDefaultInstance());
+
+    assertEquals(m.get(GrpcUtil.USER_AGENT_KEY), "user agent");
+  }
+
+  @Test
+  public void prepareHeaders_messageEncodingAdded() {
+    Metadata m = new Metadata();
+    CallOptions callOptions = CallOptions.DEFAULT.withCompressor(new Codec.Gzip());
+    ClientCallImpl.prepareHeaders(
+        m, callOptions, "user agent", DecompressorRegistry.getDefaultInstance());
+
+    assertEquals(m.get(GrpcUtil.MESSAGE_ENCODING_KEY), new Codec.Gzip().getMessageEncoding());
+  }
+
+  @Test
+  public void prepareHeaders_ignoreIdentityEncoding() {
+    Metadata m = new Metadata();
+    CallOptions callOptions = CallOptions.DEFAULT.withCompressor(Codec.Identity.NONE);
+    ClientCallImpl.prepareHeaders(
+        m, callOptions, "user agent", DecompressorRegistry.getDefaultInstance());
+
+    assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));
+  }
+
+  @Test
+  public void prepareHeaders_acceptedEncodingsAdded() {
+    Metadata m = new Metadata();
+    DecompressorRegistry customRegistry = DecompressorRegistry.newEmptyInstance();
+    customRegistry.register(new Decompressor() {
+      @Override
+      public String getMessageEncoding() {
+        return "a";
+      }
+
+      @Override
+      public InputStream decompress(InputStream is) throws IOException {
+        return null;
+      }
+    }, true);
+    customRegistry.register(new Decompressor() {
+      @Override
+      public String getMessageEncoding() {
+        return "b";
+      }
+
+      @Override
+      public InputStream decompress(InputStream is) throws IOException {
+        return null;
+      }
+    }, true);
+    customRegistry.register(new Decompressor() {
+      @Override
+      public String getMessageEncoding() {
+        return "c";
+      }
+
+      @Override
+      public InputStream decompress(InputStream is) throws IOException {
+        return null;
+      }
+    }, false); // not advertised
+
+    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, "user agent", customRegistry);
+
+    Iterable<String> acceptedEncodings =
+        Splitter.on(',').split(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
+
+    // Order may be different, since decoder priorities have not yet been implemented.
+    assertEquals(ImmutableSet.of("b", "a"), ImmutableSet.copyOf(acceptedEncodings));
+  }
+
+  @Test
+  public void prepareHeaders_removeReservedHeaders() {
+    Metadata m = new Metadata();
+    m.put(GrpcUtil.AUTHORITY_KEY, "auth");
+    m.put(GrpcUtil.USER_AGENT_KEY, "user agent");
+    m.put(GrpcUtil.MESSAGE_ENCODING_KEY, "gzip");
+    m.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, "gzip");
+
+    ClientCallImpl.prepareHeaders(
+        m, CallOptions.DEFAULT, null, DecompressorRegistry.newEmptyInstance());
+
+    assertNull(m.get(GrpcUtil.AUTHORITY_KEY));
+    assertNull(m.get(GrpcUtil.USER_AGENT_KEY));
+    assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));
+    assertNull(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
   }
 
   private static class TestMarshaller<T> implements Marshaller<T> {
