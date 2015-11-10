@@ -107,8 +107,7 @@ public class ProtoUtils {
    */
   public static <T extends Message> Metadata.Key<T> keyForProto(final T instance) {
     return Metadata.Key.of(
-        instance.getDescriptorForType().getFullName().replace('.', '-')
-            + Metadata.BINARY_HEADER_SUFFIX,
+        instance.getDescriptorForType().getFullName() + Metadata.BINARY_HEADER_SUFFIX,
         new Metadata.BinaryMarshaller<T>() {
           @Override
           public byte[] toBytes(T value) {

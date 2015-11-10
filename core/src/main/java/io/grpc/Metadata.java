@@ -422,6 +422,7 @@ public final class Metadata {
       BitSet valid  = new BitSet(0x7f);
       valid.set('-');
       valid.set('_');
+      valid.set('.');
       for (char c = '0'; c <= '9'; c++) {
         valid.set(c);
       }
