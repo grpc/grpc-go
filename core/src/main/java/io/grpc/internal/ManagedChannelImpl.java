@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -145,38 +146,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
       this.executor = executor;
     }
     this.backoffPolicyProvider = backoffPolicyProvider;
-
-    // Finding a NameResolver. Try using the target string as the URI. If that fails, try prepending
-    // "dns:///".
-    NameResolver nameResolver = null;
-    URI targetUri;
-    StringBuilder uriSyntaxErrors = new StringBuilder();
-    try {
-      targetUri = new URI(target);
-      nameResolver = nameResolverFactory.newNameResolver(targetUri, nameResolverParams);
-      // For "localhost:8080" this would likely return null, because "localhost" is parsed as the
-      // scheme. Will fall into the next branch and try "dns:///localhost:8080".
-    } catch (URISyntaxException e) {
-      // "foo.googleapis.com:8080" will trigger this exception, because "foo.googleapis.com" is an
-      // invalid scheme. Just fall through and will try "dns:///foo.googleapis.com:8080"
-      uriSyntaxErrors.append(e.getMessage());
-    }
-    if (nameResolver == null) {
-      try {
-        targetUri = new URI("dns:///" + target);
-        nameResolver = nameResolverFactory.newNameResolver(targetUri, nameResolverParams);
-      } catch (URISyntaxException e) {
-        if (uriSyntaxErrors.length() > 0) {
-          uriSyntaxErrors.append("; ");
-        }
-        uriSyntaxErrors.append(e.getMessage());
-      }
-    }
-    Preconditions.checkArgument(nameResolver != null,
-        "cannot find a NameResolver for %s%s", target,
-        uriSyntaxErrors.length() > 0 ? " (" + uriSyntaxErrors.toString() + ")" : "");
-    this.nameResolver = nameResolver;
-
+    this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
     this.loadBalancer = loadBalancerFactory.newLoadBalancer(nameResolver.getServiceAuthority(), tm);
     this.transportFactory = transportFactory;
     this.userAgent = userAgent;
@@ -196,6 +166,51 @@ public final class ManagedChannelImpl extends ManagedChannel {
       }
     });
   }
+
+  @VisibleForTesting
+  static NameResolver getNameResolver(String target, NameResolver.Factory nameResolverFactory,
+      Attributes nameResolverParams) {
+    // Finding a NameResolver. Try using the target string as the URI. If that fails, try prepending
+    // "dns:///".
+    URI targetUri = null;
+    StringBuilder uriSyntaxErrors = new StringBuilder();
+    try {
+      targetUri = new URI(target);
+      // For "localhost:8080" this would likely cause newNameResolver to return null, because
+      // "localhost" is parsed as the scheme. Will fall into the next branch and try
+      // "dns:///localhost:8080".
+    } catch (URISyntaxException e) {
+      // Can happen with ip addresses like "[::1]:1234" or 127.0.0.1:1234.  Also can happen with
+      // bogus urls like "dns:///[::1]:1234", which are not properly uriencoded.
+      uriSyntaxErrors.append(e.getMessage());
+    }
+    if (targetUri != null) {
+      NameResolver resolver = nameResolverFactory.newNameResolver(targetUri, nameResolverParams);
+      if (resolver != null) {
+        return resolver;
+      }
+      // "foo.googleapis.com:8080" cause resolver to be null, because "foo.googleapis.com" is an
+      // unmapped scheme. Just fall through and will try "dns:///foo.googleapis.com:8080"
+    }
+
+    // If we reached here, the targetUri couldn't be used, so try again.
+    try {
+      targetUri = new URI("dns", null, "/" + target, null);
+    } catch (URISyntaxException e) {
+      // Should not be possible.
+      throw new IllegalArgumentException(e);
+    }
+    if (targetUri != null) {
+      NameResolver resolver = nameResolverFactory.newNameResolver(targetUri, nameResolverParams);
+      if (resolver != null) {
+        return resolver;
+      }
+    }
+    throw new IllegalArgumentException(String.format(
+        "cannot find a NameResolver for %s%s",
+        target, uriSyntaxErrors.length() > 0 ? " (" + uriSyntaxErrors.toString() + ")" : ""));
+  }
+
 
   /**
    * Sets the default compression method for this Channel.  By default, new calls will use the

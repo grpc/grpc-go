@@ -59,6 +59,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
+import io.grpc.NameResolver.Factory;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.SimpleLoadBalancerFactory;
 import io.grpc.Status;
@@ -66,7 +67,9 @@ import io.grpc.StringMarshaller;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -77,6 +80,7 @@ import org.mockito.stubbing.Answer;
 
 import java.net.SocketAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -100,16 +104,16 @@ public class ManagedChannelImplTest {
   private final String serviceName = "fake.example.com";
   private final String authority = serviceName;
   private final String target = "fake://" + serviceName;
+  private URI expectedUri;
   private final SocketAddress socketAddress = new SocketAddress() {};
   private final ResolvedServerInfo server = new ResolvedServerInfo(socketAddress, Attributes.EMPTY);
+
+  @Rule public final ExpectedException thrown = ExpectedException.none();
 
   @Mock
   private ClientTransport mockTransport;
   @Mock
   private ClientTransportFactory mockTransportFactory;
-
-  private ManagedChannel channel;
-
   @Mock
   private ClientCall.Listener<Integer> mockCallListener;
   @Mock
@@ -132,6 +136,7 @@ public class ManagedChannelImplTest {
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
+    expectedUri = new URI(target);
     when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class)))
         .thenReturn(mockTransport);
   }
@@ -144,7 +149,7 @@ public class ManagedChannelImplTest {
   @Test
   public void immediateDeadlineExceeded() {
     ManagedChannel channel = createChannel(
-        new FakeNameResolverFactory(server, true), NO_INTERCEPTOR);
+        new FakeNameResolverFactory(server, expectedUri, true), NO_INTERCEPTOR);
     ClientCall<String, Integer> call =
         channel.newCall(method, CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime()));
     call.start(mockCallListener, new Metadata());
@@ -155,7 +160,7 @@ public class ManagedChannelImplTest {
   @Test
   public void shutdownWithNoTransportsEverCreated() {
     ManagedChannel channel = createChannel(
-        new FakeNameResolverFactory(server, true), NO_INTERCEPTOR);
+        new FakeNameResolverFactory(server, expectedUri, true), NO_INTERCEPTOR);
     verifyNoMoreInteractions(mockTransportFactory);
     channel.shutdown();
     assertTrue(channel.isShutdown());
@@ -165,7 +170,7 @@ public class ManagedChannelImplTest {
   @Test
   public void twoCallsAndGracefulShutdown() {
     ManagedChannel channel = createChannel(
-        new FakeNameResolverFactory(server, true), NO_INTERCEPTOR);
+        new FakeNameResolverFactory(server, expectedUri, true), NO_INTERCEPTOR);
     verifyNoMoreInteractions(mockTransportFactory);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     verifyNoMoreInteractions(mockTransportFactory);
@@ -233,6 +238,98 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void getNameResolver_invalidUriWithoutScheme() {
+    Factory nameResolverFactory =  new FakeNameResolverFactory(server, expectedUri, true);
+    thrown.expect(IllegalArgumentException.class);
+
+    ManagedChannelImpl.getNameResolver("[invalid", nameResolverFactory, Attributes.EMPTY);
+  }
+
+  @Test
+  public void getNameResolver_invalidUriWithScheme() {
+    Factory nameResolverFactory =  new FakeNameResolverFactory(server, expectedUri, true);
+    thrown.expect(IllegalArgumentException.class);
+
+    ManagedChannelImpl.getNameResolver("scheme://[invalid", nameResolverFactory, Attributes.EMPTY);
+  }
+
+  @Test
+  public void getNameResolver_validHost() {
+    Factory nameResolverFactory = new FakeNameResolverFactory(server, expectedUri, true);
+
+    NameResolver res = ManagedChannelImpl.getNameResolver(
+        target, nameResolverFactory, NAME_RESOLVER_PARAMS);
+
+    assertEquals(serviceName, res.getServiceAuthority());
+  }
+
+  @Test
+  public void getNameResolver_validHostWithoutSchema() throws URISyntaxException {
+    expectedUri = new URI("dns:///foo.googleapis.com:8080");
+    Factory nameResolverFactory = new NameResolver.Factory() {
+      @Override
+      public NameResolver newNameResolver(URI targetUri, Attributes params) {
+        if (targetUri.equals(expectedUri)) {
+          NameResolver resolver = mock(NameResolver.class);
+          when(resolver.getServiceAuthority()).thenReturn("foo.googleapis.com:8080");
+          return resolver;
+        }
+        return null;
+      }
+    };
+
+    NameResolver res = ManagedChannelImpl.getNameResolver(
+        "foo.googleapis.com:8080", nameResolverFactory, NAME_RESOLVER_PARAMS);
+
+    assertEquals("foo.googleapis.com:8080", res.getServiceAuthority());
+  }
+
+  @Test
+  public void getNameResolver_validIpHostWithoutSchema() {
+    Factory nameResolverFactory = new NameResolver.Factory() {
+      @Override
+      public NameResolver newNameResolver(URI targetUri, Attributes params) {
+        NameResolver resolver = mock(NameResolver.class);
+        when(resolver.getServiceAuthority()).thenReturn("127.0.0.1:8080");
+        return resolver;
+      }
+    };
+
+    NameResolver res = ManagedChannelImpl.getNameResolver(
+        "127.0.0.1:8080", nameResolverFactory, NAME_RESOLVER_PARAMS);
+
+    assertEquals("127.0.0.1:8080", res.getServiceAuthority());
+  }
+
+  @Test
+  public void getNameResolver_validTargetNoResovler() {
+    Factory nameResolverFactory = new NameResolver.Factory() {
+      @Override
+      public NameResolver newNameResolver(URI targetUri, Attributes params) {
+        return null;
+      }
+    };
+    thrown.expect(IllegalArgumentException.class);
+
+    ManagedChannelImpl.getNameResolver(target, nameResolverFactory, NAME_RESOLVER_PARAMS);
+  }
+
+  @Test
+  public void getNameResolver_validTargetDnsResovler() {
+    Factory nameResolverFactory = new NameResolver.Factory() {
+      @Override
+      public NameResolver newNameResolver(URI targetUri, Attributes params) {
+        if (targetUri.getScheme().equals("dns")) {
+          return mock(NameResolver.class);
+        }
+        return null;
+      }
+    };
+
+    ManagedChannelImpl.getNameResolver("[::1]:1234", nameResolverFactory, NAME_RESOLVER_PARAMS);
+  }
+
+  @Test
   public void interceptor() throws Exception {
     final AtomicLong atomic = new AtomicLong();
     ClientInterceptor interceptor = new ClientInterceptor() {
@@ -245,7 +342,7 @@ public class ManagedChannelImplTest {
       }
     };
     ManagedChannel channel = createChannel(
-        new FakeNameResolverFactory(server, true), Arrays.asList(interceptor));
+        new FakeNameResolverFactory(server, expectedUri, true), Arrays.asList(interceptor));
     assertNotNull(channel.newCall(method, CallOptions.DEFAULT));
     assertEquals(1, atomic.get());
   }
@@ -253,7 +350,7 @@ public class ManagedChannelImplTest {
   @Test
   public void testNoDeadlockOnShutdown() {
     ManagedChannel channel = createChannel(
-        new FakeNameResolverFactory(server, true), NO_INTERCEPTOR);
+        new FakeNameResolverFactory(server, expectedUri, true), NO_INTERCEPTOR);
     // Force creation of transport
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     Metadata headers = new Metadata();
@@ -317,7 +414,8 @@ public class ManagedChannelImplTest {
 
   @Test
   public void nameResolvedAfterChannelShutdown() {
-    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(server, false);
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory(server, expectedUri, false);
     ManagedChannel channel = createChannel(nameResolverFactory, NO_INTERCEPTOR);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     Metadata headers = new Metadata();
@@ -344,20 +442,23 @@ public class ManagedChannelImplTest {
     }
   }
 
-  private class FakeNameResolverFactory extends NameResolver.Factory {
+  private static class FakeNameResolverFactory extends NameResolver.Factory {
     final ResolvedServerInfo server;
     final boolean resolvedAtStart;
     final ArrayList<FakeNameResolver> resolvers = new ArrayList<FakeNameResolver>();
+    final URI expectedUri;
 
-    FakeNameResolverFactory(ResolvedServerInfo server, boolean resolvedAtStart) {
+    FakeNameResolverFactory(ResolvedServerInfo server, URI expectedUri, boolean resolvedAtStart) {
       this.server = server;
       this.resolvedAtStart = resolvedAtStart;
+      this.expectedUri = expectedUri;
     }
 
     @Override
     public NameResolver newNameResolver(final URI targetUri, Attributes params) {
-      assertEquals("fake", targetUri.getScheme());
-      assertEquals(serviceName, targetUri.getAuthority());
+      if (!expectedUri.equals(targetUri)) {
+        return null;
+      }
       assertSame(NAME_RESOLVER_PARAMS, params);
       FakeNameResolver resolver = new FakeNameResolver();
       resolvers.add(resolver);
@@ -374,7 +475,7 @@ public class ManagedChannelImplTest {
       Listener listener;
 
       @Override public String getServiceAuthority() {
-        return serviceName;
+        return expectedUri.getAuthority();
       }
 
       @Override public void start(final Listener listener) {
