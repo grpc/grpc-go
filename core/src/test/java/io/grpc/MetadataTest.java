@@ -46,7 +46,9 @@ import com.google.common.collect.Lists;
 import io.grpc.Metadata.Key;
 import io.grpc.internal.GrpcUtil;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -59,6 +61,8 @@ import java.util.Locale;
  */
 @RunWith(JUnit4.class)
 public class MetadataTest {
+
+  @Rule public final ExpectedException thrown = ExpectedException.none();
 
   private static final Metadata.BinaryMarshaller<Fish> FISH_MARSHALLER =
       new Metadata.BinaryMarshaller<Fish>() {
@@ -187,6 +191,21 @@ public class MetadataTest {
     roundTripInteger(-1);
     roundTripInteger(0x12345678);
     roundTripInteger(0x87654321);
+  }
+
+  @Test
+  public void shortBinaryKeyName() {
+    thrown.expect(IllegalArgumentException.class);
+
+    Metadata.Key.of("-bin", FISH_MARSHALLER);
+  }
+
+  @Test
+  public void invalidSuffixBinaryKeyName() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("Binary header is named");
+
+    Metadata.Key.of("nonbinary", FISH_MARSHALLER);
   }
 
   private void roundTripInteger(Integer i) {

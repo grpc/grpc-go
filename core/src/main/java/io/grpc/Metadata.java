@@ -449,7 +449,8 @@ public final class Metadata {
 
     private Key(String name) {
       this.originalName = checkNotNull(name);
-      this.name = validateName(this.originalName.toLowerCase(Locale.ROOT));
+      // Intern the result for faster string identity checking.
+      this.name = validateName(this.originalName.toLowerCase(Locale.ROOT)).intern();
       this.nameBytes = this.name.getBytes(US_ASCII);
     }
 
@@ -525,9 +526,11 @@ public final class Metadata {
      */
     private BinaryKey(String name, BinaryMarshaller<T> marshaller) {
       super(name);
-      Preconditions.checkArgument(name.endsWith(BINARY_HEADER_SUFFIX),
-          "Binary header is named " + name + ". It must end with " + BINARY_HEADER_SUFFIX);
-      this.marshaller = Preconditions.checkNotNull(marshaller);
+      checkArgument(name.endsWith(BINARY_HEADER_SUFFIX),
+          "Binary header is named %s. It must end with %s",
+          name, BINARY_HEADER_SUFFIX);
+      checkArgument(name.length() > BINARY_HEADER_SUFFIX.length(), "empty key name");
+      this.marshaller = checkNotNull(marshaller, "marshaller is null");
     }
 
     @Override
