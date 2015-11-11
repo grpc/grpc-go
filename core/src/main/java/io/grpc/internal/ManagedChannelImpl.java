@@ -318,7 +318,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
         CallOptions callOptions) {
       return new ClientCallImpl<ReqT, RespT>(
           method,
-          new SerializingExecutor(executor),
+          executor,
           callOptions,
           transportProvider,
           scheduledExecutor)

@@ -33,7 +33,6 @@ package io.grpc.benchmarks;
 
 import static io.grpc.testing.TestUtils.pickUnusedPort;
 
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
 import io.grpc.ManagedChannel;
@@ -129,8 +128,8 @@ public class TransportBenchmark {
     }
 
     if (direct) {
-      serverBuilder.executor(MoreExecutors.directExecutor());
-      channelBuilder.executor(MoreExecutors.directExecutor());
+      serverBuilder.directExecutor();
+      channelBuilder.directExecutor();
     }
 
     server = serverBuilder

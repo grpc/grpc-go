@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
@@ -90,6 +91,11 @@ public abstract class AbstractManagedChannelImplBuilder
     this.target = "directaddress:///" + directServerAddress;
     this.directServerAddress = directServerAddress;
     this.nameResolverFactory = new DirectAddressNameResolverFactory(directServerAddress, authority);
+  }
+
+  @Override
+  public final T directExecutor() {
+    return executor(MoreExecutors.directExecutor());
   }
 
   @Override

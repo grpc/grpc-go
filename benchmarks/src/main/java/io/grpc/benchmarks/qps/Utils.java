@@ -31,7 +31,6 @@
 
 package io.grpc.benchmarks.qps;
 
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
 import io.grpc.ManagedChannel;
@@ -133,8 +132,10 @@ final class Utils {
     if (config.transport == ClientConfiguration.Transport.OK_HTTP) {
       InetSocketAddress addr = (InetSocketAddress) config.address;
       OkHttpChannelBuilder builder = OkHttpChannelBuilder
-          .forAddress(addr.getHostName(), addr.getPort())
-          .executor(config.directExecutor ? MoreExecutors.directExecutor() : null);
+          .forAddress(addr.getHostName(), addr.getPort());
+      if (config.directExecutor) {
+        builder.directExecutor();
+      }
       builder.negotiationType(config.tls ? io.grpc.okhttp.NegotiationType.TLS
           : io.grpc.okhttp.NegotiationType.PLAINTEXT);
       if (config.tls) {
@@ -196,15 +197,17 @@ final class Utils {
         // Should never get here.
         throw new IllegalArgumentException("Unsupported transport: " + config.transport);
     }
-    return NettyChannelBuilder
+    NettyChannelBuilder builder = NettyChannelBuilder
         .forAddress(config.address)
         .eventLoopGroup(group)
         .channelType(channelType)
         .negotiationType(negotiationType)
-        .executor(config.directExecutor ? MoreExecutors.directExecutor() : null)
         .sslContext(sslContext)
-        .flowControlWindow(config.flowControlWindow)
-        .build();
+        .flowControlWindow(config.flowControlWindow);
+    if (config.directExecutor) {
+      builder.directExecutor();
+    }
+    return builder.build();
   }
 
   static void saveHistogram(Histogram histogram, String filename) throws IOException {

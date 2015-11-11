@@ -75,6 +75,19 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   }
 
   /**
+   * Execute application code directly in the transport thread.
+   *
+   * <p>Depending on the underlying transport, using a direct executor may lead to substantial
+   * performance improvements. However, it also requires the application to not block under
+   * any circumstances.
+   *
+   * <p>Calling this method is semantically equivalent to calling {@link #executor(Executor)} and
+   * passing in a direct executor. However, this is the preferred way as it may allow the transport
+   * to perform special optimizations.
+   */
+  public abstract T directExecutor();
+
+  /**
    * Provides a custom executor.
    *
    * <p>It's an optional parameter. If the user has not provided an executor when the channel is

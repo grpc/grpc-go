@@ -38,6 +38,7 @@ import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.HandlerRegistry;
 import io.grpc.Metadata;
@@ -271,13 +272,20 @@ public final class ServerImpl extends io.grpc.Server {
     public ServerStreamListener streamCreated(final ServerStream stream, final String methodName,
         final Metadata headers) {
       final Future<?> timeout = scheduleTimeout(stream, headers);
-      SerializingExecutor serializingExecutor = new SerializingExecutor(executor);
+      final Executor wrappedExecutor;
+      // This is a performance optimization that avoids the synchronization and queuing overhead
+      // that comes with SerializingExecutor.
+      if (executor == MoreExecutors.directExecutor()) {
+        wrappedExecutor = new SerializeReentrantCallsDirectExecutor();
+      } else {
+        wrappedExecutor = new SerializingExecutor(executor);
+      }
       final JumpToApplicationThreadServerStreamListener jumpListener
-          = new JumpToApplicationThreadServerStreamListener(serializingExecutor, stream);
-      // Run in serializingExecutor so jumpListener.setListener() is called before any callbacks
+          = new JumpToApplicationThreadServerStreamListener(wrappedExecutor, stream);
+      // Run in wrappedExecutor so jumpListener.setListener() is called before any callbacks
       // are delivered, including any errors. Callbacks can still be triggered, but they will be
       // queued.
-      serializingExecutor.execute(new Runnable() {
+      wrappedExecutor.execute(new Runnable() {
           @Override
           public void run() {
             ServerStreamListener listener = NOOP_LISTENER;
@@ -362,12 +370,12 @@ public final class ServerImpl extends io.grpc.Server {
    * exceptions.
    */
   private static class JumpToApplicationThreadServerStreamListener implements ServerStreamListener {
-    private final SerializingExecutor callExecutor;
+    private final Executor callExecutor;
     private final ServerStream stream;
     // Only accessed from callExecutor.
     private ServerStreamListener listener;
 
-    public JumpToApplicationThreadServerStreamListener(SerializingExecutor executor,
+    public JumpToApplicationThreadServerStreamListener(Executor executor,
         ServerStream stream) {
       this.callExecutor = executor;
       this.stream = stream;

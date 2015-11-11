@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
@@ -68,6 +69,11 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
    */
   protected AbstractServerImplBuilder() {
     this.registry = new MutableHandlerRegistryImpl();
+  }
+
+  @Override
+  public final T directExecutor() {
+    return executor(MoreExecutors.directExecutor());
   }
 
   @Override

@@ -31,8 +31,6 @@
 
 package io.grpc.benchmarks.netty;
 
-import com.google.common.util.concurrent.MoreExecutors;
-
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Drainable;
@@ -227,10 +225,10 @@ public abstract class AbstractBenchmark {
     }
 
     if (serverExecutor == ExecutorType.DIRECT) {
-      serverBuilder.executor(MoreExecutors.directExecutor());
+      serverBuilder.directExecutor();
     }
     if (clientExecutor == ExecutorType.DIRECT) {
-      channelBuilder.executor(MoreExecutors.directExecutor());
+      channelBuilder.directExecutor();
     }
 
     // Always use a different worker group from the client.

@@ -41,6 +41,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -54,6 +55,7 @@ import io.grpc.Status;
 
 import java.io.InputStream;
 import java.util.LinkedList;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -66,7 +68,7 @@ import javax.annotation.concurrent.GuardedBy;
  */
 final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   private final MethodDescriptor<ReqT, RespT> method;
-  private final SerializingExecutor callExecutor;
+  private final Executor callExecutor;
   private final boolean unaryRequest;
   private final CallOptions callOptions;
   private ClientStream stream;
@@ -78,11 +80,16 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   private ScheduledExecutorService deadlineCancellationExecutor;
   private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
 
-  ClientCallImpl(MethodDescriptor<ReqT, RespT> method, SerializingExecutor executor,
+  ClientCallImpl(MethodDescriptor<ReqT, RespT> method, Executor executor,
       CallOptions callOptions, ClientTransportProvider clientTransportProvider,
       ScheduledExecutorService deadlineCancellationExecutor) {
     this.method = method;
-    this.callExecutor = executor;
+    // If we know that the executor is a direct executor, we don't need to wrap it with a
+    // SerializingExecutor. This is purely for performance reasons.
+    // See https://github.com/grpc/grpc-java/issues/368
+    this.callExecutor = executor == MoreExecutors.directExecutor()
+        ? new SerializeReentrantCallsDirectExecutor()
+        : new SerializingExecutor(executor);
     this.unaryRequest = method.getType() == MethodType.UNARY
         || method.getType() == MethodType.SERVER_STREAMING;
     this.callOptions = callOptions;

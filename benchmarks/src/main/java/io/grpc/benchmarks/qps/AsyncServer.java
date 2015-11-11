@@ -31,7 +31,6 @@
 
 package io.grpc.benchmarks.qps;
 
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 
 import io.grpc.Server;
@@ -167,16 +166,19 @@ public class AsyncServer {
       }
     }
 
-    return NettyServerBuilder
+    NettyServerBuilder builder = NettyServerBuilder
         .forAddress(config.address)
         .bossEventLoopGroup(boss)
         .workerEventLoopGroup(worker)
         .channelType(channelType)
         .addService(TestServiceGrpc.bindService(new TestServiceImpl()))
         .sslContext(sslContext)
-        .executor(config.directExecutor ? MoreExecutors.directExecutor() : null)
-        .flowControlWindow(config.flowControlWindow)
-        .build();
+        .flowControlWindow(config.flowControlWindow);
+    if (config.directExecutor) {
+      builder.directExecutor();
+    }
+
+    return builder.build();
   }
 
   public static class TestServiceImpl implements TestServiceGrpc.TestService {
