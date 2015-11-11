@@ -311,7 +311,8 @@ public class ManagedChannelImplTest {
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
     Status status = statusCaptor.getValue();
-    assertSame(error, status);
+    assertSame(error.getCode(), status.getCode());
+    assertSame(error.getCause(), status.getCause());
   }
 
   @Test

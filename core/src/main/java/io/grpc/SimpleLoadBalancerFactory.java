@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,12 +31,11 @@
 
 package io.grpc;
 
-import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 
+import io.grpc.internal.BlankFutureProvider;
 import io.grpc.internal.ClientTransport;
 
 import java.net.SocketAddress;
@@ -51,6 +50,7 @@ import javax.annotation.concurrent.GuardedBy;
  * addresses from the {@link NameResolver}.
  */
 // TODO(zhangkun83): Only pick-first is implemented. We need to implement round-robin.
+@ExperimentalApi
 public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
 
   private static final SimpleLoadBalancerFactory instance = new SimpleLoadBalancerFactory();
@@ -72,10 +72,9 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
     private final List<ResolvedServerInfo> servers = new ArrayList<ResolvedServerInfo>();
     @GuardedBy("servers")
     private int currentServerIndex;
-    // TODO(zhangkun83): virtually any LoadBalancer would need to handle picks before name
-    // resolution is done, we may want to move the related logic into ManagedChannelImpl.
     @GuardedBy("servers")
-    private List<SettableFuture<ClientTransport>> pendingPicks;
+    private final BlankFutureProvider<ClientTransport> pendingPicks =
+        new BlankFutureProvider<ClientTransport>();
     @GuardedBy("servers")
     private StatusException nameResolutionError;
 
@@ -93,12 +92,7 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
           if (nameResolutionError != null) {
             return Futures.immediateFailedFuture(nameResolutionError);
           }
-          SettableFuture<ClientTransport> future = SettableFuture.create();
-          if (pendingPicks == null) {
-            pendingPicks = new ArrayList<SettableFuture<ClientTransport>>();
-          }
-          pendingPicks.add(future);
-          return future;
+          return pendingPicks.newBlankFuture();
         }
         currentServer = servers.get(currentServerIndex);
       }
@@ -108,56 +102,40 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
     @Override
     public void handleResolvedAddresses(
         List<ResolvedServerInfo> updatedServers, Attributes config) {
-      List<SettableFuture<ClientTransport>> pendingPicksCopy = null;
-      ResolvedServerInfo currentServer = null;
+      BlankFutureProvider.FulfillmentBatch<ClientTransport> pendingPicksFulfillmentBatch;
+      final ResolvedServerInfo currentServer;
       synchronized (servers) {
         nameResolutionError = null;
         servers.clear();
         for (ResolvedServerInfo addr : updatedServers) {
           servers.add(addr);
         }
-        if (!servers.isEmpty()) {
-          pendingPicksCopy = pendingPicks;
-          pendingPicks = null;
-          if (currentServerIndex >= servers.size()) {
-            currentServerIndex = 0;
-          }
-          currentServer = servers.get(currentServerIndex);
+        if (servers.isEmpty()) {
+          return;
         }
-      }
-      if (pendingPicksCopy != null) {
-        // If pendingPicksCopy != null, then servers.isEmpty() == false, then
-        // currentServer must have been assigned.
-        Preconditions.checkState(currentServer != null, "currentServer is null");
-        for (final SettableFuture<ClientTransport> pendingPick : pendingPicksCopy) {
-          ListenableFuture<ClientTransport> future = tm.getTransport(currentServer.getAddress());
-          Futures.addCallback(future, new FutureCallback<ClientTransport>() {
-            @Override public void onSuccess(ClientTransport result) {
-              pendingPick.set(result);
-            }
-
-            @Override public void onFailure(Throwable t) {
-              pendingPick.setException(t);
-            }
-          });
+        pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
+        if (currentServerIndex >= servers.size()) {
+          currentServerIndex = 0;
         }
+        currentServer = servers.get(currentServerIndex);
       }
+      pendingPicksFulfillmentBatch.link(new Supplier<ListenableFuture<ClientTransport>>() {
+        @Override public ListenableFuture<ClientTransport> get() {
+          return tm.getTransport(currentServer.getAddress());
+        }
+      });
     }
 
     @Override
     public void handleNameResolutionError(Status error) {
-      List<SettableFuture<ClientTransport>> pendingPicksCopy = null;
-      StatusException statusException = error.asException();
+      BlankFutureProvider.FulfillmentBatch<ClientTransport> pendingPicksFulfillmentBatch;
+      StatusException statusException =
+          error.augmentDescription("Name resolution failed").asException();
       synchronized (servers) {
-        pendingPicksCopy = pendingPicks;
-        pendingPicks = null;
+        pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
         nameResolutionError = statusException;
       }
-      if (pendingPicksCopy != null) {
-        for (SettableFuture<ClientTransport> pendingPick : pendingPicksCopy) {
-          pendingPick.setException(statusException);
-        }
-      }
+      pendingPicksFulfillmentBatch.fail(statusException);
     }
 
     @Override
