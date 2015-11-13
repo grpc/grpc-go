@@ -69,11 +69,9 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2CodecUtil;
-import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2FlowController;
 import io.netty.handler.codec.http2.Http2Headers;
@@ -337,8 +335,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Override
   protected NettyServerHandler newHandler() {
-    Http2Connection connection = new DefaultHttp2Connection(true);
-    return new NettyServerHandler(transportListener, connection, frameReader(), frameWriter(),
+    return NettyServerHandler.newHandler(frameReader(), frameWriter(), transportListener,
         maxConcurrentStreams, flowControlWindow, DEFAULT_MAX_MESSAGE_SIZE);
   }
 

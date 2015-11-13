@@ -67,7 +67,6 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
-import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
@@ -104,6 +103,9 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   private long nanoTime; // backs a ticker, for testing ping round-trip time measurement
   private int flowControlWindow = DEFAULT_WINDOW_SIZE;
   private int streamId = 3;
+
+  @Mock
+  private NettyClientTransport.Listener listener;
 
   /**
    * Set up for test.
@@ -469,15 +471,15 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     Http2Stream stream = connection.local().createStream(streamId - 2, true);
     stream.close();
 
-    BufferingHttp2ConnectionEncoder encoder = new BufferingHttp2ConnectionEncoder(
-        new DefaultHttp2ConnectionEncoder(connection, frameWriter()));
     Ticker ticker = new Ticker() {
       @Override
       public long read() {
         return nanoTime;
       }
     };
-    return new NettyClientHandler(encoder, connection, frameReader(), flowControlWindow, ticker);
+
+    return NettyClientHandler.newHandler(connection, frameReader(), frameWriter(),
+        listener, flowControlWindow,ticker);
   }
 
   @Override

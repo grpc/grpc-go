@@ -35,6 +35,7 @@ import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Ticker;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -47,24 +48,9 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http2.DefaultHttp2Connection;
-import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
-import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
-import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
-import io.netty.handler.codec.http2.DefaultHttp2HeadersDecoder;
-import io.netty.handler.codec.http2.Http2CodecUtil;
-import io.netty.handler.codec.http2.Http2Connection;
-import io.netty.handler.codec.http2.Http2FrameLogger;
-import io.netty.handler.codec.http2.Http2FrameReader;
-import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2HeadersDecoder;
-import io.netty.handler.codec.http2.Http2InboundFrameLogger;
-import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
-import io.netty.handler.logging.LogLevel;
 import io.netty.util.AsciiString;
 
 import java.net.SocketAddress;
@@ -79,12 +65,13 @@ class NettyClientTransport implements ClientTransport {
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
-  private final ProtocolNegotiator.Handler negotiationHandler;
-  private final NettyClientHandler handler;
+  private final ProtocolNegotiator negotiator;
   private final AsciiString authority;
   private final int flowControlWindow;
   private final int maxMessageSize;
   private final int maxHeaderListSize;
+  private ProtocolNegotiator.Handler negotiationHandler;
+  private NettyClientHandler handler;
   // We should not send on the channel until negotiation completes. This is a hard requirement
   // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
   private Channel channel;
@@ -100,7 +87,7 @@ class NettyClientTransport implements ClientTransport {
                        EventLoopGroup group, ProtocolNegotiator negotiator,
                        int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
                        String authority) {
-    Preconditions.checkNotNull(negotiator, "negotiator");
+    this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
@@ -108,9 +95,6 @@ class NettyClientTransport implements ClientTransport {
     this.maxMessageSize = maxMessageSize;
     this.maxHeaderListSize = maxHeaderListSize;
     this.authority = new AsciiString(authority);
-
-    handler = newHandler();
-    negotiationHandler = negotiator.newHandler(handler);
   }
 
   @Override
@@ -158,6 +142,10 @@ class NettyClientTransport implements ClientTransport {
   @Override
   public void start(Listener transportListener) {
     listener = Preconditions.checkNotNull(transportListener, "listener");
+
+    handler = newHandler();
+    negotiationHandler = negotiator.newHandler(handler);
+
     Bootstrap b = new Bootstrap();
     b.group(group);
     b.channel(channelType);
@@ -249,29 +237,7 @@ class NettyClientTransport implements ClientTransport {
   }
 
   private NettyClientHandler newHandler() {
-    Http2Connection connection = new DefaultHttp2Connection(false);
-    Http2HeadersDecoder headersDecoder =
-        new DefaultHttp2HeadersDecoder(maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE);
-    Http2FrameReader frameReader = new DefaultHttp2FrameReader(headersDecoder);
-    Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
-
-    Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, getClass());
-    frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
-    frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
-
-    BufferingHttp2ConnectionEncoder encoder = new BufferingHttp2ConnectionEncoder(
-            new DefaultHttp2ConnectionEncoder(connection, frameWriter)) {
-      private boolean firstSettings = true;
-
-      @Override
-      public ChannelFuture writeSettingsAck(ChannelHandlerContext ctx, ChannelPromise promise) {
-        if (firstSettings) {
-          listener.transportReady();
-          firstSettings = false;
-        }
-        return super.writeSettingsAck(ctx, promise);
-      }
-    };
-    return new NettyClientHandler(encoder, connection, frameReader, flowControlWindow);
+    return NettyClientHandler.newHandler(listener, flowControlWindow, maxHeaderListSize,
+        Ticker.systemTicker());
   }
 }

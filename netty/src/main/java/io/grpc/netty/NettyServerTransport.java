@@ -39,19 +39,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
-import io.netty.handler.codec.http2.DefaultHttp2Connection;
-import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
-import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
-import io.netty.handler.codec.http2.DefaultHttp2HeadersDecoder;
-import io.netty.handler.codec.http2.Http2CodecUtil;
-import io.netty.handler.codec.http2.Http2Connection;
-import io.netty.handler.codec.http2.Http2FrameLogger;
-import io.netty.handler.codec.http2.Http2FrameReader;
-import io.netty.handler.codec.http2.Http2FrameWriter;
-import io.netty.handler.codec.http2.Http2HeadersDecoder;
-import io.netty.handler.codec.http2.Http2InboundFrameLogger;
-import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
-import io.netty.handler.logging.LogLevel;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -128,16 +115,7 @@ class NettyServerTransport implements ServerTransport {
    * Creates the Netty handler to be used in the channel pipeline.
    */
   private NettyServerHandler createHandler(ServerTransportListener transportListener) {
-    Http2Connection connection = new DefaultHttp2Connection(true);
-    Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, getClass());
-    Http2HeadersDecoder headersDecoder =
-        new DefaultHttp2HeadersDecoder(maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE);
-    Http2FrameReader frameReader = new Http2InboundFrameLogger(
-        new DefaultHttp2FrameReader(headersDecoder), frameLogger);
-    Http2FrameWriter frameWriter =
-        new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
-
-    return new NettyServerHandler(transportListener, connection, frameReader, frameWriter,
-        maxStreams, flowControlWindow, maxMessageSize);
+    return NettyServerHandler.newHandler(transportListener, maxStreams, flowControlWindow,
+        maxHeaderListSize, maxMessageSize);
   }
 }

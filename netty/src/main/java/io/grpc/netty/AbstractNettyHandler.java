@@ -61,8 +61,9 @@ abstract class AbstractNettyHandler extends Http2ConnectionHandler {
     // Set the timeout for graceful shutdown.
     gracefulShutdownTimeoutMillis(GRACEFUL_SHUTDOWN_TIMEOUT);
 
-    // TODO(nmittler): Use auto-refill once https://github.com/grpc/grpc-java/issues/1175 is fixed.
-    this.initialConnectionWindow = Integer.MAX_VALUE;
+    // Extract the connection window from the settings if it was set.
+    this.initialConnectionWindow = initialSettings.initialWindowSize() == null ? -1 :
+            initialSettings.initialWindowSize();
   }
 
   @Override

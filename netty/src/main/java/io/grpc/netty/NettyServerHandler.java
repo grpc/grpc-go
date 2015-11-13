@@ -37,7 +37,9 @@ import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
 import static io.grpc.netty.Utils.TE_HEADER;
 import static io.grpc.netty.Utils.TE_TRAILERS;
+import static io.netty.handler.codec.http2.DefaultHttp2LocalFlowController.DEFAULT_WINDOW_UPDATE_RATIO;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Metadata;
@@ -50,20 +52,32 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
+import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
+import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
+import io.netty.handler.codec.http2.DefaultHttp2HeadersDecoder;
+import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
+import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
+import io.netty.handler.codec.http2.Http2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Exception.StreamException;
 import io.netty.handler.codec.http2.Http2FrameAdapter;
+import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2HeadersDecoder;
+import io.netty.handler.codec.http2.Http2InboundFrameLogger;
+import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamVisitor;
+import io.netty.handler.logging.LogLevel;
 import io.netty.util.ReferenceCountUtil;
 
 import java.util.logging.Level;
@@ -87,37 +101,63 @@ class NettyServerHandler extends AbstractNettyHandler {
   private boolean teWarningLogged;
   private WriteQueue serverWriteQueue;
 
-  NettyServerHandler(ServerTransportListener transportListener,
-                     Http2Connection connection,
-                     Http2FrameReader frameReader,
-                     Http2FrameWriter frameWriter,
-                     int maxStreams,
-                     int flowControlWindow,
-                     int maxMessageSize) {
-    this(transportListener, new DefaultHttp2ConnectionEncoder(connection, frameWriter), frameReader,
-            createInitialSettings(flowControlWindow, maxStreams), maxMessageSize);
+  static NettyServerHandler newHandler(ServerTransportListener transportListener,
+                                       int maxStreams,
+                                       int flowControlWindow,
+                                       int maxHeaderListSize,
+                                       int maxMessageSize) {
+    Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
+    Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, NettyServerHandler.class);
+    Http2HeadersDecoder headersDecoder =
+        new DefaultHttp2HeadersDecoder(maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE);
+    Http2FrameReader frameReader = new Http2InboundFrameLogger(
+        new DefaultHttp2FrameReader(headersDecoder), frameLogger);
+    Http2FrameWriter frameWriter =
+        new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
+    return newHandler(frameReader, frameWriter, transportListener, maxStreams, flowControlWindow,
+        maxMessageSize);
+  }
+
+  @VisibleForTesting
+  static NettyServerHandler newHandler(Http2FrameReader frameReader, Http2FrameWriter frameWriter,
+                                       ServerTransportListener transportListener,
+                                       int maxStreams,
+                                       int flowControlWindow,
+                                       int maxMessageSize) {
+    Preconditions.checkArgument(maxStreams > 0, "maxStreams must be positive");
+    Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
+    Preconditions.checkArgument(maxMessageSize > 0, "maxMessageSize must be positive");
+
+    Http2Connection connection = new DefaultHttp2Connection(true);
+
+    // Create the local flow controller configured to auto-refill the connection window.
+    connection.local().flowController(new DefaultHttp2LocalFlowController(connection,
+            DEFAULT_WINDOW_UPDATE_RATIO, true));
+
+    Http2ConnectionEncoder encoder = new DefaultHttp2ConnectionEncoder(connection, frameWriter);
+    Http2ConnectionDecoder decoder = new DefaultHttp2ConnectionDecoder(connection, encoder,
+        frameReader);
+
+    Http2Settings settings = new Http2Settings();
+    settings.initialWindowSize(flowControlWindow);
+    settings.maxConcurrentStreams(maxStreams);
+
+    return new NettyServerHandler(transportListener, decoder, encoder, settings, maxMessageSize);
   }
 
   private NettyServerHandler(ServerTransportListener transportListener,
-                             Http2ConnectionEncoder encoder,
-                             Http2FrameReader frameReader, Http2Settings settings,
+                             Http2ConnectionDecoder decoder,
+                             Http2ConnectionEncoder encoder, Http2Settings settings,
                              int maxMessageSize) {
-    super(new DefaultHttp2ConnectionDecoder(encoder.connection(), encoder, frameReader), encoder,
-            settings);
+    super(decoder, encoder, settings);
     checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
     this.maxMessageSize = maxMessageSize;
 
     streamKey = encoder.connection().newKey();
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
-    decoder().frameListener(new FrameListener());
-  }
 
-  private static Http2Settings createInitialSettings(int flowControlWindow, int maxStreams) {
-    Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
-    Http2Settings initialSettings = new Http2Settings();
-    initialSettings.initialWindowSize(flowControlWindow);
-    initialSettings.maxConcurrentStreams(maxStreams);
-    return initialSettings;
+    // Set the frame listener on the decoder.
+    decoder().frameListener(new FrameListener());
   }
 
   @Nullable
