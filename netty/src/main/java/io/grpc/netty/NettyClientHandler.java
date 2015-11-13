@@ -105,12 +105,13 @@ class NettyClientHandler extends AbstractNettyHandler {
 
   @VisibleForTesting
   NettyClientHandler(BufferingHttp2ConnectionEncoder encoder, Http2Connection connection,
-      Http2FrameReader frameReader, int flowControlWindow, Ticker ticker) {
-    super(new DefaultHttp2ConnectionDecoder(connection, encoder, frameReader,
-        new LazyFrameListener()), encoder, createInitialSettings(flowControlWindow));
+                     Http2FrameReader frameReader, int flowControlWindow, Ticker ticker) {
+    super(new DefaultHttp2ConnectionDecoder(connection, encoder, frameReader), encoder,
+            createInitialSettings(flowControlWindow));
     this.ticker = ticker;
 
-    initListener();
+    // Set the frame listener on the decoder.
+    decoder().frameListener(new FrameListener());
 
     streamKey = connection.newKey();
 
@@ -178,10 +179,6 @@ class NettyClientHandler extends AbstractNettyHandler {
     } catch (Http2Exception e) {
       throw new RuntimeException(e);
     }
-  }
-
-  private void initListener() {
-    ((LazyFrameListener) decoder().listener()).setHandler(this);
   }
 
   private void onHeadersRead(int streamId, Http2Headers headers, boolean endStream)
@@ -476,17 +473,11 @@ class NettyClientHandler extends AbstractNettyHandler {
     return stream;
   }
 
-  private static class LazyFrameListener extends Http2FrameAdapter {
-    private NettyClientHandler handler;
-
-    void setHandler(NettyClientHandler handler) {
-      this.handler = handler;
-    }
-
+  private class FrameListener extends Http2FrameAdapter {
     @Override
     public int onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
         boolean endOfStream) throws Http2Exception {
-      handler.onDataRead(streamId, data, endOfStream);
+      NettyClientHandler.this.onDataRead(streamId, data, endOfStream);
       return padding;
     }
 
@@ -499,23 +490,23 @@ class NettyClientHandler extends AbstractNettyHandler {
         boolean exclusive,
         int padding,
         boolean endStream) throws Http2Exception {
-      handler.onHeadersRead(streamId, headers, endStream);
+      NettyClientHandler.this.onHeadersRead(streamId, headers, endStream);
     }
 
     @Override
     public void onRstStreamRead(ChannelHandlerContext ctx, int streamId, long errorCode)
         throws Http2Exception {
-      handler.onRstStreamRead(streamId, errorCode);
+      NettyClientHandler.this.onRstStreamRead(streamId, errorCode);
     }
 
     @Override public void onPingAckRead(ChannelHandlerContext ctx, ByteBuf data)
         throws Http2Exception {
-      Http2Ping p = handler.ping;
+      Http2Ping p = ping;
       if (p != null) {
         long ackPayload = data.readLong();
         if (p.payload() == ackPayload) {
           p.complete();
-          handler.ping = null;
+          ping = null;
         } else {
           logger.log(Level.WARNING, String.format("Received unexpected ping ack. "
               + "Expecting %d, got %d", p.payload(), ackPayload));

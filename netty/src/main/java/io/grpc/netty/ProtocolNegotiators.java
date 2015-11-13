@@ -59,7 +59,7 @@ import io.netty.handler.ssl.OpenSslEngine;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
-import io.netty.util.ByteString;
+import io.netty.util.AsciiString;
 
 import java.net.URI;
 import java.util.ArrayDeque;
@@ -108,7 +108,7 @@ public final class ProtocolNegotiators {
           }
 
           @Override
-          public ByteString scheme() {
+          public AsciiString scheme() {
             return Utils.HTTP;
           }
         };
@@ -183,7 +183,7 @@ public final class ProtocolNegotiators {
     }
 
     @Override
-    public ByteString scheme() {
+    public AsciiString scheme() {
       return Utils.HTTPS;
     }
   }
@@ -488,7 +488,7 @@ public final class ProtocolNegotiators {
     }
 
     @Override
-    public ByteString scheme() {
+    public AsciiString scheme() {
       return Utils.HTTPS;
     }
 
@@ -527,7 +527,7 @@ public final class ProtocolNegotiators {
     }
 
     @Override
-    public ByteString scheme() {
+    public AsciiString scheme() {
       return Utils.HTTP;
     }
 
@@ -554,7 +554,7 @@ public final class ProtocolNegotiators {
     }
 
     @Override
-    public ByteString scheme() {
+    public AsciiString scheme() {
       return Utils.HTTP;
     }
 

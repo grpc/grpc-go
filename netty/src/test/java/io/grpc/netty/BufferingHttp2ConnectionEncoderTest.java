@@ -111,9 +111,10 @@ public class BufferingHttp2ConnectionEncoderTest {
         new DefaultHttp2ConnectionEncoder(connection, writer);
     encoder = new BufferingHttp2ConnectionEncoder(defaultEncoder);
     DefaultHttp2ConnectionDecoder decoder = new DefaultHttp2ConnectionDecoder(connection, encoder,
-        new DefaultHttp2FrameReader(), frameListener);
+        new DefaultHttp2FrameReader());
+    decoder.frameListener(frameListener);
 
-    Http2ConnectionHandler handler = new Http2ConnectionHandler(decoder, encoder);
+    Http2ConnectionHandler handler = new Http2ConnectionHandler.Builder().build(decoder, encoder);
     channel = new EmbeddedChannel(handler);
     ctx = channel.pipeline().context(handler);
   }

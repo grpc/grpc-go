@@ -31,7 +31,6 @@
 
 package io.grpc.netty;
 
-import static com.google.common.base.Charsets.US_ASCII;
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.netty.Utils.CONTENT_TYPE_GRPC;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
@@ -65,7 +64,6 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamVisitor;
-import io.netty.util.ByteString;
 import io.netty.util.ReferenceCountUtil;
 
 import java.util.logging.Level;
@@ -78,7 +76,6 @@ import javax.annotation.Nullable;
  * the context of the Netty Channel thread.
  */
 class NettyServerHandler extends AbstractNettyHandler {
-
   private static Logger logger = Logger.getLogger(NettyServerHandler.class.getName());
 
   private static final Status GOAWAY_STATUS = Status.UNAVAILABLE;
@@ -98,21 +95,21 @@ class NettyServerHandler extends AbstractNettyHandler {
                      int flowControlWindow,
                      int maxMessageSize) {
     this(transportListener, new DefaultHttp2ConnectionEncoder(connection, frameWriter), frameReader,
-        createInitialSettings(flowControlWindow, maxStreams), maxMessageSize);
+            createInitialSettings(flowControlWindow, maxStreams), maxMessageSize);
   }
 
   private NettyServerHandler(ServerTransportListener transportListener,
                              Http2ConnectionEncoder encoder,
                              Http2FrameReader frameReader, Http2Settings settings,
                              int maxMessageSize) {
-    super(new DefaultHttp2ConnectionDecoder(encoder.connection(), encoder, frameReader,
-        new LazyFrameListener()), encoder, settings);
+    super(new DefaultHttp2ConnectionDecoder(encoder.connection(), encoder, frameReader), encoder,
+            settings);
     checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
     this.maxMessageSize = maxMessageSize;
 
     streamKey = encoder.connection().newKey();
     this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
-    initListener();
+    decoder().frameListener(new FrameListener());
   }
 
   private static Http2Settings createInitialSettings(int flowControlWindow, int maxStreams) {
@@ -126,10 +123,6 @@ class NettyServerHandler extends AbstractNettyHandler {
   @Nullable
   Throwable connectionError() {
     return connectionError;
-  }
-
-  private void initListener() {
-    ((LazyFrameListener) decoder().listener()).setHandler(this);
   }
 
   @Override
@@ -333,12 +326,12 @@ class NettyServerHandler extends AbstractNettyHandler {
   }
 
   private void verifyContentType(int streamId, Http2Headers headers) throws Http2Exception {
-    ByteString contentType = headers.get(CONTENT_TYPE_HEADER);
+    CharSequence contentType = headers.get(CONTENT_TYPE_HEADER);
     if (contentType == null) {
       throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
           "Content-Type is missing from the request");
     }
-    String contentTypeString = contentType.toString(US_ASCII);
+    String contentTypeString = contentType.toString();
     if (!GrpcUtil.isGrpcContentType(contentTypeString)) {
       throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
           "Content-Type '%s' is not supported", contentTypeString);
@@ -361,16 +354,18 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
     checkHeader(streamId, headers, CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
     // Remove the leading slash of the path and get the fully qualified method name
-    ByteString path = headers.path();
-    if (path.byteAt(0) != '/') {
+    CharSequence path = headers.path();
+    if (path.charAt(0) != '/') {
       throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
           "Malformatted path: %s", path);
     }
-    return path.toString(1, path.length());
+    return path.subSequence(1, path.length()).toString();
   }
 
-  private static void checkHeader(int streamId, Http2Headers headers,
-      ByteString header, ByteString expectedValue) throws Http2Exception {
+  private static void checkHeader(int streamId,
+                                  Http2Headers headers,
+                                  CharSequence header,
+                                  CharSequence expectedValue) throws Http2Exception {
     if (!expectedValue.equals(headers.get(header))) {
       throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
           "Header '%s'='%s', while '%s' is expected", header, headers.get(header), expectedValue);
@@ -389,17 +384,12 @@ class NettyServerHandler extends AbstractNettyHandler {
         streamId, Http2Error.INTERNAL_ERROR, cause, cause.getMessage());
   }
 
-  private static class LazyFrameListener extends Http2FrameAdapter {
-    private NettyServerHandler handler;
-
-    void setHandler(NettyServerHandler handler) {
-      this.handler = handler;
-    }
+  private class FrameListener extends Http2FrameAdapter {
 
     @Override
     public int onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
         boolean endOfStream) throws Http2Exception {
-      handler.onDataRead(streamId, data, endOfStream);
+      NettyServerHandler.this.onDataRead(streamId, data, endOfStream);
       return padding;
     }
 
@@ -412,13 +402,13 @@ class NettyServerHandler extends AbstractNettyHandler {
         boolean exclusive,
         int padding,
         boolean endStream) throws Http2Exception {
-      handler.onHeadersRead(ctx, streamId, headers);
+      NettyServerHandler.this.onHeadersRead(ctx, streamId, headers);
     }
 
     @Override
     public void onRstStreamRead(ChannelHandlerContext ctx, int streamId, long errorCode)
         throws Http2Exception {
-      handler.onRstStreamRead(streamId);
+      NettyServerHandler.this.onRstStreamRead(streamId);
     }
   }
 }

@@ -80,7 +80,6 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
-import io.netty.util.ByteString;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -278,7 +277,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void headersWithInvalidContentTypeShouldFail() throws Exception {
     Http2Headers headers = new DefaultHttp2Headers()
             .method(HTTP_METHOD)
-            .set(CONTENT_TYPE_HEADER, new ByteString("application/bad", UTF_8))
+            .set(CONTENT_TYPE_HEADER, new AsciiString("application/bad", UTF_8))
             .set(TE_HEADER, TE_TRAILERS)
             .path(new AsciiString("/foo/bar"));
     ByteBuf headersFrame = headersFrame(STREAM_ID, headers);

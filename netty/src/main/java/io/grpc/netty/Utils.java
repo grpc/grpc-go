@@ -34,6 +34,7 @@ package io.grpc.netty;
 import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.grpc.internal.GrpcUtil.CONTENT_TYPE_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
+import static io.netty.util.CharsetUtil.US_ASCII;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
@@ -47,7 +48,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.util.ByteString;
+import io.netty.util.AsciiString;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
@@ -62,18 +63,15 @@ import java.util.concurrent.TimeUnit;
  */
 class Utils {
 
-  public static final ByteString STATUS_OK = new ByteString("200".getBytes(UTF_8));
-  public static final ByteString HTTP_METHOD = new ByteString(GrpcUtil.HTTP_METHOD.getBytes(UTF_8));
-  public static final ByteString HTTPS = new ByteString("https".getBytes(UTF_8));
-  public static final ByteString HTTP = new ByteString("http".getBytes(UTF_8));
-  public static final ByteString CONTENT_TYPE_HEADER =
-      new ByteString(CONTENT_TYPE_KEY.name().getBytes(UTF_8));
-  public static final ByteString CONTENT_TYPE_GRPC =
-      new ByteString(GrpcUtil.CONTENT_TYPE_GRPC.getBytes(UTF_8));
-  public static final ByteString TE_HEADER = new ByteString("te".getBytes(UTF_8));
-  public static final ByteString TE_TRAILERS = new ByteString(GrpcUtil.TE_TRAILERS.getBytes(UTF_8));
-  public static final ByteString USER_AGENT =
-      new ByteString(USER_AGENT_KEY.name().getBytes(UTF_8));
+  public static final AsciiString STATUS_OK = AsciiString.of("200");
+  public static final AsciiString HTTP_METHOD = AsciiString.of(GrpcUtil.HTTP_METHOD);
+  public static final AsciiString HTTPS = AsciiString.of("https");
+  public static final AsciiString HTTP = AsciiString.of("http");
+  public static final AsciiString CONTENT_TYPE_HEADER = AsciiString.of(CONTENT_TYPE_KEY.name());
+  public static final AsciiString CONTENT_TYPE_GRPC = AsciiString.of(GrpcUtil.CONTENT_TYPE_GRPC);
+  public static final AsciiString TE_HEADER = AsciiString.of("te");
+  public static final AsciiString TE_TRAILERS = AsciiString.of(GrpcUtil.TE_TRAILERS);
+  public static final AsciiString USER_AGENT = AsciiString.of(USER_AGENT_KEY.name());
 
   public static final Resource<EventLoopGroup> DEFAULT_BOSS_EVENT_LOOP_GROUP =
       new DefaultEventLoopGroupResource(1, "grpc-default-boss-ELG");
@@ -90,17 +88,26 @@ class Utils {
     // arbitrary binary data, not just ASCII.
     byte[][] headerValues = new byte[http2Headers.size() * 2][];
     int i = 0;
-    for (Map.Entry<ByteString, ByteString> entry : http2Headers) {
-      headerValues[i++] = entry.getKey().array();
-      headerValues[i++] = entry.getValue().array();
+    for (Map.Entry<CharSequence, CharSequence> entry : http2Headers) {
+      headerValues[i++] = bytes(entry.getKey());
+      headerValues[i++] = bytes(entry.getValue());
     }
     return TransportFrameUtil.toRawSerializedHeaders(headerValues);
   }
 
+  private static byte[] bytes(CharSequence seq) {
+    if (seq instanceof AsciiString) {
+      // Fast path - no copy.
+      return ((AsciiString) seq).array();
+    }
+    // Slow path - copy.
+    return seq.toString().getBytes(UTF_8);
+  }
+
   public static Http2Headers convertClientHeaders(Metadata headers,
-      ByteString scheme,
-      ByteString defaultPath,
-      ByteString defaultAuthority) {
+      AsciiString scheme,
+      AsciiString defaultPath,
+      AsciiString defaultAuthority) {
     Preconditions.checkNotNull(defaultPath, "defaultPath");
     Preconditions.checkNotNull(defaultAuthority, "defaultAuthority");
     // Add any application-provided headers first.
@@ -116,12 +123,12 @@ class Utils {
 
     // Override the default authority and path if provided by the headers.
     if (headers.containsKey(AUTHORITY_KEY)) {
-      http2Headers.authority(new ByteString(headers.get(AUTHORITY_KEY).getBytes(UTF_8)));
+      http2Headers.authority(new AsciiString(headers.get(AUTHORITY_KEY).getBytes(UTF_8)));
     }
 
     // Set the User-Agent header.
     String userAgent = GrpcUtil.getGrpcUserAgent("netty", headers.get(USER_AGENT_KEY));
-    http2Headers.set(USER_AGENT, new ByteString(userAgent.getBytes(UTF_8)));
+    http2Headers.set(USER_AGENT, new AsciiString(userAgent.getBytes(UTF_8)));
 
     return http2Headers;
   }
@@ -151,8 +158,8 @@ class Utils {
     Http2Headers http2Headers = new DefaultHttp2Headers();
     byte[][] serializedHeaders = TransportFrameUtil.toHttp2Headers(headers);
     for (int i = 0; i < serializedHeaders.length; i += 2) {
-      ByteString name = new ByteString(serializedHeaders[i], false);
-      ByteString value = new ByteString(serializedHeaders[i + 1], false);
+      AsciiString name = new AsciiString(serializedHeaders[i], false);
+      AsciiString value = new AsciiString(serializedHeaders[i + 1], false);
       http2Headers.add(name, value);
     }
 

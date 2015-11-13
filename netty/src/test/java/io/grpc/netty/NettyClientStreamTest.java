@@ -55,14 +55,12 @@ import static org.mockito.Mockito.when;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
-import io.netty.util.ByteString;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -265,10 +263,10 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     // Set stream id to indicate it has been created
     stream().id(STREAM_ID);
     Http2Headers headers = new DefaultHttp2Headers().status(STATUS_OK).set(CONTENT_TYPE_HEADER,
-            new ByteString("application/bad", UTF_8));
+            new AsciiString("application/bad", UTF_8));
     stream().transportHeadersReceived(headers, false);
     Http2Headers trailers = new DefaultHttp2Headers()
-        .set(new ByteString("grpc-status", UTF_8), new ByteString("0", UTF_8));
+        .set(new AsciiString("grpc-status", UTF_8), new AsciiString("0", UTF_8));
     stream().transportHeadersReceived(trailers, true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.class));

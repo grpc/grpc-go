@@ -32,6 +32,8 @@
 package io.grpc.netty;
 
 import static io.netty.handler.codec.http2.Http2CodecUtil.getEmbeddedHttp2Exception;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
@@ -47,7 +49,7 @@ import io.netty.handler.codec.http2.Http2Stream;
  * shutdown the connection) as well as sending the initial connection window at startup.
  */
 abstract class AbstractNettyHandler extends Http2ConnectionHandler {
-
+  private static long GRACEFUL_SHUTDOWN_TIMEOUT = MILLISECONDS.convert(5, SECONDS);
   private int initialConnectionWindow;
   private ChannelHandlerContext ctx;
 
@@ -55,6 +57,9 @@ abstract class AbstractNettyHandler extends Http2ConnectionHandler {
                        Http2ConnectionEncoder encoder,
                        Http2Settings initialSettings) {
     super(decoder, encoder, initialSettings);
+
+    // Set the timeout for graceful shutdown.
+    gracefulShutdownTimeoutMillis(GRACEFUL_SHUTDOWN_TIMEOUT);
 
     // TODO(nmittler): Use auto-refill once https://github.com/grpc/grpc-java/issues/1175 is fixed.
     this.initialConnectionWindow = Integer.MAX_VALUE;
@@ -81,7 +86,8 @@ abstract class AbstractNettyHandler extends Http2ConnectionHandler {
     if (embedded == null) {
       // Kill the connection instead of propagating the exceptionCaught(). Http2ConnectionHandler
       // only handles Http2Exceptions and propagates everything else.
-      cause = Http2Exception.connectionError(Http2Error.INTERNAL_ERROR, cause, cause.getMessage());
+      String message = cause.getMessage() == null ? "Unknown error occurred" : cause.getMessage();
+      cause = Http2Exception.connectionError(Http2Error.INTERNAL_ERROR, cause, message);
     }
     super.exceptionCaught(ctx, cause);
   }

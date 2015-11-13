@@ -34,7 +34,7 @@ package io.grpc.netty;
 import io.grpc.Internal;
 import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
-import io.netty.util.ByteString;
+import io.netty.util.AsciiString;
 
 /**
  * A class that provides a Netty handler to control protocol negotiation.
@@ -49,7 +49,7 @@ public interface ProtocolNegotiator {
     /**
      * The HTTP/2 scheme to be used when sending {@code HEADERS}.
      */
-    ByteString scheme();
+    AsciiString scheme();
   }
 
   /**
