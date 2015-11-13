@@ -40,6 +40,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.Lists;
 
@@ -304,6 +305,16 @@ public class MetadataTest {
     // Check that the casing is preserved.
     assertEquals("CASE", k2.originalName());
     assertEquals("case", k2.name());
+  }
+
+  @Test
+  public void invalidKeyName() {
+    try {
+      Key<Integer> k = Key.of("io.grpc/key1", Metadata.INTEGER_MARSHALLER);
+      fail("Should have thrown");
+    } catch (IllegalArgumentException e) {
+      assertEquals("Invalid character '/' in key name 'io.grpc/key1'", e.getMessage());
+    }
   }
 
   private static class Fish {

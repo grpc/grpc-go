@@ -443,7 +443,8 @@ public final class Metadata {
           continue;
         }
 
-        checkArgument(VALID_T_CHARS.get(tChar), "Invalid character '%c' in key name", tChar);
+        checkArgument(VALID_T_CHARS.get(tChar),
+            "Invalid character '%s' in key name '%s'", tChar, n);
       }
       return n;
     }
