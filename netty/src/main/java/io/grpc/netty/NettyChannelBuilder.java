@@ -89,7 +89,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
    * Creates a new builder with the given host and port.
    */
   public static NettyChannelBuilder forAddress(String host, int port) {
-    return forAddress(new InetSocketAddress(host, port));
+    return new NettyChannelBuilder(host, port);
   }
 
   /**
@@ -98,6 +98,10 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
    */
   public static NettyChannelBuilder forTarget(String target) {
     return new NettyChannelBuilder(target);
+  }
+
+  protected NettyChannelBuilder(String host, int port) {
+    this(GrpcUtil.authorityFromHostAndPort(host, port));
   }
 
   private NettyChannelBuilder(String target) {
