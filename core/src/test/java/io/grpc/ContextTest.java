@@ -62,6 +62,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -725,5 +726,30 @@ public class ContextTest {
     public void execute(Runnable r) {
       runnables.add(r);
     }
+  }
+
+  @Test
+  public void childContextListenerNotifiedAfterParentListener() {
+    Context.CancellableContext parent = Context.current().withCancellation();
+    Context child = parent.withValue(COLOR, "red");
+    final AtomicBoolean childAfterParent = new AtomicBoolean();
+    final AtomicBoolean parentCalled = new AtomicBoolean();
+    child.addListener(new Context.CancellationListener() {
+      @Override
+      public void cancelled(Context context) {
+        if (parentCalled.get()) {
+          childAfterParent.set(true);
+        }
+      }
+    }, MoreExecutors.directExecutor());
+    parent.addListener(new Context.CancellationListener() {
+      @Override
+      public void cancelled(Context context) {
+        parentCalled.set(true);
+      }
+    }, MoreExecutors.directExecutor());
+    parent.cancel(null);
+    assertTrue(parentCalled.get());
+    assertTrue(childAfterParent.get());
   }
 }

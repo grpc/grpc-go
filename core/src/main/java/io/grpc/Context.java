@@ -193,17 +193,8 @@ public class Context {
   private final Object[][] keyValueEntries;
   private final boolean cascadesCancellation;
   private ArrayList<ExecutableListener> listeners;
-  private CancellationListener parentListener = new CancellationListener() {
-    @Override
-    public void cancelled(Context context) {
-      if (Context.this instanceof CancellableContext) {
-        // Record cancellation with its cause.
-        ((CancellableContext) Context.this).cancel(context.cause());
-      } else {
-        notifyAndClearListeners();
-      }
-    }
-  };
+  private CancellationListener parentListener = new ParentListener();
+  private final boolean canBeCancelled;
 
   /**
    * Construct a context that cannot be cancelled and will not cascade cancellation from its parent.
@@ -212,6 +203,7 @@ public class Context {
     this.parent = parent;
     keyValueEntries = EMPTY_ENTRIES;
     cascadesCancellation = false;
+    canBeCancelled = false;
   }
 
   /**
@@ -222,6 +214,18 @@ public class Context {
     this.parent = parent;
     this.keyValueEntries = keyValueEntries;
     cascadesCancellation = true;
+    canBeCancelled = this.parent != null && this.parent.canBeCancelled;
+  }
+
+  /**
+   * Construct a context that can be cancelled and will cascade cancellation from its parent if
+   * it is cancellable.
+   */
+  private Context(Context parent, Object[][] keyValueEntries, boolean isCancellable) {
+    this.parent = parent;
+    this.keyValueEntries = keyValueEntries;
+    cascadesCancellation = true;
+    canBeCancelled = isCancellable;
   }
 
   /**
@@ -335,8 +339,8 @@ public class Context {
 
   boolean canBeCancelled() {
     // A context is cancellable if it cascades from its parent and its parent is
-    // cancellable.
-    return (cascadesCancellation && this.parent != null && this.parent.canBeCancelled());
+    // cancellable or is itself directly cancellable..
+    return canBeCancelled;
   }
 
   /**
@@ -407,7 +411,7 @@ public class Context {
                           final Executor executor) {
     Preconditions.checkNotNull(cancellationListener);
     Preconditions.checkNotNull(executor);
-    if (canBeCancelled()) {
+    if (canBeCancelled) {
       ExecutableListener executableListener =
           new ExecutableListener(executor, cancellationListener);
       synchronized (this) {
@@ -425,8 +429,6 @@ public class Context {
           }
         }
       }
-    } else {
-      // Discussion point: Should we throw or suppress.
     }
   }
 
@@ -434,13 +436,16 @@ public class Context {
    * Remove a {@link CancellationListener}.
    */
   public void removeListener(CancellationListener cancellationListener) {
+    if (!canBeCancelled) {
+      return;
+    }
     synchronized (this) {
       if (listeners != null) {
         for (int i = listeners.size() - 1; i >= 0; i--) {
           if (listeners.get(i).listener == cancellationListener) {
             listeners.remove(i);
-            // Just remove the first matching listener, given that we allow duplicate adds we should
-            // allow for duplicates after remove.
+            // Just remove the first matching listener, given that we allow duplicate
+            // adds we should allow for duplicates after remove.
             break;
           }
         }
@@ -458,6 +463,9 @@ public class Context {
    * any reference to them so that they may be garbage collected.
    */
   void notifyAndClearListeners() {
+    if (!canBeCancelled) {
+      return;
+    }
     ArrayList<ExecutableListener> tmpListeners;
     synchronized (this) {
       if (listeners == null) {
@@ -466,8 +474,19 @@ public class Context {
       tmpListeners = listeners;
       listeners = null;
     }
+    // Deliver events to non-child context listeners before we notify child contexts. We do this
+    // to cancel higher level units of work before child units. This allows for a better error
+    // handling paradigm where the higher level unit of work knows it is cancelled and so can
+    // ignore errors that bubble up as a result of cancellation of lower level units.
     for (int i = 0; i < tmpListeners.size(); i++) {
-      tmpListeners.get(i).deliver();
+      if (!(tmpListeners.get(i).listener instanceof ParentListener)) {
+        tmpListeners.get(i).deliver();
+      }
+    }
+    for (int i = 0; i < tmpListeners.size(); i++) {
+      if (tmpListeners.get(i).listener instanceof ParentListener) {
+        tmpListeners.get(i).deliver();
+      }
     }
     parent.removeListener(parentListener);
   }
@@ -581,7 +600,7 @@ public class Context {
      * Create a cancellable context that does not have a deadline.
      */
     private CancellableContext(Context parent) {
-      super(parent, EMPTY_ENTRIES);
+      super(parent, EMPTY_ENTRIES, true);
       // Create a dummy that inherits from this to attach so that you cannot retrieve a
       // cancellable context from Context.current()
       dummy = new Context(this, EMPTY_ENTRIES);
@@ -677,11 +696,6 @@ public class Context {
       } finally {
         cancel(cause);
       }
-    }
-
-    @Override
-    boolean canBeCancelled() {
-      return true;
     }
 
     @Override
@@ -797,6 +811,18 @@ public class Context {
     @Override
     public void run() {
       listener.cancelled(Context.this);
+    }
+  }
+
+  private class ParentListener implements CancellationListener {
+    @Override
+    public void cancelled(Context context) {
+      if (Context.this instanceof CancellableContext) {
+        // Record cancellation with its cause.
+        ((CancellableContext) Context.this).cancel(context.cause());
+      } else {
+        notifyAndClearListeners();
+      }
     }
   }
 }
