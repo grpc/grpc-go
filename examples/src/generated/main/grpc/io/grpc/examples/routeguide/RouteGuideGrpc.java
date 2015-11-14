@@ -203,58 +203,87 @@ public class RouteGuideGrpc {
     }
   }
 
+  private static final int METHODID_GET_FEATURE = 0;
+  private static final int METHODID_LIST_FEATURES = 1;
+  private static final int METHODID_RECORD_ROUTE = 2;
+  private static final int METHODID_ROUTE_CHAT = 3;
+
+  private static class MethodHandlers<Req, Resp> implements
+      io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
+    private final RouteGuide serviceImpl;
+    private final int methodId;
+
+    public MethodHandlers(RouteGuide serviceImpl, int methodId) {
+      this.serviceImpl = serviceImpl;
+      this.methodId = methodId;
+    }
+
+    @java.lang.SuppressWarnings("unchecked")
+    public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        case METHODID_GET_FEATURE:
+          serviceImpl.getFeature((io.grpc.examples.routeguide.Point) request,
+              (io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Feature>) responseObserver);
+          break;
+        case METHODID_LIST_FEATURES:
+          serviceImpl.listFeatures((io.grpc.examples.routeguide.Rectangle) request,
+              (io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Feature>) responseObserver);
+          break;
+        default:
+          throw new AssertionError();
+      }
+    }
+
+    @java.lang.SuppressWarnings("unchecked")
+    public io.grpc.stub.StreamObserver<Req> invoke(
+        io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        case METHODID_RECORD_ROUTE:
+          return (io.grpc.stub.StreamObserver<Req>) serviceImpl.recordRoute(
+              (io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteSummary>) responseObserver);
+        case METHODID_ROUTE_CHAT:
+          return (io.grpc.stub.StreamObserver<Req>) serviceImpl.routeChat(
+              (io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote>) responseObserver);
+        default:
+          throw new AssertionError();
+      }
+    }
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final RouteGuide serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(
-        METHOD_GET_FEATURE,
-        asyncUnaryCall(
-          new io.grpc.stub.ServerCalls.UnaryMethod<
+        .addMethod(
+          METHOD_GET_FEATURE,
+          asyncUnaryCall(
+            new MethodHandlers<
               io.grpc.examples.routeguide.Point,
-              io.grpc.examples.routeguide.Feature>() {
-            @java.lang.Override
-            public void invoke(
-                io.grpc.examples.routeguide.Point request,
-                io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Feature> responseObserver) {
-              serviceImpl.getFeature(request, responseObserver);
-            }
-          }))
-      .addMethod(
-        METHOD_LIST_FEATURES,
-        asyncServerStreamingCall(
-          new io.grpc.stub.ServerCalls.ServerStreamingMethod<
+              io.grpc.examples.routeguide.Feature>(
+                serviceImpl, METHODID_GET_FEATURE)))
+        .addMethod(
+          METHOD_LIST_FEATURES,
+          asyncServerStreamingCall(
+            new MethodHandlers<
               io.grpc.examples.routeguide.Rectangle,
-              io.grpc.examples.routeguide.Feature>() {
-            @java.lang.Override
-            public void invoke(
-                io.grpc.examples.routeguide.Rectangle request,
-                io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Feature> responseObserver) {
-              serviceImpl.listFeatures(request, responseObserver);
-            }
-          }))
-      .addMethod(
-        METHOD_RECORD_ROUTE,
-        asyncClientStreamingCall(
-          new io.grpc.stub.ServerCalls.ClientStreamingMethod<
+              io.grpc.examples.routeguide.Feature>(
+                serviceImpl, METHODID_LIST_FEATURES)))
+        .addMethod(
+          METHOD_RECORD_ROUTE,
+          asyncClientStreamingCall(
+            new MethodHandlers<
               io.grpc.examples.routeguide.Point,
-              io.grpc.examples.routeguide.RouteSummary>() {
-            @java.lang.Override
-            public io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Point> invoke(
-                io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteSummary> responseObserver) {
-              return serviceImpl.recordRoute(responseObserver);
-            }
-          }))
-      .addMethod(
-        METHOD_ROUTE_CHAT,
-        asyncBidiStreamingCall(
-          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+              io.grpc.examples.routeguide.RouteSummary>(
+                serviceImpl, METHODID_RECORD_ROUTE)))
+        .addMethod(
+          METHOD_ROUTE_CHAT,
+          asyncBidiStreamingCall(
+            new MethodHandlers<
               io.grpc.examples.routeguide.RouteNote,
-              io.grpc.examples.routeguide.RouteNote>() {
-            @java.lang.Override
-            public io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> invoke(
-                io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> responseObserver) {
-              return serviceImpl.routeChat(responseObserver);
-            }
-          })).build();
+              io.grpc.examples.routeguide.RouteNote>(
+                serviceImpl, METHODID_ROUTE_CHAT)))
+        .build();
   }
 }

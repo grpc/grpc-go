@@ -136,21 +136,53 @@ public class UnimplementedServiceGrpc {
     }
   }
 
+  private static final int METHODID_UNIMPLEMENTED_CALL = 0;
+
+  private static class MethodHandlers<Req, Resp> implements
+      io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
+    private final UnimplementedService serviceImpl;
+    private final int methodId;
+
+    public MethodHandlers(UnimplementedService serviceImpl, int methodId) {
+      this.serviceImpl = serviceImpl;
+      this.methodId = methodId;
+    }
+
+    @java.lang.SuppressWarnings("unchecked")
+    public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        case METHODID_UNIMPLEMENTED_CALL:
+          serviceImpl.unimplementedCall((com.google.protobuf.EmptyProtos.Empty) request,
+              (io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty>) responseObserver);
+          break;
+        default:
+          throw new AssertionError();
+      }
+    }
+
+    @java.lang.SuppressWarnings("unchecked")
+    public io.grpc.stub.StreamObserver<Req> invoke(
+        io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        default:
+          throw new AssertionError();
+      }
+    }
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final UnimplementedService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(
-        METHOD_UNIMPLEMENTED_CALL,
-        asyncUnaryCall(
-          new io.grpc.stub.ServerCalls.UnaryMethod<
+        .addMethod(
+          METHOD_UNIMPLEMENTED_CALL,
+          asyncUnaryCall(
+            new MethodHandlers<
               com.google.protobuf.EmptyProtos.Empty,
-              com.google.protobuf.EmptyProtos.Empty>() {
-            @java.lang.Override
-            public void invoke(
-                com.google.protobuf.EmptyProtos.Empty request,
-                io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
-              serviceImpl.unimplementedCall(request, responseObserver);
-            }
-          })).build();
+              com.google.protobuf.EmptyProtos.Empty>(
+                serviceImpl, METHODID_UNIMPLEMENTED_CALL)))
+        .build();
   }
 }

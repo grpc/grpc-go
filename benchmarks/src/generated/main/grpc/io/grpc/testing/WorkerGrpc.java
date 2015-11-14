@@ -137,32 +137,63 @@ public class WorkerGrpc {
     }
   }
 
+  private static final int METHODID_RUN_TEST = 0;
+  private static final int METHODID_RUN_SERVER = 1;
+
+  private static class MethodHandlers<Req, Resp> implements
+      io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
+    private final Worker serviceImpl;
+    private final int methodId;
+
+    public MethodHandlers(Worker serviceImpl, int methodId) {
+      this.serviceImpl = serviceImpl;
+      this.methodId = methodId;
+    }
+
+    @java.lang.SuppressWarnings("unchecked")
+    public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        default:
+          throw new AssertionError();
+      }
+    }
+
+    @java.lang.SuppressWarnings("unchecked")
+    public io.grpc.stub.StreamObserver<Req> invoke(
+        io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        case METHODID_RUN_TEST:
+          return (io.grpc.stub.StreamObserver<Req>) serviceImpl.runTest(
+              (io.grpc.stub.StreamObserver<io.grpc.testing.ClientStatus>) responseObserver);
+        case METHODID_RUN_SERVER:
+          return (io.grpc.stub.StreamObserver<Req>) serviceImpl.runServer(
+              (io.grpc.stub.StreamObserver<io.grpc.testing.ServerStatus>) responseObserver);
+        default:
+          throw new AssertionError();
+      }
+    }
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final Worker serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(
-        METHOD_RUN_TEST,
-        asyncBidiStreamingCall(
-          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+        .addMethod(
+          METHOD_RUN_TEST,
+          asyncBidiStreamingCall(
+            new MethodHandlers<
               io.grpc.testing.ClientArgs,
-              io.grpc.testing.ClientStatus>() {
-            @java.lang.Override
-            public io.grpc.stub.StreamObserver<io.grpc.testing.ClientArgs> invoke(
-                io.grpc.stub.StreamObserver<io.grpc.testing.ClientStatus> responseObserver) {
-              return serviceImpl.runTest(responseObserver);
-            }
-          }))
-      .addMethod(
-        METHOD_RUN_SERVER,
-        asyncBidiStreamingCall(
-          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+              io.grpc.testing.ClientStatus>(
+                serviceImpl, METHODID_RUN_TEST)))
+        .addMethod(
+          METHOD_RUN_SERVER,
+          asyncBidiStreamingCall(
+            new MethodHandlers<
               io.grpc.testing.ServerArgs,
-              io.grpc.testing.ServerStatus>() {
-            @java.lang.Override
-            public io.grpc.stub.StreamObserver<io.grpc.testing.ServerArgs> invoke(
-                io.grpc.stub.StreamObserver<io.grpc.testing.ServerStatus> responseObserver) {
-              return serviceImpl.runServer(responseObserver);
-            }
-          })).build();
+              io.grpc.testing.ServerStatus>(
+                serviceImpl, METHODID_RUN_SERVER)))
+        .build();
   }
 }

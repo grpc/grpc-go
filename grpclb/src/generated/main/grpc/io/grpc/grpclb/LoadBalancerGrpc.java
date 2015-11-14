@@ -118,20 +118,52 @@ public class LoadBalancerGrpc {
     }
   }
 
+  private static final int METHODID_BALANCE_LOAD = 0;
+
+  private static class MethodHandlers<Req, Resp> implements
+      io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
+    private final LoadBalancer serviceImpl;
+    private final int methodId;
+
+    public MethodHandlers(LoadBalancer serviceImpl, int methodId) {
+      this.serviceImpl = serviceImpl;
+      this.methodId = methodId;
+    }
+
+    @java.lang.SuppressWarnings("unchecked")
+    public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        default:
+          throw new AssertionError();
+      }
+    }
+
+    @java.lang.SuppressWarnings("unchecked")
+    public io.grpc.stub.StreamObserver<Req> invoke(
+        io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        case METHODID_BALANCE_LOAD:
+          return (io.grpc.stub.StreamObserver<Req>) serviceImpl.balanceLoad(
+              (io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse>) responseObserver);
+        default:
+          throw new AssertionError();
+      }
+    }
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final LoadBalancer serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(
-        METHOD_BALANCE_LOAD,
-        asyncBidiStreamingCall(
-          new io.grpc.stub.ServerCalls.BidiStreamingMethod<
+        .addMethod(
+          METHOD_BALANCE_LOAD,
+          asyncBidiStreamingCall(
+            new MethodHandlers<
               io.grpc.grpclb.LoadBalanceRequest,
-              io.grpc.grpclb.LoadBalanceResponse>() {
-            @java.lang.Override
-            public io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceRequest> invoke(
-                io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse> responseObserver) {
-              return serviceImpl.balanceLoad(responseObserver);
-            }
-          })).build();
+              io.grpc.grpclb.LoadBalanceResponse>(
+                serviceImpl, METHODID_BALANCE_LOAD)))
+        .build();
   }
 }

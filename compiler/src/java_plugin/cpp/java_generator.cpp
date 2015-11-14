@@ -1,7 +1,9 @@
 #include "java_generator.h"
 
+#include <algorithm>
 #include <iostream>
 #include <map>
+#include <vector>
 #include <google/protobuf/compiler/java/java_names.h>
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/io/printer.h>
@@ -55,6 +57,10 @@ static inline string LowerMethodName(const MethodDescriptor* method) {
 
 static inline string MethodPropertiesFieldName(const MethodDescriptor* method) {
   return "METHOD_" + ToAllUpperCase(method->name());
+}
+
+static inline string MethodIdFieldName(const MethodDescriptor* method) {
+  return "METHODID_" + ToAllUpperCase(method->name());
 }
 
 static inline string MessageFullJavaName(bool nano, const Descriptor* desc) {
@@ -449,6 +455,123 @@ static void PrintStub(
   p->Print("}\n\n");
 }
 
+static bool CompareMethodClientStreaming(const MethodDescriptor* method1,
+                                         const MethodDescriptor* method2)
+{
+  return method1->client_streaming() < method2->client_streaming();
+}
+
+// Place all method invocations into a single class to reduce memory footprint
+// on Android.
+static void PrintMethodHandlerClass(const ServiceDescriptor* service,
+                                   map<string, string>* vars,
+                                   Printer* p,
+                                   bool generate_nano) {
+  // Sort method ids based on client_streaming() so switch tables are compact.
+  vector<const MethodDescriptor*> sorted_methods(service->method_count());
+  for (int i = 0; i < service->method_count(); ++i) {
+    sorted_methods[i] = service->method(i);
+  }
+  stable_sort(sorted_methods.begin(), sorted_methods.end(),
+              CompareMethodClientStreaming);
+  for (int i = 0; i < sorted_methods.size(); i++) {
+    const MethodDescriptor* method = sorted_methods[i];
+    (*vars)["method_id"] = to_string(i);
+    (*vars)["method_id_name"] = MethodIdFieldName(method);
+    p->Print(
+        *vars,
+        "private static final int $method_id_name$ = $method_id$;\n");
+  }
+  p->Print("\n");
+  (*vars)["service_name"] = service->name();
+  p->Print(
+      *vars,
+      "private static class MethodHandlers<Req, Resp> implements\n"
+      "    io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,\n"
+      "    io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,\n"
+      "    io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,\n"
+      "    io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {\n"
+      "  private final $service_name$ serviceImpl;\n"
+      "  private final int methodId;\n"
+      "\n"
+      "  public MethodHandlers($service_name$ serviceImpl, int methodId) {\n"
+      "    this.serviceImpl = serviceImpl;\n"
+      "    this.methodId = methodId;\n"
+      "  }\n\n");
+  p->Indent();
+  p->Print(
+      *vars,
+      "@java.lang.SuppressWarnings(\"unchecked\")\n"
+      "public void invoke(Req request, $StreamObserver$<Resp> responseObserver) {\n"
+      "  switch (methodId) {\n");
+  p->Indent();
+  p->Indent();
+
+  for (int i = 0; i < service->method_count(); ++i) {
+    const MethodDescriptor* method = service->method(i);
+    if (method->client_streaming()) {
+      continue;
+    }
+    (*vars)["method_id_name"] = MethodIdFieldName(method);
+    (*vars)["lower_method_name"] = LowerMethodName(method);
+    (*vars)["input_type"] = MessageFullJavaName(generate_nano,
+                                                method->input_type());
+    (*vars)["output_type"] = MessageFullJavaName(generate_nano,
+                                                 method->output_type());
+    p->Print(
+        *vars,
+        "case $method_id_name$:\n"
+        "  serviceImpl.$lower_method_name$(($input_type$) request,\n"
+        "      ($StreamObserver$<$output_type$>) responseObserver);\n"
+        "  break;\n");
+  }
+  p->Print("default:\n"
+           "  throw new AssertionError();\n");
+
+  p->Outdent();
+  p->Outdent();
+  p->Print("  }\n"
+           "}\n\n");
+
+  p->Print(
+      *vars,
+      "@java.lang.SuppressWarnings(\"unchecked\")\n"
+      "public $StreamObserver$<Req> invoke(\n"
+      "    $StreamObserver$<Resp> responseObserver) {\n"
+      "  switch (methodId) {\n");
+  p->Indent();
+  p->Indent();
+
+  for (int i = 0; i < service->method_count(); ++i) {
+    const MethodDescriptor* method = service->method(i);
+    if (!method->client_streaming()) {
+      continue;
+    }
+    (*vars)["method_id_name"] = MethodIdFieldName(method);
+    (*vars)["lower_method_name"] = LowerMethodName(method);
+    (*vars)["input_type"] = MessageFullJavaName(generate_nano,
+                                                method->input_type());
+    (*vars)["output_type"] = MessageFullJavaName(generate_nano,
+                                                 method->output_type());
+    p->Print(
+        *vars,
+        "case $method_id_name$:\n"
+        "  return ($StreamObserver$<Req>) serviceImpl.$lower_method_name$(\n"
+        "      ($StreamObserver$<$output_type$>) responseObserver);\n");
+  }
+  p->Print("default:\n"
+           "  throw new AssertionError();\n");
+
+  p->Outdent();
+  p->Outdent();
+  p->Print("  }\n"
+           "}\n");
+
+
+  p->Outdent();
+  p->Print("}\n\n");
+}
+
 static void PrintBindServiceMethod(const ServiceDescriptor* service,
                                    map<string, string>* vars,
                                    Printer* p,
@@ -463,6 +586,7 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
            "return "
            "$ServerServiceDefinition$.builder(SERVICE_NAME)\n");
   p->Indent();
+  p->Indent();
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
     (*vars)["lower_method_name"] = LowerMethodName(method);
@@ -471,27 +595,20 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
                                                 method->input_type());
     (*vars)["output_type"] = MessageFullJavaName(generate_nano,
                                                  method->output_type());
+    (*vars)["method_id_name"] = MethodIdFieldName(method);
     bool client_streaming = method->client_streaming();
     bool server_streaming = method->server_streaming();
     if (client_streaming) {
       if (server_streaming) {
         (*vars)["calls_method"] = "asyncBidiStreamingCall";
-        (*vars)["invocation_class"] =
-            "io.grpc.stub.ServerCalls.BidiStreamingMethod";
       } else {
         (*vars)["calls_method"] = "asyncClientStreamingCall";
-        (*vars)["invocation_class"] =
-            "io.grpc.stub.ServerCalls.ClientStreamingMethod";
       }
     } else {
       if (server_streaming) {
         (*vars)["calls_method"] = "asyncServerStreamingCall";
-        (*vars)["invocation_class"] =
-            "io.grpc.stub.ServerCalls.ServerStreamingMethod";
       } else {
         (*vars)["calls_method"] = "asyncUnaryCall";
-        (*vars)["invocation_class"] =
-            "io.grpc.stub.ServerCalls.UnaryMethod";
       }
     }
     p->Print(*vars, ".addMethod(\n");
@@ -503,38 +620,15 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
     p->Indent();
     p->Print(
         *vars,
-        "new $invocation_class$<\n"
-        "    $input_type$,\n"
-        "    $output_type$>() {\n");
-    p->Indent();
-    p->Print(
-        *vars,
-        "@$Override$\n");
-    if (client_streaming) {
-      p->Print(
-          *vars,
-          "public $StreamObserver$<$input_type$> invoke(\n"
-          "    $StreamObserver$<$output_type$> responseObserver) {\n"
-          "  return serviceImpl.$lower_method_name$(responseObserver);\n"
-          "}\n");
-    } else {
-      p->Print(
-          *vars,
-          "public void invoke(\n"
-          "    $input_type$ request,\n"
-          "    $StreamObserver$<$output_type$> responseObserver) {\n"
-          "  serviceImpl.$lower_method_name$(request, responseObserver);\n"
-          "}\n");
-    }
-    p->Outdent();
-    p->Print("}))");
-    if (i == service->method_count() - 1) {
-      p->Print(".build();");
-    }
-    p->Print("\n");
+        "new MethodHandlers<\n"
+        "  $input_type$,\n"
+        "  $output_type$>(\n"
+        "    serviceImpl, $method_id_name$)))\n");
     p->Outdent();
     p->Outdent();
   }
+  p->Print(".build();\n");
+  p->Outdent();
   p->Outdent();
   p->Outdent();
   p->Print("}\n");
@@ -598,6 +692,7 @@ static void PrintService(const ServiceDescriptor* service,
   PrintStub(service, vars, p, ASYNC_CLIENT_IMPL, generate_nano);
   PrintStub(service, vars, p, BLOCKING_CLIENT_IMPL, generate_nano);
   PrintStub(service, vars, p, FUTURE_CLIENT_IMPL, generate_nano);
+  PrintMethodHandlerClass(service, vars, p, generate_nano);
   PrintBindServiceMethod(service, vars, p, generate_nano);
   p->Outdent();
   p->Print("}\n");

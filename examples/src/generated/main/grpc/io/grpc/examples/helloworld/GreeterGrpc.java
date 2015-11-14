@@ -136,21 +136,53 @@ public class GreeterGrpc {
     }
   }
 
+  private static final int METHODID_SAY_HELLO = 0;
+
+  private static class MethodHandlers<Req, Resp> implements
+      io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
+      io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
+    private final Greeter serviceImpl;
+    private final int methodId;
+
+    public MethodHandlers(Greeter serviceImpl, int methodId) {
+      this.serviceImpl = serviceImpl;
+      this.methodId = methodId;
+    }
+
+    @java.lang.SuppressWarnings("unchecked")
+    public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        case METHODID_SAY_HELLO:
+          serviceImpl.sayHello((io.grpc.examples.helloworld.HelloRequest) request,
+              (io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloResponse>) responseObserver);
+          break;
+        default:
+          throw new AssertionError();
+      }
+    }
+
+    @java.lang.SuppressWarnings("unchecked")
+    public io.grpc.stub.StreamObserver<Req> invoke(
+        io.grpc.stub.StreamObserver<Resp> responseObserver) {
+      switch (methodId) {
+        default:
+          throw new AssertionError();
+      }
+    }
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final Greeter serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
-      .addMethod(
-        METHOD_SAY_HELLO,
-        asyncUnaryCall(
-          new io.grpc.stub.ServerCalls.UnaryMethod<
+        .addMethod(
+          METHOD_SAY_HELLO,
+          asyncUnaryCall(
+            new MethodHandlers<
               io.grpc.examples.helloworld.HelloRequest,
-              io.grpc.examples.helloworld.HelloResponse>() {
-            @java.lang.Override
-            public void invoke(
-                io.grpc.examples.helloworld.HelloRequest request,
-                io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloResponse> responseObserver) {
-              serviceImpl.sayHello(request, responseObserver);
-            }
-          })).build();
+              io.grpc.examples.helloworld.HelloResponse>(
+                serviceImpl, METHODID_SAY_HELLO)))
+        .build();
   }
 }
