@@ -41,7 +41,6 @@ import com.google.common.util.concurrent.Futures;
 
 import io.grpc.HandlerRegistry;
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.Status;
@@ -443,130 +442,6 @@ public final class ServerImpl extends io.grpc.Server {
           getListener().onReady();
         }
       });
-    }
-  }
-
-  private static class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
-    private final ServerStream stream;
-    private final MethodDescriptor<ReqT, RespT> method;
-    private volatile boolean cancelled;
-    private boolean sendHeadersCalled;
-    private boolean closeCalled;
-    private boolean sendMessageCalled;
-
-    public ServerCallImpl(ServerStream stream, MethodDescriptor<ReqT, RespT> method) {
-      this.stream = stream;
-      this.method = method;
-    }
-
-    @Override
-    public void request(int numMessages) {
-      stream.request(numMessages);
-    }
-
-    @Override
-    public void sendHeaders(Metadata headers) {
-      Preconditions.checkState(!sendHeadersCalled, "sendHeaders has already been called");
-      Preconditions.checkState(!closeCalled, "call is closed");
-      Preconditions.checkState(!sendMessageCalled, "sendMessage has already been called");
-      sendHeadersCalled = true;
-      stream.writeHeaders(headers);
-    }
-
-    @Override
-    public void sendMessage(RespT message) {
-      Preconditions.checkState(sendHeadersCalled, "sendHeaders has not been called");
-      Preconditions.checkState(!closeCalled, "call is closed");
-      sendMessageCalled = true;
-      try {
-        InputStream resp = method.streamResponse(message);
-        stream.writeMessage(resp);
-        stream.flush();
-      } catch (Throwable t) {
-        close(Status.fromThrowable(t), new Metadata());
-        throw Throwables.propagate(t);
-      }
-    }
-
-    @Override
-    public boolean isReady() {
-      return stream.isReady();
-    }
-
-    @Override
-    public void close(Status status, Metadata trailers) {
-      Preconditions.checkState(!closeCalled, "call already closed");
-      closeCalled = true;
-      stream.close(status, trailers);
-    }
-
-    @Override
-    public boolean isCancelled() {
-      return cancelled;
-    }
-
-    private ServerStreamListenerImpl newServerStreamListener(ServerCall.Listener<ReqT> listener,
-        Future<?> timeout) {
-      return new ServerStreamListenerImpl(listener, timeout);
-    }
-
-    /**
-     * All of these callbacks are assumed to called on an application thread, and the caller is
-     * responsible for handling thrown exceptions.
-     */
-    private class ServerStreamListenerImpl implements ServerStreamListener {
-      private final ServerCall.Listener<ReqT> listener;
-      private final Future<?> timeout;
-
-      public ServerStreamListenerImpl(ServerCall.Listener<ReqT> listener, Future<?> timeout) {
-        this.listener = Preconditions.checkNotNull(listener, "listener must not be null");
-        this.timeout = timeout;
-      }
-
-      @Override
-      public void messageRead(final InputStream message) {
-        try {
-          if (cancelled) {
-            return;
-          }
-
-          listener.onMessage(method.parseRequest(message));
-        } finally {
-          try {
-            message.close();
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
-        }
-      }
-
-      @Override
-      public void halfClosed() {
-        if (cancelled) {
-          return;
-        }
-
-        listener.onHalfClose();
-      }
-
-      @Override
-      public void closed(Status status) {
-        timeout.cancel(true);
-        if (status.isOk()) {
-          listener.onComplete();
-        } else {
-          cancelled = true;
-          listener.onCancel();
-        }
-      }
-
-      @Override
-      public void onReady() {
-        if (cancelled) {
-          return;
-        }
-        listener.onReady();
-      }
     }
   }
 }
