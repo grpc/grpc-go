@@ -68,6 +68,11 @@ class NettyServerStream extends AbstractServerStream<Integer> {
     return http2Stream.id();
   }
 
+  @Override
+  protected void inboundHeadersReceived(Metadata headers) {
+    super.inboundHeadersReceived(headers);
+  }
+
   void inboundDataReceived(ByteBuf frame, boolean endOfStream) {
     super.inboundDataReceived(new NettyReadableBuffer(frame.retain()), endOfStream);
   }

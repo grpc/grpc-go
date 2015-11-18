@@ -130,6 +130,28 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   }
 
   /**
+   * Called by transport implementations when they receive headers.
+   *
+   * @param headers the parsed headers
+   */
+  protected void inboundHeadersReceived(Metadata headers) {
+    if (headers.containsKey(GrpcUtil.MESSAGE_ENCODING_KEY)) {
+      String messageEncoding = headers.get(GrpcUtil.MESSAGE_ENCODING_KEY);
+      try {
+        setDecompressor(messageEncoding);
+      } catch (IllegalArgumentException e) {
+        Status status = Status.INVALID_ARGUMENT
+            .withDescription("Unable to decompress encoding " + messageEncoding)
+            .withCause(e);
+        abortStream(status, true);
+        return;
+      }
+    }
+
+    inboundPhase(Phase.MESSAGE);
+  }
+
+  /**
    * Called in the network thread to process the content of an inbound DATA frame from the client.
    *
    * @param frame the inbound HTTP/2 DATA frame. If this buffer is not used immediately, it must

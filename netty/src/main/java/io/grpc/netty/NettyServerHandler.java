@@ -151,19 +151,9 @@ class NettyServerHandler extends AbstractNettyHandler {
 
       NettyServerStream stream = new NettyServerStream(ctx.channel(), http2Stream, this,
               maxMessageSize);
-      Metadata metadata = Utils.convertHeaders(headers);
 
-      String messageEncoding = metadata.get(GrpcUtil.MESSAGE_ENCODING_KEY);
-      if (messageEncoding != null) {
-        try {
-          stream.setDecompressor(messageEncoding);
-        } catch (IllegalArgumentException e) {
-          throw Status.INVALID_ARGUMENT
-              .withDescription("Unable to decompress message with encoding: " + messageEncoding)
-              .withCause(e)
-              .asRuntimeException();
-        }
-      }
+      Metadata metadata = Utils.convertHeaders(headers);
+      stream.inboundHeadersReceived(metadata);
 
       ServerStreamListener listener =
           transportListener.streamCreated(stream, method, metadata);

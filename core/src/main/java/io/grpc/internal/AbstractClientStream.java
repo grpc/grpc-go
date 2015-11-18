@@ -99,10 +99,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   }
 
   /**
-   * Called by transport implementations when they receive headers. When receiving headers
-   * a transport may determine that there is an error in the protocol at this phase which is
-   * why this method takes an error {@link Status}. If a transport reports an
-   * {@link io.grpc.Status.Code#INTERNAL} error
+   * Called by transport implementations when they receive headers.
    *
    * @param headers the parsed headers
    */
