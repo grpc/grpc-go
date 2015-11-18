@@ -359,6 +359,7 @@ func (cc *Conn) resetTransport(closeTransport bool) error {
 		cc.mu.Lock()
 		cc.printf("connecting")
 		if cc.state == Shutdown {
+			// cc.Close() has been invoked.
 			cc.mu.Unlock()
 			return ErrClientConnClosing
 		}
@@ -393,6 +394,11 @@ func (cc *Conn) resetTransport(closeTransport bool) error {
 		newTransport, err := transport.NewClientTransport(cc.target, &copts)
 		if err != nil {
 			cc.mu.Lock()
+			if cc.state == Shutdown {
+				// cc.Close() has been invoked.
+				cc.mu.Unlock()
+				return ErrClientConnClosing
+			}
 			cc.errorf("transient failure: %v", err)
 			cc.state = TransientFailure
 			cc.stateCV.Broadcast()
@@ -450,6 +456,11 @@ func (cc *Conn) transportMonitor() {
 			return
 		case <-cc.transport.Error():
 			cc.mu.Lock()
+			if cc.state == Shutdown {
+				// cc.Close() has been invoked.
+				cc.mu.Unlock()
+				return
+			}
 			cc.state = TransientFailure
 			cc.stateCV.Broadcast()
 			cc.mu.Unlock()
