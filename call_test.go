@@ -34,7 +34,6 @@
 package grpc
 
 import (
-	"bytes"
 	"io"
 	"math"
 	"net"
@@ -49,15 +48,15 @@ import (
 )
 
 var (
-	expectedRequest  = []byte("ping")
-	expectedResponse = []byte("pong")
+	expectedRequest  = "ping"
+	expectedResponse = "pong"
 )
 
 type testCodec struct {
 }
 
 func (testCodec) Marshal(v interface{}) ([]byte, error) {
-	return v.([]byte), nil
+	return []byte(*(v.(*string))), nil
 }
 
 func (testCodec) Unmarshal(data []byte, v interface{}) error {
@@ -91,12 +90,12 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		if err := codec.Unmarshal(req, &v); err != nil {
 			t.Fatalf("Failed to unmarshal the received message %v", err)
 		}
-		if !bytes.Equal(req, expectedRequest) {
-			t.Fatalf("handleStream got %v, want %v", p, req)
+		if v != expectedRequest {
+			t.Fatalf("handleStream got %v, want %v", v, expectedRequest)
 		}
 	}
 	// send a response back to end the stream.
-	reply, err := encode(testCodec{}, expectedResponse, compressionNone)
+	reply, err := encode(testCodec{}, &expectedResponse, compressionNone)
 	if err != nil {
 		t.Fatalf("Failed to encode the response: %v", err)
 	}
@@ -190,7 +189,7 @@ func setUp(t *testing.T, port int, maxStreams uint32) (*server, *ClientConn) {
 func TestInvoke(t *testing.T) {
 	server, cc := setUp(t, 0, math.MaxUint32)
 	var reply string
-	if err := Invoke(context.Background(), "/foo/bar", expectedRequest, &reply, cc); err != nil {
+	if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil || reply != expectedResponse {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
 	}
 	server.stop()
