@@ -34,7 +34,6 @@ package io.grpc.netty;
 import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.grpc.internal.GrpcUtil.CONTENT_TYPE_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
-import static io.netty.util.CharsetUtil.US_ASCII;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
