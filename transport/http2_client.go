@@ -753,7 +753,7 @@ func (t *http2Client) reader() {
 			endStream := frame.Header().Flags.Has(http2.FlagHeadersEndStream)
 			curStream = t.operateHeaders(hDec, curStream, frame, endStream)
 		case *http2.ContinuationFrame:
-			curStream = t.operateHeaders(hDec, curStream, frame, false)
+			curStream = t.operateHeaders(hDec, curStream, frame, frame.HeadersEnded())
 		case *http2.DataFrame:
 			t.handleData(frame)
 		case *http2.RSTStreamFrame:

@@ -50,6 +50,7 @@ import (
 var (
 	expectedRequest  = "ping"
 	expectedResponse = "pong"
+	sizeLargeErr     = 1024 * 1024
 )
 
 type testCodec struct {
@@ -91,7 +92,8 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 			t.Fatalf("Failed to unmarshal the received message %v", err)
 		}
 		if v != expectedRequest {
-			t.Fatalf("handleStream got %v, want %v", v, expectedRequest)
+			h.t.WriteStatus(s, codes.Internal, string(make([]byte, sizeLargeErr)))
+			return
 		}
 	}
 	// send a response back to end the stream.
@@ -192,5 +194,21 @@ func TestInvoke(t *testing.T) {
 	if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil || reply != expectedResponse {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
 	}
+	cc.Close()
+	server.stop()
+}
+
+func TestInvokeLargeErr(t *testing.T) {
+	server, cc := setUp(t, 0, math.MaxUint32)
+	var reply string
+	req := "hello"
+	err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
+	if _, ok := err.(rpcError); !ok {
+		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
+	}
+	if Code(err) != codes.Internal || len(ErrorDesc(err)) != sizeLargeErr {
+		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want an error of code %d and desc size %d", err, codes.Internal, sizeLargeErr)
+	}
+	cc.Close()
 	server.stop()
 }
