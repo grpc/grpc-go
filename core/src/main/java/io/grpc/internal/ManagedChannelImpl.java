@@ -69,6 +69,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -81,6 +82,11 @@ public final class ManagedChannelImpl extends ManagedChannel {
 
   private static final ListenableFuture<ClientTransport> NULL_VALUE_TRANSPORT_FUTURE =
         Futures.immediateFuture(null);
+
+  // Matching this pattern means the target string is a URI target or at least intended to be one.
+  // A URI target must be an absolute hierarchical URI.
+  // From RFC 2396: scheme = alpha *( alpha | digit | "+" | "-" | "." )
+  private static final Pattern URI_PATTERN = Pattern.compile("[a-zA-Z][a-zA-Z0-9+-.]*:/.*");
 
   private final ClientTransportFactory transportFactory;
   private final Executor executor;
@@ -180,8 +186,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
       // "localhost" is parsed as the scheme. Will fall into the next branch and try
       // "dns:///localhost:8080".
     } catch (URISyntaxException e) {
-      // Can happen with ip addresses like "[::1]:1234" or 127.0.0.1:1234.  Also can happen with
-      // bogus urls like "dns:///[::1]:1234", which are not properly uriencoded.
+      // Can happen with ip addresses like "[::1]:1234" or 127.0.0.1:1234.
       uriSyntaxErrors.append(e.getMessage());
     }
     if (targetUri != null) {
@@ -193,17 +198,20 @@ public final class ManagedChannelImpl extends ManagedChannel {
       // unmapped scheme. Just fall through and will try "dns:///foo.googleapis.com:8080"
     }
 
-    // If we reached here, the targetUri couldn't be used, so try again.
-    try {
-      targetUri = new URI("dns", null, "/" + target, null);
-    } catch (URISyntaxException e) {
-      // Should not be possible.
-      throw new IllegalArgumentException(e);
-    }
-    if (targetUri != null) {
-      NameResolver resolver = nameResolverFactory.newNameResolver(targetUri, nameResolverParams);
-      if (resolver != null) {
-        return resolver;
+    // If we reached here, the targetUri couldn't be used.
+    if (!URI_PATTERN.matcher(target).matches()) {
+      // It doesn't look like a URI target. Maybe it's a DNS name.
+      try {
+        targetUri = new URI("dns", null, "/" + target, null);
+      } catch (URISyntaxException e) {
+        // Should not be possible.
+        throw new IllegalArgumentException(e);
+      }
+      if (targetUri != null) {
+        NameResolver resolver = nameResolverFactory.newNameResolver(targetUri, nameResolverParams);
+        if (resolver != null) {
+          return resolver;
+        }
       }
     }
     throw new IllegalArgumentException(String.format(

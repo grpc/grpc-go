@@ -33,19 +33,10 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.internal.GrpcUtil;
-import io.grpc.internal.SharedResourceHolder;
-
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.concurrent.ExecutorService;
-
-import javax.annotation.Nullable;
 
 /**
- * A factory for DNS-based {@link NameResolver}s.
+ * A factory for {@link DnsNameResolver}.
  *
  * <p>It resolves a target URI whose scheme is {@code "dns"}. The (optional) authority of the target
  * URI is reserved for the address of alternative DNS server (not implemented yet). The path of the
@@ -82,73 +73,5 @@ public final class DnsNameResolverFactory extends NameResolver.Factory {
 
   public static DnsNameResolverFactory getInstance() {
     return instance;
-  }
-
-  private static class DnsNameResolver extends NameResolver {
-    private final String authority;
-    private final String host;
-    private final int port;
-    private ExecutorService executor;
-
-    DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params) {
-      // TODO: if a DNS server is provided as nsAuthority, use it.
-      // https://www.captechconsulting.com/blogs/accessing-the-dusty-corners-of-dns-with-java
-
-      // Must prepend a "//" to the name when constructing a URI, otherwise
-      // the authority and host of the resulted URI would be null.
-      URI nameUri = URI.create("//" + name);
-      authority = Preconditions.checkNotNull(nameUri.getAuthority(),
-          "nameUri (%s) doesn't have an authority", nameUri);
-      host = Preconditions.checkNotNull(nameUri.getHost(), "host");
-      if (nameUri.getPort() == -1) {
-        Integer defaultPort = params.get(NameResolver.Factory.PARAMS_DEFAULT_PORT);
-        if (defaultPort != null) {
-          port = defaultPort;
-        } else {
-          throw new IllegalArgumentException(
-              "name '" + name + "' doesn't contain a port, and default port is not set in params");
-        }
-      } else {
-        port = nameUri.getPort();
-      }
-    }
-
-    @Override
-    public String getServiceAuthority() {
-      return authority;
-    }
-
-    @Override
-    public synchronized void start(final Listener listener) {
-      Preconditions.checkState(executor == null, "already started");
-      executor = SharedResourceHolder.get(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
-      executor.execute(new Runnable() {
-        @Override
-        public void run() {
-          InetAddress[] inetAddrs;
-          try {
-            inetAddrs = InetAddress.getAllByName(host);
-          } catch (Exception e) {
-            listener.onError(Status.UNAVAILABLE.withCause(e));
-            return;
-          }
-          ArrayList<ResolvedServerInfo> servers
-              = new ArrayList<ResolvedServerInfo>(inetAddrs.length);
-          for (int i = 0; i < inetAddrs.length; i++) {
-            InetAddress inetAddr = inetAddrs[i];
-            servers.add(
-                new ResolvedServerInfo(new InetSocketAddress(inetAddr, port), Attributes.EMPTY));
-          }
-          listener.onUpdate(servers, Attributes.EMPTY);
-        }
-      });
-    }
-
-    @Override
-    public synchronized void shutdown() {
-      if (executor != null) {
-        executor = SharedResourceHolder.release(GrpcUtil.SHARED_CHANNEL_EXECUTOR, executor);
-      }
-    }
   }
 }

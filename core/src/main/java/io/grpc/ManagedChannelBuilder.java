@@ -46,19 +46,22 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
 
   /**
    * Creates a channel with a target string, which can be either a valid {@link
-   * NameResolver}-compliant URI, or a HOST:PORT string.
+   * NameResolver}-compliant URI, or an authority string.
    *
-   * <p>Example {@code NameResolver}-compliant URIs:
+   * <p>A {@code NameResolver}-compliant URI is an aboslute hierarchical URI as defined by {@link
+   * java.net.URI}. Example URIs:
    * <ul>
    *   <li>{@code "dns:///foo.googleapis.com:8080"}</li>
    *   <li>{@code "dns:///foo.googleapis.com"}</li>
+   *   <li>{@code "dns:///%5B2001:db8:85a3:8d3:1319:8a2e:370:7348%5D:443"}</li>
    *   <li>{@code "dns://8.8.8.8/foo.googleapis.com:8080"}</li>
    *   <li>{@code "dns://8.8.8.8/foo.googleapis.com"}</li>
    *   <li>{@code "zookeeper://zk.example.com:9900/example_service"}</li>
    * </ul>
    *
-   * <p>Example HOST:PORT strings, which will be converted to {@code NameResolver}-compliant URIs by
-   * prepending {@code "dns:///"}.
+   * <p>An authority string will be converted to a {@code NameResolver}-compliant URI, which has
+   * {@code "dns"} as the scheme, no authority, and the original authority string as its path after
+   * properly escaped. Example authority strings:
    * <ul>
    *   <li>{@code "localhost"}</li>
    *   <li>{@code "127.0.0.1"}</li>
