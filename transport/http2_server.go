@@ -268,7 +268,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 			endStream := frame.Header().Flags.Has(http2.FlagHeadersEndStream)
 			curStream = t.operateHeaders(hDec, curStream, frame, endStream, handle)
 		case *http2.ContinuationFrame:
-			curStream = t.operateHeaders(hDec, curStream, frame, false, handle)
+			curStream = t.operateHeaders(hDec, curStream, frame, frame.HeadersEnded(), handle)
 		case *http2.DataFrame:
 			t.handleData(frame)
 		case *http2.RSTStreamFrame:
