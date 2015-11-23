@@ -86,6 +86,12 @@ public interface Stream {
   void setCompressor(Compressor c);
 
   /**
+   * Enables per-message compression, if an encoding type has been negotiated.  If no message
+   * encoding has been negotiated, this is a no-op.
+   */
+  void setMessageCompression(boolean enable);
+
+  /**
    * Sets the decompressor registry to use when resolving {@link #setDecompressor(String)}.  If
    * unset, the default DecompressorRegistry will be used.
    *

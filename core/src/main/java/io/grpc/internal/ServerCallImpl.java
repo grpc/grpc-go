@@ -88,6 +88,11 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
   }
 
   @Override
+  public void setMessageCompression(boolean enable) {
+    stream.setMessageCompression(enable);
+  }
+
+  @Override
   public boolean isReady() {
     return stream.isReady();
   }

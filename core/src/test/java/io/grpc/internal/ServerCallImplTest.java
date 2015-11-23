@@ -160,6 +160,12 @@ public class ServerCallImplTest {
     assertTrue(call.isReady());
   }
 
+  @Test
+  public void setMessageCompression() {
+    call.setMessageCompression(true);
+
+    verify(stream).setMessageCompression(true);
+  }
 
   private static class LongMarshaller implements Marshaller<Long> {
     @Override

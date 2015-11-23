@@ -56,6 +56,9 @@ import javax.annotation.Nullable;
 public class AbstractStreamTest {
   @Mock private StreamListener streamListener;
 
+  @Mock MessageFramer framer;
+  @Mock MessageDeframer deframer;
+
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
@@ -68,6 +71,14 @@ public class AbstractStreamTest {
     stream.onStreamAllocated();
 
     verify(streamListener).onReady();
+  }
+
+  @Test
+  public void setMessageCompression() {
+    AbstractStream<?> as = new AbstractStreamBase<Void>(framer, deframer);
+    as.setMessageCompression(true);
+
+    verify(framer).setMessageCompression(true);
   }
 
   @Test
@@ -104,6 +115,10 @@ public class AbstractStreamTest {
   private class AbstractStreamBase<IdT> extends AbstractStream<IdT> {
     private AbstractStreamBase(WritableBufferAllocator bufferAllocator) {
       super(bufferAllocator, DEFAULT_MAX_MESSAGE_SIZE);
+    }
+
+    private AbstractStreamBase(MessageFramer framer, MessageDeframer deframer) {
+      super(framer, deframer);
     }
 
     @Override

@@ -103,37 +103,46 @@ public abstract class AbstractStream<IdT> implements Stream {
   private volatile DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance();
 
+  @VisibleForTesting
+  class FramerSink implements MessageFramer.Sink {
+    @Override
+    public void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+      internalSendFrame(frame, endOfStream, flush);
+    }
+  }
+
+  @VisibleForTesting
+  class DeframerListener implements MessageDeframer.Listener {
+    @Override
+    public void bytesRead(int numBytes) {
+      returnProcessedBytes(numBytes);
+    }
+
+    @Override
+    public void messageRead(InputStream input) {
+      receiveMessage(input);
+    }
+
+    @Override
+    public void deliveryStalled() {
+      inboundDeliveryPaused();
+    }
+
+    @Override
+    public void endOfStream() {
+      remoteEndClosed();
+    }
+  }
+
   AbstractStream(WritableBufferAllocator bufferAllocator, int maxMessageSize) {
-    MessageDeframer.Listener inboundMessageHandler = new MessageDeframer.Listener() {
-      @Override
-      public void bytesRead(int numBytes) {
-        returnProcessedBytes(numBytes);
-      }
+    framer = new MessageFramer(new FramerSink(), bufferAllocator);
+    deframer = new MessageDeframer(new DeframerListener(), Codec.Identity.NONE, maxMessageSize);
+  }
 
-      @Override
-      public void messageRead(InputStream input) {
-        receiveMessage(input);
-      }
-
-      @Override
-      public void deliveryStalled() {
-        inboundDeliveryPaused();
-      }
-
-      @Override
-      public void endOfStream() {
-        remoteEndClosed();
-      }
-    };
-    MessageFramer.Sink outboundFrameHandler = new MessageFramer.Sink() {
-      @Override
-      public void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-        internalSendFrame(frame, endOfStream, flush);
-      }
-    };
-
-    framer = new MessageFramer(outboundFrameHandler, bufferAllocator);
-    deframer = new MessageDeframer(inboundMessageHandler, Codec.Identity.NONE, maxMessageSize);
+  @VisibleForTesting
+  AbstractStream(MessageFramer framer, MessageDeframer deframer) {
+    this.framer = framer;
+    this.deframer = deframer;
   }
 
   /**
@@ -166,6 +175,11 @@ public abstract class AbstractStream<IdT> implements Stream {
     if (!framer.isClosed()) {
       framer.writePayload(message);
     }
+  }
+
+  @Override
+  public final void setMessageCompression(boolean enable) {
+    framer.setMessageCompression(enable);
   }
 
   @Override

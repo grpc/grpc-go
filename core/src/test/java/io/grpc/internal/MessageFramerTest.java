@@ -53,6 +53,8 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 
 /**
@@ -237,27 +239,72 @@ public class MessageFramerTest {
   public void compressed() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
     framer = new MessageFramer(sink, allocator, new Codec.Gzip());
+    framer.setMessageCompression(true);
     writeKnownLength(framer, new byte[1000]);
-    // The GRPC header is written first as a separate frame
-    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(false));
     framer.flush();
-    // and then the payload is written with flush=true
+    // The GRPC header is written first as a separate frame.
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(false));
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
+
+    // Check the header
+    ByteWritableBuffer buffer = frameCaptor.getAllValues().get(0);
+
+    assertEquals(0x1, buffer.data[0]);
+    ByteBuffer byteBuf = ByteBuffer.wrap(buffer.data, 1, 4);
+    byteBuf.order(ByteOrder.BIG_ENDIAN);
+    int length = byteBuf.getInt();
+    // compressed data should be smaller than uncompressed data.
+    assertTrue(length < 1000);
+
+    assertEquals(frameCaptor.getAllValues().get(1).size(), length);
+  }
+
+  @Test
+  public void dontCompressIfNoEncoding() throws Exception {
+    allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
+    framer = new MessageFramer(sink, allocator, Codec.Identity.NONE);
+    framer.setMessageCompression(true);
+    writeKnownLength(framer, new byte[1000]);
+    framer.flush();
+    // The GRPC header is written first as a separate frame
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
+
     // Check the header
     ByteWritableBuffer buffer = frameCaptor.getAllValues().get(0);
     // We purposefully don't check the last byte of length, since that depends on how exactly it
     // compressed.
-    assertEquals(1, buffer.data[0]);
-    assertEquals(0, buffer.data[1]);
-    assertEquals(0, buffer.data[2]);
-    assertEquals(0, buffer.data[3]);
 
-    // check the payload
-    buffer = frameCaptor.getAllValues().get(1);
-    // Payload should have compressed very well.
-    assertTrue(buffer.size() < 100);
+    assertEquals(0x0, buffer.data[0]);
+    ByteBuffer byteBuf = ByteBuffer.wrap(buffer.data, 1, 4);
+    byteBuf.order(ByteOrder.BIG_ENDIAN);
+    int length = byteBuf.getInt();
+    assertEquals(1000, length);
 
-    assertEquals(2, allocator.allocCount);
+    assertEquals(buffer.data.length - 5 , length);
+  }
+
+  @Test
+  public void dontCompressIfNotRequested() throws Exception {
+    allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
+    framer = new MessageFramer(sink, allocator, new Codec.Gzip());
+    framer.setMessageCompression(false);
+    writeKnownLength(framer, new byte[1000]);
+    framer.flush();
+    // The GRPC header is written first as a separate frame
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
+
+    // Check the header
+    ByteWritableBuffer buffer = frameCaptor.getAllValues().get(0);
+    // We purposefully don't check the last byte of length, since that depends on how exactly it
+    // compressed.
+
+    assertEquals(0x0, buffer.data[0]);
+    ByteBuffer byteBuf = ByteBuffer.wrap(buffer.data, 1, 4);
+    byteBuf.order(ByteOrder.BIG_ENDIAN);
+    int length = byteBuf.getInt();
+    assertEquals(1000, length);
+
+    assertEquals(buffer.data.length - 5 , length);
   }
 
   @Test
@@ -296,6 +343,7 @@ public class MessageFramerTest {
 
   private static void writeKnownLength(MessageFramer framer, byte[] bytes) {
     framer.writePayload(new ByteArrayInputStream(bytes));
+    // TODO(carl-mastrangelo): add framer.flush() here.
   }
 
   static class ByteWritableBuffer implements WritableBuffer {
@@ -351,7 +399,6 @@ public class MessageFramerTest {
   }
 
   static class BytesWritableBufferAllocator implements WritableBufferAllocator {
-
     public int minSize;
     public int maxSize;
     public int allocCount = 0;

@@ -328,6 +328,11 @@ class InProcessTransport implements ServerTransport, ClientTransport {
         clientStreamListener.closed(status, new Metadata());
         return true;
       }
+
+      @Override
+      public void setMessageCompression(boolean enable) {
+        // noop
+      }
     }
 
     private class InProcessClientStream implements ClientStream {
@@ -441,7 +446,13 @@ class InProcessTransport implements ServerTransport, ClientTransport {
 
       @Override
       public void setDecompressionRegistry(DecompressorRegistry registry) {}
+
+      @Override
+      public void setMessageCompression(boolean enable) {
+        // noop
+      }
     }
+
   }
 
   private static class NoopClientStream implements ClientStream {
@@ -472,5 +483,10 @@ class InProcessTransport implements ServerTransport, ClientTransport {
 
     @Override
     public void setDecompressionRegistry(DecompressorRegistry registry) {}
+
+    @Override
+    public void setMessageCompression(boolean enable) {
+      // noop
+    }
   }
 }

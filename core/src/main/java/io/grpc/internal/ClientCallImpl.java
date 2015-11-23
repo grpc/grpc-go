@@ -55,6 +55,7 @@ import io.grpc.Status;
 
 import java.io.InputStream;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -107,7 +108,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
      */
     ListenableFuture<ClientTransport> get(CallOptions callOptions);
   }
-
 
   ClientCallImpl<ReqT, RespT> setUserAgent(String userAgent) {
     this.userAgent = userAgent;
@@ -181,6 +181,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     Compressor compressor = callOptions.getCompressor();
     if (compressor != null) {
       stream.setCompressor(compressor);
+      // TODO(carl-mastrangelo): move this to ClientCall.
+      stream.setMessageCompression(true);
     }
 
     // Start the deadline timer after stream creation because it will close the stream
@@ -383,6 +385,16 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     }
   }
 
+  private static final class PendingMessage {
+    private final InputStream message;
+    private final boolean shouldBeCompressed;
+
+    public PendingMessage(InputStream message, boolean shouldBeCompressed) {
+      this.message = message;
+      this.shouldBeCompressed = shouldBeCompressed;
+    }
+  }
+
   /**
    * A stream that queues requests before the transport is available, and delegates to a real stream
    * implementation when the transport is available.
@@ -407,7 +419,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     @GuardedBy("this")
     DecompressorRegistry decompressionRegistry;
     @GuardedBy("this")
-    final LinkedList<InputStream> pendingMessages = new LinkedList<InputStream>();
+    final List<PendingMessage> pendingMessages = new LinkedList<PendingMessage>();
+    boolean messageCompressionEnabled;
     @GuardedBy("this")
     boolean pendingHalfClose;
     @GuardedBy("this")
@@ -478,9 +491,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         if (this.decompressionRegistry != null) {
           realStream.setDecompressionRegistry(this.decompressionRegistry);
         }
-        for (InputStream message : pendingMessages) {
-          realStream.writeMessage(message);
+        for (PendingMessage message : pendingMessages) {
+          realStream.setMessageCompression(message.shouldBeCompressed);
+          realStream.writeMessage(message.message);
         }
+        // Set this again, incase no messages were sent.
+        realStream.setMessageCompression(messageCompressionEnabled);
         pendingMessages.clear();
         if (pendingHalfClose) {
           realStream.halfClose();
@@ -516,7 +532,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       if (realStream == null) {
         synchronized (this) {
           if (realStream == null) {
-            pendingMessages.add(message);
+            pendingMessages.add(new PendingMessage(message, messageCompressionEnabled));
             return;
           }
         }
@@ -596,6 +612,15 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       }
       return realStream.isReady();
     }
+
+    @Override
+    public synchronized void setMessageCompression(boolean enable) {
+      if (realStream != null) {
+        realStream.setMessageCompression(enable);
+      } else {
+        messageCompressionEnabled = enable;
+      }
+    }
   }
 
   private static final ClientStream NOOP_CLIENT_STREAM = new ClientStream() {
@@ -610,6 +635,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     @Override public void request(int numMessages) {}
 
     @Override public void setCompressor(Compressor c) {}
+
+    @Override
+    public void setMessageCompression(boolean enable) {
+      // noop
+    }
 
     /**
      * Always returns {@code false}, since this is only used when the startup of the {@link

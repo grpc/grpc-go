@@ -34,7 +34,6 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.lang.Math.min;
 
-import com.google.common.base.Preconditions;
 import com.google.common.io.ByteStreams;
 
 import io.grpc.Codec;
@@ -75,10 +74,10 @@ public class MessageFramer {
   private static final byte UNCOMPRESSED = 0;
   private static final byte COMPRESSED = 1;
 
-
   private final Sink sink;
   private WritableBuffer buffer;
   private Compressor compressor;
+  private boolean messageCompression;
   private final OutputStreamAdapter outputStreamAdapter = new OutputStreamAdapter();
   private final byte[] headerScratch = new byte[HEADER_LENGTH];
   private final WritableBufferAllocator bufferAllocator;
@@ -102,13 +101,17 @@ public class MessageFramer {
    * @param compressor the compressor to use
    */
   public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator, Compressor compressor) {
-    this.sink = Preconditions.checkNotNull(sink, "sink");
+    this.sink = checkNotNull(sink, "sink");
     this.bufferAllocator = bufferAllocator;
-    this.compressor = Preconditions.checkNotNull(compressor, "compressor");
+    this.compressor = checkNotNull(compressor, "compressor");
   }
 
-  public void setCompressor(Compressor compressor) {
+  void setCompressor(Compressor compressor) {
     this.compressor = checkNotNull(compressor, "Can't pass an empty compressor");
+  }
+
+  void setMessageCompression(boolean enable) {
+    messageCompression = enable;
   }
 
   /**
@@ -119,7 +122,7 @@ public class MessageFramer {
   public void writePayload(InputStream message) {
     verifyNotClosed();
     try {
-      if (compressor != Codec.Identity.NONE) {
+      if (messageCompression && compressor != Codec.Identity.NONE) {
         writeCompressed(message);
       } else {
         writeUncompressed(message);
@@ -217,7 +220,6 @@ public class MessageFramer {
     buffer =  bufferList.get(bufferList.size() - 1);
   }
 
-  @SuppressWarnings("rawtypes")
   private static long writeToOutputStream(InputStream message, OutputStream outputStream)
       throws IOException {
     if (message instanceof Drainable) {

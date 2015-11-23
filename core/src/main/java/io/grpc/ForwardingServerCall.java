@@ -70,6 +70,12 @@ public abstract class ForwardingServerCall<RespT> extends ServerCall<RespT> {
     return delegate().isCancelled();
   }
 
+  @Override
+  @ExperimentalApi
+  public void setMessageCompression(boolean enabled) {
+    delegate().setMessageCompression(enabled);
+  }
+
   /**
    * A simplified version of {@link ForwardingServerCall} where subclasses can pass in a {@link
    * ServerCall} as the delegate.
