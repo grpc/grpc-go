@@ -49,6 +49,7 @@ import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
@@ -100,6 +101,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1218,8 +1220,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void invalidAuthorityPropagates() {
     clientTransport = new OkHttpClientTransport(
-        "host",
-        1234,
+        new InetSocketAddress("host", 1234),
         "invalid_authority",
         executor,
         null,
@@ -1231,6 +1232,30 @@ public class OkHttpClientTransportTest {
 
     assertEquals("invalid_authority", host);
     assertEquals(1234, port);
+  }
+
+  @Test
+  public void unreachableServer() throws Exception {
+    clientTransport = new OkHttpClientTransport(
+        new InetSocketAddress("localhost", 1234),
+        "authority",
+        executor,
+        null,
+        ConnectionSpec.CLEARTEXT,
+        DEFAULT_MAX_MESSAGE_SIZE);
+
+    ClientTransport.Listener listener = mock(ClientTransport.Listener.class);
+    clientTransport.start(listener);
+    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
+    verify(listener, timeout(TIME_OUT_MS)).transportShutdown(captor.capture());
+    Status status = captor.getValue();
+    assertEquals(Status.UNAVAILABLE.getCode(), status.getCode());
+    assertTrue(status.getCause().toString(), status.getCause() instanceof IOException);
+
+    MockStreamListener streamListener = new MockStreamListener();
+    clientTransport.newStream(method, new Metadata(), streamListener);
+    streamListener.waitUntilStreamClosed();
+    assertEquals(Status.UNAVAILABLE.getCode(), streamListener.status.getCode());
   }
 
   private int activeStreamCount() {

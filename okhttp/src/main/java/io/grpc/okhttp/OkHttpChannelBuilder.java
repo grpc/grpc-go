@@ -257,8 +257,8 @@ public class OkHttpChannelBuilder extends
     @Override
     public ClientTransport newClientTransport(SocketAddress addr, String authority) {
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
-      return new OkHttpClientTransport(inetSocketAddr.getHostString(), inetSocketAddr.getPort(),
-          authority, executor, socketFactory, Utils.convertSpec(connectionSpec), maxMessageSize);
+      return new OkHttpClientTransport(inetSocketAddr, authority, executor, socketFactory,
+          Utils.convertSpec(connectionSpec), maxMessageSize);
     }
 
     @Override

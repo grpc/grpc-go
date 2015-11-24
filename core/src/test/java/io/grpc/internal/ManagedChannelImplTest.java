@@ -83,9 +83,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** Unit tests for {@link ManagedChannelImpl}. */
@@ -336,6 +338,67 @@ public class ManagedChannelImplTest {
         .newClientTransport(any(SocketAddress.class), any(String.class));
   }
 
+  /**
+   * Verify that if one resolved address points to a bad server, the retry will use another address.
+   */
+  @Test
+  public void firstResoledServerIsBad() throws Exception {
+    final SocketAddress goodAddress = new SocketAddress() {};
+    final SocketAddress badAddress = new SocketAddress() {};
+    final ResolvedServerInfo goodServer = new ResolvedServerInfo(goodAddress, Attributes.EMPTY);
+    final ResolvedServerInfo badServer = new ResolvedServerInfo(badAddress, Attributes.EMPTY);
+    final ClientTransport goodTransport = mock(ClientTransport.class);
+    final ClientTransport badTransport = mock(ClientTransport.class);
+    when(mockTransportFactory.newClientTransport(same(goodAddress), any(String.class)))
+        .thenReturn(goodTransport);
+    when(mockTransportFactory.newClientTransport(same(badAddress), any(String.class)))
+        .thenReturn(badTransport);
+    final CountDownLatch badTransportFailed = new CountDownLatch(1);
+    doAnswer(new Answer<Object>() {
+      @Override
+      public Object answer(InvocationOnMock invocation) throws Throwable {
+        Object[] args = invocation.getArguments();
+        final ClientTransport.Listener listener = (ClientTransport.Listener) args[0];
+        executor.execute(new Runnable() {
+          @Override
+          public void run() {
+            listener.transportShutdown(Status.UNAVAILABLE);
+          }
+        });
+        badTransportFailed.countDown();
+        return null;
+      }
+    }).when(badTransport).start(any(ClientTransport.Listener.class));
+
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory(Arrays.asList(badServer, goodServer));
+    ManagedChannel channel = createChannel(nameResolverFactory, NO_INTERCEPTOR);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    Metadata headers = new Metadata();
+    doAnswer(new Answer<ClientStream>() {
+      @Override
+      public ClientStream answer(InvocationOnMock invocation) throws Throwable {
+        Object[] args = invocation.getArguments();
+        final ClientStreamListener listener = (ClientStreamListener) args[2];
+        listener.closed(Status.UNAVAILABLE, new Metadata());
+        return mock(ClientStream.class);
+      }
+    }).when(badTransport).newStream(same(method), same(headers), any(ClientStreamListener.class));
+    when(goodTransport.newStream(same(method), same(headers), any(ClientStreamListener.class)))
+        .thenReturn(mock(ClientStream.class));
+
+    // First try should fail with the bad address.
+    call.start(mockCallListener, headers);
+    assertTrue(badTransportFailed.await(1000, TimeUnit.MILLISECONDS));
+    verify(mockCallListener, timeout(1000)).onClose(same(Status.UNAVAILABLE), any(Metadata.class));
+
+    // Retry should work with the good address.
+    ClientCall<String, Integer> call2 = channel.newCall(method, CallOptions.DEFAULT);
+    call2.start(mockCallListener, headers);
+    verify(goodTransport, timeout(1000)).newStream(
+        same(method), same(headers), any(ClientStreamListener.class));
+  }
+
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {
     @Override
     public BackoffPolicy get() {
@@ -349,11 +412,18 @@ public class ManagedChannelImplTest {
   }
 
   private class FakeNameResolverFactory extends NameResolver.Factory {
+    final List<ResolvedServerInfo> servers;
     final boolean resolvedAtStart;
     final ArrayList<FakeNameResolver> resolvers = new ArrayList<FakeNameResolver>();
 
     FakeNameResolverFactory(boolean resolvedAtStart) {
       this.resolvedAtStart = resolvedAtStart;
+      servers = Collections.singletonList(server);
+    }
+
+    FakeNameResolverFactory(List<ResolvedServerInfo> servers) {
+      resolvedAtStart = true;
+      this.servers = servers;
     }
 
     @Override
@@ -388,7 +458,7 @@ public class ManagedChannelImplTest {
       }
 
       void resolved() {
-        listener.onUpdate(Collections.singletonList(server), Attributes.EMPTY);
+        listener.onUpdate(servers, Attributes.EMPTY);
       }
 
       @Override public void shutdown() {}

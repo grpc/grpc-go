@@ -66,6 +66,7 @@ import okio.ByteString;
 import okio.Okio;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.util.Collections;
@@ -120,8 +121,7 @@ class OkHttpClientTransport implements ClientTransport {
     ERROR_CODE_TO_STATUS = Collections.unmodifiableMap(errorToStatus);
   }
 
-  private final String host;
-  private final int port;
+  private final InetSocketAddress address;
   private final String defaultAuthority;
   private final Random random = new Random();
   private final Ticker ticker;
@@ -168,11 +168,10 @@ class OkHttpClientTransport implements ClientTransport {
   Runnable connectingCallback;
   SettableFuture<Void> connectedFuture;
 
-  OkHttpClientTransport(String host, int port, String authority, Executor executor,
+  OkHttpClientTransport(InetSocketAddress address, String authority, Executor executor,
       @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec,
       int maxMessageSize) {
-    this.host = Preconditions.checkNotNull(host, "host");
-    this.port = port;
+    this.address = Preconditions.checkNotNull(address, "address");
     this.defaultAuthority = authority;
     this.maxMessageSize = maxMessageSize;
     this.executor = Preconditions.checkNotNull(executor, "executor");
@@ -193,8 +192,7 @@ class OkHttpClientTransport implements ClientTransport {
       int nextStreamId, Socket socket, Ticker ticker,
       @Nullable Runnable connectingCallback, SettableFuture<Void> connectedFuture,
       int maxMessageSize) {
-    host = null;
-    port = 0;
+    address = null;
     this.maxMessageSize = maxMessageSize;
     defaultAuthority = "notarealauthority:80";
     this.executor = Preconditions.checkNotNull(executor);
@@ -210,7 +208,7 @@ class OkHttpClientTransport implements ClientTransport {
   }
 
   private boolean isForTest() {
-    return host == null;
+    return address == null;
   }
 
   @Override
@@ -348,7 +346,7 @@ class OkHttpClientTransport implements ClientTransport {
         BufferedSink sink;
         Socket sock;
         try {
-          sock = new Socket(host, port);
+          sock = new Socket(address.getAddress(), address.getPort());
           if (sslSocketFactory != null) {
             sock = OkHttpTlsUpgrader.upgrade(
                 sslSocketFactory, sock, getOverridenHost(), getOverridenPort(), connectionSpec);
@@ -436,7 +434,7 @@ class OkHttpClientTransport implements ClientTransport {
       return uri.getPort();
     }
 
-    return port;
+    return address.getPort();
   }
 
   @Override
