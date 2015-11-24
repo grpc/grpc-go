@@ -164,12 +164,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       try {
         transport = transportFuture.get();
         if (transport != null && updateTimeoutHeader(headers)) {
-          try {
-            stream = transport.newStream(method, headers, listener);
-          } catch (IllegalStateException e) {
-            // The transport is already shut down. This may due to a race condition between Channel
-            // shutting down idle transports. Retry in DelayedStream.
-          }
+          stream = transport.newStream(method, headers, listener);
         }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -177,6 +172,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         // Fall through to DelayedStream
       }
     }
+
     if (stream == null) {
       stream = new DelayedStream(transportFuture, headers, listener);
     }
@@ -474,17 +470,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
           maybeClosePrematurely(Status.DEADLINE_EXCEEDED);
           return;
         }
-        try {
-          realStream = transport.newStream(method, headers, listener);
-        } catch (IllegalStateException e) {
-          // The transport is already shut down. This may due to a race condition between Channel
-          // shutting down idle transports. Retry StreamCreationTask with a new transport, but
-          // schedule it in an executor to avoid recursion.
-          ListenableFuture<ClientTransport> transportFuture =
-              clientTransportProvider.get(callOptions);
-          callExecutor.execute(new StreamCreationTask(transportFuture));
-          return;
-        }
+        realStream = transport.newStream(method, headers, listener);
         Preconditions.checkNotNull(realStream, transport.toString() + " returned null stream");
         if (compressor != null) {
           realStream.setCompressor(compressor);
