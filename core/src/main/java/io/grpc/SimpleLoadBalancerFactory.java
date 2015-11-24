@@ -68,14 +68,14 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
   }
 
   private static class SimpleLoadBalancer extends LoadBalancer {
-    @GuardedBy("servers")
-    private final List<ResolvedServerInfo> servers = new ArrayList<ResolvedServerInfo>();
-    @GuardedBy("servers")
-    private int currentServerIndex;
-    @GuardedBy("servers")
+    private final Object lock = new Object();
+
+    @GuardedBy("lock")
+    private EquivalentAddressGroup addresses;
+    @GuardedBy("lock")
     private final BlankFutureProvider<ClientTransport> pendingPicks =
         new BlankFutureProvider<ClientTransport>();
-    @GuardedBy("servers")
+    @GuardedBy("lock")
     private StatusException nameResolutionError;
 
     private final TransportManager tm;
@@ -86,42 +86,41 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
 
     @Override
     public ListenableFuture<ClientTransport> pickTransport(@Nullable RequestKey requestKey) {
-      ResolvedServerInfo currentServer;
-      synchronized (servers) {
-        if (servers.isEmpty()) {
+      EquivalentAddressGroup addressesCopy;
+      synchronized (lock) {
+        addressesCopy = addresses;
+        if (addressesCopy == null) {
           if (nameResolutionError != null) {
             return Futures.immediateFailedFuture(nameResolutionError);
           }
           return pendingPicks.newBlankFuture();
         }
-        currentServer = servers.get(currentServerIndex);
       }
-      return tm.getTransport(currentServer.getAddress());
+      return tm.getTransport(addressesCopy);
     }
 
     @Override
     public void handleResolvedAddresses(
         List<ResolvedServerInfo> updatedServers, Attributes config) {
       BlankFutureProvider.FulfillmentBatch<ClientTransport> pendingPicksFulfillmentBatch;
-      final ResolvedServerInfo currentServer;
-      synchronized (servers) {
-        nameResolutionError = null;
-        servers.clear();
-        for (ResolvedServerInfo addr : updatedServers) {
-          servers.add(addr);
+      final EquivalentAddressGroup newAddresses;
+      synchronized (lock) {
+        ArrayList<SocketAddress> newAddressList =
+            new ArrayList<SocketAddress>(updatedServers.size());
+        for (ResolvedServerInfo server : updatedServers) {
+          newAddressList.add(server.getAddress());
         }
-        if (servers.isEmpty()) {
+        newAddresses = new EquivalentAddressGroup(newAddressList);
+        if (newAddresses.equals(addresses)) {
           return;
         }
+        addresses = newAddresses;
+        nameResolutionError = null;
         pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
-        if (currentServerIndex >= servers.size()) {
-          currentServerIndex = 0;
-        }
-        currentServer = servers.get(currentServerIndex);
       }
       pendingPicksFulfillmentBatch.link(new Supplier<ListenableFuture<ClientTransport>>() {
         @Override public ListenableFuture<ClientTransport> get() {
-          return tm.getTransport(currentServer.getAddress());
+          return tm.getTransport(newAddresses);
         }
       });
     }
@@ -131,27 +130,11 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
       BlankFutureProvider.FulfillmentBatch<ClientTransport> pendingPicksFulfillmentBatch;
       StatusException statusException =
           error.augmentDescription("Name resolution failed").asException();
-      synchronized (servers) {
+      synchronized (lock) {
         pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
         nameResolutionError = statusException;
       }
       pendingPicksFulfillmentBatch.fail(statusException);
-    }
-
-    @Override
-    public void transportShutdown(SocketAddress addr, ClientTransport transport, Status s) {
-      if (!s.isOk()) {
-        // If the current transport is shut down due to error, move on to the next address in the
-        // list
-        synchronized (servers) {
-          if (addr.equals(servers.get(currentServerIndex).getAddress())) {
-            currentServerIndex++;
-            if (currentServerIndex >= servers.size()) {
-              currentServerIndex = 0;
-            }
-          }
-        }
-      }
     }
   }
 }

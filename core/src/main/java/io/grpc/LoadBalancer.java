@@ -35,7 +35,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.internal.ClientTransport;
 
-import java.net.SocketAddress;
 import java.util.List;
 
 import javax.annotation.Nullable;
@@ -83,12 +82,13 @@ public abstract class LoadBalancer {
   /**
    * Called when a transport is fully connected and ready to accept traffic.
    */
-  public void transportReady(SocketAddress addr, ClientTransport transport) { }
+  public void transportReady(EquivalentAddressGroup addressGroup, ClientTransport transport) { }
 
   /**
    * Called when a transport is shutting down.
    */
-  public void transportShutdown(SocketAddress addr, ClientTransport transport, Status s) { }
+  public void transportShutdown(
+      EquivalentAddressGroup addressGroup, ClientTransport transport, Status s) { }
 
   public abstract static class Factory {
     /**

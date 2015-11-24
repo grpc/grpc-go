@@ -36,7 +36,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.same;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -44,7 +44,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
@@ -66,6 +65,7 @@ public class SimpleLoadBalancerTest {
   private LoadBalancer loadBalancer;
 
   private ArrayList<ResolvedServerInfo> servers;
+  private EquivalentAddressGroup addressGroup;
 
   @Mock
   private TransportManager mockTransportManager;
@@ -76,16 +76,20 @@ public class SimpleLoadBalancerTest {
     loadBalancer = SimpleLoadBalancerFactory.getInstance().newLoadBalancer(
         "fakeservice", mockTransportManager);
     servers = new ArrayList<ResolvedServerInfo>();
+    ArrayList<SocketAddress> addresses = new ArrayList<SocketAddress>();
     for (int i = 0; i < 3; i++) {
-      servers.add(new ResolvedServerInfo(new FakeSocketAddress("server" + i), Attributes.EMPTY));
+      SocketAddress addr = new FakeSocketAddress("server" + i);
+      servers.add(new ResolvedServerInfo(addr, Attributes.EMPTY));
+      addresses.add(addr);
     }
+    addressGroup = new EquivalentAddressGroup(addresses);
   }
 
   @Test
   public void pickBeforeResolved() throws Exception {
     ClientTransport mockTransport = mock(ClientTransport.class);
     SettableFuture<ClientTransport> sourceFuture = SettableFuture.create();
-    when(mockTransportManager.getTransport(same(servers.get(0).getAddress())))
+    when(mockTransportManager.getTransport(eq(addressGroup)))
         .thenReturn(sourceFuture);
     ListenableFuture<ClientTransport> f1 = loadBalancer.pickTransport(null);
     ListenableFuture<ClientTransport> f2 = loadBalancer.pickTransport(null);
@@ -94,9 +98,9 @@ public class SimpleLoadBalancerTest {
     assertNotSame(f1, f2);
     assertFalse(f1.isDone());
     assertFalse(f2.isDone());
-    verify(mockTransportManager, never()).getTransport(any(SocketAddress.class));
+    verify(mockTransportManager, never()).getTransport(any(EquivalentAddressGroup.class));
     loadBalancer.handleResolvedAddresses(servers, Attributes.EMPTY);
-    verify(mockTransportManager, times(2)).getTransport(same(servers.get(0).getAddress()));
+    verify(mockTransportManager, times(2)).getTransport(eq(addressGroup));
     assertFalse(f1.isDone());
     assertFalse(f2.isDone());
     assertNotSame(sourceFuture, f1);
@@ -104,28 +108,22 @@ public class SimpleLoadBalancerTest {
     sourceFuture.set(mockTransport);
     assertSame(mockTransport, f1.get());
     assertSame(mockTransport, f2.get());
-    ListenableFuture<ClientTransport> f3 = loadBalancer.pickTransport(null);
-    assertSame(sourceFuture, f3);
-    verify(mockTransportManager, times(3)).getTransport(same(servers.get(0).getAddress()));
     verifyNoMoreInteractions(mockTransportManager);
   }
 
   @Test
-  public void transportFailed() throws Exception {
-    ClientTransport mockTransport1 = mock(ClientTransport.class);
-    ClientTransport mockTransport2 = mock(ClientTransport.class);
-    when(mockTransportManager.getTransport(same(servers.get(0).getAddress()))).thenReturn(
-        Futures.immediateFuture(mockTransport1));
-    when(mockTransportManager.getTransport(same(servers.get(1).getAddress()))).thenReturn(
-        Futures.immediateFuture(mockTransport2));
+  public void pickAfterResolved() throws Exception {
+    ClientTransport mockTransport = mock(ClientTransport.class);
+    SettableFuture<ClientTransport> sourceFuture = SettableFuture.create();
+    when(mockTransportManager.getTransport(eq(addressGroup)))
+        .thenReturn(sourceFuture);
     loadBalancer.handleResolvedAddresses(servers, Attributes.EMPTY);
-    ListenableFuture<ClientTransport> f1 = loadBalancer.pickTransport(null);
-    ListenableFuture<ClientTransport> f2 = loadBalancer.pickTransport(null);
-    assertSame(mockTransport1, f1.get());
-    assertSame(mockTransport1, f2.get());
-    loadBalancer.transportShutdown(servers.get(0).getAddress(), mockTransport1, Status.INTERNAL);
-    ListenableFuture<ClientTransport> f3 = loadBalancer.pickTransport(null);
-    assertSame(mockTransport2, f3.get());
+    ListenableFuture<ClientTransport> f = loadBalancer.pickTransport(null);
+    assertSame(sourceFuture, f);
+    assertFalse(f.isDone());
+    sourceFuture.set(mockTransport);
+    assertSame(mockTransport, f.get());
+    verify(mockTransportManager).getTransport(addressGroup);
   }
 
   private static class FakeSocketAddress extends SocketAddress {

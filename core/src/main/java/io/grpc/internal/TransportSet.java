@@ -36,12 +36,14 @@ import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
+import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.Status;
 
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -53,7 +55,7 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * Transports for a single server.
+ * Transports for a single {@link SocketAddress}.
  */
 @ThreadSafe
 final class TransportSet {
@@ -66,7 +68,7 @@ final class TransportSet {
   }
 
   private final Object lock = new Object();
-  private final SocketAddress server;
+  private final EquivalentAddressGroup addressGroup;
   private final String authority;
   private final BackoffPolicy.Provider backoffPolicyProvider;
   private final Callback callback;
@@ -74,8 +76,17 @@ final class TransportSet {
   private final ScheduledExecutorService scheduledExecutor;
 
   @GuardedBy("lock")
-  @Nullable
+  private int nextAddressIndex;
+
+  @GuardedBy("lock")
   private BackoffPolicy reconnectPolicy;
+
+  // The address index from which the current series of consecutive failing connection attempts
+  // started. -1 means the current series have not started.
+  // In the case of consecutive failures, the time between two attempts for this address is
+  // controlled by connectPolicy.
+  @GuardedBy("lock")
+  private int headIndex = -1;
 
   @GuardedBy("lock")
   @Nullable
@@ -100,10 +111,10 @@ final class TransportSet {
    */
   private volatile SettableFuture<ClientTransport> activeTransportFuture;
 
-  TransportSet(SocketAddress server, String authority, LoadBalancer loadBalancer,
+  TransportSet(EquivalentAddressGroup addressGroup, String authority, LoadBalancer loadBalancer,
       BackoffPolicy.Provider backoffPolicyProvider, ClientTransportFactory transportFactory,
       ScheduledExecutorService scheduledExecutor, Callback callback) {
-    this.server = server;
+    this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.loadBalancer = loadBalancer;
     this.backoffPolicyProvider = backoffPolicyProvider;
@@ -150,6 +161,15 @@ final class TransportSet {
     Preconditions.checkState(!shutdown, "Already shut down");
     Preconditions.checkState(reconnectTask == null || reconnectTask.isDone(),
         "previous reconnectTask is not done");
+
+    final int currentAddressIndex = nextAddressIndex;
+    List<SocketAddress> addrs = addressGroup.getAddresses();
+    final SocketAddress address = addrs.get(currentAddressIndex);
+    nextAddressIndex++;
+    if (nextAddressIndex >= addrs.size()) {
+      nextAddressIndex = 0;
+    }
+
     Runnable createTransportRunnable = new Runnable() {
       @Override
       public void run() {
@@ -157,28 +177,33 @@ final class TransportSet {
           if (shutdown) {
             return;
           }
-          ClientTransport newActiveTransport = transportFactory.newClientTransport(
-              server, authority);
+          ClientTransport newActiveTransport =
+              transportFactory.newClientTransport(address, authority);
           log.log(Level.INFO, "Created transport {0} for {1}",
-              new Object[] {newActiveTransport, server});
+              new Object[] {newActiveTransport, address});
           transports.add(newActiveTransport);
           newActiveTransport.start(
-              new TransportListener(newActiveTransport, activeTransportFuture));
+              new TransportListener(newActiveTransport, activeTransportFuture, address));
           Preconditions.checkState(activeTransportFuture.set(newActiveTransport),
               "failed to set the new transport to the future");
         }
       }
     };
-    if (reconnectPolicy == null) {
-      // First connect attempt
-      reconnectPolicy = backoffPolicyProvider.get();
-      createTransportRunnable.run();
-      reconnectTask = null;
-    } else {
-      // Reconnect attempts
+
+    if (currentAddressIndex == headIndex) {
+      // Back to the first attempted address. Trigger back-off.
       long delayMillis = reconnectPolicy.nextBackoffMillis();
       reconnectTask = scheduledExecutor.schedule(
           createTransportRunnable, delayMillis, TimeUnit.MILLISECONDS);
+    } else {
+      if (headIndex == -1) {
+        // First connect attempt, or the first attempt since last successful connection.
+        headIndex = currentAddressIndex;
+        reconnectPolicy = backoffPolicyProvider.get();
+      }
+      reconnectTask = null;
+      // No back-off this time.
+      createTransportRunnable.run();
     }
   }
 
@@ -221,13 +246,15 @@ final class TransportSet {
   }
 
   private class TransportListener implements ClientTransport.Listener {
+    private final SocketAddress address;
     private final ClientTransport transport;
     private final SettableFuture<ClientTransport> transportFuture;
 
     public TransportListener(ClientTransport transport,
-        SettableFuture<ClientTransport> transportFuture) {
+        SettableFuture<ClientTransport> transportFuture, SocketAddress address) {
       this.transport = transport;
       this.transportFuture = transportFuture;
+      this.address = address;
     }
 
     @GuardedBy("lock")
@@ -238,26 +265,26 @@ final class TransportSet {
     @Override
     public void transportReady() {
       synchronized (lock) {
-        log.log(Level.INFO, "Transport {0} for {1} is ready", new Object[] {transport, server});
+        log.log(Level.INFO, "Transport {0} for {1} is ready", new Object[] {transport, address});
         Preconditions.checkState(transportFuture.isDone(), "the transport future is not done");
         if (isAttachedToActiveTransport()) {
-          reconnectPolicy = null;
+          headIndex = -1;
         }
       }
-      loadBalancer.transportReady(server, transport);
+      loadBalancer.transportReady(addressGroup, transport);
     }
 
     @Override
     public void transportShutdown(Status s) {
       synchronized (lock) {
         log.log(Level.INFO, "Transport {0} for {1} is being shutdown",
-            new Object[] {transport, server});
+            new Object[] {transport, address});
         Preconditions.checkState(transportFuture.isDone(), "the transport future is not done");
         if (isAttachedToActiveTransport()) {
           createActiveTransportFuture();
         }
       }
-      loadBalancer.transportShutdown(server, transport, s);
+      loadBalancer.transportShutdown(addressGroup, transport, s);
     }
 
     @Override
@@ -265,7 +292,7 @@ final class TransportSet {
       boolean runCallback = false;
       synchronized (lock) {
         log.log(Level.INFO, "Transport {0} for {1} is terminated",
-            new Object[] {transport, server});
+            new Object[] {transport, address});
         Preconditions.checkState(!isAttachedToActiveTransport(),
             "Listener is still attached to activeTransportFuture. "
             + "Seems transportTerminated was not called.");

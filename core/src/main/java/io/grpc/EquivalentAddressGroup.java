@@ -31,31 +31,53 @@
 
 package io.grpc;
 
-import com.google.common.util.concurrent.ListenableFuture;
-
-import io.grpc.internal.ClientTransport;
-
 import java.net.SocketAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
- * Manages transport life-cycles and provide ready-to-use transports.
+ * A group of {@link SocketAddress}es that are considered equivalent when channel makes connections.
+ *
+ * <p>Usually the addresses are addresses resolved from the same host name, and connecting to any of
+ * them is equally sufficient. They do have order. An address appears earlier on the list is likely
+ * to be tried earlier.
  */
 @ExperimentalApi
-public abstract class TransportManager {
-  /**
-   * Advises this {@code TransportManager} to retain transports only to these servers, for warming
-   * up connections and discarding unused connections.
-   */
-  public abstract void updateRetainedTransports(SocketAddress[] addrs);
+public final class EquivalentAddressGroup {
+
+  private final List<SocketAddress> addrs;
+
+  public EquivalentAddressGroup(List<SocketAddress> addrs) {
+    this.addrs = Collections.unmodifiableList(new ArrayList<SocketAddress>(addrs));
+  }
+
+  public EquivalentAddressGroup(SocketAddress addr) {
+    this.addrs = Collections.singletonList(addr);
+  }
 
   /**
-   * Returns the future of a transport for any of the addresses from the given address group.
-   *
-   * <p>If the channel has been shut down, the value of the future will be {@code null}.
+   * Returns an immutable list of the addresses.
    */
-  // TODO(zhangkun83): GrpcLoadBalancer will use this to get transport to connect to LB servers,
-  // which would have a different authority than the primary servers. We need to figure out how to
-  // do it.
-  public abstract ListenableFuture<ClientTransport> getTransport(
-      EquivalentAddressGroup addressGroup);
+  public List<SocketAddress> getAddresses() {
+    return addrs;
+  }
+
+  @Override
+  public String toString() {
+    return addrs.toString();
+  }
+
+  @Override
+  public int hashCode() {
+    return addrs.hashCode();
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (!(other instanceof EquivalentAddressGroup)) {
+      return false;
+    }
+    return addrs.equals(((EquivalentAddressGroup) other).addrs);
+  }
 }

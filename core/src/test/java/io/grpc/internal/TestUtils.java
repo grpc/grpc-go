@@ -29,33 +29,48 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
-import com.google.common.util.concurrent.ListenableFuture;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
-import io.grpc.internal.ClientTransport;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.net.SocketAddress;
+import java.util.LinkedList;
 
 /**
- * Manages transport life-cycles and provide ready-to-use transports.
+ * Common utility methods for tests.
  */
-@ExperimentalApi
-public abstract class TransportManager {
-  /**
-   * Advises this {@code TransportManager} to retain transports only to these servers, for warming
-   * up connections and discarding unused connections.
-   */
-  public abstract void updateRetainedTransports(SocketAddress[] addrs);
+final class TestUtils {
 
   /**
-   * Returns the future of a transport for any of the addresses from the given address group.
-   *
-   * <p>If the channel has been shut down, the value of the future will be {@code null}.
+   * Stub the given mock {@link ClientTransportFactory} by returning mock {@link ClientTransport}s
+   * which saves their listeners to a list which is returned by this method.
    */
-  // TODO(zhangkun83): GrpcLoadBalancer will use this to get transport to connect to LB servers,
-  // which would have a different authority than the primary servers. We need to figure out how to
-  // do it.
-  public abstract ListenableFuture<ClientTransport> getTransport(
-      EquivalentAddressGroup addressGroup);
+  static LinkedList<ClientTransport.Listener> captureListeners(
+      ClientTransportFactory mockTransportFactory) {
+    final LinkedList<ClientTransport.Listener> listeners =
+        new LinkedList<ClientTransport.Listener>();
+
+    doAnswer(new Answer<ClientTransport>() {
+      @Override
+      public ClientTransport answer(InvocationOnMock invocation) throws Throwable {
+        ClientTransport mockTransport = mock(ClientTransport.class);
+        // Save the listener
+        doAnswer(new Answer<Void>() {
+          @Override
+          public Void answer(InvocationOnMock invocation) throws Throwable {
+            listeners.add((ClientTransport.Listener) invocation.getArguments()[0]);
+            return null;
+          }
+        }).when(mockTransport).start(any(ClientTransport.Listener.class));
+        return mockTransport;
+      }
+    }).when(mockTransportFactory).newClientTransport(any(SocketAddress.class), any(String.class));
+
+    return listeners;
+  }
 }

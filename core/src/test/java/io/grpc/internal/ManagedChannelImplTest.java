@@ -83,11 +83,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** Unit tests for {@link ManagedChannelImpl}. */
@@ -353,22 +351,6 @@ public class ManagedChannelImplTest {
         .thenReturn(goodTransport);
     when(mockTransportFactory.newClientTransport(same(badAddress), any(String.class)))
         .thenReturn(badTransport);
-    final CountDownLatch badTransportFailed = new CountDownLatch(1);
-    doAnswer(new Answer<Object>() {
-      @Override
-      public Object answer(InvocationOnMock invocation) throws Throwable {
-        Object[] args = invocation.getArguments();
-        final ClientTransport.Listener listener = (ClientTransport.Listener) args[0];
-        executor.execute(new Runnable() {
-          @Override
-          public void run() {
-            listener.transportShutdown(Status.UNAVAILABLE);
-          }
-        });
-        badTransportFailed.countDown();
-        return null;
-      }
-    }).when(badTransport).start(any(ClientTransport.Listener.class));
 
     FakeNameResolverFactory nameResolverFactory =
         new FakeNameResolverFactory(Arrays.asList(badServer, goodServer));
@@ -389,8 +371,11 @@ public class ManagedChannelImplTest {
 
     // First try should fail with the bad address.
     call.start(mockCallListener, headers);
-    assertTrue(badTransportFailed.await(1000, TimeUnit.MILLISECONDS));
+    ArgumentCaptor<ClientTransport.Listener> badTransportListenerCaptor =
+        ArgumentCaptor.forClass(ClientTransport.Listener.class);
     verify(mockCallListener, timeout(1000)).onClose(same(Status.UNAVAILABLE), any(Metadata.class));
+    verify(badTransport, timeout(1000)).start(badTransportListenerCaptor.capture());
+    badTransportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
 
     // Retry should work with the good address.
     ClientCall<String, Integer> call2 = channel.newCall(method, CallOptions.DEFAULT);

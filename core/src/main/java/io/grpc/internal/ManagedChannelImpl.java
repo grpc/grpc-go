@@ -47,6 +47,7 @@ import io.grpc.ClientInterceptors;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.DecompressorRegistry;
+import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
@@ -114,11 +115,11 @@ public final class ManagedChannelImpl extends ManagedChannel {
   private final LoadBalancer loadBalancer;
 
   /**
-   * Maps addresses to transports for that server.
+   * Maps EquivalentAddressGroups to transports for that server.
    */
   @GuardedBy("lock")
-  private final Map<SocketAddress, TransportSet> transports =
-      new HashMap<SocketAddress, TransportSet>();
+  private final Map<EquivalentAddressGroup, TransportSet> transports =
+      new HashMap<EquivalentAddressGroup, TransportSet>();
 
   @GuardedBy("lock")
   private boolean shutdown;
@@ -359,20 +360,21 @@ public final class ManagedChannelImpl extends ManagedChannel {
     }
 
     @Override
-    public ListenableFuture<ClientTransport> getTransport(final SocketAddress addr) {
+    public ListenableFuture<ClientTransport> getTransport(
+        final EquivalentAddressGroup addressGroup) {
       TransportSet ts;
       synchronized (lock) {
         if (shutdown) {
           return NULL_VALUE_TRANSPORT_FUTURE;
         }
-        ts = transports.get(addr);
+        ts = transports.get(addressGroup);
         if (ts == null) {
-          ts = new TransportSet(addr, authority(), loadBalancer, backoffPolicyProvider,
+          ts = new TransportSet(addressGroup, authority(), loadBalancer, backoffPolicyProvider,
               transportFactory, scheduledExecutor, new TransportSet.Callback() {
                 @Override
                 public void onTerminated() {
                   synchronized (lock) {
-                    transports.remove(addr);
+                    transports.remove(addressGroup);
                     if (shutdown && transports.isEmpty()) {
                       if (terminated) {
                         log.warning("transportTerminated called after already terminated");
@@ -384,7 +386,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
                   }
                 }
               });
-          transports.put(addr, ts);
+          transports.put(addressGroup, ts);
         }
       }
       return ts.obtainActiveTransport();
