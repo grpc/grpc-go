@@ -300,7 +300,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   protected void onConnectionError(ChannelHandlerContext ctx, Throwable cause,
       Http2Exception http2Ex) {
     logger.log(Level.FINE, "Caught a connection error", cause);
-    goAwayStatus(statusFromError(cause));
+    goAwayStatus(Utils.statusFromThrowable(cause));
     super.onConnectionError(ctx, cause, http2Ex);
   }
 
@@ -310,16 +310,11 @@ class NettyClientHandler extends AbstractNettyHandler {
     // Close the stream with a status that contains the cause.
     NettyClientStream stream = clientStream(connection().stream(http2Ex.streamId()));
     if (stream != null) {
-      stream.transportReportStatus(statusFromError(cause), false, new Metadata());
+      stream.transportReportStatus(Utils.statusFromThrowable(cause), false, new Metadata());
     }
 
     // Delegate to the base class to send a RST_STREAM.
     super.onStreamError(ctx, cause, http2Ex);
-  }
-
-  private Status statusFromError(Throwable cause) {
-    return cause instanceof Http2Exception ? Status.INTERNAL.withCause(cause)
-        : Status.fromThrowable(cause);
   }
 
   @Override

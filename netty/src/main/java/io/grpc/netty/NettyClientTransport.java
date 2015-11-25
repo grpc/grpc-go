@@ -127,7 +127,7 @@ class NettyClientTransport implements ClientTransport {
       public void operationComplete(ChannelFuture future) throws Exception {
         if (!future.isSuccess()) {
           // Stream creation failed. Close the stream if not already closed.
-          stream.transportReportStatus(Status.fromThrowable(future.cause()), true,
+          stream.transportReportStatus(Utils.statusFromThrowable(future.cause()), true,
                   new Metadata());
         }
       }
@@ -184,7 +184,7 @@ class NettyClientTransport implements ClientTransport {
         if (!future.isSuccess()) {
           // Need to notify of this failure, because handler.connectionError() is not guaranteed to
           // have seen this cause.
-          notifyTerminated(Status.fromThrowable(future.cause()));
+          notifyTerminated(Utils.statusFromThrowable(future.cause()));
         }
       }
     });

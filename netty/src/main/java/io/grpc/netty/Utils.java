@@ -40,17 +40,20 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.grpc.Metadata;
+import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.internal.TransportFrameUtil;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
+import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -163,6 +166,20 @@ class Utils {
     }
 
     return http2Headers;
+  }
+
+  public static Status statusFromThrowable(Throwable t) {
+    Status s = Status.fromThrowable(t);
+    if (s.getCode() != Status.Code.UNKNOWN) {
+      return s;
+    }
+    if (t instanceof IOException) {
+      return Status.UNAVAILABLE.withCause(t);
+    }
+    if (t instanceof Http2Exception) {
+      return Status.INTERNAL.withCause(t);
+    }
+    return s;
   }
 
   private static class DefaultEventLoopGroupResource implements Resource<EventLoopGroup> {
