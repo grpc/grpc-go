@@ -287,7 +287,7 @@ public class AbstractClientStreamTest {
   /**
    * No-op base class for testing.
    */
-  private static class BaseClientStreamListener implements ClientStreamListener {
+  static class BaseClientStreamListener implements ClientStreamListener {
     @Override
     public void messageRead(InputStream message) {}
 

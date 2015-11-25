@@ -37,9 +37,12 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
-import static org.mockito.Mockito.any;
+import static org.mockito.Matchers.isA;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
@@ -64,6 +67,7 @@ import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
+import io.grpc.internal.ClientCallImpl.StreamCreationTask;
 
 import org.junit.After;
 import org.junit.Before;
@@ -101,6 +105,16 @@ public class ClientCallImplTest {
       Executors.newScheduledThreadPool(0);
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance();
+  private final MethodDescriptor<Void, Void> method = MethodDescriptor.create(
+      MethodType.UNARY,
+      "service/method",
+      new TestMarshaller<Void>(),
+      new TestMarshaller<Void>());
+
+  @Mock private ClientStreamListener streamListener;
+  @Mock private ClientTransport clientTransport;
+  @Mock private DelayedStream delayedStream;
+  @Captor private ArgumentCaptor<Status> statusCaptor;
 
   @Mock
   private ClientTransport transport;
@@ -121,6 +135,7 @@ public class ClientCallImplTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+
     decompressorRegistry.register(new Codec.Gzip(), true);
   }
 
@@ -131,11 +146,20 @@ public class ClientCallImplTest {
 
   @Test
   public void advertisedEncodingsAreSent() {
+    final ClientTransport transport = mock(ClientTransport.class);
+    final ClientStream stream = mock(ClientStream.class);
+    ClientTransportProvider provider = new ClientTransportProvider() {
+      @Override
+      public ListenableFuture<ClientTransport> get(CallOptions callOptions) {
+        return Futures.immediateFuture(transport);
+      }
+    };
+
     when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
         any(ClientStreamListener.class))).thenReturn(stream);
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
         provider,
@@ -146,7 +170,7 @@ public class ClientCallImplTest {
 
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
     verify(transport).newStream(
-        eq(DESCRIPTOR), metadataCaptor.capture(), isA(ClientStreamListener.class));
+        eq(method), metadataCaptor.capture(), isA(ClientStreamListener.class));
     Metadata actual = metadataCaptor.getValue();
 
     Set<String> acceptedEncodings =
@@ -422,6 +446,56 @@ public class ClientCallImplTest {
     } catch (IllegalStateException ise) {
       // expected
     }
+  }
+
+  @Test
+  public void streamCreationTask_failure() {
+    StreamCreationTask task = new StreamCreationTask(
+        delayedStream, new Metadata(), method, CallOptions.DEFAULT, streamListener);
+
+    task.onFailure(Status.CANCELLED.asException());
+
+    verify(delayedStream).maybeClosePrematurely(statusCaptor.capture());
+    assertEquals(Status.Code.CANCELLED, statusCaptor.getValue().getCode());
+  }
+
+  @Test
+  public void streamCreationTask_transportShutdown() {
+    StreamCreationTask task = new StreamCreationTask(
+        delayedStream, new Metadata(), method, CallOptions.DEFAULT, streamListener);
+
+    // null means no transport available
+    task.onSuccess(null);
+
+    verify(delayedStream).maybeClosePrematurely(statusCaptor.capture());
+    assertEquals(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
+  }
+
+  @Test
+  public void streamCreationTask_deadlineExceeded() {
+    Metadata headers = new Metadata();
+    headers.put(GrpcUtil.TIMEOUT_KEY, 1L);
+    CallOptions callOptions = CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime() - 1);
+    StreamCreationTask task =
+        new StreamCreationTask(delayedStream, headers, method, callOptions, streamListener);
+
+    task.onSuccess(clientTransport);
+
+    verify(delayedStream).maybeClosePrematurely(statusCaptor.capture());
+    assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
+  }
+
+  @Test
+  public void streamCreationTask_success() {
+    Metadata headers = new Metadata();
+    StreamCreationTask task =
+        new StreamCreationTask(delayedStream, headers, method, CallOptions.DEFAULT, streamListener);
+    when(clientTransport.newStream(method, headers, streamListener))
+        .thenReturn(DelayedStream.NOOP_CLIENT_STREAM);
+
+    task.onSuccess(clientTransport);
+
+    verify(clientTransport).newStream(method, headers, streamListener);
   }
 
   private static class TestMarshaller<T> implements Marshaller<T> {
