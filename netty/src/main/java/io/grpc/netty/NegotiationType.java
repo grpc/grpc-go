@@ -31,9 +31,12 @@
 
 package io.grpc.netty;
 
+import io.grpc.ExperimentalApi;
+
 /**
  * Identifies the negotiation used for starting up HTTP/2.
  */
+@ExperimentalApi("Only used by experimental builders")
 public enum NegotiationType {
   /**
    * Uses TLS ALPN/NPN negotiation, assumes an SSL connection.

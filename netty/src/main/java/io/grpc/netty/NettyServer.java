@@ -59,7 +59,7 @@ import javax.annotation.Nullable;
 /**
  * Netty-based server implementation.
  */
-public class NettyServer implements Server {
+class NettyServer implements Server {
   private static final Logger log = Logger.getLogger(Server.class.getName());
 
   private final SocketAddress address;
