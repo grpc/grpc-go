@@ -125,9 +125,16 @@ class OkHttpClientStream extends Http2ClientStream {
     requestHeaders = null;
 
     if (pendingData != null) {
+      boolean flush = false;
       while (!pendingData.isEmpty()) {
         PendingData data = pendingData.poll();
-        outboundFlow.data(data.endOfStream, id, data.buffer, data.flush);
+        outboundFlow.data(data.endOfStream, id, data.buffer, false);
+        if (data.flush) {
+          flush = true;
+        }
+      }
+      if (flush) {
+        outboundFlow.flush();
       }
       pendingData = null;
     }

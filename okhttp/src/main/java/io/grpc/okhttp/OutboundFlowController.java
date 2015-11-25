@@ -160,7 +160,7 @@ class OutboundFlowController {
     }
   }
 
-  private void flush() {
+  void flush() {
     try {
       frameWriter.flush();
     } catch (IOException e) {
