@@ -257,6 +257,8 @@ public final class ManagedChannelImpl extends ManagedChannel {
         transportsCopy.addAll(transports.values());
       }
     }
+    loadBalancer.shutdown();
+    nameResolver.shutdown();
     for (TransportSet ts : transportsCopy) {
       ts.shutdown();
     }

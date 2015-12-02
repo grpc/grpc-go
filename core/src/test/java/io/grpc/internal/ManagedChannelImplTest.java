@@ -43,6 +43,7 @@ import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -55,6 +56,7 @@ import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.IntegerMarshaller;
+import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -63,6 +65,7 @@ import io.grpc.ResolvedServerInfo;
 import io.grpc.SimpleLoadBalancerFactory;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.TransportManager;
 
 import org.junit.After;
 import org.junit.Before;
@@ -105,6 +108,8 @@ public class ManagedChannelImplTest {
   private URI expectedUri;
   private final SocketAddress socketAddress = new SocketAddress() {};
   private final ResolvedServerInfo server = new ResolvedServerInfo(socketAddress, Attributes.EMPTY);
+  private SpyingLoadBalancerFactory loadBalancerFactory =
+      new SpyingLoadBalancerFactory(SimpleLoadBalancerFactory.getInstance());
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
@@ -127,7 +132,7 @@ public class ManagedChannelImplTest {
   private ManagedChannel createChannel(
       NameResolver.Factory nameResolverFactory, List<ClientInterceptor> interceptors) {
     return new ManagedChannelImpl(target, new FakeBackoffPolicyProvider(),
-        nameResolverFactory, NAME_RESOLVER_PARAMS, SimpleLoadBalancerFactory.getInstance(),
+        nameResolverFactory, NAME_RESOLVER_PARAMS, loadBalancerFactory,
         mockTransportFactory, executor, null, interceptors);
   }
 
@@ -167,8 +172,8 @@ public class ManagedChannelImplTest {
 
   @Test
   public void twoCallsAndGracefulShutdown() {
-    ManagedChannel channel = createChannel(
-        new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(true);
+    ManagedChannel channel = createChannel(nameResolverFactory, NO_INTERCEPTOR);
     verifyNoMoreInteractions(mockTransportFactory);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     verifyNoMoreInteractions(mockTransportFactory);
@@ -210,6 +215,10 @@ public class ManagedChannelImplTest {
     assertTrue(channel.isShutdown());
     assertFalse(channel.isTerminated());
     verify(mockTransport).shutdown();
+    assertEquals(1, nameResolverFactory.resolvers.size());
+    assertTrue(nameResolverFactory.resolvers.get(0).shutdown);
+    assertEquals(1, loadBalancerFactory.balancers.size());
+    verify(loadBalancerFactory.balancers.get(0)).shutdown();
 
     // Further calls should fail without going to the transport
     ClientCall<String, Integer> call3 = channel.newCall(method, CallOptions.DEFAULT);
@@ -340,7 +349,7 @@ public class ManagedChannelImplTest {
    * Verify that if one resolved address points to a bad server, the retry will use another address.
    */
   @Test
-  public void firstResoledServerIsBad() throws Exception {
+  public void firstResolvedServerIsBad() throws Exception {
     final SocketAddress goodAddress = new SocketAddress() {};
     final SocketAddress badAddress = new SocketAddress() {};
     final ResolvedServerInfo goodServer = new ResolvedServerInfo(goodAddress, Attributes.EMPTY);
@@ -430,6 +439,7 @@ public class ManagedChannelImplTest {
 
     private class FakeNameResolver extends NameResolver {
       Listener listener;
+      boolean shutdown;
 
       @Override public String getServiceAuthority() {
         return expectedUri.getAuthority();
@@ -446,7 +456,9 @@ public class ManagedChannelImplTest {
         listener.onUpdate(servers, Attributes.EMPTY);
       }
 
-      @Override public void shutdown() {}
+      @Override public void shutdown() {
+        shutdown = true;
+      }
     }
   }
 
@@ -470,6 +482,22 @@ public class ManagedChannelImplTest {
 
         @Override public void shutdown() {}
       };
+    }
+  }
+
+  private class SpyingLoadBalancerFactory extends LoadBalancer.Factory {
+    private final LoadBalancer.Factory delegate;
+    private final List<LoadBalancer> balancers = new ArrayList<LoadBalancer>();
+
+    private SpyingLoadBalancerFactory(LoadBalancer.Factory delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public LoadBalancer newLoadBalancer(String serviceName, TransportManager tm) {
+      LoadBalancer lb = spy(delegate.newLoadBalancer(serviceName, tm));
+      balancers.add(lb);
+      return lb;
     }
   }
 }
