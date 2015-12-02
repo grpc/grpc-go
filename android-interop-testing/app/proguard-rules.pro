@@ -11,3 +11,7 @@
 
 -dontwarn com.google.common.**
 -dontwarn okio.**
+
+# Need to create channel through service provider.
+-keepnames class io.grpc.ManagedChannelProvider
+-keep class io.grpc.okhttp.OkHttpChannelProvider

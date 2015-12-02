@@ -49,6 +49,7 @@ import static junit.framework.Assert.fail;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
 import io.grpc.android.integrationtest.nano.Messages;
@@ -133,7 +134,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     this.testCase = testCase;
     this.listener = listener;
 
-    OkHttpChannelBuilder channelBuilder = OkHttpChannelBuilder.forAddress(host, port);
+    ManagedChannelBuilder channelBuilder = ManagedChannelBuilder.forAddress(host, port);
     if (serverHostOverride != null) {
       // Force the hostname to match the cert the server uses.
       channelBuilder.overrideAuthority(serverHostOverride);
@@ -146,13 +147,13 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
         } else {
           factory = getSslSocketFactory(testCa);
         }
-        channelBuilder.negotiationType(NegotiationType.TLS);
-        channelBuilder.sslSocketFactory(factory);
+        ((OkHttpChannelBuilder) channelBuilder).negotiationType(NegotiationType.TLS);
+        ((OkHttpChannelBuilder) channelBuilder).sslSocketFactory(factory);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
     } else {
-      channelBuilder.negotiationType(NegotiationType.PLAINTEXT);
+      channelBuilder.usePlaintext(true);
     }
 
     channel = channelBuilder.build();
