@@ -140,18 +140,19 @@ public class ClientCalls {
    * Returns the result of calling {@link Future#get()} interruptably on a task known not to throw a
    * checked exception.
    *
-   * <p>If interrupted, the interrupt is restored before throwing a {@code RuntimeException}.
+   * <p>If interrupted, the interrupt is restored before throwing an exception..
    *
-   * @throws RuntimeException if {@code get} is interrupted
-   * @throws CancellationException if {@code get} throws a {@code CancellationException}
-   * @throws StatusRuntimeException if {@code get} throws an {@code ExecutionException}
+   * @throws java.util.concurrent.CancellationException
+   *     if {@code get} throws a {@code CancellationException}.
+   * @throws io.grpc.StatusRuntimeException if {@code get} throws an {@link ExecutionException}
+   *     or an {@link InterruptedException}.
    */
   private static <V> V getUnchecked(Future<V> future) {
     try {
       return future.get();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new RuntimeException(e);
+      throw Status.CANCELLED.withCause(e).asRuntimeException();
     } catch (ExecutionException e) {
       throw Status.fromThrowable(e).asRuntimeException();
     }
