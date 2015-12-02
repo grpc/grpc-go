@@ -40,6 +40,7 @@ import android.os.Bundle;
 import android.util.Log;
 
 import java.io.InputStream;
+import java.lang.Throwable;
 
 
 /**
@@ -87,24 +88,30 @@ public class TesterInstrumentation extends Instrumentation {
       }
     }
 
-    new InteropTester(testCase, host, port, serverHostOverride, useTls, testCa,
-        androidSocketFactoryTls,
-        new InteropTester.TestListener() {
-          @Override
-          public void onPreTest() {
-          }
+    try {
+      new InteropTester(testCase, host, port, serverHostOverride, useTls, testCa,
+          androidSocketFactoryTls,
+          new InteropTester.TestListener() {
+            @Override
+            public void onPreTest() {
+            }
 
-          @Override
-          public void onPostTest(String result) {
-            Bundle bundle = new Bundle();
-            bundle.putString("grpc test result", result);
-            if (InteropTester.SUCCESS_MESSAGE.equals(result)) {
-              finish(0, bundle);
-            } else {
-              finish(1, bundle);
+            @Override
+            public void onPostTest(String result) {
+              Bundle bundle = new Bundle();
+              bundle.putString("grpc test result", result);
+              if (InteropTester.SUCCESS_MESSAGE.equals(result)) {
+                finish(0, bundle);
+              } else {
+                finish(1, bundle);
+              }
             }
           }
-        }
-    ).execute();
+      ).execute();
+    } catch (Throwable t) {
+      Bundle bundle = new Bundle();
+      bundle.putString("Exception encountered", t.toString());
+      finish(1, bundle);
+    }
   }
 }
