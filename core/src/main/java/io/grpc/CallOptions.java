@@ -55,10 +55,6 @@ public final class CallOptions {
   // unnamed arguments, which is undesirable.
   private Long deadlineNanoTime;
 
-
-  @Nullable
-  private Compressor compressor;
-
   @Nullable
   private String authority;
 
@@ -115,25 +111,6 @@ public final class CallOptions {
   }
 
   /**
-   * Returns the compressor, or {@code null} if none is set.
-   */
-  @Nullable
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
-  public Compressor getCompressor() {
-    return compressor;
-  }
-
-  /**
-   * Use the desired compression.
-   */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
-  public CallOptions withCompressor(@Nullable Compressor compressor) {
-    CallOptions newOptions = new CallOptions(this);
-    newOptions.compressor = compressor;
-    return newOptions;
-  }
-
-  /**
    * Returns a new {@code CallOptions} with a request key for affinity-based routing.
    */
   @ExperimentalApi
@@ -175,7 +152,6 @@ public final class CallOptions {
    */
   private CallOptions(CallOptions other) {
     deadlineNanoTime = other.deadlineNanoTime;
-    compressor = other.compressor;
     authority = other.authority;
     requestKey = other.requestKey;
   }
@@ -188,7 +164,6 @@ public final class CallOptions {
       long remainingNanos = deadlineNanoTime - System.nanoTime();
       toStringHelper.addValue(remainingNanos + " ns from now");
     }
-    toStringHelper.add("compressor", compressor);
     toStringHelper.add("authority", authority);
 
     return toStringHelper.toString();

@@ -37,6 +37,7 @@ import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Splitter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.grpc.Metadata;
@@ -155,6 +156,8 @@ public final class GrpcUtil {
    */
   public static final Set<Status.Code> CANCEL_REASONS =
           EnumSet.of(CANCELLED, DEADLINE_EXCEEDED, Status.Code.INTERNAL, Status.Code.UNKNOWN);
+
+  public static final Splitter ACCEPT_ENCODING_SPLITER = Splitter.on(',').trimResults();
 
   /**
    * Maps HTTP error response status codes to transport codes.

@@ -31,8 +31,11 @@
 
 package io.grpc.internal;
 
+import static com.google.common.collect.Iterables.addAll;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
 import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
+import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
@@ -50,6 +53,7 @@ import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Codec;
 import io.grpc.Compressor;
+import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
@@ -58,6 +62,8 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 
 import java.io.InputStream;
+import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -82,7 +88,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   private final ClientTransportProvider clientTransportProvider;
   private String userAgent;
   private ScheduledExecutorService deadlineCancellationExecutor;
+  private Set<String> knownMessageEncodingRegistry;
   private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
+  private CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
 
   ClientCallImpl(MethodDescriptor<ReqT, RespT> method, Executor executor,
       CallOptions callOptions, ClientTransportProvider clientTransportProvider,
@@ -129,9 +137,24 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     return this;
   }
 
+  ClientCallImpl<ReqT, RespT> setCompressorRegistry(CompressorRegistry compressorRegistry) {
+    this.compressorRegistry = compressorRegistry;
+    return this;
+  }
+
+  /**
+   * Sets encodings known to be supported by the server.  This set MUST be thread safe, and MAY be
+   * modified by any code as it learns about new supported encodings.
+   */
+  ClientCallImpl<ReqT, RespT> setKnownMessageEncodingRegistry(Set<String> knownMessageEncodings) {
+    this.knownMessageEncodingRegistry = knownMessageEncodings;
+    return this;
+  }
+
   @VisibleForTesting
   static void prepareHeaders(Metadata headers, CallOptions callOptions, String userAgent,
-      DecompressorRegistry decompressorRegistry) {
+      Set<String> knownMessageEncodings, DecompressorRegistry decompressorRegistry,
+      CompressorRegistry compressorRegistry) {
     // Hack to propagate authority.  This should be properly pass to the transport.newStream
     // somehow.
     headers.removeAll(AUTHORITY_KEY);
@@ -146,16 +169,19 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
 
     headers.removeAll(MESSAGE_ENCODING_KEY);
-    Compressor compressor = callOptions.getCompressor();
-    if (compressor != null && compressor != Codec.Identity.NONE) {
-      headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
+    for (String messageEncoding : knownMessageEncodings) {
+      Compressor compressor = compressorRegistry.lookupCompressor(messageEncoding);
+      if (compressor != null && compressor != Codec.Identity.NONE) {
+        headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
+        break;
+      }
     }
 
-    headers.removeAll(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY);
+    headers.removeAll(MESSAGE_ACCEPT_ENCODING_KEY);
     if (!decompressorRegistry.getAdvertisedMessageEncodings().isEmpty()) {
       String acceptEncoding =
           Joiner.on(',').join(decompressorRegistry.getAdvertisedMessageEncodings());
-      headers.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, acceptEncoding);
+      headers.put(MESSAGE_ACCEPT_ENCODING_KEY, acceptEncoding);
     }
   }
 
@@ -175,7 +201,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       });
       return;
     }
-    prepareHeaders(headers, callOptions, userAgent, decompressorRegistry);
+    prepareHeaders(headers, callOptions, userAgent,
+        knownMessageEncodingRegistry, decompressorRegistry, compressorRegistry);
 
     ClientStreamListener listener = new ClientStreamListenerImpl(observer);
     ListenableFuture<ClientTransport> transportFuture = clientTransportProvider.get(callOptions);
@@ -203,9 +230,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
 
     stream.setDecompressionRegistry(decompressorRegistry);
-    Compressor compressor = callOptions.getCompressor();
-    if (compressor != null) {
-      stream.setCompressor(compressor);
+    stream.setCompressionRegistry(compressorRegistry);
+    if (headers.containsKey(MESSAGE_ENCODING_KEY)) {
+      stream.pickCompressor(Collections.singleton(headers.get(MESSAGE_ENCODING_KEY)));
       // TODO(carl-mastrangelo): move this to ClientCall.
       stream.setMessageCompression(true);
     }
@@ -337,6 +364,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
     @Override
     public void headersRead(final Metadata headers) {
+      if (headers.containsKey(MESSAGE_ACCEPT_ENCODING_KEY)) {
+        // TODO(carl-mastrangelo): after the first time we contact the server, it almost certainly
+        // won't change.  It might be possible to recover performance by not adding to the known
+        // encodings if it isn't empty.
+        String serverAcceptEncodings = headers.get(MESSAGE_ACCEPT_ENCODING_KEY);
+        addAll(knownMessageEncodingRegistry, ACCEPT_ENCODING_SPLITER.split(serverAcceptEncodings));
+      }
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public final void runInContext() {

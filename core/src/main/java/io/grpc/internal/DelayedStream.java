@@ -34,6 +34,7 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkState;
 
 import io.grpc.Compressor;
+import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -61,6 +62,9 @@ class DelayedStream implements ClientStream {
 
   @GuardedBy("this")
   private Compressor compressor;
+
+  @GuardedBy("this")
+  private Iterable<String> compressionMessageEncodings;
   // Can be either a Decompressor or a String
   @GuardedBy("this")
   private Object decompressor;
@@ -75,6 +79,8 @@ class DelayedStream implements ClientStream {
   private int pendingFlowControlRequests;
   @GuardedBy("this")
   private boolean pendingFlush;
+  @GuardedBy("lock")
+  private CompressorRegistry compressionRegistry;
 
   static final class PendingMessage {
     final InputStream message;
@@ -104,11 +110,14 @@ class DelayedStream implements ClientStream {
       }
       checkState(realStream == null, "Stream already created: %s", realStream);
       realStream = stream;
-      if (compressor != null) {
-        realStream.setCompressor(compressor);
+      if (compressionMessageEncodings != null) {
+        realStream.pickCompressor(compressionMessageEncodings);
       }
       if (this.decompressionRegistry != null) {
         realStream.setDecompressionRegistry(this.decompressionRegistry);
+      }
+      if (this.compressionRegistry != null) {
+        realStream.setCompressionRegistry(this.compressionRegistry);
       }
       for (PendingMessage message : pendingMessages) {
         realStream.setMessageCompression(message.shouldBeCompressed);
@@ -206,11 +215,21 @@ class DelayedStream implements ClientStream {
   }
 
   @Override
-  public void setCompressor(Compressor c) {
+  public void pickCompressor(Iterable<String> messageEncodings) {
     synchronized (this) {
-      compressor = c;
+      compressionMessageEncodings = messageEncodings;
       if (realStream != null) {
-        realStream.setCompressor(c);
+        realStream.pickCompressor(messageEncodings);
+      }
+    }
+  }
+
+  @Override
+  public void setCompressionRegistry(CompressorRegistry registry) {
+    synchronized (this) {
+      this.compressionRegistry = registry;
+      if (realStream != null) {
+        realStream.setCompressionRegistry(registry);
       }
     }
   }

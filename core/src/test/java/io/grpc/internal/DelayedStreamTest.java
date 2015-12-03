@@ -36,12 +36,9 @@ import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import io.grpc.Codec;
+import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
-import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
-import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 
 import org.junit.Before;
@@ -71,10 +68,6 @@ public class DelayedStreamTest {
   @Mock private ClientStream realStream;
   @Captor private ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
   private DelayedStream stream;
-  private Metadata headers = new Metadata();
-
-  private MethodDescriptor<Integer, Integer> method = MethodDescriptor.create(
-      MethodType.UNARY, "service/method", new IntegerMarshaller(), new IntegerMarshaller());
 
   @Before
   public void setUp() {
@@ -85,10 +78,10 @@ public class DelayedStreamTest {
 
   @Test
   public void setStream_sendsAllMessages() {
-    stream.setCompressor(Codec.Identity.NONE);
-
-    DecompressorRegistry registry = DecompressorRegistry.newEmptyInstance();
-    stream.setDecompressionRegistry(registry);
+    DecompressorRegistry decompressors = DecompressorRegistry.newEmptyInstance();
+    CompressorRegistry compressors = CompressorRegistry.newEmptyInstance();
+    stream.setDecompressionRegistry(decompressors);
+    stream.setCompressionRegistry(compressors);
 
     stream.setMessageCompression(true);
     InputStream message = new ByteArrayInputStream(new byte[]{'a'});
@@ -98,9 +91,8 @@ public class DelayedStreamTest {
 
     stream.setStream(realStream);
 
-
-    verify(realStream).setCompressor(Codec.Identity.NONE);
-    verify(realStream).setDecompressionRegistry(registry);
+    verify(realStream).setDecompressionRegistry(decompressors);
+    verify(realStream).setCompressionRegistry(compressors);
 
     // Verify that the order was correct, even though they should be interleaved with the
     // writeMessage calls

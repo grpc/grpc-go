@@ -31,7 +31,7 @@
 
 package io.grpc.internal;
 
-import io.grpc.Compressor;
+import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 
 import java.io.InputStream;
@@ -80,10 +80,13 @@ public interface Stream {
   boolean isReady();
 
   /**
-   * Sets the default message encoder for messages on this stream.
-   * @param c the compressor
+   * Picks a compressor for for this stream.  If no message encodings are acceptable, compression is
+   *     not used.
+   *
+   * @param messageEncodings a group of message encoding names that the remote endpoint is known
+   *     to support.
    */
-  void setCompressor(Compressor c);
+  void pickCompressor(Iterable<String> messageEncodings);
 
   /**
    * Enables per-message compression, if an encoding type has been negotiated.  If no message
@@ -92,7 +95,7 @@ public interface Stream {
   void setMessageCompression(boolean enable);
 
   /**
-   * Sets the decompressor registry to use when resolving {@link #setDecompressor(String)}.  If
+   * Sets the decompressor registry to use when resolving {@code #setDecompressor(String)}.  If
    * unset, the default DecompressorRegistry will be used.
    *
    * @see DecompressorRegistry#getDefaultInstance()
@@ -100,4 +103,14 @@ public interface Stream {
    * @param registry the decompressors to use.
    */
   void setDecompressionRegistry(DecompressorRegistry registry);
+
+  /**
+   * Sets the compressor registry to use when resolving {@link #pickCompressor}.  If
+   * unset, the default CompressorRegistry will be used.
+   *
+   * @see CompressorRegistry#getDefaultInstance()
+   *
+   * @param registry the compressors to use.
+   */
+  void setCompressionRegistry(CompressorRegistry registry);
 }

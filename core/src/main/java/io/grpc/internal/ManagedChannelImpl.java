@@ -44,11 +44,9 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
-import io.grpc.Codec;
-import io.grpc.Compressor;
+import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.ExperimentalApi;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
 import io.grpc.MethodDescriptor;
@@ -62,9 +60,12 @@ import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -95,8 +96,21 @@ public final class ManagedChannelImpl extends ManagedChannel {
   private final String userAgent;
   private final Object lock = new Object();
 
+  /* Compression related */
+  /**
+   *  When a client connects to a server, it does not know what encodings are supported.  This set
+   *  is the union of all accept-encoding headers the server has sent.  It is used to pick an
+   *  encoding when contacting the server again.  One problem with the gRPC protocol is that if
+   *  there is only one RPC made (perhaps streaming, or otherwise long lived) an encoding will not
+   *  be selected.  To combat this you can preflight a request to the server to fill in the mapping
+   *  for the next one.  A better solution is if you have prior knowledge that the server supports
+   *  an encoding, and fill this structure before the request.
+   */
+  private final Set<String> knownAcceptEncodingRegistry =
+      Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance();
+  private final CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
 
   /**
    * Executor that runs deadline timers for requests.
@@ -125,8 +139,6 @@ public final class ManagedChannelImpl extends ManagedChannel {
   private boolean shutdown;
   @GuardedBy("lock")
   private boolean terminated;
-
-  private volatile Compressor defaultCompressor;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
@@ -220,21 +232,6 @@ public final class ManagedChannelImpl extends ManagedChannel {
         target, uriSyntaxErrors.length() > 0 ? " (" + uriSyntaxErrors.toString() + ")" : ""));
   }
 
-
-  /**
-   * Sets the default compression method for this Channel.  By default, new calls will use the
-   * provided compressor.  Each individual Call can override this by specifying it in CallOptions.
-   * If the remote host does not support the message encoding, the call will likely break.  There
-   * is currently no provided way to discover what message encodings the remote host supports.
-   * @param c The compressor to use.  If {@code null} no compression will by performed.  This is
-   *          equivalent to using {@code Codec.Identity.NONE}.  If not null, the Compressor must be
-   *          threadsafe.
-   */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
-  public void setDefaultCompressor(@Nullable Compressor c) {
-    defaultCompressor = (c != null) ? c : Codec.Identity.NONE;
-  }
-
   /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are immediately
    * cancelled.
@@ -311,10 +308,6 @@ public final class ManagedChannelImpl extends ManagedChannel {
   @Override
   public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
       CallOptions callOptions) {
-    boolean hasCodecOverride = callOptions.getCompressor() != null;
-    if (!hasCodecOverride && defaultCompressor != Codec.Identity.NONE) {
-      callOptions = callOptions.withCompressor(defaultCompressor);
-    }
     return interceptorChannel.newCall(method, callOptions);
   }
 
@@ -334,7 +327,9 @@ public final class ManagedChannelImpl extends ManagedChannel {
           transportProvider,
           scheduledExecutor)
               .setUserAgent(userAgent)
-              .setDecompressorRegistry(decompressorRegistry);
+              .setDecompressorRegistry(decompressorRegistry)
+              .setCompressorRegistry(compressorRegistry)
+              .setKnownMessageEncodingRegistry(knownAcceptEncodingRegistry);
     }
 
     @Override

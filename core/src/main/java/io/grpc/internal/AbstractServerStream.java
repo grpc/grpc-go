@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
 
 import com.google.common.base.Preconditions;
 
@@ -146,6 +147,10 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
         abortStream(status, true);
         return;
       }
+    }
+    if (headers.containsKey(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY)) {
+      pickCompressor(
+          ACCEPT_ENCODING_SPLITER.split(headers.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY)));
     }
 
     inboundPhase(Phase.MESSAGE);

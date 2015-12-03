@@ -54,6 +54,7 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer;
@@ -194,6 +195,7 @@ public class ManagedChannelImplTest {
     verify(mockTransport, timeout(1000))
         .newStream(same(method), same(headers), streamListenerCaptor.capture());
     verify(mockStream).setDecompressionRegistry(isA(DecompressorRegistry.class));
+    verify(mockStream).setCompressionRegistry(isA(CompressorRegistry.class));
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
 
     // Second call

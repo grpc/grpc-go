@@ -35,8 +35,6 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
-import io.grpc.Compressor;
-import io.grpc.ExperimentalApi;
 
 import java.util.concurrent.TimeUnit;
 
@@ -123,14 +121,6 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    */
   public final S withChannel(Channel newChannel) {
     return build(newChannel, callOptions);
-  }
-
-  /**
-   * Returns a new stub that uses the given compressor.
-   */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
-  public final S withCompressor(Compressor c) {
-    return build(channel, callOptions.withCompressor(c));
   }
 
   /**

@@ -31,7 +31,7 @@
 
 package io.grpc.inprocess;
 
-import io.grpc.Compressor;
+import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -216,12 +216,6 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       }
 
       @Override
-      public void setCompressor(Compressor c) {
-        // I don't *think* there is any good reason to do this, so just throw away the compressor
-        // intentional nop
-      }
-
-      @Override
       public void setDecompressionRegistry(DecompressorRegistry registry) {}
 
       @Override
@@ -334,6 +328,12 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       public void setMessageCompression(boolean enable) {
         // noop
       }
+
+      @Override
+      public void pickCompressor(Iterable<String> messageEncodings) {}
+
+      @Override
+      public void setCompressionRegistry(CompressorRegistry registry) {}
     }
 
     private class InProcessClientStream implements ClientStream {
@@ -441,17 +441,16 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       }
 
       @Override
-      public void setCompressor(Compressor c) {
-        // nop
-      }
-
-      @Override
       public void setDecompressionRegistry(DecompressorRegistry registry) {}
 
       @Override
-      public void setMessageCompression(boolean enable) {
-        // noop
-      }
+      public void setMessageCompression(boolean enable) {}
+
+      @Override
+      public void pickCompressor(Iterable<String> messageEncodings) {}
+
+      @Override
+      public void setCompressionRegistry(CompressorRegistry registry) {}
     }
   }
 }

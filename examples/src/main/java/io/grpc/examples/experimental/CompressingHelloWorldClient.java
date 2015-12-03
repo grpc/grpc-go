@@ -31,7 +31,6 @@
 
 package io.grpc.examples.experimental;
 
-import io.grpc.Codec;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.examples.helloworld.GreeterGrpc;
@@ -61,7 +60,7 @@ public class CompressingHelloWorldClient {
     channel = ManagedChannelBuilder.forAddress(host, port)
         .usePlaintext(true)
         .build();
-    blockingStub = GreeterGrpc.newBlockingStub(channel).withCompressor(new Codec.Gzip());
+    blockingStub = GreeterGrpc.newBlockingStub(channel);
   }
 
   public void shutdown() throws InterruptedException {

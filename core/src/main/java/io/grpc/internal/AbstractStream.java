@@ -40,6 +40,7 @@ import com.google.common.base.MoreObjects;
 
 import io.grpc.Codec;
 import io.grpc.Compressor;
+import io.grpc.CompressorRegistry;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 
@@ -102,6 +103,8 @@ public abstract class AbstractStream<IdT> implements Stream {
   private final Object onReadyLock = new Object();
   private volatile DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance();
+  private volatile CompressorRegistry compressorRegistry =
+      CompressorRegistry.getDefaultInstance();
 
   @VisibleForTesting
   class FramerSink implements MessageFramer.Sink {
@@ -303,26 +306,17 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   /**
-   * Set the decompressor for this stream.  This may be called at most once.  Typically this is set
-   * after the message encoding header is provided by the remote host, but before any messages are
-   * received.
-   */
-  protected final void setDecompressor(Decompressor d) {
-    deframer.setDecompressor(d);
-  }
-
-  /**
    * Looks up the decompressor by its message encoding name, and sets it for this stream.
    * Decompressors are registered with {@link DecompressorRegistry#register}.
    *
    * @param messageEncoding the name of the encoding provided by the remote host
    * @throws IllegalArgumentException if the provided message encoding cannot be found.
    */
-  public final void setDecompressor(String messageEncoding) {
+  protected final void setDecompressor(String messageEncoding) {
     Decompressor d = decompressorRegistry.lookupDecompressor(messageEncoding);
     checkArgument(d != null,
         "Unable to find decompressor for message encoding %s", messageEncoding);
-    setDecompressor(d);
+    deframer.setDecompressor(d);
   }
 
   @Override
@@ -331,10 +325,21 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   @Override
-  public void setCompressor(Compressor c) {
-    // TODO(carl-mastrangelo): check that headers haven't already been sent.  I can't find where
-    // the client stream changes outbound phase correctly, so I am ignoring it.
-    framer.setCompressor(c);
+  public final void setCompressionRegistry(CompressorRegistry registry) {
+    compressorRegistry = checkNotNull(registry);
+  }
+
+  @Override
+  public final void pickCompressor(Iterable<String> messageEncodings) {
+    for (String messageEncoding : messageEncodings) {
+      Compressor c = compressorRegistry.lookupCompressor(messageEncoding);
+      if (c != null) {
+        // TODO(carl-mastrangelo): check that headers haven't already been sent.  I can't find where
+        // the client stream changes outbound phase correctly, so I am ignoring it.
+        framer.setCompressor(c);
+        break;
+      }
+    }
   }
 
   /**

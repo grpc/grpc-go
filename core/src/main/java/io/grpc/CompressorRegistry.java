@@ -29,51 +29,45 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
-import io.grpc.CompressorRegistry;
-import io.grpc.DecompressorRegistry;
-import io.grpc.Status;
+import com.google.common.annotations.VisibleForTesting;
 
-import java.io.InputStream;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * An implementation of {@link ClientStream} that silently does nothing for the operations.
+ * Encloses classes related to the compression and decompression of messages.
  */
-public class NoopClientStream implements ClientStream {
-  public static NoopClientStream INSTANCE = new NoopClientStream();
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
+@ThreadSafe
+public final class CompressorRegistry {
+  private static final CompressorRegistry DEFAULT_INSTANCE = new CompressorRegistry(
+      new Codec.Gzip());
 
-  @Override
-  public void request(int numMessages) {}
-
-  @Override
-  public void writeMessage(InputStream message) {}
-
-  @Override
-  public void flush() {}
-
-  @Override
-  public boolean isReady() {
-    return false;
+  public static CompressorRegistry getDefaultInstance() {
+    return DEFAULT_INSTANCE;
   }
 
-  @Override
-  public void cancel(Status status) {}
-
-  @Override
-  public void halfClose() {}
-
-  @Override
-  public void setDecompressionRegistry(DecompressorRegistry registry) {}
-
-  @Override
-  public void setMessageCompression(boolean enable) {
-    // noop
+  public static CompressorRegistry newEmptyInstance() {
+    return new CompressorRegistry();
   }
 
-  @Override
-  public void pickCompressor(Iterable<String> messageEncodings) {}
+  private final ConcurrentMap<String, Compressor> compressors;
 
-  @Override
-  public void setCompressionRegistry(CompressorRegistry registry) {}
+  @VisibleForTesting
+  CompressorRegistry(Compressor ...cs) {
+    compressors = new ConcurrentHashMap<String, Compressor>();
+    for (Compressor c : cs) {
+      compressors.put(c.getMessageEncoding(), c);
+    }
+  }
+
+  @Nullable
+  public Compressor lookupCompressor(String compressorName) {
+    return compressors.get(compressorName);
+  }
 }
