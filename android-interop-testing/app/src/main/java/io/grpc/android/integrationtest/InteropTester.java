@@ -134,7 +134,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     this.testCase = testCase;
     this.listener = listener;
 
-    ManagedChannelBuilder channelBuilder = ManagedChannelBuilder.forAddress(host, port);
+    ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port);
     if (serverHostOverride != null) {
       // Force the hostname to match the cert the server uses.
       channelBuilder.overrideAuthority(serverHostOverride);
