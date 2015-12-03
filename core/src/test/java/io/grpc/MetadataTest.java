@@ -310,7 +310,7 @@ public class MetadataTest {
   @Test
   public void invalidKeyName() {
     try {
-      Key<Integer> k = Key.of("io.grpc/key1", Metadata.INTEGER_MARSHALLER);
+      Key.of("io.grpc/key1", Metadata.INTEGER_MARSHALLER);
       fail("Should have thrown");
     } catch (IllegalArgumentException e) {
       assertEquals("Invalid character '/' in key name 'io.grpc/key1'", e.getMessage());
