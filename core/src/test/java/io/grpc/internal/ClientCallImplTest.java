@@ -414,21 +414,9 @@ public class ClientCallImplTest {
 
     final SettableFuture<Status> statusFuture = SettableFuture.create();
     call.start(new ClientCall.Listener<Void>() {
-      boolean headersCalled;
-      @Override
-      public void onHeaders(Metadata headers) {
-        headersCalled = true;
-      }
-
       @Override
       public void onClose(Status status, Metadata trailers) {
-        if (headersCalled) {
-          statusFuture.set(status);
-        } else {
-          statusFuture.setException(
-              new AssertionError("Headers must be called before close"));
-        }
-
+        statusFuture.set(status);
       }
     }, new Metadata());
 

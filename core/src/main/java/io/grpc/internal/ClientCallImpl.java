@@ -169,9 +169,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public void runInContext() {
-          // Must call onHeaders per API contract
-          observer.onHeaders(new Metadata());
-          // then notify of immediate closure.
           observer.onClose(Status.CANCELLED.withCause(context.cause()), new Metadata());
         }
       });

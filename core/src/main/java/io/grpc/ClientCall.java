@@ -75,8 +75,6 @@ public abstract class ClientCall<ReqT, RespT> {
 
     /**
      * The response headers have been received. Headers always precede messages.
-     * This method is always called, if no headers were received then an empty {@link Metadata}
-     * is passed.
      *
      * @param headers containing metadata sent by the server at the start of the response.
      */
