@@ -37,12 +37,15 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@RunWith(JUnit4.class)
 public class SerializeReentrantCallsDirectExecutorTest {
 
   SerializeReentrantCallsDirectExecutor executor;
