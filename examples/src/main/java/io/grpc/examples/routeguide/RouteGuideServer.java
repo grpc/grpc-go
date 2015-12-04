@@ -208,7 +208,7 @@ public class RouteGuideServer {
 
         @Override
         public void onError(Throwable t) {
-          logger.log(Level.WARNING, "Encountered error in recordRoute", t);
+          logger.log(Level.WARNING, "recordRoute cancelled");
         }
 
         @Override
@@ -247,7 +247,7 @@ public class RouteGuideServer {
 
         @Override
         public void onError(Throwable t) {
-          logger.log(Level.WARNING, "Encountered error in routeChat", t);
+          logger.log(Level.WARNING, "routeChat cancelled");
         }
 
         @Override

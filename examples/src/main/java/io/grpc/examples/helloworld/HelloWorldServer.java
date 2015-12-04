@@ -35,6 +35,7 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
 
+import java.io.IOException;
 import java.util.logging.Logger;
 
 /**
@@ -47,7 +48,7 @@ public class HelloWorldServer {
   private int port = 50051;
   private Server server;
 
-  private void start() throws Exception {
+  private void start() throws IOException {
     server = ServerBuilder.forPort(port)
         .addService(GreeterGrpc.bindService(new GreeterImpl()))
         .build()
@@ -82,7 +83,7 @@ public class HelloWorldServer {
   /**
    * Main launches the server from the command line.
    */
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) throws IOException, InterruptedException {
     final HelloWorldServer server = new HelloWorldServer();
     server.start();
     server.blockUntilShutdown();

@@ -39,6 +39,7 @@ import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.examples.helloworld.HelloResponse;
 import io.grpc.stub.StreamObserver;
 
+import java.io.IOException;
 import java.util.logging.Logger;
 
 /**
@@ -52,7 +53,7 @@ public class CustomHeaderServer {
   private static final int port = 50051;
   private Server server;
 
-  private void start() throws Exception {
+  private void start() throws IOException {
     server = ServerBuilder.forPort(port)
         .addService(ServerInterceptors.intercept(
             GreeterGrpc.bindService(new GreeterImpl()), new HeaderServerInterceptor()))
@@ -88,7 +89,7 @@ public class CustomHeaderServer {
   /**
    * Main launches the server from the command line.
    */
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) throws IOException, InterruptedException {
     final CustomHeaderServer server = new CustomHeaderServer();
     server.start();
     server.blockUntilShutdown();

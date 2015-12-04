@@ -36,6 +36,7 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.StatusRuntimeException;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.examples.helloworld.HelloResponse;
@@ -74,14 +75,16 @@ public class CustomHeaderClient {
    * A simple client method that like {@link io.grpc.examples.helloworld.HelloWorldClient}.
    */
   private void greet(String name) {
+    logger.info("Will try to greet " + name + " ...");
+    HelloRequest request = HelloRequest.newBuilder().setName(name).build();
+    HelloResponse response;
     try {
-      logger.info("Will try to greet " + name + " ...");
-      HelloRequest request = HelloRequest.newBuilder().setName(name).build();
-      HelloResponse response = blockingStub.sayHello(request);
-      logger.info("Greeting: " + response.getMessage());
-    } catch (RuntimeException e) {
-      logger.log(Level.WARNING, "RPC failed", e);
+      response = blockingStub.sayHello(request);
+    } catch (StatusRuntimeException e) {
+      logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
+      return;
     }
+    logger.info("Greeting: " + response.getMessage());
   }
 
   /**

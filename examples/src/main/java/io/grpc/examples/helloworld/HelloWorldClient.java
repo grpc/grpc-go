@@ -33,6 +33,7 @@ package io.grpc.examples.helloworld;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.StatusRuntimeException;
 
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -61,15 +62,16 @@ public class HelloWorldClient {
 
   /** Say hello to server. */
   public void greet(String name) {
+    logger.info("Will try to greet " + name + " ...");
+    HelloRequest request = HelloRequest.newBuilder().setName(name).build();
+    HelloResponse response;
     try {
-      logger.info("Will try to greet " + name + " ...");
-      HelloRequest request = HelloRequest.newBuilder().setName(name).build();
-      HelloResponse response = blockingStub.sayHello(request);
-      logger.info("Greeting: " + response.getMessage());
-    } catch (RuntimeException e) {
-      logger.log(Level.WARNING, "RPC failed", e);
+      response = blockingStub.sayHello(request);
+    } catch (StatusRuntimeException e) {
+      logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
       return;
     }
+    logger.info("Greeting: " + response.getMessage());
   }
 
   /**
