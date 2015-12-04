@@ -43,7 +43,6 @@ import io.grpc.Status;
 import java.io.InputStream;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.Executor;
 
 import javax.annotation.concurrent.GuardedBy;
 
@@ -56,8 +55,6 @@ import javax.annotation.concurrent.GuardedBy;
  * necessary.
  */
 class DelayedStream implements ClientStream {
-  private final Executor callExecutor;
-
   private final ClientStreamListener listener;
 
   private final Object lock = new Object();
@@ -93,11 +90,8 @@ class DelayedStream implements ClientStream {
     }
   }
 
-  DelayedStream(
-      ClientStreamListener listener,
-      Executor callExecutor) {
+  DelayedStream(ClientStreamListener listener) {
     this.listener = listener;
-    this.callExecutor = callExecutor;
   }
 
   /**
@@ -143,12 +137,7 @@ class DelayedStream implements ClientStream {
     synchronized (lock) {
       if (realStream == null) {
         realStream = NOOP_CLIENT_STREAM;
-        callExecutor.execute(new Runnable() {
-          @Override
-          public void run() {
-            listener.closed(reason, new Metadata());
-          }
-        });
+        listener.closed(reason, new Metadata());
       }
     }
   }

@@ -196,7 +196,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
     if (stream == null) {
       DelayedStream delayed;
-      stream = delayed = new DelayedStream(listener, callExecutor);
+      stream = delayed = new DelayedStream(listener);
       addListener(transportFuture,
           new StreamCreationTask(delayed, headers, method, callOptions, listener));
     }

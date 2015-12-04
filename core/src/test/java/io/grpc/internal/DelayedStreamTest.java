@@ -36,8 +36,6 @@ import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.google.common.util.concurrent.MoreExecutors;
-
 import io.grpc.Codec;
 import io.grpc.DecompressorRegistry;
 import io.grpc.IntegerMarshaller;
@@ -59,7 +57,6 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.util.concurrent.Executor;
 
 /**
  * Tests for {@link DelayedStream}.  Most of the state checking is enforced by
@@ -67,8 +64,6 @@ import java.util.concurrent.Executor;
  */
 @RunWith(JUnit4.class)
 public class DelayedStreamTest {
-  private static final Executor executor = MoreExecutors.directExecutor();
-
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
   @Mock private ClientStreamListener listener;
@@ -85,7 +80,7 @@ public class DelayedStreamTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
 
-    stream = new DelayedStream(listener, executor);
+    stream = new DelayedStream(listener);
   }
 
   @Test
