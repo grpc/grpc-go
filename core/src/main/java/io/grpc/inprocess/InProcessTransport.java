@@ -40,6 +40,7 @@ import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.NoopClientStream;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
@@ -451,42 +452,6 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       public void setMessageCompression(boolean enable) {
         // noop
       }
-    }
-
-  }
-
-  private static class NoopClientStream implements ClientStream {
-    @Override
-    public void request(int numMessages) {}
-
-    @Override
-    public void writeMessage(InputStream message) {}
-
-    @Override
-    public void flush() {}
-
-    @Override
-    public boolean isReady() {
-      return false;
-    }
-
-    @Override
-    public void cancel(Status status) {}
-
-    @Override
-    public void halfClose() {}
-
-    @Override
-    public void setCompressor(Compressor c) {
-      // very much a nop
-    }
-
-    @Override
-    public void setDecompressionRegistry(DecompressorRegistry registry) {}
-
-    @Override
-    public void setMessageCompression(boolean enable) {
-      // noop
     }
   }
 }

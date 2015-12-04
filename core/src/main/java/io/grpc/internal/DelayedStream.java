@@ -33,8 +33,6 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import io.grpc.Compressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
@@ -94,9 +92,9 @@ class DelayedStream implements ClientStream {
 
   /**
    * Creates a stream on a presumably usable transport. Must not be called if {@link
-   * cancelledPrematurely}, as there is no way to close {@code stream} without double-calling {@code
-   * listener}. Most callers of this method will need to acquire the intrinsic lock to check {@code
-   * cancelledPrematurely} and this method atomically.
+   * #cancelledPrematurely}, as there is no way to close {@code stream} without double-calling
+   * {@code listener}. Most callers of this method will need to acquire the intrinsic lock to check
+   * {@code cancelledPrematurely} and this method atomically.
    */
   void setStream(ClientStream stream) {
     synchronized (this) {
@@ -137,7 +135,7 @@ class DelayedStream implements ClientStream {
   void maybeClosePrematurely(final Status reason) {
     synchronized (this) {
       if (realStream == null) {
-        realStream = NOOP_CLIENT_STREAM;
+        realStream = NoopClientStream.INSTANCE;
         listener.closed(reason, new Metadata());
       }
     }
@@ -145,7 +143,7 @@ class DelayedStream implements ClientStream {
 
   public boolean cancelledPrematurely() {
     synchronized (this) {
-      return realStream == NOOP_CLIENT_STREAM;
+      return realStream == NoopClientStream.INSTANCE;
     }
   }
 
@@ -249,40 +247,4 @@ class DelayedStream implements ClientStream {
       }
     }
   }
-
-  @VisibleForTesting
-  static final ClientStream NOOP_CLIENT_STREAM = new ClientStream() {
-    @Override public void writeMessage(InputStream message) {}
-
-    @Override public void flush() {}
-
-    @Override public void cancel(Status reason) {}
-
-    @Override public void halfClose() {}
-
-    @Override public void request(int numMessages) {}
-
-    @Override public void setCompressor(Compressor c) {}
-
-    @Override
-    public void setMessageCompression(boolean enable) {
-      // noop
-    }
-
-    /**
-     * Always returns {@code false}, since this is only used when the startup of the {@link
-     * ClientCall} fails (i.e. the {@link ClientCall} is closed).
-     */
-    @Override public boolean isReady() {
-      return false;
-    }
-
-    @Override
-    public void setDecompressionRegistry(DecompressorRegistry registry) {}
-
-    @Override
-    public String toString() {
-      return "NOOP_CLIENT_STREAM";
-    }
-  };
 }

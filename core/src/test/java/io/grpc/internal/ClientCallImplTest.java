@@ -425,6 +425,11 @@ public class ClientCallImplTest {
     assertEquals(Status.Code.CANCELLED, status.getCode());
     assertSame(cause, status.getCause());
 
+    // Following operations should be no-op.
+    call.request(1);
+    call.sendMessage(null);
+    call.halfClose();
+
     // Stream should never be created.
     verifyZeroInteractions(transport);
 
@@ -489,7 +494,7 @@ public class ClientCallImplTest {
     StreamCreationTask task =
         new StreamCreationTask(delayedStream, headers, method, CallOptions.DEFAULT, streamListener);
     when(clientTransport.newStream(method, headers, streamListener))
-        .thenReturn(DelayedStream.NOOP_CLIENT_STREAM);
+        .thenReturn(NoopClientStream.INSTANCE);
 
     task.onSuccess(clientTransport);
 

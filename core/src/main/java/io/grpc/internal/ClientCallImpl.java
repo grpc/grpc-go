@@ -164,8 +164,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     Preconditions.checkState(stream == null, "Already started");
 
     if (context.isCancelled()) {
-      // Context is already cancelled so no need to create a stream, just notify the observer of
-      // cancellation via callback on the executor
+      // Context is already cancelled so no need to create a real stream, just notify the observer
+      // of cancellation via callback on the executor
+      stream = NoopClientStream.INSTANCE;
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public void runInContext() {
