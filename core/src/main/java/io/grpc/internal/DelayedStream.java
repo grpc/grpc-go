@@ -57,27 +57,25 @@ import javax.annotation.concurrent.GuardedBy;
 class DelayedStream implements ClientStream {
   private final ClientStreamListener listener;
 
-  private final Object lock = new Object();
-
   // Volatile to be readable without synchronization in the fast path.
   // Writes are also done within synchronized(this).
   private volatile ClientStream realStream;
 
-  @GuardedBy("lock")
+  @GuardedBy("this")
   private Compressor compressor;
   // Can be either a Decompressor or a String
-  @GuardedBy("lock")
+  @GuardedBy("this")
   private Object decompressor;
-  @GuardedBy("lock")
+  @GuardedBy("this")
   private DecompressorRegistry decompressionRegistry;
-  @GuardedBy("lock")
+  @GuardedBy("this")
   private final List<PendingMessage> pendingMessages = new LinkedList<PendingMessage>();
   private boolean messageCompressionEnabled;
-  @GuardedBy("lock")
+  @GuardedBy("this")
   private boolean pendingHalfClose;
-  @GuardedBy("lock")
+  @GuardedBy("this")
   private int pendingFlowControlRequests;
-  @GuardedBy("lock")
+  @GuardedBy("this")
   private boolean pendingFlush;
 
   static final class PendingMessage {
@@ -95,13 +93,16 @@ class DelayedStream implements ClientStream {
   }
 
   /**
-   * Creates a stream on a presumably usable transport.
+   * Creates a stream on a presumably usable transport. Must not be called if {@link
+   * cancelledPrematurely}, as there is no way to close {@code stream} without double-calling {@code
+   * listener}. Most callers of this method will need to acquire the intrinsic lock to check {@code
+   * cancelledPrematurely} and this method atomically.
    */
   void setStream(ClientStream stream) {
-    synchronized (lock) {
-      if (realStream == NOOP_CLIENT_STREAM) {
+    synchronized (this) {
+      if (cancelledPrematurely()) {
         // Already cancelled
-        return;
+        throw new IllegalStateException("Can't set on cancelled stream");
       }
       checkState(realStream == null, "Stream already created: %s", realStream);
       realStream = stream;
@@ -134,7 +135,7 @@ class DelayedStream implements ClientStream {
   }
 
   void maybeClosePrematurely(final Status reason) {
-    synchronized (lock) {
+    synchronized (this) {
       if (realStream == null) {
         realStream = NOOP_CLIENT_STREAM;
         listener.closed(reason, new Metadata());
@@ -142,10 +143,16 @@ class DelayedStream implements ClientStream {
     }
   }
 
+  public boolean cancelledPrematurely() {
+    synchronized (this) {
+      return realStream == NOOP_CLIENT_STREAM;
+    }
+  }
+
   @Override
   public void writeMessage(InputStream message) {
     if (realStream == null) {
-      synchronized (lock) {
+      synchronized (this) {
         if (realStream == null) {
           pendingMessages.add(new PendingMessage(message, messageCompressionEnabled));
           return;
@@ -158,7 +165,7 @@ class DelayedStream implements ClientStream {
   @Override
   public void flush() {
     if (realStream == null) {
-      synchronized (lock) {
+      synchronized (this) {
         if (realStream == null) {
           pendingFlush = true;
           return;
@@ -177,7 +184,7 @@ class DelayedStream implements ClientStream {
   @Override
   public void halfClose() {
     if (realStream == null) {
-      synchronized (lock) {
+      synchronized (this) {
         if (realStream == null) {
           pendingHalfClose = true;
           return;
@@ -190,7 +197,7 @@ class DelayedStream implements ClientStream {
   @Override
   public void request(int numMessages) {
     if (realStream == null) {
-      synchronized (lock) {
+      synchronized (this) {
         if (realStream == null) {
           pendingFlowControlRequests += numMessages;
           return;
@@ -202,7 +209,7 @@ class DelayedStream implements ClientStream {
 
   @Override
   public void setCompressor(Compressor c) {
-    synchronized (lock) {
+    synchronized (this) {
       compressor = c;
       if (realStream != null) {
         realStream.setCompressor(c);
@@ -212,7 +219,7 @@ class DelayedStream implements ClientStream {
 
   @Override
   public void setDecompressionRegistry(DecompressorRegistry registry) {
-    synchronized (lock) {
+    synchronized (this) {
       this.decompressionRegistry = registry;
       if (realStream != null) {
         realStream.setDecompressionRegistry(registry);
@@ -223,7 +230,7 @@ class DelayedStream implements ClientStream {
   @Override
   public boolean isReady() {
     if (realStream == null) {
-      synchronized (lock) {
+      synchronized (this) {
         if (realStream == null) {
           return false;
         }
@@ -234,7 +241,7 @@ class DelayedStream implements ClientStream {
 
   @Override
   public void setMessageCompression(boolean enable) {
-    synchronized (lock) {
+    synchronized (this) {
       if (realStream != null) {
         realStream.setMessageCompression(enable);
       } else {

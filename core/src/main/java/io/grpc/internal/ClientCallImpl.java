@@ -454,7 +454,15 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         stream.maybeClosePrematurely(Status.DEADLINE_EXCEEDED);
         return;
       }
-      stream.setStream(transport.newStream(method, headers, listener));
+      synchronized (stream) {
+        // Must not create a real stream with 'listener' if 'stream' is cancelled, as
+        // listener.closed() would be called multiple times and from different threads in a
+        // non-synchronized manner.
+        if (stream.cancelledPrematurely()) {
+          return;
+        }
+        stream.setStream(transport.newStream(method, headers, listener));
+      }
     }
 
     @Override

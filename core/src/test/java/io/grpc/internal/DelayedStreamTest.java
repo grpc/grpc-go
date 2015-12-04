@@ -150,10 +150,9 @@ public class DelayedStreamTest {
   @Test
   public void streamCancelled() {
     stream.cancel(Status.CANCELLED);
-
-    // Should be a no op, and not fail due to transport not returning a newStream
-    stream.setStream(realStream);
-
     verify(listener).closed(eq(Status.CANCELLED), isA(Metadata.class));
+
+    thrown.expect(IllegalStateException.class);
+    stream.setStream(realStream);
   }
 }

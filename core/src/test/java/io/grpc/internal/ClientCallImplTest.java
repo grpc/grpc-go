@@ -448,6 +448,16 @@ public class ClientCallImplTest {
   }
 
   @Test
+  public void streamCreationTask_alreadyCancelled() {
+    StreamCreationTask task = new StreamCreationTask(
+        delayedStream, new Metadata(), method, CallOptions.DEFAULT, streamListener);
+
+    when(delayedStream.cancelledPrematurely()).thenReturn(true);
+    task.onSuccess(clientTransport);
+    verifyZeroInteractions(clientTransport);
+  }
+
+  @Test
   public void streamCreationTask_transportShutdown() {
     StreamCreationTask task = new StreamCreationTask(
         delayedStream, new Metadata(), method, CallOptions.DEFAULT, streamListener);
