@@ -72,4 +72,6 @@ type Watcher interface {
 	// Next blocks until an update or error happens. It may return one or more
 	// updates. The first call should get the full set of the results.
 	Next(ctx context.Context) ([]*Update, error)
+	// Close closes the Watcher.
+	Close()
 }
