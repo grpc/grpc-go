@@ -33,7 +33,8 @@ $ openssl req -new -key client.key -out client.csr
 When prompted for certificate information, everything is default except the
 common name which is set to testclient.
 
-$ openssl ca -in client.csr -out client.pem
+$ openssl ca -in client.csr -out client.pem -keyfile ca.key -cert ca.pem -verbose -config openssl.cnf -days 3650 -updatedb
+$ openssl x509 -in client.pem -out client.pem -outform PEM
 
 server0 is issued by CA:
 ------------------------
@@ -46,7 +47,8 @@ $ openssl req -new -key server0.key -out server0.csr
 When prompted for certificate information, everything is default except the
 common name which is set to *.test.google.com.au.
 
-$ openssl ca -in server0.csr -out server0.pem
+$ openssl ca -in server0.csr -out server0.pem -keyfile ca.key -cert ca.pem -verbose -config openssl.cnf -days 3650 -updatedb
+$ openssl x509 -in server0.pem -out server0.pem -outform PEM
 
 server1 is issued by CA with a special config for subject alternative names:
 ----------------------------------------------------------------------------
@@ -59,4 +61,12 @@ $ openssl req -new -key server1.key -out server1.csr -config server1-openssl.cnf
 When prompted for certificate information, everything is default except the
 common name which is set to *.test.google.com.
 
-$ openssl ca -in server1.csr -out server1.pem
+$ openssl ca -in server1.csr -out server1.pem -keyfile ca.key -cert ca.pem -verbose -config server1-openssl.cnf -days 3650 -extensions v3_req -updatedb
+$ openssl x509 -in server1.pem -out server1.pem -outform PEM
+
+Gotchas
+=======
+
+You may have to delete and recreate the index.txt file so that it is empty when
+running the `openssl ca` command.
+
