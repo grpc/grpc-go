@@ -238,6 +238,15 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   }
 
   @Test
+  public void channelInactiveShouldCloseStreams() throws Exception {
+    createStream();
+    handler().channelInactive(ctx());
+    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
+    verify(streamListener).closed(captor.capture());
+    assertFalse(captor.getValue().isOk());
+  }
+
+  @Test
   public void shouldAdvertiseMaxConcurrentStreams() throws Exception {
     maxConcurrentStreams = 314;
     setUp();
