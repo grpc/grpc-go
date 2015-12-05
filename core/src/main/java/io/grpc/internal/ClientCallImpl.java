@@ -226,7 +226,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
    */
   static boolean updateTimeoutHeader(@Nullable Long deadlineNanoTime, Metadata headers) {
     // Fill out timeout on the headers
-    // TODO(someone): Find out if this should always remove the timeout, even when returning false.
+    // TODO(carl-mastrangelo): Find out if this should always remove the timeout,
+    // even when returning false.
     headers.removeAll(TIMEOUT_KEY);
     // Convert the deadline to timeout. Timeout is more favorable than deadline on the wire
     // because timeout tolerates the clock difference between machines.
