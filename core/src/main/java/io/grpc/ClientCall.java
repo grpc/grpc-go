@@ -183,4 +183,13 @@ public abstract class ClientCall<ReqT, RespT> {
   public boolean isReady() {
     return true;
   }
+
+  /**
+   * Enables per-message compression, if an encoding type has been negotiated.  If no message
+   * encoding has been negotiated, this is a no-op.
+   */
+  @ExperimentalApi
+  public void setMessageCompression(boolean enabled) {
+    // noop
+  }
 }

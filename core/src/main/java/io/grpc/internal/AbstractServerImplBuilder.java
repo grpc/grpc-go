@@ -34,7 +34,9 @@ package io.grpc.internal;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 
+import io.grpc.CompressorRegistry;
 import io.grpc.Context;
+import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
 import io.grpc.MutableHandlerRegistry;
@@ -57,6 +59,12 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   private final HandlerRegistry registry;
   @Nullable
   private Executor executor;
+
+  @Nullable
+  private DecompressorRegistry decompressorRegistry;
+
+  @Nullable
+  private CompressorRegistry compressorRegistry;
 
   /**
    * Constructs using a given handler registry.
@@ -96,6 +104,26 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
       return thisT();
     }
     throw new UnsupportedOperationException("Underlying HandlerRegistry is not mutable");
+  }
+
+  @Override
+  public final T decompressorRegistry(DecompressorRegistry registry) {
+    decompressorRegistry = registry;
+    return thisT();
+  }
+
+  protected final DecompressorRegistry decompressorRegistry() {
+    return decompressorRegistry;
+  }
+
+  @Override
+  public final T compressorRegistry(CompressorRegistry registry) {
+    compressorRegistry = registry;
+    return thisT();
+  }
+
+  protected final CompressorRegistry compressorRegistry() {
+    return compressorRegistry;
   }
 
   @Override

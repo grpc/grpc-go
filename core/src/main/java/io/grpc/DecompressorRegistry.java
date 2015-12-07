@@ -54,7 +54,7 @@ import javax.annotation.concurrent.ThreadSafe;
 public final class DecompressorRegistry {
 
   private static final DecompressorRegistry DEFAULT_INSTANCE = new DecompressorRegistry(
-      new DecompressorInfo(new Codec.Gzip(), false),
+      new DecompressorInfo(new Codec.Gzip(), true),
       new DecompressorInfo(Codec.Identity.NONE, false));
 
   public static DecompressorRegistry getDefaultInstance() {

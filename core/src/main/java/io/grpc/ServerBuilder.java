@@ -88,6 +88,22 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
   public abstract T useTransportSecurity(File certChain, File privateKey);
 
   /**
+   * Set the decompression registry for use in the channel.  This is an advanced API call and
+   * shouldn't be used unless you are using custom message encoding.   The default supported
+   * decompressors are in {@code DecompressorRegistry.getDefaultInstance}.
+   */
+  @ExperimentalApi
+  public abstract T decompressorRegistry(DecompressorRegistry registry);
+
+  /**
+   * Set the compression registry for use in the channel.  This is an advanced API call and
+   * shouldn't be used unless you are using custom message encoding.   The default supported
+   * compressors are in {@code CompressorRegistry.getDefaultInstance}.
+   */
+  @ExperimentalApi
+  public abstract T compressorRegistry(CompressorRegistry registry);
+
+  /**
    * Builds a server using the given parameters.
    *
    * <p>The returned service will not been started or be bound a port. You will need to start it

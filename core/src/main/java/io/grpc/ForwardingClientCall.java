@@ -66,6 +66,11 @@ public abstract class ForwardingClientCall<ReqT, RespT> extends ClientCall<ReqT,
   }
 
   @Override
+  public void setMessageCompression(boolean enabled) {
+    delegate().setMessageCompression(enabled);
+  }
+
+  @Override
   public boolean isReady() {
     return delegate().isReady();
   }

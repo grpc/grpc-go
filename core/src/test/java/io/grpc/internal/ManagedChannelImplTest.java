@@ -134,7 +134,8 @@ public class ManagedChannelImplTest {
       NameResolver.Factory nameResolverFactory, List<ClientInterceptor> interceptors) {
     return new ManagedChannelImpl(target, new FakeBackoffPolicyProvider(),
         nameResolverFactory, NAME_RESOLVER_PARAMS, loadBalancerFactory,
-        mockTransportFactory, executor, null, interceptors);
+        mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
+        CompressorRegistry.getDefaultInstance(), executor, null, interceptors);
   }
 
   @Before

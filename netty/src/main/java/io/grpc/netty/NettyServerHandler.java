@@ -32,6 +32,7 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.netty.Utils.CONTENT_TYPE_GRPC;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
@@ -42,6 +43,8 @@ import static io.netty.handler.codec.http2.DefaultHttp2LocalFlowController.DEFAU
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import io.grpc.CompressorRegistry;
+import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
@@ -94,6 +97,8 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   private static final Status GOAWAY_STATUS = Status.UNAVAILABLE;
 
+  private final DecompressorRegistry decompressorRegistry;
+  private final CompressorRegistry compressorRegistry;
   private final Http2Connection.PropertyKey streamKey;
   private final ServerTransportListener transportListener;
   private final int maxMessageSize;
@@ -102,6 +107,8 @@ class NettyServerHandler extends AbstractNettyHandler {
   private WriteQueue serverWriteQueue;
 
   static NettyServerHandler newHandler(ServerTransportListener transportListener,
+                                       DecompressorRegistry decompressorRegistry,
+                                       CompressorRegistry compressorRegistry,
                                        int maxStreams,
                                        int flowControlWindow,
                                        int maxHeaderListSize,
@@ -114,13 +121,15 @@ class NettyServerHandler extends AbstractNettyHandler {
         new DefaultHttp2FrameReader(headersDecoder), frameLogger);
     Http2FrameWriter frameWriter =
         new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
-    return newHandler(frameReader, frameWriter, transportListener, maxStreams, flowControlWindow,
-        maxMessageSize);
+    return newHandler(frameReader, frameWriter, transportListener, decompressorRegistry,
+        compressorRegistry, maxStreams, flowControlWindow, maxMessageSize);
   }
 
   @VisibleForTesting
   static NettyServerHandler newHandler(Http2FrameReader frameReader, Http2FrameWriter frameWriter,
                                        ServerTransportListener transportListener,
+                                       DecompressorRegistry decompressorRegistry,
+                                       CompressorRegistry compressorRegistry,
                                        int maxStreams,
                                        int flowControlWindow,
                                        int maxMessageSize) {
@@ -142,19 +151,24 @@ class NettyServerHandler extends AbstractNettyHandler {
     settings.initialWindowSize(flowControlWindow);
     settings.maxConcurrentStreams(maxStreams);
 
-    return new NettyServerHandler(transportListener, decoder, encoder, settings, maxMessageSize);
+    return new NettyServerHandler(transportListener, decoder, encoder, settings,
+        decompressorRegistry, compressorRegistry, maxMessageSize);
   }
 
   private NettyServerHandler(ServerTransportListener transportListener,
                              Http2ConnectionDecoder decoder,
                              Http2ConnectionEncoder encoder, Http2Settings settings,
+                             DecompressorRegistry decompressorRegistry,
+                             CompressorRegistry compressorRegistry,
                              int maxMessageSize) {
     super(decoder, encoder, settings);
     checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
     this.maxMessageSize = maxMessageSize;
+    this.decompressorRegistry = checkNotNull(decompressorRegistry, "decompressorRegistry");
+    this.compressorRegistry = checkNotNull(compressorRegistry, "compressorRegistry");
 
     streamKey = encoder.connection().newKey();
-    this.transportListener = Preconditions.checkNotNull(transportListener, "transportListener");
+    this.transportListener = checkNotNull(transportListener, "transportListener");
 
     // Set the frame listener on the decoder.
     decoder().frameListener(new FrameListener());
@@ -191,6 +205,11 @@ class NettyServerHandler extends AbstractNettyHandler {
 
       NettyServerStream stream = new NettyServerStream(ctx.channel(), http2Stream, this,
               maxMessageSize);
+
+      // These must be called before inboundHeadersReceived, because the framers depend on knowing
+      // the compression algorithms available before negotiation.
+      stream.setDecompressionRegistry(decompressorRegistry);
+      stream.setCompressionRegistry(compressorRegistry);
 
       Metadata metadata = Utils.convertHeaders(headers);
       stream.inboundHeadersReceived(metadata);

@@ -35,6 +35,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static io.netty.channel.ChannelOption.SO_BACKLOG;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
+import io.grpc.CompressorRegistry;
+import io.grpc.DecompressorRegistry;
 import io.grpc.internal.Server;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.SharedResourceHolder;
@@ -72,6 +74,8 @@ class NettyServer implements Server {
   private EventLoopGroup workerGroup;
   private ServerListener listener;
   private Channel channel;
+  private final DecompressorRegistry decompressorRegistry;
+  private final CompressorRegistry compressorRegistry;
   private final int flowControlWindow;
   private final int maxMessageSize;
   private final int maxHeaderListSize;
@@ -79,7 +83,8 @@ class NettyServer implements Server {
 
   NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
               @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
-              ProtocolNegotiator protocolNegotiator, int maxStreamsPerConnection,
+              ProtocolNegotiator protocolNegotiator, DecompressorRegistry decompressorRegistry,
+              CompressorRegistry compressorRegistry, int maxStreamsPerConnection,
               int flowControlWindow, int maxMessageSize, int maxHeaderListSize) {
     this.address = address;
     this.channelType = checkNotNull(channelType, "channelType");
@@ -92,6 +97,8 @@ class NettyServer implements Server {
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
     this.maxHeaderListSize = maxHeaderListSize;
+    this.decompressorRegistry = checkNotNull(decompressorRegistry, "decompressorRegistry");
+    this.compressorRegistry = checkNotNull(compressorRegistry, "compressorRegistry");
   }
 
   @Override
@@ -113,13 +120,15 @@ class NettyServer implements Server {
       public void initChannel(Channel ch) throws Exception {
         eventLoopReferenceCounter.retain();
         ch.closeFuture().addListener(new ChannelFutureListener() {
+          @Override
           public void operationComplete(ChannelFuture future) {
             eventLoopReferenceCounter.release();
           }
         });
         NettyServerTransport transport
-            = new NettyServerTransport(ch, protocolNegotiator, maxStreamsPerConnection,
-                flowControlWindow, maxMessageSize, maxHeaderListSize);
+            = new NettyServerTransport(ch, protocolNegotiator, decompressorRegistry,
+                compressorRegistry, maxStreamsPerConnection, flowControlWindow, maxMessageSize,
+                maxHeaderListSize);
         transport.start(listener.transportCreated(transport));
       }
     });

@@ -108,9 +108,8 @@ public final class ManagedChannelImpl extends ManagedChannel {
    */
   private final Set<String> knownAcceptEncodingRegistry =
       Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
-  private final DecompressorRegistry decompressorRegistry =
-      DecompressorRegistry.getDefaultInstance();
-  private final CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
+  private final DecompressorRegistry decompressorRegistry;
+  private final CompressorRegistry compressorRegistry;
 
   /**
    * Executor that runs deadline timers for requests.
@@ -154,9 +153,10 @@ public final class ManagedChannelImpl extends ManagedChannel {
 
   ManagedChannelImpl(String target, BackoffPolicy.Provider backoffPolicyProvider,
       NameResolver.Factory nameResolverFactory, Attributes nameResolverParams,
-      LoadBalancer.Factory loadBalancerFactory,
-      ClientTransportFactory transportFactory, @Nullable Executor executor,
-      @Nullable String userAgent, List<ClientInterceptor> interceptors) {
+      LoadBalancer.Factory loadBalancerFactory, ClientTransportFactory transportFactory,
+      DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry,
+      @Nullable Executor executor, @Nullable String userAgent,
+      List<ClientInterceptor> interceptors) {
     if (executor == null) {
       usingSharedExecutor = true;
       this.executor = SharedResourceHolder.get(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
@@ -171,6 +171,8 @@ public final class ManagedChannelImpl extends ManagedChannel {
     this.userAgent = userAgent;
     this.interceptorChannel = ClientInterceptors.intercept(new RealChannel(), interceptors);
     scheduledExecutor = SharedResourceHolder.get(TIMER_SERVICE);
+    this.decompressorRegistry = decompressorRegistry;
+    this.compressorRegistry = compressorRegistry;
 
     this.nameResolver.start(new NameResolver.Listener() {
       @Override

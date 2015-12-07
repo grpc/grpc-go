@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Iterables.addAll;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
@@ -335,6 +336,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     if (!unaryRequest) {
       stream.flush();
     }
+  }
+
+  @Override
+  public void setMessageCompression(boolean enabled) {
+    checkState(stream != null, "Not started");
+    stream.setMessageCompression(enabled);
   }
 
   @Override

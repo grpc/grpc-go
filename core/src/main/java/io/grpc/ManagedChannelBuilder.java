@@ -164,6 +164,22 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
 
   /**
+   * Set the decompression registry for use in the channel.  This is an advanced API call and
+   * shouldn't be used unless you are using custom message encoding.   The default supported
+   * decompressors are in {@code DecompressorRegistry.getDefaultInstance}.
+   */
+  @ExperimentalApi
+  public abstract T decompressorRegistry(DecompressorRegistry registry);
+
+  /**
+   * Set the compression registry for use in the channel.  This is an advanced API call and
+   * shouldn't be used unless you are using custom message encoding.   The default supported
+   * compressors are in {@code CompressorRegistry.getDefaultInstance}.
+   */
+  @ExperimentalApi
+  public abstract T compressorRegistry(CompressorRegistry registry);
+
+  /**
    * Builds a channel using the given parameters.
    */
   public abstract ManagedChannel build();

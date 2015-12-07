@@ -31,11 +31,16 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
+
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
+import io.grpc.CompressorRegistry;
+import io.grpc.DecompressorRegistry;
+import io.grpc.ExperimentalApi;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
@@ -81,6 +86,12 @@ public abstract class AbstractManagedChannelImplBuilder
 
   @Nullable
   private LoadBalancer.Factory loadBalancerFactory;
+
+  @Nullable
+  private DecompressorRegistry decompressorRegistry;
+
+  @Nullable
+  private CompressorRegistry compressorRegistry;
 
   protected AbstractManagedChannelImplBuilder(String target) {
     this.target = Preconditions.checkNotNull(target);
@@ -133,6 +144,20 @@ public abstract class AbstractManagedChannelImplBuilder
     return thisT();
   }
 
+  @Override
+  @ExperimentalApi
+  public final T decompressorRegistry(DecompressorRegistry registry) {
+    this.decompressorRegistry = registry;
+    return thisT();
+  }
+
+  @Override
+  @ExperimentalApi
+  public final T compressorRegistry(CompressorRegistry registry) {
+    this.compressorRegistry = registry;
+    return thisT();
+  }
+
   private T thisT() {
     @SuppressWarnings("unchecked")
     T thisT = (T) this;
@@ -168,12 +193,13 @@ public abstract class AbstractManagedChannelImplBuilder
         target,
         // TODO(carl-mastrangelo): Allow clients to pass this in
         new ExponentialBackoffPolicy.Provider(),
-        nameResolverFactory == null ? NameResolverRegistry.getDefaultRegistry()
-            : nameResolverFactory,
+        firstNonNull(nameResolverFactory, NameResolverRegistry.getDefaultRegistry()),
         getNameResolverParams(),
-        loadBalancerFactory == null ? SimpleLoadBalancerFactory.getInstance()
-            : loadBalancerFactory,
-        transportFactory, executor, userAgent, interceptors);
+        firstNonNull(loadBalancerFactory, SimpleLoadBalancerFactory.getInstance()),
+        transportFactory,
+        firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
+        firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
+        executor, userAgent, interceptors);
   }
 
   /**
@@ -186,7 +212,7 @@ public abstract class AbstractManagedChannelImplBuilder
   /**
    * Subclasses can override this method to provide additional parameters to {@link
    * NameResolver.Factory#newNameResolver}. The default implementation returns {@link
-   * Attributes.EMPTY}.
+   * Attributes#EMPTY}.
    */
   protected Attributes getNameResolverParams() {
     return Attributes.EMPTY;

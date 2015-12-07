@@ -31,8 +31,12 @@
 
 package io.grpc.netty;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.base.Preconditions;
 
+import io.grpc.CompressorRegistry;
+import io.grpc.DecompressorRegistry;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.netty.channel.Channel;
@@ -51,6 +55,8 @@ class NettyServerTransport implements ServerTransport {
 
   private final Channel channel;
   private final ProtocolNegotiator protocolNegotiator;
+  private final DecompressorRegistry decompressorRegistry;
+  private final CompressorRegistry compressorRegistry;
   private final int maxStreams;
   private ServerTransportListener listener;
   private boolean terminated;
@@ -58,14 +64,18 @@ class NettyServerTransport implements ServerTransport {
   private final int maxMessageSize;
   private final int maxHeaderListSize;
 
-  NettyServerTransport(Channel channel, ProtocolNegotiator protocolNegotiator, int maxStreams,
-                       int flowControlWindow, int maxMessageSize, int maxHeaderListSize) {
+  NettyServerTransport(Channel channel, ProtocolNegotiator protocolNegotiator,
+                       DecompressorRegistry decompressorRegistry,
+                       CompressorRegistry compressorRegistry, int maxStreams, int flowControlWindow,
+                       int maxMessageSize, int maxHeaderListSize) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
     this.protocolNegotiator = Preconditions.checkNotNull(protocolNegotiator, "protocolNegotiator");
     this.maxStreams = maxStreams;
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
     this.maxHeaderListSize = maxHeaderListSize;
+    this.decompressorRegistry = checkNotNull(decompressorRegistry, "decompressorRegistry");
+    this.compressorRegistry = checkNotNull(compressorRegistry, "compressorRegistry");
   }
 
   public void start(ServerTransportListener listener) {
@@ -115,7 +125,7 @@ class NettyServerTransport implements ServerTransport {
    * Creates the Netty handler to be used in the channel pipeline.
    */
   private NettyServerHandler createHandler(ServerTransportListener transportListener) {
-    return NettyServerHandler.newHandler(transportListener, maxStreams, flowControlWindow,
-        maxHeaderListSize, maxMessageSize);
+    return NettyServerHandler.newHandler(transportListener, decompressorRegistry,
+        compressorRegistry, maxStreams, flowControlWindow, maxHeaderListSize, maxMessageSize);
   }
 }
