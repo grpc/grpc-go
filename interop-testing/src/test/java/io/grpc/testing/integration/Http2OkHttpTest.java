@@ -88,8 +88,7 @@ public class Http2OkHttpTest extends AbstractTransportTest {
         .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
             TestUtils.TEST_SERVER_HOST, serverPort));
     try {
-      builder.sslSocketFactory(TestUtils.newSslSocketFactoryForCa(
-          TestUtils.loadCert("ca.pem")));
+      builder.sslSocketFactory(TestUtils.newSslSocketFactoryForCa(TestUtils.loadCert("ca.pem")));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
