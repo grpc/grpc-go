@@ -41,9 +41,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/codes"
-	perfpb "google.golang.org/grpc/test/codec_perf"
-	"google.golang.org/grpc/transport"
+	"github.com/VerveWireless/grpc/codes"
+	perfpb "github.com/VerveWireless/grpc/test/codec_perf"
+	"github.com/VerveWireless/grpc/transport"
 )
 
 func TestSimpleParsing(t *testing.T) {

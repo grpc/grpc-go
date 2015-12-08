@@ -39,9 +39,9 @@ import (
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/transport"
+	"github.com/VerveWireless/grpc/codes"
+	"github.com/VerveWireless/grpc/metadata"
+	"github.com/VerveWireless/grpc/transport"
 )
 
 // recvResponse receives and parses an RPC response.

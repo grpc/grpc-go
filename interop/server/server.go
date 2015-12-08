@@ -43,10 +43,10 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"github.com/VerveWireless/grpc"
+	"github.com/VerveWireless/grpc/credentials"
+	"github.com/VerveWireless/grpc/grpclog"
+	testpb "github.com/VerveWireless/grpc/interop/grpc_testing"
 )
 
 var (

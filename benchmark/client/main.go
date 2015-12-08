@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/benchmark"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
-	"google.golang.org/grpc/benchmark/stats"
-	"google.golang.org/grpc/grpclog"
+	"github.com/VerveWireless/grpc"
+	"github.com/VerveWireless/grpc/benchmark"
+	testpb "github.com/VerveWireless/grpc/benchmark/grpc_testing"
+	"github.com/VerveWireless/grpc/benchmark/stats"
+	"github.com/VerveWireless/grpc/grpclog"
 )
 
 var (

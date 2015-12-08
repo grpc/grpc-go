@@ -44,10 +44,10 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	pb "google.golang.org/grpc/examples/route_guide/routeguide"
-	"google.golang.org/grpc/grpclog"
+	"github.com/VerveWireless/grpc"
+	"github.com/VerveWireless/grpc/credentials"
+	pb "github.com/VerveWireless/grpc/examples/route_guide/routeguide"
+	"github.com/VerveWireless/grpc/grpclog"
 )
 
 var (

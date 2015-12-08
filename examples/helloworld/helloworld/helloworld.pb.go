@@ -18,7 +18,7 @@ import proto "github.com/golang/protobuf/proto"
 
 import (
 	context "golang.org/x/net/context"
-	grpc "google.golang.org/grpc"
+	grpc "github.com/VerveWireless/grpc"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

@@ -7,7 +7,7 @@ before_install:
 
 install:
   - mkdir -p "$GOPATH/src/google.golang.org"
-  - mv "$TRAVIS_BUILD_DIR" "$GOPATH/src/google.golang.org/grpc"
+  - mv "$TRAVIS_BUILD_DIR" "$GOPATH/src/github.com/VerveWireless/grpc"
 
 script:
   - make test testrace

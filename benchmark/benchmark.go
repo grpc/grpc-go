@@ -42,9 +42,9 @@ import (
 	"net"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
-	"google.golang.org/grpc/grpclog"
+	"github.com/VerveWireless/grpc"
+	testpb "github.com/VerveWireless/grpc/benchmark/grpc_testing"
+	"github.com/VerveWireless/grpc/grpclog"
 )
 
 func newPayload(t testpb.PayloadType, size int) *testpb.Payload {

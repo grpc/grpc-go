@@ -45,10 +45,10 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/metadata"
+	"github.com/VerveWireless/grpc/codes"
+	"github.com/VerveWireless/grpc/credentials"
+	"github.com/VerveWireless/grpc/grpclog"
+	"github.com/VerveWireless/grpc/metadata"
 )
 
 // ErrIllegalHeaderWrite indicates that setting header is illegal because of

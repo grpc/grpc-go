@@ -37,9 +37,9 @@ import (
 	"log"
 	"os"
 
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	pb "github.com/VerveWireless/grpc/examples/helloworld/helloworld"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
+	"github.com/VerveWireless/grpc"
 )
 
 const (

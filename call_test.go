@@ -43,8 +43,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/transport"
+	"github.com/VerveWireless/grpc/codes"
+	"github.com/VerveWireless/grpc/transport"
 )
 
 var (

@@ -37,7 +37,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/transport"
+	"github.com/VerveWireless/grpc/transport"
 )
 
 // Picker picks a Conn for RPC requests.

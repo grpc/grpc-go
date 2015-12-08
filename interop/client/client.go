@@ -46,13 +46,13 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/oauth"
-	"google.golang.org/grpc/grpclog"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/metadata"
+	"github.com/VerveWireless/grpc"
+	"github.com/VerveWireless/grpc/codes"
+	"github.com/VerveWireless/grpc/credentials"
+	"github.com/VerveWireless/grpc/credentials/oauth"
+	"github.com/VerveWireless/grpc/grpclog"
+	testpb "github.com/VerveWireless/grpc/interop/grpc_testing"
+	"github.com/VerveWireless/grpc/metadata"
 )
 
 var (

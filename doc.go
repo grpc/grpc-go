@@ -3,4 +3,4 @@ Package grpc implements an RPC system called gRPC.
 
 See https://github.com/grpc/grpc for more information about gRPC.
 */
-package grpc // import "google.golang.org/grpc"
+package grpc // import "github.com/VerveWireless/grpc"

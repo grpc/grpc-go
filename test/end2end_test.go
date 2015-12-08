@@ -47,13 +47,13 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/health"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1alpha"
-	"google.golang.org/grpc/metadata"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	"github.com/VerveWireless/grpc"
+	"github.com/VerveWireless/grpc/codes"
+	"github.com/VerveWireless/grpc/credentials"
+	"github.com/VerveWireless/grpc/health"
+	healthpb "github.com/VerveWireless/grpc/health/grpc_health_v1alpha"
+	"github.com/VerveWireless/grpc/metadata"
+	testpb "github.com/VerveWireless/grpc/test/grpc_testing"
 )
 
 var (

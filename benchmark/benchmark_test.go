@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
-	"google.golang.org/grpc/benchmark/stats"
+	"github.com/VerveWireless/grpc"
+	testpb "github.com/VerveWireless/grpc/benchmark/grpc_testing"
+	"github.com/VerveWireless/grpc/benchmark/stats"
 )
 
 func runUnary(b *testing.B, maxConcurrentCalls int) {
