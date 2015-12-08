@@ -42,13 +42,13 @@ import (
 	"strconv"
 	"sync"
 
-	"golang.org/x/net/context"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/hpack"
 	"github.com/VerveWireless/grpc/codes"
 	"github.com/VerveWireless/grpc/credentials"
 	"github.com/VerveWireless/grpc/grpclog"
 	"github.com/VerveWireless/grpc/metadata"
+	"golang.org/x/net/context"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/hpack"
 )
 
 // ErrIllegalHeaderWrite indicates that setting header is illegal because of
@@ -386,7 +386,8 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 	id := f.Header().StreamID
 	incr := f.Increment
 	if id == 0 {
-		t.sendQuotaPool.add(int(incr))
+		// FIXME: Transport quota leaking for timeouts and other errors. Disable trans quota for now.
+		//		t.sendQuotaPool.add(int(incr))
 		return
 	}
 	if s, ok := t.getStream(f); ok {
@@ -538,31 +539,32 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		if err != nil {
 			return err
 		}
-		t.sendQuotaPool.add(0)
-		// Wait until the transport has some quota to send the data.
-		tq, err := wait(s.ctx, t.shutdownChan, t.sendQuotaPool.acquire())
-		if err != nil {
-			if _, ok := err.(StreamError); ok {
-				t.sendQuotaPool.cancel()
-			}
-			return err
-		}
+		// FIXME: Transport quotas are leaking upon timeout and other errors. Disable trans quota for now.
+		//		t.sendQuotaPool.add(0)
+		//		// Wait until the transport has some quota to send the data.
+		//		tq, err := wait(s.ctx, t.shutdownChan, t.sendQuotaPool.acquire())
+		//		if err != nil {
+		//			if _, ok := err.(StreamError); ok {
+		//				t.sendQuotaPool.cancel()
+		//			}
+		//			return err
+		//		}
 		if sq < size {
 			size = sq
 		}
-		if tq < size {
-			size = tq
-		}
+		//		if tq < size {
+		//			size = tq
+		//		}
 		p := r.Next(size)
 		ps := len(p)
 		if ps < sq {
 			// Overbooked stream quota. Return it back.
 			s.sendQuotaPool.add(sq - ps)
 		}
-		if ps < tq {
-			// Overbooked transport quota. Return it back.
-			t.sendQuotaPool.add(tq - ps)
-		}
+		//		if ps < tq {
+		//			// Overbooked transport quota. Return it back.
+		//			t.sendQuotaPool.add(tq - ps)
+		//		}
 		t.framer.adjustNumWriters(1)
 		// Got some quota. Try to acquire writing privilege on the
 		// transport.
