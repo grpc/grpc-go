@@ -31,7 +31,9 @@
 
 package io.grpc.internal;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -89,6 +91,9 @@ final class TransportSet {
   private int headIndex = -1;
 
   @GuardedBy("lock")
+  private final Stopwatch backoffWatch;
+
+  @GuardedBy("lock")
   @Nullable
   private ScheduledFuture<?> reconnectTask;
 
@@ -106,14 +111,23 @@ final class TransportSet {
   private boolean shutdown;
 
   /**
-   * The future for the transport for new outgoing requests. 'lock' lock must be held when assigning
-   * to activeTransportFuture.
+   * The future for the transport for new outgoing requests. 'lock' must be held when assigning
+   * to it.
    */
+  @Nullable
   private volatile SettableFuture<ClientTransport> activeTransportFuture;
 
   TransportSet(EquivalentAddressGroup addressGroup, String authority, LoadBalancer loadBalancer,
       BackoffPolicy.Provider backoffPolicyProvider, ClientTransportFactory transportFactory,
       ScheduledExecutorService scheduledExecutor, Callback callback) {
+    this(addressGroup, authority, loadBalancer, backoffPolicyProvider, transportFactory,
+        scheduledExecutor, callback, Stopwatch.createUnstarted());
+  }
+
+  @VisibleForTesting
+  TransportSet(EquivalentAddressGroup addressGroup, String authority, LoadBalancer loadBalancer,
+      BackoffPolicy.Provider backoffPolicyProvider, ClientTransportFactory transportFactory,
+      ScheduledExecutorService scheduledExecutor, Callback callback, Stopwatch backoffWatch) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.loadBalancer = loadBalancer;
@@ -121,7 +135,7 @@ final class TransportSet {
     this.transportFactory = transportFactory;
     this.scheduledExecutor = scheduledExecutor;
     this.callback = callback;
-    createActiveTransportFuture();
+    this.backoffWatch = backoffWatch;
   }
 
   /**
@@ -130,28 +144,23 @@ final class TransportSet {
    * <p>If this {@code TransportSet} has been shut down, the returned future will have {@code null}
    * value.
    */
-  ListenableFuture<ClientTransport> obtainActiveTransport() {
-    return activeTransportFuture;
-  }
-
-  /**
-   * Creates a new activeTransportFuture, overwrites the current value and initiates the connection.
-   *
-   * <p>This method MUST ONLY be called in one of the following cases:
-   * <ol>
-   * <li>activeTransportFuture has never been assigned, thus it's null;</li>
-   * <li>activeTransportFuture is done and its transport has been shut down.</li>
-   * </ol>
-   */
-  private void createActiveTransportFuture() {
+  final ListenableFuture<ClientTransport> obtainActiveTransport() {
+    SettableFuture<ClientTransport> savedTransportFuture = activeTransportFuture;
+    if (savedTransportFuture != null) {
+      return savedTransportFuture;
+    }
     synchronized (lock) {
-      if (shutdown) {
-        return;
+      // Check again, since it could have changed before acquiring the lock
+      if (activeTransportFuture == null) {
+        // In shutdown(), activeTransportFuture is set to NULL_VALUE_FUTURE, thus if
+        // activeTransportFuture is null, shutdown must be false.
+        Preconditions.checkState(!shutdown, "already shutdown");
+        Preconditions.checkState(activeTransportFuture == null || activeTransportFuture.isDone(),
+            "activeTransportFuture is neither null nor done");
+        activeTransportFuture = SettableFuture.create();
+        scheduleConnection();
       }
-      Preconditions.checkState(activeTransportFuture == null || activeTransportFuture.isDone(),
-          "activeTransportFuture is neither null nor done");
-      activeTransportFuture = SettableFuture.create();
-      scheduleConnection();
+      return activeTransportFuture;
     }
   }
 
@@ -177,6 +186,9 @@ final class TransportSet {
           if (shutdown) {
             return;
           }
+          if (currentAddressIndex == headIndex) {
+            backoffWatch.reset().start();
+          }
           ClientTransport newActiveTransport =
               transportFactory.newClientTransport(address, authority);
           log.log(Level.INFO, "Created transport {0} for {1}",
@@ -190,27 +202,33 @@ final class TransportSet {
       }
     };
 
+    long delayMillis;
     if (currentAddressIndex == headIndex) {
-      // Back to the first attempted address. Trigger back-off.
-      long delayMillis = reconnectPolicy.nextBackoffMillis();
-      reconnectTask = scheduledExecutor.schedule(
-          createTransportRunnable, delayMillis, TimeUnit.MILLISECONDS);
+      // Back to the first attempted address. Calculate back-off delay.
+      delayMillis =
+          reconnectPolicy.nextBackoffMillis() - backoffWatch.elapsed(TimeUnit.MILLISECONDS);
     } else {
+      delayMillis = 0;
       if (headIndex == -1) {
         // First connect attempt, or the first attempt since last successful connection.
         headIndex = currentAddressIndex;
         reconnectPolicy = backoffPolicyProvider.get();
       }
+    }
+    if (delayMillis <= 0) {
       reconnectTask = null;
       // No back-off this time.
       createTransportRunnable.run();
+    } else {
+      reconnectTask = scheduledExecutor.schedule(
+          createTransportRunnable, delayMillis, TimeUnit.MILLISECONDS);
     }
   }
 
   /**
    * Shut down all transports, may run callback inline.
    */
-  void shutdown() {
+  final void shutdown() {
     SettableFuture<ClientTransport> savedActiveTransportFuture;
     boolean runCallback = false;
     synchronized (lock) {
@@ -281,7 +299,7 @@ final class TransportSet {
             new Object[] {transport, address});
         Preconditions.checkState(transportFuture.isDone(), "the transport future is not done");
         if (isAttachedToActiveTransport()) {
-          createActiveTransportFuture();
+          activeTransportFuture = null;
         }
       }
       loadBalancer.transportShutdown(addressGroup, transport, s);
