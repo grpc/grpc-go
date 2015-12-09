@@ -61,6 +61,16 @@ package io.grpc;
  * {@link Status#CANCELLED CANCELLED}. Otherwise, {@link Listener#onClose Listener.onClose()} is
  * called with whatever status the RPC was finished. We ensure that at most one is called.
  *
+ * <p>Example: A simple Unary (1 request, 1 response) RPC would look like this:
+ * <pre>
+ *   call = channel.newCall(method, callOptions);
+ *   call.start(listener, headers);
+ *   call.sendMessage(message);
+ *   call.halfClose();
+ *   call.request(1);
+ *   // wait for listener.onMessage()
+ * </pre>
+ *
  * @param <ReqT> type of message sent one or more times to the server.
  * @param <RespT> type of message received one or more times from the server.
  */
@@ -157,7 +167,8 @@ public abstract class ClientCall<ReqT, RespT> {
   public abstract void cancel();
 
   /**
-   * Close the call for request message sending. Incoming response messages are unaffected.
+   * Close the call for request message sending. Incoming response messages are unaffected.  This
+   * should be called when no more messages will be sent from the client.
    *
    * @throws IllegalStateException if call is already {@code halfClose()}d or {@link #cancel}ed
    */

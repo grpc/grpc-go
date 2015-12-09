@@ -34,11 +34,13 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 
 import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.Status;
 
@@ -121,33 +123,45 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
     return cancelled;
   }
 
-  ServerStreamListenerImpl newServerStreamListener(ServerCall.Listener<ReqT> listener,
+  ServerStreamListener newServerStreamListener(ServerCall.Listener<ReqT> listener,
       Future<?> timeout) {
-    return new ServerStreamListenerImpl(listener, timeout);
+    return new ServerStreamListenerImpl<ReqT>(this, listener, timeout);
   }
 
   /**
    * All of these callbacks are assumed to called on an application thread, and the caller is
    * responsible for handling thrown exceptions.
    */
-  private class ServerStreamListenerImpl implements ServerStreamListener {
+  @VisibleForTesting
+  static final class ServerStreamListenerImpl<ReqT> implements ServerStreamListener {
+    private final ServerCallImpl<ReqT, ?> call;
     private final ServerCall.Listener<ReqT> listener;
     private final Future<?> timeout;
+    private boolean messageReceived;
 
-    public ServerStreamListenerImpl(ServerCall.Listener<ReqT> listener, Future<?> timeout) {
+    public ServerStreamListenerImpl(
+        ServerCallImpl<ReqT, ?> call, ServerCall.Listener<ReqT> listener, Future<?> timeout) {
+      this.call = checkNotNull(call, "call");
       this.listener = checkNotNull(listener, "listener must not be null");
-      // TODO: check if timeout should not be null
-      this.timeout = timeout;
+      this.timeout = checkNotNull(timeout, "timeout");
     }
 
     @Override
     public void messageRead(final InputStream message) {
       try {
-        if (cancelled) {
+        if (call.cancelled) {
           return;
         }
+        // Special case for unary calls.
+        if (messageReceived && call.method.getType() == MethodType.UNARY) {
+          call.stream.close(Status.INVALID_ARGUMENT.withDescription(
+                  "More than one request messages for unary call or server streaming call"),
+              new Metadata());
+          return;
+        }
+        messageReceived = true;
 
-        listener.onMessage(method.parseRequest(message));
+        listener.onMessage(call.method.parseRequest(message));
       } finally {
         try {
           message.close();
@@ -159,7 +173,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
 
     @Override
     public void halfClosed() {
-      if (cancelled) {
+      if (call.cancelled) {
         return;
       }
 
@@ -172,14 +186,14 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
       if (status.isOk()) {
         listener.onComplete();
       } else {
-        cancelled = true;
+        call.cancelled = true;
         listener.onCancel();
       }
     }
 
     @Override
     public void onReady() {
-      if (cancelled) {
+      if (call.cancelled) {
         return;
       }
       listener.onReady();

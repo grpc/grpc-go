@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -41,13 +42,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.io.CharStreams;
+import com.google.common.util.concurrent.Futures;
 
 import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
+import io.grpc.ServerCall;
 import io.grpc.Status;
+import io.grpc.internal.ServerCallImpl.ServerStreamListenerImpl;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -55,17 +59,25 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.concurrent.Future;
 
 @RunWith(JUnit4.class)
 public class ServerCallImplTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
   @Mock private ServerStream stream;
+  @Mock private ServerCall.Listener<Long> callListener;
+  @Captor private ArgumentCaptor<Status> statusCaptor;
+
+  private final Future<?> timeout = Futures.immediateCancelledFuture();
 
   private ServerCallImpl<Long, Long> call;
   private Context.CancellableContext context;
@@ -184,6 +196,110 @@ public class ServerCallImplTest {
     call.setMessageCompression(true);
 
     verify(stream).setMessageCompression(true);
+  }
+
+  @Test
+  public void streamListener_halfClosed() {
+    ServerStreamListenerImpl<Long> streamListener =
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, timeout);
+
+    streamListener.halfClosed();
+
+    verify(callListener).onHalfClose();
+  }
+
+  @Test
+  public void streamListener_halfClosed_onlyOnce() {
+    ServerStreamListenerImpl<Long> streamListener =
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, timeout);
+    streamListener.halfClosed();
+    // canceling the call should short circuit future halfClosed() calls.
+    streamListener.closed(Status.CANCELLED);
+
+    streamListener.halfClosed();
+
+    verify(callListener).onHalfClose();
+  }
+
+  @Test
+  public void streamListener_closedOk() {
+    ServerStreamListenerImpl<Long> streamListener =
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, timeout);
+
+    streamListener.closed(Status.OK);
+
+    verify(callListener).onComplete();
+    assertTrue(timeout.isCancelled());
+  }
+
+  @Test
+  public void streamListener_closedCancelled() {
+    ServerStreamListenerImpl<Long> streamListener =
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, timeout);
+
+    streamListener.closed(Status.CANCELLED);
+
+    verify(callListener).onCancel();
+    assertTrue(timeout.isCancelled());
+  }
+
+  @Test
+  public void streamListener_onReady() {
+    ServerStreamListenerImpl<Long> streamListener =
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, timeout);
+
+    streamListener.onReady();
+
+    verify(callListener).onReady();
+  }
+
+  @Test
+  public void streamListener_onReady_onlyOnce() {
+    ServerStreamListenerImpl<Long> streamListener =
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, timeout);
+    streamListener.onReady();
+    // canceling the call should short circuit future halfClosed() calls.
+    streamListener.closed(Status.CANCELLED);
+
+    streamListener.onReady();
+
+    verify(callListener).onReady();
+  }
+
+  @Test
+  public void streamListener_messageRead() {
+    ServerStreamListenerImpl<Long> streamListener =
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, timeout);
+    streamListener.messageRead(method.streamRequest(1234L));
+
+    verify(callListener).onMessage(1234L);
+  }
+
+  @Test
+  public void streamListener_messageRead_unaryFailsOnMultiple() {
+    ServerStreamListenerImpl<Long> streamListener =
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, timeout);
+    streamListener.messageRead(method.streamRequest(1234L));
+    streamListener.messageRead(method.streamRequest(1234L));
+
+    // Makes sure this was only called once.
+    verify(callListener).onMessage(1234L);
+
+    verify(stream).close(statusCaptor.capture(), Mockito.isA(Metadata.class));
+    assertEquals(Status.Code.INVALID_ARGUMENT, statusCaptor.getValue().getCode());
+  }
+
+  @Test
+  public void streamListener_messageRead_onlyOnce() {
+    ServerStreamListenerImpl<Long> streamListener =
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, timeout);
+    streamListener.messageRead(method.streamRequest(1234L));
+    // canceling the call should short circuit future halfClosed() calls.
+    streamListener.closed(Status.CANCELLED);
+
+    streamListener.messageRead(method.streamRequest(1234L));
+
+    verify(callListener).onMessage(1234L);
   }
 
   private static class LongMarshaller implements Marshaller<Long> {

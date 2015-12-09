@@ -130,22 +130,15 @@ public class ServerCalls {
           Metadata headers) {
         final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
         // We expect only 1 request, but we ask for 2 requests here so that if a misbehaving client
-        // sends more than 1 requests, we will catch it in onMessage() and emit INVALID_ARGUMENT.
+        // sends more than 1 requests, ServerCall will catch it.
         call.request(2);
         return new EmptyServerCallListener<ReqT>() {
           ReqT request;
           @Override
           public void onMessage(ReqT request) {
-            if (this.request == null) {
-              // We delay calling method.invoke() until onHalfClose(), because application may call
-              // close(OK) inside invoke(), while close(OK) is not allowed before onHalfClose().
-              this.request = request;
-            } else {
-              call.close(
-                  Status.INVALID_ARGUMENT.withDescription(
-                      "More than one request messages for unary call or server streaming call"),
-                  new Metadata());
-            }
+            // We delay calling method.invoke() until onHalfClose() to make sure the client
+            // half-closes.
+            this.request = request;
           }
 
           @Override
