@@ -53,11 +53,12 @@ import java.net.URI;
 @ExperimentalApi
 public final class DnsNameResolverFactory extends NameResolver.Factory {
 
+  private static final String SCHEME = "dns";
   private static final DnsNameResolverFactory instance = new DnsNameResolverFactory();
 
   @Override
   public NameResolver newNameResolver(URI targetUri, Attributes params) {
-    if ("dns".equals(targetUri.getScheme())) {
+    if (SCHEME.equals(targetUri.getScheme())) {
       String targetPath = Preconditions.checkNotNull(targetUri.getPath(), "targetPath");
       Preconditions.checkArgument(targetPath.startsWith("/"),
           "the path component (%s) of the target (%s) must start with '/'", targetPath, targetUri);
@@ -66,6 +67,11 @@ public final class DnsNameResolverFactory extends NameResolver.Factory {
     } else {
       return null;
     }
+  }
+
+  @Override
+  public String getDefaultScheme() {
+    return SCHEME;
   }
 
   private DnsNameResolverFactory() {

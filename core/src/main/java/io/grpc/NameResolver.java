@@ -87,6 +87,13 @@ public abstract class NameResolver {
      */
     @Nullable
     public abstract NameResolver newNameResolver(URI targetUri, Attributes params);
+
+    /**
+     * Returns the default scheme, which will be used to construct a URI when {@link
+     * ManagedChannelBuilder#forTarget(String)} is given an authority string instead of a compliant
+     * URI.
+     */
+    public abstract String getDefaultScheme();
   }
 
   /**

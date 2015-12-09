@@ -434,6 +434,11 @@ public class ManagedChannelImplTest {
       return resolver;
     }
 
+    @Override
+    public String getDefaultScheme() {
+      return "fake";
+    }
+
     void allResolved() {
       for (FakeNameResolver resolver : resolvers) {
         resolver.resolved();
@@ -485,6 +490,11 @@ public class ManagedChannelImplTest {
 
         @Override public void shutdown() {}
       };
+    }
+
+    @Override
+    public String getDefaultScheme() {
+      return "fake";
     }
   }
 

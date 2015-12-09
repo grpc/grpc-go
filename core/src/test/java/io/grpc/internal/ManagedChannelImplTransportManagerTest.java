@@ -98,6 +98,11 @@ public class ManagedChannelImplTransportManagerTest {
         }
       };
     }
+
+    @Override
+    public String getDefaultScheme() {
+      return "fake";
+    }
   };
 
   private final ExecutorService executor = Executors.newSingleThreadExecutor();

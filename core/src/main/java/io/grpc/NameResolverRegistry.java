@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import com.google.common.base.Preconditions;
+
 import java.net.URI;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -43,21 +45,22 @@ import javax.annotation.concurrent.ThreadSafe;
 @ExperimentalApi
 @ThreadSafe
 public final class NameResolverRegistry extends NameResolver.Factory {
-  private static final NameResolverRegistry defaultRegistry = new NameResolverRegistry();
+  private static final NameResolverRegistry defaultRegistry =
+      new NameResolverRegistry(DnsNameResolverFactory.getInstance());
 
   private final CopyOnWriteArrayList<NameResolver.Factory> registry =
       new CopyOnWriteArrayList<NameResolver.Factory>();
 
-  private NameResolverRegistry() {
-    // To prevent instantiation
-  }
-
-  static {
-    defaultRegistry.register(DnsNameResolverFactory.getInstance());
-  }
-
   public static NameResolverRegistry getDefaultRegistry() {
     return defaultRegistry;
+  }
+
+  private final String defaultScheme;
+
+  private NameResolverRegistry(NameResolver.Factory defaultResolverFactory) {
+    register(defaultResolverFactory);
+    defaultScheme = Preconditions.checkNotNull(
+        defaultResolverFactory.getDefaultScheme(), "defaultScheme");
   }
 
   /**
@@ -82,5 +85,10 @@ public final class NameResolverRegistry extends NameResolver.Factory {
       }
     }
     return null;
+  }
+
+  @Override
+  public String getDefaultScheme() {
+    return defaultScheme;
   }
 }

@@ -65,6 +65,7 @@ import javax.annotation.Nullable;
  */
 public abstract class AbstractManagedChannelImplBuilder
         <T extends AbstractManagedChannelImplBuilder<T>> extends ManagedChannelBuilder<T> {
+  private static final String DIRECT_ADDRESS_SCHEME = "directaddress";
 
   @Nullable
   private Executor executor;
@@ -99,7 +100,7 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   protected AbstractManagedChannelImplBuilder(SocketAddress directServerAddress, String authority) {
-    this.target = "directaddress:///" + directServerAddress;
+    this.target = DIRECT_ADDRESS_SCHEME + ":///" + directServerAddress;
     this.directServerAddress = directServerAddress;
     this.nameResolverFactory = new DirectAddressNameResolverFactory(directServerAddress, authority);
   }
@@ -279,6 +280,11 @@ public abstract class AbstractManagedChannelImplBuilder
         @Override
         public void shutdown() {}
       };
+    }
+
+    @Override
+    public String getDefaultScheme() {
+      return DIRECT_ADDRESS_SCHEME;
     }
   }
 }

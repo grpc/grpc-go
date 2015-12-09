@@ -53,21 +53,18 @@ public class ManagedChannelImplGetNameResolverTest {
 
   @Test
   public void invalidUriTarget() {
-    testInvalidTarget("dns:///[invalid]");
+    testInvalidTarget("defaultscheme:///[invalid]");
   }
 
   @Test
   public void validTargetWithInvalidDnsName() throws Exception {
-    // "dns:///[invalid" is a valid URI target, it's just "[invalid" is not a valid DNS name.  Such
-    // error will be handled by DnsNameResolver (tested in DnsNameResolverTest), but not in
-    // getNameResolver().
-    testValidTarget("[invalid]", new URI("dns", null, "/[invalid]", null));
+    testValidTarget("[valid]", new URI("defaultscheme", null, "/[valid]", null));
   }
 
   @Test
   public void validAuthorityTarget() throws Exception {
     testValidTarget("foo.googleapis.com:8080",
-        new URI("dns", null, "/foo.googleapis.com:8080", null));
+        new URI("defaultscheme", null, "/foo.googleapis.com:8080", null));
   }
 
   @Test
@@ -78,7 +75,7 @@ public class ManagedChannelImplGetNameResolverTest {
 
   @Test
   public void validIpv4AuthorityTarget() throws Exception {
-    testValidTarget("127.0.0.1:1234", new URI("dns", null, "/127.0.0.1:1234", null));
+    testValidTarget("127.0.0.1:1234", new URI("defaultscheme", null, "/127.0.0.1:1234", null));
   }
 
   @Test
@@ -88,7 +85,7 @@ public class ManagedChannelImplGetNameResolverTest {
 
   @Test
   public void validIpv6AuthorityTarget() throws Exception {
-    testValidTarget("[::1]:1234", new URI("dns", null, "/[::1]:1234", null));
+    testValidTarget("[::1]:1234", new URI("defaultscheme", null, "/[::1]:1234", null));
   }
 
   @Test
@@ -107,6 +104,11 @@ public class ManagedChannelImplGetNameResolverTest {
       @Override
       public NameResolver newNameResolver(URI targetUri, Attributes params) {
         return null;
+      }
+
+      @Override
+      public String getDefaultScheme() {
+        return "defaultscheme";
       }
     };
     try {
@@ -151,6 +153,11 @@ public class ManagedChannelImplGetNameResolverTest {
         return new FakeNameResolver(targetUri);
       }
       return null;
+    }
+
+    @Override
+    public String getDefaultScheme() {
+      return expectedScheme;
     }
   }
 
