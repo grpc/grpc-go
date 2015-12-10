@@ -330,16 +330,22 @@ public abstract class AbstractStream<IdT> implements Stream {
   }
 
   @Override
-  public final void pickCompressor(Iterable<String> messageEncodings) {
+  public final Compressor pickCompressor(Iterable<String> messageEncodings) {
     for (String messageEncoding : messageEncodings) {
       Compressor c = compressorRegistry.lookupCompressor(messageEncoding);
       if (c != null) {
         // TODO(carl-mastrangelo): check that headers haven't already been sent.  I can't find where
         // the client stream changes outbound phase correctly, so I am ignoring it.
         framer.setCompressor(c);
-        break;
+        return c;
       }
     }
+    return null;
+  }
+
+  // TODO(carl-mastrangelo): this is a hack to get around registry passing.  Remove it.
+  protected final DecompressorRegistry decompressorRegistry() {
+    return decompressorRegistry;
   }
 
   /**

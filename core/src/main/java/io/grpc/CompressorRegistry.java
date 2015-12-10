@@ -31,7 +31,10 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.google.common.annotations.VisibleForTesting;
+
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -69,5 +72,16 @@ public final class CompressorRegistry {
   @Nullable
   public Compressor lookupCompressor(String compressorName) {
     return compressors.get(compressorName);
+  }
+
+  /**
+   * Registers a compressor for both decompression and message encoding negotiation.
+   *
+   * @param c The compressor to register
+   */
+  public void register(Compressor c) {
+    String encoding = c.getMessageEncoding();
+    checkArgument(!encoding.contains(","), "Comma is currently not allowed in message encoding");
+    compressors.put(encoding, c);
   }
 }

@@ -31,6 +31,7 @@
 
 package io.grpc.inprocess;
 
+import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
@@ -326,11 +327,13 @@ class InProcessTransport implements ServerTransport, ClientTransport {
 
       @Override
       public void setMessageCompression(boolean enable) {
-        // noop
+         // noop
       }
 
       @Override
-      public void pickCompressor(Iterable<String> messageEncodings) {}
+      public Compressor pickCompressor(Iterable<String> messageEncodings) {
+        return null;
+      }
 
       @Override
       public void setCompressionRegistry(CompressorRegistry registry) {}
@@ -447,7 +450,9 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       public void setMessageCompression(boolean enable) {}
 
       @Override
-      public void pickCompressor(Iterable<String> messageEncodings) {}
+      public Compressor pickCompressor(Iterable<String> messageEncodings) {
+        return null;
+      }
 
       @Override
       public void setCompressionRegistry(CompressorRegistry registry) {}

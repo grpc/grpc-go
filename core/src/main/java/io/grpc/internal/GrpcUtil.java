@@ -36,6 +36,7 @@ import static io.grpc.Status.Code.CANCELLED;
 import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -158,6 +159,8 @@ public final class GrpcUtil {
           EnumSet.of(CANCELLED, DEADLINE_EXCEEDED, Status.Code.INTERNAL, Status.Code.UNKNOWN);
 
   public static final Splitter ACCEPT_ENCODING_SPLITER = Splitter.on(',').trimResults();
+
+  public static final Joiner ACCEPT_ENCODING_JOINER = Joiner.on(',');
 
   /**
    * Maps HTTP error response status codes to transport codes.

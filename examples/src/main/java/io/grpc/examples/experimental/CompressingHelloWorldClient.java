@@ -31,14 +31,22 @@
 
 package io.grpc.examples.experimental;
 
+import com.google.common.util.concurrent.Uninterruptibles;
+
+import io.grpc.CallOptions;
+import io.grpc.ClientCall;
+import io.grpc.ClientCall.Listener;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.Metadata;
+import io.grpc.Status;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.examples.helloworld.HelloResponse;
+import io.grpc.internal.GrpcUtil;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -53,14 +61,12 @@ public class CompressingHelloWorldClient {
       Logger.getLogger(CompressingHelloWorldClient.class.getName());
 
   private final ManagedChannel channel;
-  private final GreeterGrpc.GreeterBlockingStub blockingStub;
 
   /** Construct client connecting to HelloWorld server at {@code host:port}. */
   public CompressingHelloWorldClient(String host, int port) {
     channel = ManagedChannelBuilder.forAddress(host, port)
         .usePlaintext(true)
         .build();
-    blockingStub = GreeterGrpc.newBlockingStub(channel);
   }
 
   public void shutdown() throws InterruptedException {
@@ -68,16 +74,44 @@ public class CompressingHelloWorldClient {
   }
 
   /** Say hello to server. */
-  public void greet(String name) {
-    try {
-      logger.info("Will try to greet " + name + " ...");
-      HelloRequest request = HelloRequest.newBuilder().setName(name).build();
-      HelloResponse response = blockingStub.sayHello(request);
-      logger.info("Greeting: " + response.getMessage());
-    } catch (RuntimeException e) {
-      logger.log(Level.WARNING, "RPC failed", e);
-      return;
-    }
+  public void greet(final String name) {
+    final ClientCall<HelloRequest, HelloResponse> call =
+        channel.newCall(GreeterGrpc.METHOD_SAY_HELLO, CallOptions.DEFAULT);
+
+    final CountDownLatch latch = new CountDownLatch(1);
+
+    call.start(new Listener<HelloResponse>() {
+      @Override
+      public void onHeaders(Metadata headers) {
+        super.onHeaders(headers);
+        String encoding = headers.get(GrpcUtil.MESSAGE_ENCODING_KEY);
+        if (encoding == null) {
+          throw new RuntimeException("No compression selected!");
+        }
+      }
+
+      @Override
+      public void onMessage(HelloResponse message) {
+        super.onMessage(message);
+        logger.info("Greeting: " + message.getMessage());
+        latch.countDown();
+      }
+
+      @Override
+      public void onClose(Status status, Metadata trailers) {
+        latch.countDown();
+        if (!status.isOk()) {
+          throw status.asRuntimeException();
+        }
+      }
+    }, new Metadata());
+
+    call.setMessageCompression(true);
+    call.sendMessage(HelloRequest.newBuilder().setName(name).build());
+    call.request(1);
+    call.halfClose();
+
+    Uninterruptibles.awaitUninterruptibly(latch, 100, TimeUnit.SECONDS);
   }
 
   /**

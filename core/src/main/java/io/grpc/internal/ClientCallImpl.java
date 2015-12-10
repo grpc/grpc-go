@@ -34,6 +34,7 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Iterables.addAll;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_JOINER;
 import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
 import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
@@ -181,7 +182,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     headers.removeAll(MESSAGE_ACCEPT_ENCODING_KEY);
     if (!decompressorRegistry.getAdvertisedMessageEncodings().isEmpty()) {
       String acceptEncoding =
-          Joiner.on(',').join(decompressorRegistry.getAdvertisedMessageEncodings());
+          ACCEPT_ENCODING_JOINER.join(decompressorRegistry.getAdvertisedMessageEncodings());
       headers.put(MESSAGE_ACCEPT_ENCODING_KEY, acceptEncoding);
     }
   }

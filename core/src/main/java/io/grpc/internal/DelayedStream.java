@@ -215,13 +215,17 @@ class DelayedStream implements ClientStream {
   }
 
   @Override
-  public void pickCompressor(Iterable<String> messageEncodings) {
+  public Compressor pickCompressor(Iterable<String> messageEncodings) {
     synchronized (this) {
       compressionMessageEncodings = messageEncodings;
       if (realStream != null) {
-        realStream.pickCompressor(messageEncodings);
+        return realStream.pickCompressor(messageEncodings);
       }
     }
+    // ClientCall never uses this.  Since the stream doesn't exist yet, it can't say what
+    // stream it would pick.  Eventually this will need a cleaner solution.
+    // TODO(carl-mastrangelo): Remove this.
+    return null;
   }
 
   @Override

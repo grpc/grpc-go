@@ -31,10 +31,13 @@
 
 package io.grpc.internal;
 
+import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 
 import java.io.InputStream;
+
+import javax.annotation.Nullable;
 
 /**
  * A single stream of communication between two end-points within a transport.
@@ -81,12 +84,15 @@ public interface Stream {
 
   /**
    * Picks a compressor for for this stream.  If no message encodings are acceptable, compression is
-   *     not used.
+   *     not used.  It is undefined if this this method is invoked multiple times.
+   *
    *
    * @param messageEncodings a group of message encoding names that the remote endpoint is known
    *     to support.
+   * @return The compressor chosen for the stream, or null if none selected.
    */
-  void pickCompressor(Iterable<String> messageEncodings);
+  @Nullable
+  Compressor pickCompressor(Iterable<String> messageEncodings);
 
   /**
    * Enables per-message compression, if an encoding type has been negotiated.  If no message

@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Status;
@@ -72,7 +73,9 @@ public class NoopClientStream implements ClientStream {
   }
 
   @Override
-  public void pickCompressor(Iterable<String> messageEncodings) {}
+  public Compressor pickCompressor(Iterable<String> messageEncodings) {
+    return null;
+  }
 
   @Override
   public void setCompressionRegistry(CompressorRegistry registry) {}

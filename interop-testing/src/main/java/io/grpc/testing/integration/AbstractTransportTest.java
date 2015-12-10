@@ -49,6 +49,7 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.auth.oauth2.OAuth2Credentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.auth.oauth2.ServiceAccountJwtAccessCredentials;
+import com.google.common.collect.ImmutableList;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 
@@ -58,6 +59,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -107,13 +109,19 @@ public abstract class AbstractTransportTest {
   private static Server server;
   private static int OPERATION_TIMEOUT = 5000;
 
-  protected static void startStaticServer(ServerBuilder<?> builder) {
+  protected static void startStaticServer(
+      ServerBuilder<?> builder, ServerInterceptor ... interceptors) {
     testServiceExecutor = Executors.newScheduledThreadPool(2);
+
+    List<ServerInterceptor> allInterceptors = ImmutableList.<ServerInterceptor>builder()
+        .add(TestUtils.recordRequestHeadersInterceptor(requestHeadersCapture))
+        .add(TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY))
+        .add(interceptors)
+        .build();
 
     builder.addService(ServerInterceptors.intercept(
         TestServiceGrpc.bindService(new TestServiceImpl(testServiceExecutor)),
-        TestUtils.recordRequestHeadersInterceptor(requestHeadersCapture),
-        TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)));
+        allInterceptors));
     try {
       server = builder.build().start();
     } catch (IOException ex) {
@@ -584,7 +592,7 @@ public abstract class AbstractTransportTest {
     Assert.assertEquals(contextValue, trailersCapture.get().get(METADATA_KEY));
   }
 
-  @Test(timeout = 10000)
+  @Test(timeout = 100000000)
   public void sendsTimeoutHeader() {
     long configuredTimeoutMinutes = 100;
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
