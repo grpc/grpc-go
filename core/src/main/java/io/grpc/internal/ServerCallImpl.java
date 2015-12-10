@@ -184,18 +184,10 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
 
   @Override
   public void close(Status status, Metadata trailers) {
-    try {
-      checkState(!closeCalled, "call already closed");
-      closeCalled = true;
-      inboundHeaders = null;
-      stream.close(status, trailers);
-    } finally {
-      if (status.getCode() == Status.Code.OK) {
-        context.cancel(null);
-      } else {
-        context.cancel(status.getCause() != null ? status.getCause() : status.asRuntimeException());
-      }
-    }
+    checkState(!closeCalled, "call already closed");
+    closeCalled = true;
+    inboundHeaders = null;
+    stream.close(status, trailers);
   }
 
   @Override
@@ -205,7 +197,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
 
   ServerStreamListener newServerStreamListener(ServerCall.Listener<ReqT> listener,
       Future<?> timeout) {
-    return new ServerStreamListenerImpl<ReqT>(this, listener, timeout);
+    return new ServerStreamListenerImpl<ReqT>(this, listener, timeout, context);
   }
 
   /**
@@ -217,13 +209,16 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
     private final ServerCallImpl<ReqT, ?> call;
     private final ServerCall.Listener<ReqT> listener;
     private final Future<?> timeout;
+    private final Context.CancellableContext context;
     private boolean messageReceived;
 
     public ServerStreamListenerImpl(
-        ServerCallImpl<ReqT, ?> call, ServerCall.Listener<ReqT> listener, Future<?> timeout) {
+        ServerCallImpl<ReqT, ?> call, ServerCall.Listener<ReqT> listener, Future<?> timeout,
+        Context.CancellableContext context) {
       this.call = checkNotNull(call, "call");
       this.listener = checkNotNull(listener, "listener must not be null");
       this.timeout = checkNotNull(timeout, "timeout");
+      this.context = checkNotNull(context, "context");
     }
 
     @Override
@@ -263,11 +258,17 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
     @Override
     public void closed(Status status) {
       timeout.cancel(true);
-      if (status.isOk()) {
-        listener.onComplete();
-      } else {
-        call.cancelled = true;
-        listener.onCancel();
+      try {
+        if (status.isOk()) {
+          listener.onComplete();
+        } else {
+          call.cancelled = true;
+          listener.onCancel();
+        }
+      } finally {
+        // Cancel context after delivering RPC closure notification to allow the application to
+        // clean up and update any state based on whether onComplete or onCancel was called.
+        context.cancel(null);
       }
     }
 
