@@ -49,7 +49,7 @@ import java.util.ServiceLoader;
 @Internal
 public abstract class ManagedChannelProvider {
   private static final ManagedChannelProvider provider
-      = load(Thread.currentThread().getContextClassLoader());
+      = load(getCorrectClassLoader());
 
   @VisibleForTesting
   static ManagedChannelProvider load(ClassLoader classLoader) {
@@ -85,6 +85,27 @@ public abstract class ManagedChannelProvider {
           + "Try adding a dependency on the grpc-okhttp or grpc-netty artifact");
     }
     return provider;
+  }
+
+  private static ClassLoader getCorrectClassLoader() {
+    if (isAndroid()) {
+      // When android:sharedUserId or android:process is used, Android will setup a dummy
+      // ClassLoader for the thread context (http://stackoverflow.com/questions/13407006),
+      // instead of letting users to manually set context class loader, we choose the
+      // correct class loader here.
+      return ManagedChannelProvider.class.getClassLoader();
+    }
+    return Thread.currentThread().getContextClassLoader();
+  }
+
+  protected static boolean isAndroid() {
+    try {
+      Class.forName("android.app.Application", /*initialize=*/ false, null);
+      return true;
+    } catch (Exception e) {
+      // If Application isn't loaded, it might as well not be Android.
+      return false;
+    }
   }
 
   /**

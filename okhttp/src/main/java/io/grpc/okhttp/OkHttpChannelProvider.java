@@ -47,16 +47,6 @@ public class OkHttpChannelProvider extends ManagedChannelProvider {
     return isAndroid() ? 8 : 3;
   }
 
-  private static boolean isAndroid() {
-    try {
-      Class.forName("android.app.Application", /*initialize=*/ false, null);
-      return true;
-    } catch (Exception e) {
-      // If Application isn't loaded, it might as well not be Android.
-      return false;
-    }
-  }
-
   @Override
   protected OkHttpChannelBuilder builderForAddress(String name, int port) {
     return OkHttpChannelBuilder.forAddress(name, port);
