@@ -30,7 +30,10 @@ if [ -f ${INSTALL_DIR}/lib/libssl.so ]; then
 elif [ "$(uname)" = Darwin ]; then
   brew install openssl
 else
-  wget -O - https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz | tar xz -C $DOWNLOAD_DIR
+  # The version without the patch letter (e.g., 1.0.2 provided 1.0.2d)
+  VERSION_BASE=${OPENSSL_VERSION%%[a-z]*}
+  wget -O - https://www.openssl.org/source/old/$VERSION_BASE/openssl-${OPENSSL_VERSION}.tar.gz \
+    | tar xz -C $DOWNLOAD_DIR
   pushd $DOWNLOAD_DIR/openssl-${OPENSSL_VERSION}
   ./Configure linux-x86_64 shared no-ssl2 no-comp --prefix=${INSTALL_DIR}
   make -j$(nproc)
