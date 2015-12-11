@@ -35,10 +35,6 @@
 // The interface is EXPERIMENTAL and may be suject to change.
 package naming
 
-import (
-	"golang.org/x/net/context"
-)
-
 // Operation defines the corresponding operations for a name resolution change.
 type Operation uint8
 
@@ -71,7 +67,7 @@ type Resolver interface {
 type Watcher interface {
 	// Next blocks until an update or error happens. It may return one or more
 	// updates. The first call should get the full set of the results.
-	Next(ctx context.Context) ([]*Update, error)
+	Next() ([]*Update, error)
 	// Close closes the Watcher.
 	Close()
 }
