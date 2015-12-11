@@ -35,16 +35,12 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Stopwatch;
-import com.google.common.base.Ticker;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.EquivalentAddressGroup;
@@ -57,16 +53,10 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
 import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.LinkedList;
-import java.util.PriorityQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Unit tests for {@link TransportSet}.
@@ -78,7 +68,7 @@ public class TransportSetTest {
 
   private static final String authority = "fakeauthority";
 
-  private long currentTimeMillis;
+  private FakeClock fakeClock;
 
   @Mock private LoadBalancer mockLoadBalancer;
   @Mock private BackoffPolicy mockBackoffPolicy1;
@@ -87,9 +77,6 @@ public class TransportSetTest {
   @Mock private BackoffPolicy.Provider mockBackoffPolicyProvider;
   @Mock private ClientTransportFactory mockTransportFactory;
   @Mock private TransportSet.Callback mockTransportSetCallback;
-  @Mock private ScheduledExecutorService mockScheduledExecutorService;
-
-  private final PriorityQueue<Task> tasks = new PriorityQueue<Task>();
 
   private TransportSet transportSet;
   private EquivalentAddressGroup addressGroup;
@@ -97,23 +84,13 @@ public class TransportSetTest {
 
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
+    fakeClock = new FakeClock();
 
     when(mockBackoffPolicyProvider.get())
         .thenReturn(mockBackoffPolicy1, mockBackoffPolicy2, mockBackoffPolicy3);
     when(mockBackoffPolicy1.nextBackoffMillis()).thenReturn(10L, 100L);
     when(mockBackoffPolicy2.nextBackoffMillis()).thenReturn(10L, 100L);
     when(mockBackoffPolicy3.nextBackoffMillis()).thenReturn(10L, 100L);
-    doAnswer(new Answer<ScheduledFuture<?>>() {
-      @Override public ScheduledFuture<?> answer(InvocationOnMock invocation) throws Throwable {
-        Object[] args = invocation.getArguments();
-        Runnable task = (Runnable) args[0];
-        long delay = (Long) args[1];
-        TimeUnit unit = (TimeUnit) args[2];
-        tasks.add(new Task(currentTimeMillis + unit.toMillis(delay), task));
-        return null;
-      }
-    }).when(mockScheduledExecutorService)
-        .schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
     listeners = TestUtils.captureListeners(mockTransportFactory);
   }
 
@@ -139,9 +116,9 @@ public class TransportSetTest {
     verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     // Transport creation doesn't happen until time is due
-    forwardTime(9);
+    fakeClock.forwardMillis(9);
     verify(mockTransportFactory, times(transportsCreated)).newClientTransport(addr, authority);
-    forwardTime(1);
+    fakeClock.forwardMillis(1);
     verify(mockTransportFactory, times(++transportsCreated)).newClientTransport(addr, authority);
     // Fail this one too
     listeners.poll().transportShutdown(Status.UNAVAILABLE);
@@ -151,9 +128,9 @@ public class TransportSetTest {
     verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     // Transport creation doesn't happen until time is due
-    forwardTime(99);
+    fakeClock.forwardMillis(99);
     verify(mockTransportFactory, times(transportsCreated)).newClientTransport(addr, authority);
-    forwardTime(1);
+    fakeClock.forwardMillis(1);
     verify(mockTransportFactory, times(++transportsCreated)).newClientTransport(addr, authority);
     // Let this one succeed
     listeners.peek().transportReady();
@@ -212,9 +189,9 @@ public class TransportSetTest {
     transportSet.obtainActiveTransport();
     verify(mockBackoffPolicy2, times(++backoff2Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
-    forwardTime(9);
+    fakeClock.forwardMillis(9);
     verify(mockTransportFactory, times(transportsAddr2)).newClientTransport(addr2, authority);
-    forwardTime(1);
+    fakeClock.forwardMillis(1);
     verify(mockTransportFactory, times(++transportsAddr2)).newClientTransport(addr2, authority);
     // Fail this one too
     listeners.poll().transportShutdown(Status.UNAVAILABLE);
@@ -230,9 +207,9 @@ public class TransportSetTest {
     transportSet.obtainActiveTransport();
     verify(mockBackoffPolicy2, times(++backoff2Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
-    forwardTime(99);
+    fakeClock.forwardMillis(99);
     verify(mockTransportFactory, times(transportsAddr2)).newClientTransport(addr2, authority);
-    forwardTime(1);
+    fakeClock.forwardMillis(1);
     verify(mockTransportFactory, times(++transportsAddr2)).newClientTransport(addr2, authority);
     // Let it through
     listeners.peek().transportReady();
@@ -259,9 +236,9 @@ public class TransportSetTest {
     transportSet.obtainActiveTransport();
     verify(mockBackoffPolicy3, times(++backoff3Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
-    forwardTime(9);
+    fakeClock.forwardMillis(9);
     verify(mockTransportFactory, times(transportsAddr1)).newClientTransport(addr1, authority);
-    forwardTime(1);
+    fakeClock.forwardMillis(1);
     verify(mockTransportFactory, times(++transportsAddr1)).newClientTransport(addr1, authority);
 
     // Final checks on invocations on back-off policies
@@ -289,7 +266,7 @@ public class TransportSetTest {
     listeners.poll().transportShutdown(Status.UNAVAILABLE);
 
     // Won't reconnect until requested, even if back-off time has expired
-    forwardTime(10);
+    fakeClock.forwardMillis(10);
     verify(mockTransportFactory, times(transportsCreated)).newClientTransport(addr, authority);
 
     // Once requested, will reconnect
@@ -302,7 +279,7 @@ public class TransportSetTest {
     // Request immediately, but will wait for back-off before reconnecting
     assertNotNull(transportSet.obtainActiveTransport());
     verify(mockTransportFactory, times(transportsCreated)).newClientTransport(addr, authority);
-    forwardTime(100);
+    fakeClock.forwardMillis(100);
     verify(mockTransportFactory, times(++transportsCreated)).newClientTransport(addr, authority);
   }
 
@@ -343,52 +320,33 @@ public class TransportSetTest {
     verify(mockTransportFactory, times(0)).newClientTransport(addr, authority);
   }
 
-  private static class Task implements Comparable<Task> {
-    final long dueTimeMillis;
-    final Runnable command;
+  @Test
+  public void cancellingTransportFutureWontAffectOtherCallers() {
+    SocketAddress addr = mock(SocketAddress.class);
+    createTransortSet(addr);
 
-    Task(long dueTimeMillis, Runnable command) {
-      this.dueTimeMillis = dueTimeMillis;
-      this.command = command;
-    }
+    // Fail the first pick so that the next pick will be pending on back-off
+    ListenableFuture<ClientTransport> future0 = transportSet.obtainActiveTransport();
+    assertTrue(future0.isDone());
+    listeners.poll().transportShutdown(Status.UNAVAILABLE);
 
-    @Override public int compareTo(Task other) {
-      if (dueTimeMillis < other.dueTimeMillis) {
-        return -1;
-      } else if (dueTimeMillis > other.dueTimeMillis) {
-        return 1;
-      } else {
-        return 0;
-      }
-    }
-  }
+    ListenableFuture<ClientTransport> future1 = transportSet.obtainActiveTransport();
+    ListenableFuture<ClientTransport> future2 = transportSet.obtainActiveTransport();
 
-  private void runDueTasks() {
-    while (true) {
-      Task task = tasks.peek();
-      if (task == null || task.dueTimeMillis > currentTimeMillis) {
-        break;
-      }
-      tasks.poll();
-      task.command.run();
-    }
-  }
+    // These futures are pending on back-off
+    assertFalse(future1.isDone());
+    assertFalse(future2.isDone());
 
-  private void forwardTime(long millis) {
-    currentTimeMillis += millis;
-    runDueTasks();
+    // Cancel future1
+    future1.cancel(false);
+    // future2 is not affected. future1 can either be really cancelled or not, which we don't care.
+    assertFalse(future2.isDone());
   }
 
   private void createTransortSet(SocketAddress ... addrs) {
     addressGroup = new EquivalentAddressGroup(Arrays.asList(addrs));
     transportSet = new TransportSet(addressGroup, authority, mockLoadBalancer,
-        mockBackoffPolicyProvider, mockTransportFactory, mockScheduledExecutorService,
-        mockTransportSetCallback, Stopwatch.createUnstarted(
-            new Ticker() {
-              @Override public long read() {
-                return TimeUnit.MILLISECONDS.toNanos(currentTimeMillis);
-              }
-            })
-        );
+        mockBackoffPolicyProvider, mockTransportFactory, fakeClock.scheduledExecutorService,
+        mockTransportSetCallback, Stopwatch.createUnstarted(fakeClock.ticker));
   }
 }

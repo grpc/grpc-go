@@ -123,7 +123,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   interface ClientTransportProvider {
     /**
      * @return a future for client transport. If no more transports can be created, e.g., channel is
-     *         shut down, the future's value will be {@code null}.
+     *         shut down, the future's value will be {@code null}. If the call is cancelled, it will
+     *         also cancel the future.
      */
     ListenableFuture<ClientTransport> get(CallOptions callOptions);
   }
@@ -205,8 +206,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     prepareHeaders(headers, callOptions, userAgent,
         knownMessageEncodingRegistry, decompressorRegistry, compressorRegistry);
 
-    ClientStreamListener listener = new ClientStreamListenerImpl(observer);
     ListenableFuture<ClientTransport> transportFuture = clientTransportProvider.get(callOptions);
+    ClientStreamListener listener = new ClientStreamListenerImpl(observer, transportFuture);
 
     if (transportFuture.isDone()) {
       // Try to skip DelayedStream when possible to avoid the overhead of a volatile read in the
@@ -226,8 +227,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     if (stream == null) {
       DelayedStream delayed;
       stream = delayed = new DelayedStream(listener);
-      addListener(transportFuture,
-          new StreamCreationTask(delayed, headers, method, callOptions, listener));
+      Futures.addCallback(transportFuture,
+          new StreamCreationTask(delayed, headers, method, callOptions, listener),
+          transportFuture.isDone() ? directExecutor() : callExecutor);
     }
 
     stream.setDecompressionRegistry(decompressorRegistry);
@@ -353,8 +355,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     return deadlineCancellationExecutor.schedule(new Runnable() {
       @Override
       public void run() {
-        // DelayedStream.cancel() is safe to call from a thread that is different from where the
-        // stream is created.
         stream.cancel(Status.DEADLINE_EXCEEDED);
       }
     }, timeoutMicros, TimeUnit.MICROSECONDS);
@@ -362,11 +362,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
   private class ClientStreamListenerImpl implements ClientStreamListener {
     private final Listener<RespT> observer;
+    private final ListenableFuture<ClientTransport> transportFuture;
     private boolean closed;
 
-    public ClientStreamListenerImpl(Listener<RespT> observer) {
-      Preconditions.checkNotNull(observer);
-      this.observer = observer;
+    public ClientStreamListenerImpl(Listener<RespT> observer,
+        ListenableFuture<ClientTransport> transportFuture) {
+      this.observer = Preconditions.checkNotNull(observer, "observer");
+      this.transportFuture = Preconditions.checkNotNull(transportFuture, "transportFuture");
     }
 
     @Override
@@ -421,6 +423,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     @Override
     public void closed(Status status, Metadata trailers) {
       Long timeoutMicros = getRemainingTimeoutMicros(callOptions.getDeadlineNanoTime());
+      transportFuture.cancel(false);
       if (status.getCode() == Status.Code.CANCELLED && timeoutMicros != null) {
         // When the server's deadline expires, it can only reset the stream with CANCEL and no
         // description. Since our timer may be delayed in firing, we double-check the deadline and
@@ -460,11 +463,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         }
       });
     }
-  }
-
-  private <T> void addListener(ListenableFuture<T> future, FutureCallback<T> callback) {
-    Executor executor = future.isDone() ? directExecutor() : callExecutor;
-    Futures.addCallback(future, callback, executor);
   }
 
   /**

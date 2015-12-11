@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.FutureCallback;
@@ -38,8 +39,10 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collections;
+import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -54,14 +57,33 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public final class BlankFutureProvider<T> {
-  private List<SettableFuture<T>> blankFutures = new ArrayList<SettableFuture<T>>();
+  private Set<SettableFuture<T>> blankFutures = createSet();
+
+  @VisibleForTesting
+  Set<SettableFuture<T>> getBlankFutureSet() {
+    return blankFutures;
+  }
 
   /**
    * Creates a blank future and track it.
+   *
+   * <p>If the caller gives up on an undone future, it should call either {@code cancel(true)} or
+   * {@code cancel(false)} (they have the same effect) on the future to clean up the tracking
+   * information.
    */
   public ListenableFuture<T> newBlankFuture() {
-    SettableFuture<T> future = SettableFuture.create();
+    final SettableFuture<T> future = SettableFuture.create();
     blankFutures.add(future);
+    final Set<SettableFuture<T>> savedSet = blankFutures;
+    Futures.addCallback(future, new FutureCallback<T>() {
+      @Override public void onFailure(Throwable t) {
+        if (t instanceof CancellationException) {
+          savedSet.remove(future);
+        }
+      }
+
+      @Override public void onSuccess(T result) { }
+    });
     return future;
   }
 
@@ -73,8 +95,8 @@ public final class BlankFutureProvider<T> {
    * previous blank futures, and can be used to create and track new blank futures.
    */
   public FulfillmentBatch<T> createFulfillmentBatch() {
-    List<SettableFuture<T>> blankFuturesCopy = blankFutures;
-    blankFutures = new ArrayList<SettableFuture<T>>();
+    Set<SettableFuture<T>> blankFuturesCopy = blankFutures;
+    blankFutures = createSet();
     return new FulfillmentBatch<T>(blankFuturesCopy);
   }
 
@@ -85,10 +107,10 @@ public final class BlankFutureProvider<T> {
    * <p>This object is independent from the {@link BlankFutureProvider} that created it. They don't
    * need synchronization between them.
    */
-  public static class FulfillmentBatch<T> {
-    private final List<SettableFuture<T>> futures;
+  public static final class FulfillmentBatch<T> {
+    private final Set<SettableFuture<T>> futures;
 
-    private FulfillmentBatch(List<SettableFuture<T>> futures) {
+    private FulfillmentBatch(Set<SettableFuture<T>> futures) {
       this.futures = Preconditions.checkNotNull(futures, "futures");
     }
 
@@ -121,5 +143,13 @@ public final class BlankFutureProvider<T> {
         future.setException(error);
       }
     }
+  }
+
+  private static <T> Set<SettableFuture<T>> createSet() {
+    // If a future is cancelled before it's fulfilled, it will be removed from the set.
+    // The cancellation may happen asynchronously, e.g., from a deadline timer thread, thus the set
+    // must be thread-safe.
+    // There is a race between cancelling and fulfilling, but it is benign.
+    return Collections.newSetFromMap(new ConcurrentHashMap<SettableFuture<T>, Boolean>());
   }
 }

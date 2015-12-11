@@ -35,8 +35,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Throwables;
+import com.google.common.util.concurrent.AbstractFuture;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
@@ -62,10 +62,10 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 final class TransportSet {
   private static final Logger log = Logger.getLogger(TransportSet.class.getName());
-  private static final SettableFuture<ClientTransport> NULL_VALUE_FUTURE;
+  private static final UncancellableTransportFuture NULL_VALUE_FUTURE;
 
   static {
-    NULL_VALUE_FUTURE = SettableFuture.create();
+    NULL_VALUE_FUTURE = new UncancellableTransportFuture();
     NULL_VALUE_FUTURE.set(null);
   }
 
@@ -115,7 +115,7 @@ final class TransportSet {
    * to it.
    */
   @Nullable
-  private volatile SettableFuture<ClientTransport> activeTransportFuture;
+  private volatile UncancellableTransportFuture activeTransportFuture;
 
   TransportSet(EquivalentAddressGroup addressGroup, String authority, LoadBalancer loadBalancer,
       BackoffPolicy.Provider backoffPolicyProvider, ClientTransportFactory transportFactory,
@@ -143,9 +143,11 @@ final class TransportSet {
    *
    * <p>If this {@code TransportSet} has been shut down, the returned future will have {@code null}
    * value.
+   *
+   * <p>Cancelling the return future has no effect.
    */
   final ListenableFuture<ClientTransport> obtainActiveTransport() {
-    SettableFuture<ClientTransport> savedTransportFuture = activeTransportFuture;
+    UncancellableTransportFuture savedTransportFuture = activeTransportFuture;
     if (savedTransportFuture != null) {
       return savedTransportFuture;
     }
@@ -157,7 +159,7 @@ final class TransportSet {
         Preconditions.checkState(!shutdown, "already shutdown");
         Preconditions.checkState(activeTransportFuture == null || activeTransportFuture.isDone(),
             "activeTransportFuture is neither null nor done");
-        activeTransportFuture = SettableFuture.create();
+        activeTransportFuture = new UncancellableTransportFuture();
         scheduleConnection();
       }
       return activeTransportFuture;
@@ -229,7 +231,7 @@ final class TransportSet {
    * Shut down all transports, may run callback inline.
    */
   final void shutdown() {
-    SettableFuture<ClientTransport> savedActiveTransportFuture;
+    UncancellableTransportFuture savedActiveTransportFuture;
     boolean runCallback = false;
     synchronized (lock) {
       if (shutdown) {
@@ -266,10 +268,10 @@ final class TransportSet {
   private class TransportListener implements ClientTransport.Listener {
     private final SocketAddress address;
     private final ClientTransport transport;
-    private final SettableFuture<ClientTransport> transportFuture;
+    private final UncancellableTransportFuture transportFuture;
 
     public TransportListener(ClientTransport transport,
-        SettableFuture<ClientTransport> transportFuture, SocketAddress address) {
+        UncancellableTransportFuture transportFuture, SocketAddress address) {
       this.transport = transport;
       this.transportFuture = transportFuture;
       this.address = address;
@@ -327,5 +329,19 @@ final class TransportSet {
 
   interface Callback {
     void onTerminated();
+  }
+
+  private static class UncancellableTransportFuture extends AbstractFuture<ClientTransport> {
+    @Override public boolean cancel(boolean mayInterruptIfRunning) {
+      // Do not cancel.
+      // A future instance is shared among multiple obtainActiveTransport() calls.
+      // Since the user of the future may cancel it when it's no longer needed, cancelling for real
+      // will affect other users of the same future.
+      return false;
+    }
+
+    @Override protected boolean set(ClientTransport v) {
+      return super.set(v);
+    }
   }
 }

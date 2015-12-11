@@ -52,6 +52,8 @@ public abstract class TransportManager {
    * Returns the future of a transport for any of the addresses from the given address group.
    *
    * <p>If the channel has been shut down, the value of the future will be {@code null}.
+   *
+   * <p>Cancelling the returned future has no effect.
    */
   // TODO(zhangkun83): GrpcLoadBalancer will use this to get transport to connect to LB servers,
   // which would have a different authority than the primary servers. We need to figure out how to

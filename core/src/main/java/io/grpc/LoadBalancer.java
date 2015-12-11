@@ -55,6 +55,10 @@ public abstract class LoadBalancer {
   /**
    * Pick a transport that Channel will use for next RPC.
    *
+   * <p>If the caller gives up before the futrue is done, it should call either {@code cancel(true)}
+   * or {@code cancel(false)} (they have the same effect) on the future to avoid leaking of
+   * resources.
+   *
    * @param requestKey for affinity-based routing
    */
   public abstract ListenableFuture<ClientTransport> pickTransport(
