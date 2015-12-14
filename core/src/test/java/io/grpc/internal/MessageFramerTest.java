@@ -238,8 +238,9 @@ public class MessageFramerTest {
   @Test
   public void compressed() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
-    framer = new MessageFramer(sink, allocator, new Codec.Gzip());
-    framer.setMessageCompression(true);
+    framer = new MessageFramer(sink, allocator)
+        .setCompressor(new Codec.Gzip())
+        .setMessageCompression(true);
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
     // The GRPC header is written first as a separate frame.
@@ -262,8 +263,8 @@ public class MessageFramerTest {
   @Test
   public void dontCompressIfNoEncoding() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
-    framer = new MessageFramer(sink, allocator, Codec.Identity.NONE);
-    framer.setMessageCompression(true);
+    framer = new MessageFramer(sink, allocator)
+        .setMessageCompression(true);
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
     // The GRPC header is written first as a separate frame
@@ -286,8 +287,9 @@ public class MessageFramerTest {
   @Test
   public void dontCompressIfNotRequested() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
-    framer = new MessageFramer(sink, allocator, new Codec.Gzip());
-    framer.setMessageCompression(false);
+    framer = new MessageFramer(sink, allocator)
+        .setCompressor(new Codec.Gzip())
+        .setMessageCompression(false);
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
     // The GRPC header is written first as a separate frame
@@ -321,11 +323,19 @@ public class MessageFramerTest {
         }
       }
     };
-    framer = new MessageFramer(reentrant, allocator, Codec.Identity.NONE);
+    framer = new MessageFramer(reentrant, allocator);
     writeKnownLength(framer, new byte[]{3, 14});
     framer.close();
   }
 
+  @Test
+  public void zeroLengthCompressibleMessageIsNotCompressed() {
+    framer.setCompressor(new Codec.Gzip());
+    framer.setMessageCompression(true);
+    writeKnownLength(framer, new byte[]{});
+    framer.flush();
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true);
+  }
 
   private static WritableBuffer toWriteBuffer(byte[] data) {
     return toWriteBufferWithMinSize(data, 0);

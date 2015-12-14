@@ -40,6 +40,7 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 
 import io.grpc.internal.AbstractStream.Phase;
+import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -58,6 +59,13 @@ public class AbstractStreamTest {
 
   @Mock MessageFramer framer;
   @Mock MessageDeframer deframer;
+
+  private final WritableBufferAllocator allocator = new WritableBufferAllocator() {
+    @Override
+    public WritableBuffer allocate(int capacityHint) {
+      return new ByteWritableBuffer(capacityHint);
+    }
+  };
 
   @Before
   public void setUp() {
@@ -114,7 +122,7 @@ public class AbstractStreamTest {
    */
   private class AbstractStreamBase<IdT> extends AbstractStream<IdT> {
     private AbstractStreamBase(WritableBufferAllocator bufferAllocator) {
-      super(bufferAllocator, DEFAULT_MAX_MESSAGE_SIZE);
+      super(allocator, DEFAULT_MAX_MESSAGE_SIZE);
     }
 
     private AbstractStreamBase(MessageFramer framer, MessageDeframer deframer) {
