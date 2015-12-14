@@ -356,6 +356,8 @@ func (cc *Conn) WaitForStateChange(ctx context.Context, sourceState Connectivity
 	return cc.state, nil
 }
 
+// NotifyReset tries to signal the underlying transport needs to be reset due to
+// for example a name resolution change in flight.
 func (cc *Conn) NotifyReset() {
 	select {
 	case cc.resetChan <- 0:
