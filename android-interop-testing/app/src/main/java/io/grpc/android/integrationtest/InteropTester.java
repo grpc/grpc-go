@@ -171,13 +171,13 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     try {
       runTest(testCase);
       return SUCCESS_MESSAGE;
-    } catch (Exception | AssertionError e) {
+    } catch (Throwable t) {
       // Print the stack trace to logcat.
-      e.printStackTrace();
+      t.printStackTrace();
       // Then print to the error message.
       StringWriter sw = new StringWriter();
-      e.printStackTrace(new PrintWriter(sw));
-      return "Failed... : " + e.getMessage() + "\n" + sw.toString();
+      t.printStackTrace(new PrintWriter(sw));
+      return "Failed... : " + t.getMessage() + "\n" + sw.toString();
     } finally {
       shutdown();
     }
@@ -195,26 +195,26 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
 
   public void runTest(String testCase) throws Exception {
     if ("all".equals(testCase)) {
-      emptyUnary();
-      largeUnary();
-      clientStreaming();
-      serverStreaming();
-      pingPong();
-      emptyStream();
-      cancelAfterBegin();
-      cancelAfterFirstResponse();
-      fullDuplexCallShouldSucceed();
-      halfDuplexCallShouldSucceed();
-      serverStreamingShouldBeFlowControlled();
-      veryLargeRequest();
-      veryLargeResponse();
-      deadlineNotExceeded();
-      deadlineExceeded();
-      deadlineExceededServerStreaming();
-      unimplementedMethod();
-      timeoutOnSleepingServer();
+      runTest("empty_unary");
+      runTest("large_unary");
+      runTest("client_streaming");
+      runTest("server_streaming");
+      runTest("ping_pong");
+      runTest("empty_stream");
+      runTest("cancel_after_begin");
+      runTest("cancel_after_first_response");
+      runTest("full_duplex_call_should_succeed");
+      runTest("half_duplex_call_should_succeed");
+      runTest("server_streaming_should_be_flow_controlled");
+      runTest("very_large_request");
+      runTest("very_large_response");
+      runTest("deadline_not_exceeded");
+      runTest("deadline_exceeded");
+      runTest("deadline_exceeded_server_streaming");
+      runTest("unimplemented_method");
+      runTest("timeout_on_sleeping_server");
       // This has to be the last one, because it will shut down the channel.
-      gracefulShutdown();
+      runTest("graceful_shutdown");
     } else if ("empty_unary".equals(testCase)) {
       emptyUnary();
     } else if ("large_unary".equals(testCase)) {
@@ -584,7 +584,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     goldenResponse.payload.type = Messages.COMPRESSABLE;
     goldenResponse.payload.body = new byte[unaryPayloadLength()];
 
-    assertMessageEquals(goldenResponse, blockingStub.unaryCall(request));
+    assertMessageSizeEquals(goldenResponse, blockingStub.unaryCall(request));
   }
 
   public void deadlineNotExceeded() {
@@ -743,6 +743,11 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
       fail("Messages not equal, but assertEquals didn't throw");
     }
   }
+
+  public static void assertMessageSizeEquals(MessageNano expected, MessageNano actual) {
+    assertEquals(expected.getSerializedSize(), actual.getSerializedSize());
+  }
+
 
   private static void assertSuccess(StreamRecorder<?> recorder) {
     if (recorder.getError() != null) {
