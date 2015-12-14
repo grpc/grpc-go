@@ -81,10 +81,11 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 			break
 		}
 		if err != nil {
-			t.Fatalf("Failed to receive the message from the client.")
+			return
 		}
 		if pf != compressionNone {
-			t.Fatalf("Received the mistaken message format %d, want %d", pf, compressionNone)
+			t.Errorf("Received the mistaken message format %d, want %d", pf, compressionNone)
+			return
 		}
 		var v string
 		codec := testCodec{}
