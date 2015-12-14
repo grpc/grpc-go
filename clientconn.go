@@ -500,6 +500,7 @@ func (cc *Conn) transportMonitor() {
 			if !cc.reconnect() {
 				return
 			}
+			// Tries to drain reset signal if there is any since it is out-dated.
 			select {
 			case <-cc.resetChan:
 			default:
