@@ -46,17 +46,6 @@ const (
 	binHdrSuffix = "-bin"
 )
 
-// grpc-http2 requires ASCII header key and value (more detail can be found in
-// "Requests" subsection in go/grpc-http2).
-func isASCII(s string) bool {
-	for _, c := range s {
-		if c > 127 {
-			return false
-		}
-	}
-	return true
-}
-
 // encodeKeyValue encodes key and value qualified for transmission via gRPC.
 // Transmitting binary headers violates HTTP/2 spec.
 // TODO(zhaoq): Maybe check if k is ASCII also.
