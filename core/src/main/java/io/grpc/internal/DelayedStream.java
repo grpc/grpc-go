@@ -79,7 +79,7 @@ class DelayedStream implements ClientStream {
   private int pendingFlowControlRequests;
   @GuardedBy("this")
   private boolean pendingFlush;
-  @GuardedBy("lock")
+  @GuardedBy("this")
   private CompressorRegistry compressionRegistry;
 
   static final class PendingMessage {
