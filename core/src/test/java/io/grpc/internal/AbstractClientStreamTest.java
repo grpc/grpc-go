@@ -245,11 +245,15 @@ public class AbstractClientStreamTest {
     stream.start(mockListener);
     Metadata headers = new Metadata();
     headers.put(GrpcUtil.MESSAGE_ENCODING_KEY, "bad");
+    Metadata.Key<String> randomKey = Metadata.Key.of("random", Metadata.ASCII_STRING_MARSHALLER);
+    headers.put(randomKey, "4");
 
     stream.inboundHeadersReceived(headers);
 
-    verify(mockListener).closed(statusCaptor.capture(), isA(Metadata.class));
+    ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
+    verify(mockListener).closed(statusCaptor.capture(), metadataCaptor.capture());
     assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
+    assertEquals("4", metadataCaptor.getValue().get(randomKey));
   }
 
   @Test

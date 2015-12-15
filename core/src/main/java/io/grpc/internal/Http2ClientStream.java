@@ -65,7 +65,9 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
   private static final Metadata.Key<Integer> HTTP2_STATUS = Metadata.Key.of(":status",
       HTTP_STATUS_LINE_MARSHALLER);
 
+  /** When non-{@code null}, {@link #transportErrorMetadata} must also be non-{@code null}. */
   private Status transportError;
+  private Metadata transportErrorMetadata;
   private Charset errorCharset = Charsets.UTF_8;
   private boolean contentTypeChecked;
 
@@ -99,6 +101,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
       // Note we don't immediately report the transport error, instead we wait for more data on the
       // stream so we can accumulate more detail into the error before reporting it.
       transportError = transportError.augmentDescription("\n" + headers.toString());
+      transportErrorMetadata = headers;
       errorCharset = extractCharset(headers);
     } else {
       stripTransportDetails(headers);
@@ -117,6 +120,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
       // Must receive headers prior to receiving any payload as we use headers to check for
       // protocol correctness.
       transportError = Status.INTERNAL.withDescription("no headers received prior to data");
+      transportErrorMetadata = new Metadata();
     }
     if (transportError != null) {
       // We've already detected a transport error and now we're just accumulating more detail
@@ -125,7 +129,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
           + ReadableBuffers.readAsString(frame, errorCharset));
       frame.close();
       if (transportError.getDescription().length() > 1000 || endOfStream) {
-        inboundTransportError(transportError);
+        inboundTransportError(transportError, transportErrorMetadata);
         // We have enough error detail so lets cancel.
         sendCancel(Status.CANCELLED);
       }
@@ -134,7 +138,8 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
       if (endOfStream) {
         // This is a protocol violation as we expect to receive trailers.
         transportError = Status.INTERNAL.withDescription("Recevied EOS on DATA frame");
-        inboundTransportError(transportError);
+        transportErrorMetadata = new Metadata();
+        inboundTransportError(transportError, transportErrorMetadata);
       }
     }
   }
@@ -151,9 +156,10 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
       transportError = transportError.augmentDescription(trailers.toString());
     } else {
       transportError = checkContentType(trailers);
+      transportErrorMetadata = trailers;
     }
     if (transportError != null) {
-      inboundTransportError(transportError);
+      inboundTransportError(transportError, transportErrorMetadata);
       sendCancel(Status.CANCELLED);
     } else {
       Status status = statusFromTrailers(trailers);

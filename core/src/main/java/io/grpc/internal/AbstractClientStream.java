@@ -97,8 +97,10 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * responsible for properly closing streams when protocol errors occur.
    *
    * @param errorStatus the error to report
+   * @param metadata any metadata received
    */
-  protected void inboundTransportError(Status errorStatus) {
+  protected void inboundTransportError(Status errorStatus, Metadata metadata) {
+    Preconditions.checkNotNull(metadata, "metadata");
     if (inboundPhase() == Phase.STATUS) {
       log.log(Level.INFO, "Received transport error on closed stream {0} {1}",
           new Object[]{id(), errorStatus});
@@ -106,7 +108,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     }
     // For transport errors we immediately report status to the application layer
     // and do not wait for additional payloads.
-    transportReportStatus(errorStatus, false, new Metadata());
+    transportReportStatus(errorStatus, false, metadata);
   }
 
   /**
@@ -130,7 +132,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
             .withCause(e);
         // TODO(carl-mastrangelo): look back into tearing down this stream.  sendCancel() can be
         // buffered.
-        inboundTransportError(status);
+        inboundTransportError(status, headers);
         sendCancel(status);
         return;
       }
@@ -155,7 +157,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
       if (inboundPhase() == Phase.HEADERS) {
         // Have not received headers yet so error
         inboundTransportError(Status.INTERNAL
-            .withDescription("headers not received before payload"));
+            .withDescription("headers not received before payload"), new Metadata());
         return;
       }
       inboundPhase(Phase.MESSAGE);

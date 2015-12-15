@@ -236,6 +236,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   public void invalidInboundHeadersCancelStream() throws Exception {
     stream().id(STREAM_ID);
     Http2Headers headers = grpcResponseHeaders();
+    headers.set("random", "4");
     headers.remove(CONTENT_TYPE_HEADER);
     // Remove once b/16290036 is fixed.
     headers.status(new AsciiString("500"));
@@ -252,8 +253,11 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     // Now verify that cancel is sent and an error is reported to the listener
     verify(writeQueue).enqueue(any(CancelClientStreamCommand.class), eq(true));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture(), any(Metadata.class));
+    ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
+    verify(listener).closed(captor.capture(), metadataCaptor.capture());
     assertEquals(Status.UNKNOWN.getCode(), captor.getValue().getCode());
+    assertEquals("4", metadataCaptor.getValue()
+        .get(Metadata.Key.of("random", Metadata.ASCII_STRING_MARSHALLER)));
     assertTrue(stream.isClosed());
 
   }
@@ -269,10 +273,13 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         .set(new AsciiString("grpc-status", UTF_8), new AsciiString("0", UTF_8));
     stream().transportHeadersReceived(trailers, true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture(), any(Metadata.class));
+    ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
+    verify(listener).closed(captor.capture(), metadataCaptor.capture());
     Status status = captor.getValue();
     assertEquals(Status.Code.INTERNAL, status.getCode());
     assertTrue(status.getDescription().contains("content-type"));
+    assertEquals("application/bad", metadataCaptor.getValue()
+        .get(Metadata.Key.of("Content-Type", Metadata.ASCII_STRING_MARSHALLER)));
   }
 
   @Test

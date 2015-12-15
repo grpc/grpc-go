@@ -325,8 +325,8 @@ public class OkHttpClientTransportTest {
     stream.start(listener);
     stream.request(1);
     assertContainStream(3);
-    // Empty headers block without correct content type or status
-    frameHandler().headers(false, false, 3, 0, new ArrayList<Header>(),
+    // Headers block without correct content type or status
+    frameHandler().headers(false, false, 3, 0, Arrays.asList(new Header("random", "4")),
         HeadersMode.HTTP_20_HEADERS);
     // Now wait to receive 1000 bytes of data so we can have a better error message before
     // cancelling the streaam.
@@ -335,6 +335,27 @@ public class OkHttpClientTransportTest {
     assertNull(listener.headers);
     assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
     assertNotNull(listener.trailers);
+    assertEquals("4", listener.trailers
+        .get(Metadata.Key.of("random", Metadata.ASCII_STRING_MARSHALLER)));
+    shutdownAndVerify();
+  }
+
+  @Test
+  public void invalidInboundTrailersPropagateToMetadata() throws Exception {
+    initTransport();
+    MockStreamListener listener = new MockStreamListener();
+    OkHttpClientStream stream = clientTransport.newStream(method, new Metadata());
+    stream.start(listener);
+    stream.request(1);
+    assertContainStream(3);
+    // Headers block with EOS without correct content type or status
+    frameHandler().headers(true, true, 3, 0, Arrays.asList(new Header("random", "4")),
+        HeadersMode.HTTP_20_HEADERS);
+    assertNull(listener.headers);
+    assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
+    assertNotNull(listener.trailers);
+    assertEquals("4", listener.trailers
+        .get(Metadata.Key.of("random", Metadata.ASCII_STRING_MARSHALLER)));
     shutdownAndVerify();
   }
 
