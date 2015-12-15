@@ -104,9 +104,9 @@ public class CompressionTest {
   private CompressorRegistry clientCompressors = CompressorRegistry.newEmptyInstance();
   private CompressorRegistry serverCompressors = CompressorRegistry.newEmptyInstance();
 
-  /** The headers received by the server from the client */
+  /** The headers received by the server from the client. */
   private volatile Metadata serverResponseHeaders;
-  /** The headers received by the client from the server */
+  /** The headers received by the client from the server. */
   private volatile Metadata clientResponseHeaders;
 
   // Params
@@ -121,6 +121,9 @@ public class CompressionTest {
   private ManagedChannel channel;
   private TestServiceBlockingStub stub;
 
+  /**
+   * Auto called by test.
+   */
   public CompressionTest(
       boolean enableClientMessageCompression,
       boolean clientAcceptEncoding,
@@ -164,6 +167,9 @@ public class CompressionTest {
     executor.shutdownNow();
   }
 
+  /**
+   * Parameters for test.
+   */
   @Parameters
   public static Collection<Object[]> params() {
     Boolean[] bools = new Boolean[]{false, true};

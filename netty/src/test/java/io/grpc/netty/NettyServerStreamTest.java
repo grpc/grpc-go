@@ -50,6 +50,7 @@ import static org.mockito.Mockito.when;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ServerStreamListener;
 
 import io.netty.buffer.EmptyByteBuf;
@@ -95,6 +96,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream.writeHeaders(new Metadata());
     Http2Headers headers = new DefaultHttp2Headers()
         .status(Utils.STATUS_OK)
+        .set(GrpcUtil.MESSAGE_ACCEPT_ENCODING, AsciiString.of("gzip"))
         .set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_GRPC);
     verify(writeQueue).enqueue(new SendResponseHeadersCommand(STREAM_ID, headers, false), true);
     byte[] msg = smallMessage();
