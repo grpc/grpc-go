@@ -40,6 +40,27 @@ import (
 
 const binaryValue = string(128)
 
+func TestEncodeKeyValue(t *testing.T) {
+	for _, test := range []struct {
+		// input
+		kin string
+		vin string
+		// output
+		kout string
+		vout string
+	}{
+		{"key", "abc", "key", "abc"},
+		{"KEY", "abc", "key", "abc"},
+		{"key-bin", "abc", "key-bin", "YWJj"},
+		{"key-bin", binaryValue, "key-bin", "woA="},
+	} {
+		k, v := encodeKeyValue(test.kin, test.vin)
+		if k != test.kout || !reflect.DeepEqual(v, test.vout) {
+			t.Fatalf("encodeKeyValue(%q, %q) = %q, %q, want %q, %q", test.kin, test.vin, k, v, test.kout, test.vout)
+		}
+	}
+}
+
 func TestDecodeKeyValue(t *testing.T) {
 	for _, test := range []struct {
 		// input
@@ -51,8 +72,8 @@ func TestDecodeKeyValue(t *testing.T) {
 		err  error
 	}{
 		{"a", "abc", "a", "abc", nil},
-		{"key-bin", "Zm9vAGJhcg==", "key", "foo\x00bar", nil},
-		{"key-bin", "woA=", "key", binaryValue, nil},
+		{"key-bin", "Zm9vAGJhcg==", "key-bin", "foo\x00bar", nil},
+		{"key-bin", "woA=", "key-bin", binaryValue, nil},
 	} {
 		k, v, err := DecodeKeyValue(test.kin, test.vin)
 		if k != test.kout || !reflect.DeepEqual(v, test.vout) || !reflect.DeepEqual(err, test.err) {
@@ -69,9 +90,9 @@ func TestPairsMD(t *testing.T) {
 		md MD
 	}{
 		{[]string{}, MD{}},
-		{[]string{"k1", "v1", "k2", binaryValue}, New(map[string]string{
+		{[]string{"k1", "v1", "k2-bin", binaryValue}, New(map[string]string{
 			"k1":     "v1",
-			"k2-bin": "woA=",
+			"k2-bin": binaryValue,
 		})},
 	} {
 		md := Pairs(test.kv...)
