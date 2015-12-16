@@ -46,9 +46,9 @@ import (
 
 type testWatcher struct {
 	// the channel to receives name resolution updates
-	update   chan *naming.Update
+	update chan *naming.Update
 	// the side channel to get to know how many updates in a batch
-	side     chan int
+	side chan int
 	// the channel to notifiy update injector that the update reading is done
 	readDone chan int
 	wg       *sync.WaitGroup
@@ -119,7 +119,7 @@ func startServers(t *testing.T, numServers, port int, maxStreams uint32, wg *syn
 	addr := "127.0.0.1:" + servers[0].port
 	return servers, &testNameResolver{
 		addr: addr,
-		wg: wg,
+		wg:   wg,
 	}
 }
 
