@@ -61,13 +61,7 @@ class DelayedStream implements ClientStream {
   private volatile ClientStream realStream;
 
   @GuardedBy("this")
-  private Compressor compressor;
-
-  @GuardedBy("this")
   private Iterable<String> compressionMessageEncodings;
-  // Can be either a Decompressor or a String
-  @GuardedBy("this")
-  private Object decompressor;
   @GuardedBy("this")
   private DecompressorRegistry decompressionRegistry;
   @GuardedBy("this")
