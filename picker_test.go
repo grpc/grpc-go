@@ -184,6 +184,7 @@ func TestEmptyAddrs(t *testing.T) {
 		Op:   naming.Delete,
 		Addr: "127.0.0.1:" + servers[0].port,
 	})
+	// Wait until the first reading is done.
 	wg.Wait()
 	r.w.inject(updates)
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
