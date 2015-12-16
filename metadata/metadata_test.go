@@ -87,17 +87,21 @@ func TestPairsMD(t *testing.T) {
 		// input
 		kv []string
 		// output
-		md MD
+		md   MD
+		size int
 	}{
-		{[]string{}, MD{}},
+		{[]string{}, MD{}, 0},
 		{[]string{"k1", "v1", "k2-bin", binaryValue}, New(map[string]string{
 			"k1":     "v1",
 			"k2-bin": binaryValue,
-		})},
+		}), 2},
 	} {
 		md := Pairs(test.kv...)
 		if !reflect.DeepEqual(md, test.md) {
 			t.Fatalf("Pairs(%v) = %v, want %v", test.kv, md, test.md)
+		}
+		if md.Len() != test.size {
+			t.Fatalf("Pairs(%v) generates md of size %d, want %d", md.Len(), test.size)
 		}
 	}
 }
