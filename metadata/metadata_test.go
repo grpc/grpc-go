@@ -101,7 +101,7 @@ func TestPairsMD(t *testing.T) {
 			t.Fatalf("Pairs(%v) = %v, want %v", test.kv, md, test.md)
 		}
 		if md.Len() != test.size {
-			t.Fatalf("Pairs(%v) generates md of size %d, want %d", md.Len(), test.size)
+			t.Fatalf("Pairs(%v) generates md of size %d, want %d", test.kv, md.Len(), test.size)
 		}
 	}
 }

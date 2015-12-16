@@ -537,7 +537,7 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 	}
 	ctx, _ = context.WithTimeout(context.Background(), time.Second)
 	if _, err := cc.WaitForStateChange(ctx, grpc.Ready); err == nil {
-		t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, %v", grpc.Ready, context.DeadlineExceeded)
+		t.Fatalf("cc.WaitForStateChange(_, %s) = _, <nil>, want _, %v", grpc.Ready, context.DeadlineExceeded)
 	}
 	tc := testpb.NewTestServiceClient(cc)
 	var header metadata.MD
