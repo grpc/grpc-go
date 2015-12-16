@@ -41,7 +41,7 @@ import java.nio.ByteBuffer;
  * Base class for a wrapper around another {@link ReadableBuffer}.
  *
  * <p>This class just passes every operation through to the underlying buffer. Subclasses may
- * override methods to intercept concertain operations.
+ * override methods to intercept certain operations.
  */
 public abstract class ForwardingReadableBuffer implements ReadableBuffer {
 
