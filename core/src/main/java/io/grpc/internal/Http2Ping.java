@@ -82,10 +82,10 @@ public class Http2Ping {
   @GuardedBy("this") private Throwable failureCause;
 
   /**
-   * The round-trip time for the ping, in microseconds. This value is only meaningful when
+   * The round-trip time for the ping, in nanoseconds. This value is only meaningful when
    * {@link #completed} is true and {@link #failureCause} is null.
    */
-  @GuardedBy("this") private long roundTripTimeMicros;
+  @GuardedBy("this") private long roundTripTimeNanos;
 
   /**
    * Creates a new ping operation. The caller is responsible for sending a ping on an HTTP/2 channel
@@ -116,7 +116,7 @@ public class Http2Ping {
       }
       // otherwise, invoke callback immediately (but not while holding lock)
       runnable = this.failureCause != null ? asRunnable(callback, failureCause)
-                                           : asRunnable(callback, roundTripTimeMicros);
+                                           : asRunnable(callback, roundTripTimeNanos);
     }
     doExecute(executor, runnable);
   }
@@ -139,18 +139,18 @@ public class Http2Ping {
    */
   public boolean complete() {
     Map<ClientTransport.PingCallback, Executor> callbacks;
-    long roundTripTimeMicros;
+    long roundTripTimeNanos;
     synchronized (this) {
       if (completed) {
         return false;
       }
       completed = true;
-      roundTripTimeMicros = this.roundTripTimeMicros = stopwatch.elapsed(TimeUnit.MICROSECONDS);
+      roundTripTimeNanos = this.roundTripTimeNanos = stopwatch.elapsed(TimeUnit.NANOSECONDS);
       callbacks = this.callbacks;
       this.callbacks = null;
     }
     for (Map.Entry<ClientTransport.PingCallback, Executor> entry : callbacks.entrySet()) {
-      doExecute(entry.getValue(), asRunnable(entry.getKey(), roundTripTimeMicros));
+      doExecute(entry.getValue(), asRunnable(entry.getKey(), roundTripTimeNanos));
     }
     return true;
   }
@@ -205,11 +205,11 @@ public class Http2Ping {
    * duration.
    */
   private static Runnable asRunnable(final ClientTransport.PingCallback callback,
-                                     final long roundTripTimeMicros) {
+                                     final long roundTripTimeNanos) {
     return new Runnable() {
       @Override
       public void run() {
-        callback.pingAcknowledged(roundTripTimeMicros);
+        callback.onSuccess(roundTripTimeNanos);
       }
     };
 
@@ -224,7 +224,7 @@ public class Http2Ping {
     return new Runnable() {
       @Override
       public void run() {
-        callback.pingFailed(failureCause);
+        callback.onFailure(failureCause);
       }
     };
   }

@@ -1093,7 +1093,7 @@ public class OkHttpClientTransportTest {
     assertEquals(0, callback1.invocationCount);
     assertEquals(0, callback2.invocationCount);
 
-    nanoTime += TimeUnit.MICROSECONDS.toNanos(10101);
+    nanoTime += 10101;
 
     // reading the proper response should complete the future
     frameHandler().ping(true, payload1, payload2);
@@ -1470,13 +1470,13 @@ public class OkHttpClientTransportTest {
     Throwable failureCause;
 
     @Override
-    public void pingAcknowledged(long roundTripTimeMicros) {
+    public void onSuccess(long roundTripTimeNanos) {
       invocationCount++;
-      this.roundTripTime = roundTripTimeMicros;
+      this.roundTripTime = roundTripTimeNanos;
     }
 
     @Override
-    public void pingFailed(Throwable cause) {
+    public void onFailure(Throwable cause) {
       invocationCount++;
       this.failureCause = cause;
     }

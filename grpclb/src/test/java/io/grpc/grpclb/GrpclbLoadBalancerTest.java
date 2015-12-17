@@ -57,6 +57,7 @@ import io.grpc.Status;
 import io.grpc.TransportManager;
 import io.grpc.internal.ClientTransport;
 
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -88,6 +89,7 @@ public class GrpclbLoadBalancerTest {
   private SettableFuture<ClientTransport> lbTransportFuture;
 
   @Test
+  @Ignore("Flaky") //TODO(zhangkun83): fix flakiness
   public void balancing() throws Exception {
     List<ResolvedServerInfo> servers = createResolvedServerInfoList(4000, 4001);
 

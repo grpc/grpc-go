@@ -86,22 +86,49 @@ public class GrpcUtilTest {
   public void timeoutTest() {
     GrpcUtil.TimeoutMarshaller marshaller =
             new GrpcUtil.TimeoutMarshaller();
-    assertEquals("1000u", marshaller.toAsciiString(1000L));
-    assertEquals(1000L, (long) marshaller.parseAsciiString("1000u"));
+    // nanos
+    assertEquals("0n", marshaller.toAsciiString(0L));
+    assertEquals(0L, (long) marshaller.parseAsciiString("0n"));
 
-    assertEquals("100000m", marshaller.toAsciiString(100000000L));
-    assertEquals(100000000L, (long) marshaller.parseAsciiString("100000m"));
+    assertEquals("99999999n", marshaller.toAsciiString(99999999L));
+    assertEquals(99999999L, (long) marshaller.parseAsciiString("99999999n"));
 
-    assertEquals("100000S", marshaller.toAsciiString(100000000000L));
-    assertEquals(100000000000L, (long) marshaller.parseAsciiString("100000S"));
+    // micros
+    assertEquals("100000u", marshaller.toAsciiString(100000000L));
+    assertEquals(100000000L, (long) marshaller.parseAsciiString("100000u"));
 
-    // 1,666,667 * 60 has 9 digits
-    assertEquals("1666666M", marshaller.toAsciiString(100000000000000L));
-    assertEquals(60000000000000L, (long) marshaller.parseAsciiString("1000000M"));
+    assertEquals("99999999u", marshaller.toAsciiString(99999999999L));
+    assertEquals(99999999000L, (long) marshaller.parseAsciiString("99999999u"));
 
-    // 1,666,667 * 60 has 9 digits
-    assertEquals("1666666H", marshaller.toAsciiString(6000000000000000L));
-    assertEquals(3600000000000000L, (long) marshaller.parseAsciiString("1000000H"));
+    // millis
+    assertEquals("100000m", marshaller.toAsciiString(100000000000L));
+    assertEquals(100000000000L, (long) marshaller.parseAsciiString("100000m"));
+
+    assertEquals("99999999m", marshaller.toAsciiString(99999999999999L));
+    assertEquals(99999999000000L, (long) marshaller.parseAsciiString("99999999m"));
+
+    // seconds
+    assertEquals("100000S", marshaller.toAsciiString(100000000000000L));
+    assertEquals(100000000000000L, (long) marshaller.parseAsciiString("100000S"));
+
+    assertEquals("99999999S", marshaller.toAsciiString(99999999999999999L));
+    assertEquals(99999999000000000L, (long) marshaller.parseAsciiString("99999999S"));
+
+    // minutes
+    assertEquals("1666666M", marshaller.toAsciiString(100000000000000000L));
+    assertEquals(99999960000000000L, (long) marshaller.parseAsciiString("1666666M"));
+
+    assertEquals("99999999M", marshaller.toAsciiString(5999999999999999999L));
+    assertEquals(5999999940000000000L, (long) marshaller.parseAsciiString("99999999M"));
+
+    // hours
+    assertEquals("1666666H", marshaller.toAsciiString(6000000000000000000L));
+    assertEquals(5999997600000000000L, (long) marshaller.parseAsciiString("1666666H"));
+
+    assertEquals("2562047H", marshaller.toAsciiString(Long.MAX_VALUE));
+    assertEquals(9223369200000000000L, (long) marshaller.parseAsciiString("2562047H"));
+
+    assertEquals(Long.MAX_VALUE, (long) marshaller.parseAsciiString("2562048H"));
   }
 
   @Test

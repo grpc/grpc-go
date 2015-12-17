@@ -136,18 +136,18 @@ public interface ClientTransport {
 
     /**
      * Invoked when a ping is acknowledged. The given argument is the round-trip time of the ping,
-     * in microseconds.
+     * in nanoseconds.
      *
-     * @param roundTripTimeMicros the round-trip duration between the ping being sent and the
+     * @param roundTripTimeNanos the round-trip duration between the ping being sent and the
      *     acknowledgement received
      */
-    void pingAcknowledged(long roundTripTimeMicros);
+    void onSuccess(long roundTripTimeNanos);
 
     /**
      * Invoked when a ping fails. The given argument is the cause of the failure.
      *
      * @param cause the cause of the ping failure
      */
-    void pingFailed(Throwable cause);
+    void onFailure(Throwable cause);
   }
 }

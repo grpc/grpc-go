@@ -138,14 +138,14 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       executor.execute(new Runnable() {
         @Override
         public void run() {
-          callback.pingFailed(shutdownStatus.asRuntimeException());
+          callback.onFailure(shutdownStatus.asRuntimeException());
         }
       });
     } else {
       executor.execute(new Runnable() {
         @Override
         public void run() {
-          callback.pingAcknowledged(0);
+          callback.onSuccess(0);
         }
       });
     }

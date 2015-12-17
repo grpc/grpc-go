@@ -241,9 +241,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
 
     // Start the deadline timer after stream creation because it will close the stream
-    Long timeoutMicros = getRemainingTimeoutMicros(callOptions.getDeadlineNanoTime());
-    if (timeoutMicros != null) {
-      deadlineCancellationFuture = startDeadlineTimer(timeoutMicros);
+    Long timeoutNanos = getRemainingTimeoutNanos(callOptions.getDeadlineNanoTime());
+    if (timeoutNanos != null) {
+      deadlineCancellationFuture = startDeadlineTimer(timeoutNanos);
     }
     // Propagate later Context cancellation to the remote side.
     this.context.addListener(this, MoreExecutors.directExecutor());
@@ -261,27 +261,27 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     headers.removeAll(TIMEOUT_KEY);
     // Convert the deadline to timeout. Timeout is more favorable than deadline on the wire
     // because timeout tolerates the clock difference between machines.
-    Long timeoutMicros = getRemainingTimeoutMicros(deadlineNanoTime);
-    if (timeoutMicros != null) {
-      if (timeoutMicros <= 0) {
+    Long timeoutNanos = getRemainingTimeoutNanos(deadlineNanoTime);
+    if (timeoutNanos != null) {
+      if (timeoutNanos <= 0) {
         return false;
       }
-      headers.put(TIMEOUT_KEY, timeoutMicros);
+      headers.put(TIMEOUT_KEY, timeoutNanos);
     }
     return true;
   }
 
   /**
-   * Return the remaining amount of microseconds before the deadline is reached.
+   * Return the remaining amount of nanoseconds before the deadline is reached.
    *
    * <p>{@code null} if deadline is not set. Negative value if already expired.
    */
   @Nullable
-  private static Long getRemainingTimeoutMicros(@Nullable Long deadlineNanoTime) {
+  private static Long getRemainingTimeoutNanos(@Nullable Long deadlineNanoTime) {
     if (deadlineNanoTime == null) {
       return null;
     }
-    return TimeUnit.NANOSECONDS.toMicros(deadlineNanoTime - System.nanoTime());
+    return deadlineNanoTime - System.nanoTime();
   }
 
   @Override
@@ -351,13 +351,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     return stream.isReady();
   }
 
-  private ScheduledFuture<?> startDeadlineTimer(long timeoutMicros) {
+  private ScheduledFuture<?> startDeadlineTimer(long timeoutNanos) {
     return deadlineCancellationExecutor.schedule(new Runnable() {
       @Override
       public void run() {
         stream.cancel(Status.DEADLINE_EXCEEDED);
       }
-    }, timeoutMicros, TimeUnit.MICROSECONDS);
+    }, timeoutNanos, TimeUnit.NANOSECONDS);
   }
 
   private class ClientStreamListenerImpl implements ClientStreamListener {
@@ -422,13 +422,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
     @Override
     public void closed(Status status, Metadata trailers) {
-      Long timeoutMicros = getRemainingTimeoutMicros(callOptions.getDeadlineNanoTime());
+      Long timeoutNanos = getRemainingTimeoutNanos(callOptions.getDeadlineNanoTime());
       transportFuture.cancel(false);
-      if (status.getCode() == Status.Code.CANCELLED && timeoutMicros != null) {
+      if (status.getCode() == Status.Code.CANCELLED && timeoutNanos != null) {
         // When the server's deadline expires, it can only reset the stream with CANCEL and no
         // description. Since our timer may be delayed in firing, we double-check the deadline and
         // turn the failure into the likely more helpful DEADLINE_EXCEEDED status.
-        if (timeoutMicros <= 0) {
+        if (timeoutNanos <= 0) {
           status = Status.DEADLINE_EXCEEDED;
           // Replace trailers to prevent mixing sources of status and trailers.
           trailers = new Metadata();

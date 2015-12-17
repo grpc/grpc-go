@@ -39,6 +39,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
+import com.google.common.collect.BiMap;
+import com.google.common.collect.ImmutableBiMap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.grpc.Metadata;
@@ -49,10 +51,12 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.EnumSet;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
@@ -414,9 +418,10 @@ public final class GrpcUtil {
       };
 
   /**
-   * Marshals a microseconds representation of the timeout to and from a string representation,
+   * Marshals a nanoseconds representation of the timeout to and from a string representation,
    * consisting of an ASCII decimal representation of a number with at most 8 digits, followed by a
    * unit:
+   * n = nanoseconds
    * u = microseconds
    * m = milliseconds
    * S = seconds
@@ -431,54 +436,41 @@ public final class GrpcUtil {
    */
   @VisibleForTesting
   static class TimeoutMarshaller implements Metadata.AsciiMarshaller<Long> {
+    private static final BiMap<TimeUnit, Character> UNITS =
+        ImmutableBiMap.<TimeUnit, Character>builder()
+            .put(TimeUnit.NANOSECONDS, 'n')
+            .put(TimeUnit.MICROSECONDS, 'u')
+            .put(TimeUnit.MILLISECONDS, 'm')
+            .put(TimeUnit.SECONDS, 'S')
+            .put(TimeUnit.MINUTES, 'M')
+            .put(TimeUnit.HOURS, 'H')
+            .build();
+
     @Override
-    public String toAsciiString(Long timeoutMicros) {
-      Preconditions.checkArgument(timeoutMicros >= 0, "Negative timeout");
-      long timeout;
-      String timeoutUnit;
+    public String toAsciiString(Long timeoutNanos) {
+      checkArgument(timeoutNanos >= 0, "Negative timeout");
       // the smallest integer with 9 digits
       int cutoff = 100000000;
-      if (timeoutMicros < cutoff) {
-        timeout = timeoutMicros;
-        timeoutUnit = "u";
-      } else if (timeoutMicros / 1000 < cutoff) {
-        timeout = timeoutMicros / 1000;
-        timeoutUnit = "m";
-      } else if (timeoutMicros / (1000 * 1000) < cutoff) {
-        timeout = timeoutMicros / (1000 * 1000);
-        timeoutUnit = "S";
-      } else if (timeoutMicros / (60 * 1000 * 1000) < cutoff) {
-        timeout = timeoutMicros / (60 * 1000 * 1000);
-        timeoutUnit = "M";
-      } else if (timeoutMicros / (60L * 60L * 1000L * 1000L) < cutoff) {
-        timeout = timeoutMicros / (60L * 60L * 1000L * 1000L);
-        timeoutUnit = "H";
-      } else {
-        throw new IllegalArgumentException("Timeout too large");
+      for (Entry<TimeUnit, Character> unit : UNITS.entrySet()) {
+        long timeout = unit.getKey().convert(timeoutNanos, TimeUnit.NANOSECONDS);
+        if (timeout < cutoff) {
+          return Long.toString(timeout) + unit.getValue();
+        }
       }
-      return Long.toString(timeout) + timeoutUnit;
+      throw new IllegalArgumentException("Timeout too large");
     }
 
     @Override
     public Long parseAsciiString(String serialized) {
+      checkArgument(serialized.length() > 0, "empty timeout");
+      checkArgument(serialized.length() <= 9, "bad timeout format");
       String valuePart = serialized.substring(0, serialized.length() - 1);
       char unit = serialized.charAt(serialized.length() - 1);
-      long factor;
-      switch (unit) {
-        case 'u':
-          factor = 1; break;
-        case 'm':
-          factor = 1000L; break;
-        case 'S':
-          factor = 1000L * 1000L; break;
-        case 'M':
-          factor = 60L * 1000L * 1000L; break;
-        case 'H':
-          factor = 60L * 60L * 1000L * 1000L; break;
-        default:
-          throw new IllegalArgumentException(String.format("Invalid timeout unit: %s", unit));
+      TimeUnit timeUnit = UNITS.inverse().get(unit);
+      if (timeUnit != null) {
+        return timeUnit.toNanos(Long.parseLong(valuePart));
       }
-      return Long.parseLong(valuePart) * factor;
+      throw new IllegalArgumentException(String.format("Invalid timeout unit: %s", unit));
     }
   }
 

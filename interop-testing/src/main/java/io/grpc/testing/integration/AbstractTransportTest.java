@@ -598,7 +598,7 @@ public abstract class AbstractTransportTest {
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
         .withDeadlineAfter(configuredTimeoutMinutes, TimeUnit.MINUTES);
     stub.emptyCall(Empty.getDefaultInstance());
-    long transferredTimeoutMinutes = TimeUnit.MICROSECONDS.toMinutes(
+    long transferredTimeoutMinutes = TimeUnit.NANOSECONDS.toMinutes(
         requestHeadersCapture.get().get(GrpcUtil.TIMEOUT_KEY));
     Assert.assertTrue(
         "configuredTimeoutMinutes=" + configuredTimeoutMinutes

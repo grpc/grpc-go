@@ -330,8 +330,8 @@ public final class ServerImpl extends io.grpc.Server {
 
     private Future<?> scheduleTimeout(final ServerStream stream, Metadata headers,
                                       final Context.CancellableContext context) {
-      Long timeoutMicros = headers.get(TIMEOUT_KEY);
-      if (timeoutMicros == null) {
+      Long timeoutNanos = headers.get(TIMEOUT_KEY);
+      if (timeoutNanos == null) {
         return DEFAULT_TIMEOUT_FUTURE;
       }
       return timeoutService.schedule(new Runnable() {
@@ -345,8 +345,8 @@ public final class ServerImpl extends io.grpc.Server {
             context.cancel(TIMEOUT_EXCEPTION);
           }
         },
-        timeoutMicros,
-        TimeUnit.MICROSECONDS);
+          timeoutNanos,
+        TimeUnit.NANOSECONDS);
     }
 
     /** Never returns {@code null}. */
