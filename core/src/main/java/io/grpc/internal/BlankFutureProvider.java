@@ -40,9 +40,9 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -69,7 +69,7 @@ public final class BlankFutureProvider<T> {
    *
    * <p>If the caller gives up on an undone future, it should call either {@code cancel(true)} or
    * {@code cancel(false)} (they have the same effect) on the future to clean up the tracking
-   * information.
+   * information. The future can be cancelled from any thread.
    */
   public ListenableFuture<T> newBlankFuture() {
     final SettableFuture<T> future = SettableFuture.create();
@@ -118,7 +118,8 @@ public final class BlankFutureProvider<T> {
      * Links the blank futures with futures that will be eventually completed.
      *
      * <p>For each blank future, this method calls {@link Supplier#get()} on {@code source} and link
-     * the returned future to the blank future.
+     * the returned future to the blank future. The blank futures are processed in the same order as
+     * they were created.
      */
     public void link(Supplier<ListenableFuture<T>> source) {
       for (final SettableFuture<T> future : futures) {
@@ -150,6 +151,6 @@ public final class BlankFutureProvider<T> {
     // The cancellation may happen asynchronously, e.g., from a deadline timer thread, thus the set
     // must be thread-safe.
     // There is a race between cancelling and fulfilling, but it is benign.
-    return Collections.newSetFromMap(new ConcurrentHashMap<SettableFuture<T>, Boolean>());
+    return Collections.synchronizedSet(new LinkedHashSet<SettableFuture<T>>());
   }
 }

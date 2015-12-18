@@ -31,8 +31,8 @@
 
 package io.grpc.internal;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -70,9 +70,8 @@ public class BlankFutureProviderTest {
     });
     assertTrue(f1.isDone());
     assertTrue(f2.isDone());
-    assertNotEquals(f1.get(), f2.get());
-    assertTrue(f1.get().startsWith("value"));
-    assertTrue(f2.get().startsWith("value"));
+    assertEquals("value0", f1.get());
+    assertEquals("value1", f2.get());
     assertFalse(f3.isDone());
   }
 
@@ -95,9 +94,8 @@ public class BlankFutureProviderTest {
     for (int i = 0; i < fulfillingFutures.size(); i++) {
       fulfillingFutures.get(i).set("value" + i);
     }
-    assertNotEquals(f1.get(), f2.get());
-    assertTrue(f1.get().startsWith("value"));
-    assertTrue(f2.get().startsWith("value"));
+    assertEquals("value0", f1.get());
+    assertEquals("value1", f2.get());
     assertFalse(f3.isDone());
   }
 
@@ -136,9 +134,8 @@ public class BlankFutureProviderTest {
     } catch (ExecutionException e) {
       e2 = e.getCause();
     }
-    assertNotEquals(e1.getMessage(), e2.getMessage());
-    assertTrue(e1.getMessage().startsWith("simulated"));
-    assertTrue(e2.getMessage().startsWith("simulated"));
+    assertEquals("simulated0", e1.getMessage());
+    assertEquals("simulated1", e2.getMessage());
     assertFalse(f3.isDone());
   }
 
