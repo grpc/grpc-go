@@ -37,6 +37,8 @@ show_cover_report func
 case "$1" in
 "")
     ;;
+--html)
+    show_cover_report html ;;
 --coveralls)
     push_to_coveralls ;;
 *)
