@@ -48,7 +48,8 @@ public interface Stream {
   /**
    * Requests up to the given number of messages from the call to be delivered to
    * {@link StreamListener#messageRead(java.io.InputStream)}. No additional messages will be
-   * delivered.
+   * delivered.  If the stream has a {@code start()} method, it must be called before requesting
+   * messages.
    *
    * @param numMessages the requested number of messages to be delivered to the listener.
    */
@@ -58,7 +59,8 @@ public interface Stream {
    * Writes a message payload to the remote end-point. The bytes from the stream are immediately
    * read by the Transport. Where possible callers should use streams that are
    * {@link io.grpc.KnownLength} to improve efficiency. This method will always return immediately
-   * and will not wait for the write to complete.
+   * and will not wait for the write to complete.  If the stream has a {@code start()} method, it
+   * must be called before writing any messages.
    *
    * <p>It is recommended that the caller consult {@link #isReady()} before calling this method to
    * avoid excessive buffering in the transport.
@@ -84,7 +86,8 @@ public interface Stream {
 
   /**
    * Picks a compressor for for this stream.  If no message encodings are acceptable, compression is
-   *     not used.  It is undefined if this this method is invoked multiple times.
+   * not used.  It is undefined if this this method is invoked multiple times.  If the stream has
+   * a {@code start()} method, pickCompressor must be called prior to start.
    *
    *
    * @param messageEncodings a group of message encoding names that the remote endpoint is known
@@ -102,7 +105,8 @@ public interface Stream {
 
   /**
    * Sets the decompressor registry to use when resolving {@code #setDecompressor(String)}.  If
-   * unset, the default DecompressorRegistry will be used.
+   * unset, the default DecompressorRegistry will be used.  If the stream has a {@code start()}
+   * method, setDecompressionRegistry must be called prior to start.
    *
    * @see DecompressorRegistry#getDefaultInstance()
    *
@@ -111,8 +115,9 @@ public interface Stream {
   void setDecompressionRegistry(DecompressorRegistry registry);
 
   /**
-   * Sets the compressor registry to use when resolving {@link #pickCompressor}.  If
-   * unset, the default CompressorRegistry will be used.
+   * Sets the compressor registry to use when resolving {@link #pickCompressor}.  If unset, the
+   * default CompressorRegistry will be used.  If the stream has a {@code start()} method,
+   * setCompressionRegistry must be called prior to start.
    *
    * @see CompressorRegistry#getDefaultInstance()
    *

@@ -55,7 +55,18 @@ public interface ClientStream extends Stream {
   /**
    * Closes the local side of this stream and flushes any remaining messages. After this is called,
    * no further messages may be sent on this stream, but additional messages may be received until
-   * the remote end-point is closed. This method may only be called once.
+   * the remote end-point is closed. This method may only be called once, and only after
+   * {@link #start}.
    */
   void halfClose();
+
+  /**
+   * Starts stream. This method may only be called once.  It is safe to do latent initialization of
+   * the stream up until {@link #start} is called.
+   *
+   * <p>This method should not throw any exceptions.
+   *
+   * @param listener non-{@code null} listener of stream events
+   */
+  void start(ClientStreamListener listener);
 }

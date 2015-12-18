@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Iterables.addAll;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
@@ -189,7 +190,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
   @Override
   public void start(final Listener<RespT> observer, Metadata headers) {
-    Preconditions.checkState(stream == null, "Already started");
+    checkState(stream == null, "Already started");
+    checkNotNull(observer, "observer");
+    checkNotNull(headers, "headers");
 
     if (context.isCancelled()) {
       // Context is already cancelled so no need to create a real stream, just notify the observer
@@ -207,7 +210,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         knownMessageEncodingRegistry, decompressorRegistry, compressorRegistry);
 
     ListenableFuture<ClientTransport> transportFuture = clientTransportProvider.get(callOptions);
-    ClientStreamListener listener = new ClientStreamListenerImpl(observer, transportFuture);
 
     if (transportFuture.isDone()) {
       // Try to skip DelayedStream when possible to avoid the overhead of a volatile read in the
@@ -216,7 +218,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       try {
         transport = transportFuture.get();
         if (transport != null && updateTimeoutHeader(callOptions.getDeadlineNanoTime(), headers)) {
-          stream = transport.newStream(method, headers, listener);
+          stream = transport.newStream(method, headers);
         }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -224,11 +226,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         // Fall through to DelayedStream
       }
     }
+
     if (stream == null) {
       DelayedStream delayed;
-      stream = delayed = new DelayedStream(listener);
+      stream = delayed = new DelayedStream();
       Futures.addCallback(transportFuture,
-          new StreamCreationTask(delayed, headers, method, callOptions, listener),
+          new StreamCreationTask(delayed, headers, method, callOptions),
           transportFuture.isDone() ? directExecutor() : callExecutor);
     }
 
@@ -247,6 +250,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
     // Propagate later Context cancellation to the remote side.
     this.context.addListener(this, MoreExecutors.directExecutor());
+    stream.start(new ClientStreamListenerImpl(observer, transportFuture));
   }
 
   /**
@@ -480,42 +484,33 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     private final DelayedStream stream;
     private final MethodDescriptor<?, ?> method;
     private final Metadata headers;
-    private final ClientStreamListener listener;
     private final CallOptions callOptions;
 
     StreamCreationTask(DelayedStream stream, Metadata headers, MethodDescriptor<?, ?> method,
-        CallOptions callOptions, ClientStreamListener listener) {
+        CallOptions callOptions) {
       this.stream = stream;
       this.headers = headers;
       this.method = method;
       this.callOptions = callOptions;
-      this.listener = listener;
     }
 
     @Override
     public void onSuccess(ClientTransport transport) {
       if (transport == null) {
-        stream.maybeClosePrematurely(Status.UNAVAILABLE.withDescription("Channel is shutdown"));
+        stream.setError(Status.UNAVAILABLE.withDescription("Channel is shutdown"));
         return;
       }
       if (!updateTimeoutHeader(callOptions.getDeadlineNanoTime(), headers)) {
-        stream.maybeClosePrematurely(Status.DEADLINE_EXCEEDED);
+        stream.setError(Status.DEADLINE_EXCEEDED);
         return;
       }
-      synchronized (stream) {
-        // Must not create a real stream with 'listener' if 'stream' is cancelled, as
-        // listener.closed() would be called multiple times and from different threads in a
-        // non-synchronized manner.
-        if (stream.cancelledPrematurely()) {
-          return;
-        }
-        stream.setStream(transport.newStream(method, headers, listener));
-      }
+      // setStream correctly handles being cancelled.
+      stream.setStream(transport.newStream(method, headers));
     }
 
     @Override
     public void onFailure(Throwable t) {
-      stream.maybeClosePrematurely(Status.fromThrowable(t));
+      stream.setError(Status.fromThrowable(t));
     }
   }
 }

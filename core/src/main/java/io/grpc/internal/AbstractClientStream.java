@@ -32,6 +32,8 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.internal.GrpcUtil.CANCEL_REASONS;
 
 import com.google.common.base.MoreObjects;
@@ -52,7 +54,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
 
   private static final Logger log = Logger.getLogger(AbstractClientStream.class.getName());
 
-  private final ClientStreamListener listener;
+  private ClientStreamListener listener;
   private boolean listenerClosed;
 
   // Stored status & trailers to report when deframer completes or
@@ -63,10 +65,8 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
   private volatile boolean cancelled;
 
   protected AbstractClientStream(WritableBufferAllocator bufferAllocator,
-                                 ClientStreamListener listener,
                                  int maxMessageSize) {
     super(bufferAllocator, maxMessageSize);
-    this.listener = Preconditions.checkNotNull(listener);
   }
 
   @Override
@@ -74,9 +74,20 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
     return listener;
   }
 
+  /**
+   * Indicates that the stream may proceed to do traffic.  Sub classes should override and invoke
+   * this method after they have been created.
+   */
+  @Override
+  public void start(ClientStreamListener listener) {
+    checkState(this.listener == null, "stream already started");
+    this.listener = checkNotNull(listener, "listener");
+  }
+
   @Override
   protected void receiveMessage(InputStream is) {
     if (!listenerClosed) {
+      checkState(listener != null, "stream not started");
       listener.messageRead(is);
     }
   }
@@ -104,6 +115,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    * @param headers the parsed headers
    */
   protected void inboundHeadersReceived(Metadata headers) {
+    checkState(listener != null, "stream not started");
     if (inboundPhase() == Phase.STATUS) {
       log.log(Level.INFO, "Received headers on closed stream {0} {1}",
           new Object[]{id(), headers});
@@ -259,8 +271,11 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
 
   /**
    * Closes the listener if not previously closed.
+   *
+   * @throws IllegalStateException if the call has not yet been started.
    */
   private void closeListener(Status newStatus, Metadata trailers) {
+    checkState(listener != null, "stream not started");
     if (!listenerClosed) {
       listenerClosed = true;
       closeDeframer();

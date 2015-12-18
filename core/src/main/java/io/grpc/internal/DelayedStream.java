@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import io.grpc.Compressor;
@@ -54,11 +55,17 @@ import javax.annotation.concurrent.GuardedBy;
  * necessary.
  */
 class DelayedStream implements ClientStream {
-  private final ClientStreamListener listener;
 
-  // Volatile to be readable without synchronization in the fast path.
-  // Writes are also done within synchronized(this).
-  private volatile ClientStream realStream;
+  // set to non null once both listener and realStream are valid.  After this point it is safe
+  // to call methods on startedRealStream.  Note: this may be true even after the delayed stream is
+  // cancelled.  This should be okay.
+  private volatile ClientStream startedRealStream;
+  @GuardedBy("this")
+  private ClientStreamListener listener;
+  @GuardedBy("this")
+  private ClientStream realStream;
+  @GuardedBy("this")
+  private Status error;
 
   @GuardedBy("this")
   private Iterable<String> compressionMessageEncodings;
@@ -86,182 +93,222 @@ class DelayedStream implements ClientStream {
     }
   }
 
-  DelayedStream(ClientStreamListener listener) {
-    this.listener = listener;
+  @Override
+  public void start(ClientStreamListener listener) {
+    synchronized (this) {
+      // start may be called at most once.
+      checkState(this.listener == null, "already started");
+      this.listener = checkNotNull(listener, "listener");
+
+      // Check error first rather than success.
+      if (error != null) {
+        listener.closed(error, new Metadata());
+      }
+      // In the event that an error happened, realStream will be a noop stream.  We still call
+      // start stream in order to drain references to pending messages.
+      if (realStream != null) {
+        startStream();
+      }
+    }
   }
 
-  /**
-   * Creates a stream on a presumably usable transport. Must not be called if {@link
-   * #cancelledPrematurely}, as there is no way to close {@code stream} without double-calling
-   * {@code listener}. Most callers of this method will need to acquire the intrinsic lock to check
-   * {@code cancelledPrematurely} and this method atomically.
-   */
+  @GuardedBy("this")
+  private void startStream() {
+    checkState(realStream != null, "realStream");
+    checkState(listener != null, "listener");
+    realStream.start(listener);
+
+    if (compressionMessageEncodings != null) {
+      realStream.pickCompressor(compressionMessageEncodings);
+    }
+    if (this.decompressionRegistry != null) {
+      realStream.setDecompressionRegistry(this.decompressionRegistry);
+    }
+    if (this.compressionRegistry != null) {
+      realStream.setCompressionRegistry(this.compressionRegistry);
+    }
+    for (PendingMessage message : pendingMessages) {
+      realStream.setMessageCompression(message.shouldBeCompressed);
+      realStream.writeMessage(message.message);
+    }
+    // Set this again, incase no messages were sent.
+    realStream.setMessageCompression(messageCompressionEnabled);
+    pendingMessages.clear();
+    if (pendingHalfClose) {
+      realStream.halfClose();
+      pendingHalfClose = false;
+    }
+    if (pendingFlowControlRequests > 0) {
+      realStream.request(pendingFlowControlRequests);
+      pendingFlowControlRequests = 0;
+    }
+    if (pendingFlush) {
+      realStream.flush();
+      pendingFlush = false;
+    }
+    // Ensures visibility.
+    startedRealStream = realStream;
+  }
+
   void setStream(ClientStream stream) {
     synchronized (this) {
-      if (cancelledPrematurely()) {
-        // Already cancelled
-        throw new IllegalStateException("Can't set on cancelled stream");
+      if (error != null) {
+        // If there is an error, unstartedStream will be a Noop.
+        return;
       }
       checkState(realStream == null, "Stream already created: %s", realStream);
-      realStream = stream;
-      if (compressionMessageEncodings != null) {
-        realStream.pickCompressor(compressionMessageEncodings);
-      }
-      if (this.decompressionRegistry != null) {
-        realStream.setDecompressionRegistry(this.decompressionRegistry);
-      }
-      if (this.compressionRegistry != null) {
-        realStream.setCompressionRegistry(this.compressionRegistry);
-      }
-      for (PendingMessage message : pendingMessages) {
-        realStream.setMessageCompression(message.shouldBeCompressed);
-        realStream.writeMessage(message.message);
-      }
-      // Set this again, incase no messages were sent.
-      realStream.setMessageCompression(messageCompressionEnabled);
-      pendingMessages.clear();
-      if (pendingHalfClose) {
-        realStream.halfClose();
-        pendingHalfClose = false;
-      }
-      if (pendingFlowControlRequests > 0) {
-        realStream.request(pendingFlowControlRequests);
-        pendingFlowControlRequests = 0;
-      }
-      if (pendingFlush) {
-        realStream.flush();
-        pendingFlush = false;
+      realStream = checkNotNull(stream, "stream");
+      // listener can only be non-null if start has already been called.
+      if (listener != null) {
+        startStream();
       }
     }
   }
 
-  void maybeClosePrematurely(final Status reason) {
+  void setError(Status reason) {
     synchronized (this) {
-      if (realStream == null) {
+      // If the client has already cancelled the stream don't bother keeping the next error.
+      if (error == null) {
+        error = checkNotNull(reason);
         realStream = NoopClientStream.INSTANCE;
-        listener.closed(reason, new Metadata());
+        if (listener != null) {
+          listener.closed(error, new Metadata());
+          // call startStream anyways to drain pending messages.
+          startStream();
+        }
       }
-    }
-  }
-
-  public boolean cancelledPrematurely() {
-    synchronized (this) {
-      return realStream == NoopClientStream.INSTANCE;
     }
   }
 
   @Override
   public void writeMessage(InputStream message) {
-    if (realStream == null) {
+    if (startedRealStream == null) {
       synchronized (this) {
-        if (realStream == null) {
+        if (startedRealStream == null) {
           pendingMessages.add(new PendingMessage(message, messageCompressionEnabled));
           return;
         }
       }
     }
-    realStream.writeMessage(message);
+    startedRealStream.writeMessage(message);
   }
 
   @Override
   public void flush() {
-    if (realStream == null) {
+    if (startedRealStream == null) {
       synchronized (this) {
-        if (realStream == null) {
+        if (startedRealStream == null) {
           pendingFlush = true;
           return;
         }
       }
     }
-    realStream.flush();
+    startedRealStream.flush();
   }
 
   @Override
   public void cancel(Status reason) {
-    maybeClosePrematurely(reason);
-    realStream.cancel(reason);
+    if (startedRealStream == null) {
+      synchronized (this) {
+        if (startedRealStream == null) {
+          setError(reason);
+          return;
+        }
+      }
+    }
+    startedRealStream.cancel(reason);
   }
 
   @Override
   public void halfClose() {
-    if (realStream == null) {
+    if (startedRealStream == null) {
       synchronized (this) {
-        if (realStream == null) {
+        if (startedRealStream == null) {
           pendingHalfClose = true;
           return;
         }
       }
     }
-    realStream.halfClose();
+    startedRealStream.halfClose();
   }
 
   @Override
   public void request(int numMessages) {
-    if (realStream == null) {
+    if (startedRealStream == null) {
       synchronized (this) {
-        if (realStream == null) {
+        if (startedRealStream == null) {
           pendingFlowControlRequests += numMessages;
           return;
         }
       }
     }
-    realStream.request(numMessages);
+    startedRealStream.request(numMessages);
   }
 
   @Override
   public Compressor pickCompressor(Iterable<String> messageEncodings) {
-    synchronized (this) {
-      compressionMessageEncodings = messageEncodings;
-      if (realStream != null) {
-        return realStream.pickCompressor(messageEncodings);
+    if (startedRealStream == null) {
+      synchronized (this) {
+        if (startedRealStream == null) {
+          compressionMessageEncodings = messageEncodings;
+          // ClientCall never uses this.  Since the stream doesn't exist yet, it can't say what
+          // stream it would pick.  Eventually this will need a cleaner solution.
+          // TODO(carl-mastrangelo): Remove this.
+          return null;
+        }
       }
     }
-    // ClientCall never uses this.  Since the stream doesn't exist yet, it can't say what
-    // stream it would pick.  Eventually this will need a cleaner solution.
-    // TODO(carl-mastrangelo): Remove this.
-    return null;
+    return startedRealStream.pickCompressor(messageEncodings);
   }
 
   @Override
   public void setCompressionRegistry(CompressorRegistry registry) {
-    synchronized (this) {
-      this.compressionRegistry = registry;
-      if (realStream != null) {
-        realStream.setCompressionRegistry(registry);
+    if (startedRealStream == null) {
+      synchronized (this) {
+        if (startedRealStream == null) {
+          compressionRegistry = registry;
+          return;
+        }
       }
     }
+    startedRealStream.setCompressionRegistry(registry);
   }
 
   @Override
   public void setDecompressionRegistry(DecompressorRegistry registry) {
-    synchronized (this) {
-      this.decompressionRegistry = registry;
-      if (realStream != null) {
-        realStream.setDecompressionRegistry(registry);
+    if (startedRealStream == null) {
+      synchronized (this) {
+        if (startedRealStream == null) {
+          decompressionRegistry = registry;
+          return;
+        }
       }
     }
+    startedRealStream.setDecompressionRegistry(registry);
   }
 
   @Override
   public boolean isReady() {
-    if (realStream == null) {
+    if (startedRealStream == null) {
       synchronized (this) {
-        if (realStream == null) {
+        if (startedRealStream == null) {
           return false;
         }
       }
     }
-    return realStream.isReady();
+    return startedRealStream.isReady();
   }
 
   @Override
   public void setMessageCompression(boolean enable) {
-    synchronized (this) {
-      if (realStream != null) {
-        realStream.setMessageCompression(enable);
-      } else {
-        messageCompressionEnabled = enable;
+    if (startedRealStream == null) {
+      synchronized (this) {
+        if (startedRealStream == null) {
+          messageCompressionEnabled = enable;
+          return;
+        }
       }
     }
+    startedRealStream.setMessageCompression(enable);
   }
 }

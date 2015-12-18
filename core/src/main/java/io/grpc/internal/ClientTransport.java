@@ -61,13 +61,10 @@ public interface ClientTransport {
    *
    * @param method the descriptor of the remote method to be called for this stream.
    * @param headers to send at the beginning of the call
-   * @param listener the listener for the newly created stream.
    * @return the newly created stream.
    */
   // TODO(nmittler): Consider also throwing for stopping.
-  ClientStream newStream(MethodDescriptor<?, ?> method,
-                         Metadata headers,
-                         ClientStreamListener listener);
+  ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers);
 
   /**
    * Starts transport. This method may only be called once.

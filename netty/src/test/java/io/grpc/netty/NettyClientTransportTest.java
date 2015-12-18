@@ -334,7 +334,8 @@ public class NettyClientTransportTest {
     }
 
     Rpc(NettyClientTransport transport, Metadata headers) {
-      stream = transport.newStream(METHOD, headers, listener);
+      stream = transport.newStream(METHOD, headers);
+      stream.start(listener);
       stream.request(1);
       stream.writeMessage(new ByteArrayInputStream(MESSAGE.getBytes()));
       stream.flush();

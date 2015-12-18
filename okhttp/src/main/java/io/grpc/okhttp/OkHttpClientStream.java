@@ -70,6 +70,7 @@ class OkHttpClientStream extends Http2ClientStream {
   private final AsyncFrameWriter frameWriter;
   private final OutboundFlowController outboundFlow;
   private final OkHttpClientTransport transport;
+  private final Runnable startCallback;
   private final Object lock;
   private Object outboundFlowState;
   private volatile Integer id;
@@ -79,17 +80,19 @@ class OkHttpClientStream extends Http2ClientStream {
   @GuardedBy("lock")
   private boolean cancelSent = false;
 
-  OkHttpClientStream(ClientStreamListener listener,
+  OkHttpClientStream(
       AsyncFrameWriter frameWriter,
       OkHttpClientTransport transport,
+      Runnable startCallback,
       OutboundFlowController outboundFlow,
       MethodType type,
       Object lock,
       List<Header> requestHeaders,
       int maxMessageSize) {
-    super(new OkHttpWritableBufferAllocator(), listener, maxMessageSize);
+    super(new OkHttpWritableBufferAllocator(), maxMessageSize);
     this.frameWriter = frameWriter;
     this.transport = transport;
+    this.startCallback = startCallback;
     this.outboundFlow = outboundFlow;
     this.type = type;
     this.lock = lock;
@@ -114,6 +117,12 @@ class OkHttpClientStream extends Http2ClientStream {
   @Nullable
   public Integer id() {
     return id;
+  }
+
+  @Override
+  public void start(ClientStreamListener listener) {
+    super.start(listener);
+    startCallback.run();
   }
 
   @GuardedBy("lock")

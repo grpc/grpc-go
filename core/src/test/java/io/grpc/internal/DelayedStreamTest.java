@@ -67,17 +67,16 @@ public class DelayedStreamTest {
   @Mock private ClientTransport transport;
   @Mock private ClientStream realStream;
   @Captor private ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
-  private DelayedStream stream;
+  private DelayedStream stream = new DelayedStream();
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-
-    stream = new DelayedStream(listener);
   }
 
   @Test
   public void setStream_sendsAllMessages() {
+    stream.start(listener);
     DecompressorRegistry decompressors = DecompressorRegistry.newEmptyInstance();
     CompressorRegistry compressors = CompressorRegistry.newEmptyInstance();
     stream.setDecompressionRegistry(decompressors);
@@ -100,10 +99,12 @@ public class DelayedStreamTest {
     verify(realStream, times(2)).setMessageCompression(false);
 
     verify(realStream, times(2)).writeMessage(message);
+    verify(realStream).start(listener);
   }
 
   @Test
   public void setStream_halfClose() {
+    stream.start(listener);
     stream.halfClose();
     stream.setStream(realStream);
 
@@ -112,6 +113,7 @@ public class DelayedStreamTest {
 
   @Test
   public void setStream_flush() {
+    stream.start(listener);
     stream.flush();
     stream.setStream(realStream);
 
@@ -120,6 +122,7 @@ public class DelayedStreamTest {
 
   @Test
   public void setStream_flowControl() {
+    stream.start(listener);
     stream.request(1);
     stream.request(2);
 
@@ -130,6 +133,7 @@ public class DelayedStreamTest {
 
   @Test
   public void setStream_cantCreateTwice() {
+    stream.start(listener);
     // The first call will be a success
     stream.setStream(realStream);
 
@@ -141,10 +145,8 @@ public class DelayedStreamTest {
 
   @Test
   public void streamCancelled() {
+    stream.start(listener);
     stream.cancel(Status.CANCELLED);
     verify(listener).closed(eq(Status.CANCELLED), isA(Metadata.class));
-
-    thrown.expect(IllegalStateException.class);
-    stream.setStream(realStream);
   }
 }

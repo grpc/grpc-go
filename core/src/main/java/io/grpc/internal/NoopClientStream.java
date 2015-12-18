@@ -45,6 +45,9 @@ public class NoopClientStream implements ClientStream {
   public static NoopClientStream INSTANCE = new NoopClientStream();
 
   @Override
+  public void start(ClientStreamListener listener) {}
+
+  @Override
   public void request(int numMessages) {}
 
   @Override

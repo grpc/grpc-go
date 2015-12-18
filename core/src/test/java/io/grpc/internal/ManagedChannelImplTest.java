@@ -185,15 +185,14 @@ public class ManagedChannelImplTest {
     Metadata headers = new Metadata();
     when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class)))
         .thenReturn(mockTransport);
-    when(mockTransport.newStream(same(method), same(headers), any(ClientStreamListener.class)))
-        .thenReturn(mockStream);
+    when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
     call.start(mockCallListener, headers);
     verify(mockTransportFactory, timeout(1000))
         .newClientTransport(same(socketAddress), eq(authority));
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     ClientTransport.Listener transportListener = transportListenerCaptor.getValue();
-    verify(mockTransport, timeout(1000))
-        .newStream(same(method), same(headers), streamListenerCaptor.capture());
+    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
+    verify(mockStream).start(streamListenerCaptor.capture());
     verify(mockStream).setDecompressionRegistry(isA(DecompressorRegistry.class));
     verify(mockStream).setCompressionRegistry(isA(CompressorRegistry.class));
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
@@ -202,11 +201,10 @@ public class ManagedChannelImplTest {
     ClientCall<String, Integer> call2 = channel.newCall(method, CallOptions.DEFAULT);
     ClientStream mockStream2 = mock(ClientStream.class);
     Metadata headers2 = new Metadata();
-    when(mockTransport.newStream(same(method), same(headers2), any(ClientStreamListener.class)))
-        .thenReturn(mockStream2);
+    when(mockTransport.newStream(same(method), same(headers2))).thenReturn(mockStream2);
     call2.start(mockCallListener2, headers2);
-    verify(mockTransport, timeout(1000))
-        .newStream(same(method), same(headers2), streamListenerCaptor.capture());
+    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers2));
+    verify(mockStream2).start(streamListenerCaptor.capture());
     ClientStreamListener streamListener2 = streamListenerCaptor.getValue();
     Metadata trailers = new Metadata();
     streamListener2.closed(Status.CANCELLED, trailers);
@@ -272,8 +270,7 @@ public class ManagedChannelImplTest {
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     Metadata headers = new Metadata();
     ClientStream mockStream = mock(ClientStream.class);
-    when(mockTransport.newStream(same(method), same(headers), any(ClientStreamListener.class)))
-        .thenReturn(mockStream);
+    when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
     call.start(mockCallListener, headers);
     call.cancel();
 
@@ -368,17 +365,18 @@ public class ManagedChannelImplTest {
     ManagedChannel channel = createChannel(nameResolverFactory, NO_INTERCEPTOR);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     Metadata headers = new Metadata();
+    ClientStream badStream = mock(ClientStream.class);
+    when(badTransport.newStream(same(method), same(headers))).thenReturn(badStream);
     doAnswer(new Answer<ClientStream>() {
       @Override
       public ClientStream answer(InvocationOnMock invocation) throws Throwable {
         Object[] args = invocation.getArguments();
-        final ClientStreamListener listener = (ClientStreamListener) args[2];
+        final ClientStreamListener listener = (ClientStreamListener) args[0];
         listener.closed(Status.UNAVAILABLE, new Metadata());
         return mock(ClientStream.class);
       }
-    }).when(badTransport).newStream(same(method), same(headers), any(ClientStreamListener.class));
-    when(goodTransport.newStream(same(method), same(headers), any(ClientStreamListener.class)))
-        .thenReturn(mock(ClientStream.class));
+    }).when(badStream).start(any(ClientStreamListener.class));
+    when(goodTransport.newStream(same(method), same(headers))).thenReturn(mock(ClientStream.class));
 
     // First try should fail with the bad address.
     call.start(mockCallListener, headers);
@@ -391,8 +389,7 @@ public class ManagedChannelImplTest {
     // Retry should work with the good address.
     ClientCall<String, Integer> call2 = channel.newCall(method, CallOptions.DEFAULT);
     call2.start(mockCallListener, headers);
-    verify(goodTransport, timeout(1000)).newStream(
-        same(method), same(headers), any(ClientStreamListener.class));
+    verify(goodTransport, timeout(1000)).newStream(same(method), same(headers));
   }
 
   private void verifyListenerClosed(ClientCall.Listener<?> mockCallListener,

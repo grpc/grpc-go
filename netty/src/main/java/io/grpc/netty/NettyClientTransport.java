@@ -41,7 +41,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
-import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -104,39 +103,42 @@ class NettyClientTransport implements ClientTransport {
   }
 
   @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers,
-      ClientStreamListener listener) {
+  public ClientStream newStream(final MethodDescriptor<?, ?> method, final Metadata headers) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
-    Preconditions.checkNotNull(listener, "listener");
-
-    // Create the stream.
-    final NettyClientStream stream = new NettyClientStream(listener, channel, handler,
-        maxMessageSize);
 
     // Convert the headers into Netty HTTP/2 headers.
     AsciiString defaultPath = new AsciiString("/" + method.getFullMethodName());
-    AsciiString defaultAuthority  = new AsciiString(headers.containsKey(AUTHORITY_KEY)
+    AsciiString defaultAuthority = new AsciiString(headers.containsKey(AUTHORITY_KEY)
         ? headers.get(AUTHORITY_KEY) : authority);
     headers.removeAll(AUTHORITY_KEY);
-    Http2Headers http2Headers = Utils.convertClientHeaders(headers, negotiationHandler.scheme(),
-        defaultPath, defaultAuthority);
+    final Http2Headers http2Headers = Utils.convertClientHeaders(
+        headers, negotiationHandler.scheme(), defaultPath, defaultAuthority);
 
-    ChannelFutureListener failureListener = new ChannelFutureListener() {
-      @Override
-      public void operationComplete(ChannelFuture future) throws Exception {
-        if (!future.isSuccess()) {
-          // Stream creation failed. Close the stream if not already closed.
-          stream.transportReportStatus(Utils.statusFromThrowable(future.cause()), true,
-                  new Metadata());
+    class StartCallback implements Runnable {
+      final NettyClientStream clientStream =
+          new NettyClientStream(channel, handler, this, maxMessageSize);
+
+      final ChannelFutureListener failureListener = new ChannelFutureListener() {
+        @Override
+        public void operationComplete(ChannelFuture future) throws Exception {
+          if (!future.isSuccess()) {
+            // Stream creation failed. Close the stream if not already closed.
+            clientStream.transportReportStatus(Utils.statusFromThrowable(future.cause()), true,
+                new Metadata());
+          }
         }
-      }
-    };
+      };
 
-    // Write the command requesting the creation of the stream.
-    handler.getWriteQueue().enqueue(new CreateStreamCommand(http2Headers, stream),
+      @Override
+      public void run() {
+        // Write the command requesting the creation of the stream.
+        handler.getWriteQueue().enqueue(new CreateStreamCommand(http2Headers, clientStream),
             !method.getType().clientSendsOneMessage()).addListener(failureListener);
-    return stream;
+      }
+    }
+
+    return new StartCallback().clientStream;
   }
 
   @Override

@@ -44,7 +44,6 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.Status.Code;
-import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
@@ -243,30 +242,32 @@ class OkHttpClientTransport implements ClientTransport {
   }
 
   @Override
-  public OkHttpClientStream newStream(MethodDescriptor<?, ?> method,
-                                      Metadata headers,
-                                      ClientStreamListener listener) {
+  public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method, final Metadata headers) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
-    Preconditions.checkNotNull(listener, "listener");
 
-    String defaultPath = "/" + method.getFullMethodName();
-    OkHttpClientStream clientStream = new OkHttpClientStream(
-        listener, frameWriter, this, outboundFlow, method.getType(), lock,
-        Headers.createRequestHeaders(headers, defaultPath, defaultAuthority),
-        maxMessageSize);
+    final String defaultPath = "/" + method.getFullMethodName();
+    class StartCallback implements Runnable {
+      final OkHttpClientStream clientStream = new OkHttpClientStream(
+          frameWriter, OkHttpClientTransport.this, this, outboundFlow, method.getType(), lock,
+          Headers.createRequestHeaders(headers, defaultPath, defaultAuthority),
+          maxMessageSize);
 
-    synchronized (lock) {
-      if (goAway) {
-        clientStream.transportReportStatus(goAwayStatus, true, new Metadata());
-      } else if (streams.size() >= maxConcurrentStreams) {
-        pendingStreams.add(clientStream);
-      } else {
-        startStream(clientStream);
+      @Override
+      public void run() {
+        synchronized (lock) {
+          if (goAway) {
+            clientStream.transportReportStatus(goAwayStatus, true, new Metadata());
+          } else if (streams.size() >= maxConcurrentStreams) {
+            pendingStreams.add(clientStream);
+          } else {
+            startStream(clientStream);
+          }
+        }
       }
     }
 
-    return clientStream;
+    return new StartCallback().clientStream;
   }
 
   @GuardedBy("lock")

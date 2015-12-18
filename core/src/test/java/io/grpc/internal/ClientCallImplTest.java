@@ -40,7 +40,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -152,8 +151,7 @@ public class ClientCallImplTest {
     final ClientStream stream = mock(ClientStream.class);
     when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
 
-    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
-        any(ClientStreamListener.class))).thenReturn(stream);
+    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
@@ -168,8 +166,7 @@ public class ClientCallImplTest {
     call.start(callListener, new Metadata());
 
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-    verify(transport).newStream(
-        eq(method), metadataCaptor.capture(), isA(ClientStreamListener.class));
+    verify(transport).newStream(eq(method), metadataCaptor.capture());
     Metadata actual = metadataCaptor.getValue();
 
     Set<String> acceptedEncodings =
@@ -283,8 +280,8 @@ public class ClientCallImplTest {
 
   @Test
   public void callerContextPropagatedToListener() throws Exception {
-    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
-        listenerArgumentCaptor.capture())).thenReturn(stream);
+
+    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
     when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
 
     // Attach the context which is recorded when the call is created
@@ -344,6 +341,7 @@ public class ClientCallImplTest {
       }
     }, new Metadata());
 
+    verify(stream).start(listenerArgumentCaptor.capture());
     ClientStreamListener listener = listenerArgumentCaptor.getValue();
     listener.onReady();
     listener.headersRead(new Metadata());
@@ -361,8 +359,7 @@ public class ClientCallImplTest {
 
   @Test
   public void contextCancellationCancelsStream() throws Exception {
-    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
-        listenerArgumentCaptor.capture())).thenReturn(stream);
+    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
     when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
 
     // Attach the context which is recorded when the call is created
@@ -382,11 +379,6 @@ public class ClientCallImplTest {
     previous.attach();
 
     call.start(callListener, new Metadata());
-
-    ClientStreamListener listener = listenerArgumentCaptor.getValue();
-    listener.onReady();
-    listener.headersRead(new Metadata());
-    listener.messageRead(new ByteArrayInputStream(new byte[0]));
 
     cancellableContext.cancel(new Throwable());
 
@@ -469,8 +461,7 @@ public class ClientCallImplTest {
     assertFalse(future.isDone());
     fakeClock.forwardTime(1, TimeUnit.SECONDS);
     assertTrue(future.isCancelled());
-    verify(transport, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class),
-        any(ClientStreamListener.class));
+    verify(transport, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class));
     verify(callListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
     assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
   }
@@ -478,33 +469,23 @@ public class ClientCallImplTest {
   @Test
   public void streamCreationTask_failure() {
     StreamCreationTask task = new StreamCreationTask(
-        delayedStream, new Metadata(), method, CallOptions.DEFAULT, streamListener);
+        delayedStream, new Metadata(), method, CallOptions.DEFAULT);
 
     task.onFailure(Status.CANCELLED.asException());
 
-    verify(delayedStream).maybeClosePrematurely(statusCaptor.capture());
+    verify(delayedStream).setError(statusCaptor.capture());
     assertEquals(Status.Code.CANCELLED, statusCaptor.getValue().getCode());
-  }
-
-  @Test
-  public void streamCreationTask_alreadyCancelled() {
-    StreamCreationTask task = new StreamCreationTask(
-        delayedStream, new Metadata(), method, CallOptions.DEFAULT, streamListener);
-
-    when(delayedStream.cancelledPrematurely()).thenReturn(true);
-    task.onSuccess(clientTransport);
-    verifyZeroInteractions(clientTransport);
   }
 
   @Test
   public void streamCreationTask_transportShutdown() {
     StreamCreationTask task = new StreamCreationTask(
-        delayedStream, new Metadata(), method, CallOptions.DEFAULT, streamListener);
+        delayedStream, new Metadata(), method, CallOptions.DEFAULT);
 
     // null means no transport available
     task.onSuccess(null);
 
-    verify(delayedStream).maybeClosePrematurely(statusCaptor.capture());
+    verify(delayedStream).setError(statusCaptor.capture());
     assertEquals(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
   }
 
@@ -514,11 +495,11 @@ public class ClientCallImplTest {
     headers.put(GrpcUtil.TIMEOUT_KEY, 1L);
     CallOptions callOptions = CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime() - 1);
     StreamCreationTask task =
-        new StreamCreationTask(delayedStream, headers, method, callOptions, streamListener);
+        new StreamCreationTask(delayedStream, headers, method, callOptions);
 
     task.onSuccess(clientTransport);
 
-    verify(delayedStream).maybeClosePrematurely(statusCaptor.capture());
+    verify(delayedStream).setError(statusCaptor.capture());
     assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
   }
 
@@ -526,13 +507,13 @@ public class ClientCallImplTest {
   public void streamCreationTask_success() {
     Metadata headers = new Metadata();
     StreamCreationTask task =
-        new StreamCreationTask(delayedStream, headers, method, CallOptions.DEFAULT, streamListener);
-    when(clientTransport.newStream(method, headers, streamListener))
+        new StreamCreationTask(delayedStream, headers, method, CallOptions.DEFAULT);
+    when(clientTransport.newStream(method, headers))
         .thenReturn(NoopClientStream.INSTANCE);
 
     task.onSuccess(clientTransport);
 
-    verify(clientTransport).newStream(method, headers, streamListener);
+    verify(clientTransport).newStream(method, headers);
   }
 
   private static class TestMarshaller<T> implements Marshaller<T> {

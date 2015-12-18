@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -54,16 +54,24 @@ import javax.annotation.Nullable;
 class NettyClientStream extends Http2ClientStream {
   private final Channel channel;
   private final NettyClientHandler handler;
+  private final Runnable startCallback;
   private Http2Stream http2Stream;
   private Integer id;
   private WriteQueue writeQueue;
 
-  NettyClientStream(ClientStreamListener listener, Channel channel, NettyClientHandler handler,
-                    int maxMessageSize) {
-    super(new NettyWritableBufferAllocator(channel.alloc()), listener, maxMessageSize);
+  NettyClientStream(
+      Channel channel, NettyClientHandler handler, Runnable startCallback, int maxMessageSize) {
+    super(new NettyWritableBufferAllocator(channel.alloc()), maxMessageSize);
     this.writeQueue = handler.getWriteQueue();
     this.channel = checkNotNull(channel, "channel");
     this.handler = checkNotNull(handler, "handler");
+    this.startCallback = checkNotNull(startCallback, "startCallback");
+  }
+
+  @Override
+  public void start(ClientStreamListener listener) {
+    super.start(listener);
+    startCallback.run();
   }
 
   @Override

@@ -31,6 +31,8 @@
 
 package io.grpc.inprocess;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
@@ -115,20 +117,18 @@ class InProcessTransport implements ServerTransport, ClientTransport {
   }
 
   @Override
-  public synchronized ClientStream newStream(MethodDescriptor<?, ?> method,
-      Metadata headers, ClientStreamListener clientStreamListener) {
+  public synchronized ClientStream newStream(
+      final MethodDescriptor<?, ?> method, final Metadata headers) {
     if (shutdownStatus != null) {
-      clientStreamListener.closed(shutdownStatus, new Metadata());
-      return new NoopClientStream();
+      return new NoopClientStream() {
+        @Override
+        public void start(ClientStreamListener listener) {
+          listener.closed(shutdownStatus, new Metadata());
+        }
+      };
     }
-    headers.removeAll(GrpcUtil.AUTHORITY_KEY);
-    InProcessStream stream = new InProcessStream();
-    stream.serverStream.setListener(clientStreamListener);
-    ServerStreamListener serverStreamListener = serverTransportListener.streamCreated(
-        stream.serverStream, method.getFullMethodName(), headers);
-    stream.clientStream.setListener(serverStreamListener);
-    streams.add(stream);
-    return stream.clientStream;
+
+    return new InProcessStream(method, headers).clientStream;
   }
 
   @Override
@@ -191,6 +191,14 @@ class InProcessTransport implements ServerTransport, ClientTransport {
   private class InProcessStream {
     private final InProcessServerStream serverStream = new InProcessServerStream();
     private final InProcessClientStream clientStream = new InProcessClientStream();
+    private final Metadata headers;
+    private MethodDescriptor<?, ?> method;
+
+    private InProcessStream(MethodDescriptor<?, ?> method, Metadata headers) {
+      this.method = checkNotNull(method);
+      this.headers = checkNotNull(headers);
+
+    }
 
     // Can be called multiple times due to races on both client and server closing at same time.
     private void streamClosed() {
@@ -461,6 +469,19 @@ class InProcessTransport implements ServerTransport, ClientTransport {
 
       @Override
       public void setCompressionRegistry(CompressorRegistry registry) {}
+
+      @Override
+      public void start(ClientStreamListener listener) {
+        serverStream.setListener(listener);
+
+        synchronized (InProcessTransport.this) {
+          headers.removeAll(GrpcUtil.AUTHORITY_KEY);
+          ServerStreamListener serverStreamListener = serverTransportListener.streamCreated(
+              serverStream, method.getFullMethodName(), headers);
+          clientStream.setListener(serverStreamListener);
+          streams.add(InProcessTransport.InProcessStream.this);
+        }
+      }
     }
   }
 }
