@@ -34,6 +34,7 @@ package io.grpc.okhttp;
 import com.google.common.base.Preconditions;
 
 import io.grpc.okhttp.internal.ConnectionSpec;
+import io.grpc.okhttp.internal.OkHostnameVerifier;
 import io.grpc.okhttp.internal.Protocol;
 
 import java.io.IOException;
@@ -42,6 +43,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
@@ -69,11 +71,13 @@ final class OkHttpTlsUpgrader {
     SSLSocket sslSocket = (SSLSocket) sslSocketFactory.createSocket(
         socket, host, port, true /* auto close */);
     spec.apply(sslSocket, false);
-    if (spec.supportsTlsExtensions()) {
-      String negotiatedProtocol =
-          OkHttpProtocolNegotiator.get().negotiate(sslSocket, host, TLS_PROTOCOLS);
-      Preconditions.checkState(HTTP2_PROTOCOL_NAME.equals(negotiatedProtocol),
-          "Only \"h2\" is supported, but negotiated protocol is %s", negotiatedProtocol);
+    String negotiatedProtocol = OkHttpProtocolNegotiator.get().negotiate(
+        sslSocket, host, spec.supportsTlsExtensions() ? TLS_PROTOCOLS : null);
+    Preconditions.checkState(HTTP2_PROTOCOL_NAME.equals(negotiatedProtocol),
+        "Only \"h2\" is supported, but negotiated protocol is %s", negotiatedProtocol);
+
+    if (!OkHostnameVerifier.INSTANCE.verify(host, sslSocket.getSession())) {
+      throw new SSLPeerUnverifiedException("Cannot verify hostname: " + host);
     }
     return sslSocket;
   }

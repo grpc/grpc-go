@@ -31,6 +31,12 @@
 
 package io.grpc.testing.integration;
 
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import com.google.common.base.Throwables;
+import com.google.protobuf.EmptyProtos.Empty;
+
 import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.TlsVersion;
 
@@ -51,6 +57,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.io.IOException;
+
+import javax.net.ssl.SSLPeerUnverifiedException;
 
 /**
  * Integration tests for GRPC over Http2 using the OkHttp framework.
@@ -116,5 +124,30 @@ public class Http2OkHttpTest extends AbstractTransportTest {
 
     recorder.awaitCompletion();
     emptyUnary();
+  }
+
+  @Test(timeout = 10000)
+  public void wrongHostNameFailHostnameVerification() throws Exception {
+    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", serverPort)
+        .connectionSpec(new ConnectionSpec.Builder(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC)
+            .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
+            .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))
+            .build())
+        .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
+            "I.am.a.bad.hostname", serverPort));
+    ManagedChannel channel = builder.sslSocketFactory(
+        TestUtils.newSslSocketFactoryForCa(TestUtils.loadCert("ca.pem"))).build();
+    TestServiceGrpc.TestServiceBlockingStub blockingStub =
+        TestServiceGrpc.newBlockingStub(channel);
+
+    try {
+      blockingStub.emptyCall(Empty.getDefaultInstance());
+      fail("The rpc should have been failed due to hostname verification");
+    } catch (Throwable t) {
+      Throwable cause = Throwables.getRootCause(t);
+      assertTrue("Failed by unexpected exception: " + cause,
+          cause instanceof SSLPeerUnverifiedException);
+    }
+    channel.shutdown();
   }
 }

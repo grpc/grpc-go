@@ -46,6 +46,7 @@ import java.security.Provider;
 import java.security.Security;
 import java.util.List;
 
+import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocket;
 
 /**
@@ -96,8 +97,10 @@ class OkHttpProtocolNegotiator {
    * @throws RuntimeException if the negotiation completed, but no protocol was selected.
    */
   public String negotiate(
-      SSLSocket sslSocket, String hostname, List<Protocol> protocols) throws IOException {
-    configureTlsExtensions(sslSocket, hostname, protocols);
+      SSLSocket sslSocket, String hostname, @Nullable List<Protocol> protocols) throws IOException {
+    if (protocols != null) {
+      configureTlsExtensions(sslSocket, hostname, protocols);
+    }
     try {
       // Force handshake.
       sslSocket.startHandshake();
