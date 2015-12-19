@@ -73,7 +73,7 @@ var (
         cancel_after_first_response: cancellation after receiving 1st message from the server.`)
 
 	// The test CA root cert file
-	testCAFile  = "testdata/ca.pem"
+	testCAFile = "testdata/ca.pem"
 )
 
 func main() {

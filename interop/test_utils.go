@@ -242,7 +242,7 @@ func DoEmptyStream(tc testpb.TestServiceClient) {
 	grpclog.Println("Emptystream done")
 }
 
-// DoTimeoutSleepingServer performs an RPC on a sleep server which causes RPC timeout. 
+// DoTimeoutSleepingServer performs an RPC on a sleep server which causes RPC timeout.
 func DoTimeoutOnSleepingServer(tc testpb.TestServiceClient) {
 	ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	stream, err := tc.FullDuplexCall(ctx)
@@ -600,4 +600,3 @@ func (s *TestServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 	}
 	return nil
 }
-
