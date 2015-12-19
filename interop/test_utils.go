@@ -242,7 +242,7 @@ func DoEmptyStream(tc testpb.TestServiceClient) {
 	grpclog.Println("Emptystream done")
 }
 
-// DoTimeoutSleepingServer performs an RPC on a sleep server which causes RPC timeout.
+// DoTimeoutOnSleepingServer performs an RPC on a sleep server which causes RPC timeout.
 func DoTimeoutOnSleepingServer(tc testpb.TestServiceClient) {
 	ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	stream, err := tc.FullDuplexCall(ctx)
@@ -469,10 +469,15 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient) {
 	grpclog.Println("CancelAfterFirstResponse done")
 }
 
-type TestServer struct {
+type testServer struct {
 }
 
-func (s *TestServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+// NewTestServer creates a test server for test service.
+func NewTestServer() testpb.TestServiceServer {
+	return &testServer{}
+}
+
+func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 	return new(testpb.Empty), nil
 }
 
@@ -494,7 +499,7 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 	}, nil
 }
 
-func (s *TestServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	pl, err := serverNewPayload(in.GetResponseType(), in.GetResponseSize())
 	if err != nil {
 		return nil, err
@@ -504,7 +509,7 @@ func (s *TestServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	}, nil
 }
 
-func (s *TestServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
+func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
 	cs := args.GetResponseParameters()
 	for _, c := range cs {
 		if us := c.GetIntervalUs(); us > 0 {
@@ -523,7 +528,7 @@ func (s *TestServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest
 	return nil
 }
 
-func (s *TestServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
+func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
 	var sum int
 	for {
 		in, err := stream.Recv()
@@ -540,7 +545,7 @@ func (s *TestServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 	}
 }
 
-func (s *TestServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -568,7 +573,7 @@ func (s *TestServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 	}
 }
 
-func (s *TestServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServer) error {
+func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServer) error {
 	var msgBuf []*testpb.StreamingOutputCallRequest
 	for {
 		in, err := stream.Recv()
