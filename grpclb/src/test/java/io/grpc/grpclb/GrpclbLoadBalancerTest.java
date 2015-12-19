@@ -299,6 +299,58 @@ public class GrpclbLoadBalancerTest {
     assertNull(loadBalancer.getRoundRobinServerList());
   }
 
+  @Test public void lbStreamUnimplemented() throws Exception {
+    // Simulate the initial set of LB addresses resolved
+    simulateLbAddressResolved(30001);
+
+    // First pick, will be pending
+    ListenableFuture<ClientTransport> pick = loadBalancer.pickTransport(null);
+
+    // Make the transport for LB server ready
+    ClientTransport lbTransport = mock(ClientTransport.class);
+    lbTransportFuture.set(lbTransport);
+
+    // An LB request is sent
+    SendLbRequestArgs sentLbRequest = loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS);
+    assertNotNull(sentLbRequest);
+    assertSame(lbTransport, sentLbRequest.transport);
+
+    // Simulate that the LB stream fails with UNIMPLEMENTED
+    loadBalancer.getLbResponseObserver().onError(Status.UNIMPLEMENTED.asException());
+
+    // The pending pick will succeed with lbTransport
+    assertTrue(pick.isDone());
+    assertSame(lbTransport, pick.get());
+
+    // Subsequent picks will also get lbTransport
+    pick = loadBalancer.pickTransport(null);
+    assertTrue(pick.isDone());
+    assertSame(lbTransport, pick.get());
+
+    // Round-robin list NOT available at this point
+    assertNull(loadBalancer.getRoundRobinServerList());
+
+    verify(mockTransportManager, times(1)).getTransport(eq(lbAddressGroup));
+
+    // Didn't send additional requests other than the initial one
+    assertEquals(0, loadBalancer.sentLbRequests.size());
+
+    // Shut down the transport
+    loadBalancer.transportShutdown(lbAddressGroup, lbTransport,
+        Status.UNAVAILABLE.withDescription("simulated"));
+
+    // Subsequent pick will fail because an error has occurred
+    pick = loadBalancer.pickTransport(null);
+    assertTrue(pick.isDone());
+    assertFutureFailedWithError(pick, Status.Code.UNAVAILABLE,
+        "simulated", "Transport to LB server closed");
+
+    // Will get another lbTransport, and send another LB request
+    verify(mockTransportManager, times(2)).getTransport(eq(lbAddressGroup));
+    lbTransportFuture.set(lbTransport);
+    assertNotNull(loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS));
+  }
+
   @Test public void lbConnectionClosedAfterResponse() throws Exception {
     // Simulate the initial set of LB addresses resolved
     simulateLbAddressResolved(30001);

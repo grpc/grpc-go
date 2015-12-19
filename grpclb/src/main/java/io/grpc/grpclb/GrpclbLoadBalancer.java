@@ -94,6 +94,8 @@ class GrpclbLoadBalancer extends LoadBalancer {
   @GuardedBy("lock")
   private ClientTransport lbTransport;
   @GuardedBy("lock")
+  private ListenableFuture<ClientTransport> directTransport;
+  @GuardedBy("lock")
   private StreamObserver<LoadBalanceResponse> lbResponseObserver;
   @GuardedBy("lock")
   private StreamObserver<LoadBalanceRequest> lbRequestWriter;
@@ -134,6 +136,9 @@ class GrpclbLoadBalancer extends LoadBalancer {
     RoundRobinServerList serverListCopy;
     synchronized (lock) {
       Preconditions.checkState(!closed, "already closed");
+      if (directTransport != null) {
+        return directTransport;
+      }
       if (roundRobinServerList == null) {
         if (lastError == null) {
           return pendingPicks.newBlankFuture();
@@ -165,12 +170,14 @@ class GrpclbLoadBalancer extends LoadBalancer {
 
   @GuardedBy("lock")
   private void connectToLb() {
+    directTransport = null;
     if (closed) {
       return;
     }
     lbResponseObserver = null;
-    // TODO(zhangkun83): should use a separate authority for LB servers
     Preconditions.checkNotNull(lbAddresses, "lbAddresses");
+    // TODO(zhangkun83): LB servers may use an authority different from the service's.
+    // getTransport() will need to add an argument for the authority.
     ListenableFuture<ClientTransport> transportFuture = tm.getTransport(lbAddresses);
     Futures.addCallback(
         Preconditions.checkNotNull(transportFuture),
@@ -340,19 +347,37 @@ class GrpclbLoadBalancer extends LoadBalancer {
     }
 
     private void onStreamClosed(Status status) {
-      handleError(status);
-      synchronized (this) {
-        if (lbResponseObserver == this) {
-          if (status.getCode() == Status.Code.UNIMPLEMENTED) {
-            // TODO(zhangkun83): maybe we can instead begin sending normal RPCs to this server, but
-            // it's not decided yet.
-            lbTransport.shutdown();
-          } else {
-            // TODO(zhangkun83): apply back-off, otherwise this will spam the server continually
-            // with requests if the server tends to fail it for any reason.
-            // I am still the active LB stream. Reopen the stream.
-            startNegotiation();
+      if (status.getCode() == Status.Code.UNIMPLEMENTED) {
+        FulfillmentBatch<ClientTransport> pendingPicksFulfillmentBatch;
+        final ListenableFuture<ClientTransport> transportFuture;
+        // This LB transport doesn't seem to be an actual LB server, if the LB address comes
+        // directly from NameResolver, just use it to serve normal RPCs.
+        // TODO(zhangkun83): check if lbAddresses are from NameResolver after we start getting
+        // lbAddresses from LoadBalanceResponse.
+        synchronized (lock) {
+          if (lbResponseObserver != this) {
+            return;
           }
+          directTransport = transportFuture = Futures.immediateFuture(lbTransport);
+          pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
+        }
+        pendingPicksFulfillmentBatch.link(
+            new Supplier<ListenableFuture<ClientTransport>>() {
+              @Override
+              public ListenableFuture<ClientTransport> get() {
+                return transportFuture;
+              }
+            });
+      } else {
+        handleError(status);
+        synchronized (lock) {
+          if (lbResponseObserver != this) {
+            return;
+          }
+          // TODO(zhangkun83): apply back-off, otherwise this will spam the server continually
+          // with requests if the server tends to fail it for any reason.
+          // I am still the active LB stream. Reopen the stream.
+          startNegotiation();
         }
       }
     }
