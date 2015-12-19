@@ -36,7 +36,6 @@ package grpc
 import (
 	"fmt"
 	"math"
-	"sync"
 	"testing"
 	"time"
 
@@ -51,7 +50,6 @@ type testWatcher struct {
 	side chan int
 	// the channel to notifiy update injector that the update reading is done
 	readDone chan int
-	wg       *sync.WaitGroup
 }
 
 func (w *testWatcher) Next() (updates []*naming.Update, err error) {
@@ -83,7 +81,6 @@ func (w *testWatcher) inject(updates []*naming.Update) {
 type testNameResolver struct {
 	w    *testWatcher
 	addr string
-	wg   *sync.WaitGroup
 }
 
 func (r *testNameResolver) Resolve(target string) (naming.Watcher, error) {
@@ -91,7 +88,6 @@ func (r *testNameResolver) Resolve(target string) (naming.Watcher, error) {
 		update:   make(chan *naming.Update, 1),
 		side:     make(chan int, 1),
 		readDone: make(chan int),
-		wg:       r.wg,
 	}
 	r.w.side <- 1
 	r.w.update <- &naming.Update{
@@ -100,14 +96,11 @@ func (r *testNameResolver) Resolve(target string) (naming.Watcher, error) {
 	}
 	go func() {
 		<-r.w.readDone
-		if r.w.wg != nil {
-			r.w.wg.Done()
-		}
 	}()
 	return r.w, nil
 }
 
-func startServers(t *testing.T, numServers, port int, maxStreams uint32, wg *sync.WaitGroup) ([]*server, *testNameResolver) {
+func startServers(t *testing.T, numServers, port int, maxStreams uint32) ([]*server, *testNameResolver) {
 	var servers []*server
 	for i := 0; i < numServers; i++ {
 		s := &server{readyChan: make(chan bool)}
@@ -119,13 +112,12 @@ func startServers(t *testing.T, numServers, port int, maxStreams uint32, wg *syn
 	addr := "127.0.0.1:" + servers[0].port
 	return servers, &testNameResolver{
 		addr: addr,
-		wg:   wg,
 	}
 }
 
 func TestNameDiscovery(t *testing.T) {
 	// Start 3 servers on 3 ports.
-	servers, r := startServers(t, 3, 0, math.MaxUint32, nil)
+	servers, r := startServers(t, 3, 0, math.MaxUint32)
 	cc, err := Dial("foo.bar.com", WithPicker(NewUnicastNamingPicker(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
@@ -166,9 +158,7 @@ func TestNameDiscovery(t *testing.T) {
 }
 
 func TestEmptyAddrs(t *testing.T) {
-	var wg sync.WaitGroup
-	servers, r := startServers(t, 1, 0, math.MaxUint32, &wg)
-	wg.Add(1)
+	servers, r := startServers(t, 1, 0, math.MaxUint32)
 	cc, err := Dial("foo.bar.com", WithPicker(NewUnicastNamingPicker(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
@@ -184,12 +174,14 @@ func TestEmptyAddrs(t *testing.T) {
 		Op:   naming.Delete,
 		Addr: "127.0.0.1:" + servers[0].port,
 	})
-	// Wait until the first reading is done.
-	wg.Wait()
 	r.w.inject(updates)
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); err == nil {
-		t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want non-<nil>", err)
+	// Loop until the above updates apply.
+	for {
+		time.Sleep(10 * time.Millisecond)
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); err != nil {
+			break
+		}
 	}
 	cc.Close()
 	servers[0].stop()
