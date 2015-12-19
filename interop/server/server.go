@@ -68,6 +68,6 @@ func main() {
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	server := grpc.NewServer(opts...)
-	testpb.RegisterTestServiceServer(server, &interop.TestServer{})
+	testpb.RegisterTestServiceServer(server, interop.NewTestServer())
 	server.Serve(lis)
 }
