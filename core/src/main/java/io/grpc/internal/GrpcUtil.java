@@ -39,8 +39,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
-import com.google.common.collect.BiMap;
-import com.google.common.collect.ImmutableBiMap;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.grpc.Metadata;
@@ -436,14 +435,16 @@ public final class GrpcUtil {
    */
   @VisibleForTesting
   static class TimeoutMarshaller implements Metadata.AsciiMarshaller<Long> {
-    private static final BiMap<TimeUnit, Character> UNITS =
-        ImmutableBiMap.<TimeUnit, Character>builder()
-            .put(TimeUnit.NANOSECONDS, 'n')
-            .put(TimeUnit.MICROSECONDS, 'u')
-            .put(TimeUnit.MILLISECONDS, 'm')
-            .put(TimeUnit.SECONDS, 'S')
-            .put(TimeUnit.MINUTES, 'M')
-            .put(TimeUnit.HOURS, 'H')
+
+    // ImmutableMap's have consistent iteration order.
+    private static final ImmutableMap<Character, TimeUnit> UNITS =
+        ImmutableMap.<Character, TimeUnit>builder()
+            .put('n', TimeUnit.NANOSECONDS)
+            .put('u', TimeUnit.MICROSECONDS)
+            .put('m', TimeUnit.MILLISECONDS)
+            .put('S', TimeUnit.SECONDS)
+            .put('M', TimeUnit.MINUTES)
+            .put('H', TimeUnit.HOURS)
             .build();
 
     @Override
@@ -451,10 +452,10 @@ public final class GrpcUtil {
       checkArgument(timeoutNanos >= 0, "Negative timeout");
       // the smallest integer with 9 digits
       int cutoff = 100000000;
-      for (Entry<TimeUnit, Character> unit : UNITS.entrySet()) {
-        long timeout = unit.getKey().convert(timeoutNanos, TimeUnit.NANOSECONDS);
+      for (Entry<Character, TimeUnit> unit : UNITS.entrySet()) {
+        long timeout = unit.getValue().convert(timeoutNanos, TimeUnit.NANOSECONDS);
         if (timeout < cutoff) {
-          return Long.toString(timeout) + unit.getValue();
+          return Long.toString(timeout) + unit.getKey();
         }
       }
       throw new IllegalArgumentException("Timeout too large");
@@ -466,7 +467,7 @@ public final class GrpcUtil {
       checkArgument(serialized.length() <= 9, "bad timeout format");
       String valuePart = serialized.substring(0, serialized.length() - 1);
       char unit = serialized.charAt(serialized.length() - 1);
-      TimeUnit timeUnit = UNITS.inverse().get(unit);
+      TimeUnit timeUnit = UNITS.get(unit);
       if (timeUnit != null) {
         return timeUnit.toNanos(Long.parseLong(valuePart));
       }
