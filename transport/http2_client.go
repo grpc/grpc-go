@@ -242,6 +242,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if t.authInfo != nil {
 		ctx = credentials.NewContext(ctx, t.authInfo)
 	}
+
+	ctx = newContextWithPeer(ctx, t.makePeer())
+
 	authData := make(map[string]string)
 	for _, c := range t.authCreds {
 		// Construct URI required to get auth request metadata.
@@ -857,4 +860,8 @@ func (t *http2Client) notifyError(err error) {
 		close(t.errorChan)
 		grpclog.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
 	}
+}
+
+func (t *http2Client) makePeer() Peer {
+	return Peer{Addr: t.conn.RemoteAddr()}
 }

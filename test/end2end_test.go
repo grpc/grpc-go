@@ -54,6 +54,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1alpha"
 	"google.golang.org/grpc/metadata"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+	"google.golang.org/grpc/transport"
 )
 
 var (
@@ -110,6 +111,10 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		}
 		grpc.SetTrailer(ctx, md)
 	}
+	peer, ok := transport.PeerFromContext(ctx)
+	if !ok || peer.Addr == net.Addr(nil) {
+		return nil, grpc.Errorf(codes.DataLoss, "Peer not available")
+	}
 	if s.security != "" {
 		// Check Auth info
 		authInfo, ok := credentials.FromContext(ctx)
@@ -152,6 +157,12 @@ func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest
 			return grpc.Errorf(codes.DataLoss, "got extra metadata")
 		}
 	}
+
+	peer, ok := transport.PeerFromContext(stream.Context())
+	if !ok || peer.Addr == net.Addr(nil) {
+		return grpc.Errorf(codes.DataLoss, "Peer not available")
+	}
+
 	cs := args.GetResponseParameters()
 	for _, c := range cs {
 		if us := c.GetIntervalUs(); us > 0 {
@@ -1038,6 +1049,11 @@ func testClientStreaming(t *testing.T, e env) {
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
 	}
 	var sum int
+
+	peer, ok := transport.PeerFromContext(stream.Context())
+	if !ok || peer.Addr == net.Addr(nil) {
+		t.Fatalf("transport.PeerFromContext(stream.Context()): peer not available")
+	}
 
 	for _, s := range reqSizes {
 		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(s))

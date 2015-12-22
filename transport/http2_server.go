@@ -168,6 +168,9 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	} else {
 		s.ctx, s.cancel = context.WithCancel(context.TODO())
 	}
+
+	s.ctx = newContextWithPeer(s.ctx, t.makePeer())
+
 	// Attach Auth info if there is any.
 	if t.authInfo != nil {
 		s.ctx = credentials.NewContext(s.ctx, t.authInfo)
@@ -691,4 +694,8 @@ func (t *http2Server) closeStream(s *Stream) {
 
 func (t *http2Server) RemoteAddr() net.Addr {
 	return t.conn.RemoteAddr()
+}
+
+func (t *http2Server) makePeer() Peer {
+	return Peer{Addr: t.RemoteAddr()}
 }
