@@ -16,6 +16,15 @@ Connect your Android device or start the emulator:
 $ ./start-emulator.sh <AVD name> & ./wait-for-emulator.sh
 ```
 
+Start test server
+-----------------
+
+Start the test server by:
+```
+$ ../run-test-server.sh
+```
+
+
 Manually test
 -------------
 
@@ -31,7 +40,7 @@ Commandline test
 
 Run the test with arguments:
 ```
-$ adb shell am instrument -w -e server_host <hostname or ip address> -e server_port 8030 -e server_host_override foo.test.google.fr -e use_tls true -e use_test_ca true -e test_case all io.grpc.android.integrationtest/.TesterInstrumentation
+$ adb shell am instrument -w -e server_host <hostname or ip address> -e server_port <port> -e server_host_override foo.test.google.fr -e use_tls true -e use_test_ca true -e test_case all io.grpc.android.integrationtest/.TesterInstrumentation
 ```
 
 If the test passed successfully, it will output:
