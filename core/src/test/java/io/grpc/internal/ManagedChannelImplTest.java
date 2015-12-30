@@ -158,8 +158,7 @@ public class ManagedChannelImplTest {
     ClientCall<String, Integer> call =
         channel.newCall(method, CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime()));
     call.start(mockCallListener, new Metadata());
-    verify(mockCallListener, timeout(1000)).onClose(
-        same(Status.DEADLINE_EXCEEDED), any(Metadata.class));
+    verifyListenerClosed(mockCallListener, Status.Code.DEADLINE_EXCEEDED);
   }
 
   @Test
@@ -211,7 +210,7 @@ public class ManagedChannelImplTest {
     ClientStreamListener streamListener2 = streamListenerCaptor.getValue();
     Metadata trailers = new Metadata();
     streamListener2.closed(Status.CANCELLED, trailers);
-    verify(mockCallListener2, timeout(1000)).onClose(Status.CANCELLED, trailers);
+    verifyListenerClosed(mockCallListener2, Status.Code.CANCELLED);
 
     // Shutdown
     channel.shutdown();
@@ -235,7 +234,7 @@ public class ManagedChannelImplTest {
     transportListener.transportShutdown(Status.CANCELLED);
     assertFalse(channel.isTerminated());
     streamListener.closed(Status.CANCELLED, trailers);
-    verify(mockCallListener, timeout(1000)).onClose(Status.CANCELLED, trailers);
+    verifyListenerClosed(mockCallListener, Status.Code.CANCELLED);
     assertFalse(channel.isTerminated());
 
     transportListener.transportTerminated();
@@ -385,7 +384,7 @@ public class ManagedChannelImplTest {
     call.start(mockCallListener, headers);
     ArgumentCaptor<ClientTransport.Listener> badTransportListenerCaptor =
         ArgumentCaptor.forClass(ClientTransport.Listener.class);
-    verify(mockCallListener, timeout(1000)).onClose(same(Status.UNAVAILABLE), any(Metadata.class));
+    verifyListenerClosed(mockCallListener, Status.Code.UNAVAILABLE);
     verify(badTransport, timeout(1000)).start(badTransportListenerCaptor.capture());
     badTransportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
 
@@ -394,6 +393,14 @@ public class ManagedChannelImplTest {
     call2.start(mockCallListener, headers);
     verify(goodTransport, timeout(1000)).newStream(
         same(method), same(headers), any(ClientStreamListener.class));
+  }
+
+  private void verifyListenerClosed(ClientCall.Listener<?> mockCallListener,
+      Status.Code statusCode) {
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
+    Status status = statusCaptor.getValue();
+    assertEquals(statusCode, status.getCode());
   }
 
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {

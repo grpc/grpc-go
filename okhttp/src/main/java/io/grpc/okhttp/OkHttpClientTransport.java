@@ -404,6 +404,11 @@ class OkHttpClientTransport implements ClientTransport {
     });
   }
 
+  @Override
+  public String toString() {
+    return getClass().getSimpleName() + "(" + address + ")";
+  }
+
   /**
    * Gets the overriden authority hostname.  If the authority is overriden to be an invalid
    * authority, uri.getHost() will (rightly) return null, since the authority is no longer

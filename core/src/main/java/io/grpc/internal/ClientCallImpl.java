@@ -434,7 +434,14 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
           trailers = new Metadata();
         }
       }
-      final Status savedStatus = status;
+      ClientTransport transport = null;
+      try {
+        transport = transportFuture.get();
+      } catch (Exception e) {
+        // Ignore the exception, and keep transport as null.
+      }
+      final Status savedStatus = (transport == null
+          ? status : status.augmentDescription("transport=" + transport));
       final Metadata savedTrailers = trailers;
       callExecutor.execute(new ContextRunnable(context) {
         @Override
