@@ -4,11 +4,11 @@
 package io.grpc.grpclb;
 
 public interface LoadBalanceRequestOrBuilder extends
-    // @@protoc_insertion_point(interface_extends:grpc.lb.v1.LoadBalanceRequest)
+    // @@protoc_insertion_point(interface_extends:loadbalancer_gslb.client.grpc.LoadBalanceRequest)
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
    *
    * <pre>
    * This message should be sent on the first request to the load balancer.
@@ -16,7 +16,7 @@ public interface LoadBalanceRequestOrBuilder extends
    */
   io.grpc.grpclb.InitialLoadBalanceRequest getInitialRequest();
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
    *
    * <pre>
    * This message should be sent on the first request to the load balancer.
@@ -25,7 +25,7 @@ public interface LoadBalanceRequestOrBuilder extends
   io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder getInitialRequestOrBuilder();
 
   /**
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
    *
    * <pre>
    * The client stats should be periodically reported to the load balancer
@@ -34,7 +34,7 @@ public interface LoadBalanceRequestOrBuilder extends
    */
   io.grpc.grpclb.ClientStats getClientStats();
   /**
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
    *
    * <pre>
    * The client stats should be periodically reported to the load balancer

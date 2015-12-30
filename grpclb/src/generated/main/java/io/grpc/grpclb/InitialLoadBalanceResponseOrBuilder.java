@@ -4,7 +4,7 @@
 package io.grpc.grpclb;
 
 public interface InitialLoadBalanceResponseOrBuilder extends
-    // @@protoc_insertion_point(interface_extends:grpc.lb.v1.InitialLoadBalanceResponse)
+    // @@protoc_insertion_point(interface_extends:loadbalancer_gslb.client.grpc.InitialLoadBalanceResponse)
     com.google.protobuf.MessageOrBuilder {
 
   /**

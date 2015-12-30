@@ -4,11 +4,11 @@
 package io.grpc.grpclb;
 
 public interface LoadBalanceResponseOrBuilder extends
-    // @@protoc_insertion_point(interface_extends:grpc.lb.v1.LoadBalanceResponse)
+    // @@protoc_insertion_point(interface_extends:loadbalancer_gslb.client.grpc.LoadBalanceResponse)
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceResponse initial_response = 1;</code>
    *
    * <pre>
    * This message should be sent on the first response to the client.
@@ -16,7 +16,7 @@ public interface LoadBalanceResponseOrBuilder extends
    */
   io.grpc.grpclb.InitialLoadBalanceResponse getInitialResponse();
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceResponse initial_response = 1;</code>
    *
    * <pre>
    * This message should be sent on the first response to the client.
@@ -25,7 +25,7 @@ public interface LoadBalanceResponseOrBuilder extends
   io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder getInitialResponseOrBuilder();
 
   /**
-   * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.ServerList server_list = 2;</code>
    *
    * <pre>
    * Contains the list of servers selected by the load balancer. The client
@@ -34,7 +34,7 @@ public interface LoadBalanceResponseOrBuilder extends
    */
   io.grpc.grpclb.ServerList getServerList();
   /**
-   * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.ServerList server_list = 2;</code>
    *
    * <pre>
    * Contains the list of servers selected by the load balancer. The client

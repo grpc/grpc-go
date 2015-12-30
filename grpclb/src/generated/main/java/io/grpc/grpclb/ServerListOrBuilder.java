@@ -4,11 +4,11 @@
 package io.grpc.grpclb;
 
 public interface ServerListOrBuilder extends
-    // @@protoc_insertion_point(interface_extends:grpc.lb.v1.ServerList)
+    // @@protoc_insertion_point(interface_extends:loadbalancer_gslb.client.grpc.ServerList)
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
+   * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
    *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
@@ -20,7 +20,7 @@ public interface ServerListOrBuilder extends
   java.util.List<io.grpc.grpclb.Server> 
       getServersList();
   /**
-   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
+   * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
    *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
@@ -31,7 +31,7 @@ public interface ServerListOrBuilder extends
    */
   io.grpc.grpclb.Server getServers(int index);
   /**
-   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
+   * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
    *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
@@ -42,7 +42,7 @@ public interface ServerListOrBuilder extends
    */
   int getServersCount();
   /**
-   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
+   * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
    *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
@@ -54,7 +54,7 @@ public interface ServerListOrBuilder extends
   java.util.List<? extends io.grpc.grpclb.ServerOrBuilder> 
       getServersOrBuilderList();
   /**
-   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
+   * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
    *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will

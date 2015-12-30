@@ -4,7 +4,7 @@
 package io.grpc.grpclb;
 
 /**
- * Protobuf type {@code grpc.lb.v1.ClientStats}
+ * Protobuf type {@code loadbalancer_gslb.client.grpc.ClientStats}
  *
  * <pre>
  * Contains client level statistics that are useful to load balancing. Each
@@ -13,7 +13,7 @@ package io.grpc.grpclb;
  */
 public  final class ClientStats extends
     com.google.protobuf.GeneratedMessage implements
-    // @@protoc_insertion_point(message_implements:grpc.lb.v1.ClientStats)
+    // @@protoc_insertion_point(message_implements:loadbalancer_gslb.client.grpc.ClientStats)
     ClientStatsOrBuilder {
   // Use ClientStats.newBuilder() to construct.
   private ClientStats(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -78,12 +78,12 @@ public  final class ClientStats extends
   }
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStats_descriptor;
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_ClientStats_descriptor;
   }
 
   protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStats_fieldAccessorTable
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_ClientStats_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.grpclb.ClientStats.class, io.grpc.grpclb.ClientStats.Builder.class);
   }
@@ -244,7 +244,7 @@ public  final class ClientStats extends
     return builder;
   }
   /**
-   * Protobuf type {@code grpc.lb.v1.ClientStats}
+   * Protobuf type {@code loadbalancer_gslb.client.grpc.ClientStats}
    *
    * <pre>
    * Contains client level statistics that are useful to load balancing. Each
@@ -253,16 +253,16 @@ public  final class ClientStats extends
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-      // @@protoc_insertion_point(builder_implements:grpc.lb.v1.ClientStats)
+      // @@protoc_insertion_point(builder_implements:loadbalancer_gslb.client.grpc.ClientStats)
       io.grpc.grpclb.ClientStatsOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStats_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_ClientStats_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStats_fieldAccessorTable
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_ClientStats_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.grpclb.ClientStats.class, io.grpc.grpclb.ClientStats.Builder.class);
     }
@@ -294,7 +294,7 @@ public  final class ClientStats extends
 
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStats_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_ClientStats_descriptor;
     }
 
     public io.grpc.grpclb.ClientStats getDefaultInstanceForType() {
@@ -488,10 +488,10 @@ public  final class ClientStats extends
     }
 
 
-    // @@protoc_insertion_point(builder_scope:grpc.lb.v1.ClientStats)
+    // @@protoc_insertion_point(builder_scope:loadbalancer_gslb.client.grpc.ClientStats)
   }
 
-  // @@protoc_insertion_point(class_scope:grpc.lb.v1.ClientStats)
+  // @@protoc_insertion_point(class_scope:loadbalancer_gslb.client.grpc.ClientStats)
   private static final io.grpc.grpclb.ClientStats DEFAULT_INSTANCE;
   static {
     DEFAULT_INSTANCE = new io.grpc.grpclb.ClientStats();

@@ -4,11 +4,11 @@
 package io.grpc.grpclb;
 
 /**
- * Protobuf type {@code grpc.lb.v1.LoadBalanceRequest}
+ * Protobuf type {@code loadbalancer_gslb.client.grpc.LoadBalanceRequest}
  */
 public  final class LoadBalanceRequest extends
     com.google.protobuf.GeneratedMessage implements
-    // @@protoc_insertion_point(message_implements:grpc.lb.v1.LoadBalanceRequest)
+    // @@protoc_insertion_point(message_implements:loadbalancer_gslb.client.grpc.LoadBalanceRequest)
     LoadBalanceRequestOrBuilder {
   // Use LoadBalanceRequest.newBuilder() to construct.
   private LoadBalanceRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -83,12 +83,12 @@ public  final class LoadBalanceRequest extends
   }
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_LoadBalanceRequest_descriptor;
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_LoadBalanceRequest_descriptor;
   }
 
   protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_LoadBalanceRequest_fieldAccessorTable
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_LoadBalanceRequest_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.grpclb.LoadBalanceRequest.class, io.grpc.grpclb.LoadBalanceRequest.Builder.class);
   }
@@ -126,7 +126,7 @@ public  final class LoadBalanceRequest extends
 
   public static final int INITIAL_REQUEST_FIELD_NUMBER = 1;
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
    *
    * <pre>
    * This message should be sent on the first request to the load balancer.
@@ -139,7 +139,7 @@ public  final class LoadBalanceRequest extends
     return io.grpc.grpclb.InitialLoadBalanceRequest.getDefaultInstance();
   }
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
    *
    * <pre>
    * This message should be sent on the first request to the load balancer.
@@ -154,7 +154,7 @@ public  final class LoadBalanceRequest extends
 
   public static final int CLIENT_STATS_FIELD_NUMBER = 2;
   /**
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
    *
    * <pre>
    * The client stats should be periodically reported to the load balancer
@@ -168,7 +168,7 @@ public  final class LoadBalanceRequest extends
     return io.grpc.grpclb.ClientStats.getDefaultInstance();
   }
   /**
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+   * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
    *
    * <pre>
    * The client stats should be periodically reported to the load balancer
@@ -292,20 +292,20 @@ public  final class LoadBalanceRequest extends
     return builder;
   }
   /**
-   * Protobuf type {@code grpc.lb.v1.LoadBalanceRequest}
+   * Protobuf type {@code loadbalancer_gslb.client.grpc.LoadBalanceRequest}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-      // @@protoc_insertion_point(builder_implements:grpc.lb.v1.LoadBalanceRequest)
+      // @@protoc_insertion_point(builder_implements:loadbalancer_gslb.client.grpc.LoadBalanceRequest)
       io.grpc.grpclb.LoadBalanceRequestOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_LoadBalanceRequest_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_LoadBalanceRequest_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_LoadBalanceRequest_fieldAccessorTable
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_LoadBalanceRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.grpclb.LoadBalanceRequest.class, io.grpc.grpclb.LoadBalanceRequest.Builder.class);
     }
@@ -333,7 +333,7 @@ public  final class LoadBalanceRequest extends
 
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_LoadBalanceRequest_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_LoadBalanceRequest_descriptor;
     }
 
     public io.grpc.grpclb.LoadBalanceRequest getDefaultInstanceForType() {
@@ -437,7 +437,7 @@ public  final class LoadBalanceRequest extends
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.grpclb.InitialLoadBalanceRequest, io.grpc.grpclb.InitialLoadBalanceRequest.Builder, io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder> initialRequestBuilder_;
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
      *
      * <pre>
      * This message should be sent on the first request to the load balancer.
@@ -457,7 +457,7 @@ public  final class LoadBalanceRequest extends
       }
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
      *
      * <pre>
      * This message should be sent on the first request to the load balancer.
@@ -477,7 +477,7 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
      *
      * <pre>
      * This message should be sent on the first request to the load balancer.
@@ -495,7 +495,7 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
      *
      * <pre>
      * This message should be sent on the first request to the load balancer.
@@ -521,7 +521,7 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
      *
      * <pre>
      * This message should be sent on the first request to the load balancer.
@@ -544,7 +544,7 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
      *
      * <pre>
      * This message should be sent on the first request to the load balancer.
@@ -554,7 +554,7 @@ public  final class LoadBalanceRequest extends
       return getInitialRequestFieldBuilder().getBuilder();
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
      *
      * <pre>
      * This message should be sent on the first request to the load balancer.
@@ -571,7 +571,7 @@ public  final class LoadBalanceRequest extends
       }
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest initial_request = 1;</code>
      *
      * <pre>
      * This message should be sent on the first request to the load balancer.
@@ -599,7 +599,7 @@ public  final class LoadBalanceRequest extends
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.grpclb.ClientStats, io.grpc.grpclb.ClientStats.Builder, io.grpc.grpclb.ClientStatsOrBuilder> clientStatsBuilder_;
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
      *
      * <pre>
      * The client stats should be periodically reported to the load balancer
@@ -620,7 +620,7 @@ public  final class LoadBalanceRequest extends
       }
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
      *
      * <pre>
      * The client stats should be periodically reported to the load balancer
@@ -641,7 +641,7 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
      *
      * <pre>
      * The client stats should be periodically reported to the load balancer
@@ -660,7 +660,7 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
      *
      * <pre>
      * The client stats should be periodically reported to the load balancer
@@ -687,7 +687,7 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
      *
      * <pre>
      * The client stats should be periodically reported to the load balancer
@@ -711,7 +711,7 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
      *
      * <pre>
      * The client stats should be periodically reported to the load balancer
@@ -722,7 +722,7 @@ public  final class LoadBalanceRequest extends
       return getClientStatsFieldBuilder().getBuilder();
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
      *
      * <pre>
      * The client stats should be periodically reported to the load balancer
@@ -740,7 +740,7 @@ public  final class LoadBalanceRequest extends
       }
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>optional .loadbalancer_gslb.client.grpc.ClientStats client_stats = 2;</code>
      *
      * <pre>
      * The client stats should be periodically reported to the load balancer
@@ -776,10 +776,10 @@ public  final class LoadBalanceRequest extends
     }
 
 
-    // @@protoc_insertion_point(builder_scope:grpc.lb.v1.LoadBalanceRequest)
+    // @@protoc_insertion_point(builder_scope:loadbalancer_gslb.client.grpc.LoadBalanceRequest)
   }
 
-  // @@protoc_insertion_point(class_scope:grpc.lb.v1.LoadBalanceRequest)
+  // @@protoc_insertion_point(class_scope:loadbalancer_gslb.client.grpc.LoadBalanceRequest)
   private static final io.grpc.grpclb.LoadBalanceRequest DEFAULT_INSTANCE;
   static {
     DEFAULT_INSTANCE = new io.grpc.grpclb.LoadBalanceRequest();
