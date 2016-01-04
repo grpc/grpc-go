@@ -657,3 +657,12 @@ func TestStreamContext(t *testing.T) {
 		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, *s, ok, expectedStream)
 	}
 }
+
+func TestPeerContext(t *testing.T) {
+	expected := Peer{}
+	ctx := newContextWithPeer(context.Background(), expected)
+	p, ok := PeerFromContext(ctx)
+	if !ok || !reflect.DeepEqual(expected, p) {
+		t.Fatalf("PeerFromContext(%v) = %v, %t, want: %v, true", ctx, p, ok, expected)
+	}
+}

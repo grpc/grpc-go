@@ -303,6 +303,24 @@ func StreamFromContext(ctx context.Context) (s *Stream, ok bool) {
 	return
 }
 
+// Peer connection info
+type Peer struct {
+	Addr net.Addr
+}
+
+type peerCtxKey struct{}
+
+// Save peer info in a new context and return it
+func newContextWithPeer(ctx context.Context, peer Peer) context.Context {
+	return context.WithValue(ctx, peerCtxKey{}, peer)
+}
+
+// PeerFromContext retrieves the peer information from ctx
+func PeerFromContext(ctx context.Context) (peer Peer, ok bool) {
+	peer, ok = ctx.Value(peerCtxKey{}).(Peer)
+	return
+}
+
 // state of transport
 type transportState int
 
