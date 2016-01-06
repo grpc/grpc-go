@@ -39,6 +39,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -46,6 +47,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
+import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -404,10 +406,26 @@ public final class GrpcUtil {
       new Resource<ScheduledExecutorService>() {
         @Override
         public ScheduledExecutorService create() {
-          return Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder()
-              .setDaemon(true)
-              .setNameFormat("grpc-timer-%d")
-              .build());
+          ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor(
+              new ThreadFactoryBuilder()
+                  .setDaemon(true)
+                  .setNameFormat("grpc-timer-%d")
+                  .build());
+          // If there are long timeouts that are cancelled, they will not actually be removed from
+          // the executors queue.  This forces immediate removal upon cancellation to avoid a
+          // memory leak.  Reflection is used because we cannot use methods added in Java 1.7.  If
+          // the method does not exist, we give up.  Note that the method is not present in 1.6, but
+          // _is_ present in the android standard library.
+          try {
+            Method method = service.getClass().getMethod("setRemoveOnCancelPolicy", boolean.class);
+            method.invoke(service, true);
+          } catch (NoSuchMethodException e) {
+            // no op
+          } catch (Exception e) {
+            throw Throwables.propagate(e);
+          }
+
+          return service;
         }
 
         @Override
