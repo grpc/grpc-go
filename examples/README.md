@@ -43,7 +43,7 @@ $ greeter_client
 OPTIONAL - Rebuilding the generated code
 ----------------------------------------
 
-1 First [install protoc](https://github.com/google/protobuf/blob/master/INSTALL.txt)
+1 First [install protoc](https://github.com/google/protobuf/blob/master/README.md)
   - For now, this needs to be installed from source
   - This is will change once proto3 is officially released
 
