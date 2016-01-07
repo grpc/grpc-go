@@ -170,7 +170,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 		s.ctx, s.cancel = context.WithCancel(context.TODO())
 	}
 	pr := &peer.Peer{
-		Address: t.conn.RemoteAddr(),
+		Addr: t.conn.RemoteAddr(),
 	}
 	// Attach Auth info if there is any.
 	if t.authInfo != nil {

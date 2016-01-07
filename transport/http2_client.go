@@ -240,7 +240,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 	}
 	pr := &peer.Peer{
-		Address: t.conn.RemoteAddr(),
+		Addr: t.conn.RemoteAddr(),
 	}
 	// Attach Auth info if there is any.
 	if t.authInfo != nil {

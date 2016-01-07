@@ -113,7 +113,10 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	}
 	pr, ok := peer.FromContext(ctx)
 	if !ok {
-		return nil, fmt.Errorf("Failed to get peer from ctx.")
+		return nil, fmt.Errorf("failed to get peer from ctx")
+	}
+	if pr.Addr == net.Addr(nil) {
+		return nil, fmt.Errorf("failed to get peer address")
 	}
 	if s.security != "" {
 		// Check Auth info

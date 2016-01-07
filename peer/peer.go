@@ -44,7 +44,10 @@ import (
 
 // Peer contains the information of the peer for an RPC.
 type Peer struct {
-	Address  net.Addr
+	// Addr is the peer address.
+	Addr net.Addr
+	// AuthInfo is the authentication information of the transport.
+	// It is nil if there is no transport security being used.
 	AuthInfo credentials.AuthInfo
 }
 
