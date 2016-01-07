@@ -245,7 +245,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	// Attach Auth info if there is any.
 	if t.authInfo != nil {
 		pr.AuthInfo = t.authInfo
-		//ctx = credentials.NewContext(ctx, t.authInfo)
 	}
 	ctx = peer.NewContext(ctx, pr)
 	authData := make(map[string]string)
