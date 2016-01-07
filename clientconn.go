@@ -89,6 +89,7 @@ func WithCodec(c Codec) DialOption {
 	}
 }
 
+// WithPicker returns a DialOption which sets a picker for connection selection.
 func WithPicker(p Picker) DialOption {
 	return func(o *dialOptions) {
 		o.picker = p
@@ -104,6 +105,8 @@ func WithBlock() DialOption {
 	}
 }
 
+// WithInsecure returns a DialOption which disables transport security for this ClientConn.
+// Note that transport security is required unless WithInsecure is set.
 func WithInsecure() DialOption {
 	return func(o *dialOptions) {
 		o.insecure = true
