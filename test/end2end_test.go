@@ -53,6 +53,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1alpha"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
@@ -110,14 +111,14 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		}
 		grpc.SetTrailer(ctx, md)
 	}
+	pr, ok := peer.FromContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("Failed to get peer from ctx.")
+	}
 	if s.security != "" {
 		// Check Auth info
-		authInfo, ok := credentials.FromContext(ctx)
-		if !ok {
-			return nil, fmt.Errorf("Failed to get AuthInfo from ctx.")
-		}
 		var authType, serverName string
-		switch info := authInfo.(type) {
+		switch info := pr.AuthInfo.(type) {
 		case credentials.TLSInfo:
 			authType = info.AuthType()
 			serverName = info.State.ServerName

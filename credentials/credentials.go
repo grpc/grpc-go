@@ -87,6 +87,7 @@ type AuthInfo interface {
 	AuthType() string
 }
 
+/*
 type authInfoKey struct{}
 
 // NewContext creates a new context with authInfo attached.
@@ -99,7 +100,7 @@ func FromContext(ctx context.Context) (authInfo AuthInfo, ok bool) {
 	authInfo, ok = ctx.Value(authInfoKey{}).(AuthInfo)
 	return
 }
-
+*/
 // TransportAuthenticator defines the common interface for all the live gRPC wire
 // protocols and supported transport security protocols (e.g., TLS, SSL).
 type TransportAuthenticator interface {
