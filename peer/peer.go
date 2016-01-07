@@ -44,7 +44,7 @@ import (
 
 // Peer contains the information of the peer for an RPC.
 type Peer struct {
-	Address net.Addr
+	Address  net.Addr
 	AuthInfo credentials.AuthInfo
 }
 
