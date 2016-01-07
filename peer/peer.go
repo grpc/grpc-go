@@ -31,7 +31,8 @@
  *
  */
 
-// Package peer contains all the peer information of an RPC.
+// Package peer defines various peer information associated with RPCs and
+// corresponding utils.
 package peer
 
 import (
