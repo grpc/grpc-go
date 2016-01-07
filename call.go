@@ -40,7 +40,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
 )
 
@@ -92,14 +91,6 @@ func sendRequest(ctx context.Context, codec Codec, callHdr *transport.CallHdr, t
 	}
 	// Sent successfully.
 	return stream, nil
-}
-
-// callInfo contains all related configuration and information about an RPC.
-type callInfo struct {
-	failFast  bool
-	headerMD  metadata.MD
-	trailerMD metadata.MD
-	traceInfo traceInfo // in trace.go
 }
 
 // Invoke is called by the generated code. It sends the RPC request on the

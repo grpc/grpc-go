@@ -75,6 +75,14 @@ func (protoCodec) String() string {
 	return "proto"
 }
 
+// callInfo contains all related configuration and information about an RPC.
+type callInfo struct {
+	failFast  bool
+	headerMD  metadata.MD
+	trailerMD metadata.MD
+	traceInfo traceInfo // in trace.go
+}
+
 // CallOption configures a Call before it starts or extracts information from
 // a Call after it completes.
 type CallOption interface {
