@@ -50,6 +50,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 )
 
 // http2Client implements the ClientTransport interface with HTTP2.
@@ -238,10 +239,14 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			return nil, ContextErr(context.DeadlineExceeded)
 		}
 	}
+	pr := &peer.Peer{
+		Addr: t.conn.RemoteAddr(),
+	}
 	// Attach Auth info if there is any.
 	if t.authInfo != nil {
-		ctx = credentials.NewContext(ctx, t.authInfo)
+		pr.AuthInfo = t.authInfo
 	}
+	ctx = peer.NewContext(ctx, pr)
 	authData := make(map[string]string)
 	for _, c := range t.authCreds {
 		// Construct URI required to get auth request metadata.

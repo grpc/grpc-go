@@ -49,6 +49,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 )
 
 // ErrIllegalHeaderWrite indicates that setting header is illegal because of
@@ -168,10 +169,14 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	} else {
 		s.ctx, s.cancel = context.WithCancel(context.TODO())
 	}
+	pr := &peer.Peer{
+		Addr: t.conn.RemoteAddr(),
+	}
 	// Attach Auth info if there is any.
 	if t.authInfo != nil {
-		s.ctx = credentials.NewContext(s.ctx, t.authInfo)
+		pr.AuthInfo = t.authInfo
 	}
+	s.ctx = peer.NewContext(s.ctx, pr)
 	// Cache the current stream to the context so that the server application
 	// can find out. Required when the server wants to send some metadata
 	// back to the client (unary call only).
