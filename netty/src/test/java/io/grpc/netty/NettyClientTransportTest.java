@@ -126,6 +126,14 @@ public class NettyClientTransportTest {
   }
 
   @Test
+  public void testToString() throws Exception {
+    String s = newTransport(newNegotiator()).toString();
+    transports.clear();
+    assertTrue("Unexpected: " + s, s.contains("NettyClientTransport"));
+    assertTrue("Unexpected: " + s, s.contains(address.toString()));
+  }
+
+  @Test
   public void headersShouldAddDefaultUserAgent() throws Exception {
     startServer();
     NettyClientTransport transport = newTransport(newNegotiator());

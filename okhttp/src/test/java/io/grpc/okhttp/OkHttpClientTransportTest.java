@@ -188,6 +188,17 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
+  public void testToString() throws Exception {
+    InetSocketAddress address = InetSocketAddress.createUnresolved("hostname", 31415);
+    clientTransport = new OkHttpClientTransport(
+        address, "hostname", executor, null,
+        Utils.convertSpec(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC), DEFAULT_MAX_MESSAGE_SIZE);
+    String s = clientTransport.toString();
+    assertTrue("Unexpected: " + s, s.contains("OkHttpClientTransport"));
+    assertTrue("Unexpected: " + s, s.contains(address.toString()));
+  }
+
+  @Test
   public void maxMessageSizeShouldBeEnforced() throws Exception {
     // Allow the response payloads of up to 1 byte.
     startTransport(3, null, true, 1);
