@@ -164,11 +164,6 @@ class InProcessTransport implements ServerTransport, ClientTransport {
     }
   }
 
-  @Override
-  public String toString() {
-    return getClass().getSimpleName() + "(" + name + ")";
-  }
-
   private synchronized void notifyShutdown(Status s) {
     if (shutdown) {
       return;

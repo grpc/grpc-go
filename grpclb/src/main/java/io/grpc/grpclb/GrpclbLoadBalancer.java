@@ -358,7 +358,6 @@ class GrpclbLoadBalancer extends LoadBalancer {
           if (lbResponseObserver != this) {
             return;
           }
-          logger.info("Received " + status + ", entering fallback mode");
           directTransport = transportFuture = Futures.immediateFuture(lbTransport);
           pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
         }

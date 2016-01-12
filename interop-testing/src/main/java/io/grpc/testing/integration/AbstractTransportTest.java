@@ -338,8 +338,7 @@ public abstract class AbstractTransportTest {
     requestObserver.onError(new RuntimeException());
     responseObserver.awaitCompletion();
     assertEquals(Arrays.<StreamingInputCallResponse>asList(), responseObserver.getValues());
-    assertEquals(Status.Code.CANCELLED,
-        Status.fromThrowable(responseObserver.getError()).getCode());
+    assertEquals(Status.CANCELLED, Status.fromThrowable(responseObserver.getError()));
   }
 
   @Test(timeout = 10000)
@@ -367,7 +366,7 @@ public abstract class AbstractTransportTest {
     requestObserver.onError(new RuntimeException());
     ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
     verify(responseObserver, timeout(OPERATION_TIMEOUT)).onError(captor.capture());
-    assertEquals(Status.Code.CANCELLED, Status.fromThrowable(captor.getValue()).getCode());
+    assertEquals(Status.CANCELLED, Status.fromThrowable(captor.getValue()));
     verifyNoMoreInteractions(responseObserver);
   }
 
@@ -490,8 +489,7 @@ public abstract class AbstractTransportTest {
     // Make sure that everything still completes.
     call.request(1);
     assertEquals(goldenResponses.get(1), queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
-    assertEquals(Status.Code.OK,
-        ((Status) queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS)).getCode());
+    assertEquals(Status.OK, queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
   }
 
   @Test(timeout = 30000)
@@ -634,7 +632,7 @@ public abstract class AbstractTransportTest {
                .build()).next();
       fail("Expected deadline to be exceeded");
     } catch (Throwable t) {
-      assertEquals(Status.Code.DEADLINE_EXCEEDED, Status.fromThrowable(t).getCode());
+      assertEquals(Status.DEADLINE_EXCEEDED, Status.fromThrowable(t));
     }
   }
 
@@ -657,8 +655,7 @@ public abstract class AbstractTransportTest {
         .withDeadlineAfter(30, TimeUnit.MILLISECONDS)
         .streamingOutputCall(request, recorder);
     recorder.awaitCompletion();
-    assertEquals(Status.Code.DEADLINE_EXCEEDED,
-        Status.fromThrowable(recorder.getError()).getCode());
+    assertEquals(Status.DEADLINE_EXCEEDED, Status.fromThrowable(recorder.getError()));
   }
 
   protected int unaryPayloadLength() {

@@ -214,11 +214,6 @@ class NettyClientTransport implements ClientTransport {
     }
   }
 
-  @Override
-  public String toString() {
-    return getClass().getSimpleName() + "(" + address + ")";
-  }
-
   private void notifyShutdown(Status status) {
     Preconditions.checkNotNull(status, "status");
     boolean notifyShutdown;
