@@ -120,10 +120,11 @@ class InProcessTransport implements ServerTransport, ClientTransport {
   public synchronized ClientStream newStream(
       final MethodDescriptor<?, ?> method, final Metadata headers) {
     if (shutdownStatus != null) {
+      final Status capturedStatus = shutdownStatus;
       return new NoopClientStream() {
         @Override
         public void start(ClientStreamListener listener) {
-          listener.closed(shutdownStatus, new Metadata());
+          listener.closed(capturedStatus, new Metadata());
         }
       };
     }
