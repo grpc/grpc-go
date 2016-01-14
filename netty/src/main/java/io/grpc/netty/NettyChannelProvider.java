@@ -36,24 +36,24 @@ import io.grpc.ManagedChannelProvider;
 
 /** Provider for {@link NettyChannelBuilder} instances. */
 @Internal
-public class NettyChannelProvider extends ManagedChannelProvider {
+public final class NettyChannelProvider extends ManagedChannelProvider {
   @Override
-  protected boolean isAvailable() {
+  public boolean isAvailable() {
     return true;
   }
 
   @Override
-  protected int priority() {
+  public int priority() {
     return 5;
   }
 
   @Override
-  protected NettyChannelBuilder builderForAddress(String name, int port) {
+  public NettyChannelBuilder builderForAddress(String name, int port) {
     return NettyChannelBuilder.forAddress(name, port);
   }
 
   @Override
-  protected NettyChannelBuilder builderForTarget(String target) {
+  public NettyChannelBuilder builderForTarget(String target) {
     return NettyChannelBuilder.forTarget(target);
   }
 }

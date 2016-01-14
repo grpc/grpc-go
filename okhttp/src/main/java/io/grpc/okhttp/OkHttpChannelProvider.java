@@ -36,24 +36,24 @@ import io.grpc.ManagedChannelProvider;
 
 /** Provider for {@link OkHttpChannelBuilder} instances. */
 @Internal
-public class OkHttpChannelProvider extends ManagedChannelProvider {
+public final class OkHttpChannelProvider extends ManagedChannelProvider {
   @Override
-  protected boolean isAvailable() {
+  public boolean isAvailable() {
     return true;
   }
 
   @Override
-  protected int priority() {
+  public int priority() {
     return isAndroid() ? 8 : 3;
   }
 
   @Override
-  protected OkHttpChannelBuilder builderForAddress(String name, int port) {
+  public OkHttpChannelBuilder builderForAddress(String name, int port) {
     return OkHttpChannelBuilder.forAddress(name, port);
   }
 
   @Override
-  protected OkHttpChannelBuilder builderForTarget(String target) {
+  public OkHttpChannelBuilder builderForTarget(String target) {
     return OkHttpChannelBuilder.forTarget(target);
   }
 }
