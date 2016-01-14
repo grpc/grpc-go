@@ -114,10 +114,6 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		codec:   cc.dopts.codec,
 		tracing: EnableTracing,
 	}
-	s, err := t.NewStream(ctx, callHdr)
-	if err != nil {
-		return nil, toRPCErr(err)
-	}
 	if cs.tracing {
 		cs.trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
 		cs.trInfo.firstLine.client = true
@@ -126,6 +122,11 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 		cs.trInfo.tr.LazyLog(&cs.trInfo.firstLine, false)
 		ctx = trace.NewContext(ctx, cs.trInfo.tr)
+	}
+	s, err := t.NewStream(ctx, callHdr)
+	if err != nil {
+		cs.finish(err)
+		return nil, toRPCErr(err)
 	}
 	cs.t = t
 	cs.s = s
