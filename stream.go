@@ -125,6 +125,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	s, err := t.NewStream(ctx, callHdr)
 	if err != nil {
+		cs.finish(err)
 		return nil, toRPCErr(err)
 	}
 	cs.t = t
