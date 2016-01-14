@@ -50,6 +50,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/monitoring"
 	"google.golang.org/grpc/transport"
 )
 
@@ -92,6 +93,7 @@ type Server struct {
 type options struct {
 	creds                credentials.Credentials
 	codec                Codec
+	monitor 			 monitoring.RpcMonitor
 	maxConcurrentStreams uint32
 }
 
@@ -120,6 +122,13 @@ func Creds(c credentials.Credentials) ServerOption {
 	}
 }
 
+// Monitoring returns a ServerOption that sets the monitoring mechanism for gRPC server.
+func Monitoring(m monitoring.RpcMonitor) ServerOption {
+	return func(o *options) {
+		o.monitor = m
+	}
+}
+
 // NewServer creates a gRPC server which has no service registered and has not
 // started to accept requests yet.
 func NewServer(opt ...ServerOption) *Server {
@@ -130,6 +139,10 @@ func NewServer(opt ...ServerOption) *Server {
 	if opts.codec == nil {
 		// Set the default codec.
 		opts.codec = protoCodec{}
+	}
+	if opts.monitor == nil {
+		// Set to no monitoring monitor.
+		opts.monitor = &monitoring.NoOpMonitor{}
 	}
 	s := &Server{
 		lis:   make(map[net.Listener]bool),
@@ -303,6 +316,8 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
+	var statusCode codes.Code = codes.Unknown
+	var statusDesc string = ""
 	if trInfo != nil {
 		defer trInfo.tr.Finish()
 		trInfo.firstLine.client = false
@@ -314,6 +329,14 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 		}()
 	}
+	monitor := s.opts.monitor.NewForRpc(monitoring.Unary, stream.Method())
+	defer func() {
+		if err != nil && err != io.EOF {
+			monitor.Erred(err)
+		} else {
+			monitor.Handled(statusCode, statusDesc)
+		}
+	}()
 	p := &parser{s: stream}
 	for {
 		pf, req, err := p.recvMsg()
@@ -336,8 +359,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		switch pf {
 		case compressionNone:
-			statusCode := codes.OK
-			statusDesc := ""
+			statusCode = codes.OK
+			statusDesc = ""
 			df := func(v interface{}) error {
 				if err := s.opts.codec.Unmarshal(req, v); err != nil {
 					return err
@@ -404,6 +427,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		p:      &parser{s: stream},
 		codec:  s.opts.codec,
 		trInfo: trInfo,
+		monitor: s.opts.monitor.NewForRpc(monitoring.Streaming, stream.Method()),
 	}
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
@@ -418,6 +442,14 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			ss.mu.Unlock()
 		}()
 	}
+	defer func() {
+		if err != nil && err != io.EOF {
+			ss.monitor.Erred(err)
+		} else {
+			ss.monitor.Handled(ss.statusCode, ss.statusDesc)
+		}
+	}()
+
 	if appErr := sd.Handler(srv.server, ss); appErr != nil {
 		if err, ok := appErr.(rpcError); ok {
 			ss.statusCode = err.code
