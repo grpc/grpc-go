@@ -74,7 +74,12 @@ class OkHttpClientStream extends Http2ClientStream {
   private final Object lock;
   private Object outboundFlowState;
   private volatile Integer id;
+  @GuardedBy("lock")
   private List<Header> requestHeaders;
+  /**
+   * Null iff {@link #requestHeaders} is null.  Non-null iff neither {@link #sendCancel} nor
+   * {@link #start(Integer)} have been called.
+   */
   @GuardedBy("lock")
   private Queue<PendingData> pendingData = new LinkedList<PendingData>();
   @GuardedBy("lock")
@@ -130,10 +135,12 @@ class OkHttpClientStream extends Http2ClientStream {
     checkNotNull(id, "id");
     checkState(this.id == null, "the stream has been started with id %s", this.id);
     this.id = id;
-    frameWriter.synStream(false, false, id, 0, requestHeaders);
-    requestHeaders = null;
 
     if (pendingData != null) {
+      // Only happens when the stream has neither been started nor cancelled.
+      frameWriter.synStream(false, false, id, 0, requestHeaders);
+      requestHeaders = null;
+
       boolean flush = false;
       while (!pendingData.isEmpty()) {
         PendingData data = pendingData.poll();
@@ -251,6 +258,8 @@ class OkHttpClientStream extends Http2ClientStream {
         pendingData = null;
         transportReportStatus(reason, true, new Metadata());
       } else {
+        // If pendingData is null, start must have already been called, which means synStream has
+        // been called as well.
         transport.finishStream(id(), reason, ErrorCode.CANCEL);
       }
     }
