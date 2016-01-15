@@ -51,6 +51,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
+	"google.golang.org/grpc/middleware"
 )
 
 type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)
@@ -74,6 +75,7 @@ type ServiceDesc struct {
 // service consists of the information of the server serving this service and
 // the methods in this service.
 type service struct {
+	middleware.MiddlewareChain
 	server interface{} // the server for service methods
 	md     map[string]*MethodDesc
 	sd     map[string]*StreamDesc
@@ -81,6 +83,7 @@ type service struct {
 
 // Server is a gRPC server to serve RPC requests.
 type Server struct {
+	middleware.MiddlewareChain
 	opts   options
 	mu     sync.Mutex
 	lis    map[net.Listener]bool
@@ -132,6 +135,7 @@ func NewServer(opt ...ServerOption) *Server {
 		opts.codec = protoCodec{}
 	}
 	s := &Server{
+		MiddlewareChain: middleware.NewMiddlewareChain(),
 		lis:   make(map[net.Listener]bool),
 		opts:  opts,
 		conns: make(map[transport.ServerTransport]bool),
@@ -180,6 +184,7 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 		grpclog.Fatalf("grpc: Server.RegisterService found duplicate service registration for %q", sd.ServiceName)
 	}
 	srv := &service{
+		MiddlewareChain: middleware.NewMiddlewareChain(),
 		server: ss,
 		md:     make(map[string]*MethodDesc),
 		sd:     make(map[string]*StreamDesc),
@@ -193,6 +198,16 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 		srv.sd[d.StreamName] = d
 	}
 	s.m[sd.ServiceName] = srv
+}
+
+
+// AddMiddlewareToService adds a middleware to a specific service.
+// Should be called only after RegisterService had been called
+func (s *Server) AddMiddlewareToService(sn string, mn string, mfn middleware.MiddlewareFn) {
+	srv, ok :=s.m[sn]
+	if ok {
+		srv.AddUnaryMiddleware(mn, mfn)
+	}
 }
 
 var (
@@ -347,7 +362,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 				return nil
 			}
-			reply, appErr := md.Handler(srv.server, stream.Context(), df)
+			reply, appErr :=  s.WrapUnary(srv.WrapUnary(md.Handler))(srv.server, stream.Context(), df)
 			if appErr != nil {
 				if err, ok := appErr.(rpcError); ok {
 					statusCode = err.code
@@ -542,6 +557,13 @@ func (s *Server) TestingCloseConns() {
 	s.conns = make(map[transport.ServerTransport]bool)
 	s.mu.Unlock()
 }
+//func (s *Server) AddMiddleware(name string, md middleware.MiddlewareFn) {
+//	s.mc.AddMiddleware(name, md)
+//}
+
+//func (s *Server) wrapMiddleware(next methodHandler) (methodHandler){
+//	return s.Wrap(next)
+//}
 
 // SendHeader sends header metadata. It may be called at most once from a unary
 // RPC handler. The ctx is the RPC handler's Context or one derived from it.
