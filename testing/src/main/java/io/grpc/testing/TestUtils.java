@@ -53,6 +53,7 @@ import java.net.ServerSocket;
 import java.net.UnknownHostException;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -191,7 +192,8 @@ public class TestUtils {
   }
 
   /**
-   * Load a file from the resources folder.
+   * Saves a file from the classpath resources in src/main/resources/certs as a file on the
+   * filesystem.
    *
    * @param name  name of a file in src/main/resources/certs.
    */
@@ -211,6 +213,23 @@ public class TestUtils {
     }
 
     return tmpFile;
+  }
+
+  /**
+   * Loads an X.509 certificate from the classpath resources in src/main/resources/certs.
+   *
+   * @param fileName  name of a file in src/main/resources/certs.
+   */
+  public static X509Certificate loadX509Cert(String fileName)
+      throws CertificateException, IOException {
+    CertificateFactory cf = CertificateFactory.getInstance("X.509");
+
+    InputStream in = TestUtils.class.getResourceAsStream("/certs/" + fileName);
+    try {
+      return (X509Certificate) cf.generateCertificate(in);
+    } finally {
+      in.close();
+    }
   }
 
   /**
