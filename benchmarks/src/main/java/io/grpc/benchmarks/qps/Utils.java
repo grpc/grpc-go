@@ -31,6 +31,7 @@
 
 package io.grpc.benchmarks.qps;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 
 import io.grpc.ManagedChannel;
@@ -61,6 +62,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.concurrent.ThreadFactory;
 
 import javax.net.ssl.SSLSocketFactory;
 
@@ -175,21 +177,25 @@ final class Utils {
     }
     final EventLoopGroup group;
     final Class<? extends io.netty.channel.Channel> channelType;
+    ThreadFactory tf = new ThreadFactoryBuilder()
+        .setDaemon(true)
+        .setNameFormat("ELG-%d")
+        .build();
     switch (config.transport) {
       case NETTY_NIO:
-        group = new NioEventLoopGroup();
+        group = new NioEventLoopGroup(0, tf);
         channelType = NioSocketChannel.class;
         break;
 
       case NETTY_EPOLL:
         // These classes only work on Linux.
-        group = new EpollEventLoopGroup();
+        group = new EpollEventLoopGroup(0, tf);
         channelType = EpollSocketChannel.class;
         break;
 
       case NETTY_UNIX_DOMAIN_SOCKET:
         // These classes only work on Linux.
-        group = new EpollEventLoopGroup();
+        group = new EpollEventLoopGroup(0, tf);
         channelType = EpollDomainSocketChannel.class;
         break;
 
