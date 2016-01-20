@@ -44,16 +44,33 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 	"github.com/VerveWireless/grpc/codes"
 	"github.com/VerveWireless/grpc/credentials"
 	"github.com/VerveWireless/grpc/grpclog"
 	"github.com/VerveWireless/grpc/metadata"
 	"github.com/VerveWireless/grpc/transport"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 )
 
+type methodResp struct {
+	reply interface{}
+	err   error
+}
+
+// methodHandler handles unary RPC method invocations
 type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)
+
+// methodEvent is data needed to invoke a methodHandler
+type methodEvent struct {
+	srv    interface{}
+	md     *MethodDesc
+	ctx    context.Context
+	dec    func(interface{}) error
+	replyC chan methodResp
+}
+
+var methodEventChan = make(chan *methodEvent)
 
 // MethodDesc represents an RPC service's method specification.
 type MethodDesc struct {
@@ -93,6 +110,7 @@ type options struct {
 	creds                credentials.Credentials
 	codec                Codec
 	maxConcurrentStreams uint32
+	maxWorkerGoroutines  uint32
 }
 
 // A ServerOption sets options.
@@ -110,6 +128,14 @@ func CustomCodec(codec Codec) ServerOption {
 func MaxConcurrentStreams(n uint32) ServerOption {
 	return func(o *options) {
 		o.maxConcurrentStreams = n
+	}
+}
+
+// MaxWorkerGoroutines returns a ServerOption that will apply a limit on the number
+// of concurrent worker routines for the server. 0 => unlimited.
+func MaxWorkerGoroutines(n uint32) ServerOption {
+	return func(o *options) {
+		o.maxWorkerGoroutines = n
 	}
 }
 
@@ -216,10 +242,28 @@ func (s *Server) Serve(lis net.Listener) error {
 	s.mu.Unlock()
 	defer func() {
 		lis.Close()
+		close(methodEventChan)
 		s.mu.Lock()
 		delete(s.lis, lis)
 		s.mu.Unlock()
 	}()
+
+	// Event queue dispatcher
+	for i := uint32(0); i < s.opts.maxWorkerGoroutines; i++ {
+		go func() {
+			for {
+				select {
+				case ev, ok := <-methodEventChan:
+					if !ok {
+						break
+					}
+					reply, err := ev.md.Handler(ev.srv, ev.ctx, ev.dec)
+					ev.replyC <- methodResp{reply, err}
+				}
+			}
+		}()
+	}
+
 	for {
 		c, err := lis.Accept()
 		if err != nil {
@@ -347,7 +391,20 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 				return nil
 			}
-			reply, appErr := md.Handler(srv.server, stream.Context(), df)
+
+			var reply interface{}
+			var appErr error
+
+			if s.opts.maxWorkerGoroutines == 0 {
+				reply, appErr = md.Handler(srv.server, stream.Context(), df)
+			} else {
+				rc := make(chan methodResp, 1)
+				methodEventChan <- &methodEvent{srv.server, md, stream.Context(), df, rc}
+				resp := <-rc
+				reply = resp.reply
+				appErr = resp.err
+			}
+
 			if appErr != nil {
 				if err, ok := appErr.(rpcError); ok {
 					statusCode = err.code
