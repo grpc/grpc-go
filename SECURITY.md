@@ -6,6 +6,8 @@ As outlined in <a href="https://github.com/grpc/grpc/blob/master/doc/grpc-auth-s
 
 HTTP/2 over TLS mandates the use of [ALPN](https://tools.ietf.org/html/draft-ietf-tls-applayerprotoneg-05) to negotiate the use of the h2 protocol. ALPN is a fairly new standard and (where possible) gRPC also supports protocol negotiation via [NPN](https://tools.ietf.org/html/draft-agl-tls-nextprotoneg-04) for systems that do not yet support ALPN.
 
+On Android, use the [Play Services Provider](#tls-on-android). For non-Android systems, use [OpenSSL](#tls-with-openssl).
+
 ## TLS on Android
 
 On Android we recommend the use of the [Play Services Dynamic Security Provider](http://appfoundry.be/blog/2014/11/18/Google-Play-Services-Dynamic-Security-Provider) to ensure your application has an up-to-date OpenSSL library with the necessary ciper-suites and a reliable ALPN implementation.
@@ -130,6 +132,16 @@ dependencies {
 ```
 
 ## TLS with JDK (Jetty ALPN/NPN)
+
+**WARNING: DON'T DO THIS!!**
+
+*For non-Android systems, the recommended approach is to use [OpenSSL](#tls-with-openssl). Using the JDK for ALPN is generally much slower and may not support the necessary ciphers for HTTP2.*
+
+*Jetty ALPN brings its own baggage in that the Java bootclasspath needs to be modified, which may not be an option for some environments. In addition, a specific version of Jetty ALPN has to be used for a given version of the JRE. If the versions don't match the negotiation will fail, but you won't really know why. And since there is such a tight coupling between Jetty ALPN and the JRE, there are no guarantees that Jetty ALPN will support every JRE out in the wild.*
+
+*The moral of the story is: Don't use the JDK for ALPN!  But if you absolutely have to, here's how you do it... :)*
+
+---
 
 If not using the Netty transport (or you are unable to use OpenSSL for some reason) another alternative is to use the JDK for TLS.
 
