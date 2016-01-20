@@ -61,6 +61,7 @@ import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
+import io.grpc.internal.GrpcUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
@@ -264,8 +265,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     channelRead(goAwayFrame(0));
     assertTrue(future.isDone());
     assertFalse(future.isSuccess());
-    verify(stream).transportReportStatus(any(Status.class), eq(false),
-        notNull(Metadata.class));
+    Status status = Status.fromThrowable(future.cause());
+    assertEquals(GrpcUtil.Http2Error.NO_ERROR.status(), status);
   }
 
   @Test
@@ -286,16 +287,29 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   public void receivedGoAwayShouldFailUnknownBufferedStreams() throws Exception {
     receiveMaxConcurrentStreams(0);
 
-    enqueue(new CreateStreamCommand(grpcHeaders, stream));
+    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, stream));
 
     // Read a GOAWAY that indicates our stream was never processed by the server.
     channelRead(goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
-    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(stream).transportReportStatus(captor.capture(), eq(false),
-        notNull(Metadata.class));
-    assertEquals(Status.CANCELLED.getCode(), captor.getValue().getCode());
-    assertEquals("HTTP/2 error code: CANCEL\nthis is a test",
-        captor.getValue().getDescription());
+    assertTrue(future.isDone());
+    assertFalse(future.isSuccess());
+    Status status = Status.fromThrowable(future.cause());
+    assertEquals(Status.CANCELLED.getCode(), status.getCode());
+    assertEquals("HTTP/2 error code: CANCEL\nthis is a test", status.getDescription());
+  }
+
+  @Test
+  public void receivedGoAwayShouldFailNewStreams() throws Exception {
+    // Read a GOAWAY that indicates our stream was never processed by the server.
+    channelRead(goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
+
+    // Now try to create a stream.
+    ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, stream));
+    assertTrue(future.isDone());
+    assertFalse(future.isSuccess());
+    Status status = Status.fromThrowable(future.cause());
+    assertEquals(Status.CANCELLED.getCode(), status.getCode());
+    assertEquals("HTTP/2 error code: CANCEL\nthis is a test", status.getDescription());
   }
 
   @Test

@@ -47,6 +47,7 @@ import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -111,6 +112,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   private WriteQueue clientWriteQueue;
   private Http2Ping ping;
   private Status goAwayStatus;
+  private Throwable goAwayStatusThrowable;
   private int nextStreamId;
 
   static NettyClientHandler newHandler(ClientTransport.Listener listener,
@@ -186,7 +188,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     connection.addListener(new Http2ConnectionAdapter() {
       @Override
       public void onGoAwayReceived(int lastStreamId, long errorCode, ByteBuf debugData) {
-        goAwayStatus(statusFromGoAway(errorCode, debugData));
+        goAwayStatus(statusFromGoAway(errorCode, ByteBufUtil.getBytes(debugData)));
         goingAway();
       }
     });
@@ -350,7 +352,17 @@ class NettyClientHandler extends AbstractNettyHandler {
     final NettyClientStream stream = command.stream();
     final Http2Headers headers = command.headers();
     stream.id(streamId);
-    encoder().writeHeaders(ctx(), streamId, headers, 0, false, promise)
+
+    if (goAwayStatus != null) {
+      // The connection is going away, just terminate the stream now.
+      promise.setFailure(goAwayStatusThrowable);
+      return;
+    }
+
+    // Create an intermediate promise so that we can intercept the failure reported back to the
+    // application.
+    ChannelPromise tempPromise = ctx().newPromise();
+    encoder().writeHeaders(ctx(), streamId, headers, 0, false, tempPromise)
             .addListener(new ChannelFutureListener() {
               @Override
               public void operationComplete(ChannelFuture future) throws Exception {
@@ -360,25 +372,25 @@ class NettyClientHandler extends AbstractNettyHandler {
                   Http2Stream http2Stream = connection().stream(streamId);
                   if (http2Stream != null) {
                     http2Stream.setProperty(streamKey, stream);
-                  } else if (stream.isClosed()) {
-                    // The stream has been cancelled and Netty is sending a RST_STREAM frame which
-                    // causes it to purge pending writes from the flow-controller and delete the
-                    // http2Stream. The stream listener has already been notified of cancellation
-                    // so there is nothing to do.
-                    return;
-                  } else {
-                    throw new IllegalStateException("Stream closed but http2 stream not defined");
+
+                    // Attach the client stream to the HTTP/2 stream object as user data.
+                    stream.setHttp2Stream(http2Stream);
                   }
-                  // Attach the client stream to the HTTP/2 stream object as user data.
-                  stream.setHttp2Stream(http2Stream);
+                  // Otherwise, the stream has been cancelled and Netty is sending a
+                  // RST_STREAM frame which causes it to purge pending writes from the
+                  // flow-controller and delete the http2Stream. The stream listener has already
+                  // been notified of cancellation so there is nothing to do.
+
+                  // Just forward on the success status to the original promise.
+                  promise.setSuccess();
                 } else {
-                  if (future.cause() instanceof GoAwayClosedStreamException) {
-                    GoAwayClosedStreamException e = (GoAwayClosedStreamException) future.cause();
+                  final Throwable cause = future.cause();
+                  if (cause instanceof GoAwayClosedStreamException) {
+                    GoAwayClosedStreamException e = (GoAwayClosedStreamException) cause;
                     goAwayStatus(statusFromGoAway(e.errorCode(), e.debugData()));
-                    stream.transportReportStatus(goAwayStatus, false, new Metadata());
+                    promise.setFailure(goAwayStatusThrowable);
                   } else {
-                    stream.transportReportStatus(Status.fromThrowable(future.cause()), true,
-                        new Metadata());
+                    promise.setFailure(cause);
                   }
                 }
               }
@@ -486,7 +498,11 @@ class NettyClientHandler extends AbstractNettyHandler {
   }
 
   private void goAwayStatus(Status status) {
-    goAwayStatus = goAwayStatus == null ? status : goAwayStatus;
+    // Don't overwrite if we already have a goAwayStatus.
+    if (goAwayStatus == null) {
+      goAwayStatus = status;
+      goAwayStatusThrowable = status.asException();
+    }
   }
 
   private void cancelPing() {
@@ -496,11 +512,11 @@ class NettyClientHandler extends AbstractNettyHandler {
     }
   }
 
-  private Status statusFromGoAway(long errorCode, ByteBuf debugData) {
+  private Status statusFromGoAway(long errorCode, byte[] debugData) {
     Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode);
-    if (debugData.isReadable()) {
+    if (debugData != null && debugData.length > 0) {
       // If a debug message was provided, use it.
-      String msg = debugData.toString(UTF_8);
+      String msg = new String(debugData, UTF_8);
       status = status.augmentDescription(msg);
     }
     return status;

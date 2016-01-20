@@ -35,6 +35,7 @@ import static io.netty.handler.codec.http2.Http2Error.PROTOCOL_ERROR;
 import static io.netty.handler.codec.http2.Http2Exception.connectionError;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -217,7 +218,8 @@ class BufferingHttp2ConnectionEncoder extends DecoratingHttp2ConnectionEncoder {
 
   private void cancelGoAwayStreams(int lastStreamId, long errorCode, ByteBuf debugData) {
     Iterator<PendingStream> iter = pendingStreams.values().iterator();
-    Exception e = new GoAwayClosedStreamException(lastStreamId, errorCode, debugData);
+    Exception e = new GoAwayClosedStreamException(lastStreamId, errorCode,
+            ByteBufUtil.getBytes(debugData));
     while (iter.hasNext()) {
       PendingStream stream = iter.next();
       if (stream.streamId > lastStreamId) {

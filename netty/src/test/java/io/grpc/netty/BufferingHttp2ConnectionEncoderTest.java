@@ -34,6 +34,7 @@ package io.grpc.netty;
 import static io.grpc.internal.GrpcUtil.Http2Error.CANCEL;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_PRIORITY_WEIGHT;
 import static io.netty.handler.codec.http2.Http2Stream.State.HALF_CLOSED_LOCAL;
+import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -83,6 +84,7 @@ import java.util.List;
  */
 @RunWith(JUnit4.class)
 public class BufferingHttp2ConnectionEncoderTest {
+  private static final byte[] DEBUG_DATA = "test exception".getBytes(UTF_8);
 
   private BufferingHttp2ConnectionEncoder encoder;
 
@@ -197,7 +199,7 @@ public class BufferingHttp2ConnectionEncoderTest {
   public void bufferingNewStreamFailsAfterGoAwayReceived() {
     encoder.writeSettingsAck(ctx, newPromise());
     connection.local().maxActiveStreams(0);
-    connection.goAwayReceived(1, 8, null);
+    connection.goAwayReceived(1, 8, Unpooled.wrappedBuffer(DEBUG_DATA));
 
     ChannelFuture future = encoderWriteHeaders(3);
     assertEquals(0, encoder.numBufferedStreams());
@@ -221,7 +223,7 @@ public class BufferingHttp2ConnectionEncoderTest {
     flush();
     assertEquals(4, encoder.numBufferedStreams());
 
-    connection.goAwayReceived(11, 8, null);
+    connection.goAwayReceived(11, 8, Unpooled.wrappedBuffer(DEBUG_DATA));
 
     assertEquals(5, connection.numActiveStreams());
     // The 4 buffered streams must have been failed.

@@ -31,15 +31,13 @@
 
 package io.grpc.netty;
 
-import io.netty.buffer.ByteBuf;
-
 class GoAwayClosedStreamException extends Exception {
   private static final long serialVersionUID = 1326785622777291198L;
   private final int lastStreamId;
   private final long errorCode;
-  private final ByteBuf debugData;
+  private final byte[] debugData;
 
-  GoAwayClosedStreamException(int lastStreamId, long errorCode, ByteBuf debugData) {
+  GoAwayClosedStreamException(int lastStreamId, long errorCode, byte[] debugData) {
     this.lastStreamId = lastStreamId;
     this.errorCode = errorCode;
     this.debugData = debugData;
@@ -53,7 +51,7 @@ class GoAwayClosedStreamException extends Exception {
     return errorCode;
   }
 
-  ByteBuf debugData() {
+  byte[] debugData() {
     return debugData;
   }
 }
