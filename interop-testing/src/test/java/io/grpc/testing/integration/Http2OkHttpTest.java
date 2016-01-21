@@ -48,6 +48,10 @@ import io.grpc.okhttp.OkHttpChannelBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.StreamRecorder;
 import io.grpc.testing.TestUtils;
+import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import org.junit.AfterClass;
@@ -71,11 +75,18 @@ public class Http2OkHttpTest extends AbstractTransportTest {
   @BeforeClass
   public static void startServer() throws Exception {
     try {
+      SslProvider sslProvider = SslContext.defaultServerProvider();
+      if (sslProvider == SslProvider.OPENSSL && !OpenSsl.isAlpnSupported()) {
+        // OkHttp only supports Jetty ALPN on OpenJDK. So if OpenSSL doesn't support ALPN, then we
+        // are forced to use Jetty ALPN for Netty instead of OpenSSL.
+        sslProvider = SslProvider.JDK;
+      }
+      SslContextBuilder contextBuilder = SslContextBuilder
+          .forServer(TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key"));
+      GrpcSslContexts.configure(contextBuilder, sslProvider);
+      contextBuilder.ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE);
       startStaticServer(NettyServerBuilder.forPort(serverPort)
-          .sslContext(GrpcSslContexts
-              .forServer(TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key"))
-              .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
-              .build()));
+          .sslContext(contextBuilder.build()));
     } catch (IOException ex) {
       throw new RuntimeException(ex);
     }

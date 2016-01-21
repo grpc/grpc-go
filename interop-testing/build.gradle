@@ -23,6 +23,7 @@ dependencies {
             project(':grpc-testing'),
             libraries.junit,
             libraries.mockito,
+            libraries.netty_tcnative,
             libraries.oauth_client
 }
 
