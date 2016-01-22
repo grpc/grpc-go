@@ -126,13 +126,15 @@ system.  Make sure to have at least version 1.7.1 or later.
    made (e.g., copied configuration files) will be lost. If you want to keep the
    container, remove `--rm=true` from the command line.
 4. Next, you'll need to copy your OSSRH credentials and GnuPG keys to your docker container.
-   Run `ifconfig` in the host, find the IP address of the `docker0` interface.
-   Then in Docker:
-   
-   ```bash
-   $ scp -r <your-host-user>@<docker0-IP>:./.gnupg ~/
-   $ mkdir ~/.gradle
-   $ scp -r <your-host-user>@<docker0-IP>:./.gradle/gradle.properties ~/.gradle
+   In Docker:
+   ```
+   # mkdir /root/.gradle
+   ```
+   Find the container ID in your bash prompt, which is shown as `[root@<container-ID> ...]`.
+   In host:
+   ```
+   $ docker cp ~/.gnupg <container-ID>:/root/
+   $ docker cp ~/.gradle/gradle.properties <container-ID>:/root/.gradle/
    ```
    
    You'll also need to update `signing.secretKeyRingFile` in
