@@ -72,6 +72,8 @@ import java.util.concurrent.TimeUnit;
 // GrpcSslContexts.configure(SslContextBuilder, SslProvider).
 @RunWith(JUnit4.class)
 public class TlsTest {
+  private int port = TestUtils.pickUnusedPort();
+
   @Before
   public void setUp() {
     executor = Executors.newSingleThreadScheduledExecutor();
@@ -87,11 +89,8 @@ public class TlsTest {
    * Tests that a client and a server configured using GrpcSslContexts can successfully
    * communicate with each other.
    */
-  // TODO: Fix whatever causes this test to fail, then remove the @Ignore annotation.
-  @Ignore
   @Test
   public void basicClientServerIntegrationTest() throws Exception {
-    int port = TestUtils.pickUnusedPort();
 
     // Create & start a server.
     File serverCertFile = TestUtils.loadCert("server1.pem");
@@ -106,13 +105,15 @@ public class TlsTest {
 
     try {
       // Create a client.
-      File clientCertFile = TestUtils.loadCert("client.pem");
+      File clientCertChainFile = TestUtils.loadCert("client.pem");
       File clientPrivateKeyFile = TestUtils.loadCert("client.key");
       X509Certificate[] clientTrustedCaCerts = {
         TestUtils.loadX509Cert("ca.pem")
       };
-      ManagedChannel channel = clientChannel("localhost", port, clientCertFile,
-                                             clientPrivateKeyFile, clientTrustedCaCerts);
+      ManagedChannel channel = clientChannel(port, GrpcSslContexts.forClient()
+          .keyManager(clientCertChainFile, clientPrivateKeyFile)
+          .trustManager(clientTrustedCaCerts)
+          .build());
       TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
 
       // Send an actual request, via the full GRPC & network stack, and check that a proper
@@ -133,8 +134,6 @@ public class TlsTest {
   @Ignore
   @Test
   public void serverRejectsUntrustedClientCert() throws Exception {
-    int port = TestUtils.pickUnusedPort();
-
     // Create & start a server. It requires client authentication and trusts only the test CA.
     File serverCertFile = TestUtils.loadCert("server1.pem");
     File serverPrivateKeyFile = TestUtils.loadCert("server1.key");
@@ -150,13 +149,15 @@ public class TlsTest {
       // Create a client. Its credentials come from a CA that the server does not trust. The client
       // trusts both test CAs, so we can be sure that the handshake failure is due to the server
       // rejecting the client's cert, not the client rejecting the server's cert.
-      File clientCertFile = TestUtils.loadCert("badclient.pem");
+      File clientCertChainFile = TestUtils.loadCert("badclient.pem");
       File clientPrivateKeyFile = TestUtils.loadCert("badclient.key");
       X509Certificate[] clientTrustedCaCerts = {
         TestUtils.loadX509Cert("ca.pem")
       };
-      ManagedChannel channel = clientChannel("localhost", port, clientCertFile,
-                                             clientPrivateKeyFile, clientTrustedCaCerts);
+      ManagedChannel channel = clientChannel(port, GrpcSslContexts.forClient()
+          .keyManager(clientCertChainFile, clientPrivateKeyFile)
+          .trustManager(clientTrustedCaCerts)
+          .build());
       TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
 
       // Check that the TLS handshake fails.
@@ -180,10 +181,10 @@ public class TlsTest {
    * Tests that a server configured to require client authentication actually does require client
    * authentication.
    */
+  // TODO: Fix whatever causes this test to fail, then remove the @Ignore annotation.
+  @Ignore
   @Test
   public void noClientAuthFailure() throws Exception {
-    int port = TestUtils.pickUnusedPort();
-
      // Create & start a server.
     File serverCertFile = TestUtils.loadCert("server1.pem");
     File serverPrivateKeyFile = TestUtils.loadCert("server1.key");
@@ -197,10 +198,12 @@ public class TlsTest {
 
     try {
       // Create a client. It has no credentials.
-      ManagedChannel channel = NettyChannelBuilder.forAddress("localhost", port)
-          .overrideAuthority(TestUtils.TEST_SERVER_HOST)
-          .negotiationType(NegotiationType.TLS)
-          .build();
+      X509Certificate[] clientTrustedCaCerts = {
+        TestUtils.loadX509Cert("ca.pem")
+      };
+      ManagedChannel channel = clientChannel(port, GrpcSslContexts.forClient()
+          .trustManager(clientTrustedCaCerts)
+          .build());
       TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
 
       // Check that the TLS handshake fails.
@@ -234,17 +237,8 @@ public class TlsTest {
   }
 
 
-  private static ManagedChannel clientChannel(String serverHost, int serverPort,
-                                              File clientCertChainFile,
-                                              File clientPrivateKeyFile,
-                                              X509Certificate[] clientTrustedCaCerts)
-      throws IOException {
-    SslContext sslContext = GrpcSslContexts.forClient()
-        .keyManager(clientCertChainFile, clientPrivateKeyFile)
-        .trustManager(clientTrustedCaCerts)
-        .build();
-
-    return NettyChannelBuilder.forAddress(serverHost, serverPort)
+  private static ManagedChannel clientChannel(int port, SslContext sslContext) throws IOException {
+    return NettyChannelBuilder.forAddress("localhost", port)
         .overrideAuthority(TestUtils.TEST_SERVER_HOST)
         .negotiationType(NegotiationType.TLS)
         .sslContext(sslContext)
