@@ -73,6 +73,8 @@ import java.util.concurrent.TimeUnit;
 @RunWith(JUnit4.class)
 public class TlsTest {
   private int port = TestUtils.pickUnusedPort();
+  private Server server;
+  private ManagedChannel channel;
 
   @Before
   public void setUp() {
@@ -81,6 +83,12 @@ public class TlsTest {
 
   @After
   public void tearDown() {
+    if (server != null) {
+      server.shutdown();
+    }
+    if (channel != null) {
+      channel.shutdown();
+    }
     MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
   }
 
@@ -91,38 +99,33 @@ public class TlsTest {
    */
   @Test
   public void basicClientServerIntegrationTest() throws Exception {
-
     // Create & start a server.
     File serverCertFile = TestUtils.loadCert("server1.pem");
     File serverPrivateKeyFile = TestUtils.loadCert("server1.key");
     X509Certificate[] serverTrustedCaCerts = {
       TestUtils.loadX509Cert("ca.pem")
     };
-    Server server = serverBuilder(port, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
+    server = serverBuilder(port, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
         .addService(TestServiceGrpc.bindService(new TestServiceImpl(executor)))
         .build()
         .start();
 
-    try {
-      // Create a client.
-      File clientCertChainFile = TestUtils.loadCert("client.pem");
-      File clientPrivateKeyFile = TestUtils.loadCert("client.key");
-      X509Certificate[] clientTrustedCaCerts = {
-        TestUtils.loadX509Cert("ca.pem")
-      };
-      ManagedChannel channel = clientChannel(port, GrpcSslContexts.forClient()
-          .keyManager(clientCertChainFile, clientPrivateKeyFile)
-          .trustManager(clientTrustedCaCerts)
-          .build());
-      TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
+    // Create a client.
+    File clientCertChainFile = TestUtils.loadCert("client.pem");
+    File clientPrivateKeyFile = TestUtils.loadCert("client.key");
+    X509Certificate[] clientTrustedCaCerts = {
+      TestUtils.loadX509Cert("ca.pem")
+    };
+    channel = clientChannel(port, GrpcSslContexts.forClient()
+        .keyManager(clientCertChainFile, clientPrivateKeyFile)
+        .trustManager(clientTrustedCaCerts)
+        .build());
+    TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
 
-      // Send an actual request, via the full GRPC & network stack, and check that a proper
-      // response comes back.
-      Empty request = Empty.getDefaultInstance();
-      client.emptyCall(request);
-    } finally {
-      server.shutdown();
-    }
+    // Send an actual request, via the full GRPC & network stack, and check that a proper
+    // response comes back.
+    Empty request = Empty.getDefaultInstance();
+    client.emptyCall(request);
   }
 
 
@@ -140,39 +143,35 @@ public class TlsTest {
     X509Certificate[] serverTrustedCaCerts = {
       TestUtils.loadX509Cert("ca.pem")
     };
-    Server server = serverBuilder(port, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
+    server = serverBuilder(port, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
         .addService(TestServiceGrpc.bindService(new TestServiceImpl(executor)))
         .build()
         .start();
 
-    try {
-      // Create a client. Its credentials come from a CA that the server does not trust. The client
-      // trusts both test CAs, so we can be sure that the handshake failure is due to the server
-      // rejecting the client's cert, not the client rejecting the server's cert.
-      File clientCertChainFile = TestUtils.loadCert("badclient.pem");
-      File clientPrivateKeyFile = TestUtils.loadCert("badclient.key");
-      X509Certificate[] clientTrustedCaCerts = {
-        TestUtils.loadX509Cert("ca.pem")
-      };
-      ManagedChannel channel = clientChannel(port, GrpcSslContexts.forClient()
-          .keyManager(clientCertChainFile, clientPrivateKeyFile)
-          .trustManager(clientTrustedCaCerts)
-          .build());
-      TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
+    // Create a client. Its credentials come from a CA that the server does not trust. The client
+    // trusts both test CAs, so we can be sure that the handshake failure is due to the server
+    // rejecting the client's cert, not the client rejecting the server's cert.
+    File clientCertChainFile = TestUtils.loadCert("badclient.pem");
+    File clientPrivateKeyFile = TestUtils.loadCert("badclient.key");
+    X509Certificate[] clientTrustedCaCerts = {
+      TestUtils.loadX509Cert("ca.pem")
+    };
+    channel = clientChannel(port, GrpcSslContexts.forClient()
+        .keyManager(clientCertChainFile, clientPrivateKeyFile)
+        .trustManager(clientTrustedCaCerts)
+        .build());
+    TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
 
-      // Check that the TLS handshake fails.
-      Empty request = Empty.getDefaultInstance();
-      try {
-        client.emptyCall(request);
-        fail("TLS handshake should have failed, but didn't; received RPC response");
-      } catch (StatusRuntimeException e) {
-        // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
-        // javax.net.ssl.SSLHandshakeException or a java.nio.channels.ClosedChannelException.
-        // Thus, reliably detecting the underlying cause is not feasible.
-        assertEquals(Status.Code.UNAVAILABLE, e.getStatus().getCode());
-      }
-    } finally {
-      server.shutdown();
+    // Check that the TLS handshake fails.
+    Empty request = Empty.getDefaultInstance();
+    try {
+      client.emptyCall(request);
+      fail("TLS handshake should have failed, but didn't; received RPC response");
+    } catch (StatusRuntimeException e) {
+      // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
+      // javax.net.ssl.SSLHandshakeException or a java.nio.channels.ClosedChannelException.
+      // Thus, reliably detecting the underlying cause is not feasible.
+      assertEquals(Status.Code.UNAVAILABLE, e.getStatus().getCode());
     }
   }
 
@@ -191,34 +190,30 @@ public class TlsTest {
     X509Certificate[] serverTrustedCaCerts = {
       TestUtils.loadX509Cert("ca.pem")
     };
-    Server server = serverBuilder(port, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
+    server = serverBuilder(port, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
         .addService(TestServiceGrpc.bindService(new TestServiceImpl(executor)))
         .build()
         .start();
 
-    try {
-      // Create a client. It has no credentials.
-      X509Certificate[] clientTrustedCaCerts = {
-        TestUtils.loadX509Cert("ca.pem")
-      };
-      ManagedChannel channel = clientChannel(port, GrpcSslContexts.forClient()
-          .trustManager(clientTrustedCaCerts)
-          .build());
-      TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
+    // Create a client. It has no credentials.
+    X509Certificate[] clientTrustedCaCerts = {
+      TestUtils.loadX509Cert("ca.pem")
+    };
+    channel = clientChannel(port, GrpcSslContexts.forClient()
+        .trustManager(clientTrustedCaCerts)
+        .build());
+    TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
 
-      // Check that the TLS handshake fails.
-      Empty request = Empty.getDefaultInstance();
-      try {
-        client.emptyCall(request);
-        fail("TLS handshake should have failed, but didn't; received RPC response");
-      } catch (StatusRuntimeException e) {
-        // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
-        // javax.net.ssl.SSLHandshakeException or a java.nio.channels.ClosedChannelException.
-        // Thus, reliably detecting the underlying cause is not feasible.
-        assertEquals(Status.Code.UNAVAILABLE, e.getStatus().getCode());
-      }
-    } finally {
-      server.shutdown();
+    // Check that the TLS handshake fails.
+    Empty request = Empty.getDefaultInstance();
+    try {
+      client.emptyCall(request);
+      fail("TLS handshake should have failed, but didn't; received RPC response");
+    } catch (StatusRuntimeException e) {
+      // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
+      // javax.net.ssl.SSLHandshakeException or a java.nio.channels.ClosedChannelException.
+      // Thus, reliably detecting the underlying cause is not feasible.
+      assertEquals(Status.Code.UNAVAILABLE, e.getStatus().getCode());
     }
   }
 
