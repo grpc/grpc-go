@@ -48,18 +48,24 @@ import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.testing.TestUtils;
 import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 
 import org.junit.After;
+import org.junit.Assume;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.io.File;
 import java.io.IOException;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -68,17 +74,33 @@ import java.util.concurrent.TimeUnit;
 /**
  * Integration tests for GRPC's TLS support.
  */
-// TODO: Use @RunWith(Parameterized.class) to run these tests for all TLS providers, probably via
-// GrpcSslContexts.configure(SslContextBuilder, SslProvider).
-@RunWith(JUnit4.class)
+@RunWith(Parameterized.class)
 public class TlsTest {
+  /**
+   * Iterable of various configurations to use for tests.
+   */
+  @Parameters(name = "{0}")
+  public static Iterable<Object[]> data() {
+    return Arrays.asList(new Object[][] {
+      {SslProvider.JDK}, {SslProvider.OPENSSL},
+    });
+  }
+
+  @Parameter(value = 0)
+  public SslProvider sslProvider;
+
   private int port = TestUtils.pickUnusedPort();
   private Server server;
   private ManagedChannel channel;
+  private SslContextBuilder clientContextBuilder;
 
   @Before
   public void setUp() {
     executor = Executors.newSingleThreadScheduledExecutor();
+    if (sslProvider == SslProvider.OPENSSL) {
+      Assume.assumeTrue(OpenSsl.isAvailable());
+    }
+    clientContextBuilder = GrpcSslContexts.configure(SslContextBuilder.forClient(), sslProvider);
   }
 
   @After
@@ -116,7 +138,7 @@ public class TlsTest {
     X509Certificate[] clientTrustedCaCerts = {
       TestUtils.loadX509Cert("ca.pem")
     };
-    channel = clientChannel(port, GrpcSslContexts.forClient()
+    channel = clientChannel(port, clientContextBuilder
         .keyManager(clientCertChainFile, clientPrivateKeyFile)
         .trustManager(clientTrustedCaCerts)
         .build());
@@ -133,10 +155,10 @@ public class TlsTest {
    * Tests that a server configured to require client authentication refuses to accept connections
    * from a client that has an untrusted certificate.
    */
-  // TODO: Fix whatever causes this test to fail, then remove the @Ignore annotation.
-  @Ignore
   @Test
   public void serverRejectsUntrustedClientCert() throws Exception {
+    // TODO(ejona): Issue #1325 OpenSSL doesn't work
+    Assume.assumeTrue(sslProvider != SslProvider.OPENSSL);
     // Create & start a server. It requires client authentication and trusts only the test CA.
     File serverCertFile = TestUtils.loadCert("server1.pem");
     File serverPrivateKeyFile = TestUtils.loadCert("server1.key");
@@ -156,7 +178,7 @@ public class TlsTest {
     X509Certificate[] clientTrustedCaCerts = {
       TestUtils.loadX509Cert("ca.pem")
     };
-    channel = clientChannel(port, GrpcSslContexts.forClient()
+    channel = clientChannel(port, clientContextBuilder
         .keyManager(clientCertChainFile, clientPrivateKeyFile)
         .trustManager(clientTrustedCaCerts)
         .build());
@@ -180,10 +202,10 @@ public class TlsTest {
    * Tests that a server configured to require client authentication actually does require client
    * authentication.
    */
-  // TODO: Fix whatever causes this test to fail, then remove the @Ignore annotation.
-  @Ignore
   @Test
   public void noClientAuthFailure() throws Exception {
+    // TODO(ejona): Issue #1325 OpenSSL doesn't work
+    Assume.assumeTrue(sslProvider != SslProvider.OPENSSL);
      // Create & start a server.
     File serverCertFile = TestUtils.loadCert("server1.pem");
     File serverPrivateKeyFile = TestUtils.loadCert("server1.key");
@@ -199,7 +221,7 @@ public class TlsTest {
     X509Certificate[] clientTrustedCaCerts = {
       TestUtils.loadX509Cert("ca.pem")
     };
-    channel = clientChannel(port, GrpcSslContexts.forClient()
+    channel = clientChannel(port, clientContextBuilder
         .trustManager(clientTrustedCaCerts)
         .build());
     TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
@@ -218,17 +240,16 @@ public class TlsTest {
   }
 
 
-  private static ServerBuilder<?> serverBuilder(int port, File serverCertChainFile,
-                                                File serverPrivateKeyFile,
-                                                X509Certificate[] serverTrustedCaCerts)
-      throws IOException {
-    SslContext sslContext = GrpcSslContexts.forServer(serverCertChainFile, serverPrivateKeyFile)
-        .trustManager(serverTrustedCaCerts)
-        .clientAuth(ClientAuth.REQUIRE)
-        .build();
+  private ServerBuilder<?> serverBuilder(int port, File serverCertChainFile,
+      File serverPrivateKeyFile, X509Certificate[] serverTrustedCaCerts) throws IOException {
+    SslContextBuilder sslContextBuilder
+        = SslContextBuilder.forServer(serverCertChainFile, serverPrivateKeyFile);
+    GrpcSslContexts.configure(sslContextBuilder, sslProvider);
+    sslContextBuilder.trustManager(serverTrustedCaCerts)
+        .clientAuth(ClientAuth.REQUIRE);
 
     return NettyServerBuilder.forPort(port)
-        .sslContext(sslContext);
+        .sslContext(sslContextBuilder.build());
   }
 
 
