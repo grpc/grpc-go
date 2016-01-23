@@ -37,7 +37,6 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -46,8 +45,6 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-
-import io.grpc.internal.ClientTransport;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -62,13 +59,13 @@ import java.util.ArrayList;
 /** Unit test for {@link SimpleLoadBalancerFactory}. */
 @RunWith(JUnit4.class)
 public class SimpleLoadBalancerTest {
-  private LoadBalancer loadBalancer;
+  private LoadBalancer<Transport> loadBalancer;
 
   private ArrayList<ResolvedServerInfo> servers;
   private EquivalentAddressGroup addressGroup;
 
   @Mock
-  private TransportManager mockTransportManager;
+  private TransportManager<Transport> mockTransportManager;
 
   @Before
   public void setUp() {
@@ -87,12 +84,12 @@ public class SimpleLoadBalancerTest {
 
   @Test
   public void pickBeforeResolved() throws Exception {
-    ClientTransport mockTransport = mock(ClientTransport.class);
-    SettableFuture<ClientTransport> sourceFuture = SettableFuture.create();
+    Transport mockTransport = new Transport();
+    SettableFuture<Transport> sourceFuture = SettableFuture.create();
     when(mockTransportManager.getTransport(eq(addressGroup)))
         .thenReturn(sourceFuture);
-    ListenableFuture<ClientTransport> f1 = loadBalancer.pickTransport(null);
-    ListenableFuture<ClientTransport> f2 = loadBalancer.pickTransport(null);
+    ListenableFuture<Transport> f1 = loadBalancer.pickTransport(null);
+    ListenableFuture<Transport> f2 = loadBalancer.pickTransport(null);
     assertNotNull(f1);
     assertNotNull(f2);
     assertNotSame(f1, f2);
@@ -113,12 +110,12 @@ public class SimpleLoadBalancerTest {
 
   @Test
   public void pickAfterResolved() throws Exception {
-    ClientTransport mockTransport = mock(ClientTransport.class);
-    SettableFuture<ClientTransport> sourceFuture = SettableFuture.create();
+    Transport mockTransport = new Transport();
+    SettableFuture<Transport> sourceFuture = SettableFuture.create();
     when(mockTransportManager.getTransport(eq(addressGroup)))
         .thenReturn(sourceFuture);
     loadBalancer.handleResolvedAddresses(servers, Attributes.EMPTY);
-    ListenableFuture<ClientTransport> f = loadBalancer.pickTransport(null);
+    ListenableFuture<Transport> f = loadBalancer.pickTransport(null);
     assertSame(sourceFuture, f);
     assertFalse(f.isDone());
     sourceFuture.set(mockTransport);
@@ -139,4 +136,5 @@ public class SimpleLoadBalancerTest {
     }
   }
 
+  private static class Transport {}
 }

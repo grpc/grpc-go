@@ -39,7 +39,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.TransportManager;
-import io.grpc.internal.ClientTransport;
 
 import java.net.InetSocketAddress;
 import java.util.Iterator;
@@ -55,18 +54,18 @@ import javax.annotation.concurrent.ThreadSafe;
 // TODO(zhangkun83): possibly move it to io.grpc.internal, as it can also be used by the round-robin
 // LoadBalancer.
 @ThreadSafe
-class RoundRobinServerList {
-  private final TransportManager tm;
+class RoundRobinServerList<T> {
+  private final TransportManager<T> tm;
   private final List<EquivalentAddressGroup> list;
   private final Iterator<EquivalentAddressGroup> cyclingIter;
 
-  private RoundRobinServerList(TransportManager tm, List<EquivalentAddressGroup> list) {
+  private RoundRobinServerList(TransportManager<T> tm, List<EquivalentAddressGroup> list) {
     this.tm = tm;
     this.list = list;
     this.cyclingIter = Iterables.cycle(list).iterator();
   }
 
-  ListenableFuture<ClientTransport> getTransportForNextServer() {
+  ListenableFuture<T> getTransportForNextServer() {
     EquivalentAddressGroup currentServer;
     synchronized (cyclingIter) {
       // TODO(zhangkun83): receive transportShutdown and transportReady events, then skip addresses
@@ -92,12 +91,12 @@ class RoundRobinServerList {
   }
 
   @NotThreadSafe
-  static class Builder {
+  static class Builder<T> {
     private final ImmutableList.Builder<EquivalentAddressGroup> listBuilder =
         ImmutableList.builder();
-    private final TransportManager tm;
+    private final TransportManager<T> tm;
 
-    Builder(TransportManager tm) {
+    Builder(TransportManager<T> tm) {
       this.tm = tm;
     }
 
@@ -108,8 +107,8 @@ class RoundRobinServerList {
       listBuilder.add(new EquivalentAddressGroup(addr));
     }
 
-    RoundRobinServerList build() {
-      return new RoundRobinServerList(tm, listBuilder.build());
+    RoundRobinServerList<T> build() {
+      return new RoundRobinServerList<T>(tm, listBuilder.build());
     }
   }
 }

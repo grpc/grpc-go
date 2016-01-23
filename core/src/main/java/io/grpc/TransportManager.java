@@ -33,15 +33,13 @@ package io.grpc;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
-import io.grpc.internal.ClientTransport;
-
 import java.util.Collection;
 
 /**
  * Manages transport life-cycles and provide ready-to-use transports.
  */
 @ExperimentalApi
-public abstract class TransportManager {
+public abstract class TransportManager<T> {
   /**
    * Advises this {@code TransportManager} to retain transports only to these servers, for warming
    * up connections and discarding unused connections.
@@ -59,6 +57,10 @@ public abstract class TransportManager {
   // TODO(zhangkun83): GrpcLoadBalancer will use this to get transport to connect to LB servers,
   // which would have a different authority than the primary servers. We need to figure out how to
   // do it.
-  public abstract ListenableFuture<ClientTransport> getTransport(
-      EquivalentAddressGroup addressGroup);
+  public abstract ListenableFuture<T> getTransport(EquivalentAddressGroup addressGroup);
+
+  /**
+   * Returns a channel that uses {@code transport}; useful for issuing RPCs on a transport.
+   */
+  public abstract Channel makeChannel(T transport);
 }

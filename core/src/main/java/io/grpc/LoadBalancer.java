@@ -33,8 +33,6 @@ package io.grpc;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
-import io.grpc.internal.ClientTransport;
-
 import java.util.List;
 
 import javax.annotation.Nullable;
@@ -46,12 +44,14 @@ import javax.annotation.concurrent.ThreadSafe;
  *
  * <p>Note to implementations: all methods are expected to return quickly. Any work that may block
  * should be done asynchronously.
+ *
+ * @param T the transport type to balance
  */
 // TODO(zhangkun83): since it's also used for non-loadbalancing cases like pick-first,
 // "RequestRouter" might be a better name.
 @ExperimentalApi
 @ThreadSafe
-public abstract class LoadBalancer {
+public abstract class LoadBalancer<T> {
   /**
    * Pick a transport that Channel will use for next RPC.
    *
@@ -61,8 +61,7 @@ public abstract class LoadBalancer {
    *
    * @param requestKey for affinity-based routing
    */
-  public abstract ListenableFuture<ClientTransport> pickTransport(
-      @Nullable RequestKey requestKey);
+  public abstract ListenableFuture<T> pickTransport(@Nullable RequestKey requestKey);
 
   /**
    * Shuts down this {@code LoadBalancer}.
@@ -86,13 +85,12 @@ public abstract class LoadBalancer {
   /**
    * Called when a transport is fully connected and ready to accept traffic.
    */
-  public void transportReady(EquivalentAddressGroup addressGroup, ClientTransport transport) { }
+  public void transportReady(EquivalentAddressGroup addressGroup, T transport) { }
 
   /**
    * Called when a transport is shutting down.
    */
-  public void transportShutdown(
-      EquivalentAddressGroup addressGroup, ClientTransport transport, Status s) { }
+  public void transportShutdown(EquivalentAddressGroup addressGroup, T transport, Status s) { }
 
   public abstract static class Factory {
     /**
@@ -102,6 +100,6 @@ public abstract class LoadBalancer {
      * @param tm the interface where an {@code LoadBalancer} implementation gets connected
      *               transports from
      */
-    public abstract LoadBalancer newLoadBalancer(String serviceName, TransportManager tm);
+    public abstract <T> LoadBalancer<T> newLoadBalancer(String serviceName, TransportManager<T> tm);
   }
 }

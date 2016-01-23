@@ -62,6 +62,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
@@ -114,15 +115,18 @@ public class ManagedChannelImplTransportManagerTest {
   @Mock private BackoffPolicy.Provider mockBackoffPolicyProvider;
   @Mock private BackoffPolicy mockBackoffPolicy;
 
-  private TransportManager tm;
+  private TransportManager<ClientTransport> tm;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
 
     when(mockBackoffPolicyProvider.get()).thenReturn(mockBackoffPolicy);
-    when(mockLoadBalancerFactory.newLoadBalancer(anyString(), any(TransportManager.class)))
-        .thenReturn(mock(LoadBalancer.class));
+    @SuppressWarnings("unchecked")
+    LoadBalancer<ClientTransport> loadBalancer = mock(LoadBalancer.class);
+    when(mockLoadBalancerFactory
+        .newLoadBalancer(anyString(), Matchers.<TransportManager<ClientTransport>>any()))
+        .thenReturn(loadBalancer);
 
     channel = new ManagedChannelImpl("fake://target", mockBackoffPolicyProvider,
         nameResolverFactory, Attributes.EMPTY, mockLoadBalancerFactory,
@@ -130,7 +134,8 @@ public class ManagedChannelImplTransportManagerTest {
         CompressorRegistry.getDefaultInstance(), executor, null,
         Collections.<ClientInterceptor>emptyList());
 
-    ArgumentCaptor<TransportManager> tmCaptor = ArgumentCaptor.forClass(TransportManager.class);
+    ArgumentCaptor<TransportManager<ClientTransport>> tmCaptor
+        = ArgumentCaptor.forClass(null);
     verify(mockLoadBalancerFactory).newLoadBalancer(anyString(), tmCaptor.capture());
     tm = tmCaptor.getValue();
   }
@@ -259,5 +264,4 @@ public class ManagedChannelImplTransportManagerTest {
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockBackoffPolicy, times(++backoffConsulted)).nextBackoffMillis();
   }
-
 }

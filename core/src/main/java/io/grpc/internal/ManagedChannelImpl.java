@@ -125,7 +125,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
   private final Channel interceptorChannel;
 
   private final NameResolver nameResolver;
-  private final LoadBalancer loadBalancer;
+  private final LoadBalancer<ClientTransport> loadBalancer;
 
   /**
    * Maps EquivalentAddressGroups to transports for that server.
@@ -357,7 +357,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
     transportFactory.release();
   }
 
-  private final TransportManager tm = new TransportManager() {
+  private final TransportManager<ClientTransport> tm = new TransportManager<ClientTransport>() {
     @Override
     public void updateRetainedTransports(Collection<EquivalentAddressGroup> addrs) {
       // TODO(zhangkun83): warm-up new servers and discard removed servers.
@@ -395,6 +395,12 @@ public final class ManagedChannelImpl extends ManagedChannel {
         }
       }
       return ts.obtainActiveTransport();
+    }
+
+    @Override
+    public Channel makeChannel(ClientTransport transport) {
+      return new SingleTransportChannel(
+          transport, executor, scheduledExecutor, authority());
     }
   };
 }

@@ -36,7 +36,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.internal.BlankFutureProvider;
-import io.grpc.internal.ClientTransport;
 
 import java.net.SocketAddress;
 import java.util.ArrayList;
@@ -63,29 +62,28 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
   }
 
   @Override
-  public LoadBalancer newLoadBalancer(String serviceName, TransportManager tm) {
-    return new SimpleLoadBalancer(tm);
+  public <T> LoadBalancer<T> newLoadBalancer(String serviceName, TransportManager<T> tm) {
+    return new SimpleLoadBalancer<T>(tm);
   }
 
-  private static class SimpleLoadBalancer extends LoadBalancer {
+  private static class SimpleLoadBalancer<T> extends LoadBalancer<T> {
     private final Object lock = new Object();
 
     @GuardedBy("lock")
     private EquivalentAddressGroup addresses;
     @GuardedBy("lock")
-    private final BlankFutureProvider<ClientTransport> pendingPicks =
-        new BlankFutureProvider<ClientTransport>();
+    private final BlankFutureProvider<T> pendingPicks = new BlankFutureProvider<T>();
     @GuardedBy("lock")
     private StatusException nameResolutionError;
 
-    private final TransportManager tm;
+    private final TransportManager<T> tm;
 
-    private SimpleLoadBalancer(TransportManager tm) {
+    private SimpleLoadBalancer(TransportManager<T> tm) {
       this.tm = tm;
     }
 
     @Override
-    public ListenableFuture<ClientTransport> pickTransport(@Nullable RequestKey requestKey) {
+    public ListenableFuture<T> pickTransport(@Nullable RequestKey requestKey) {
       EquivalentAddressGroup addressesCopy;
       synchronized (lock) {
         addressesCopy = addresses;
@@ -102,7 +100,7 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
     @Override
     public void handleResolvedAddresses(
         List<ResolvedServerInfo> updatedServers, Attributes config) {
-      BlankFutureProvider.FulfillmentBatch<ClientTransport> pendingPicksFulfillmentBatch;
+      BlankFutureProvider.FulfillmentBatch<T> pendingPicksFulfillmentBatch;
       final EquivalentAddressGroup newAddresses;
       synchronized (lock) {
         ArrayList<SocketAddress> newAddressList =
@@ -118,8 +116,8 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
         nameResolutionError = null;
         pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
       }
-      pendingPicksFulfillmentBatch.link(new Supplier<ListenableFuture<ClientTransport>>() {
-        @Override public ListenableFuture<ClientTransport> get() {
+      pendingPicksFulfillmentBatch.link(new Supplier<ListenableFuture<T>>() {
+        @Override public ListenableFuture<T> get() {
           return tm.getTransport(newAddresses);
         }
       });
@@ -127,7 +125,7 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
 
     @Override
     public void handleNameResolutionError(Status error) {
-      BlankFutureProvider.FulfillmentBatch<ClientTransport> pendingPicksFulfillmentBatch;
+      BlankFutureProvider.FulfillmentBatch<T> pendingPicksFulfillmentBatch;
       StatusException statusException =
           error.augmentDescription("Name resolution failed").asException();
       synchronized (lock) {

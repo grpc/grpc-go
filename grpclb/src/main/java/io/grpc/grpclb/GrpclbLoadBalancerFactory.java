@@ -56,7 +56,7 @@ public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
   }
 
   @Override
-  public LoadBalancer newLoadBalancer(String serviceName, TransportManager tm) {
-    return new GrpclbLoadBalancer(serviceName, tm);
+  public <T> LoadBalancer<T> newLoadBalancer(String serviceName, TransportManager<T> tm) {
+    return new GrpclbLoadBalancer<T>(serviceName, tm);
   }
 }

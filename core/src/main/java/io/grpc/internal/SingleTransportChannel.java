@@ -50,7 +50,7 @@ import java.util.concurrent.ScheduledExecutorService;
 /**
  * A {@link Channel} that wraps a {@link ClientTransport}.
  */
-public final class SingleTransportChannel extends Channel {
+final class SingleTransportChannel extends Channel {
 
   private final ClientTransport transport;
   private final Executor executor;

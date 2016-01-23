@@ -70,7 +70,7 @@ public class TransportSetTest {
 
   private FakeClock fakeClock;
 
-  @Mock private LoadBalancer mockLoadBalancer;
+  @Mock private LoadBalancer<ClientTransport> mockLoadBalancer;
   @Mock private BackoffPolicy mockBackoffPolicy1;
   @Mock private BackoffPolicy mockBackoffPolicy2;
   @Mock private BackoffPolicy mockBackoffPolicy3;

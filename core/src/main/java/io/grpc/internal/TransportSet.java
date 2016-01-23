@@ -105,7 +105,7 @@ final class TransportSet {
   @GuardedBy("lock")
   private final Collection<ClientTransport> transports = new ArrayList<ClientTransport>();
 
-  private final LoadBalancer loadBalancer;
+  private final LoadBalancer<ClientTransport> loadBalancer;
 
   @GuardedBy("lock")
   private boolean shutdown;
@@ -117,17 +117,19 @@ final class TransportSet {
   @Nullable
   private volatile UncancellableTransportFuture activeTransportFuture;
 
-  TransportSet(EquivalentAddressGroup addressGroup, String authority, LoadBalancer loadBalancer,
-      BackoffPolicy.Provider backoffPolicyProvider, ClientTransportFactory transportFactory,
-      ScheduledExecutorService scheduledExecutor, Callback callback) {
+  TransportSet(EquivalentAddressGroup addressGroup, String authority,
+      LoadBalancer<ClientTransport> loadBalancer, BackoffPolicy.Provider backoffPolicyProvider,
+      ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
+      Callback callback) {
     this(addressGroup, authority, loadBalancer, backoffPolicyProvider, transportFactory,
         scheduledExecutor, callback, Stopwatch.createUnstarted());
   }
 
   @VisibleForTesting
-  TransportSet(EquivalentAddressGroup addressGroup, String authority, LoadBalancer loadBalancer,
-      BackoffPolicy.Provider backoffPolicyProvider, ClientTransportFactory transportFactory,
-      ScheduledExecutorService scheduledExecutor, Callback callback, Stopwatch backoffWatch) {
+  TransportSet(EquivalentAddressGroup addressGroup, String authority,
+      LoadBalancer<ClientTransport> loadBalancer, BackoffPolicy.Provider backoffPolicyProvider,
+      ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
+      Callback callback, Stopwatch backoffWatch) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.loadBalancer = loadBalancer;

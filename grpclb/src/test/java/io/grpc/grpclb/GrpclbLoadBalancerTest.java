@@ -55,7 +55,6 @@ import io.grpc.EquivalentAddressGroup;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.Status;
 import io.grpc.TransportManager;
-import io.grpc.internal.ClientTransport;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -77,7 +76,8 @@ import java.util.concurrent.TimeUnit;
 public class GrpclbLoadBalancerTest {
 
   private static final String serviceName = "testlbservice";
-  private final TransportManager mockTransportManager = mock(TransportManager.class);
+  @SuppressWarnings("unchecked")
+  private final TransportManager<Transport> mockTransportManager = mock(TransportManager.class);
 
   // The test subject
   private TestGrpclbLoadBalancer loadBalancer = new TestGrpclbLoadBalancer();
@@ -85,28 +85,28 @@ public class GrpclbLoadBalancerTest {
   // Current addresses of the LB server
   private EquivalentAddressGroup lbAddressGroup;
   // The future of the currently requested transport for an LB server
-  private SettableFuture<ClientTransport> lbTransportFuture;
+  private SettableFuture<Transport> lbTransportFuture;
 
   @Test
   public void balancing() throws Exception {
     List<ResolvedServerInfo> servers = createResolvedServerInfoList(4000, 4001);
 
     // Set up mocks
-    List<ClientTransport> transports = new ArrayList<ClientTransport>(servers.size());
-    List<SettableFuture<ClientTransport>> transportFutures =
-        new ArrayList<SettableFuture<ClientTransport>>(servers.size());
+    List<Transport> transports = new ArrayList<Transport>(servers.size());
+    List<SettableFuture<Transport>> transportFutures =
+        new ArrayList<SettableFuture<Transport>>(servers.size());
 
     for (ResolvedServerInfo server : servers) {
       transports.add(
-          mock(ClientTransport.class, withSettings().name("Transport for "  + server.toString())));
-      SettableFuture<ClientTransport> future = SettableFuture.create();
+          mock(Transport.class, withSettings().name("Transport for "  + server.toString())));
+      SettableFuture<Transport> future = SettableFuture.create();
       transportFutures.add(future);
       when(mockTransportManager.getTransport(eq(new EquivalentAddressGroup(server.getAddress()))))
           .thenReturn(future);
     }
 
-    ListenableFuture<ClientTransport> pick0;
-    ListenableFuture<ClientTransport> pick1;
+    ListenableFuture<Transport> pick0;
+    ListenableFuture<Transport> pick1;
 
     // Pick before name resolved
     pick0 = loadBalancer.pickTransport(null);
@@ -118,7 +118,7 @@ public class GrpclbLoadBalancerTest {
     pick1 = loadBalancer.pickTransport(null);
 
     // Make the transport for LB server ready
-    ClientTransport lbTransport = mock(ClientTransport.class);
+    Transport lbTransport = new Transport();
     lbTransportFuture.set(lbTransport);
     // An LB request is sent
     SendLbRequestArgs sentLbRequest = loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS);
@@ -173,7 +173,7 @@ public class GrpclbLoadBalancerTest {
     simulateLbAddressResolved(30001);
 
     // Make the transport for LB server ready
-    ClientTransport lbTransport = mock(ClientTransport.class);
+    Transport lbTransport = new Transport();
     lbTransportFuture.set(lbTransport);
 
     // An LB request is sent
@@ -207,7 +207,7 @@ public class GrpclbLoadBalancerTest {
     verify(mockTransportManager).getTransport(eq(lbAddressGroup));
 
     // Make the transport for LB server ready
-    ClientTransport lbTransport = mock(ClientTransport.class);
+    Transport lbTransport = new Transport();
     lbTransportFuture.set(lbTransport);
 
     // An LB request is sent
@@ -221,7 +221,7 @@ public class GrpclbLoadBalancerTest {
     assertNotEquals(lbAddress1, lbAddress2);
     verify(mockTransportManager).updateRetainedTransports(eq(Collections.singleton(lbAddress2)));
     verify(mockTransportManager).getTransport(eq(lbAddressGroup));
-    lbTransport = mock(ClientTransport.class);
+    lbTransport = new Transport();
     lbTransportFuture.set(lbTransport);
 
     // Another LB request is sent
@@ -243,7 +243,7 @@ public class GrpclbLoadBalancerTest {
     simulateLbAddressResolved(30001);
 
     // Make the transport for LB server ready
-    lbTransportFuture.set(mock(ClientTransport.class));
+    lbTransportFuture.set(new Transport());
 
     // An LB request is sent
     assertNotNull(loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS));
@@ -271,10 +271,10 @@ public class GrpclbLoadBalancerTest {
     simulateLbAddressResolved(30001);
 
     // First pick, will be pending
-    ListenableFuture<ClientTransport> pick = loadBalancer.pickTransport(null);
+    ListenableFuture<Transport> pick = loadBalancer.pickTransport(null);
 
     // Make the transport for LB server ready
-    ClientTransport lbTransport = mock(ClientTransport.class);
+    Transport lbTransport = new Transport();
     lbTransportFuture.set(lbTransport);
 
     // An LB request is sent
@@ -304,10 +304,10 @@ public class GrpclbLoadBalancerTest {
     simulateLbAddressResolved(30001);
 
     // First pick, will be pending
-    ListenableFuture<ClientTransport> pick = loadBalancer.pickTransport(null);
+    ListenableFuture<Transport> pick = loadBalancer.pickTransport(null);
 
     // Make the transport for LB server ready
-    ClientTransport lbTransport = mock(ClientTransport.class);
+    Transport lbTransport = new Transport();
     lbTransportFuture.set(lbTransport);
 
     // An LB request is sent
@@ -356,7 +356,7 @@ public class GrpclbLoadBalancerTest {
     simulateLbAddressResolved(30001);
 
     // Make the transport for LB server ready
-    ClientTransport lbTransport = mock(ClientTransport.class);
+    Transport lbTransport = new Transport();
     lbTransportFuture.set(lbTransport);
 
     // An LB request is sent
@@ -378,7 +378,7 @@ public class GrpclbLoadBalancerTest {
     verify(mockTransportManager, times(2)).getTransport(eq(lbAddressGroup));
 
     // Make the new transport ready
-    lbTransportFuture.set(mock(ClientTransport.class));
+    lbTransportFuture.set(new Transport());
 
     // Another LB request is sent
     assertNotNull(loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS));
@@ -389,10 +389,10 @@ public class GrpclbLoadBalancerTest {
     simulateLbAddressResolved(30001);
 
     // First pick, will be pending
-    ListenableFuture<ClientTransport> pick = loadBalancer.pickTransport(null);
+    ListenableFuture<Transport> pick = loadBalancer.pickTransport(null);
 
     // Make the transport for LB server ready
-    ClientTransport lbTransport = mock(ClientTransport.class);
+    Transport lbTransport = new Transport();
     lbTransportFuture.set(lbTransport);
 
     // An LB request is sent
@@ -417,13 +417,13 @@ public class GrpclbLoadBalancerTest {
   }
 
   @Test public void nameResolutionFailed() throws Exception {
-    ListenableFuture<ClientTransport> pick0 = loadBalancer.pickTransport(null);
+    ListenableFuture<Transport> pick0 = loadBalancer.pickTransport(null);
     assertFalse(pick0.isDone());
 
     loadBalancer.handleNameResolutionError(Status.UNAVAILABLE);
 
     assertTrue(pick0.isDone());
-    ListenableFuture<ClientTransport> pick1 = loadBalancer.pickTransport(null);
+    ListenableFuture<Transport> pick1 = loadBalancer.pickTransport(null);
     assertTrue(pick1.isDone());
     assertFutureFailedWithError(pick0, Status.Code.UNAVAILABLE, "Name resolution failed");
     assertFutureFailedWithError(pick1, Status.Code.UNAVAILABLE, "Name resolution failed");
@@ -434,7 +434,7 @@ public class GrpclbLoadBalancerTest {
     simulateLbAddressResolved(30001);
 
     // Make the transport for LB server ready
-    ClientTransport lbTransport = mock(ClientTransport.class);
+    Transport lbTransport = new Transport();
     lbTransportFuture.set(lbTransport);
 
     // An LB request is sent
@@ -469,7 +469,7 @@ public class GrpclbLoadBalancerTest {
     ResolvedServerInfo lbServerInfo = new ResolvedServerInfo(
         new InetSocketAddress("127.0.0.1", lbPort), Attributes.EMPTY);
     lbAddressGroup = buildAddressGroup(lbServerInfo);
-    ClientTransport lbTransport = mock(ClientTransport.class);
+    Transport lbTransport = new Transport();
     lbTransportFuture = SettableFuture.create();
     when(mockTransportManager.getTransport(eq(lbAddressGroup))).thenReturn(lbTransportFuture);
     loadBalancer.handleResolvedAddresses(Collections.singletonList(lbServerInfo), Attributes.EMPTY);
@@ -490,7 +490,7 @@ public class GrpclbLoadBalancerTest {
    * A slightly modified {@link GrpclbLoadBalancerTest} that saves LB requests in a queue instead of
    * sending them out.
    */
-  private class TestGrpclbLoadBalancer extends GrpclbLoadBalancer {
+  private class TestGrpclbLoadBalancer extends GrpclbLoadBalancer<Transport> {
     final LinkedBlockingQueue<SendLbRequestArgs> sentLbRequests =
         new LinkedBlockingQueue<SendLbRequestArgs>();
 
@@ -498,16 +498,16 @@ public class GrpclbLoadBalancerTest {
       super(serviceName, mockTransportManager);
     }
 
-    @Override void sendLbRequest(ClientTransport transport, LoadBalanceRequest request) {
+    @Override void sendLbRequest(Transport transport, LoadBalanceRequest request) {
       sentLbRequests.add(new SendLbRequestArgs(transport, request));
     }
   }
 
   private static class SendLbRequestArgs {
-    final ClientTransport transport;
+    final Transport transport;
     final LoadBalanceRequest request;
 
-    SendLbRequestArgs(ClientTransport transport, LoadBalanceRequest request) {
+    SendLbRequestArgs(Transport transport, LoadBalanceRequest request) {
       this.transport = transport;
       this.request = request;
     }
@@ -563,4 +563,6 @@ public class GrpclbLoadBalancerTest {
       }
     }
   }
+
+  public static class Transport {}
 }

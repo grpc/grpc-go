@@ -529,15 +529,15 @@ public class ManagedChannelImplTest {
 
   private class SpyingLoadBalancerFactory extends LoadBalancer.Factory {
     private final LoadBalancer.Factory delegate;
-    private final List<LoadBalancer> balancers = new ArrayList<LoadBalancer>();
+    private final List<LoadBalancer<?>> balancers = new ArrayList<LoadBalancer<?>>();
 
     private SpyingLoadBalancerFactory(LoadBalancer.Factory delegate) {
       this.delegate = delegate;
     }
 
     @Override
-    public LoadBalancer newLoadBalancer(String serviceName, TransportManager tm) {
-      LoadBalancer lb = spy(delegate.newLoadBalancer(serviceName, tm));
+    public <T> LoadBalancer<T> newLoadBalancer(String serviceName, TransportManager<T> tm) {
+      LoadBalancer<T> lb = spy(delegate.newLoadBalancer(serviceName, tm));
       balancers.add(lb);
       return lb;
     }
