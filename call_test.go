@@ -98,7 +98,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		}
 	}
 	// send a response back to end the stream.
-	reply, err := encode(testCodec{}, &expectedResponse, compressionNone)
+	reply, err := encode(testCodec{}, &expectedResponse, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to encode the response: %v", err)
 	}

@@ -73,6 +73,8 @@ var (
 // values passed to Dial.
 type dialOptions struct {
 	codec    Codec
+	cg       CompressorGenerator
+	dg       DecompressorGenerator
 	picker   Picker
 	block    bool
 	insecure bool
@@ -86,6 +88,18 @@ type DialOption func(*dialOptions)
 func WithCodec(c Codec) DialOption {
 	return func(o *dialOptions) {
 		o.codec = c
+	}
+}
+
+func WithCompressor(f CompressorGenerator) DialOption {
+	return func(o *dialOptions) {
+		o.cg = f
+	}
+}
+
+func WithDecompressor(f DecompressorGenerator) DialOption {
+	return func(o *dialOptions) {
+		o.dg = f
 	}
 }
 

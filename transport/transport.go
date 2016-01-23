@@ -171,6 +171,8 @@ type Stream struct {
 	cancel context.CancelFunc
 	// method records the associated RPC method of the stream.
 	method    string
+	recvCompress string
+	sendCompress  string
 	buf       *recvBuffer
 	dec       io.Reader
 	fc        *inFlow
@@ -199,6 +201,14 @@ type Stream struct {
 	// the status received from the server.
 	statusCode codes.Code
 	statusDesc string
+}
+
+func (s *Stream) RecvCompress() string {
+	return s.recvCompress
+}
+
+func (s *Stream) SetSendCompress(str string) {
+	s.sendCompress = str
 }
 
 // Header acquires the key-value pairs of header metadata once it
@@ -350,6 +360,8 @@ type Options struct {
 type CallHdr struct {
 	Host   string // peer host
 	Method string // the operation to perform on the specified host
+	RecvCompress string
+	SendCompress string
 }
 
 // ClientTransport is the common interface for all gRPC client side transport
