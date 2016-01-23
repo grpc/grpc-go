@@ -33,16 +33,12 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
-import io.grpc.internal.SharedResourceHolder;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -113,33 +109,6 @@ import javax.annotation.Nullable;
 public class Context {
 
   private static final Logger LOG = Logger.getLogger(Context.class.getName());
-
-  /**
-   * Use a shared resource to retain the {@link ScheduledExecutorService} used to
-   * implement deadline based context cancellation. This allows the executor to be
-   * shutdown if its not in use thereby allowing Context to be unloaded.
-   */
-  static final SharedResourceHolder.Resource<ScheduledExecutorService> SCHEDULER =
-      new SharedResourceHolder.Resource<ScheduledExecutorService>() {
-        private static final String name = "context-scheduler";
-        @Override
-        public ScheduledExecutorService create() {
-          return Executors.newScheduledThreadPool(1, new ThreadFactoryBuilder()
-              .setNameFormat(name + "-%d")
-              .setDaemon(true)
-              .build());
-        }
-
-        @Override
-        public void close(ScheduledExecutorService instance) {
-          instance.shutdown();
-        }
-
-        @Override
-        public String toString() {
-          return name;
-        }
-      };
 
   private static final Object[][] EMPTY_ENTRIES = new Object[0][2];
 
@@ -268,8 +237,9 @@ public class Context {
    * a received existing deadline. When establishing a new deadline, {@link #withDeadlineAfter}
    * is the better mechanism.
    */
-  public CancellableContext withDeadlineNanoTime(long deadlineNanoTime) {
-    return withDeadlineAfter(deadlineNanoTime - System.nanoTime(), TimeUnit.NANOSECONDS);
+  public CancellableContext withDeadlineNanoTime(long deadlineNanoTime,
+      ScheduledExecutorService scheduler) {
+    return withDeadlineAfter(deadlineNanoTime - System.nanoTime(), TimeUnit.NANOSECONDS, scheduler);
   }
 
   /**
@@ -280,7 +250,7 @@ public class Context {
    * <p>Sample usage:
    * <pre>
    *   Context.CancellableContext withDeadline = Context.current().withDeadlineAfter(5,
-   *       TimeUnit.SECONDS);
+   *       TimeUnit.SECONDS, scheduler);
    *   executorService.execute(withDeadline.wrap(new Runnable() {
    *     public void run() {
    *       Context current = Context.current();
@@ -291,10 +261,12 @@ public class Context {
    *   });
    * </pre>
    */
-  public CancellableContext withDeadlineAfter(long duration, TimeUnit unit) {
+  public CancellableContext withDeadlineAfter(long duration, TimeUnit unit,
+      ScheduledExecutorService scheduler) {
     Preconditions.checkArgument(duration >= 0, "duration must be greater than or equal to 0");
     Preconditions.checkNotNull(unit, "unit");
-    return new CancellableContext(this, unit.toNanos(duration));
+    Preconditions.checkNotNull(scheduler, "scheduler");
+    return new CancellableContext(this, unit.toNanos(duration), scheduler);
   }
 
   /**
@@ -611,17 +583,13 @@ public class Context {
     /**
      * Create a cancellable context that has a deadline.
      */
-    private CancellableContext(Context parent, long delayNanos) {
+    private CancellableContext(Context parent, long delayNanos,
+        ScheduledExecutorService scheduler) {
       this(parent);
-      final ScheduledExecutorService scheduler = SharedResourceHolder.get(SCHEDULER);
       scheduledFuture = scheduler.schedule(new Runnable() {
         @Override
         public void run() {
-          try {
-            cancel(new TimeoutException("context timed out"));
-          } finally {
-            SharedResourceHolder.release(SCHEDULER, scheduler);
-          }
+          cancel(new TimeoutException("context timed out"));
         }
       }, delayNanos, TimeUnit.NANOSECONDS);
     }

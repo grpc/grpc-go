@@ -43,8 +43,6 @@ import static org.junit.Assert.fail;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 
-import io.grpc.internal.SharedResourceHolder;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -57,9 +55,9 @@ import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -97,6 +95,7 @@ public class ContextTest {
       observed = Context.current();
     }
   };
+  private ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
   @Before
   public void setUp() throws Exception {
@@ -105,6 +104,7 @@ public class ContextTest {
 
   @After
   public void tearDown() throws Exception {
+    scheduler.shutdown();
   }
 
   @Test
@@ -611,7 +611,7 @@ public class ContextTest {
   @Test
   public void absoluteDeadlineTriggersAndPropagates() throws Exception {
     Context base = Context.current().withDeadlineNanoTime(System.nanoTime()
-        + TimeUnit.SECONDS.toNanos(1));
+        + TimeUnit.SECONDS.toNanos(1), scheduler);
     Context child = base.withValue(FOOD, "lasagna");
     child.addListener(cancellationListener, MoreExecutors.directExecutor());
     assertFalse(base.isCancelled());
@@ -626,12 +626,12 @@ public class ContextTest {
 
   @Test(expected = IllegalArgumentException.class)
   public void negativeDeadlineFails() {
-    Context.current().withDeadlineAfter(-1, TimeUnit.NANOSECONDS);
+    Context.current().withDeadlineAfter(-1, TimeUnit.NANOSECONDS, scheduler);
   }
 
   @Test
   public void relativeDeadlineTriggersAndPropagates() throws Exception {
-    Context base = Context.current().withDeadlineAfter(1, TimeUnit.SECONDS);
+    Context base = Context.current().withDeadlineAfter(1, TimeUnit.SECONDS, scheduler);
     Context child = base.withValue(FOOD, "lasagna");
     child.addListener(cancellationListener, MoreExecutors.directExecutor());
     assertFalse(base.isCancelled());
@@ -646,8 +646,8 @@ public class ContextTest {
 
   @Test
   public void innerDeadlineCompletesBeforeOuter() throws Exception {
-    Context base = Context.current().withDeadlineAfter(2, TimeUnit.SECONDS);
-    Context child = base.withDeadlineAfter(1, TimeUnit.SECONDS);
+    Context base = Context.current().withDeadlineAfter(2, TimeUnit.SECONDS, scheduler);
+    Context child = base.withDeadlineAfter(1, TimeUnit.SECONDS, scheduler);
     child.addListener(cancellationListener, MoreExecutors.directExecutor());
     assertFalse(base.isCancelled());
     assertFalse(child.isCancelled());
@@ -667,45 +667,18 @@ public class ContextTest {
 
   @Test
   public void cancellationCancelsScheduledTask() {
-    ScheduledExecutorService service = SharedResourceHolder.get(Context.SCHEDULER);
+    ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
     try {
-      ThreadPoolExecutor executor = (ThreadPoolExecutor) service;
-      executor.purge();
       assertEquals(0, executor.getQueue().size());
-      Context.CancellableContext base = Context.current().withDeadlineAfter(1, TimeUnit.DAYS);
+      Context.CancellableContext base
+          = Context.current().withDeadlineAfter(1, TimeUnit.DAYS, executor);
       assertEquals(1, executor.getQueue().size());
       base.cancel(null);
       executor.purge();
       assertEquals(0, executor.getQueue().size());
     } finally {
-      SharedResourceHolder.release(Context.SCHEDULER, service);
+      executor.shutdown();
     }
-  }
-
-  @Test
-  public void testScheduler() throws Exception {
-    assertEquals("context-scheduler", Context.SCHEDULER.toString());
-    ScheduledExecutorService service = Context.SCHEDULER.create();
-    try {
-      assertFalse(service.isShutdown());
-      final AtomicReference<String> threadName = new AtomicReference<String>();
-      final AtomicReference<Boolean> threadIsDaemon = new AtomicReference<Boolean>();
-      Future<?> ran = service.submit(new Runnable() {
-        @Override
-        public void run() {
-          threadName.set(Thread.currentThread().getName());
-          threadIsDaemon.set(Thread.currentThread().isDaemon());
-        }
-      });
-      ran.get();
-      assertNotNull(threadName.get());
-      assertTrue(threadName.get(), threadName.get().startsWith(Context.SCHEDULER.toString()));
-      assertNotNull(threadIsDaemon.get());
-      assertTrue(threadIsDaemon.get());
-    } finally {
-      Context.SCHEDULER.close(service);
-    }
-    assertTrue(service.isShutdown());
   }
 
   @Test
