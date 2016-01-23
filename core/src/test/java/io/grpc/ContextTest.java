@@ -711,12 +711,12 @@ public class ContextTest {
   @Test
   public void testKeyEqualsHashCode() {
     assertTrue(PET.equals(PET));
-    assertTrue(PET.equals(Context.key("pet")));
+    assertFalse(PET.equals(Context.key("pet")));
     assertFalse(PET.equals(FOOD));
     assertFalse(PET.equals("pet"));
     assertFalse(PET.equals(null));
 
-    assertEquals(PET.hashCode(), Context.key("pet").hashCode());
+    assertEquals(PET.hashCode(), PET.hashCode());
   }
 
   private static class QueuedExecutor implements Executor {

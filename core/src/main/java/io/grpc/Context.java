@@ -160,14 +160,16 @@ public class Context {
   };
 
   /**
-   * Create a {@link Key} with the given name.
+   * Create a {@link Key} with the given debug name. Multiple different keys may have the same name;
+   * the name is intended for debugging purposes and does not impact behavior.
    */
   public static <T> Key<T> key(String name) {
     return new Key<T>(name);
   }
 
   /**
-   * Create a {@link Key} with the given name and default value.
+   * Create a {@link Key} with the given debug name and default value. Multiple different keys may
+   * have the same name; the name is intended for debugging purposes and does not impact behavior.
    */
   public static <T> Key<T> keyWithDefault(String name, T defaultValue) {
     return new Key<T>(name, defaultValue);
@@ -766,25 +768,6 @@ public class Context {
     public T get(Context context) {
       T value = (T) context.lookup(this);
       return value == null ? defaultValue : value;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-
-      Key<?> key = (Key<?>) o;
-
-      return key.name.equals(this.name);
-    }
-
-    @Override
-    public int hashCode() {
-      return name.hashCode();
     }
 
     @Override
