@@ -99,7 +99,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
   private TestServiceGrpc.TestService asyncStub;
   private String testCase;
   private TestListener listener;
-  private static int OPERATION_TIMEOUT = 5000;
+  private static int TIMEOUT_MILLIS = 5000;
 
   class ResponseObserver implements StreamObserver<Messages.StreamingOutputCallResponse> {
     public LinkedBlockingQueue<Object> responses = new LinkedBlockingQueue<Object>();
@@ -369,7 +369,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
         = asyncStub.fullDuplexCall(responseObserver);
     for (int i = 0; i < requests.length; i++) {
       requestObserver.onNext(requests[i]);
-      Object response = responseObserver.responses.poll(OPERATION_TIMEOUT, TimeUnit.SECONDS);
+      Object response = responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
       if (!(response instanceof Messages.StreamingOutputCallResponse)) {
         fail("Unexpected: " + response);
       }
@@ -379,7 +379,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     }
     requestObserver.onCompleted();
     assertEquals(responseObserver.magicTailResponse,
-        responseObserver.responses.poll(OPERATION_TIMEOUT, TimeUnit.SECONDS));
+        responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
   }
 
   public void emptyStream() throws Exception {
@@ -389,7 +389,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onCompleted();
     assertEquals(responseObserver.magicTailResponse,
-        responseObserver.responses.poll(OPERATION_TIMEOUT, TimeUnit.SECONDS));
+        responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
   }
 
   public void cancelAfterBegin() throws Exception {
@@ -419,14 +419,14 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onNext(request);
-    Object response = responseObserver.responses.poll(OPERATION_TIMEOUT, TimeUnit.SECONDS);
+    Object response = responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
     if (!(response instanceof Messages.StreamingOutputCallResponse)) {
       fail("Unexpected: " + response);
     }
     assertMessageEquals(goldenResponse, (Messages.StreamingOutputCallResponse) response);
 
     requestObserver.onError(new RuntimeException());
-    response = responseObserver.responses.poll(OPERATION_TIMEOUT, TimeUnit.SECONDS);
+    response = responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
     if (!(response instanceof Throwable)) {
       fail("Unexpected: " + response);
     }
@@ -542,7 +542,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     // Time how long it takes to get the first response.
     call.request(1);
     assertMessageEquals(goldenResponses[0],
-        (StreamingOutputCallResponse) queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
+        (StreamingOutputCallResponse) queue.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
     long firstCallDuration = System.nanoTime() - start;
 
     // Without giving additional flow control, make sure that we don't get another response. We wait
@@ -555,8 +555,8 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     // Make sure that everything still completes.
     call.request(1);
     assertMessageEquals(goldenResponses[1],
-        (StreamingOutputCallResponse) queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
-    assertEquals(io.grpc.Status.OK, queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
+        (StreamingOutputCallResponse) queue.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
+    assertEquals(io.grpc.Status.OK, queue.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
   }
 
   public void veryLargeRequest() throws Exception {
@@ -684,23 +684,23 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onNext(requests[0]);
-    Object response = responseObserver.responses.poll(OPERATION_TIMEOUT, TimeUnit.SECONDS);
+    Object response = responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
     assertTrue(response instanceof Messages.StreamingOutputCallResponse);
     assertMessageEquals(goldenResponses[0], (Messages.StreamingOutputCallResponse) response);
     // Initiate graceful shutdown.
     channel.shutdown();
     // The previous ping-pong could have raced with the shutdown, but this one certainly shouldn't.
     requestObserver.onNext(requests[1]);
-    response = responseObserver.responses.poll(OPERATION_TIMEOUT, TimeUnit.SECONDS);
+    response = responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
     assertTrue(response instanceof Messages.StreamingOutputCallResponse);
     assertMessageEquals(goldenResponses[1], (Messages.StreamingOutputCallResponse) response);
     requestObserver.onNext(requests[2]);
-    response = responseObserver.responses.poll(OPERATION_TIMEOUT, TimeUnit.SECONDS);
+    response = responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
     assertTrue(response instanceof Messages.StreamingOutputCallResponse);
     assertMessageEquals(goldenResponses[2], (Messages.StreamingOutputCallResponse) response);
     requestObserver.onCompleted();
     assertEquals(responseObserver.magicTailResponse,
-        responseObserver.responses.poll(OPERATION_TIMEOUT, TimeUnit.SECONDS));
+        responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
   }
 
   /** Sends an rpc to an unimplemented method on the server. */
