@@ -35,7 +35,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor.MethodType;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.Http2ClientStream;
@@ -61,17 +62,18 @@ class OkHttpClientStream extends Http2ClientStream {
 
   private static final Buffer EMPTY_BUFFER = new Buffer();
 
-  private final MethodType type;
-
   @GuardedBy("lock")
   private int window = Utils.DEFAULT_WINDOW_SIZE;
   @GuardedBy("lock")
   private int processedWindow = Utils.DEFAULT_WINDOW_SIZE;
+  private final MethodDescriptor<?, ?> method;
+  /** {@code null} iff start has been called. */
+  private Metadata headers;
   private final AsyncFrameWriter frameWriter;
   private final OutboundFlowController outboundFlow;
   private final OkHttpClientTransport transport;
-  private final Runnable startCallback;
   private final Object lock;
+  private String authority;
   private Object outboundFlowState;
   private volatile Integer id;
   @GuardedBy("lock")
@@ -86,29 +88,29 @@ class OkHttpClientStream extends Http2ClientStream {
   private boolean cancelSent = false;
 
   OkHttpClientStream(
+      MethodDescriptor<?, ?> method,
+      Metadata headers,
       AsyncFrameWriter frameWriter,
       OkHttpClientTransport transport,
-      Runnable startCallback,
       OutboundFlowController outboundFlow,
-      MethodType type,
       Object lock,
-      List<Header> requestHeaders,
-      int maxMessageSize) {
+      int maxMessageSize,
+      String authority) {
     super(new OkHttpWritableBufferAllocator(), maxMessageSize);
+    this.method = method;
+    this.headers = headers;
     this.frameWriter = frameWriter;
     this.transport = transport;
-    this.startCallback = startCallback;
     this.outboundFlow = outboundFlow;
-    this.type = type;
     this.lock = lock;
-    this.requestHeaders = requestHeaders;
+    this.authority = authority;
   }
 
   /**
    * Returns the type of this stream.
    */
-  public MethodType getType() {
-    return type;
+  public MethodDescriptor.MethodType getType() {
+    return method.getType();
   }
 
   @Override
@@ -125,9 +127,21 @@ class OkHttpClientStream extends Http2ClientStream {
   }
 
   @Override
+  public void setAuthority(String authority) {
+    checkState(listener() == null, "must be call before start");
+    this.authority = checkNotNull(authority, "authority");
+  }
+
+  @Override
   public void start(ClientStreamListener listener) {
     super.start(listener);
-    startCallback.run();
+    String defaultPath = "/" + method.getFullMethodName();
+    List<Header> requestHeaders = Headers.createRequestHeaders(headers, defaultPath, authority);
+    headers = null;
+    synchronized (lock) {
+      this.requestHeaders = requestHeaders;
+      transport.streamReadyToStart(this);
+    }
   }
 
   @GuardedBy("lock")

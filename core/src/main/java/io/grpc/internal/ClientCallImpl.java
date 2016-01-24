@@ -35,7 +35,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_JOINER;
-import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
@@ -146,13 +145,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   @VisibleForTesting
   static void prepareHeaders(Metadata headers, CallOptions callOptions, String userAgent,
       DecompressorRegistry decompressorRegistry, Compressor compressor) {
-    // Hack to propagate authority.  This should be properly pass to the transport.newStream
-    // somehow.
-    headers.removeAll(AUTHORITY_KEY);
-    if (callOptions.getAuthority() != null) {
-      headers.put(AUTHORITY_KEY, callOptions.getAuthority());
-    }
-
     // Fill out the User-Agent header.
     headers.removeAll(USER_AGENT_KEY);
     if (userAgent != null) {
@@ -238,6 +230,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
           transportFuture.isDone() ? directExecutor() : callExecutor);
     }
 
+    if (callOptions.getAuthority() != null) {
+      stream.setAuthority(callOptions.getAuthority());
+    }
     stream.setCompressor(compressor);
     if (compressor != Codec.Identity.NONE) {
       stream.setMessageCompression(true);

@@ -60,6 +60,8 @@ class DelayedStream implements ClientStream {
   // cancelled.  This should be okay.
   private volatile ClientStream startedRealStream;
   @GuardedBy("this")
+  private String authority;
+  @GuardedBy("this")
   private ClientStreamListener listener;
   @GuardedBy("this")
   private ClientStream realStream;
@@ -87,6 +89,17 @@ class DelayedStream implements ClientStream {
     public PendingMessage(InputStream message, boolean shouldBeCompressed) {
       this.message = message;
       this.shouldBeCompressed = shouldBeCompressed;
+    }
+  }
+
+  @Override
+  public synchronized void setAuthority(String authority) {
+    checkState(listener == null, "must be called before start");
+    checkNotNull(authority, "authority");
+    if (realStream == null) {
+      this.authority = authority;
+    } else {
+      realStream.setAuthority(authority);
     }
   }
 

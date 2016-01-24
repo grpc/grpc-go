@@ -53,6 +53,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.netty.buffer.ByteBuf;
@@ -84,6 +85,13 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
 
   @Mock
   protected NettyClientHandler handler;
+
+  @SuppressWarnings("unchecked")
+  private MethodDescriptor.Marshaller<Void> marshaller = mock(MethodDescriptor.Marshaller.class);
+
+  // Must be initialized before @Before, because it is used by createStream()
+  private MethodDescriptor<?, ?> methodDescriptor = MethodDescriptor.create(
+      MethodDescriptor.MethodType.UNARY, "/testService/test", marshaller, marshaller);
 
   @Override
   protected ClientStreamListener listener() {
@@ -346,12 +354,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   @Test
   public void setHttp2StreamShouldNotifyReady() {
     listener = mock(ClientStreamListener.class);
-    Runnable starter = new Runnable() {
-      @Override
-      public void run() {}
-    };
 
-    stream = new NettyClientStream(channel, handler, starter, DEFAULT_MAX_MESSAGE_SIZE);
+    stream = new NettyClientStream(methodDescriptor, new Metadata(), channel, handler,
+        DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"));
     stream.start(listener);
     stream().id(STREAM_ID);
     verify(listener, never()).onReady();
@@ -374,12 +379,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
       }
     }).when(writeQueue).enqueue(any(), any(ChannelPromise.class), anyBoolean());
     when(writeQueue.enqueue(any(), anyBoolean())).thenReturn(future);
-    Runnable starter = new Runnable() {
-      @Override
-      public void run() {}
-    };
-    NettyClientStream stream =
-        new NettyClientStream(channel, handler, starter, DEFAULT_MAX_MESSAGE_SIZE);
+    NettyClientStream stream = new NettyClientStream(methodDescriptor, new Metadata(), channel,
+        handler, DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"));
     stream.start(listener);
     assertTrue(stream.canSend());
     assertTrue(stream.canReceive());

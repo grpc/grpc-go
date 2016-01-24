@@ -37,11 +37,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.okhttp.internal.framed.ErrorCode;
-import io.grpc.okhttp.internal.framed.Header;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -54,28 +54,28 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 @RunWith(JUnit4.class)
 public class OkHttpClientStreamTest {
   private static final int MAX_MESSAGE_SIZE = 100;
 
+  @Mock private MethodDescriptor.Marshaller<Void> marshaller;
   @Mock private AsyncFrameWriter frameWriter;
   @Mock private OkHttpClientTransport transport;
-  @Mock private Runnable startCallback;
   @Mock private OutboundFlowController flowController;
   private final Object lock = new Object();
-  private final List<Header> requestHeaders = new ArrayList<Header>();
 
+  private MethodDescriptor<?, ?> methodDescriptor;
   private OkHttpClientStream stream;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    stream = new OkHttpClientStream(frameWriter, transport, startCallback, flowController,
-        MethodType.UNARY, lock, requestHeaders, MAX_MESSAGE_SIZE);
+    methodDescriptor = MethodDescriptor.create(
+        MethodType.UNARY, "/testService/test", marshaller, marshaller);
+    stream = new OkHttpClientStream(methodDescriptor, new Metadata(), frameWriter, transport,
+        flowController, lock, MAX_MESSAGE_SIZE, "localhost");
   }
 
   @Test

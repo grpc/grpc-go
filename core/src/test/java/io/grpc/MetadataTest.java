@@ -283,15 +283,6 @@ public class MetadataTest {
   }
 
   @Test
-  public void serializeSkipsAuthority() {
-    Metadata m = new Metadata();
-    m.put(GrpcUtil.AUTHORITY_KEY, "authority");
-    byte[][] values = m.serialize();
-
-    assertEquals(0, values.length);
-  }
-
-  @Test
   public void keyEqualsHashNameWorks() {
     Key<Integer> k1 = Key.of("case", Metadata.INTEGER_MARSHALLER);
 

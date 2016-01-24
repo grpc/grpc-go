@@ -40,8 +40,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 
-import io.grpc.internal.GrpcUtil;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -251,11 +249,6 @@ public final class Metadata {
     // One *2 for keys+values, one *2 to prevent resizing if a single key has multiple values
     List<byte[]> serialized = new ArrayList<byte[]>(store.size() * 2 * 2);
     for (Map.Entry<String, List<MetadataEntry>> keyEntry : store.entrySet()) {
-      // Intentionally skip this field on serialization.  It must be handled special by the
-      // transport.
-      if (keyEntry.getKey().equals(GrpcUtil.AUTHORITY_KEY.name())) {
-        continue;
-      }
       for (int i = 0; i < keyEntry.getValue().size(); i++) {
         MetadataEntry entry = keyEntry.getValue().get(i);
         byte[] asciiName;

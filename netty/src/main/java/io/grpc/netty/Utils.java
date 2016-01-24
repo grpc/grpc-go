@@ -31,7 +31,6 @@
 
 package io.grpc.netty;
 
-import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.grpc.internal.GrpcUtil.CONTENT_TYPE_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import static io.netty.util.CharsetUtil.UTF_8;
@@ -109,24 +108,19 @@ class Utils {
   public static Http2Headers convertClientHeaders(Metadata headers,
       AsciiString scheme,
       AsciiString defaultPath,
-      AsciiString defaultAuthority) {
+      AsciiString authority) {
     Preconditions.checkNotNull(defaultPath, "defaultPath");
-    Preconditions.checkNotNull(defaultAuthority, "defaultAuthority");
+    Preconditions.checkNotNull(authority, "authority");
     // Add any application-provided headers first.
     Http2Headers http2Headers = convertMetadata(headers);
 
     // Now set GRPC-specific default headers.
-    http2Headers.authority(defaultAuthority)
+    http2Headers.authority(authority)
         .path(defaultPath)
         .method(HTTP_METHOD)
         .scheme(scheme)
         .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC)
         .set(TE_HEADER, TE_TRAILERS);
-
-    // Override the default authority and path if provided by the headers.
-    if (headers.containsKey(AUTHORITY_KEY)) {
-      http2Headers.authority(new AsciiString(headers.get(AUTHORITY_KEY).getBytes(UTF_8)));
-    }
 
     // Set the User-Agent header.
     String userAgent = GrpcUtil.getGrpcUserAgent("netty", headers.get(USER_AGENT_KEY));

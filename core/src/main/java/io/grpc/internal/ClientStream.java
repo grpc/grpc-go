@@ -61,6 +61,12 @@ public interface ClientStream extends Stream {
   void halfClose();
 
   /**
+   * Override the default authority with {@code authority}. May only be called before {@link
+   * #start}.
+   */
+  void setAuthority(String authority);
+
+  /**
    * Starts stream. This method may only be called once.  It is safe to do latent initialization of
    * the stream up until {@link #start} is called.
    *

@@ -264,6 +264,9 @@ public class AbstractClientStreamTest {
     }
 
     @Override
+    public void setAuthority(String authority) {}
+
+    @Override
     public void request(int numMessages) {}
 
     @Override

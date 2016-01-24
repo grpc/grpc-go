@@ -41,6 +41,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -169,13 +170,44 @@ public class ClientCallImplTest {
   }
 
   @Test
-  public void prepareHeaders_authorityAdded() {
-    Metadata m = new Metadata();
-    CallOptions callOptions = CallOptions.DEFAULT.withAuthority("auth");
-    ClientCallImpl.prepareHeaders(m, callOptions, "user agent", decompressorRegistry,
-        Codec.Identity.NONE);
+  public void authorityPropagatedToStream() {
+    final ClientTransport transport = mock(ClientTransport.class);
+    final ClientStream stream = mock(ClientStream.class);
+    when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
 
-    assertEquals(m.get(GrpcUtil.AUTHORITY_KEY), "auth");
+    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
+
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        method,
+        MoreExecutors.directExecutor(),
+        CallOptions.DEFAULT.withAuthority("overridden-authority"),
+        provider,
+        deadlineCancellationExecutor)
+            .setDecompressorRegistry(decompressorRegistry);
+
+    call.start(callListener, new Metadata());
+    verify(stream).setAuthority("overridden-authority");
+  }
+
+  @Test
+  public void authorityNotPropagatedToStream() {
+    final ClientTransport transport = mock(ClientTransport.class);
+    final ClientStream stream = mock(ClientStream.class);
+    when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
+
+    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
+
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        method,
+        MoreExecutors.directExecutor(),
+        // Don't provide an authority
+        CallOptions.DEFAULT,
+        provider,
+        deadlineCancellationExecutor)
+            .setDecompressorRegistry(decompressorRegistry);
+
+    call.start(callListener, new Metadata());
+    verify(stream, never()).setAuthority(any(String.class));
   }
 
   @Test
@@ -247,7 +279,6 @@ public class ClientCallImplTest {
   @Test
   public void prepareHeaders_removeReservedHeaders() {
     Metadata m = new Metadata();
-    m.put(GrpcUtil.AUTHORITY_KEY, "auth");
     m.put(GrpcUtil.USER_AGENT_KEY, "user agent");
     m.put(GrpcUtil.MESSAGE_ENCODING_KEY, "gzip");
     m.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, "gzip");
@@ -255,7 +286,6 @@ public class ClientCallImplTest {
     ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, null,
         DecompressorRegistry.newEmptyInstance(), Codec.Identity.NONE);
 
-    assertNull(m.get(GrpcUtil.AUTHORITY_KEY));
     assertNull(m.get(GrpcUtil.USER_AGENT_KEY));
     assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));
     assertNull(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));

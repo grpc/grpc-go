@@ -35,6 +35,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.Http2ClientStream;
@@ -45,6 +47,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
+import io.netty.util.AsciiString;
 
 import javax.annotation.Nullable;
 
@@ -52,30 +55,62 @@ import javax.annotation.Nullable;
  * Client stream for a Netty transport.
  */
 class NettyClientStream extends Http2ClientStream {
+  private final MethodDescriptor<?, ?> method;
+  /** {@code null} after start. */
+  private Metadata headers;
   private final Channel channel;
   private final NettyClientHandler handler;
-  private final Runnable startCallback;
+  private AsciiString authority;
+  private final AsciiString scheme;
   private Http2Stream http2Stream;
   private Integer id;
   private WriteQueue writeQueue;
 
-  NettyClientStream(
-      Channel channel, NettyClientHandler handler, Runnable startCallback, int maxMessageSize) {
+  NettyClientStream(MethodDescriptor<?, ?> method, Metadata headers, Channel channel,
+      NettyClientHandler handler, int maxMessageSize, AsciiString authority, AsciiString scheme) {
     super(new NettyWritableBufferAllocator(channel.alloc()), maxMessageSize);
+    this.method = checkNotNull(method, "method");
+    this.headers = checkNotNull(headers, "headers");
     this.writeQueue = handler.getWriteQueue();
     this.channel = checkNotNull(channel, "channel");
     this.handler = checkNotNull(handler, "handler");
-    this.startCallback = checkNotNull(startCallback, "startCallback");
+    this.authority = checkNotNull(authority, "authority");
+    this.scheme = checkNotNull(scheme, "scheme");
+  }
+
+  @Override
+  public void setAuthority(String authority) {
+    checkState(listener() == null, "must be call before start");
+    this.authority = AsciiString.of(checkNotNull(authority, "authority"));
   }
 
   @Override
   public void start(ClientStreamListener listener) {
     super.start(listener);
-    startCallback.run();
+
+    // Convert the headers into Netty HTTP/2 headers.
+    AsciiString defaultPath = new AsciiString("/" + method.getFullMethodName());
+    Http2Headers http2Headers
+        = Utils.convertClientHeaders(headers, scheme, defaultPath, authority);
+    headers = null;
+
+    ChannelFutureListener failureListener = new ChannelFutureListener() {
+      @Override
+      public void operationComplete(ChannelFuture future) throws Exception {
+        if (!future.isSuccess()) {
+          // Stream creation failed. Close the stream if not already closed.
+          transportReportStatus(Utils.statusFromThrowable(future.cause()), true, new Metadata());
+        }
+      }
+    };
+
+    // Write the command requesting the creation of the stream.
+    writeQueue.enqueue(new CreateStreamCommand(http2Headers, this),
+        !method.getType().clientSendsOneMessage()).addListener(failureListener);
   }
 
   @Override
-  public void request(final int numMessages) {
+  public void request(int numMessages) {
     if (channel.eventLoop().inEventLoop()) {
       // Processing data read in the event loop so can call into the deframer immediately
       requestMessagesFromDeframer(numMessages);

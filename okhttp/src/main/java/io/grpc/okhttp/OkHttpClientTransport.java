@@ -245,29 +245,21 @@ class OkHttpClientTransport implements ClientTransport {
   public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method, final Metadata headers) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
+    return new OkHttpClientStream(method, headers, frameWriter, OkHttpClientTransport.this,
+        outboundFlow, lock, maxMessageSize, defaultAuthority);
+  }
 
-    final String defaultPath = "/" + method.getFullMethodName();
-    class StartCallback implements Runnable {
-      final OkHttpClientStream clientStream = new OkHttpClientStream(
-          frameWriter, OkHttpClientTransport.this, this, outboundFlow, method.getType(), lock,
-          Headers.createRequestHeaders(headers, defaultPath, defaultAuthority),
-          maxMessageSize);
-
-      @Override
-      public void run() {
-        synchronized (lock) {
-          if (goAway) {
-            clientStream.transportReportStatus(goAwayStatus, true, new Metadata());
-          } else if (streams.size() >= maxConcurrentStreams) {
-            pendingStreams.add(clientStream);
-          } else {
-            startStream(clientStream);
-          }
-        }
+  @GuardedBy("lock")
+  void streamReadyToStart(OkHttpClientStream clientStream) {
+    synchronized (lock) {
+      if (goAway) {
+        clientStream.transportReportStatus(goAwayStatus, true, new Metadata());
+      } else if (streams.size() >= maxConcurrentStreams) {
+        pendingStreams.add(clientStream);
+      } else {
+        startStream(clientStream);
       }
     }
-
-    return new StartCallback().clientStream;
   }
 
   @GuardedBy("lock")

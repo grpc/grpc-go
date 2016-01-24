@@ -41,7 +41,6 @@ import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.NoopClientStream;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
@@ -485,11 +484,16 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       public void setMessageCompression(boolean enable) {}
 
       @Override
+      public void setAuthority(String string) {
+        // TODO(ejona): Do something with this? Could be useful for testing, but can we "validate"
+        // it?
+      }
+
+      @Override
       public void start(ClientStreamListener listener) {
         serverStream.setListener(listener);
 
         synchronized (InProcessTransport.this) {
-          headers.removeAll(GrpcUtil.AUTHORITY_KEY);
           ServerStreamListener serverStreamListener = serverTransportListener.streamCreated(
               serverStream, method.getFullMethodName(), headers);
           clientStream.setListener(serverStreamListener);
