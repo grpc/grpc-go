@@ -362,9 +362,9 @@ type Options struct {
 // CallHdr carries the information of a particular RPC.
 type CallHdr struct {
 	// Host specifies peer host.
-	Host         string
+	Host string
 	// Method specifies the operation to perform.
-	Method       string
+	Method string
 	// RecvCompress specifies the compression algorithm applied on inbound messages.
 	RecvCompress string
 	// SendCompress specifies the compression algorithm applied on outbound message.
