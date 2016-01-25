@@ -194,6 +194,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
   }
 
   public void runTest(String testCase) throws Exception {
+    Log.i(TesterActivity.LOG_TAG, "Running test " + testCase);
     if ("all".equals(testCase)) {
       runTest("empty_unary");
       runTest("large_unary");
@@ -302,7 +303,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
 
     StreamRecorder<Messages.StreamingOutputCallResponse> recorder = StreamRecorder.create();
     asyncStub.streamingOutputCall(request, recorder);
-    recorder.awaitCompletion();
+    assertTrue(recorder.awaitCompletion(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
     assertSuccess(recorder);
     assertMessageEquals(Arrays.asList(goldenResponses), recorder.getValues());
   }
@@ -397,7 +398,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     StreamObserver<StreamingInputCallRequest> requestObserver =
         asyncStub.streamingInputCall(responseObserver);
     requestObserver.onError(new RuntimeException());
-    responseObserver.awaitCompletion();
+    assertTrue(responseObserver.awaitCompletion(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
     assertEquals(Arrays.<StreamingInputCallResponse>asList(), responseObserver.getValues());
     assertEquals(io.grpc.Status.CANCELLED.getCode(),
         io.grpc.Status.fromThrowable(responseObserver.getError()).getCode());
@@ -455,7 +456,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
       requestStream.onNext(request);
     }
     requestStream.onCompleted();
-    recorder.awaitCompletion();
+    assertTrue(recorder.awaitCompletion(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
     assertSuccess(recorder);
     assertEquals(responseSizes.length * numRequests, recorder.getValues().size());
     for (int ix = 0; ix < recorder.getValues().size(); ++ix) {
@@ -487,7 +488,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
       requestStream.onNext(request);
     }
     requestStream.onCompleted();
-    recorder.awaitCompletion();
+    assertTrue(recorder.awaitCompletion(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
     assertSuccess(recorder);
     assertEquals(responseSizes.length * numRequests, recorder.getValues().size());
     for (int ix = 0; ix < recorder.getValues().size(); ++ix) {
@@ -634,7 +635,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     TestServiceGrpc.newStub(channel)
         .withDeadlineAfter(30, TimeUnit.MILLISECONDS)
         .streamingOutputCall(request, recorder);
-    recorder.awaitCompletion();
+    assertTrue(recorder.awaitCompletion(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
     assertEquals(io.grpc.Status.DEADLINE_EXCEEDED.getCode(),
         io.grpc.Status.fromThrowable(recorder.getError()).getCode());
   }
@@ -732,7 +733,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
       // This can happen if the stream has already been terminated due to deadline exceeded.
     }
 
-    recorder.awaitCompletion();
+    assertTrue(recorder.awaitCompletion(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
     assertEquals(io.grpc.Status.DEADLINE_EXCEEDED.getCode(),
         io.grpc.Status.fromThrowable(recorder.getError()).getCode());
   }
