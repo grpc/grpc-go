@@ -106,16 +106,40 @@ func TestEncode(t *testing.T) {
 	for _, test := range []struct {
 		// input
 		msg proto.Message
-		pt  payloadFormat
+		cp  Compressor
 		// outputs
 		b   []byte
 		err error
 	}{
-		{nil, compressionNone, []byte{0, 0, 0, 0, 0}, nil},
+		{nil, nil, []byte{0, 0, 0, 0, 0}, nil},
 	} {
-		b, err := encode(protoCodec{}, test.msg, test.pt)
+		b, err := encode(protoCodec{}, test.msg, nil, nil)
 		if err != test.err || !bytes.Equal(b, test.b) {
-			t.Fatalf("encode(_, _, %d) = %v, %v\nwant %v, %v", test.pt, b, err, test.b, test.err)
+			t.Fatalf("encode(_, _, %v, _) = %v, %v\nwant %v, %v", test.cp, b, err, test.b, test.err)
+		}
+	}
+}
+
+func TestCompress(t *testing.T) {
+	for _, test := range []struct {
+		// input
+		data []byte
+		cp   Compressor
+		dc   Decompressor
+		// outputs
+		err error
+	}{
+		{make([]byte, 1024), &gzipCompressor{}, &gzipDecompressor{}, nil},
+	} {
+		b := new(bytes.Buffer)
+		if err := test.cp.Do(b, test.data); err != test.err {
+			t.Fatalf("Compressor.Do(_, %v) = %v, want %v", test.data, err, test.err)
+		}
+		if b.Len() >= len(test.data) {
+			t.Fatalf("The compressor fails to compress data.")
+		}
+		if p, err := test.dc.Do(b); err != nil || !bytes.Equal(test.data, p) {
+			t.Fatalf("Decompressor.Do(%v) = %v, %v, want %v, <nil>", b, p, err, test.data)
 		}
 	}
 }
@@ -158,12 +182,12 @@ func TestContextErr(t *testing.T) {
 // bytes.
 func bmEncode(b *testing.B, mSize int) {
 	msg := &perfpb.Buffer{Body: make([]byte, mSize)}
-	encoded, _ := encode(protoCodec{}, msg, compressionNone)
+	encoded, _ := encode(protoCodec{}, msg, nil, nil)
 	encodedSz := int64(len(encoded))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encode(protoCodec{}, msg, compressionNone)
+		encode(protoCodec{}, msg, nil, nil)
 	}
 	b.SetBytes(encodedSz)
 }

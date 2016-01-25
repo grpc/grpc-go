@@ -34,6 +34,7 @@
 package grpc
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"sync"
@@ -104,15 +105,28 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if err != nil {
 		return nil, toRPCErr(err)
 	}
+	var cp Compressor
+	if cc.dopts.cg != nil {
+		cp = cc.dopts.cg()
+	}
 	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
 		Method: method,
 	}
+	if cp != nil {
+		callHdr.SendCompress = cp.Type()
+	}
 	cs := &clientStream{
 		desc:    desc,
 		codec:   cc.dopts.codec,
+		cp:      cp,
+		dg:      cc.dopts.dg,
 		tracing: EnableTracing,
+	}
+	if cp != nil {
+		callHdr.SendCompress = cp.Type()
+		cs.cbuf = new(bytes.Buffer)
 	}
 	if cs.tracing {
 		cs.trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
@@ -153,6 +167,9 @@ type clientStream struct {
 	p     *parser
 	desc  *StreamDesc
 	codec Codec
+	cp    Compressor
+	cbuf  *bytes.Buffer
+	dg    DecompressorGenerator
 
 	tracing bool // set to EnableTracing when the clientStream is created.
 
@@ -198,7 +215,12 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 		err = toRPCErr(err)
 	}()
-	out, err := encode(cs.codec, m, compressionNone)
+	out, err := encode(cs.codec, m, cs.cp, cs.cbuf)
+	defer func() {
+		if cs.cbuf != nil {
+			cs.cbuf.Reset()
+		}
+	}()
 	if err != nil {
 		return transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
@@ -206,7 +228,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
-	err = recv(cs.p, cs.codec, m)
+	err = recv(cs.p, cs.codec, cs.s, cs.dg, m)
 	defer func() {
 		// err != nil indicates the termination of the stream.
 		if err != nil {
@@ -225,7 +247,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			return
 		}
 		// Special handling for client streaming rpc.
-		err = recv(cs.p, cs.codec, m)
+		err = recv(cs.p, cs.codec, cs.s, cs.dg, m)
 		cs.closeTransportStream(err)
 		if err == nil {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
@@ -310,6 +332,9 @@ type serverStream struct {
 	s          *transport.Stream
 	p          *parser
 	codec      Codec
+	cp         Compressor
+	dg         DecompressorGenerator
+	cbuf       *bytes.Buffer
 	statusCode codes.Code
 	statusDesc string
 	trInfo     *traceInfo
@@ -348,7 +373,12 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.mu.Unlock()
 		}
 	}()
-	out, err := encode(ss.codec, m, compressionNone)
+	out, err := encode(ss.codec, m, ss.cp, ss.cbuf)
+	defer func() {
+		if ss.cbuf != nil {
+			ss.cbuf.Reset()
+		}
+	}()
 	if err != nil {
 		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 		return err
@@ -371,5 +401,5 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			ss.mu.Unlock()
 		}
 	}()
-	return recv(ss.p, ss.codec, m)
+	return recv(ss.p, ss.codec, ss.s, ss.dg, m)
 }

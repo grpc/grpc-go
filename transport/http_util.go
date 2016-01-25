@@ -89,6 +89,7 @@ var (
 // Records the states during HPACK decoding. Must be reset once the
 // decoding of the entire headers are finished.
 type decodeState struct {
+	encoding string
 	// statusCode caches the stream status received from the trailer
 	// the server sent. Client side only.
 	statusCode codes.Code
@@ -145,6 +146,8 @@ func newHPACKDecoder() *hpackDecoder {
 				d.err = StreamErrorf(codes.FailedPrecondition, "transport: received the unexpected header")
 				return
 			}
+		case "grpc-encoding":
+			d.state.encoding = f.Value
 		case "grpc-status":
 			code, err := strconv.Atoi(f.Value)
 			if err != nil {

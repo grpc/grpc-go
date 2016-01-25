@@ -164,6 +164,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	if !endHeaders {
 		return s
 	}
+	s.recvCompress = hDec.state.encoding
 	if hDec.state.timeoutSet {
 		s.ctx, s.cancel = context.WithTimeout(context.TODO(), hDec.state.timeout)
 	} else {
@@ -190,6 +191,7 @@ func (t *http2Server) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 		ctx:  s.ctx,
 		recv: s.buf,
 	}
+	s.recvCompress = hDec.state.encoding
 	s.method = hDec.state.method
 	t.mu.Lock()
 	if t.state != reachable {
@@ -446,6 +448,9 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	t.hBuf.Reset()
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+	if s.sendCompress != "" {
+		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-encoding", Value: s.sendCompress})
+	}
 	for k, v := range md {
 		for _, entry := range v {
 			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
@@ -520,6 +525,9 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		t.hBuf.Reset()
 		t.hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
 		t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+		if s.sendCompress != "" {
+			t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-encoding", Value: s.sendCompress})
+		}
 		p := http2.HeadersFrameParam{
 			StreamID:      s.id,
 			BlockFragment: t.hBuf.Bytes(),

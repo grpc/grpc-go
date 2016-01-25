@@ -34,6 +34,7 @@
 package grpc
 
 import (
+	"bytes"
 	"io"
 	"time"
 
@@ -47,7 +48,7 @@ import (
 // On error, it returns the error and indicates whether the call should be retried.
 //
 // TODO(zhaoq): Check whether the received message sequence is valid.
-func recvResponse(codec Codec, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) error {
+func recvResponse(dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) error {
 	// Try to acquire header metadata from the server if there is any.
 	var err error
 	c.headerMD, err = stream.Header()
@@ -56,7 +57,7 @@ func recvResponse(codec Codec, t transport.ClientTransport, c *callInfo, stream 
 	}
 	p := &parser{s: stream}
 	for {
-		if err = recv(p, codec, reply); err != nil {
+		if err = recv(p, dopts.codec, stream, dopts.dg, reply); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -68,7 +69,7 @@ func recvResponse(codec Codec, t transport.ClientTransport, c *callInfo, stream 
 }
 
 // sendRequest writes out various information of an RPC such as Context and Message.
-func sendRequest(ctx context.Context, codec Codec, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
+func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
 	stream, err := t.NewStream(ctx, callHdr)
 	if err != nil {
 		return nil, err
@@ -80,8 +81,11 @@ func sendRequest(ctx context.Context, codec Codec, callHdr *transport.CallHdr, t
 			}
 		}
 	}()
-	// TODO(zhaoq): Support compression.
-	outBuf, err := encode(codec, args, compressionNone)
+	var cbuf *bytes.Buffer
+	if compressor != nil {
+		cbuf = new(bytes.Buffer)
+	}
+	outBuf, err := encode(codec, args, compressor, cbuf)
 	if err != nil {
 		return nil, transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
@@ -129,7 +133,11 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	}
 	var (
 		lastErr error // record the error that happened
+		cp      Compressor
 	)
+	if cc.dopts.cg != nil {
+		cp = cc.dopts.cg()
+	}
 	for {
 		var (
 			err    error
@@ -144,6 +152,9 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			Host:   cc.authority,
 			Method: method,
 		}
+		if cp != nil {
+			callHdr.SendCompress = cp.Type()
+		}
 		t, err = cc.dopts.picker.Pick(ctx)
 		if err != nil {
 			if lastErr != nil {
@@ -155,7 +166,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
 		}
-		stream, err = sendRequest(ctx, cc.dopts.codec, callHdr, t, args, topts)
+		stream, err = sendRequest(ctx, cc.dopts.codec, cp, callHdr, t, args, topts)
 		if err != nil {
 			if _, ok := err.(transport.ConnectionError); ok {
 				lastErr = err
@@ -167,7 +178,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			return toRPCErr(err)
 		}
 		// Receive the response
-		lastErr = recvResponse(cc.dopts.codec, t, &c, stream, reply)
+		lastErr = recvResponse(cc.dopts, t, &c, stream, reply)
 		if _, ok := lastErr.(transport.ConnectionError); ok {
 			continue
 		}

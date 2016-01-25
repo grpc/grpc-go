@@ -210,6 +210,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	s := &Stream{
 		id:            t.nextID,
 		method:        callHdr.Method,
+		sendCompress:  callHdr.SendCompress,
 		buf:           newRecvBuffer(),
 		fc:            fc,
 		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
@@ -322,6 +323,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	t.hEnc.WriteField(hpack.HeaderField{Name: "user-agent", Value: t.userAgent})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "te", Value: "trailers"})
 
+	if callHdr.SendCompress != "" {
+		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-encoding", Value: callHdr.SendCompress})
+	}
 	if timeout > 0 {
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: timeoutEncode(timeout)})
 	}
@@ -694,8 +698,10 @@ func (t *http2Client) operateHeaders(hDec *hpackDecoder, s *Stream, frame header
 	if !endHeaders {
 		return s
 	}
-
 	s.mu.Lock()
+	if !endStream {
+		s.recvCompress = hDec.state.encoding
+	}
 	if !s.headerDone {
 		if !endStream && len(hDec.state.mdata) > 0 {
 			s.header = hDec.state.mdata
