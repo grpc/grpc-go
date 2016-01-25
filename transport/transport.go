@@ -170,13 +170,13 @@ type Stream struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	// method records the associated RPC method of the stream.
-	method    string
+	method       string
 	recvCompress string
-	sendCompress  string
-	buf       *recvBuffer
-	dec       io.Reader
-	fc        *inFlow
-	recvQuota uint32
+	sendCompress string
+	buf          *recvBuffer
+	dec          io.Reader
+	fc           *inFlow
+	recvQuota    uint32
 	// The accumulated inbound quota pending for window update.
 	updateQuota uint32
 	// The handler to control the window update procedure for both this
@@ -358,8 +358,8 @@ type Options struct {
 
 // CallHdr carries the information of a particular RPC.
 type CallHdr struct {
-	Host   string // peer host
-	Method string // the operation to perform on the specified host
+	Host         string // peer host
+	Method       string // the operation to perform on the specified host
 	RecvCompress string
 	SendCompress string
 }

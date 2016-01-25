@@ -563,7 +563,7 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 		t.Fatalf("header[\"ua\"] = %q, %t, want %q, true", v, ok, testAppUA)
 	}
 	tearDown(s, cc)
-	ctx, _ = context.WithTimeout(context.Background(), 5 * time.Second)
+	ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
 	if _, err := cc.WaitForStateChange(ctx, grpc.Ready); err != nil {
 		t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Ready, err)
 	}
@@ -823,12 +823,12 @@ func testCancelNoIO(t *testing.T, e env) {
 	go func() {
 		defer close(ch)
 		// This should be blocked until the 1st is canceled.
-		ctx, _ := context.WithTimeout(context.Background(), 2 * time.Second)
+		ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
 		if _, err := tc.StreamingInputCall(ctx); err != nil {
 			t.Errorf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
 		}
 	}()
-	cancel();
+	cancel()
 	<-ch
 }
 

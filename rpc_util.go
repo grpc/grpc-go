@@ -78,11 +78,15 @@ func (protoCodec) String() string {
 	return "proto"
 }
 
+// Compressor defines the interface gRPC uses to compress a message.
 type Compressor interface {
+	// Do compresses p into w.
 	Do(w io.Writer, p []byte) error
+	// Type returns the compression algorithm the Compressor uses.
 	Type() string
 }
 
+// NewGZIPCompressor creates a Compressor based on GZIP.
 func NewGZIPCompressor() Compressor {
 	return &gzipCompressor{}
 }
@@ -102,14 +106,18 @@ func (c *gzipCompressor) Type() string {
 	return "gzip"
 }
 
+// Decompressor defines the interface gRPC uses to decompress a message.
 type Decompressor interface {
+	// Do reads the data from r and uncompress them.
 	Do(r io.Reader) ([]byte, error)
+	// Type returns the compression algorithm the Decompressor uses.
 	Type() string
 }
 
 type gzipDecompressor struct {
 }
 
+// NewGZIPDecompressor creates a Decompressor based on GZIP.
 func NewGZIPDecompressor() Decompressor {
 	return &gzipDecompressor{}
 }
@@ -127,8 +135,10 @@ func (d *gzipDecompressor) Type() string {
 	return "gzip"
 }
 
+// CompressorGenerator defines the function generating a Compressor.
 type CompressorGenerator func() Compressor
 
+// DecompressorGenerator defines the function generating a Decompressor.
 type DecompressorGenerator func() Decompressor
 
 // callInfo contains all related configuration and information about an RPC.
