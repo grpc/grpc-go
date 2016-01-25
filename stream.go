@@ -124,6 +124,10 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		dg:      cc.dopts.dg,
 		tracing: EnableTracing,
 	}
+	if cp != nil {
+		callHdr.SendCompress = cp.Type()
+		cs.cbuf = new(bytes.Buffer)
+	}
 	if cs.tracing {
 		cs.trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
 		cs.trInfo.firstLine.client = true
@@ -164,7 +168,7 @@ type clientStream struct {
 	desc  *StreamDesc
 	codec Codec
 	cp    Compressor
-	cbuf  bytes.Buffer
+	cbuf  *bytes.Buffer
 	dg    DecompressorGenerator
 
 	tracing bool // set to EnableTracing when the clientStream is created.
@@ -211,8 +215,12 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 		err = toRPCErr(err)
 	}()
-	out, err := encode(cs.codec, m, cs.cp, &cs.cbuf)
-	defer cs.cbuf.Reset()
+	out, err := encode(cs.codec, m, cs.cp, cs.cbuf)
+	defer func() {
+		if cs.cbuf != nil {
+			cs.cbuf.Reset()
+		}
+	}()
 	if err != nil {
 		return transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
@@ -326,7 +334,7 @@ type serverStream struct {
 	codec      Codec
 	cp         Compressor
 	dg         DecompressorGenerator
-	cbuf       bytes.Buffer
+	cbuf       *bytes.Buffer
 	statusCode codes.Code
 	statusDesc string
 	trInfo     *traceInfo
@@ -365,8 +373,12 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.mu.Unlock()
 		}
 	}()
-	out, err := encode(ss.codec, m, ss.cp, &ss.cbuf)
-	defer ss.cbuf.Reset()
+	out, err := encode(ss.codec, m, ss.cp, ss.cbuf)
+	defer func() {
+		if ss.cbuf != nil {
+			ss.cbuf.Reset()
+		}
+	}()
 	if err != nil {
 		err = transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 		return err

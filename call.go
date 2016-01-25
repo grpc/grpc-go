@@ -81,7 +81,11 @@ func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHd
 			}
 		}
 	}()
-	outBuf, err := encode(codec, args, compressor, new(bytes.Buffer))
+	var cbuf *bytes.Buffer
+	if compressor != nil {
+		cbuf = new(bytes.Buffer)
+	}
+	outBuf, err := encode(codec, args, compressor, cbuf)
 	if err != nil {
 		return nil, transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}

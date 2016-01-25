@@ -303,7 +303,11 @@ func (s *Server) Serve(lis net.Listener) error {
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options) error {
-	p, err := encode(s.opts.codec, msg, cp, new(bytes.Buffer))
+	var cbuf *bytes.Buffer
+	if cp != nil {
+		cbuf = new(bytes.Buffer)
+	}
+	p, err := encode(s.opts.codec, msg, cp, cbuf)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program
@@ -456,6 +460,9 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		cp:     cp,
 		dg:     s.opts.dg,
 		trInfo: trInfo,
+	}
+	if cp != nil {
+		ss.cbuf = new(bytes.Buffer)
 	}
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
