@@ -85,6 +85,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   private final CallOptions callOptions;
   private ClientStream stream;
   private volatile ScheduledFuture<?> deadlineCancellationFuture;
+  private volatile boolean deadlineCancellationFutureShouldBeCancelled;
   private boolean cancelCalled;
   private boolean halfCloseCalled;
   private final ClientTransportProvider clientTransportProvider;
@@ -243,14 +244,23 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       stream.setMessageCompression(true);
     }
 
+    stream.start(new ClientStreamListenerImpl(observer, transportFuture));
+    // Delay any sources of cancellation after start(), because most of the transports are broken if
+    // they receive cancel before start. Issue #1343 has more details
+
     // Start the deadline timer after stream creation because it will close the stream
     Long timeoutNanos = getRemainingTimeoutNanos(callOptions.getDeadlineNanoTime());
     if (timeoutNanos != null) {
       deadlineCancellationFuture = startDeadlineTimer(timeoutNanos);
+      if (deadlineCancellationFutureShouldBeCancelled) {
+        // Race detected! ClientStreamListener.closed may have been called before
+        // deadlineCancellationFuture was set, thereby preventing the future from being cancelled.
+        // Go ahead and cancel again, just to be sure it was cancelled.
+        deadlineCancellationFuture.cancel(false);
+      }
     }
     // Propagate later Context cancellation to the remote side.
     this.context.addListener(this, MoreExecutors.directExecutor());
-    stream.start(new ClientStreamListenerImpl(observer, transportFuture));
   }
 
   /**
@@ -445,6 +455,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         public final void runInContext() {
           try {
             closed = true;
+            deadlineCancellationFutureShouldBeCancelled = true;
             // manually optimize the volatile read
             ScheduledFuture<?> future = deadlineCancellationFuture;
             if (future != null) {

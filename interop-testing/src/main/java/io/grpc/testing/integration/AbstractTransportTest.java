@@ -658,6 +658,28 @@ public abstract class AbstractTransportTest {
     assertEquals(Status.DEADLINE_EXCEEDED, Status.fromThrowable(recorder.getError()));
   }
 
+  @Test(timeout = 10000)
+  public void deadlineInPast() throws Exception {
+    // Test once with idle channel and once with active channel
+    try {
+      TestServiceGrpc.newBlockingStub(channel)
+          .withDeadlineAfter(-10, TimeUnit.SECONDS)
+          .emptyCall(Empty.getDefaultInstance());
+    } catch (StatusRuntimeException ex) {
+      assertEquals(Status.Code.DEADLINE_EXCEEDED, ex.getStatus().getCode());
+    }
+
+    // warm up the channel
+    blockingStub.emptyCall(Empty.getDefaultInstance());
+    try {
+      TestServiceGrpc.newBlockingStub(channel)
+          .withDeadlineAfter(-10, TimeUnit.SECONDS)
+          .emptyCall(Empty.getDefaultInstance());
+    } catch (StatusRuntimeException ex) {
+      assertEquals(Status.Code.DEADLINE_EXCEEDED, ex.getStatus().getCode());
+    }
+  }
+
   protected int unaryPayloadLength() {
     // 10MiB.
     return 10485760;
