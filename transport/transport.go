@@ -203,10 +203,13 @@ type Stream struct {
 	statusDesc string
 }
 
+// RecvCompress returns the compression algorithm applied to the inbound
+// message. It is empty string if there is no compression applied.
 func (s *Stream) RecvCompress() string {
 	return s.recvCompress
 }
 
+// SetSendCompress sets the compression algorithm to the stream.
 func (s *Stream) SetSendCompress(str string) {
 	s.sendCompress = str
 }
