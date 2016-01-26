@@ -297,14 +297,8 @@ func (p *parser) recvMsg() (codecType CodecType, compressType CompressType, msg 
 	}
 
 	codecType = CodecType(buf[0] & 0x0F)
-	if codecType != CODEC_TYPE_JSON && codecType != CODEC_TYPE_PROTO {
-		return 0, 0, nil, fmt.Errorf("codec not support %d", codecType)
-	}
 
 	compressType = CompressType(buf[0] & 0xF0)
-	if compressType != COMPRESS_TYPE_NONE && compressType != COMPRESS_TYPE_GZIP {
-		return 0, 0, nil, fmt.Errorf("compressor not support %d", compressType)
-	}
 
 	length := binary.BigEndian.Uint32(buf[1:])
 	if length == 0 {
