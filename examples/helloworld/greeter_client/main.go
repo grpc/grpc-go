@@ -37,9 +37,9 @@ import (
 	"log"
 	"os"
 
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
 const (
@@ -49,7 +49,7 @@ const (
 
 func main() {
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithCodec(grpc.NewJsonCodec()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
