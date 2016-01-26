@@ -57,7 +57,7 @@ func recvResponse(dopts dialOptions, t transport.ClientTransport, c *callInfo, s
 	}
 	p := &parser{s: stream}
 	for {
-		if err = recv(p, dopts.codec, stream, dopts.dg, reply); err != nil {
+		if err = recv(p, stream, dopts.dg, reply); err != nil {
 			if err == io.EOF {
 				break
 			}
