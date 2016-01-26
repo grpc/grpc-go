@@ -142,7 +142,7 @@ subprojects {
                 okio: 'com.squareup.okio:okio:1.6.0',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufNanoVersion}",
-                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.0',
+                protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.4',
 
                 netty: 'io.netty:netty-codec-http2:4.1.0.Beta8',
                 netty_epoll: 'io.netty:netty-transport-native-epoll:4.1.0.Beta8' + epoll_suffix,
