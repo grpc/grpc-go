@@ -38,14 +38,12 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -55,16 +53,19 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
+const MAX_CODECS = int(16)
+
+//0 for protobuf defalt;1 for json defalt
 type CodecType byte
 
-var (
+const (
 	CODEC_TYPE_PROTO = CodecType(0x00)
 	CODEC_TYPE_JSON  = CodecType(0x01)
 )
 
 type CompressType byte
 
-var (
+const (
 	COMPRESS_TYPE_NONE = CompressType(0x00)
 	COMPRESS_TYPE_GZIP = CompressType(0x10)
 )
@@ -82,14 +83,33 @@ type Codec interface {
 	TypeCode() CodecType
 }
 
+var codecs = [MAX_CODECS]Codec{
+	NewProtoCodec(),
+	NewJsonCodec(),
+}
+
 func GetCodec(typ CodecType) (c Codec, err error) {
-	if typ == CODEC_TYPE_PROTO {
-		return NewProtoCodec(), nil
-	} else if typ == CODEC_TYPE_JSON {
-		return NewJsonCodec(), nil
+	index := int(typ)
+	if index < 0 || index >= MAX_CODECS {
+		return nil, fmt.Errorf("codec type out of range %d", typ)
 	}
 
-	return nil, errors.New("codec not support " + strconv.Itoa(int(typ)))
+	if codecs[index] == nil {
+		return nil, fmt.Errorf("codec not support %d", typ)
+	}
+
+	return codecs[index], nil
+}
+
+func RegistCodec(c Codec) (err error) {
+	index := int(c.TypeCode())
+	if index < 0 || index >= MAX_CODECS {
+		return fmt.Errorf("codec type out of range %d", c.TypeCode())
+	}
+
+	codecs[index] = c
+
+	return nil
 }
 
 // protoCodec is a Codec implemetation with protobuf. It is the default codec for gRPC.
@@ -278,12 +298,12 @@ func (p *parser) recvMsg() (codecType CodecType, compressType CompressType, msg 
 
 	codecType = CodecType(buf[0] & 0x0F)
 	if codecType != CODEC_TYPE_JSON && codecType != CODEC_TYPE_PROTO {
-		return 0, 0, nil, errors.New("codec not support " + strconv.Itoa(int(codecType)))
+		return 0, 0, nil, fmt.Errorf("codec not support %d", codecType)
 	}
 
 	compressType = CompressType(buf[0] & 0xF0)
 	if compressType != COMPRESS_TYPE_NONE && compressType != COMPRESS_TYPE_GZIP {
-		return 0, 0, nil, errors.New("compressor not support " + strconv.Itoa(int(compressType)))
+		return 0, 0, nil, fmt.Errorf("compressor not support %d", compressType)
 	}
 
 	length := binary.BigEndian.Uint32(buf[1:])

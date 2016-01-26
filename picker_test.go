@@ -118,7 +118,9 @@ func startServers(t *testing.T, numServers, port int, maxStreams uint32) ([]*ser
 func TestNameDiscovery(t *testing.T) {
 	// Start 3 servers on 3 ports.
 	servers, r := startServers(t, 3, 0, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithPicker(NewUnicastNamingPicker(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	codec := &testCodec{}
+	RegistCodec(codec)
+	cc, err := Dial("foo.bar.com", WithPicker(NewUnicastNamingPicker(r)), WithBlock(), WithInsecure(), WithCodec(codec))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
@@ -158,8 +160,10 @@ func TestNameDiscovery(t *testing.T) {
 }
 
 func TestEmptyAddrs(t *testing.T) {
+	codec := &testCodec{}
+	RegistCodec(codec)
 	servers, r := startServers(t, 1, 0, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithPicker(NewUnicastNamingPicker(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("foo.bar.com", WithPicker(NewUnicastNamingPicker(r)), WithBlock(), WithInsecure(), WithCodec(codec))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}

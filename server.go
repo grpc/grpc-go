@@ -385,7 +385,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				if err != nil {
 					if err := t.WriteStatus(stream, codes.Internal, err.Error()); err != nil {
 						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
-					}					
+					}
 					return err
 				}
 			}
@@ -433,7 +433,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			cp = s.opts.cg()
 			stream.SetSendCompress(cp.Type())
 		}
-
 
 		if err := s.sendResponse(t, stream, reply, cp, opts); err != nil {
 			switch err := err.(type) {

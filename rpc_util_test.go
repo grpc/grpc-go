@@ -52,23 +52,24 @@ func TestSimpleParsing(t *testing.T) {
 		// input
 		p []byte
 		// outputs
-		err error
-		b   []byte
-		pt  payloadFormat
+		err          error
+		b            []byte
+		codecType    CodecType
+		compressType CompressType
 	}{
-		{nil, io.EOF, nil, compressionNone},
-		{[]byte{0, 0, 0, 0, 0}, nil, nil, compressionNone},
-		{[]byte{0, 0, 0, 0, 1, 'a'}, nil, []byte{'a'}, compressionNone},
-		{[]byte{1, 0}, io.ErrUnexpectedEOF, nil, compressionNone},
-		{[]byte{0, 0, 0, 0, 10, 'a'}, io.ErrUnexpectedEOF, nil, compressionNone},
+		{nil, io.EOF, nil, CODEC_TYPE_PROTO, COMPRESS_TYPE_NONE},
+		{[]byte{0x00, 0, 0, 0, 0}, nil, nil, CODEC_TYPE_PROTO, COMPRESS_TYPE_NONE},
+		{[]byte{0x01, 0, 0, 0, 1, 'a'}, nil, []byte{'a'}, CODEC_TYPE_JSON, COMPRESS_TYPE_NONE},
+		{[]byte{0x01, 0}, io.ErrUnexpectedEOF, nil, CODEC_TYPE_PROTO, COMPRESS_TYPE_NONE},
+		{[]byte{0x00, 0, 0, 0, 10, 'a'}, io.ErrUnexpectedEOF, nil, CODEC_TYPE_PROTO, COMPRESS_TYPE_NONE},
 		// Check that messages with length >= 2^24 are parsed.
-		{append([]byte{0, 1, 0, 0, 0}, bigMsg...), nil, bigMsg, compressionNone},
+		{append([]byte{0x00, 1, 0, 0, 0}, bigMsg...), nil, bigMsg, CODEC_TYPE_PROTO, COMPRESS_TYPE_NONE},
 	} {
 		buf := bytes.NewReader(test.p)
 		parser := &parser{buf}
-		pt, b, err := parser.recvMsg()
-		if err != test.err || !bytes.Equal(b, test.b) || pt != test.pt {
-			t.Fatalf("parser{%v}.recvMsg() = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
+		codecType, compressType, b, err := parser.recvMsg()
+		if err != test.err || !bytes.Equal(b, test.b) || codecType != test.codecType || compressType != test.compressType {
+			t.Fatalf("parser{%v}.recvMsg() = %v ,%v, %v, %v\nwant %v ,%v, %v, %v", test.p, codecType, compressType, b, err, test.codecType, test.compressType, test.b, test.err)
 		}
 	}
 }
@@ -80,25 +81,26 @@ func TestMultipleParsing(t *testing.T) {
 	parser := &parser{b}
 
 	wantRecvs := []struct {
-		pt   payloadFormat
-		data []byte
+		codecType    CodecType
+		compressType CompressType
+		data         []byte
 	}{
-		{compressionNone, []byte("a")},
-		{compressionNone, []byte("bc")},
-		{compressionNone, []byte("d")},
+		{CODEC_TYPE_PROTO, COMPRESS_TYPE_NONE, []byte("a")},
+		{CODEC_TYPE_PROTO, COMPRESS_TYPE_NONE, []byte("bc")},
+		{CODEC_TYPE_PROTO, COMPRESS_TYPE_NONE, []byte("d")},
 	}
 	for i, want := range wantRecvs {
-		pt, data, err := parser.recvMsg()
-		if err != nil || pt != want.pt || !reflect.DeepEqual(data, want.data) {
-			t.Fatalf("after %d calls, parser{%v}.recvMsg() = %v, %v, %v\nwant %v, %v, <nil>",
-				i, p, pt, data, err, want.pt, want.data)
+		codecType, compressType, data, err := parser.recvMsg()
+		if err != nil || codecType != want.codecType || compressType != want.compressType || !reflect.DeepEqual(data, want.data) {
+			t.Fatalf("after %d calls, parser{%v}.recvMsg() =%v, %v, %v, %v\nwant %v, %v, %v, <nil>",
+				i, p, codecType, compressType, data, err, want.codecType, want.compressType, want.data)
 		}
 	}
 
-	pt, data, err := parser.recvMsg()
+	codecType, compressType, data, err := parser.recvMsg()
 	if err != io.EOF {
-		t.Fatalf("after %d recvMsgs calls, parser{%v}.recvMsg() = %v, %v, %v\nwant _, _, %v",
-			len(wantRecvs), p, pt, data, err, io.EOF)
+		t.Fatalf("after %d recvMsgs calls, parser{%v}.recvMsg() = %v, %v, %v, %v\nwant _, _, %v",
+			len(wantRecvs), p, codecType, compressType, data, err, io.EOF)
 	}
 }
 

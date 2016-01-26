@@ -53,6 +53,8 @@ var (
 	sizeLargeErr     = 1024 * 1024
 )
 
+var CODEC_TYPE_TEST = CodecType(3)
+
 type testCodec struct {
 }
 
@@ -69,26 +71,35 @@ func (testCodec) String() string {
 	return "test"
 }
 
+func (testCodec) TypeCode() CodecType {
+	return CODEC_TYPE_TEST
+}
+
 type testStreamHandler struct {
 	t transport.ServerTransport
 }
 
 func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
+	var codec Codec
+
 	p := &parser{s: s}
 	for {
-		pf, req, err := p.recvMsg()
+		codecType, compressType, req, err := p.recvMsg()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			return
 		}
-		if pf != compressionNone {
-			t.Errorf("Received the mistaken message format %d, want %d", pf, compressionNone)
+		if compressType != COMPRESS_TYPE_NONE {
+			t.Errorf("Received the mistaken message format %d, want %d", compressType, COMPRESS_TYPE_NONE)
 			return
 		}
 		var v string
-		codec := testCodec{}
+		codec, err = GetCodec(codecType)
+		if err != nil {
+			t.Fatalf("Failed to get codec %v", codecType)
+		}
 		if err := codec.Unmarshal(req, &v); err != nil {
 			t.Fatalf("Failed to unmarshal the received message %v", err)
 		}
@@ -98,7 +109,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		}
 	}
 	// send a response back to end the stream.
-	reply, err := encode(testCodec{}, &expectedResponse, nil, nil)
+	reply, err := encode(codec, &expectedResponse, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to encode the response: %v", err)
 	}
@@ -118,6 +129,12 @@ type server struct {
 // start starts server. Other goroutines should block on s.readyChan for futher operations.
 func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 	var err error
+
+	err = RegistCodec(&testCodec{})
+	if err != nil {
+		t.Fatalf("failed to regist codec: %v", err)
+	}
+
 	if port == 0 {
 		s.lis, err = net.Listen("tcp", ":0")
 	} else {
@@ -182,7 +199,9 @@ func setUp(t *testing.T, port int, maxStreams uint32) (*server, *ClientConn) {
 	go server.start(t, port, maxStreams)
 	server.wait(t, 2*time.Second)
 	addr := "localhost:" + server.port
-	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	codec := testCodec{}
+	RegistCodec(codec)
+	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithCodec(codec))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
