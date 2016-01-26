@@ -71,6 +71,41 @@ model {
       baseName "$protocPluginBaseName"
     }
   }
+
+  binaries {
+    all {
+      if (toolChain in Gcc || toolChain in Clang) {
+        cppCompiler.args "--std=c++0x"
+        addEnvArgs("CXXFLAGS", cppCompiler.args)
+        addEnvArgs("CPPFLAGS", cppCompiler.args)
+        if (osdetector.os == "osx") {
+          cppCompiler.args "-mmacosx-version-min=10.7", "-stdlib=libc++"
+          addLibraryIfNotLinked('protoc', linker.args)
+          addLibraryIfNotLinked('protobuf', linker.args)
+        } else if (osdetector.os == "windows") {
+          linker.args "-static", "-lprotoc", "-lprotobuf", "-static-libgcc", "-static-libstdc++",
+                      "-s"
+        } else {
+          // Link protoc, protobuf, libgcc and libstdc++ statically.
+          // Link other (system) libraries dynamically.
+          // Clang under OSX doesn't support these options.
+          linker.args "-Wl,-Bstatic", "-lprotoc", "-lprotobuf", "-static-libgcc",
+                      "-static-libstdc++",
+                      "-Wl,-Bdynamic", "-lpthread", "-s"
+        }
+        addEnvArgs("LDFLAGS", linker.args)
+      } else if (toolChain in VisualCpp) {
+        cppCompiler.args "/EHsc", "/MT"
+        if (rootProject.hasProperty('vcProtobufInclude')) {
+          cppCompiler.args "/I${rootProject.vcProtobufInclude}"
+        }
+        linker.args "libprotobuf.lib", "libprotoc.lib"
+        if (rootProject.hasProperty('vcProtobufLibs')) {
+          linker.args "/LIBPATH:${rootProject.vcProtobufLibs}"
+        }
+      }
+    }
+  }
 }
 
 configurations {
@@ -132,37 +167,6 @@ checkstyleTestNano {
 
 println "*** Building codegen requires Protobuf version ${protobufVersion}"
 println "*** Please refer to https://github.com/grpc/grpc-java/blob/master/COMPILING.md#how-to-build-code-generation-plugin"
-
-binaries.all {
-  if (toolChain in Gcc || toolChain in Clang) {
-    cppCompiler.args "--std=c++0x"
-    addEnvArgs("CXXFLAGS", cppCompiler.args)
-    addEnvArgs("CPPFLAGS", cppCompiler.args)
-    if (osdetector.os == "osx") {
-      cppCompiler.args "-mmacosx-version-min=10.7", "-stdlib=libc++"
-      addLibraryIfNotLinked('protoc', linker.args)
-      addLibraryIfNotLinked('protobuf', linker.args)
-    } else if (osdetector.os == "windows") {
-      linker.args "-static", "-lprotoc", "-lprotobuf", "-static-libgcc", "-static-libstdc++", "-s"
-    } else {
-      // Link protoc, protobuf, libgcc and libstdc++ statically.
-      // Link other (system) libraries dynamically.
-      // Clang under OSX doesn't support these options.
-      linker.args "-Wl,-Bstatic", "-lprotoc", "-lprotobuf", "-static-libgcc", "-static-libstdc++",
-                  "-Wl,-Bdynamic", "-lpthread", "-s"
-    }
-    addEnvArgs("LDFLAGS", linker.args)
-  } else if (toolChain in VisualCpp) {
-    cppCompiler.args "/EHsc", "/MT"
-    if (rootProject.hasProperty('vcProtobufInclude')) {
-      cppCompiler.args "/I${rootProject.vcProtobufInclude}"
-    }
-    linker.args "libprotobuf.lib", "libprotoc.lib"
-    if (rootProject.hasProperty('vcProtobufLibs')) {
-      linker.args "/LIBPATH:${rootProject.vcProtobufLibs}"
-    }
-  }
-}
 
 task buildArtifacts(type: Copy) {
   dependsOn 'java_pluginExecutable'
