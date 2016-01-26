@@ -30,5 +30,3 @@ Status
 ------
 Beta release
 
-
-
