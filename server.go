@@ -335,7 +335,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	p := &parser{s: stream}
 	for {
-		codecType, compressType, req, err := p.recvMsg()
+		pf, req, err := p.recvMsg()
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -355,11 +355,10 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 
 		var dc Decompressor
-		if compressType == COMPRESS_TYPE_GZIP && s.opts.dg != nil {
+		if pf == compressionMade && s.opts.dg != nil {
 			dc = s.opts.dg()
 		}
-
-		if err := checkRecvPayload(codecType, compressType, stream.RecvCompress(), dc); err != nil {
+		if err := checkRecvPayload(pf, stream.RecvCompress(), dc); err != nil {
 			switch err := err.(type) {
 			case transport.StreamError:
 				if err := t.WriteStatus(stream, err.Code, err.Desc); err != nil {
@@ -371,13 +370,12 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 
 			}
-
 			return err
 		}
 		statusCode := codes.OK
 		statusDesc := ""
 		df := func(v interface{}) error {
-			if compressType == COMPRESS_TYPE_GZIP {
+			if pf == compressionMade {
 				var err error
 				req, err = dc.Do(bytes.NewReader(req))
 				//req, err = ioutil.ReadAll(dc)
@@ -385,15 +383,11 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				if err != nil {
 					if err := t.WriteStatus(stream, codes.Internal, err.Error()); err != nil {
 						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
-					}					
+					}
 					return err
 				}
 			}
-			codec, err := GetCodec(codecType)
-			if err != nil {
-				return err
-			}
-			if err := codec.Unmarshal(req, v); err != nil {
+			if err := s.opts.codec.Unmarshal(req, v); err != nil {
 				return err
 			}
 			if trInfo != nil {
@@ -401,7 +395,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 			return nil
 		}
-
 		reply, appErr := md.Handler(srv.server, stream.Context(), df)
 		if appErr != nil {
 			if err, ok := appErr.(rpcError); ok {
@@ -433,8 +426,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			cp = s.opts.cg()
 			stream.SetSendCompress(cp.Type())
 		}
-
-
 		if err := s.sendResponse(t, stream, reply, cp, opts); err != nil {
 			switch err := err.(type) {
 			case transport.ConnectionError:
