@@ -170,7 +170,7 @@ println "*** Please refer to https://github.com/grpc/grpc-java/blob/master/COMPI
 
 task buildArtifacts(type: Copy) {
   dependsOn 'java_pluginExecutable'
-  from("$buildDir/binaries") {
+  from("$buildDir/exe") {
     if (osdetector.os != 'windows') {
       rename 'protoc-gen-grpc-java', '$0.exe'
     }
@@ -181,7 +181,7 @@ task buildArtifacts(type: Copy) {
 archivesBaseName = "$protocPluginBaseName"
 
 artifacts {
-  archives("$artifactStagingPath/java_pluginExecutable/${protocPluginBaseName}.exe" as File) {
+  archives("$artifactStagingPath/java_plugin/${protocPluginBaseName}.exe" as File) {
     classifier osdetector.os + "-" + arch
     type "exe"
     extension "exe"
