@@ -37,15 +37,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -53,20 +50,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
-)
-
-type CodecType byte
-
-var (
-	CODEC_TYPE_PROTO = CodecType(0x00)
-	CODEC_TYPE_JSON  = CodecType(0x01)
-)
-
-type CompressType byte
-
-var (
-	COMPRESS_TYPE_NONE = CompressType(0x00)
-	COMPRESS_TYPE_GZIP = CompressType(0x10)
 )
 
 // Codec defines the interface gRPC uses to encode and decode messages.
@@ -78,18 +61,6 @@ type Codec interface {
 	// String returns the name of the Codec implementation. The returned
 	// string will be used as part of content type in transmission.
 	String() string
-
-	TypeCode() CodecType
-}
-
-func GetCodec(typ CodecType) (c Codec, err error) {
-	if typ == CODEC_TYPE_PROTO {
-		return NewProtoCodec(), nil
-	} else if typ == CODEC_TYPE_JSON {
-		return NewJsonCodec(), nil
-	}
-
-	return nil, errors.New("codec not support " + strconv.Itoa(int(typ)))
 }
 
 // protoCodec is a Codec implemetation with protobuf. It is the default codec for gRPC.
@@ -107,44 +78,12 @@ func (protoCodec) String() string {
 	return "proto"
 }
 
-func (protoCodec) TypeCode() CodecType {
-	return CODEC_TYPE_PROTO
-}
-
-func NewProtoCodec() (c Codec) {
-	return protoCodec{}
-}
-
-type jsonCodec struct{}
-
-func (jsonCodec) Marshal(v interface{}) ([]byte, error) {
-	return json.Marshal(v)
-}
-
-func (jsonCodec) Unmarshal(data []byte, v interface{}) error {
-	return json.Unmarshal(data, v)
-}
-
-func (jsonCodec) String() string {
-	return "json"
-}
-
-func (jsonCodec) TypeCode() CodecType {
-	return CODEC_TYPE_JSON
-}
-
-func NewJsonCodec() (c Codec) {
-	return jsonCodec{}
-}
-
 // Compressor defines the interface gRPC uses to compress a message.
 type Compressor interface {
 	// Do compresses p into w.
 	Do(w io.Writer, p []byte) error
 	// Type returns the compression algorithm the Compressor uses.
 	Type() string
-
-	TypeCode() CompressType
 }
 
 // NewGZIPCompressor creates a Compressor based on GZIP.
@@ -167,18 +106,12 @@ func (c *gzipCompressor) Type() string {
 	return "gzip"
 }
 
-func (c *gzipCompressor) TypeCode() CompressType {
-	return COMPRESS_TYPE_GZIP
-}
-
 // Decompressor defines the interface gRPC uses to decompress a message.
 type Decompressor interface {
 	// Do reads the data from r and uncompress them.
 	Do(r io.Reader) ([]byte, error)
 	// Type returns the compression algorithm the Decompressor uses.
 	Type() string
-
-	TypeCode() CompressType
 }
 
 type gzipDecompressor struct {
@@ -200,10 +133,6 @@ func (d *gzipDecompressor) Do(r io.Reader) ([]byte, error) {
 
 func (d *gzipDecompressor) Type() string {
 	return "gzip"
-}
-
-func (c *gzipDecompressor) TypeCode() CompressType {
-	return COMPRESS_TYPE_GZIP
 }
 
 // CompressorGenerator defines the function generating a Compressor.
@@ -258,6 +187,14 @@ func Trailer(md *metadata.MD) CallOption {
 	})
 }
 
+// The format of the payload: compressed or not?
+type payloadFormat uint8
+
+const (
+	compressionNone payloadFormat = iota // no compression
+	compressionMade
+)
+
 // parser reads complelete gRPC messages from the underlying reader.
 type parser struct {
 	s io.Reader
@@ -267,38 +204,29 @@ type parser struct {
 // the message has not been complete yet. It returns the message and its type,
 // EOF is returned with nil msg and 0 pf if the entire stream is done. Other
 // non-nil error is returned if something is wrong on reading.
-func (p *parser) recvMsg() (codecType CodecType, compressType CompressType, msg []byte, err error) {
+func (p *parser) recvMsg() (pf payloadFormat, msg []byte, err error) {
 	// The header of a gRPC message. Find more detail
 	// at http://www.grpc.io/docs/guides/wire.html.
 	var buf [5]byte
 
 	if _, err := io.ReadFull(p.s, buf[:]); err != nil {
-		return 0, 0, nil, err
+		return 0, nil, err
 	}
 
-	codecType = CodecType(buf[0] & 0x0F)
-	if codecType != CODEC_TYPE_JSON && codecType != CODEC_TYPE_PROTO {
-		return 0, 0, nil, errors.New("codec not support " + strconv.Itoa(int(codecType)))
-	}
-
-	compressType = CompressType(buf[0] & 0xF0)
-	if compressType != COMPRESS_TYPE_NONE && compressType != COMPRESS_TYPE_GZIP {
-		return 0, 0, nil, errors.New("compressor not support " + strconv.Itoa(int(compressType)))
-	}
-
+	pf = payloadFormat(buf[0])
 	length := binary.BigEndian.Uint32(buf[1:])
-	if length == 0 {
-		return codecType, compressType, nil, nil
-	}
 
+	if length == 0 {
+		return pf, nil, nil
+	}
 	msg = make([]byte, int(length))
 	if _, err := io.ReadFull(p.s, msg); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
-		return 0, 0, nil, err
+		return 0, nil, err
 	}
-	return codecType, compressType, msg, nil
+	return pf, msg, nil
 }
 
 // encode serializes msg and prepends the message header. If msg is nil, it
@@ -332,12 +260,12 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer) ([]byte
 
 	var buf = make([]byte, payloadLen+sizeLen+len(b))
 
-	compressType := CompressType(0)
-	if cp != nil {
-		compressType = cp.TypeCode()
+	// Write payload format
+	if cp == nil {
+		buf[0] = byte(compressionNone)
+	} else {
+		buf[0] = byte(compressionMade)
 	}
-
-	buf[0] = byte(compressType) | byte(c.TypeCode())
 	// Write length of b into buf
 	binary.BigEndian.PutUint32(buf[1:], uint32(length))
 	// Copy encoded msg to buf
@@ -346,47 +274,39 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer) ([]byte
 	return buf, nil
 }
 
-func checkRecvPayload(codecType CodecType, compressType CompressType, recvCompress string, dc Decompressor) error {
-	switch compressType {
-	case COMPRESS_TYPE_NONE:
-	case COMPRESS_TYPE_GZIP:
+func checkRecvPayload(pf payloadFormat, recvCompress string, dc Decompressor) error {
+	switch pf {
+	case compressionNone:
+	case compressionMade:
 		if recvCompress == "" {
-			return transport.StreamErrorf(codes.InvalidArgument, "grpc: received unexpected payload format %d", compressType)
+			return transport.StreamErrorf(codes.InvalidArgument, "grpc: received unexpected payload format %d", pf)
 		}
 		if dc == nil || recvCompress != dc.Type() {
 			return transport.StreamErrorf(codes.InvalidArgument, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
 		}
 	default:
-		return transport.StreamErrorf(codes.InvalidArgument, "grpc: received unexpected payload format %d", compressType)
+		return transport.StreamErrorf(codes.InvalidArgument, "grpc: received unexpected payload format %d", pf)
 	}
 	return nil
 }
 
-func recv(p *parser, s *transport.Stream, dg DecompressorGenerator, m interface{}) error {
-	codecType, compressType, d, err := p.recvMsg()
+func recv(p *parser, c Codec, s *transport.Stream, dg DecompressorGenerator, m interface{}) error {
+	pf, d, err := p.recvMsg()
 	if err != nil {
 		return err
 	}
-
-	//decompress
 	var dc Decompressor
-	if compressType == COMPRESS_TYPE_GZIP && dg != nil {
+	if pf == compressionMade && dg != nil {
 		dc = dg()
 	}
-	if err := checkRecvPayload(codecType, compressType, s.RecvCompress(), dc); err != nil {
+	if err := checkRecvPayload(pf, s.RecvCompress(), dc); err != nil {
 		return err
 	}
-	if compressType == COMPRESS_TYPE_GZIP {
+	if pf == compressionMade {
 		d, err = dc.Do(bytes.NewReader(d))
 		if err != nil {
 			return transport.StreamErrorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
 		}
-	}
-
-	//unmarshal
-	c, err := GetCodec(codecType)
-	if err != nil {
-		return err
 	}
 	if err := c.Unmarshal(d, m); err != nil {
 		return transport.StreamErrorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
