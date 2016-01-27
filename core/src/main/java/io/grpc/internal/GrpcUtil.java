@@ -196,10 +196,15 @@ public final class GrpcUtil {
   }
 
   /**
-   * All error codes identified by the HTTP/2 spec.
+   * All error codes identified by the HTTP/2 spec. Used in GOAWAY and RST_STREAM frames.
    */
   public enum Http2Error {
-    NO_ERROR(0x0, Status.INTERNAL),
+    /**
+     * Servers implementing a graceful shutdown of the connection will send {@code GOAWAY} with
+     * {@code NO_ERROR}. In this case it is important to indicate to the application that the
+     * request should be retried (i.e. {@link Status#UNAVAILABLE}).
+     */
+    NO_ERROR(0x0, Status.UNAVAILABLE),
     PROTOCOL_ERROR(0x1, Status.INTERNAL),
     INTERNAL_ERROR(0x2, Status.INTERNAL),
     FLOW_CONTROL_ERROR(0x3, Status.INTERNAL),
