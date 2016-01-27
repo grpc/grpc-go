@@ -48,6 +48,9 @@ compile 'io.grpc:grpc-stub:0.9.0'
 Development snapshots are available in [Sonatypes's snapshot
 repository](https://oss.sonatype.org/content/repositories/snapshots/).
 
+For protobuf-based codegen, you can put your proto files in the `src/main/proto`
+and `src/test/proto` directories along with an appropriate plugin.
+
 For protobuf-based codegen integrated with the Maven build system, you can use
 [maven-protoc-plugin][]:
 ```xml
