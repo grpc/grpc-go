@@ -378,8 +378,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			if pf == compressionMade {
 				var err error
 				req, err = dc.Do(bytes.NewReader(req))
-				//req, err = ioutil.ReadAll(dc)
-				//defer dc.Close()
 				if err != nil {
 					if err := t.WriteStatus(stream, codes.Internal, err.Error()); err != nil {
 						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
