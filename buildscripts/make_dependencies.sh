@@ -7,6 +7,11 @@ DOWNLOAD_DIR=/tmp/source
 INSTALL_DIR=/tmp/protobuf-${PROTOBUF_VERSION}
 mkdir -p $DOWNLOAD_DIR
 
+# We may have set this elsewhere in order to allow gRPC find our custom
+# built openssl to run ALPN, but it may be incompatible with wget which
+# uses the system openssl. We unset this variable for this script.
+export -n LD_LIBRARY_PATH
+
 # Make protoc
 # Can't check for presence of directory as cache auto-creates it.
 if [ -f ${INSTALL_DIR}/bin/protoc ]; then

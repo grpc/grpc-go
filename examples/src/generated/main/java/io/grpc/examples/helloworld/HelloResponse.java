@@ -47,7 +47,7 @@ public  final class HelloResponse extends
             break;
           }
           case 10: {
-            String s = input.readStringRequireUtf8();
+            java.lang.String s = input.readStringRequireUtf8();
 
             message_ = s;
             break;

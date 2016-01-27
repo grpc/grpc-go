@@ -42,7 +42,7 @@ public  final class InitialLoadBalanceResponse extends
             break;
           }
           case 18: {
-            String s = input.readStringRequireUtf8();
+            java.lang.String s = input.readStringRequireUtf8();
             initialResponseTypeCase_ = 2;
             initialResponseType_ = s;
             break;

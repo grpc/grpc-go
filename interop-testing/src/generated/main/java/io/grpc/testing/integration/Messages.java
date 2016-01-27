@@ -1738,13 +1738,13 @@ public final class Messages {
               break;
             }
             case 18: {
-              String s = input.readStringRequireUtf8();
+              java.lang.String s = input.readStringRequireUtf8();
 
               username_ = s;
               break;
             }
             case 26: {
-              String s = input.readStringRequireUtf8();
+              java.lang.String s = input.readStringRequireUtf8();
 
               oauthScope_ = s;
               break;
@@ -2583,7 +2583,7 @@ public final class Messages {
               break;
             }
             case 10: {
-              String s = input.readStringRequireUtf8();
+              java.lang.String s = input.readStringRequireUtf8();
 
               value_ = s;
               break;

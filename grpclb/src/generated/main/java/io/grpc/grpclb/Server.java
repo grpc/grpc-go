@@ -46,7 +46,7 @@ public  final class Server extends
             break;
           }
           case 10: {
-            String s = input.readStringRequireUtf8();
+            java.lang.String s = input.readStringRequireUtf8();
 
             ipAddress_ = s;
             break;
@@ -57,7 +57,7 @@ public  final class Server extends
             break;
           }
           case 26: {
-            String s = input.readStringRequireUtf8();
+            java.lang.String s = input.readStringRequireUtf8();
 
             loadBalanceToken_ = s;
             break;

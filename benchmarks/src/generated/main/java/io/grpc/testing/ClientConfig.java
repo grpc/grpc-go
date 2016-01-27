@@ -50,7 +50,7 @@ public  final class ClientConfig extends
             break;
           }
           case 10: {
-            String s = input.readStringRequireUtf8();
+            java.lang.String s = input.readStringRequireUtf8();
             if (!((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
               serverTargets_ = new com.google.protobuf.LazyStringArrayList();
               mutable_bitField0_ |= 0x00000001;

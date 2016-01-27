@@ -60,7 +60,7 @@ public  final class RouteNote extends
             break;
           }
           case 18: {
-            String s = input.readStringRequireUtf8();
+            java.lang.String s = input.readStringRequireUtf8();
 
             message_ = s;
             break;

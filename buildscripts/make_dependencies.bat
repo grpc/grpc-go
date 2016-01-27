@@ -5,7 +5,7 @@ REM Prerequisite:
 REM   7za.exe in current directory or PATH
 REM   Install http://slproweb.com/download/Win64OpenSSL_Light-1_0_2d.exe
 
-set PROTOBUF_VER=3.0.0-beta-1
+set PROTOBUF_VER=3.0.0-beta-2
 set CMAKE_NAME=cmake-3.3.2-win32-x86
 
 if not exist "protobuf-%PROTOBUF_VER%\cmake\build\Release\" (
@@ -26,10 +26,10 @@ set PATH=%PATH%;%cd%\%CMAKE_NAME%\bin
 powershell -command "& { iwr https://github.com/google/protobuf/archive/v%PROTOBUF_VER%.zip -OutFile protobuf.zip }"
 7za X protobuf.zip
 del protobuf.zip
-pushd protobuf-3.0.0-beta-1\cmake
+pushd protobuf-3.0.0-beta-2\cmake
 mkdir build
 cd build
-cmake -DBUILD_TESTING=OFF ..
+cmake -Dprotobuf_BUILD_TESTS=OFF ..
 msbuild /maxcpucount /p:Configuration=Release libprotoc.vcxproj
 call extract_includes.bat
 popd
