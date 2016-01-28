@@ -39,8 +39,10 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 
@@ -122,7 +124,7 @@ public final class BlankFutureProvider<T> {
      * they were created.
      */
     public void link(Supplier<ListenableFuture<T>> source) {
-      for (final SettableFuture<T> future : futures) {
+      for (final SettableFuture<T> future : copyFutureList()) {
         ListenableFuture<T> sourceFuture = source.get();
         Futures.addCallback(sourceFuture, new FutureCallback<T>() {
           @Override public void onSuccess(T result) {
@@ -140,8 +142,14 @@ public final class BlankFutureProvider<T> {
      * Fails all futures with the given error.
      */
     public void fail(Throwable error) {
-      for (SettableFuture<T> future : futures) {
+      for (SettableFuture<T> future : copyFutureList()) {
         future.setException(error);
+      }
+    }
+
+    private List<SettableFuture<T>> copyFutureList() {
+      synchronized (futures) {
+        return new ArrayList<SettableFuture<T>>(futures);
       }
     }
   }
