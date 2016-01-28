@@ -353,6 +353,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		} else {
 			endHeaders = true
 		}
+		var flush bool
+		if endHeaders && (hasMD || callHdr.Flush) {
+			flush = true
+		}
 		if first {
 			// Sends a HeadersFrame to server to start a new stream.
 			p := http2.HeadersFrameParam{
@@ -364,11 +368,11 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			// Do a force flush for the buffered frames iff it is the last headers frame
 			// and there is header metadata to be sent. Otherwise, there is flushing until
 			// the corresponding data frame is written.
-			err = t.framer.writeHeaders(hasMD && endHeaders, p)
+			err = t.framer.writeHeaders(flush, p)
 			first = false
 		} else {
 			// Sends Continuation frames for the leftover headers.
-			err = t.framer.writeContinuation(hasMD && endHeaders, s.id, endHeaders, t.hBuf.Next(size))
+			err = t.framer.writeContinuation(flush, s.id, endHeaders, t.hBuf.Next(size))
 		}
 		if err != nil {
 			t.notifyError(err)

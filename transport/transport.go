@@ -369,6 +369,10 @@ type CallHdr struct {
 	RecvCompress string
 	// SendCompress specifies the compression algorithm applied on outbound message.
 	SendCompress string
+	// Flush indicates if new stream command should be sent to the peer without
+	// waiting for the first data. This is a hint though. The transport may modify
+	// the flush decision for performance purpose.
+	Flush bool
 }
 
 // ClientTransport is the common interface for all gRPC client side transport
