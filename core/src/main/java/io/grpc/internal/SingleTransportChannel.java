@@ -83,7 +83,7 @@ final class SingleTransportChannel extends Channel {
       MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
     return new ClientCallImpl<RequestT, ResponseT>(methodDescriptor,
         new SerializingExecutor(executor), callOptions, transportProvider,
-        deadlineCancellationExecutor).setKnownMessageEncodingRegistry(knownAcceptEncodingRegistry);
+        deadlineCancellationExecutor);
   }
 
   @Override

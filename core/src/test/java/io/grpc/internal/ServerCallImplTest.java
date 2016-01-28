@@ -44,7 +44,9 @@ import static org.mockito.Mockito.when;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.Futures;
 
+import io.grpc.CompressorRegistry;
 import io.grpc.Context;
+import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
@@ -89,7 +91,8 @@ public class ServerCallImplTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     context = Context.ROOT.withCancellation();
-    call = new ServerCallImpl<Long, Long>(stream, method, context);
+    call = new ServerCallImpl<Long, Long>(stream, method, new Metadata(), context,
+        DecompressorRegistry.getDefaultInstance(), CompressorRegistry.getDefaultInstance());
   }
 
   @Test

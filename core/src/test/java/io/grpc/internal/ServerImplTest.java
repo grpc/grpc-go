@@ -49,7 +49,10 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
+import io.grpc.Compressor;
+import io.grpc.CompressorRegistry;
 import io.grpc.Context;
+import io.grpc.DecompressorRegistry;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -91,6 +94,9 @@ public class ServerImplTest {
   private static final Context.Key<String> SERVER_ONLY = Context.key("serverOnly");
   private static final Context.CancellableContext SERVER_CONTEXT =
       Context.ROOT.withValue(SERVER_ONLY, "yes").withCancellation();
+  private final CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
+  private final DecompressorRegistry decompressorRegistry =
+      DecompressorRegistry.getDefaultInstance();
 
   static {
     // Cancel the root context. Server will fork it so the per-call context should not
@@ -101,7 +107,8 @@ public class ServerImplTest {
   private ExecutorService executor = Executors.newSingleThreadExecutor();
   private MutableHandlerRegistry registry = new MutableHandlerRegistryImpl();
   private SimpleServer transportServer = new SimpleServer();
-  private ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT);
+  private ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
+      decompressorRegistry, compressorRegistry);
 
   @Mock
   private ServerStream stream;
@@ -129,7 +136,8 @@ public class ServerImplTest {
       @Override
       public void shutdown() {}
     };
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT);
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
+        decompressorRegistry, compressorRegistry);
     server.start();
     server.shutdown();
     assertTrue(server.isShutdown());
@@ -146,7 +154,8 @@ public class ServerImplTest {
         throw new AssertionError("Should not be called, because wasn't started");
       }
     };
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT);
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
+        decompressorRegistry, compressorRegistry);
     server.shutdown();
     assertTrue(server.isShutdown());
     assertTrue(server.isTerminated());
@@ -154,7 +163,8 @@ public class ServerImplTest {
 
   @Test
   public void startStopImmediateWithChildTransport() throws IOException {
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT);
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
+        decompressorRegistry, compressorRegistry);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
       boolean shutdown;
@@ -186,7 +196,7 @@ public class ServerImplTest {
     }
 
     ServerImpl server = new ServerImpl(executor, registry, new FailingStartupServer(),
-        SERVER_CONTEXT);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
     try {
       server.start();
       fail("expected exception");
@@ -240,6 +250,7 @@ public class ServerImplTest {
     responseHeaders.put(metadataKey, "response value");
     call.sendHeaders(responseHeaders);
     verify(stream).writeHeaders(responseHeaders);
+    verify(stream).setCompressor(isA(Compressor.class));
 
     call.sendMessage(314);
     ArgumentCaptor<InputStream> inputCaptor = ArgumentCaptor.forClass(InputStream.class);
@@ -322,7 +333,8 @@ public class ServerImplTest {
     }
 
     transportServer = new MaybeDeadlockingServer();
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT);
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
+        decompressorRegistry, compressorRegistry);
     server.start();
     new Thread() {
       @Override

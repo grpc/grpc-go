@@ -34,8 +34,7 @@ package io.grpc.inprocess;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.grpc.Compressor;
-import io.grpc.CompressorRegistry;
-import io.grpc.DecompressorRegistry;
+import io.grpc.Decompressor;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -231,9 +230,6 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       }
 
       @Override
-      public void setDecompressionRegistry(DecompressorRegistry registry) {}
-
-      @Override
       public void request(int numMessages) {
         clientStream.serverRequested(numMessages);
       }
@@ -345,12 +341,10 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       }
 
       @Override
-      public Compressor pickCompressor(Iterable<String> messageEncodings) {
-        return null;
-      }
+      public void setCompressor(Compressor compressor) {}
 
       @Override
-      public void setCompressionRegistry(CompressorRegistry registry) {}
+      public void setDecompressor(Decompressor decompressor) {}
     }
 
     private class InProcessClientStream implements ClientStream {
@@ -458,18 +452,7 @@ class InProcessTransport implements ServerTransport, ClientTransport {
       }
 
       @Override
-      public void setDecompressionRegistry(DecompressorRegistry registry) {}
-
-      @Override
       public void setMessageCompression(boolean enable) {}
-
-      @Override
-      public Compressor pickCompressor(Iterable<String> messageEncodings) {
-        return null;
-      }
-
-      @Override
-      public void setCompressionRegistry(CompressorRegistry registry) {}
 
       @Override
       public void start(ClientStreamListener listener) {
@@ -483,6 +466,12 @@ class InProcessTransport implements ServerTransport, ClientTransport {
           streams.add(InProcessTransport.InProcessStream.this);
         }
       }
+
+      @Override
+      public void setCompressor(Compressor compressor) {}
+
+      @Override
+      public void setDecompressor(Decompressor decompressor) {}
     }
   }
 }

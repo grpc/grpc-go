@@ -31,6 +31,8 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
+
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -112,24 +114,18 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
     return thisT();
   }
 
-  protected final DecompressorRegistry decompressorRegistry() {
-    return decompressorRegistry;
-  }
-
   @Override
   public final T compressorRegistry(CompressorRegistry registry) {
     compressorRegistry = registry;
     return thisT();
   }
 
-  protected final CompressorRegistry compressorRegistry() {
-    return compressorRegistry;
-  }
-
   @Override
   public ServerImpl build() {
     io.grpc.internal.Server transportServer = buildTransportServer();
-    return new ServerImpl(executor, registry, transportServer, Context.ROOT);
+    return new ServerImpl(executor, registry, transportServer, Context.ROOT,
+        firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
+        firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()));
   }
 
   /**

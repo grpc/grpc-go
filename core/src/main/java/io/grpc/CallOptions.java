@@ -63,6 +63,9 @@ public final class CallOptions {
   @Nullable
   private RequestKey requestKey;
 
+  @Nullable
+  private String compressorName;
+
   /**
    * Override the HTTP/2 authority the channel claims to be connecting to. <em>This is not
    * generally safe.</em> Overriding allows advanced users to re-use a single Channel for multiple
@@ -76,6 +79,17 @@ public final class CallOptions {
   public CallOptions withAuthority(@Nullable String authority) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.authority = authority;
+    return newOptions;
+  }
+
+  /**
+   * Sets the compression to use for the call.  The compressor must be a valid name known in the
+   * {@link CompressorRegistry}.
+   */
+  @ExperimentalApi
+  public CallOptions withCompression(@Nullable String compressorName) {
+    CallOptions newOptions = new CallOptions(this);
+    newOptions.compressorName = compressorName;
     return newOptions;
   }
 
@@ -131,6 +145,16 @@ public final class CallOptions {
     return requestKey;
   }
 
+
+  /**
+   * Returns the compressor's name.
+   */
+  @ExperimentalApi
+  @Nullable
+  public String getCompressor() {
+    return compressorName;
+  }
+
   /**
    * Override the HTTP/2 authority the channel claims to be connecting to. <em>This is not
    * generally safe.</em> Overriding allows advanced users to re-use a single Channel for multiple
@@ -172,6 +196,7 @@ public final class CallOptions {
     authority = other.authority;
     requestKey = other.requestKey;
     executor = other.executor;
+    compressorName = other.compressorName;
   }
 
   @Override

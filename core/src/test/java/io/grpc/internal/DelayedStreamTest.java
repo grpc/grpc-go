@@ -36,8 +36,7 @@ import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import io.grpc.CompressorRegistry;
-import io.grpc.DecompressorRegistry;
+import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
 
@@ -77,10 +76,8 @@ public class DelayedStreamTest {
   @Test
   public void setStream_sendsAllMessages() {
     stream.start(listener);
-    DecompressorRegistry decompressors = DecompressorRegistry.newEmptyInstance();
-    CompressorRegistry compressors = CompressorRegistry.newEmptyInstance();
-    stream.setDecompressionRegistry(decompressors);
-    stream.setCompressionRegistry(compressors);
+    stream.setCompressor(Codec.Identity.NONE);
+    stream.setDecompressor(Codec.Identity.NONE);
 
     stream.setMessageCompression(true);
     InputStream message = new ByteArrayInputStream(new byte[]{'a'});
@@ -90,8 +87,8 @@ public class DelayedStreamTest {
 
     stream.setStream(realStream);
 
-    verify(realStream).setDecompressionRegistry(decompressors);
-    verify(realStream).setCompressionRegistry(compressors);
+    verify(realStream).setCompressor(Codec.Identity.NONE);
+    verify(realStream).setDecompressor(Codec.Identity.NONE);
 
     // Verify that the order was correct, even though they should be interleaved with the
     // writeMessage calls

@@ -60,12 +60,9 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -96,18 +93,6 @@ public final class ManagedChannelImpl extends ManagedChannel {
   private final String userAgent;
   private final Object lock = new Object();
 
-  /* Compression related */
-  /**
-   *  When a client connects to a server, it does not know what encodings are supported.  This set
-   *  is the union of all accept-encoding headers the server has sent.  It is used to pick an
-   *  encoding when contacting the server again.  One problem with the gRPC protocol is that if
-   *  there is only one RPC made (perhaps streaming, or otherwise long lived) an encoding will not
-   *  be selected.  To combat this you can preflight a request to the server to fill in the mapping
-   *  for the next one.  A better solution is if you have prior knowledge that the server supports
-   *  an encoding, and fill this structure before the request.
-   */
-  private final Set<String> knownAcceptEncodingRegistry =
-      Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
   private final DecompressorRegistry decompressorRegistry;
   private final CompressorRegistry compressorRegistry;
 
@@ -335,8 +320,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
           scheduledExecutor)
               .setUserAgent(userAgent)
               .setDecompressorRegistry(decompressorRegistry)
-              .setCompressorRegistry(compressorRegistry)
-              .setKnownMessageEncodingRegistry(knownAcceptEncodingRegistry);
+              .setCompressorRegistry(compressorRegistry);
     }
 
     @Override

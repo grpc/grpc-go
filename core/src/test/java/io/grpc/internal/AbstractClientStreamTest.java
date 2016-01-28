@@ -240,23 +240,6 @@ public class AbstractClientStreamTest {
   }
 
   @Test
-  public void inboundHeadersReceived_notifiesListenerOnBadEncoding() {
-    AbstractClientStream<Integer> stream = new BaseAbstractClientStream<Integer>(allocator);
-    stream.start(mockListener);
-    Metadata headers = new Metadata();
-    headers.put(GrpcUtil.MESSAGE_ENCODING_KEY, "bad");
-    Metadata.Key<String> randomKey = Metadata.Key.of("random", Metadata.ASCII_STRING_MARSHALLER);
-    headers.put(randomKey, "4");
-
-    stream.inboundHeadersReceived(headers);
-
-    ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-    verify(mockListener).closed(statusCaptor.capture(), metadataCaptor.capture());
-    assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
-    assertEquals("4", metadataCaptor.getValue().get(randomKey));
-  }
-
-  @Test
   public void rstStreamClosesStream() {
     AbstractClientStream<Integer> stream = new BaseAbstractClientStream<Integer>(allocator);
     stream.start(mockListener);

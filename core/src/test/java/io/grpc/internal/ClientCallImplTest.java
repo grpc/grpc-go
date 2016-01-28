@@ -55,7 +55,6 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Codec;
-import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
@@ -80,7 +79,6 @@ import org.mockito.MockitoAnnotations;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -103,8 +101,6 @@ public class ClientCallImplTest {
   private final FakeClock fakeClock = new FakeClock();
   private final ScheduledExecutorService deadlineCancellationExecutor =
       fakeClock.scheduledExecutorService;
-  private final Set<String> knownMessageEncodings = new HashSet<String>();
-  private final CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance();
   private final MethodDescriptor<Void, Void> method = MethodDescriptor.create(
@@ -159,9 +155,7 @@ public class ClientCallImplTest {
         CallOptions.DEFAULT,
         provider,
         deadlineCancellationExecutor)
-            .setDecompressorRegistry(decompressorRegistry)
-            .setCompressorRegistry(compressorRegistry)
-            .setKnownMessageEncodingRegistry(knownMessageEncodings);
+            .setDecompressorRegistry(decompressorRegistry);
 
     call.start(callListener, new Metadata());
 
@@ -178,8 +172,8 @@ public class ClientCallImplTest {
   public void prepareHeaders_authorityAdded() {
     Metadata m = new Metadata();
     CallOptions callOptions = CallOptions.DEFAULT.withAuthority("auth");
-    ClientCallImpl.prepareHeaders(m, callOptions, "user agent", knownMessageEncodings,
-        decompressorRegistry, compressorRegistry);
+    ClientCallImpl.prepareHeaders(m, callOptions, "user agent", decompressorRegistry,
+        Codec.Identity.NONE);
 
     assertEquals(m.get(GrpcUtil.AUTHORITY_KEY), "auth");
   }
@@ -187,28 +181,17 @@ public class ClientCallImplTest {
   @Test
   public void prepareHeaders_userAgentAdded() {
     Metadata m = new Metadata();
-    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, "user agent", knownMessageEncodings,
-        decompressorRegistry, compressorRegistry);
+    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, "user agent", decompressorRegistry,
+        Codec.Identity.NONE);
 
     assertEquals(m.get(GrpcUtil.USER_AGENT_KEY), "user agent");
   }
 
   @Test
-  public void prepareHeaders_messageEncodingAdded() {
-    Metadata m = new Metadata();
-    knownMessageEncodings.add(new Codec.Gzip().getMessageEncoding());
-    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, "user agent", knownMessageEncodings,
-        decompressorRegistry, compressorRegistry);
-
-    assertEquals(m.get(GrpcUtil.MESSAGE_ENCODING_KEY), new Codec.Gzip().getMessageEncoding());
-  }
-
-  @Test
   public void prepareHeaders_ignoreIdentityEncoding() {
     Metadata m = new Metadata();
-    knownMessageEncodings.add(Codec.Identity.NONE.getMessageEncoding());
-    ClientCallImpl.prepareHeaders(m,  CallOptions.DEFAULT, "user agent", knownMessageEncodings,
-        decompressorRegistry, compressorRegistry);
+    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, "user agent", decompressorRegistry,
+        Codec.Identity.NONE);
 
     assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));
   }
@@ -251,8 +234,8 @@ public class ClientCallImplTest {
       }
     }, false); // not advertised
 
-    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, "user agent", knownMessageEncodings,
-        customRegistry, compressorRegistry);
+    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, "user agent", customRegistry,
+        Codec.Identity.NONE);
 
     Iterable<String> acceptedEncodings =
         ACCEPT_ENCODING_SPLITER.split(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
@@ -269,8 +252,8 @@ public class ClientCallImplTest {
     m.put(GrpcUtil.MESSAGE_ENCODING_KEY, "gzip");
     m.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, "gzip");
 
-    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, null, knownMessageEncodings,
-        DecompressorRegistry.newEmptyInstance(), compressorRegistry);
+    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, null,
+        DecompressorRegistry.newEmptyInstance(), Codec.Identity.NONE);
 
     assertNull(m.get(GrpcUtil.AUTHORITY_KEY));
     assertNull(m.get(GrpcUtil.USER_AGENT_KEY));
@@ -294,9 +277,7 @@ public class ClientCallImplTest {
         CallOptions.DEFAULT,
         provider,
         deadlineCancellationExecutor)
-            .setDecompressorRegistry(decompressorRegistry)
-            .setCompressorRegistry(compressorRegistry)
-            .setKnownMessageEncodingRegistry(knownMessageEncodings);
+            .setDecompressorRegistry(decompressorRegistry);
 
     Context.ROOT.attach();
 
@@ -372,9 +353,7 @@ public class ClientCallImplTest {
         CallOptions.DEFAULT,
         provider,
         deadlineCancellationExecutor)
-            .setDecompressorRegistry(decompressorRegistry)
-            .setCompressorRegistry(compressorRegistry)
-            .setKnownMessageEncodingRegistry(knownMessageEncodings);
+            .setDecompressorRegistry(decompressorRegistry);
 
     previous.attach();
 
@@ -454,9 +433,7 @@ public class ClientCallImplTest {
         callOptions,
         provider,
         deadlineCancellationExecutor)
-            .setDecompressorRegistry(decompressorRegistry)
-            .setCompressorRegistry(compressorRegistry)
-            .setKnownMessageEncodingRegistry(knownMessageEncodings);
+            .setDecompressorRegistry(decompressorRegistry);
     call.start(callListener, new Metadata());
     assertFalse(future.isDone());
     fakeClock.forwardTime(1, TimeUnit.SECONDS);

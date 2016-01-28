@@ -76,6 +76,12 @@ public abstract class ForwardingServerCall<RespT> extends ServerCall<RespT> {
     delegate().setMessageCompression(enabled);
   }
 
+  @Override
+  @ExperimentalApi
+  public void setCompression(String compressor) {
+    delegate().setCompression(compressor);
+  }
+
   /**
    * A simplified version of {@link ForwardingServerCall} where subclasses can pass in a {@link
    * ServerCall} as the delegate.

@@ -40,7 +40,9 @@ import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 
+import io.grpc.CompressorRegistry;
 import io.grpc.Context;
+import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
@@ -104,20 +106,26 @@ public final class ServerImpl extends io.grpc.Server {
   private final ScheduledExecutorService timeoutService = SharedResourceHolder.get(TIMER_SERVICE);
   private final Context rootContext;
 
+  private final DecompressorRegistry decompressorRegistry;
+  private final CompressorRegistry compressorRegistry;
+
   /**
    * Construct a server.
    *
    * @param executor to call methods on behalf of remote clients
    * @param registry of methods to expose to remote clients.
    */
-  ServerImpl(Executor executor, HandlerRegistry registry,
-      io.grpc.internal.Server transportServer, Context rootContext) {
+  ServerImpl(Executor executor, HandlerRegistry registry, io.grpc.internal.Server transportServer,
+      Context rootContext, DecompressorRegistry decompressorRegistry,
+      CompressorRegistry compressorRegistry) {
     this.executor = executor;
     this.registry = Preconditions.checkNotNull(registry, "registry");
     this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");
     // Fork from the passed in context so that it does not propagate cancellation, it only
     // inherits values.
     this.rootContext = Preconditions.checkNotNull(rootContext).fork();
+    this.decompressorRegistry = decompressorRegistry;
+    this.compressorRegistry = compressorRegistry;
   }
 
   /**
@@ -355,7 +363,8 @@ public final class ServerImpl extends io.grpc.Server {
         Metadata headers, Context.CancellableContext context) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
-          stream, methodDef.getMethodDescriptor(), context);
+          stream, methodDef.getMethodDescriptor(), headers, context, decompressorRegistry,
+          compressorRegistry);
       ServerCall.Listener<ReqT> listener = methodDef.getServerCallHandler()
           .startCall(methodDef.getMethodDescriptor(), call, headers);
       if (listener == null) {

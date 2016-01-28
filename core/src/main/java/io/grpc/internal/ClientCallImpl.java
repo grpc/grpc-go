@@ -33,10 +33,8 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static com.google.common.collect.Iterables.addAll;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_JOINER;
-import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
 import static io.grpc.internal.GrpcUtil.AUTHORITY_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
@@ -57,6 +55,7 @@ import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
+import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -64,8 +63,6 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 
 import java.io.InputStream;
-import java.util.Collections;
-import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -91,7 +88,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   private final ClientTransportProvider clientTransportProvider;
   private String userAgent;
   private ScheduledExecutorService deadlineCancellationExecutor;
-  private Set<String> knownMessageEncodingRegistry;
+  private Compressor compressor;
   private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
   private CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
 
@@ -146,19 +143,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     return this;
   }
 
-  /**
-   * Sets encodings known to be supported by the server.  This set MUST be thread safe, and MAY be
-   * modified by any code as it learns about new supported encodings.
-   */
-  ClientCallImpl<ReqT, RespT> setKnownMessageEncodingRegistry(Set<String> knownMessageEncodings) {
-    this.knownMessageEncodingRegistry = knownMessageEncodings;
-    return this;
-  }
-
   @VisibleForTesting
   static void prepareHeaders(Metadata headers, CallOptions callOptions, String userAgent,
-      Set<String> knownMessageEncodings, DecompressorRegistry decompressorRegistry,
-      CompressorRegistry compressorRegistry) {
+      DecompressorRegistry decompressorRegistry, Compressor compressor) {
     // Hack to propagate authority.  This should be properly pass to the transport.newStream
     // somehow.
     headers.removeAll(AUTHORITY_KEY);
@@ -173,12 +160,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
 
     headers.removeAll(MESSAGE_ENCODING_KEY);
-    for (String messageEncoding : knownMessageEncodings) {
-      Compressor compressor = compressorRegistry.lookupCompressor(messageEncoding);
-      if (compressor != null && compressor != Codec.Identity.NONE) {
-        headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
-        break;
-      }
+    if (compressor != Codec.Identity.NONE) {
+      headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
     }
 
     headers.removeAll(MESSAGE_ACCEPT_ENCODING_KEY);
@@ -207,8 +190,27 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       });
       return;
     }
-    prepareHeaders(headers, callOptions, userAgent,
-        knownMessageEncodingRegistry, decompressorRegistry, compressorRegistry);
+    final String compressorName = callOptions.getCompressor();
+    if (compressorName != null) {
+      compressor = compressorRegistry.lookupCompressor(compressorName);
+      if (compressor == null) {
+        stream = NoopClientStream.INSTANCE;
+        callExecutor.execute(new ContextRunnable(context) {
+          @Override
+          public void runInContext() {
+            observer.onClose(
+                Status.INTERNAL.withDescription(
+                    String.format("Unable to find compressor by name %s", compressorName)),
+                new Metadata());
+          }
+        });
+        return;
+      }
+    } else {
+      compressor = Codec.Identity.NONE;
+    }
+
+    prepareHeaders(headers, callOptions, userAgent, decompressorRegistry, compressor);
 
     ListenableFuture<ClientTransport> transportFuture = clientTransportProvider.get(callOptions);
 
@@ -236,11 +238,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
           transportFuture.isDone() ? directExecutor() : callExecutor);
     }
 
-    stream.setDecompressionRegistry(decompressorRegistry);
-    stream.setCompressionRegistry(compressorRegistry);
-    if (headers.containsKey(MESSAGE_ENCODING_KEY)) {
-      stream.pickCompressor(Collections.singleton(headers.get(MESSAGE_ENCODING_KEY)));
-      // TODO(carl-mastrangelo): move this to ClientCall.
+    stream.setCompressor(compressor);
+    if (compressor != Codec.Identity.NONE) {
       stream.setMessageCompression(true);
     }
 
@@ -387,13 +386,18 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
     @Override
     public void headersRead(final Metadata headers) {
-      if (headers.containsKey(MESSAGE_ACCEPT_ENCODING_KEY)) {
-        // TODO(carl-mastrangelo): after the first time we contact the server, it almost certainly
-        // won't change.  It might be possible to recover performance by not adding to the known
-        // encodings if it isn't empty.
-        String serverAcceptEncodings = headers.get(MESSAGE_ACCEPT_ENCODING_KEY);
-        addAll(knownMessageEncodingRegistry, ACCEPT_ENCODING_SPLITER.split(serverAcceptEncodings));
+      Decompressor decompressor = Codec.Identity.NONE;
+      if (headers.containsKey(MESSAGE_ENCODING_KEY)) {
+        String encoding = headers.get(MESSAGE_ENCODING_KEY);
+        decompressor = decompressorRegistry.lookupDecompressor(encoding);
+        if (decompressor == null) {
+          stream.cancel(Status.INTERNAL.withDescription(
+              String.format("Can't find decompressor for %s", encoding)));
+          return;
+        }
       }
+      stream.setDecompressor(decompressor);
+
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public final void runInContext() {

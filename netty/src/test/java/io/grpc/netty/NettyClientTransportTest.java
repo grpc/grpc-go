@@ -43,8 +43,6 @@ import static org.junit.Assert.fail;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
 
-import io.grpc.CompressorRegistry;
-import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
@@ -321,10 +319,8 @@ public class NettyClientTransportTest {
     SslContext serverContext = GrpcSslContexts.forServer(serverCert, key)
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
     ProtocolNegotiator negotiator = ProtocolNegotiators.serverTls(serverContext);
-    server = new NettyServer(address, NioServerSocketChannel.class,
-            group, group, negotiator, DecompressorRegistry.getDefaultInstance(),
-            CompressorRegistry.getDefaultInstance(), maxStreamsPerConnection,
-            DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, maxHeaderListSize);
+    server = new NettyServer(address, NioServerSocketChannel.class, group, group, negotiator,
+        maxStreamsPerConnection, DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, maxHeaderListSize);
     server.start(serverListener);
   }
 

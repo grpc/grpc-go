@@ -32,12 +32,9 @@
 package io.grpc.internal;
 
 import io.grpc.Compressor;
-import io.grpc.CompressorRegistry;
-import io.grpc.DecompressorRegistry;
+import io.grpc.Decompressor;
 
 import java.io.InputStream;
-
-import javax.annotation.Nullable;
 
 /**
  * A single stream of communication between two end-points within a transport.
@@ -85,43 +82,22 @@ public interface Stream {
   boolean isReady();
 
   /**
-   * Picks a compressor for for this stream.  If no message encodings are acceptable, compression is
-   * not used.  It is undefined if this this method is invoked multiple times.  If the stream has
-   * a {@code start()} method, pickCompressor must be called prior to start.
+   * Sets the compressor on the framer.
    *
-   *
-   * @param messageEncodings a group of message encoding names that the remote endpoint is known
-   *     to support.
-   * @return The compressor chosen for the stream, or null if none selected.
+   * @param compressor the compressor to use
    */
-  @Nullable
-  Compressor pickCompressor(Iterable<String> messageEncodings);
+  void setCompressor(Compressor compressor);
+
+  /**
+   * Sets the decompressor on the deframer.
+   *
+   * @param decompressor the decompressor to use.
+   */
+  void setDecompressor(Decompressor decompressor);
 
   /**
    * Enables per-message compression, if an encoding type has been negotiated.  If no message
    * encoding has been negotiated, this is a no-op.
    */
   void setMessageCompression(boolean enable);
-
-  /**
-   * Sets the decompressor registry to use when resolving {@code #setDecompressor(String)}.  If
-   * unset, the default DecompressorRegistry will be used.  If the stream has a {@code start()}
-   * method, setDecompressionRegistry must be called prior to start.
-   *
-   * @see DecompressorRegistry#getDefaultInstance()
-   *
-   * @param registry the decompressors to use.
-   */
-  void setDecompressionRegistry(DecompressorRegistry registry);
-
-  /**
-   * Sets the compressor registry to use when resolving {@link #pickCompressor}.  If unset, the
-   * default CompressorRegistry will be used.  If the stream has a {@code start()} method,
-   * setCompressionRegistry must be called prior to start.
-   *
-   * @see CompressorRegistry#getDefaultInstance()
-   *
-   * @param registry the compressors to use.
-   */
-  void setCompressionRegistry(CompressorRegistry registry);
 }

@@ -32,14 +32,9 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_JOINER;
-import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
-import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
-import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.Compressor;
 import io.grpc.Metadata;
 import io.grpc.Status;
 
@@ -61,7 +56,6 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   private ServerStreamListener listener;
 
   private boolean headersSent = false;
-  private String messageEncoding;
   /**
    * Whether the stream was closed gracefully by the application (vs. a transport-level failure).
    */
@@ -100,16 +94,6 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
   @Override
   public final void writeHeaders(Metadata headers) {
     Preconditions.checkNotNull(headers, "headers");
-    headers.removeAll(MESSAGE_ENCODING_KEY);
-    if (messageEncoding != null) {
-      headers.put(MESSAGE_ENCODING_KEY, messageEncoding);
-    }
-    headers.removeAll(MESSAGE_ACCEPT_ENCODING_KEY);
-    if (!decompressorRegistry().getAdvertisedMessageEncodings().isEmpty()) {
-      String acceptEncoding =
-          ACCEPT_ENCODING_JOINER.join(decompressorRegistry().getAdvertisedMessageEncodings());
-      headers.put(MESSAGE_ACCEPT_ENCODING_KEY, acceptEncoding);
-    }
 
     outboundPhase(Phase.HEADERS);
     headersSent = true;
@@ -152,34 +136,6 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
    * @param headers the parsed headers
    */
   protected void inboundHeadersReceived(Metadata headers) {
-    if (headers.containsKey(GrpcUtil.MESSAGE_ENCODING_KEY)) {
-      String messageEncoding = headers.get(GrpcUtil.MESSAGE_ENCODING_KEY);
-      try {
-        setDecompressor(messageEncoding);
-      } catch (IllegalArgumentException e) {
-        Status status = Status.INVALID_ARGUMENT
-            .withDescription("Unable to decompress encoding " + messageEncoding)
-            .withCause(e);
-        abortStream(status, true);
-        return;
-      }
-    }
-    // This checks to see if the client will accept any encoding.  If so, a compressor is picked for
-    // the stream, and the decision is recorded.  When the Server Call Handler writes the first
-    // headers, the negotiated encoding will be added in #writeHeaders().  It is safe to call
-    // pickCompressor multiple times before the headers have been written to the wire, though in
-    // practice this should never happen.  There should only be one call to inboundHeadersReceived.
-
-    // Alternatively, compression could be negotiated after the server handler is invoked, but that
-    // would mean the inbound header would have to be stored until the first #writeHeaders call.
-    if (headers.containsKey(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY)) {
-      Compressor c = pickCompressor(
-          ACCEPT_ENCODING_SPLITER.split(headers.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY)));
-      if (c != null) {
-        messageEncoding = c.getMessageEncoding();
-      }
-    }
-
     inboundPhase(Phase.MESSAGE);
   }
 

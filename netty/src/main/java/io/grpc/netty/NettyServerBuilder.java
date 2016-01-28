@@ -31,14 +31,11 @@
 
 package io.grpc.netty;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.CompressorRegistry;
-import io.grpc.DecompressorRegistry;
 import io.grpc.ExperimentalApi;
 import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
@@ -244,12 +241,9 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
       negotiator = sslContext != null ? ProtocolNegotiators.serverTls(sslContext) :
               ProtocolNegotiators.serverPlaintext();
     }
-    return new NettyServer(address, channelType, bossEventLoopGroup,
-            workerEventLoopGroup, negotiator,
-            firstNonNull(decompressorRegistry(), DecompressorRegistry.getDefaultInstance()),
-            firstNonNull(compressorRegistry(), CompressorRegistry.getDefaultInstance()),
-            maxConcurrentCallsPerConnection, flowControlWindow,
-            maxMessageSize, maxHeaderListSize);
+    return new NettyServer(address, channelType, bossEventLoopGroup, workerEventLoopGroup,
+        negotiator, maxConcurrentCallsPerConnection, flowControlWindow, maxMessageSize,
+        maxHeaderListSize);
   }
 
   @Override

@@ -35,8 +35,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import io.grpc.Compressor;
-import io.grpc.CompressorRegistry;
-import io.grpc.DecompressorRegistry;
+import io.grpc.Decompressor;
 import io.grpc.Metadata;
 import io.grpc.Status;
 
@@ -68,10 +67,6 @@ class DelayedStream implements ClientStream {
   private Status error;
 
   @GuardedBy("this")
-  private Iterable<String> compressionMessageEncodings;
-  @GuardedBy("this")
-  private DecompressorRegistry decompressionRegistry;
-  @GuardedBy("this")
   private final List<PendingMessage> pendingMessages = new LinkedList<PendingMessage>();
   private boolean messageCompressionEnabled;
   @GuardedBy("this")
@@ -81,7 +76,9 @@ class DelayedStream implements ClientStream {
   @GuardedBy("this")
   private boolean pendingFlush;
   @GuardedBy("this")
-  private CompressorRegistry compressionRegistry;
+  private Compressor compressor;
+  @GuardedBy("this")
+  private Decompressor decompressor;
 
   static final class PendingMessage {
     final InputStream message;
@@ -118,15 +115,13 @@ class DelayedStream implements ClientStream {
     checkState(listener != null, "listener");
     realStream.start(listener);
 
-    if (compressionMessageEncodings != null) {
-      realStream.pickCompressor(compressionMessageEncodings);
+    if (decompressor != null) {
+      realStream.setDecompressor(decompressor);
     }
-    if (this.decompressionRegistry != null) {
-      realStream.setDecompressionRegistry(this.decompressionRegistry);
+    if (compressor != null) {
+      realStream.setCompressor(compressor);
     }
-    if (this.compressionRegistry != null) {
-      realStream.setCompressionRegistry(this.compressionRegistry);
-    }
+
     for (PendingMessage message : pendingMessages) {
       realStream.setMessageCompression(message.shouldBeCompressed);
       realStream.writeMessage(message.message);
@@ -246,45 +241,29 @@ class DelayedStream implements ClientStream {
   }
 
   @Override
-  public Compressor pickCompressor(Iterable<String> messageEncodings) {
+  public void setCompressor(Compressor compressor) {
     if (startedRealStream == null) {
       synchronized (this) {
         if (startedRealStream == null) {
-          compressionMessageEncodings = messageEncodings;
-          // ClientCall never uses this.  Since the stream doesn't exist yet, it can't say what
-          // stream it would pick.  Eventually this will need a cleaner solution.
-          // TODO(carl-mastrangelo): Remove this.
-          return null;
-        }
-      }
-    }
-    return startedRealStream.pickCompressor(messageEncodings);
-  }
-
-  @Override
-  public void setCompressionRegistry(CompressorRegistry registry) {
-    if (startedRealStream == null) {
-      synchronized (this) {
-        if (startedRealStream == null) {
-          compressionRegistry = registry;
+          this.compressor = compressor;
           return;
         }
       }
     }
-    startedRealStream.setCompressionRegistry(registry);
+    startedRealStream.setCompressor(compressor);
   }
 
   @Override
-  public void setDecompressionRegistry(DecompressorRegistry registry) {
+  public void setDecompressor(Decompressor decompressor) {
     if (startedRealStream == null) {
       synchronized (this) {
         if (startedRealStream == null) {
-          decompressionRegistry = registry;
+          this.decompressor = decompressor;
           return;
         }
       }
     }
-    startedRealStream.setDecompressionRegistry(registry);
+    startedRealStream.setDecompressor(decompressor);
   }
 
   @Override

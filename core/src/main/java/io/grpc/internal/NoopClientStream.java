@@ -32,8 +32,7 @@
 package io.grpc.internal;
 
 import io.grpc.Compressor;
-import io.grpc.CompressorRegistry;
-import io.grpc.DecompressorRegistry;
+import io.grpc.Decompressor;
 import io.grpc.Status;
 
 import java.io.InputStream;
@@ -68,18 +67,13 @@ public class NoopClientStream implements ClientStream {
   public void halfClose() {}
 
   @Override
-  public void setDecompressionRegistry(DecompressorRegistry registry) {}
-
-  @Override
   public void setMessageCompression(boolean enable) {
     // noop
   }
 
   @Override
-  public Compressor pickCompressor(Iterable<String> messageEncodings) {
-    return null;
-  }
+  public void setCompressor(Compressor compressor) {}
 
   @Override
-  public void setCompressionRegistry(CompressorRegistry registry) {}
+  public void setDecompressor(Decompressor decompressor) {}
 }

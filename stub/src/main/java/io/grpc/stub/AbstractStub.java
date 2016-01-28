@@ -35,6 +35,7 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
+import io.grpc.ExperimentalApi;
 
 import java.util.concurrent.TimeUnit;
 
@@ -114,6 +115,20 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    */
   public final S withDeadlineAfter(long duration, TimeUnit unit) {
     return build(channel, callOptions.withDeadlineAfter(duration, unit));
+  }
+
+  /**
+   *  Set's the compressor name to use for the call.  It is the responsibility of the application
+   *  to make sure the server supports decoding the compressor picked by the client.  To be clear,
+   *  this is the compressor used by the stub to compress messages to the server.  To get
+   *  compressed responses from the server, set the appropriate {@link io.grpc.DecompressorRegistry}
+   *  on the {@link io.grpc.ManagedChannelBuilder}.
+   *
+   * @param compressorName the name (e.g. "gzip") of the compressor to use.
+   */
+  @ExperimentalApi
+  public final S withCompression(String compressorName) {
+    return build(channel, callOptions.withCompression(compressorName));
   }
 
   /**

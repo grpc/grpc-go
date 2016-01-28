@@ -54,8 +54,6 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
 
-import io.grpc.CompressorRegistry;
-import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
@@ -347,7 +345,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Override
   protected NettyServerHandler newHandler() {
     return NettyServerHandler.newHandler(frameReader(), frameWriter(), transportListener,
-        DecompressorRegistry.getDefaultInstance(), CompressorRegistry.getDefaultInstance(),
         maxConcurrentStreams, flowControlWindow, DEFAULT_MAX_MESSAGE_SIZE);
   }
 

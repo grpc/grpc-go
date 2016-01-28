@@ -230,11 +230,6 @@ public class CompressionTest {
       assertNull(clientResponseHeaders.get(MESSAGE_ACCEPT_ENCODING_KEY));
     }
 
-    // Must be null for the first call.
-    assertNull(serverResponseHeaders.get(MESSAGE_ENCODING_KEY));
-    assertFalse(clientCodec.anyWritten);
-    assertFalse(serverCodec.anyRead);
-
     if (clientAcceptEncoding) {
       assertEquals("fzip", serverResponseHeaders.get(MESSAGE_ACCEPT_ENCODING_KEY));
     } else {
@@ -242,7 +237,6 @@ public class CompressionTest {
     }
 
     // Second call, once the client knows what the server supports.
-    stub.unaryCall(REQUEST);
     if (clientEncoding && serverAcceptEncoding) {
       assertEquals("fzip", serverResponseHeaders.get(MESSAGE_ENCODING_KEY));
       if (enableClientMessageCompression) {
@@ -274,7 +268,11 @@ public class CompressionTest {
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
         MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
-      final ClientCall<ReqT, RespT> call = next.newCall(method, callOptions);
+      if (clientEncoding && serverAcceptEncoding) {
+        callOptions = callOptions.withCompression("fzip");
+      }
+      ClientCall<ReqT, RespT> call = next.newCall(method, callOptions);
+
       return new ClientCompressor<ReqT, RespT>(call);
     }
   }

@@ -31,7 +31,6 @@
 
 package io.grpc.internal;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
@@ -40,9 +39,7 @@ import com.google.common.base.MoreObjects;
 
 import io.grpc.Codec;
 import io.grpc.Compressor;
-import io.grpc.CompressorRegistry;
 import io.grpc.Decompressor;
-import io.grpc.DecompressorRegistry;
 
 import java.io.InputStream;
 
@@ -101,10 +98,6 @@ public abstract class AbstractStream<IdT> implements Stream {
   private boolean allocated;
 
   private final Object onReadyLock = new Object();
-  private volatile DecompressorRegistry decompressorRegistry =
-      DecompressorRegistry.getDefaultInstance();
-  private volatile CompressorRegistry compressorRegistry =
-      CompressorRegistry.getDefaultInstance();
 
   @VisibleForTesting
   class FramerSink implements MessageFramer.Sink {
@@ -305,47 +298,14 @@ public abstract class AbstractStream<IdT> implements Stream {
     }
   }
 
-  /**
-   * Looks up the decompressor by its message encoding name, and sets it for this stream.
-   * Decompressors are registered with {@link DecompressorRegistry#register}.
-   *
-   * @param messageEncoding the name of the encoding provided by the remote host
-   * @throws IllegalArgumentException if the provided message encoding cannot be found.
-   */
-  protected final void setDecompressor(String messageEncoding) {
-    Decompressor d = decompressorRegistry.lookupDecompressor(messageEncoding);
-    checkArgument(d != null,
-        "Unable to find decompressor for message encoding %s", messageEncoding);
-    deframer.setDecompressor(d);
+  @Override
+  public final void setCompressor(Compressor compressor) {
+    framer.setCompressor(checkNotNull(compressor, "compressor"));
   }
 
   @Override
-  public final void setDecompressionRegistry(DecompressorRegistry registry) {
-    decompressorRegistry = checkNotNull(registry);
-  }
-
-  @Override
-  public final void setCompressionRegistry(CompressorRegistry registry) {
-    compressorRegistry = checkNotNull(registry);
-  }
-
-  @Override
-  public final Compressor pickCompressor(Iterable<String> messageEncodings) {
-    for (String messageEncoding : messageEncodings) {
-      Compressor c = compressorRegistry.lookupCompressor(messageEncoding);
-      if (c != null) {
-        // TODO(carl-mastrangelo): check that headers haven't already been sent.  I can't find where
-        // the client stream changes outbound phase correctly, so I am ignoring it.
-        framer.setCompressor(c);
-        return c;
-      }
-    }
-    return null;
-  }
-
-  // TODO(carl-mastrangelo): this is a hack to get around registry passing.  Remove it.
-  protected final DecompressorRegistry decompressorRegistry() {
-    return decompressorRegistry;
+  public final void setDecompressor(Decompressor decompressor) {
+    deframer.setDecompressor(checkNotNull(decompressor, "decompressor"));
   }
 
   /**
