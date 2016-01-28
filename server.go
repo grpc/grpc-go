@@ -262,18 +262,21 @@ func (s *Server) Serve(lis net.Listener) error {
 			c.Close()
 			return nil
 		}
-		st, err := transport.NewServerTransport("http2", c, s.opts.maxConcurrentStreams, authInfo)
-		if err != nil {
-			s.errorf("NewServerTransport(%q) failed: %v", c.RemoteAddr(), err)
-			s.mu.Unlock()
-			c.Close()
-			grpclog.Println("grpc: Server.Serve failed to create ServerTransport: ", err)
-			continue
-		}
-		s.conns[st] = true
 		s.mu.Unlock()
 
 		go func() {
+			st, err := transport.NewServerTransport("http2", c, s.opts.maxConcurrentStreams, authInfo)
+			if err != nil {
+				s.mu.Lock()
+				s.errorf("NewServerTransport(%q) failed: %v", c.RemoteAddr(), err)
+				s.mu.Unlock()
+				c.Close()
+				grpclog.Println("grpc: Server.Serve failed to create ServerTransport: ", err)
+				return
+			}
+			s.mu.Lock()
+			s.conns[st] = true
+			s.mu.Unlock()
 			var wg sync.WaitGroup
 			st.HandleStreams(func(stream *transport.Stream) {
 				var trInfo *traceInfo
