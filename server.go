@@ -274,7 +274,12 @@ func (s *Server) Serve(lis net.Listener) error {
 				grpclog.Println("grpc: Server.Serve failed to create ServerTransport: ", err)
 				return
 			}
+			defer st.Close()
 			s.mu.Lock()
+			if s.conns == nil {
+				s.mu.Unlock()
+				return
+			}
 			s.conns[st] = true
 			s.mu.Unlock()
 			var wg sync.WaitGroup
