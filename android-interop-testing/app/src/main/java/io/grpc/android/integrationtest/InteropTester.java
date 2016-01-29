@@ -580,12 +580,13 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     request.responseSize = unaryPayloadLength();
     request.responseType = Messages.COMPRESSABLE;
 
+    SimpleResponse resp = blockingStub.unaryCall(request);
     final SimpleResponse goldenResponse = new SimpleResponse();
     goldenResponse.payload = new Payload();
     goldenResponse.payload.type = Messages.COMPRESSABLE;
     goldenResponse.payload.body = new byte[unaryPayloadLength()];
 
-    assertMessageSizeEquals(goldenResponse, blockingStub.unaryCall(request));
+    assertMessageSizeEquals(goldenResponse, resp);
   }
 
   public void deadlineNotExceeded() {
