@@ -171,6 +171,7 @@ public final class CallOptions {
     deadlineNanoTime = other.deadlineNanoTime;
     authority = other.authority;
     requestKey = other.requestKey;
+    executor = other.executor;
   }
 
   @Override
