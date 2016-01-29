@@ -327,8 +327,8 @@ func listTestEnv() []env {
 	return []env{{"tcp", nil, ""}, {"tcp", nil, "tls"}, {"unix", unixDialer, ""}, {"unix", unixDialer, "tls"}}
 }
 
-func serverSetUp(t *testing.T, servON bool, hs *health.HealthServer, maxStream uint32, cg grpc.CompressorGenerator, dg grpc.DecompressorGenerator, e env) (s *grpc.Server, addr string) {
-	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(maxStream), grpc.CompressON(cg), grpc.DecompressON(dg)}
+func serverSetUp(t *testing.T, servON bool, hs *health.HealthServer, maxStream uint32, cp grpc.Compressor, dc grpc.Decompressor, e env) (s *grpc.Server, addr string) {
+	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(maxStream), grpc.RPCCompressor(cp), grpc.RPCDecompressor(dc)}
 	la := ":0"
 	switch e.network {
 	case "unix":
@@ -367,16 +367,16 @@ func serverSetUp(t *testing.T, servON bool, hs *health.HealthServer, maxStream u
 	return
 }
 
-func clientSetUp(t *testing.T, addr string, cg grpc.CompressorGenerator, dg grpc.DecompressorGenerator, ua string, e env) (cc *grpc.ClientConn) {
+func clientSetUp(t *testing.T, addr string, cp grpc.Compressor, dc grpc.Decompressor, ua string, e env) (cc *grpc.ClientConn) {
 	var derr error
 	if e.security == "tls" {
 		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 		if err != nil {
 			t.Fatalf("Failed to create credentials %v", err)
 		}
-		cc, derr = grpc.Dial(addr, grpc.WithTransportCredentials(creds), grpc.WithDialer(e.dialer), grpc.WithUserAgent(ua), grpc.WithCompressor(cg), grpc.WithDecompressor(dg))
+		cc, derr = grpc.Dial(addr, grpc.WithTransportCredentials(creds), grpc.WithDialer(e.dialer), grpc.WithUserAgent(ua), grpc.WithCompressor(cp), grpc.WithDecompressor(dc))
 	} else {
-		cc, derr = grpc.Dial(addr, grpc.WithDialer(e.dialer), grpc.WithInsecure(), grpc.WithUserAgent(ua), grpc.WithCompressor(cg), grpc.WithDecompressor(dg))
+		cc, derr = grpc.Dial(addr, grpc.WithDialer(e.dialer), grpc.WithInsecure(), grpc.WithUserAgent(ua), grpc.WithCompressor(cp), grpc.WithDecompressor(dc))
 	}
 	if derr != nil {
 		t.Fatalf("Dial(%q) = %v", addr, derr)
@@ -1151,7 +1151,7 @@ func TestCompressServerHasNoSupport(t *testing.T) {
 
 func testCompressServerHasNoSupport(t *testing.T, e env) {
 	s, addr := serverSetUp(t, true, nil, math.MaxUint32, nil, nil, e)
-	cc := clientSetUp(t, addr, grpc.NewGZIPCompressor, nil, "", e)
+	cc := clientSetUp(t, addr, grpc.NewGZIPCompressor(), nil, "", e)
 	// Unary call
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
@@ -1203,8 +1203,8 @@ func TestCompressOK(t *testing.T) {
 }
 
 func testCompressOK(t *testing.T, e env) {
-	s, addr := serverSetUp(t, true, nil, math.MaxUint32, grpc.NewGZIPCompressor, grpc.NewGZIPDecompressor, e)
-	cc := clientSetUp(t, addr, grpc.NewGZIPCompressor, grpc.NewGZIPDecompressor, "", e)
+	s, addr := serverSetUp(t, true, nil, math.MaxUint32, grpc.NewGZIPCompressor(), grpc.NewGZIPDecompressor(), e)
+	cc := clientSetUp(t, addr, grpc.NewGZIPCompressor(), grpc.NewGZIPDecompressor(), "", e)
 	// Unary call
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)

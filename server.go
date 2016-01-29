@@ -93,8 +93,8 @@ type Server struct {
 type options struct {
 	creds                credentials.Credentials
 	codec                Codec
-	cg                   CompressorGenerator
-	dg                   DecompressorGenerator
+	cp                   Compressor
+	dc                   Decompressor
 	maxConcurrentStreams uint32
 }
 
@@ -108,15 +108,15 @@ func CustomCodec(codec Codec) ServerOption {
 	}
 }
 
-func CompressON(f CompressorGenerator) ServerOption {
+func RPCCompressor(cp Compressor) ServerOption {
 	return func(o *options) {
-		o.cg = f
+		o.cp = cp
 	}
 }
 
-func DecompressON(f DecompressorGenerator) ServerOption {
+func RPCDecompressor(dc Decompressor) ServerOption {
 	return func(o *options) {
-		o.dg = f
+		o.dc = dc
 	}
 }
 
@@ -362,11 +362,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			return err
 		}
 
-		var dc Decompressor
-		if pf == compressionMade && s.opts.dg != nil {
-			dc = s.opts.dg()
-		}
-		if err := checkRecvPayload(pf, stream.RecvCompress(), dc); err != nil {
+		if err := checkRecvPayload(pf, stream.RecvCompress(), s.opts.dc); err != nil {
 			switch err := err.(type) {
 			case transport.StreamError:
 				if err := t.WriteStatus(stream, err.Code, err.Desc); err != nil {
@@ -385,7 +381,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		df := func(v interface{}) error {
 			if pf == compressionMade {
 				var err error
-				req, err = dc.Do(bytes.NewReader(req))
+				req, err = s.opts.dc.Do(bytes.NewReader(req))
 				if err != nil {
 					if err := t.WriteStatus(stream, codes.Internal, err.Error()); err != nil {
 						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
@@ -427,12 +423,10 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			Last:  true,
 			Delay: false,
 		}
-		var cp Compressor
-		if s.opts.cg != nil {
-			cp = s.opts.cg()
-			stream.SetSendCompress(cp.Type())
+		if s.opts.cp != nil {
+			stream.SetSendCompress(s.opts.cp.Type())
 		}
-		if err := s.sendResponse(t, stream, reply, cp, opts); err != nil {
+		if err := s.sendResponse(t, stream, reply, s.opts.cp, opts); err != nil {
 			switch err := err.(type) {
 			case transport.ConnectionError:
 				// Nothing to do here.
@@ -453,21 +447,19 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
-	var cp Compressor
-	if s.opts.cg != nil {
-		cp = s.opts.cg()
-		stream.SetSendCompress(cp.Type())
+	if s.opts.cp != nil {
+		stream.SetSendCompress(s.opts.cp.Type())
 	}
 	ss := &serverStream{
 		t:      t,
 		s:      stream,
 		p:      &parser{s: stream},
 		codec:  s.opts.codec,
-		cp:     cp,
-		dg:     s.opts.dg,
+		cp:     s.opts.cp,
+		dc:     s.opts.dc,
 		trInfo: trInfo,
 	}
-	if cp != nil {
+	if ss.cp != nil {
 		ss.cbuf = new(bytes.Buffer)
 	}
 	if trInfo != nil {
