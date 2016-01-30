@@ -194,7 +194,7 @@ artifacts {
 [
   install.repositories.mavenInstaller,
   uploadArchives.repositories.mavenDeployer,
-]*.addFilter('all') {artifact, file ->
+]*.setFilter {artifact, file ->
   ! (file.getName().endsWith('jar') || file.getName().endsWith('jar.asc'))
 }
 
@@ -207,6 +207,19 @@ artifacts {
   }
   if (ret.exitValue != 0) {
     throw new GradleException("check-artifact.sh exited with " + ret.exitValue)
+  }
+}
+
+[
+  install.repositories.mavenInstaller,
+  uploadArchives.repositories.mavenDeployer,
+]*.pom*.whenConfigured { pom ->
+  pom.project {
+    // This isn't any sort of Java archive artifact, and OSSRH doesn't enforce
+    // javadoc for 'pom' packages. 'exe' would be a more appropriate packaging
+    // value, but it isn't clear how that will be interpreted. In addition,
+    // 'pom' is typically the value used when building an exe with Maven.
+    packaging = "pom"
   }
 }
 
