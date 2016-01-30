@@ -59,7 +59,7 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative</artifactId>
-      <version>1.1.33.Fork9</version>
+      <version>1.1.33.Fork11</version>
       <classifier>${tcnative.classifier}</classifier>
     </dependency>
   </dependencies>
@@ -127,7 +127,7 @@ if (osdetector.os == "linux" && osdetector.release.isLike("fedora")) {
 }
 
 dependencies {
-    compile 'io.netty:netty-tcnative:1.1.33.Fork9:' + tcnative_classifier
+    compile 'io.netty:netty-tcnative:1.1.33.Fork11:' + tcnative_classifier
 }
 ```
 
