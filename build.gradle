@@ -144,8 +144,8 @@ subprojects {
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufNanoVersion}",
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.4',
 
-                netty: 'io.netty:netty-codec-http2:4.1.0.Beta8',
-                netty_epoll: 'io.netty:netty-transport-native-epoll:4.1.0.Beta8' + epoll_suffix,
+                netty: 'io.netty:netty-codec-http2:4.1.0.CR1',
+                netty_epoll: 'io.netty:netty-transport-native-epoll:4.1.0.CR1' + epoll_suffix,
                 netty_tcnative: 'io.netty:netty-tcnative:1.1.33.Fork9:' + tcnative_suffix,
 
                 // Test dependencies.

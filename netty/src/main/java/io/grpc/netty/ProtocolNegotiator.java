@@ -44,6 +44,9 @@ public interface ProtocolNegotiator {
 
   /**
    * The Netty handler to control the protocol negotiation.
+   *
+   * <p>TODO(carl-mastrangelo): Replace ChannelHandler with ChannelInboundHandler or
+   * ChannelOutboundHandler, since exceptionCaught is deprecated.
    */
   interface Handler extends ChannelHandler {
     /**

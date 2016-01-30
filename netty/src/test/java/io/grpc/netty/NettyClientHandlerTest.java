@@ -63,6 +63,7 @@ import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
@@ -248,13 +249,16 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
   @Test
   public void inboundDataShouldForwardToStream() throws Exception {
+    ByteBuf data = content().copy();
     createStream();
 
     // Create a data frame and then trigger the handler to read it.
     // Need to retain to simulate what is done by the stream.
     ByteBuf frame = dataFrame(3, false).retain();
     channelRead(frame);
-    verify(stream).transportDataReceived(eq(content()), eq(false));
+    ArgumentCaptor<ByteBuf> captor = ArgumentCaptor.forClass(ByteBuf.class);
+    verify(stream).transportDataReceived(captor.capture(), eq(false));
+    assertTrue(ByteBufUtil.equals(data, captor.getValue()));
   }
 
   @Test

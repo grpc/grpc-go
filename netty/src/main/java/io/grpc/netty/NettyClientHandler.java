@@ -119,8 +119,8 @@ class NettyClientHandler extends AbstractNettyHandler {
                                        int flowControlWindow, int maxHeaderListSize,
                                        Ticker ticker) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
-    Http2HeadersDecoder headersDecoder =
-        new DefaultHttp2HeadersDecoder(maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE);
+    Http2HeadersDecoder headersDecoder = new DefaultHttp2HeadersDecoder(
+        maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE, true);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader(headersDecoder);
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
     Http2Connection connection = new DefaultHttp2Connection(false);

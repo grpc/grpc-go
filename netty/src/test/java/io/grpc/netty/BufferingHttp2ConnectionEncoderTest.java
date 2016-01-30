@@ -62,6 +62,7 @@ import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
+import io.netty.handler.codec.http2.Http2ConnectionHandlerBuilder;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameListener;
 import io.netty.handler.codec.http2.Http2FrameWriter;
@@ -116,7 +117,8 @@ public class BufferingHttp2ConnectionEncoderTest {
         new DefaultHttp2FrameReader());
     decoder.frameListener(frameListener);
 
-    Http2ConnectionHandler handler = new Http2ConnectionHandler.Builder().build(decoder, encoder);
+    Http2ConnectionHandler handler =
+        new Http2ConnectionHandlerBuilder().codec(decoder, encoder).build();
     channel = new EmbeddedChannel(handler);
     ctx = channel.pipeline().context(handler);
   }

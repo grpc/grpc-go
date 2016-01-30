@@ -115,8 +115,8 @@ class NettyServerHandler extends AbstractNettyHandler {
                                        int maxMessageSize) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, NettyServerHandler.class);
-    Http2HeadersDecoder headersDecoder =
-        new DefaultHttp2HeadersDecoder(maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE);
+    Http2HeadersDecoder headersDecoder = new DefaultHttp2HeadersDecoder(
+        maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE, true);
     Http2FrameReader frameReader = new Http2InboundFrameLogger(
         new DefaultHttp2FrameReader(headersDecoder), frameLogger);
     Http2FrameWriter frameWriter =
