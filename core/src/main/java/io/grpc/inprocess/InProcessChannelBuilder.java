@@ -36,8 +36,8 @@ import com.google.common.base.Preconditions;
 import io.grpc.ExperimentalApi;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
-import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.ManagedClientTransport;
 
 import java.net.SocketAddress;
 
@@ -89,7 +89,7 @@ public class InProcessChannelBuilder extends
     }
 
     @Override
-    public ClientTransport newClientTransport(SocketAddress addr, String authority) {
+    public ManagedClientTransport newClientTransport(SocketAddress addr, String authority) {
       return new InProcessTransport(name);
     }
 

@@ -33,7 +33,7 @@ package io.grpc.internal;
 
 import java.net.SocketAddress;
 
-/** Pre-configured factory for creating {@link ClientTransport} instances. */
+/** Pre-configured factory for creating {@link ManagedClientTransport} instances. */
 public interface ClientTransportFactory extends ReferenceCounted {
   /**
    * Creates an unstarted transport for exclusive use.
@@ -41,5 +41,5 @@ public interface ClientTransportFactory extends ReferenceCounted {
    * @param serverAddress the address that the transport is connected to
    * @param authority the HTTP/2 authority of the server
    */
-  ClientTransport newClientTransport(SocketAddress serverAddress, String authority);
+  ManagedClientTransport newClientTransport(SocketAddress serverAddress, String authority);
 }

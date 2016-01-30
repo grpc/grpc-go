@@ -40,7 +40,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
-import io.grpc.internal.ClientTransport;
+import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.NoopClientStream;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
@@ -59,12 +59,12 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
 @ThreadSafe
-class InProcessTransport implements ServerTransport, ClientTransport {
+class InProcessTransport implements ServerTransport, ManagedClientTransport {
   private static final Logger log = Logger.getLogger(InProcessTransport.class.getName());
 
   private final String name;
   private ServerTransportListener serverTransportListener;
-  private ClientTransport.Listener clientTransportListener;
+  private ManagedClientTransport.Listener clientTransportListener;
   @GuardedBy("this")
   private boolean shutdown;
   @GuardedBy("this")
@@ -79,7 +79,7 @@ class InProcessTransport implements ServerTransport, ClientTransport {
   }
 
   @Override
-  public synchronized void start(ClientTransport.Listener listener) {
+  public synchronized void start(ManagedClientTransport.Listener listener) {
     this.clientTransportListener = listener;
     InProcessServer server = InProcessServer.findServer(name);
     if (server != null) {
@@ -152,7 +152,7 @@ class InProcessTransport implements ServerTransport, ClientTransport {
 
   @Override
   public synchronized void shutdown() {
-    // Can be called multiple times: once for ClientTransport, once for ServerTransport.
+    // Can be called multiple times: once for ManagedClientTransport, once for ServerTransport.
     if (shutdown) {
       return;
     }

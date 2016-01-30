@@ -40,7 +40,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
-import io.grpc.internal.ClientTransport;
+import io.grpc.internal.ManagedClientTransport;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -56,9 +56,9 @@ import java.util.concurrent.Executor;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
- * A Netty-based {@link ClientTransport} implementation.
+ * A Netty-based {@link ManagedClientTransport} implementation.
  */
-class NettyClientTransport implements ClientTransport {
+class NettyClientTransport implements ManagedClientTransport {
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;

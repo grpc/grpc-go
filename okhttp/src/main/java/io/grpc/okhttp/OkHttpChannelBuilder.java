@@ -46,9 +46,9 @@ import io.grpc.ExperimentalApi;
 import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
-import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
@@ -255,7 +255,7 @@ public class OkHttpChannelBuilder extends
     }
 
     @Override
-    public ClientTransport newClientTransport(SocketAddress addr, String authority) {
+    public ManagedClientTransport newClientTransport(SocketAddress addr, String authority) {
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
       return new OkHttpClientTransport(inetSocketAddr, authority, executor, socketFactory,
           Utils.convertSpec(connectionSpec), maxMessageSize);

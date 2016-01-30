@@ -53,6 +53,8 @@ import javax.annotation.concurrent.GuardedBy;
  * DelayedStream} may be internally altered by different threads, thus internal synchronization is
  * necessary.
  */
+// TODO(zhangkun83): merge it with DelayedClientTransport.PendingStream as it will be no longer
+// needed by ClientCallImpl as we move away from ListenableFuture<ClientTransport>
 class DelayedStream implements ClientStream {
 
   // set to non null once both listener and realStream are valid.  After this point it is safe

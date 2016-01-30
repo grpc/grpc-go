@@ -50,8 +50,8 @@ import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
-import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
@@ -92,7 +92,7 @@ import java.util.concurrent.TimeoutException;
 public class NettyClientTransportTest {
 
   @Mock
-  private ClientTransport.Listener clientTransportListener;
+  private ManagedClientTransport.Listener clientTransportListener;
 
   private final List<NettyClientTransport> transports = new ArrayList<NettyClientTransport>();
   private NioEventLoopGroup group;

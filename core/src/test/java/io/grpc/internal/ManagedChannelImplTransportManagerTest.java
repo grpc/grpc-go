@@ -55,6 +55,7 @@ import io.grpc.LoadBalancer;
 import io.grpc.NameResolver;
 import io.grpc.Status;
 import io.grpc.TransportManager;
+import io.grpc.internal.TestUtils.MockClientTransportInfo;
 
 import org.junit.After;
 import org.junit.Before;
@@ -148,10 +149,10 @@ public class ManagedChannelImplTransportManagerTest {
 
   @Test
   public void createAndReuseTransport() throws Exception {
-    doAnswer(new Answer<ClientTransport>() {
+    doAnswer(new Answer<ManagedClientTransport>() {
       @Override
-      public ClientTransport answer(InvocationOnMock invocation) throws Throwable {
-        return mock(ClientTransport.class);
+      public ManagedClientTransport answer(InvocationOnMock invocation) throws Throwable {
+        return mock(ManagedClientTransport.class);
       }
     }).when(mockTransportFactory).newClientTransport(any(SocketAddress.class), any(String.class));
 
@@ -173,8 +174,8 @@ public class ManagedChannelImplTransportManagerTest {
     SocketAddress addr2 = mock(SocketAddress.class);
     EquivalentAddressGroup addressGroup = new EquivalentAddressGroup(Arrays.asList(addr1, addr2));
 
-    LinkedList<ClientTransport.Listener> listeners =
-        TestUtils.captureListeners(mockTransportFactory);
+    LinkedList<MockClientTransportInfo> transports =
+        TestUtils.captureTransports(mockTransportFactory);
 
     // Invocation counters
     int backoffReset = 0;
@@ -185,7 +186,7 @@ public class ManagedChannelImplTransportManagerTest {
     verify(mockTransportFactory).newClientTransport(addr1, authority);
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
     // Fail the first transport, without setting it to ready
-    listeners.poll().transportShutdown(Status.UNAVAILABLE);
+    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
     // Subsequent getTransport() will use the next address
     ListenableFuture<ClientTransport> future2a = tm.getTransport(addressGroup);
@@ -197,9 +198,9 @@ public class ManagedChannelImplTransportManagerTest {
     assertSame(future2a.get(), future2b.get());
     assertNotSame(future1.get(), future2a.get());
     // Make the second transport ready
-    listeners.peek().transportReady();
+    transports.peek().listener.transportReady();
     // Disconnect the second transport
-    listeners.poll().transportShutdown(Status.UNAVAILABLE);
+    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
     // Subsequent getTransport() will use the next address, which is the first one since we have run
     // out of addresses.
@@ -212,7 +213,7 @@ public class ManagedChannelImplTransportManagerTest {
     verify(mockBackoffPolicy, times(0)).nextBackoffMillis();
     verify(mockTransportFactory, times(2)).newClientTransport(addr1, authority);
     verifyNoMoreInteractions(mockTransportFactory);
-    assertEquals(1, listeners.size());
+    assertEquals(1, transports.size());
   }
 
   @Test
@@ -221,8 +222,8 @@ public class ManagedChannelImplTransportManagerTest {
     SocketAddress addr2 = mock(SocketAddress.class);
     EquivalentAddressGroup addressGroup = new EquivalentAddressGroup(Arrays.asList(addr1, addr2));
 
-    LinkedList<ClientTransport.Listener> listeners =
-        TestUtils.captureListeners(mockTransportFactory);
+    LinkedList<MockClientTransportInfo> transports =
+        TestUtils.captureTransports(mockTransportFactory);
 
     // Invocation counters
     int transportsAddr1 = 0;
@@ -236,9 +237,9 @@ public class ManagedChannelImplTransportManagerTest {
     verify(mockTransportFactory, times(++transportsAddr1)).newClientTransport(addr1, authority);
     // Back-off policy was set initially.
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
-    listeners.peek().transportReady();
+    transports.peek().listener.transportReady();
     // Then close it
-    listeners.poll().transportShutdown(Status.UNAVAILABLE);
+    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
     // Second pick fails. This is the beginning of a series of failures.
     ListenableFuture<ClientTransport> future2 = tm.getTransport(addressGroup);
@@ -246,7 +247,7 @@ public class ManagedChannelImplTransportManagerTest {
     verify(mockTransportFactory, times(++transportsAddr2)).newClientTransport(addr2, authority);
     // Back-off policy was reset.
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
-    listeners.poll().transportShutdown(Status.UNAVAILABLE);
+    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
     // Third pick fails too
     ListenableFuture<ClientTransport> future3 = tm.getTransport(addressGroup);
@@ -254,7 +255,7 @@ public class ManagedChannelImplTransportManagerTest {
     verify(mockTransportFactory, times(++transportsAddr1)).newClientTransport(addr1, authority);
     // Back-off policy was not reset.
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
-    listeners.poll().transportShutdown(Status.UNAVAILABLE);
+    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
     // Forth pick is on addr2, back-off policy kicks in.
     ListenableFuture<ClientTransport> future4 = tm.getTransport(addressGroup);

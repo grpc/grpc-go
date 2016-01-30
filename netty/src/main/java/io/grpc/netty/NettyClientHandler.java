@@ -42,10 +42,10 @@ import com.google.common.base.Ticker;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusException;
-import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
+import io.grpc.internal.ManagedClientTransport;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -115,7 +115,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   private Throwable goAwayStatusThrowable;
   private int nextStreamId;
 
-  static NettyClientHandler newHandler(ClientTransport.Listener listener,
+  static NettyClientHandler newHandler(ManagedClientTransport.Listener listener,
                                        int flowControlWindow, int maxHeaderListSize,
                                        Ticker ticker) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
@@ -131,7 +131,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   static NettyClientHandler newHandler(Http2Connection connection,
                                        Http2FrameReader frameReader,
                                        Http2FrameWriter frameWriter,
-                                       final ClientTransport.Listener listener,
+                                       final ManagedClientTransport.Listener listener,
                                        int flowControlWindow,
                                        Ticker ticker) {
     Preconditions.checkNotNull(connection, "connection");

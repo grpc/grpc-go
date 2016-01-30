@@ -43,9 +43,9 @@ import io.grpc.Internal;
 import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AbstractReferenceCounted;
-import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.SharedResourceHolder;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
@@ -304,7 +304,8 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     }
 
     @Override
-    public ClientTransport newClientTransport(SocketAddress serverAddress, String authority) {
+    public ManagedClientTransport newClientTransport(
+        SocketAddress serverAddress, String authority) {
       ProtocolNegotiator negotiator = protocolNegotiator != null ? protocolNegotiator :
           createProtocolNegotiator(authority, negotiationType, sslContext);
       return new NettyClientTransport(serverAddress, channelType, group, negotiator,

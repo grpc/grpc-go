@@ -117,7 +117,7 @@ public class ManagedChannelImplTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
   @Mock
-  private ClientTransport mockTransport;
+  private ManagedClientTransport mockTransport;
   @Mock
   private ClientTransportFactory mockTransportFactory;
   @Mock
@@ -127,8 +127,8 @@ public class ManagedChannelImplTest {
   @Mock
   private ClientCall.Listener<Integer> mockCallListener3;
 
-  private ArgumentCaptor<ClientTransport.Listener> transportListenerCaptor =
-      ArgumentCaptor.forClass(ClientTransport.Listener.class);
+  private ArgumentCaptor<ManagedClientTransport.Listener> transportListenerCaptor =
+      ArgumentCaptor.forClass(ManagedClientTransport.Listener.class);
   private ArgumentCaptor<ClientStreamListener> streamListenerCaptor =
       ArgumentCaptor.forClass(ClientStreamListener.class);
 
@@ -183,7 +183,6 @@ public class ManagedChannelImplTest {
     verifyNoMoreInteractions(mockTransportFactory);
 
     // Create transport and call
-    ClientTransport mockTransport = mock(ClientTransport.class);
     ClientStream mockStream = mock(ClientStream.class);
     Metadata headers = new Metadata();
     when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class)))
@@ -193,7 +192,7 @@ public class ManagedChannelImplTest {
     verify(mockTransportFactory, timeout(1000))
         .newClientTransport(same(socketAddress), eq(authority));
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
-    ClientTransport.Listener transportListener = transportListenerCaptor.getValue();
+    ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();
     verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
     verify(mockStream).start(streamListenerCaptor.capture());
     verify(mockStream).setCompressor(isA(Compressor.class));
@@ -277,7 +276,7 @@ public class ManagedChannelImplTest {
     call.cancel();
 
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
-    final ClientTransport.Listener transportListener = transportListenerCaptor.getValue();
+    final ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();
     final Object lock = new Object();
     final CyclicBarrier barrier = new CyclicBarrier(2);
     new Thread() {
@@ -386,8 +385,8 @@ public class ManagedChannelImplTest {
     final SocketAddress badAddress = new SocketAddress() {};
     final ResolvedServerInfo goodServer = new ResolvedServerInfo(goodAddress, Attributes.EMPTY);
     final ResolvedServerInfo badServer = new ResolvedServerInfo(badAddress, Attributes.EMPTY);
-    final ClientTransport goodTransport = mock(ClientTransport.class);
-    final ClientTransport badTransport = mock(ClientTransport.class);
+    final ManagedClientTransport goodTransport = mock(ManagedClientTransport.class);
+    final ManagedClientTransport badTransport = mock(ManagedClientTransport.class);
     when(mockTransportFactory.newClientTransport(same(goodAddress), any(String.class)))
         .thenReturn(goodTransport);
     when(mockTransportFactory.newClientTransport(same(badAddress), any(String.class)))
@@ -413,8 +412,8 @@ public class ManagedChannelImplTest {
 
     // First try should fail with the bad address.
     call.start(mockCallListener, headers);
-    ArgumentCaptor<ClientTransport.Listener> badTransportListenerCaptor =
-        ArgumentCaptor.forClass(ClientTransport.Listener.class);
+    ArgumentCaptor<ManagedClientTransport.Listener> badTransportListenerCaptor =
+        ArgumentCaptor.forClass(ManagedClientTransport.Listener.class);
     verify(mockCallListener, timeout(1000)).onClose(same(Status.UNAVAILABLE), any(Metadata.class));
     verify(badTransport, timeout(1000)).start(badTransportListenerCaptor.capture());
     badTransportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);

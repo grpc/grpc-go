@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -33,25 +33,21 @@ package io.grpc.internal;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.Status;
 
 import java.util.concurrent.Executor;
-
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * The client-side transport encapsulating a single connection to a remote server. Allows creation
- * of new {@link Stream} instances for communication with the server. All methods on the transport
- * and its listener are expected to execute quickly.
- *
- * <p>{@link #start} must be the first method call to this interface and return before calling other
- * methods.
+ * The client-side transport typically encapsulating a single connection to a remote
+ * server. However, streams created before the client has discovered any server address may
+ * eventually be issued on different connections.  All methods on the transport and its callbacks
+ * are expected to execute quickly.
  */
 @ThreadSafe
 public interface ClientTransport {
 
   /**
-   * Creates a new stream for sending messages to the remote end-point.
+   * Creates a new stream for sending messages to a remote end-point.
    *
    * <p>
    * This method returns immediately and does not wait for any validation of the request. If
@@ -67,63 +63,17 @@ public interface ClientTransport {
   ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers);
 
   /**
-   * Starts transport. This method may only be called once.
+   * Pings a remote endpoint. When an acknowledgement is received, the given callback will be
+   * invoked using the given executor.
    *
-   * <p>Implementations must not call {@code listener} from within {@link #start}; implementations
-   * are expected to notify listener on a separate thread.  This method should not throw any
-   * exceptions.
-   *
-   * @param listener non-{@code null} listener of transport events
-   */
-  void start(Listener listener);
-
-  /**
-   * Pings the remote endpoint to verify that the transport is still active. When an acknowledgement
-   * is received, the given callback will be invoked using the given executor.
+   * <p>Pings are not necessarily sent to the same endpont, thus a successful ping only means at
+   * least one endpoint responded, but doesn't imply the availability of other endpoints (if there
+   * is any).
    *
    * <p>This is an optional method. Transports that do not have any mechanism by which to ping the
    * remote endpoint may throw {@link UnsupportedOperationException}.
    */
   void ping(PingCallback callback, Executor executor);
-
-  /**
-   * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
-   * fail (once {@link Listener#transportShutdown} callback called). This method may only be called
-   * once.
-   */
-  void shutdown();
-
-  /**
-   * Receives notifications for the transport life-cycle events. Implementation does not need to be
-   * thread-safe, so notifications must be properly sychronized externally.
-   */
-  interface Listener {
-    /**
-     * The transport is shutting down. No new streams will be processed, but existing streams may
-     * continue. Shutdown could have been caused by an error or normal operation.  It is possible
-     * that this method is called without {@link #shutdown} being called.  If the argument to this
-     * function is {@link Status#isOk}, it is safe to immediately reconnect.
-     *
-     * <p>This is called exactly once, and must be called prior to {@link #transportTerminated}.
-     *
-     * @param s the reason for the shutdown.
-     */
-    void transportShutdown(Status s);
-
-    /**
-     * The transport completed shutting down. All resources have been released.
-     *
-     * <p>This is called exactly once, and must be called after {@link #transportShutdown} has been
-     * called.
-     */
-    void transportTerminated();
-
-    /**
-     * The transport is ready to accept traffic, because the connection is established.  This is
-     * called at most once.
-     */
-    void transportReady();
-  }
 
   /**
    * A callback that is invoked when the acknowledgement to a {@link #ping} is received. Exactly one

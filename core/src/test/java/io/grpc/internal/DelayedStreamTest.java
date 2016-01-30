@@ -63,7 +63,6 @@ public class DelayedStreamTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
   @Mock private ClientStreamListener listener;
-  @Mock private ClientTransport transport;
   @Mock private ClientStream realStream;
   @Captor private ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
   private DelayedStream stream = new DelayedStream();

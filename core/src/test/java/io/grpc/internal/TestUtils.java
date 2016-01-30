@@ -34,6 +34,10 @@ package io.grpc.internal;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -46,31 +50,53 @@ import java.util.LinkedList;
  */
 final class TestUtils {
 
-  /**
-   * Stub the given mock {@link ClientTransportFactory} by returning mock {@link ClientTransport}s
-   * which saves their listeners to a list which is returned by this method.
-   */
-  static LinkedList<ClientTransport.Listener> captureListeners(
-      ClientTransportFactory mockTransportFactory) {
-    final LinkedList<ClientTransport.Listener> listeners =
-        new LinkedList<ClientTransport.Listener>();
+  static class MockClientTransportInfo {
+    /**
+     * A mock transport created by the mock transport factory.
+     */
+    final ManagedClientTransport transport;
 
-    doAnswer(new Answer<ClientTransport>() {
+    /**
+     * The listener passed to the start() of the mock transport.
+     */
+    final ManagedClientTransport.Listener listener;
+
+    MockClientTransportInfo(ManagedClientTransport transport,
+        ManagedClientTransport.Listener listener) {
+      this.transport = transport;
+      this.listener = listener;
+    }
+  }
+
+  /**
+   * Stub the given mock {@link ClientTransportFactory} by returning mock
+   * {@link ManagedClientTransport}s which saves their listeners along with them. This method
+   * returns a list of {@link MockClientTransportInfo}, each of which is a started mock transport
+   * and its listener.
+   */
+  static LinkedList<MockClientTransportInfo> captureTransports(
+      ClientTransportFactory mockTransportFactory) {
+    final LinkedList<MockClientTransportInfo> captor = new LinkedList<MockClientTransportInfo>();
+
+    doAnswer(new Answer<ManagedClientTransport>() {
       @Override
-      public ClientTransport answer(InvocationOnMock invocation) throws Throwable {
-        ClientTransport mockTransport = mock(ClientTransport.class);
+      public ManagedClientTransport answer(InvocationOnMock invocation) throws Throwable {
+        final ManagedClientTransport mockTransport = mock(ManagedClientTransport.class);
+        when(mockTransport.newStream(any(MethodDescriptor.class), any(Metadata.class)))
+            .thenReturn(mock(ClientStream.class));
         // Save the listener
         doAnswer(new Answer<Void>() {
           @Override
           public Void answer(InvocationOnMock invocation) throws Throwable {
-            listeners.add((ClientTransport.Listener) invocation.getArguments()[0]);
+            captor.add(new MockClientTransportInfo(
+                mockTransport, (ManagedClientTransport.Listener) invocation.getArguments()[0]));
             return null;
           }
-        }).when(mockTransport).start(any(ClientTransport.Listener.class));
+        }).when(mockTransport).start(any(ManagedClientTransport.Listener.class));
         return mockTransport;
       }
     }).when(mockTransportFactory).newClientTransport(any(SocketAddress.class), any(String.class));
 
-    return listeners;
+    return captor;
   }
 }

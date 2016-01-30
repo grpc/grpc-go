@@ -44,9 +44,9 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.Status.Code;
-import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
+import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
@@ -84,9 +84,9 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
- * A okhttp-based {@link ClientTransport} implementation.
+ * A okhttp-based {@link ManagedClientTransport} implementation.
  */
-class OkHttpClientTransport implements ClientTransport {
+class OkHttpClientTransport implements ManagedClientTransport {
   private static final Map<ErrorCode, Status> ERROR_CODE_TO_STATUS;
   private static final Logger log = Logger.getLogger(OkHttpClientTransport.class.getName());
   private static final OkHttpClientStream[] EMPTY_STREAM_ARRAY = new OkHttpClientStream[0];

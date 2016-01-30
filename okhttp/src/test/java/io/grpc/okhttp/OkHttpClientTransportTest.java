@@ -73,6 +73,7 @@ import io.grpc.internal.AbstractStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.ManagedClientTransport;
 import io.grpc.okhttp.OkHttpClientTransport.ClientFrameHandler;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
@@ -131,7 +132,7 @@ public class OkHttpClientTransportTest {
   @Mock
   MethodDescriptor<?, ?> method;
   @Mock
-  private ClientTransport.Listener transportListener;
+  private ManagedClientTransport.Listener transportListener;
   private OkHttpClientTransport clientTransport;
   private MockFrameReader frameReader;
   private ExecutorService executor;
@@ -1323,7 +1324,7 @@ public class OkHttpClientTransportTest {
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE);
 
-    ClientTransport.Listener listener = mock(ClientTransport.Listener.class);
+    ManagedClientTransport.Listener listener = mock(ManagedClientTransport.Listener.class);
     clientTransport.start(listener);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener, timeout(TIME_OUT_MS)).transportShutdown(captor.capture());
