@@ -157,8 +157,6 @@ public class TlsTest {
    */
   @Test
   public void serverRejectsUntrustedClientCert() throws Exception {
-    // TODO(ejona): Issue #1325 OpenSSL doesn't work
-    Assume.assumeTrue(sslProvider != SslProvider.OPENSSL);
     // Create & start a server. It requires client authentication and trusts only the test CA.
     File serverCertFile = TestUtils.loadCert("server1.pem");
     File serverPrivateKeyFile = TestUtils.loadCert("server1.key");
@@ -204,9 +202,7 @@ public class TlsTest {
    */
   @Test
   public void noClientAuthFailure() throws Exception {
-    // TODO(ejona): Issue #1325 OpenSSL doesn't work
-    Assume.assumeTrue(sslProvider != SslProvider.OPENSSL);
-     // Create & start a server.
+    // Create & start a server.
     File serverCertFile = TestUtils.loadCert("server1.pem");
     File serverPrivateKeyFile = TestUtils.loadCert("server1.key");
     X509Certificate[] serverTrustedCaCerts = {
