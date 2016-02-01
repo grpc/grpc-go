@@ -103,7 +103,7 @@ func (r *testNameResolver) Resolve(target string) (naming.Watcher, error) {
 func startServers(t *testing.T, numServers, port int, maxStreams uint32) ([]*server, *testNameResolver) {
 	var servers []*server
 	for i := 0; i < numServers; i++ {
-		s := &server{readyChan: make(chan bool)}
+		s := newTestServer()
 		servers = append(servers, s)
 		go s.start(t, port, maxStreams)
 		s.wait(t, 2*time.Second)

@@ -35,6 +35,7 @@ package transport
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"math"
 	"net"
@@ -50,12 +51,11 @@ import (
 )
 
 type server struct {
-	lis  net.Listener
-	port string
-	// channel to signal server is ready to serve.
-	readyChan chan bool
-	mu        sync.Mutex
-	conns     map[ServerTransport]bool
+	lis        net.Listener
+	port       string
+	startedErr chan error // error (or nil) with server start value
+	mu         sync.Mutex
+	conns      map[ServerTransport]bool
 }
 
 var (
@@ -136,17 +136,17 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
 		s.lis, err = net.Listen("tcp", ":"+strconv.Itoa(port))
 	}
 	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
+		s.startedErr <- fmt.Errorf("failed to listen: %v", err)
+		return
 	}
 	_, p, err := net.SplitHostPort(s.lis.Addr().String())
 	if err != nil {
-		t.Fatalf("failed to parse listener address: %v", err)
+		s.startedErr <- fmt.Errorf("failed to parse listener address: %v", err)
+		return
 	}
 	s.port = p
 	s.conns = make(map[ServerTransport]bool)
-	if s.readyChan != nil {
-		close(s.readyChan)
-	}
+	s.startedErr <- nil
 	for {
 		conn, err := s.lis.Accept()
 		if err != nil {
@@ -182,7 +182,10 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
 
 func (s *server) wait(t *testing.T, timeout time.Duration) {
 	select {
-	case <-s.readyChan:
+	case err := <-s.startedErr:
+		if err != nil {
+			t.Fatal(err)
+		}
 	case <-time.After(timeout):
 		t.Fatalf("Timed out after %v waiting for server to be ready", timeout)
 	}
@@ -199,7 +202,7 @@ func (s *server) stop() {
 }
 
 func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, ClientTransport) {
-	server := &server{readyChan: make(chan bool)}
+	server := &server{startedErr: make(chan error, 1)}
 	go server.start(t, port, maxStreams, ht)
 	server.wait(t, 2*time.Second)
 	addr := "localhost:" + server.port
