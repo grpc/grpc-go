@@ -286,21 +286,23 @@ func TestReconnectTimeout(t *testing.T) {
 	waitC := make(chan struct{})
 	go func() {
 		defer close(waitC)
-		argSize := 271828
-		respSize := 314159
+		const argSize = 271828
+		const respSize = 314159
 
-		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize))
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 
 		req := &testpb.SimpleRequest{
 			ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-			ResponseSize: proto.Int32(int32(respSize)),
+			ResponseSize: proto.Int32(respSize),
 			Payload:      payload,
 		}
 		if _, err := tc.UnaryCall(context.Background(), req); err == nil {
-			t.Fatalf("TestService/UnaryCall(_, _) = _, <nil>, want _, non-nil")
+			t.Errorf("TestService/UnaryCall(_, _) = _, <nil>, want _, non-nil")
+			return
 		}
 	}()
 	// Block untill reconnect times out.
@@ -664,29 +666,32 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 }
 
 func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup) {
-	argSize := 2718
-	respSize := 314
+	defer wg.Done()
+	const argSize = 2718
+	const respSize = 314
 
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(argSize))
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(respSize)),
+		ResponseSize: proto.Int32(respSize),
 		Payload:      payload,
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if err != nil {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
+		t.Errorf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
+		return
 	}
 	pt := reply.GetPayload().GetType()
 	ps := len(reply.GetPayload().GetBody())
 	if pt != testpb.PayloadType_COMPRESSABLE || ps != respSize {
-		t.Fatalf("Got the reply with type %d len %d; want %d, %d", pt, ps, testpb.PayloadType_COMPRESSABLE, respSize)
+		t.Errorf("Got reply with type %d len %d; want %d, %d", pt, ps, testpb.PayloadType_COMPRESSABLE, respSize)
+		return
 	}
-	wg.Done()
 }
 
 func TestRetry(t *testing.T) {
@@ -853,7 +858,7 @@ func testNoService(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	// Make sure setting ack has been sent.
-	time.Sleep(2*time.Second)
+	time.Sleep(2 * time.Second)
 	stream, err := tc.FullDuplexCall(context.Background())
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
