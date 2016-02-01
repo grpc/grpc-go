@@ -34,6 +34,7 @@
 package grpc
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"net"
@@ -90,7 +91,8 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		var v string
 		codec := testCodec{}
 		if err := codec.Unmarshal(req, &v); err != nil {
-			t.Fatalf("Failed to unmarshal the received message %v", err)
+			t.Errorf("Failed to unmarshal the received message: %v", err)
+			return
 		}
 		if v != expectedRequest {
 			h.t.WriteStatus(s, codes.Internal, string(make([]byte, sizeLargeErr)))
@@ -100,22 +102,26 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 	// send a response back to end the stream.
 	reply, err := encode(testCodec{}, &expectedResponse, nil, nil)
 	if err != nil {
-		t.Fatalf("Failed to encode the response: %v", err)
+		t.Errorf("Failed to encode the response: %v", err)
+		return
 	}
 	h.t.Write(s, reply, &transport.Options{})
 	h.t.WriteStatus(s, codes.OK, "")
 }
 
 type server struct {
-	lis  net.Listener
-	port string
-	// channel to signal server is ready to serve.
-	readyChan chan bool
-	mu        sync.Mutex
-	conns     map[transport.ServerTransport]bool
+	lis        net.Listener
+	port       string
+	startedErr chan error // sent nil or an error after server starts
+	mu         sync.Mutex
+	conns      map[transport.ServerTransport]bool
 }
 
-// start starts server. Other goroutines should block on s.readyChan for futher operations.
+func newTestServer() *server {
+	return &server{startedErr: make(chan error, 1)}
+}
+
+// start starts server. Other goroutines should block on s.startedErr for futher operations.
 func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 	var err error
 	if port == 0 {
@@ -124,17 +130,17 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 		s.lis, err = net.Listen("tcp", ":"+strconv.Itoa(port))
 	}
 	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
+		s.startedErr <- fmt.Errorf("failed to listen: %v", err)
+		return
 	}
 	_, p, err := net.SplitHostPort(s.lis.Addr().String())
 	if err != nil {
-		t.Fatalf("failed to parse listener address: %v", err)
+		s.startedErr <- fmt.Errorf("failed to parse listener address: %v", err)
+		return
 	}
 	s.port = p
 	s.conns = make(map[transport.ServerTransport]bool)
-	if s.readyChan != nil {
-		close(s.readyChan)
-	}
+	s.startedErr <- nil
 	for {
 		conn, err := s.lis.Accept()
 		if err != nil {
@@ -161,7 +167,10 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 
 func (s *server) wait(t *testing.T, timeout time.Duration) {
 	select {
-	case <-s.readyChan:
+	case err := <-s.startedErr:
+		if err != nil {
+			t.Fatal(err)
+		}
 	case <-time.After(timeout):
 		t.Fatalf("Timed out after %v waiting for server to be ready", timeout)
 	}
@@ -178,7 +187,7 @@ func (s *server) stop() {
 }
 
 func setUp(t *testing.T, port int, maxStreams uint32) (*server, *ClientConn) {
-	server := &server{readyChan: make(chan bool)}
+	server := newTestServer()
 	go server.start(t, port, maxStreams)
 	server.wait(t, 2*time.Second)
 	addr := "localhost:" + server.port
