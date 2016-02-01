@@ -70,9 +70,11 @@ class ProtoInputStream extends InputStream implements Drainable, KnownLength {
       written = message.getSerializedSize();
       message.writeTo(target);
       message = null;
-    } else {
+    } else if (partial != null) {
       written = (int) ByteStreams.copy(partial, target);
       partial = null;
+    } else {
+      written = 0;
     }
     return written;
   }

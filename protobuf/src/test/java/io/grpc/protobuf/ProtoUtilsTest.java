@@ -41,6 +41,7 @@ import com.google.protobuf.Empty;
 import com.google.protobuf.Enum;
 import com.google.protobuf.Type;
 
+import io.grpc.Drainable;
 import io.grpc.MethodDescriptor.Marshaller;
 
 import org.junit.Test;
@@ -48,6 +49,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
@@ -113,6 +115,48 @@ public class ProtoUtilsTest {
     assertEquals(-1, is.read(b));
     assertArrayEquals(new byte[10], b);
     assertEquals(-1, is.read());
+    assertEquals(0, is.available());
+  }
+
+  @Test
+  public void testDrainTo_all() throws Exception {
+    byte[] golden = ByteStreams.toByteArray(marshaller.stream(proto));
+    InputStream is = marshaller.stream(proto);
+    Drainable d = (Drainable) is;
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    int drained = d.drainTo(baos);
+    assertEquals(baos.size(), drained);
+    assertArrayEquals(golden, baos.toByteArray());
+    assertEquals(0, is.available());
+  }
+
+  @Test
+  public void testDrainTo_partial() throws Exception {
+    final byte[] golden;
+    {
+      InputStream is = marshaller.stream(proto);
+      is.read();
+      golden = ByteStreams.toByteArray(is);
+    }
+    InputStream is = marshaller.stream(proto);
+    is.read();
+    Drainable d = (Drainable) is;
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    int drained = d.drainTo(baos);
+    assertEquals(baos.size(), drained);
+    assertArrayEquals(golden, baos.toByteArray());
+    assertEquals(0, is.available());
+  }
+
+  @Test
+  public void testDrainTo_none() throws Exception {
+    byte[] golden = ByteStreams.toByteArray(marshaller.stream(proto));
+    InputStream is = marshaller.stream(proto);
+    ByteStreams.toByteArray(is);
+    Drainable d = (Drainable) is;
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    assertEquals(0, d.drainTo(baos));
+    assertArrayEquals(new byte[0], baos.toByteArray());
     assertEquals(0, is.available());
   }
 }
