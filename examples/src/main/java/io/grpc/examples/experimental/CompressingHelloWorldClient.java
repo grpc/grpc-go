@@ -41,8 +41,8 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.examples.helloworld.GreeterGrpc;
+import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
-import io.grpc.examples.helloworld.HelloResponse;
 import io.grpc.internal.GrpcUtil;
 
 import java.util.concurrent.CountDownLatch;
@@ -75,12 +75,12 @@ public class CompressingHelloWorldClient {
 
   /** Say hello to server. */
   public void greet(final String name) {
-    final ClientCall<HelloRequest, HelloResponse> call =
+    final ClientCall<HelloRequest, HelloReply> call =
         channel.newCall(GreeterGrpc.METHOD_SAY_HELLO, CallOptions.DEFAULT);
 
     final CountDownLatch latch = new CountDownLatch(1);
 
-    call.start(new Listener<HelloResponse>() {
+    call.start(new Listener<HelloReply>() {
       @Override
       public void onHeaders(Metadata headers) {
         super.onHeaders(headers);
@@ -91,7 +91,7 @@ public class CompressingHelloWorldClient {
       }
 
       @Override
-      public void onMessage(HelloResponse message) {
+      public void onMessage(HelloReply message) {
         super.onMessage(message);
         logger.info("Greeting: " + message.getMessage());
         latch.countDown();

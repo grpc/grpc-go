@@ -23,13 +23,13 @@ public class GreeterGrpc {
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi
   public static final io.grpc.MethodDescriptor<io.grpc.examples.helloworld.HelloRequest,
-      io.grpc.examples.helloworld.HelloResponse> METHOD_SAY_HELLO =
+      io.grpc.examples.helloworld.HelloReply> METHOD_SAY_HELLO =
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
               "helloworld.Greeter", "SayHello"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloResponse.getDefaultInstance()));
+          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloReply.getDefaultInstance()));
 
   public static GreeterStub newStub(io.grpc.Channel channel) {
     return new GreeterStub(channel);
@@ -48,17 +48,17 @@ public class GreeterGrpc {
   public static interface Greeter {
 
     public void sayHello(io.grpc.examples.helloworld.HelloRequest request,
-        io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloResponse> responseObserver);
+        io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloReply> responseObserver);
   }
 
   public static interface GreeterBlockingClient {
 
-    public io.grpc.examples.helloworld.HelloResponse sayHello(io.grpc.examples.helloworld.HelloRequest request);
+    public io.grpc.examples.helloworld.HelloReply sayHello(io.grpc.examples.helloworld.HelloRequest request);
   }
 
   public static interface GreeterFutureClient {
 
-    public com.google.common.util.concurrent.ListenableFuture<io.grpc.examples.helloworld.HelloResponse> sayHello(
+    public com.google.common.util.concurrent.ListenableFuture<io.grpc.examples.helloworld.HelloReply> sayHello(
         io.grpc.examples.helloworld.HelloRequest request);
   }
 
@@ -81,7 +81,7 @@ public class GreeterGrpc {
 
     @java.lang.Override
     public void sayHello(io.grpc.examples.helloworld.HelloRequest request,
-        io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloResponse> responseObserver) {
+        io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloReply> responseObserver) {
       asyncUnaryCall(
           getChannel().newCall(METHOD_SAY_HELLO, getCallOptions()), request, responseObserver);
     }
@@ -105,7 +105,7 @@ public class GreeterGrpc {
     }
 
     @java.lang.Override
-    public io.grpc.examples.helloworld.HelloResponse sayHello(io.grpc.examples.helloworld.HelloRequest request) {
+    public io.grpc.examples.helloworld.HelloReply sayHello(io.grpc.examples.helloworld.HelloRequest request) {
       return blockingUnaryCall(
           getChannel(), METHOD_SAY_HELLO, getCallOptions(), request);
     }
@@ -129,7 +129,7 @@ public class GreeterGrpc {
     }
 
     @java.lang.Override
-    public com.google.common.util.concurrent.ListenableFuture<io.grpc.examples.helloworld.HelloResponse> sayHello(
+    public com.google.common.util.concurrent.ListenableFuture<io.grpc.examples.helloworld.HelloReply> sayHello(
         io.grpc.examples.helloworld.HelloRequest request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_SAY_HELLO, getCallOptions()), request);
@@ -156,7 +156,7 @@ public class GreeterGrpc {
       switch (methodId) {
         case METHODID_SAY_HELLO:
           serviceImpl.sayHello((io.grpc.examples.helloworld.HelloRequest) request,
-              (io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloResponse>) responseObserver);
+              (io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloReply>) responseObserver);
           break;
         default:
           throw new AssertionError();
@@ -181,7 +181,7 @@ public class GreeterGrpc {
           asyncUnaryCall(
             new MethodHandlers<
               io.grpc.examples.helloworld.HelloRequest,
-              io.grpc.examples.helloworld.HelloResponse>(
+              io.grpc.examples.helloworld.HelloReply>(
                 serviceImpl, METHODID_SAY_HELLO)))
         .build();
   }

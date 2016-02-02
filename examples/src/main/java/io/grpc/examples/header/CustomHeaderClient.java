@@ -38,8 +38,8 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import io.grpc.examples.helloworld.GreeterGrpc;
+import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
-import io.grpc.examples.helloworld.HelloResponse;
 
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -77,7 +77,7 @@ public class CustomHeaderClient {
   private void greet(String name) {
     logger.info("Will try to greet " + name + " ...");
     HelloRequest request = HelloRequest.newBuilder().setName(name).build();
-    HelloResponse response;
+    HelloReply response;
     try {
       response = blockingStub.sayHello(request);
     } catch (StatusRuntimeException e) {

@@ -35,8 +35,8 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptors;
 import io.grpc.examples.helloworld.GreeterGrpc;
+import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
-import io.grpc.examples.helloworld.HelloResponse;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
@@ -98,8 +98,8 @@ public class CustomHeaderServer {
   private class GreeterImpl implements GreeterGrpc.Greeter {
 
     @Override
-    public void sayHello(HelloRequest req, StreamObserver<HelloResponse> responseObserver) {
-      HelloResponse reply = HelloResponse.newBuilder().setMessage("Hello " + req.getName()).build();
+    public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
+      HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
       responseObserver.onNext(reply);
       responseObserver.onCompleted();
     }
