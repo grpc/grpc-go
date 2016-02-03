@@ -137,7 +137,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
       inboundDataReceived(frame);
       if (endOfStream) {
         // This is a protocol violation as we expect to receive trailers.
-        transportError = Status.INTERNAL.withDescription("Recevied EOS on DATA frame");
+        transportError = Status.INTERNAL.withDescription("Received EOS on DATA frame");
         transportErrorMetadata = new Metadata();
         inboundTransportError(transportError, transportErrorMetadata);
       }
