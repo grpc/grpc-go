@@ -184,8 +184,8 @@ public class TransportCompressionTest extends AbstractTransportTest {
   static final class Fzip implements Codec {
     static final Fzip INSTANCE = new Fzip();
 
-    boolean anyRead;
-    boolean anyWritten;
+    volatile boolean anyRead;
+    volatile boolean anyWritten;
 
     @Override
     public String getMessageEncoding() {
