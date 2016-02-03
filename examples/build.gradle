@@ -1,3 +1,14 @@
+// Don't consider this build file part of the example! It is much more complex
+// than yours needs to be. For your own build file, please follow ../README.md
+// instead. For a starting point you can make a build.gradle file with:
+//
+//   apply plugin: 'java'
+//   repositories {
+//     mavenCentral()
+//   }
+//
+// Then copy the snippets from README.md.
+
 apply plugin: 'application'
 
 description = "grpc Examples"
@@ -18,7 +29,7 @@ dependencies {
             project(':grpc-netty'),
             project(':grpc-protobuf'),
             project(':grpc-stub'),
-            libraries.jsonp
+            'org.glassfish:javax.json:1.0.4'
 }
 
 configureProtoCompilation()
