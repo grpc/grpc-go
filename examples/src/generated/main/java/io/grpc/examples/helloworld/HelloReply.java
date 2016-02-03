@@ -66,12 +66,12 @@ public  final class HelloReply extends
   }
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return io.grpc.examples.helloworld.HelloWorld.internal_static_helloworld_HelloReply_descriptor;
+    return io.grpc.examples.helloworld.HelloWorldProto.internal_static_helloworld_HelloReply_descriptor;
   }
 
   protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return io.grpc.examples.helloworld.HelloWorld.internal_static_helloworld_HelloReply_fieldAccessorTable
+    return io.grpc.examples.helloworld.HelloWorldProto.internal_static_helloworld_HelloReply_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.examples.helloworld.HelloReply.class, io.grpc.examples.helloworld.HelloReply.Builder.class);
   }
@@ -224,12 +224,12 @@ public  final class HelloReply extends
       io.grpc.examples.helloworld.HelloReplyOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.examples.helloworld.HelloWorld.internal_static_helloworld_HelloReply_descriptor;
+      return io.grpc.examples.helloworld.HelloWorldProto.internal_static_helloworld_HelloReply_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.examples.helloworld.HelloWorld.internal_static_helloworld_HelloReply_fieldAccessorTable
+      return io.grpc.examples.helloworld.HelloWorldProto.internal_static_helloworld_HelloReply_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.examples.helloworld.HelloReply.class, io.grpc.examples.helloworld.HelloReply.Builder.class);
     }
@@ -257,7 +257,7 @@ public  final class HelloReply extends
 
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return io.grpc.examples.helloworld.HelloWorld.internal_static_helloworld_HelloReply_descriptor;
+      return io.grpc.examples.helloworld.HelloWorldProto.internal_static_helloworld_HelloReply_descriptor;
     }
 
     public io.grpc.examples.helloworld.HelloReply getDefaultInstanceForType() {

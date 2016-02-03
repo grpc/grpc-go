@@ -3,8 +3,8 @@
 
 package io.grpc.examples.helloworld;
 
-public final class HelloWorld {
-  private HelloWorld() {}
+public final class HelloWorldProto {
+  private HelloWorldProto() {}
   public static void registerAllExtensions(
       com.google.protobuf.ExtensionRegistry registry) {
   }
@@ -31,8 +31,8 @@ public final class HelloWorld {
       "equest\022\014\n\004name\030\001 \001(\t\"\035\n\nHelloReply\022\017\n\007me" +
       "ssage\030\001 \001(\t2I\n\007Greeter\022>\n\010SayHello\022\030.hel" +
       "loworld.HelloRequest\032\026.helloworld.HelloR" +
-      "eply\"\000B1\n\033io.grpc.examples.helloworldB\nH" +
-      "elloWorldP\001\242\002\003HLWb\006proto3"
+      "eply\"\000B6\n\033io.grpc.examples.helloworldB\017H" +
+      "elloWorldProtoP\001\242\002\003HLWb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
