@@ -37,7 +37,7 @@ https://github.com/Sirupsen/logrus
 
 To set the logrus StandardLogger as the logger, do a blank import:
 
-	import _ "google.golang.org/grpc/grpglog/logrus"
+	import _ "google.golang.org/grpc/grpclog/logrus"
 
 To set another logrus Logger as the logger:
 

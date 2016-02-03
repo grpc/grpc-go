@@ -37,7 +37,7 @@ https://go.pedge.io/lion
 
 To set the lion Root Logger as the logger, do a blank import:
 
-	import _ "google.golang.org/grpc/grpglog/lion"
+	import _ "google.golang.org/grpc/grpclog/lion"
 
 To set another lion Logger as the logger:
 

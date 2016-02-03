@@ -37,7 +37,7 @@ https://gopkg.in/inconshreveable/log15.v2
 
 To set the log15 Root Logger as the logger, do a blank import:
 
-	import _ "google.golang.org/grpc/grpglog/log15"
+	import _ "google.golang.org/grpc/grpclog/log15"
 
 To set another log15 Logger as the logger:
 
