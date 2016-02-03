@@ -292,3 +292,29 @@ After waiting ~1 day and verifying that the release appears on [Maven Central]
 2. Post a release announcement to [grpc-io](https://groups.google.com/forum/#!forum/grpc-io)
    (`grpc-io@googlegroups.com`). The title should be something that clearly identifies
    the release (e.g.`GRPC-Java <tag> Released`).
+
+Update README.md
+----------------
+
+Update the version numbers in README.md to the new grpc-java version. _Also_
+update the version numbers for protoc if the protobuf library version was
+updated since last release. Make a new commit with description similar to
+"Update README to reference \<VERSION\>" and have it reviewed before submitting.
+
+Update Hosted Javadoc
+---------------------
+
+Download the released Javadoc JAR for the grpc-all project from Maven Central.
+Now we need to update gh-pages with that new Javadoc:
+
+```bash
+git checkout gh-pages
+rm -r javadoc/
+unzip -d javadoc path/to/grpc-all-<VERSION>-javadoc.jar
+rm -r javadoc/META-INF/
+git add -A javadoc
+git commit -m "Javadoc for <VERSION>"
+```
+
+Push gh-pages to the main repository and verify the current version is [live
+on grpc.io](http://www.grpc.io/grpc-java/javadoc/).
