@@ -29,17 +29,21 @@
 
 syntax = "proto3";
 
-package routeguide;
-
 option java_multiple_files = true;
 option java_package = "io.grpc.examples.routeguide";
 option java_outer_classname = "RouteGuideProto";
+option objc_class_prefix = "RTG";
+
+package routeguide;
 
 // Interface exported by the server.
 service RouteGuide {
   // A simple RPC.
   //
   // Obtains the feature at a given position.
+  //
+  // A feature with an empty name is returned if there's no feature at the given
+  // position.
   rpc GetFeature(Point) returns (Feature) {}
 
   // A server-to-client streaming RPC.

@@ -58,8 +58,8 @@ public final class RouteGuideProto {
       "RecordRoute\022\021.routeguide.Point\032\030.routegu" +
       "ide.RouteSummary\"\000(\001\022?\n\tRouteChat\022\025.rout" +
       "eguide.RouteNote\032\025.routeguide.RouteNote\"" +
-      "\000(\0010\001B0\n\033io.grpc.examples.routeguideB\017Ro" +
-      "uteGuideProtoP\001b\006proto3"
+      "\000(\0010\001B6\n\033io.grpc.examples.routeguideB\017Ro" +
+      "uteGuideProtoP\001\242\002\003RTGb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
