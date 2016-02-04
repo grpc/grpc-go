@@ -400,8 +400,8 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     requestObserver.onError(new RuntimeException());
     assertTrue(responseObserver.awaitCompletion(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
     assertEquals(Arrays.<StreamingInputCallResponse>asList(), responseObserver.getValues());
-    assertEquals(io.grpc.Status.CANCELLED.getCode(),
-        io.grpc.Status.fromThrowable(responseObserver.getError()).getCode());
+    assertCodeEquals(io.grpc.Status.CANCELLED,
+        io.grpc.Status.fromThrowable(responseObserver.getError()));
   }
 
   public void cancelAfterFirstResponse() throws Exception {
@@ -431,8 +431,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     if (!(response instanceof Throwable)) {
       fail("Unexpected: " + response);
     }
-    assertEquals(io.grpc.Status.CANCELLED.getCode(),
-        io.grpc.Status.fromThrowable((Throwable) response).getCode());
+    assertCodeEquals(io.grpc.Status.CANCELLED, io.grpc.Status.fromThrowable((Throwable) response));
   }
 
   public void fullDuplexCallShouldSucceed() throws Exception {
@@ -557,7 +556,8 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     call.request(1);
     assertMessageEquals(goldenResponses[1],
         (StreamingOutputCallResponse) queue.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
-    assertEquals(io.grpc.Status.OK, queue.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
+    assertCodeEquals(io.grpc.Status.OK,
+        (io.grpc.Status) queue.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
   }
 
   public void veryLargeRequest() throws Exception {
@@ -606,16 +606,15 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     blockingStub.emptyCall(new EmptyProtos.Empty());
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
         .withDeadlineAfter(10, TimeUnit.MILLISECONDS);
+    StreamingOutputCallRequest request = new StreamingOutputCallRequest();
+    request.responseParameters = new ResponseParameters[1];
+    request.responseParameters[0] = new ResponseParameters();
+    request.responseParameters[0].intervalUs = 20000;
     try {
-      StreamingOutputCallRequest request = new StreamingOutputCallRequest();
-      request.responseParameters = new ResponseParameters[1];
-      request.responseParameters[0] = new ResponseParameters();
-      request.responseParameters[0].intervalUs = 20000;
       stub.streamingOutputCall(request).next();
       fail("Expected deadline to be exceeded");
-    } catch (Throwable t) {
-      assertEquals(io.grpc.Status.DEADLINE_EXCEEDED.getCode(),
-          io.grpc.Status.fromThrowable(t).getCode());
+    } catch (StatusRuntimeException ex) {
+      assertCodeEquals(io.grpc.Status.DEADLINE_EXCEEDED, ex.getStatus());
     }
   }
 
@@ -637,8 +636,8 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
         .withDeadlineAfter(30, TimeUnit.MILLISECONDS)
         .streamingOutputCall(request, recorder);
     assertTrue(recorder.awaitCompletion(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
-    assertEquals(io.grpc.Status.DEADLINE_EXCEEDED.getCode(),
-        io.grpc.Status.fromThrowable(recorder.getError()).getCode());
+    assertCodeEquals(io.grpc.Status.DEADLINE_EXCEEDED,
+        io.grpc.Status.fromThrowable(recorder.getError()));
   }
 
   protected int unaryPayloadLength() {
@@ -713,7 +712,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
       stub.unimplementedCall(new EmptyProtos.Empty());
       fail();
     } catch (StatusRuntimeException e) {
-      assertEquals(io.grpc.Status.UNIMPLEMENTED.getCode(), e.getStatus().getCode());
+      assertCodeEquals(io.grpc.Status.UNIMPLEMENTED, e.getStatus());
     }
   }
 
@@ -735,8 +734,8 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     }
 
     assertTrue(recorder.awaitCompletion(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
-    assertEquals(io.grpc.Status.DEADLINE_EXCEEDED.getCode(),
-        io.grpc.Status.fromThrowable(recorder.getError()).getCode());
+    assertCodeEquals(io.grpc.Status.DEADLINE_EXCEEDED,
+        io.grpc.Status.fromThrowable(recorder.getError()));
   }
 
   public static void assertMessageEquals(MessageNano expected, MessageNano actual) {
@@ -767,6 +766,15 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
       for (int i = 0; i < expected.size(); i++) {
         assertMessageEquals(expected.get(i), actual.get(i));
       }
+    }
+  }
+
+  private static void assertCodeEquals(io.grpc.Status expected, io.grpc.Status actual) {
+    if (expected == null) {
+      fail("expected should not be null");
+    }
+    if (actual == null || !expected.getCode().equals(actual.getCode())) {
+      assertEquals(expected, actual);
     }
   }
 
