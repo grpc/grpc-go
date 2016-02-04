@@ -32,7 +32,7 @@
 package io.grpc.netty;
 
 import io.grpc.Internal;
-import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelInboundHandler;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.util.AsciiString;
 
@@ -44,11 +44,8 @@ public interface ProtocolNegotiator {
 
   /**
    * The Netty handler to control the protocol negotiation.
-   *
-   * <p>TODO(carl-mastrangelo): Replace ChannelHandler with ChannelInboundHandler or
-   * ChannelOutboundHandler, since exceptionCaught is deprecated.
    */
-  interface Handler extends ChannelHandler {
+  interface Handler extends ChannelInboundHandler {
     /**
      * The HTTP/2 scheme to be used when sending {@code HEADERS}.
      */

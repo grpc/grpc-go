@@ -89,7 +89,7 @@ public final class ProtocolNegotiators {
     return new ProtocolNegotiator() {
       @Override
       public Handler newHandler(final Http2ConnectionHandler handler) {
-        return new Handler() {
+        class PlaintextHandler extends ChannelDuplexHandler implements Handler {
           @Override
           public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
             // Just replace this handler with the gRPC handler.
@@ -97,22 +97,12 @@ public final class ProtocolNegotiators {
           }
 
           @Override
-          public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
-            // Don't care.
-          }
-
-          @Override
-          @Deprecated
-          public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-            // Should never happen.
-            ctx.fireExceptionCaught(cause);
-          }
-
-          @Override
           public AsciiString scheme() {
             return Utils.HTTP;
           }
-        };
+        }
+
+        return new PlaintextHandler();
       }
     };
   }
