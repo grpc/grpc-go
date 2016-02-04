@@ -89,7 +89,7 @@ public final class ProtocolNegotiators {
     return new ProtocolNegotiator() {
       @Override
       public Handler newHandler(final Http2ConnectionHandler handler) {
-        class PlaintextHandler extends ChannelDuplexHandler implements Handler {
+        class PlaintextHandler extends ChannelHandlerAdapter implements Handler {
           @Override
           public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
             // Just replace this handler with the gRPC handler.
