@@ -521,6 +521,7 @@ public class ServerImplTest {
         try {
           barrier.await();
         } catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
           throw new RuntimeException(ex);
         } catch (BrokenBarrierException ex) {
           throw new RuntimeException(ex);

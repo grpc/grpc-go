@@ -435,7 +435,7 @@ public class ClientCalls {
           // hangs here as the call will become closed.
           last = waitForNext();
         } catch (InterruptedException ie) {
-          Thread.interrupted();
+          Thread.currentThread().interrupt();
           throw Status.CANCELLED.withCause(ie).asRuntimeException();
         }
       }

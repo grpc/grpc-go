@@ -557,8 +557,10 @@ public final class Metadata {
      */
     private AsciiKey(String name, AsciiMarshaller<T> marshaller) {
       super(name);
-      Preconditions.checkArgument(!name.endsWith(BINARY_HEADER_SUFFIX),
-          "ASCII header is named " + name + ". It must not end with " + BINARY_HEADER_SUFFIX);
+      Preconditions.checkArgument(
+          !name.endsWith(BINARY_HEADER_SUFFIX),
+          "ASCII header is named %s. It must not end with %s",
+          name, BINARY_HEADER_SUFFIX);
       this.marshaller = Preconditions.checkNotNull(marshaller);
     }
 

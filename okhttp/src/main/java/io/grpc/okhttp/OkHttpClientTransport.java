@@ -69,6 +69,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -92,7 +93,7 @@ class OkHttpClientTransport implements ManagedClientTransport {
   private static final OkHttpClientStream[] EMPTY_STREAM_ARRAY = new OkHttpClientStream[0];
 
   static {
-    Map<ErrorCode, Status> errorToStatus = new HashMap<ErrorCode, Status>();
+    Map<ErrorCode, Status> errorToStatus = new EnumMap<ErrorCode, Status>(ErrorCode.class);
     errorToStatus.put(ErrorCode.NO_ERROR,
         Status.INTERNAL.withDescription("No error: A GRPC status of OK should have been sent"));
     errorToStatus.put(ErrorCode.PROTOCOL_ERROR,

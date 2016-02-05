@@ -69,7 +69,7 @@ public class HeaderClientInterceptor implements ClientInterceptor {
              * you can use {@link io.grpc.stub.MetadataUtils attachHeaders}
              * directly to send header
              */
-            logger.info("header received from server:" + headers.toString());
+            logger.info("header received from server:" + headers);
             super.onHeaders(headers);
           }
         }, headers);

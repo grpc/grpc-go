@@ -1398,18 +1398,16 @@ public class OkHttpClientTransportTest {
   }
 
   private List<Header> grpcResponseHeaders() {
-    return ImmutableList.<Header>builder()
-        .add(new Header(":status", "200"))
-        .add(CONTENT_TYPE_HEADER)
-        .build();
+    return ImmutableList.of(
+        new Header(":status", "200"),
+        CONTENT_TYPE_HEADER);
   }
 
   private List<Header> grpcResponseTrailers() {
-    return ImmutableList.<Header>builder()
-        .add(new Header(Status.CODE_KEY.name(), "0"))
+    return ImmutableList.of(
+        new Header(Status.CODE_KEY.name(), "0"),
         // Adding Content-Type for testing responses with only a single HEADERS frame.
-        .add(CONTENT_TYPE_HEADER)
-        .build();
+        CONTENT_TYPE_HEADER);
   }
 
   private static class MockFrameReader implements FrameReader {
@@ -1428,6 +1426,7 @@ public class OkHttpClientTransportTest {
           fail("Failed waiting frame reader to be closed.");
         }
       } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
         fail("Interrupted while waiting for frame reader to be closed.");
       }
     }
@@ -1443,6 +1442,7 @@ public class OkHttpClientTransportTest {
       try {
         wait();
       } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
         throw new IOException(e);
       }
       if (throwExceptionForNextFrame) {

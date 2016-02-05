@@ -34,6 +34,7 @@ package io.grpc.grpclb;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -351,13 +352,7 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
           directTransport = transportFuture = Futures.immediateFuture(lbTransport);
           pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
         }
-        pendingPicksFulfillmentBatch.link(
-            new Supplier<ListenableFuture<T>>() {
-              @Override
-              public ListenableFuture<T> get() {
-                return transportFuture;
-              }
-            });
+        pendingPicksFulfillmentBatch.link(Suppliers.ofInstance(transportFuture));
       } else {
         handleError(status);
         synchronized (lock) {

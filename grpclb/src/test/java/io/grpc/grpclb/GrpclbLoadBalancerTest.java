@@ -97,8 +97,7 @@ public class GrpclbLoadBalancerTest {
         new ArrayList<SettableFuture<Transport>>(servers.size());
 
     for (ResolvedServerInfo server : servers) {
-      transports.add(
-          mock(Transport.class, withSettings().name("Transport for "  + server.toString())));
+      transports.add(mock(Transport.class, withSettings().name("Transport for "  + server)));
       SettableFuture<Transport> future = SettableFuture.create();
       transportFutures.add(future);
       when(mockTransportManager.getTransport(eq(new EquivalentAddressGroup(server.getAddress()))))

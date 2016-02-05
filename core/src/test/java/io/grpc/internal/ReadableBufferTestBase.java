@@ -124,7 +124,7 @@ public abstract class ReadableBufferTestBase {
   protected abstract ReadableBuffer buffer();
 
   private static String repeatUntilLength(String toRepeat, int length) {
-    StringBuffer buf = new StringBuffer();
+    StringBuilder buf = new StringBuilder();
     while (buf.length() < length) {
       buf.append(toRepeat);
     }

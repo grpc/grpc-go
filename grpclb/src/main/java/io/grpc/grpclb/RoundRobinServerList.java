@@ -34,7 +34,7 @@ package io.grpc.grpclb;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
+import com.google.common.collect.Iterators;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.EquivalentAddressGroup;
@@ -62,7 +62,7 @@ class RoundRobinServerList<T> {
   private RoundRobinServerList(TransportManager<T> tm, List<EquivalentAddressGroup> list) {
     this.tm = tm;
     this.list = list;
-    this.cyclingIter = Iterables.cycle(list).iterator();
+    this.cyclingIter = Iterators.cycle(list);
   }
 
   ListenableFuture<T> getTransportForNextServer() {

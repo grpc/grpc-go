@@ -32,7 +32,6 @@
 package io.grpc.netty;
 
 import static io.netty.handler.codec.http2.Http2CodecUtil.getEmbeddedHttp2Exception;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 import io.netty.channel.ChannelHandlerContext;
@@ -49,7 +48,7 @@ import io.netty.handler.codec.http2.Http2Stream;
  * shutdown the connection) as well as sending the initial connection window at startup.
  */
 abstract class AbstractNettyHandler extends Http2ConnectionHandler {
-  private static long GRACEFUL_SHUTDOWN_TIMEOUT = MILLISECONDS.convert(5, SECONDS);
+  private static long GRACEFUL_SHUTDOWN_TIMEOUT = SECONDS.toMillis(5);
   private int initialConnectionWindow;
   private ChannelHandlerContext ctx;
 

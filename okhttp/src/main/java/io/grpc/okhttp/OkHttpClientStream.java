@@ -46,7 +46,7 @@ import io.grpc.okhttp.internal.framed.Header;
 
 import okio.Buffer;
 
-import java.util.LinkedList;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
 
@@ -83,7 +83,7 @@ class OkHttpClientStream extends Http2ClientStream {
    * {@link #start(Integer)} have been called.
    */
   @GuardedBy("lock")
-  private Queue<PendingData> pendingData = new LinkedList<PendingData>();
+  private Queue<PendingData> pendingData = new ArrayDeque<PendingData>();
   @GuardedBy("lock")
   private boolean cancelSent = false;
 

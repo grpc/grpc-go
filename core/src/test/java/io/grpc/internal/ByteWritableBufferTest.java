@@ -51,6 +51,6 @@ public class ByteWritableBufferTest extends WritableBufferTestBase {
 
   @Override
   protected byte[] writtenBytes() {
-    return Arrays.copyOfRange(buffer.data, 0, buffer.readableBytes());
+    return Arrays.copyOf(buffer.data, buffer.readableBytes());
   }
 }

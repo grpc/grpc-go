@@ -233,7 +233,7 @@ public class MethodDescriptor<ReqT, RespT> {
   @ExperimentalApi
   @Nullable
   public static String extractFullServiceName(String fullMethodName) {
-    int index = fullMethodName.lastIndexOf("/");
+    int index = fullMethodName.lastIndexOf('/');
     if (index == -1) {
       return null;
     }

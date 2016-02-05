@@ -217,7 +217,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
     }
     throw new IllegalArgumentException(String.format(
         "cannot find a NameResolver for %s%s",
-        target, uriSyntaxErrors.length() > 0 ? " (" + uriSyntaxErrors.toString() + ")" : ""));
+        target, uriSyntaxErrors.length() > 0 ? " (" + uriSyntaxErrors + ")" : ""));
   }
 
   /**
