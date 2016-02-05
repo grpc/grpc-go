@@ -307,7 +307,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		if err != nil {
 			cs.finish(err)
 		}
-		if err == nil {
+		if err == nil || err == transport.ErrConnClosing {
 			return
 		}
 		if err == io.EOF {
