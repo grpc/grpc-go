@@ -31,6 +31,7 @@
 
 package io.grpc.protobuf;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
@@ -71,9 +72,15 @@ public class ProtoUtils {
           // if not, using the same MethodDescriptor would ensure the parser matches and permit us
           // to enable this optimization.
           if (protoStream.parser() == parser) {
-            @SuppressWarnings("unchecked")
-            T message = (T) ((ProtoInputStream) stream).message();
-            return message;
+            try {
+              @SuppressWarnings("unchecked")
+              T message = (T) ((ProtoInputStream) stream).message();
+              return message;
+            } catch (IllegalStateException ex) {
+              // Stream must have been read from, which is a strange state. Since the point of this
+              // optimization is to be transparent, instead of throwing an error we'll continue,
+              // even though it seems likely there's a bug.
+            }
           }
         }
         try {
@@ -105,25 +112,30 @@ public class ProtoUtils {
   /**
    * Produce a metadata key for a generated protobuf type.
    */
-  public static <T extends Message> Metadata.Key<T> keyForProto(final T instance) {
+  public static <T extends Message> Metadata.Key<T> keyForProto(T instance) {
     return Metadata.Key.of(
         instance.getDescriptorForType().getFullName() + Metadata.BINARY_HEADER_SUFFIX,
-        new Metadata.BinaryMarshaller<T>() {
-          @Override
-          public byte[] toBytes(T value) {
-            return value.toByteArray();
-          }
+        keyMarshaller(instance));
+  }
 
-          @Override
-          @SuppressWarnings("unchecked")
-          public T parseBytes(byte[] serialized) {
-            try {
-              return (T) instance.getParserForType().parseFrom(serialized);
-            } catch (InvalidProtocolBufferException ipbe) {
-              throw new IllegalArgumentException(ipbe);
-            }
-          }
-        });
+  @VisibleForTesting
+  static <T extends MessageLite> Metadata.BinaryMarshaller<T> keyMarshaller(final T instance) {
+    return new Metadata.BinaryMarshaller<T>() {
+      @Override
+      public byte[] toBytes(T value) {
+        return value.toByteArray();
+      }
+
+      @Override
+      @SuppressWarnings("unchecked")
+      public T parseBytes(byte[] serialized) {
+        try {
+          return (T) instance.getParserForType().parseFrom(serialized);
+        } catch (InvalidProtocolBufferException ipbe) {
+          throw new IllegalArgumentException(ipbe);
+        }
+      }
+    };
   }
 
   private ProtoUtils() {

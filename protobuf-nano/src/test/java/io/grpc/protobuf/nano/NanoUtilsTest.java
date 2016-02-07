@@ -34,10 +34,10 @@ package io.grpc.protobuf.nano;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.protobuf.nano.InvalidProtocolBufferNanoException;
 import com.google.protobuf.nano.MessageNano;
 
 import io.grpc.MethodDescriptor.Marshaller;
@@ -49,6 +49,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -77,20 +78,14 @@ public class NanoUtilsTest {
   }
 
   @Test
-  public void testIoException() {
-    final IOException ioException = new IOException();
-    InputStream is = new InputStream() {
-      @Override
-      public int read() throws IOException {
-        throw ioException;
-      }
-    };
+  public void parseInvalid() throws Exception {
+    InputStream is = new ByteArrayInputStream(new byte[] {-127});
     try {
       marshaller.parse(is);
       fail("Expected exception");
     } catch (StatusRuntimeException ex) {
       assertEquals(Status.Code.INTERNAL, ex.getStatus().getCode());
-      assertSame(ioException, ex.getCause());
+      assertTrue(ex.getCause() instanceof InvalidProtocolBufferNanoException);
     }
   }
 

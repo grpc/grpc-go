@@ -33,16 +33,22 @@ package io.grpc.protobuf;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
 
 import com.google.common.io.ByteStreams;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
 import com.google.protobuf.Enum;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Type;
 
 import io.grpc.Drainable;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.Marshaller;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -70,6 +76,33 @@ public class ProtoUtilsTest {
     InputStream is = marshaller.stream(proto);
     is = new ByteArrayInputStream(ByteStreams.toByteArray(is));
     assertEquals(proto, marshaller.parse(is));
+  }
+
+  @Test
+  public void testInvalidatedMessage() throws Exception {
+    InputStream is = marshaller.stream(proto);
+    // Invalidates message, and drains all bytes
+    ByteStreams.toByteArray(is);
+    try {
+      ((ProtoInputStream) is).message();
+      fail("Expected exception");
+    } catch (IllegalStateException ex) {
+      // expected
+    }
+    // Zero bytes is the default message
+    assertEquals(Type.getDefaultInstance(), marshaller.parse(is));
+  }
+
+  @Test
+  public void parseInvalid() throws Exception {
+    InputStream is = new ByteArrayInputStream(new byte[] {-127});
+    try {
+      marshaller.parse(is);
+      fail("Expected exception");
+    } catch (StatusRuntimeException ex) {
+      assertEquals(Status.Code.INTERNAL, ex.getStatus().getCode());
+      assertNotNull(((InvalidProtocolBufferException) ex.getCause()).getUnfinishedMessage());
+    }
   }
 
   @Test
@@ -159,4 +192,31 @@ public class ProtoUtilsTest {
     assertArrayEquals(new byte[0], baos.toByteArray());
     assertEquals(0, is.available());
   }
+
+  @Test
+  public void keyForProto() {
+    assertEquals("google.protobuf.Type-bin",
+        ProtoUtils.keyForProto(Type.getDefaultInstance()).originalName());
+  }
+
+  @Test
+  public void keyMarshaller_roundtrip() {
+    Metadata.BinaryMarshaller<Type> keyMarshaller =
+        ProtoUtils.keyMarshaller(Type.getDefaultInstance());
+    assertEquals(proto, keyMarshaller.parseBytes(keyMarshaller.toBytes(proto)));
+  }
+
+  @Test
+  public void keyMarshaller_invalid() {
+    Metadata.BinaryMarshaller<Type> keyMarshaller =
+        ProtoUtils.keyMarshaller(Type.getDefaultInstance());
+    try {
+      keyMarshaller.parseBytes(new byte[] {-127});
+      fail("Expected exception");
+    } catch (IllegalArgumentException ex) {
+      assertNotNull(((InvalidProtocolBufferException) ex.getCause()).getUnfinishedMessage());
+    }
+  }
+
+
 }
