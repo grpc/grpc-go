@@ -1,5 +1,7 @@
 description = "gRPC: Testing"
 dependencies {
-    compile project(':grpc-core')
-    compile project(':grpc-stub')
+    compile project(':grpc-core'),
+            project(':grpc-stub'),
+            libraries.junit,
+            libraries.mockito
 }

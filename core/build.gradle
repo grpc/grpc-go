@@ -7,6 +7,7 @@ description = 'gRPC: Core'
 dependencies {
     compile libraries.guava,
             libraries.jsr305
+    testCompile project(':grpc-testing')
 }
 
 // Configure the animal sniffer plugin

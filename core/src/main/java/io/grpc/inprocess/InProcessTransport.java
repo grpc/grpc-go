@@ -100,6 +100,7 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
       shutdownThread.setDaemon(true);
       shutdownThread.setName("grpc-inprocess-shutdown");
       shutdownThread.start();
+      return;
     }
     Thread readyThread = new Thread(new Runnable() {
       @Override
