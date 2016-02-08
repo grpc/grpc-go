@@ -78,7 +78,6 @@ public interface ManagedClientTransport extends ClientTransport {
      * streams may continue, and the transport may still be able to process {@link #newStream} as
      * long as it doesn't own the new streams. Shutdown could have been caused by an error or normal
      * operation.  It is possible that this method is called without {@link #shutdown} being called.
-     * If the argument to this function is {@link Status#isOk}, it is safe to immediately reconnect.
      *
      * <p>This is called exactly once, and must be called prior to {@link #transportTerminated}.
      *

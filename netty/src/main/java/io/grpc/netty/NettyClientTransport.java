@@ -40,6 +40,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
+import io.grpc.internal.Http2Ping;
 import io.grpc.internal.ManagedClientTransport;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -51,6 +52,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.AsciiString;
 
 import java.net.SocketAddress;
+import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.Executor;
 
 import javax.annotation.concurrent.GuardedBy;
@@ -76,6 +78,9 @@ class NettyClientTransport implements ManagedClientTransport {
   /** Whether the transport started shutting down. */
   @GuardedBy("this")
   private boolean shutdown;
+  /** The cause of the shutdown. {@code null} iff not {@code shutdown} */
+  @GuardedBy("this")
+  private Status shutdownStatus;
   /** Whether the transport completed shutting down. */
   @GuardedBy("this")
   private boolean terminated;
@@ -95,9 +100,19 @@ class NettyClientTransport implements ManagedClientTransport {
   }
 
   @Override
-  public void ping(PingCallback callback, Executor executor) {
+  public void ping(final PingCallback callback, final Executor executor) {
+    ChannelFutureListener failureListener = new ChannelFutureListener() {
+      @Override
+      public void operationComplete(ChannelFuture future) throws Exception {
+        if (!future.isSuccess()) {
+          Status s = statusFromFailedFuture(future);
+          Http2Ping.notifyFailed(callback, executor, s.asException());
+        }
+      }
+    };
     // Write the command requesting the ping
-    handler.getWriteQueue().enqueue(new SendPingCommand(callback, executor), true);
+    handler.getWriteQueue().enqueue(new SendPingCommand(callback, executor), true)
+        .addListener(failureListener);
   }
 
   @Override
@@ -105,7 +120,12 @@ class NettyClientTransport implements ManagedClientTransport {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     return new NettyClientStream(method, headers, channel, handler, maxMessageSize, authority,
-        negotiationHandler.scheme());
+        negotiationHandler.scheme()) {
+      @Override
+      protected Status statusFromFailedFuture(ChannelFuture f) {
+        return NettyClientTransport.this.statusFromFailedFuture(f);
+      }
+    };
   }
 
   @Override
@@ -174,10 +194,10 @@ class NettyClientTransport implements ManagedClientTransport {
 
   @Override
   public void shutdown() {
-    notifyShutdown(Status.OK.withDescription("Channel requested transport to shut down"));
+    notifyShutdown(Status.UNAVAILABLE.withDescription("Channel requested transport to shut down"));
     // Notifying of termination is automatically done when the channel closes.
     if (channel != null && channel.isOpen()) {
-      channel.close();
+      handler.getWriteQueue().enqueue(new GracefulCloseCommand(), true);
     }
   }
 
@@ -186,12 +206,33 @@ class NettyClientTransport implements ManagedClientTransport {
     return super.toString() + "(" + address + ")";
   }
 
+  /**
+   * Convert ChannelFuture.cause() to a Status, taking into account that all handlers are removed
+   * from the pipeline when the channel is closed. Since handlers are removed, you may get an
+   * unhelpful exception like ClosedChannelException.
+   */
+  private Status statusFromFailedFuture(ChannelFuture f) {
+    Throwable t = f.cause();
+    if (t instanceof ClosedChannelException) {
+      synchronized (this) {
+        if (shutdownStatus == null) {
+          return Status.UNKNOWN.withDescription("Channel closed but for unknown reason");
+        }
+        return shutdownStatus;
+      }
+    }
+    return Utils.statusFromThrowable(t);
+  }
+
   private void notifyShutdown(Status status) {
     Preconditions.checkNotNull(status, "status");
-    boolean notifyShutdown;
+    boolean notifyShutdown = false;
     synchronized (this) {
-      notifyShutdown = !shutdown;
-      shutdown = true;
+      if (!shutdown) {
+        notifyShutdown = true;
+        shutdown = true;
+        shutdownStatus = status;
+      }
     }
     if (notifyShutdown) {
       listener.transportShutdown(status);

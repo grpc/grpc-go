@@ -188,7 +188,8 @@ public abstract class AbstractTransportTest {
     client.start(mockClientTransportListener);
     client.shutdown();
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
-    inOrder.verify(mockClientTransportListener).transportShutdown(any(Status.class));
+    inOrder.verify(mockClientTransportListener).transportShutdown(statusCaptor.capture());
+    assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
     inOrder.verify(mockClientTransportListener).transportTerminated();
   }
 
@@ -289,6 +290,7 @@ public abstract class AbstractTransportTest {
     ClientStream stream = client.newStream(methodDescriptor, new Metadata());
     stream.start(mockClientStreamListener);
     client.shutdown();
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
     ClientTransport.PingCallback mockPingCallback = mock(ClientTransport.PingCallback.class);
     try {
       client.ping(mockPingCallback, MoreExecutors.directExecutor());
@@ -304,7 +306,9 @@ public abstract class AbstractTransportTest {
   public void ping_afterTermination() throws Exception {
     server.start(serverListener);
     client.start(mockClientTransportListener);
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportReady();
     client.shutdown();
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
     ClientTransport.PingCallback mockPingCallback = mock(ClientTransport.PingCallback.class);
     try {
       client.ping(mockPingCallback, MoreExecutors.directExecutor());
@@ -325,6 +329,7 @@ public abstract class AbstractTransportTest {
     ClientStream stream = client.newStream(methodDescriptor, new Metadata());
     stream.start(mockClientStreamListener);
     client.shutdown();
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
     ClientStream stream2 = client.newStream(methodDescriptor, new Metadata());
     ClientStreamListener mockClientStreamListener2 = mock(ClientStreamListener.class);
     stream2.start(mockClientStreamListener2);
@@ -342,6 +347,23 @@ public abstract class AbstractTransportTest {
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
         .closed(statusCaptor.capture(), any(Metadata.class));
     assertCodeEquals(Status.OK, statusCaptor.getValue());
+  }
+
+  @Test
+  public void newStream_afterTermination() throws Exception {
+    // We expect the same general behavior as duringShutdown, but for some transports (e.g., Netty)
+    // dealing with afterTermination is harder than duringShutdown.
+    server.start(serverListener);
+    client.start(mockClientTransportListener);
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportReady();
+    client.shutdown();
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
+    Thread.sleep(100);
+    ClientStream stream = client.newStream(methodDescriptor, new Metadata());
+    stream.start(mockClientStreamListener);
+    verify(mockClientStreamListener, timeout(TIMEOUT_MS))
+        .closed(statusCaptor.capture(), any(Metadata.class));
+    assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
   }
 
   @Test

@@ -54,7 +54,7 @@ import javax.annotation.Nullable;
 /**
  * Client stream for a Netty transport.
  */
-class NettyClientStream extends Http2ClientStream {
+abstract class NettyClientStream extends Http2ClientStream {
   private final MethodDescriptor<?, ?> method;
   /** {@code null} after start. */
   private Metadata headers;
@@ -99,7 +99,8 @@ class NettyClientStream extends Http2ClientStream {
       public void operationComplete(ChannelFuture future) throws Exception {
         if (!future.isSuccess()) {
           // Stream creation failed. Close the stream if not already closed.
-          transportReportStatus(Utils.statusFromThrowable(future.cause()), true, new Metadata());
+          Status s = statusFromFailedFuture(future);
+          transportReportStatus(s, true, new Metadata());
         }
       }
     };
@@ -108,6 +109,11 @@ class NettyClientStream extends Http2ClientStream {
     writeQueue.enqueue(new CreateStreamCommand(http2Headers, this),
         !method.getType().clientSendsOneMessage()).addListener(failureListener);
   }
+
+  /**
+   * Intended to be overriden by NettyClientTransport, which has more information about failures.
+   */
+  protected abstract Status statusFromFailedFuture(ChannelFuture f);
 
   @Override
   public void request(int numMessages) {

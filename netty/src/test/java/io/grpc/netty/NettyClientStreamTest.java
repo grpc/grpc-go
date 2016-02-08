@@ -58,6 +58,8 @@ import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
@@ -355,7 +357,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   public void setHttp2StreamShouldNotifyReady() {
     listener = mock(ClientStreamListener.class);
 
-    stream = new NettyClientStream(methodDescriptor, new Metadata(), channel, handler,
+    stream = new NettyClientStreamImpl(methodDescriptor, new Metadata(), channel, handler,
         DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"));
     stream.start(listener);
     stream().id(STREAM_ID);
@@ -379,7 +381,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
       }
     }).when(writeQueue).enqueue(any(), any(ChannelPromise.class), anyBoolean());
     when(writeQueue.enqueue(any(), anyBoolean())).thenReturn(future);
-    NettyClientStream stream = new NettyClientStream(methodDescriptor, new Metadata(), channel,
+    NettyClientStream stream = new NettyClientStreamImpl(methodDescriptor, new Metadata(), channel,
         handler, DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"));
     stream.start(listener);
     assertTrue(stream.canSend());
@@ -416,5 +418,17 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     Metadata trailers = new Metadata();
     trailers.put(Status.CODE_KEY, status);
     return Utils.convertTrailers(trailers, true);
+  }
+
+  class NettyClientStreamImpl extends NettyClientStream {
+    NettyClientStreamImpl(MethodDescriptor<?, ?> method, Metadata headers, Channel channel,
+        NettyClientHandler handler, int maxMessageSize, AsciiString authority, AsciiString scheme) {
+      super(method, headers, channel, handler, maxMessageSize, authority, scheme);
+    }
+
+    @Override
+    protected Status statusFromFailedFuture(ChannelFuture f) {
+      return Utils.statusFromThrowable(f.cause());
+    }
   }
 }

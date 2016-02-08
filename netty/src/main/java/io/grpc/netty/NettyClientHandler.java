@@ -193,6 +193,11 @@ class NettyClientHandler extends AbstractNettyHandler {
     });
   }
 
+  /**
+   * Return the reason the handler failed. Only intended to be used by {@link NettyClientTransport}.
+   * Most other classes should retrieve the transport's shutdown status, since it may be more
+   * complete.
+   */
   @Nullable
   public Status errorStatus() {
     return goAwayStatus;
@@ -214,6 +219,11 @@ class NettyClientHandler extends AbstractNettyHandler {
       ((RequestMessagesCommand) msg).requestMessages();
     } else if (msg instanceof SendPingCommand) {
       sendPingFrame(ctx, (SendPingCommand) msg, promise);
+    } else if (msg instanceof GracefulCloseCommand) {
+      // Explicitly flush to create any buffered streams before sending GOAWAY.
+      // TODO(ejona): determine if the need to flush is a bug in Netty
+      flush(ctx);
+      close(ctx, promise);
     } else if (msg == NOOP_MESSAGE) {
       ctx.write(Unpooled.EMPTY_BUFFER, promise);
     } else {
@@ -268,6 +278,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   @Override
   public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
     logger.fine("Network channel being closed by the application.");
+    goAwayStatus(Status.UNAVAILABLE.withDescription("Channel requested transport shutdown"));
     super.close(ctx, promise);
   }
 
@@ -331,6 +342,12 @@ class NettyClientHandler extends AbstractNettyHandler {
    */
   private void createStream(CreateStreamCommand command, final ChannelPromise promise)
           throws Exception {
+    if (goAwayStatus != null) {
+      // The connection is going away, just terminate the stream now.
+      promise.setFailure(goAwayStatusThrowable);
+      return;
+    }
+
     // Get the stream ID for the new stream.
     final int streamId;
     try {
@@ -351,12 +368,6 @@ class NettyClientHandler extends AbstractNettyHandler {
     final NettyClientStream stream = command.stream();
     final Http2Headers headers = command.headers();
     stream.id(streamId);
-
-    if (goAwayStatus != null) {
-      // The connection is going away, just terminate the stream now.
-      promise.setFailure(goAwayStatusThrowable);
-      return;
-    }
 
     // Create an intermediate promise so that we can intercept the failure reported back to the
     // application.
@@ -423,20 +434,25 @@ class NettyClientHandler extends AbstractNettyHandler {
    */
   private void sendPingFrame(ChannelHandlerContext ctx, SendPingCommand msg,
       ChannelPromise promise) {
+    // Don't check goAwayStatus since we want to allow pings after shutdown but before termination.
+    // After termination, messages will no longer arrive because the pipeline clears all handlers on
+    // channel close.
+
     PingCallback callback = msg.callback();
     Executor executor = msg.executor();
-    if (!ctx.channel().isOpen()) {
-      Http2Ping.notifyFailed(callback, executor, goAwayStatus().asException());
-      return;
-    }
-
     // we only allow one outstanding ping at a time, so just add the callback to
     // any outstanding operation
     if (ping != null) {
+      promise.setSuccess();
       ping.addCallback(callback, executor);
       return;
     }
 
+    // Use a new promise to prevent calling the callback twice on write failure: here and in
+    // NettyClientTransport.ping(). It may appear strange, but it will behave the same as if
+    // ping != null above.
+    promise.setSuccess();
+    promise = ctx().newPromise();
     // set outstanding operation
     long data = random.nextLong();
     ByteBuf buffer = ctx.alloc().buffer(8);

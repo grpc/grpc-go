@@ -139,7 +139,7 @@ class DelayedClientTransport implements ManagedClientTransport {
       }
       shutdown = true;
       listener.transportShutdown(
-          Status.OK.withDescription("Channel requested transport to shut down"));
+          Status.UNAVAILABLE.withDescription("Channel requested transport to shut down"));
       if (pendingStreams == null || pendingStreams.isEmpty()) {
         pendingStreams = null;
         listener.transportTerminated();

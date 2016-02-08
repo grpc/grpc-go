@@ -53,6 +53,7 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
 import java.io.IOException;
+import java.nio.channels.ClosedChannelException;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -166,6 +167,12 @@ class Utils {
     Status s = Status.fromThrowable(t);
     if (s.getCode() != Status.Code.UNKNOWN) {
       return s;
+    }
+    if (t instanceof ClosedChannelException) {
+      // ClosedChannelException is used any time the Netty channel is closed. Proper error
+      // processing requires remembering the error that occurred before this one and using it
+      // instead.
+      return Status.UNKNOWN.withCause(t);
     }
     if (t instanceof IOException) {
       return Status.UNAVAILABLE.withCause(t);
