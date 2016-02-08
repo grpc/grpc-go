@@ -1354,8 +1354,6 @@ func interestingGoroutines() (gs []string) {
 	return
 }
 
-var failOnLeaks = flag.Bool("fail_on_leaks", true, "Fail tests if goroutines leak.")
-
 // leakCheck snapshots the currently-running goroutines and returns a
 // function to be run at the end of tests to see whether any
 // goroutines leaked.
@@ -1363,10 +1361,6 @@ func leakCheck(t testing.TB) func() {
 	orig := map[string]bool{}
 	for _, g := range interestingGoroutines() {
 		orig[g] = true
-	}
-	leakf := t.Logf
-	if *failOnLeaks {
-		leakf = t.Errorf
 	}
 	return func() {
 		// Loop, waiting for goroutines to shut down.
@@ -1387,7 +1381,7 @@ func leakCheck(t testing.TB) func() {
 				continue
 			}
 			for _, g := range leaked {
-				leakf("Leaked goroutine: %v", g)
+				t.Errorf("Leaked goroutine: %v", g)
 			}
 			return
 		}
