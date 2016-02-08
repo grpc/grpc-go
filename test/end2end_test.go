@@ -1354,7 +1354,7 @@ func interestingGoroutines() (gs []string) {
 	return
 }
 
-var failOnLeaks = flag.Bool("fail_on_leaks", false, "Fail tests if goroutines leak.")
+var failOnLeaks = flag.Bool("fail_on_leaks", true, "Fail tests if goroutines leak.")
 
 // leakCheck snapshots the currently-running goroutines and returns a
 // function to be run at the end of tests to see whether any
