@@ -279,7 +279,7 @@ func (s *Server) serveNewHTTP2Transport(c net.Conn, authInfo credentials.AuthInf
 		return
 	}
 	if !s.addConn(st) {
-		c.Close()
+		st.Close()
 		return
 	}
 	s.serveStreams(st)
