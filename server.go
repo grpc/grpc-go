@@ -594,8 +594,9 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	}
 }
 
-// Stop stops the gRPC server. Once Stop returns, the server stops accepting
-// connection requests and closes all the connected connections.
+// Stop stops the gRPC server. It immediately closes all open connections and listeners. It cancels all
+// active RPCs on server side and the corresponding pending RPCs on client side will get notified by
+// connection errors.
 func (s *Server) Stop() {
 	s.mu.Lock()
 	listeners := s.lis
