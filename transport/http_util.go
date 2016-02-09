@@ -143,7 +143,7 @@ func newHPACKDecoder() *hpackDecoder {
 		switch f.Name {
 		case "content-type":
 			if !strings.Contains(f.Value, "application/grpc") {
-				d.err = StreamErrorf(codes.FailedPrecondition, "transport: received the unexpected header")
+				d.err = StreamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value)
 				return
 			}
 		case "grpc-encoding":
