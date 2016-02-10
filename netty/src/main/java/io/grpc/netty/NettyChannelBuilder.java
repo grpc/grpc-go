@@ -104,7 +104,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     this(GrpcUtil.authorityFromHostAndPort(host, port));
   }
 
-  private NettyChannelBuilder(String target) {
+  protected NettyChannelBuilder(String target) {
     super(target);
   }
 
