@@ -68,6 +68,8 @@ var (
 	testAppUA = "myApp1/1.0 myApp2/0.9"
 )
 
+var raceMode bool // set by race_test.go in race mode
+
 type testServer struct {
 	security string // indicate the authentication protocol used by this server.
 }
@@ -758,6 +760,15 @@ func testRetry(t *testing.T, e env) {
 
 	numRPC := 1000
 	rpcSpacing := 2 * time.Millisecond
+	if raceMode {
+		// The race detector has a limit on how many goroutines it can track.
+		// This test is near the upper limit, and goes over the limit
+		// depending on the environment (the http.Handler environment uses
+		// more goroutines)
+		t.Logf("Shortening test in race mode.")
+		numRPC /= 2
+		rpcSpacing *= 2
+	}
 
 	wg.Add(1)
 	go func() {
