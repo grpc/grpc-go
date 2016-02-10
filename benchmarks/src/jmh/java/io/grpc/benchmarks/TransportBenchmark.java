@@ -85,8 +85,8 @@ public class TransportBenchmark {
 
   @Setup
   public void setUp() throws Exception {
-    AbstractServerImplBuilder serverBuilder;
-    AbstractManagedChannelImplBuilder channelBuilder;
+    AbstractServerImplBuilder<?> serverBuilder;
+    AbstractManagedChannelImplBuilder<?> channelBuilder;
     switch (transport) {
       case INPROCESS:
       {

@@ -64,12 +64,11 @@ public final class ClientAuthInterceptor implements ClientInterceptor {
 
   private Metadata cached;
   private Map<String, List<String>> lastMetadata;
-  // TODO(louiscryan): refresh token asynchronously with this executor.
-  private Executor executor;
 
-  public ClientAuthInterceptor(Credentials credentials, Executor executor) {
+  public ClientAuthInterceptor(
+      Credentials credentials, @SuppressWarnings("unused") Executor executor) {
     this.credentials = Preconditions.checkNotNull(credentials);
-    this.executor = Preconditions.checkNotNull(executor);
+    // TODO(louiscryan): refresh token asynchronously with this executor.
   }
 
   @Override

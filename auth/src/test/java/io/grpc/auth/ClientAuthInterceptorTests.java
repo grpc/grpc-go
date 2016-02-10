@@ -46,6 +46,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
+import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -68,7 +69,7 @@ import org.mockito.MockitoAnnotations;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Date;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 /**
  * Tests for {@link ClientAuthInterceptor}.
@@ -76,10 +77,12 @@ import java.util.concurrent.Executors;
 @RunWith(JUnit4.class)
 public class ClientAuthInterceptorTests {
 
-  public static final Metadata.Key<String> AUTHORIZATION = Metadata.Key.of("Authorization",
+  private static final Metadata.Key<String> AUTHORIZATION = Metadata.Key.of("Authorization",
       Metadata.ASCII_STRING_MARSHALLER);
-  public static final Metadata.Key<String> EXTRA_AUTHORIZATION = Metadata.Key.of(
+  private static final Metadata.Key<String> EXTRA_AUTHORIZATION = Metadata.Key.of(
       "Extra-Authorization", Metadata.ASCII_STRING_MARSHALLER);
+
+  private final Executor executor = MoreExecutors.directExecutor();
 
   @Mock
   Credentials credentials;
@@ -105,14 +108,13 @@ public class ClientAuthInterceptorTests {
 
   /** Set up for test. */
   @Before
-  public void startUp() throws IOException {
+  public void startUp() {
     MockitoAnnotations.initMocks(this);
     descriptor = MethodDescriptor.create(
         MethodDescriptor.MethodType.UNKNOWN, "a.service/method", stringMarshaller, intMarshaller);
     when(channel.newCall(same(descriptor), any(CallOptions.class))).thenReturn(call);
     doReturn("localhost:443").when(channel).authority();
-    interceptor = new ClientAuthInterceptor(credentials,
-        Executors.newSingleThreadExecutor());
+    interceptor = new ClientAuthInterceptor(credentials, executor);
   }
 
   @Test
@@ -161,7 +163,7 @@ public class ClientAuthInterceptorTests {
         return token;
       }
     };
-    interceptor = new ClientAuthInterceptor(oAuth2Credentials, Executors.newSingleThreadExecutor());
+    interceptor = new ClientAuthInterceptor(oAuth2Credentials, executor);
     ClientCall<String, Integer> interceptedCall =
         interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
     Metadata headers = new Metadata();

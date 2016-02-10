@@ -46,7 +46,6 @@ import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -98,7 +97,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     // If we know that the executor is a direct executor, we don't need to wrap it with a
     // SerializingExecutor. This is purely for performance reasons.
     // See https://github.com/grpc/grpc-java/issues/368
-    this.callExecutor = executor == MoreExecutors.directExecutor()
+    this.callExecutor = executor == directExecutor()
         ? new SerializeReentrantCallsDirectExecutor()
         : new SerializingExecutor(executor);
     // Propagate the context from the thread which initiated the call to all callbacks.
@@ -254,7 +253,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       }
     }
     // Propagate later Context cancellation to the remote side.
-    this.context.addListener(this, MoreExecutors.directExecutor());
+    this.context.addListener(this, directExecutor());
   }
 
   /**
