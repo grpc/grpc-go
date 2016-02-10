@@ -120,7 +120,7 @@ type headerFrame interface {
 // reserved by gRPC protocol. Any other headers are classified as the
 // user-specified metadata.
 func isReservedHeader(hdr string) bool {
-	if hdr[0] == ':' {
+	if hdr != "" && hdr[0] == ':' {
 		return true
 	}
 	switch hdr {
