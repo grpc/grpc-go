@@ -660,3 +660,26 @@ func TestStreamContext(t *testing.T) {
 		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, *s, ok, expectedStream)
 	}
 }
+
+func TestIsReservedHeader(t *testing.T) {
+	tests := []struct {
+		h    string
+		want bool
+	}{
+		{"", false}, // but should be rejected earlier
+		{"foo", false},
+		{"content-type", true},
+		{"grpc-message-type", true},
+		{"grpc-encoding", true},
+		{"grpc-message", true},
+		{"grpc-status", true},
+		{"grpc-timeout", true},
+		{"te", true},
+	}
+	for _, tt := range tests {
+		got := isReservedHeader(tt.h)
+		if got != tt.want {
+			t.Errorf("isReservedHeader(%q) = %v; want %v", tt.h, got, tt.want)
+		}
+	}
+}
