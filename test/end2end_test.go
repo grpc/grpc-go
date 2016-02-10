@@ -31,7 +31,7 @@
  *
  */
 
-package grpc_test
+package test
 
 import (
 	"flag"
@@ -267,8 +267,6 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 	return nil
 }
 
-const tlsDir = "testdata/"
-
 func TestReconnectTimeout(t *testing.T) {
 	defer leakCheck(t)()
 	lis, err := net.Listen("tcp", ":0")
@@ -378,7 +376,7 @@ func serverSetUp(t *testing.T, servON bool, hs *health.HealthServer, maxStream u
 		t.Fatalf("Failed to listen: %v", err)
 	}
 	if e.security == "tls" {
-		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
+		creds, err := credentials.NewServerTLSFromFile(Abs("testdata/server1.pem"), Abs("testdata/server1.key"))
 		if err != nil {
 			t.Fatalf("Failed to generate credentials %v", err)
 		}
@@ -408,7 +406,7 @@ func serverSetUp(t *testing.T, servON bool, hs *health.HealthServer, maxStream u
 func clientSetUp(t *testing.T, addr string, cp grpc.Compressor, dc grpc.Decompressor, ua string, e env) (cc *grpc.ClientConn) {
 	var derr error
 	if e.security == "tls" {
-		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+		creds, err := credentials.NewClientTLSFromFile(Abs("testdata/ca.pem"), "x.test.youtube.com")
 		if err != nil {
 			t.Fatalf("Failed to create credentials %v", err)
 		}

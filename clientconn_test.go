@@ -38,9 +38,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/test"
 )
-
-const tlsDir = "testdata/"
 
 func TestDialTimeout(t *testing.T) {
 	conn, err := Dial("Non-Existent.Server:80", WithTimeout(time.Millisecond), WithBlock(), WithInsecure())
@@ -53,7 +52,7 @@ func TestDialTimeout(t *testing.T) {
 }
 
 func TestTLSDialTimeout(t *testing.T) {
-	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+	creds, err := credentials.NewClientTLSFromFile(test.Abs("testdata/ca.pem"), "x.test.youtube.com")
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
@@ -67,7 +66,7 @@ func TestTLSDialTimeout(t *testing.T) {
 }
 
 func TestCredentialsMisuse(t *testing.T) {
-	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+	creds, err := credentials.NewClientTLSFromFile(test.Abs("testdata/ca.pem"), "x.test.youtube.com")
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}

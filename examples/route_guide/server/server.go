@@ -47,22 +47,21 @@ import (
 	"net"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/test"
 
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
 )
 
 var (
 	tls        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-	certFile   = flag.String("cert_file", "testdata/server1.pem", "The TLS cert file")
-	keyFile    = flag.String("key_file", "testdata/server1.key", "The TLS key file")
-	jsonDBFile = flag.String("json_db_file", "testdata/route_guide_db.json", "A json file containing a list of features")
+	certFile   = flag.String("cert_file", "testdata/server1.pem", "If -tls is true, the TLS cert file. Relative paths are interpreted from the google.golang.org/grpc directory.")
+	keyFile    = flag.String("key_file", "testdata/server1.key", "If -tls is true, the TLS key file. Relative paths are interpreted from the google.golang.org/grpc directory.")
+	jsonDBFile = flag.String("json_db_file", "examples/route_guide/testdata/route_guide_db.json", "A JSON file containing a list of features. Relative paths are interpreted from the google.golang.org/grpc directory.")
 	port       = flag.Int("port", 10000, "The server port")
 )
 
@@ -214,7 +213,7 @@ func serialize(point *pb.Point) string {
 
 func newServer() *routeGuideServer {
 	s := new(routeGuideServer)
-	s.loadFeatures(*jsonDBFile)
+	s.loadFeatures(test.Abs(*jsonDBFile))
 	s.routeNotes = make(map[string][]*pb.RouteNote)
 	return s
 }
@@ -227,7 +226,7 @@ func main() {
 	}
 	var opts []grpc.ServerOption
 	if *tls {
-		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
+		creds, err := credentials.NewServerTLSFromFile(test.Abs(*certFile), test.Abs(*keyFile))
 		if err != nil {
 			grpclog.Fatalf("Failed to generate credentials %v", err)
 		}

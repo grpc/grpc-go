@@ -44,6 +44,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/test"
 )
 
 var (
@@ -88,7 +89,7 @@ func main() {
 		var creds credentials.TransportAuthenticator
 		if *testCA {
 			var err error
-			creds, err = credentials.NewClientTLSFromFile(testCAFile, sn)
+			creds, err = credentials.NewClientTLSFromFile(test.Abs(testCAFile), sn)
 			if err != nil {
 				grpclog.Fatalf("Failed to create TLS credentials %v", err)
 			}
