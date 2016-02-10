@@ -60,6 +60,7 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.util.AsciiString;
+import io.netty.util.ReferenceCountUtil;
 
 import java.net.URI;
 import java.util.ArrayDeque;
@@ -388,6 +389,7 @@ public final class ProtocolNegotiators {
        */
       if (failCause != null) {
         promise.setFailure(failCause);
+        ReferenceCountUtil.release(msg);
       } else if (bufferedWrites == null) {
         super.write(ctx, msg, promise);
       } else {
@@ -424,6 +426,7 @@ public final class ProtocolNegotiators {
         while (!bufferedWrites.isEmpty()) {
           ChannelWrite write = bufferedWrites.poll();
           write.promise.setFailure(cause);
+          ReferenceCountUtil.release(write.msg);
         }
         bufferedWrites = null;
       }
