@@ -56,10 +56,22 @@ import (
 
 type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error)
 
+// Interceptor intercepts RPC method calls.
+type Interceptor interface {
+	Intercept(
+		methodName string,
+		request interface{},
+		response interface{},
+		err error,
+		duration time.Duration,
+	)
+}
+
 // MethodDesc represents an RPC service's method specification.
 type MethodDesc struct {
 	MethodName string
 	Handler    methodHandler
+	Intercept  bool
 }
 
 // ServiceDesc represents an RPC service's specification.
@@ -96,6 +108,7 @@ type options struct {
 	cp                   Compressor
 	dc                   Decompressor
 	maxConcurrentStreams uint32
+	interceptors         []Interceptor
 }
 
 // A ServerOption sets options.
@@ -135,10 +148,18 @@ func Creds(c credentials.Credentials) ServerOption {
 	}
 }
 
+// WithInterceptor returns a ServerOptions that adds the given interceptor.
+func WithInterceptor(i Interceptor) ServerOption {
+	return func(o *options) {
+		o.interceptors = append(o.interceptors, i)
+	}
+}
+
 // NewServer creates a gRPC server which has no service registered and has not
 // started to accept requests yet.
 func NewServer(opt ...ServerOption) *Server {
 	var opts options
+	opts.interceptors = make([]Interceptor, 0)
 	for _, o := range opt {
 		o(&opts)
 	}

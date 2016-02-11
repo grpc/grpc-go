@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+import "google/protobuf/descriptor.proto";
+
+package grpc.intercept;
+
+// InterceptType denotes which methods to intercept on a service.
+enum InterceptType {
+  // Placeholder for null.
+  INTERCEPT_TYPE_NONE = 0;
+  // Only intercept unary methods.
+  INTERCEPT_TYPE_UNARY = 1;
+  // Only intercept streaming methods.
+  INTERCEPT_TYPE_STREAMING = 2;
+  // Intercept all methods.
+  INTERCEPT_TYPE_ALL = 3;
+}
+
+extend google.protobuf.ServiceOptions {
+  // intercept denotes to intercept all methods of the given type.
+  InterceptType intercept = 78901234;
+}
+
+extend google.protobuf.MethodOptions {
+  // intercept denotes to intercept this specific method.
+  // This is redundant if the intercept field on ServiceOptions
+  // is already set to intercept this method.
+  bool intercept = 78901235;
+  // no_intercept denotes to not intercept this specific method.
+  // This is only relevant if the intercept field on ServiceOptions
+  // is set to otherwise intercept this method.
+  bool no_intercept = 78901236;
+}
