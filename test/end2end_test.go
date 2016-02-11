@@ -61,9 +61,15 @@ import (
 )
 
 var (
+	// For headers:
 	testMetadata = metadata.MD{
 		"key1": []string{"value1"},
 		"key2": []string{"value2"},
+	}
+	// For trailers:
+	testTrailerMetadata = metadata.MD{
+		"tkey1": []string{"trailerValue1"},
+		"tkey2": []string{"trailerValue2"},
 	}
 	testAppUA = "myApp1/1.0 myApp2/0.9"
 )
@@ -79,7 +85,7 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 		// For testing purpose, returns an error if there is attached metadata other than
 		// the user agent set by the client application.
 		if _, ok := md["user-agent"]; !ok {
-			return nil, grpc.Errorf(codes.DataLoss, "got extra metadata")
+			return nil, grpc.Errorf(codes.DataLoss, "missing expected user-agent")
 		}
 		var str []string
 		for _, entry := range md["user-agent"] {
@@ -114,7 +120,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		if err := grpc.SendHeader(ctx, md); err != nil {
 			return nil, fmt.Errorf("grpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
 		}
-		grpc.SetTrailer(ctx, md)
+		grpc.SetTrailer(ctx, testTrailerMetadata)
 	}
 	pr, ok := peer.FromContext(ctx)
 	if !ok {
@@ -633,8 +639,9 @@ func testFailedEmptyUnary(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
 	ctx := metadata.NewContext(context.Background(), testMetadata)
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != grpc.Errorf(codes.DataLoss, "got extra metadata") {
-		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, grpc.Errorf(codes.DataLoss, "got extra metadata"))
+	wantErr := grpc.Errorf(codes.DataLoss, "missing expected user-agent")
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != wantErr {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, wantErr)
 	}
 }
 
@@ -704,10 +711,15 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.Trailer(&trailer)); err != nil {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
+	// Ignore optional response headers that Servers may set:
+	if header != nil {
+		delete(header, "trailer") // RFC 2616 says server SHOULD (but optional) declare trailers
+		delete(header, "date")    // the Date header is also optional
+	}
 	if !reflect.DeepEqual(header, testMetadata) {
 		t.Fatalf("Received header metadata %v, want %v", header, testMetadata)
 	}
-	if !reflect.DeepEqual(trailer, testMetadata) {
+	if !reflect.DeepEqual(trailer, testTrailerMetadata) {
 		t.Fatalf("Received trailer metadata %v, want %v", trailer, testMetadata)
 	}
 }
