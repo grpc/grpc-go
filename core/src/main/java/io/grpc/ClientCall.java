@@ -124,7 +124,8 @@ public abstract class ClientCall<ReqT, RespT> {
   /**
    * Start a call, using {@code responseListener} for processing response messages.
    *
-   * <p>It must be called prior to any other method on this class.
+   * <p>It must be called prior to any other method on this class. Since {@link Metadata} is not
+   * thread-safe, the caller must not access {@code headers} after this point.
    *
    * @param responseListener receives response messages
    * @param headers which can contain extra call metadata, e.g. authentication credentials.
