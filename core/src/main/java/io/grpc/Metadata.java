@@ -43,6 +43,7 @@ import com.google.common.collect.Iterables;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -174,6 +175,15 @@ public final class Metadata {
           });
     }
     return null;
+  }
+
+  /**
+   * Returns set of all keys in store.
+   *
+   * @return unmodifiable Set of keys
+   */
+  public Set<String> keys() {
+    return Collections.unmodifiableSet(store.keySet());
   }
 
   /**
