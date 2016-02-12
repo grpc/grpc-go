@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,42 +29,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.okhttp;
+package io.grpc.internal;
 
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-import io.grpc.ManagedChannelProvider;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
-import java.util.ServiceLoader;
-
-/** Unit tests for {@link OkHttpChannelProvider}. */
-@RunWith(JUnit4.class)
-public class OkHttpChannelProviderTest {
-  private OkHttpChannelProvider provider = new OkHttpChannelProvider();
-
-  @Test
-  public void provided() {
-    for (ManagedChannelProvider current : ServiceLoader.load(ManagedChannelProvider.class)) {
-      if (current instanceof OkHttpChannelProvider) {
-        return;
-      }
-    }
-    fail("ServiceLoader unable to load OkHttpChannelProvider");
+/** A hack to access protected methods from io.grpc.internal. */
+public final class AccessProtectedHack {
+  public static InternalServer serverBuilderBuildTransportServer(
+      AbstractServerImplBuilder<?> builder) {
+    return builder.buildTransportServer();
   }
 
-  @Test
-  public void isAvailable() {
-    assertTrue(provider.isAvailable());
-  }
-
-  @Test
-  public void builderIsAOkHttpBuilder() {
-    assertSame(OkHttpChannelBuilder.class, provider.builderForAddress("localhost", 443).getClass());
-  }
+  private AccessProtectedHack() {}
 }

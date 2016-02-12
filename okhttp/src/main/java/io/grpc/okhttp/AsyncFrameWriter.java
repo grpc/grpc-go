@@ -238,10 +238,8 @@ class AsyncFrameWriter implements FrameWriter {
         doRun();
       } catch (RuntimeException e) {
         transport.onException(e);
-        throw e;
       } catch (Exception e) {
         transport.onException(e);
-        throw new RuntimeException(e);
       }
     }
 

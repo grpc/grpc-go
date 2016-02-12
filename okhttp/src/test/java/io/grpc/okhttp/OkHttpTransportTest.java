@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,40 +31,54 @@
 
 package io.grpc.okhttp;
 
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import io.grpc.internal.AccessProtectedHack;
+import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.InternalServer;
+import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.testing.AbstractTransportTest;
+import io.grpc.netty.NettyServerBuilder;
+import io.grpc.testing.TestUtils;
 
-import io.grpc.ManagedChannelProvider;
-
+import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.util.ServiceLoader;
+import java.net.InetSocketAddress;
 
-/** Unit tests for {@link OkHttpChannelProvider}. */
+/** Unit tests for OkHttp transport. */
 @RunWith(JUnit4.class)
-public class OkHttpChannelProviderTest {
-  private OkHttpChannelProvider provider = new OkHttpChannelProvider();
+public class OkHttpTransportTest extends AbstractTransportTest {
+  private static final int SERVER_PORT = TestUtils.pickUnusedPort();
+  private ClientTransportFactory clientFactory = OkHttpChannelBuilder
+      // Although specified here, address is ignored because we never call build.
+      .forAddress("127.0.0.1", SERVER_PORT)
+      .negotiationType(NegotiationType.PLAINTEXT)
+      .buildTransportFactory();
 
-  @Test
-  public void provided() {
-    for (ManagedChannelProvider current : ServiceLoader.load(ManagedChannelProvider.class)) {
-      if (current instanceof OkHttpChannelProvider) {
-        return;
-      }
-    }
-    fail("ServiceLoader unable to load OkHttpChannelProvider");
+  @After
+  public void releaseClientFactory() {
+    clientFactory.close();
   }
 
-  @Test
-  public void isAvailable() {
-    assertTrue(provider.isAvailable());
+  @Override
+  protected InternalServer newServer() {
+    return AccessProtectedHack.serverBuilderBuildTransportServer(
+        NettyServerBuilder
+          .forPort(SERVER_PORT)
+          .flowControlWindow(65 * 1024));
   }
 
-  @Test
-  public void builderIsAOkHttpBuilder() {
-    assertSame(OkHttpChannelBuilder.class, provider.builderForAddress("localhost", 443).getClass());
+  @Override
+  protected ManagedClientTransport newClientTransport() {
+    return clientFactory.newClientTransport(
+        new InetSocketAddress("127.0.0.1", SERVER_PORT), "127.0.0.1:" + SERVER_PORT);
   }
+
+  // TODO(ejona): Flaky/Broken
+  @Test
+  @Ignore
+  @Override
+  public void flowControlPushBack() {}
 }

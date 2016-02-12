@@ -10,7 +10,8 @@ dependencies {
 
     // Tests depend on base class defined by core module.
     testCompile project(':grpc-core').sourceSets.test.output,
-                project(":grpc-testing")
+                project(':grpc-testing'),
+                project(':grpc-netty')
 }
 
 project.sourceSets {
