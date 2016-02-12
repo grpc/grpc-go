@@ -329,10 +329,11 @@ func unixDialer(addr string, timeout time.Duration) (net.Conn, error) {
 }
 
 type env struct {
-	name     string
-	network  string // The type of network such as tcp, unix, etc.
-	dialer   func(addr string, timeout time.Duration) (net.Conn, error)
-	security string // The security protocol such as TLS, SSH, etc.
+	name        string
+	network     string // The type of network such as tcp, unix, etc.
+	dialer      func(addr string, timeout time.Duration) (net.Conn, error)
+	security    string // The security protocol such as TLS, SSH, etc.
+	httpHandler bool   // whether to use the http.Handler ServerTransport; requires TLS
 }
 
 func (e env) runnable() bool {
@@ -347,10 +348,11 @@ var (
 	tcpTLSEnv    = env{name: "tcp-tls", network: "tcp", security: "tls"}
 	unixClearEnv = env{name: "unix-clear", network: "unix", dialer: unixDialer}
 	unixTLSEnv   = env{name: "unix-tls", network: "unix", dialer: unixDialer, security: "tls"}
-	allEnv       = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv}
+	handlerEnv   = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true}
+	allEnv       = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv, handlerEnv}
 )
 
-var onlyEnv = flag.String("only_env", "", "If non-empty, one of 'tcp-clear', 'tcp-tls', 'unix-clear', or 'unix-tls' to only run the tests for that environment. Empty means all.")
+var onlyEnv = flag.String("only_env", "", "If non-empty, one of 'tcp-clear', 'tcp-tls', 'unix-clear', 'unix-tls', or 'handler-tls' to only run the tests for that environment. Empty means all.")
 
 func listTestEnv() (envs []env) {
 	if *onlyEnv != "" {
@@ -393,6 +395,9 @@ func serverSetUp(t *testing.T, servON bool, hs *health.HealthServer, maxStream u
 		sopts = append(sopts, grpc.Creds(creds))
 	}
 	s = grpc.NewServer(sopts...)
+	if e.httpHandler {
+		s.TestingUseHandlerImpl()
+	}
 	if hs != nil {
 		healthpb.RegisterHealthServer(s, hs)
 	}
@@ -720,7 +725,7 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 		t.Fatalf("Received header metadata %v, want %v", header, testMetadata)
 	}
 	if !reflect.DeepEqual(trailer, testTrailerMetadata) {
-		t.Fatalf("Received trailer metadata %v, want %v", trailer, testMetadata)
+		t.Fatalf("Received trailer metadata %v, want %v", trailer, testTrailerMetadata)
 	}
 }
 
@@ -1030,11 +1035,13 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		if e.security == "tls" {
 			delete(headerMD, "transport_security_type")
 		}
+		delete(headerMD, "trailer") // ignore if present
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#1 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
 		// test the cached value.
 		headerMD, err = stream.Header()
+		delete(headerMD, "trailer") // ignore if present
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
