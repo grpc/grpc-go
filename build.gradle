@@ -280,5 +280,6 @@ subprojects {
             showCauses true
             showStackTraces true
         }
+        maxHeapSize = '1500m'
     }
 }

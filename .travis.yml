@@ -4,6 +4,7 @@ language: java
 
 env:
   global:
+    - GRADLE_OPTS=-Xmx512m
     - PROTOBUF_VERSION=3.0.0-beta-2
     - LDFLAGS=-L/tmp/protobuf-${PROTOBUF_VERSION}/lib
     - CXXFLAGS=-I/tmp/protobuf-${PROTOBUF_VERSION}/include
