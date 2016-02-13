@@ -32,12 +32,11 @@
 package io.grpc.grpclb;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
-import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.Status;
 import io.grpc.TransportManager;
 
 import java.net.InetSocketAddress;
@@ -58,14 +57,17 @@ class RoundRobinServerList<T> {
   private final TransportManager<T> tm;
   private final List<EquivalentAddressGroup> list;
   private final Iterator<EquivalentAddressGroup> cyclingIter;
+  private final T requestDroppingTransport;
 
   private RoundRobinServerList(TransportManager<T> tm, List<EquivalentAddressGroup> list) {
     this.tm = tm;
     this.list = list;
     this.cyclingIter = Iterators.cycle(list);
+    this.requestDroppingTransport =
+      tm.createFailingTransport(Status.UNAVAILABLE.withDescription("Throttled by LB"));
   }
 
-  ListenableFuture<T> getTransportForNextServer() {
+  T getTransportForNextServer() {
     EquivalentAddressGroup currentServer;
     synchronized (cyclingIter) {
       // TODO(zhangkun83): receive transportShutdown and transportReady events, then skip addresses
@@ -73,12 +75,9 @@ class RoundRobinServerList<T> {
       currentServer = cyclingIter.next();
     }
     if (currentServer == null) {
-      // TODO(zhangkun83): drop the request by returnning a fake transport that would fail
-      // streams.
-      throw new UnsupportedOperationException("server dropping not implemented yet");
+      return requestDroppingTransport;
     }
-    return Preconditions.checkNotNull(tm.getTransport(currentServer),
-        "TransportManager returned null for %s", currentServer);
+    return tm.getTransport(currentServer);
   }
 
   @VisibleForTesting

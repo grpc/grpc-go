@@ -32,10 +32,8 @@
 package io.grpc;
 
 import com.google.common.base.Supplier;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 
-import io.grpc.internal.BlankFutureProvider;
+import io.grpc.TransportManager.InterimTransport;
 
 import java.net.SocketAddress;
 import java.util.ArrayList;
@@ -67,14 +65,19 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
   }
 
   private static class SimpleLoadBalancer<T> extends LoadBalancer<T> {
+    private static final Status SHUTDOWN_STATUS =
+        Status.UNAVAILABLE.augmentDescription("SimpleLoadBalancer has shut down");
+
     private final Object lock = new Object();
 
     @GuardedBy("lock")
     private EquivalentAddressGroup addresses;
     @GuardedBy("lock")
-    private final BlankFutureProvider<T> pendingPicks = new BlankFutureProvider<T>();
+    private InterimTransport<T> interimTransport;
     @GuardedBy("lock")
-    private StatusException nameResolutionError;
+    private Status nameResolutionError;
+    @GuardedBy("lock")
+    private boolean closed;
 
     private final TransportManager<T> tm;
 
@@ -83,15 +86,21 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
     }
 
     @Override
-    public ListenableFuture<T> pickTransport(@Nullable RequestKey requestKey) {
+    public T pickTransport(@Nullable RequestKey requestKey) {
       EquivalentAddressGroup addressesCopy;
       synchronized (lock) {
+        if (closed) {
+          return tm.createFailingTransport(SHUTDOWN_STATUS);
+        }
         addressesCopy = addresses;
         if (addressesCopy == null) {
           if (nameResolutionError != null) {
-            return Futures.immediateFailedFuture(nameResolutionError);
+            return tm.createFailingTransport(nameResolutionError);
           }
-          return pendingPicks.newBlankFuture();
+          if (interimTransport == null) {
+            interimTransport = tm.createInterimTransport();
+          }
+          return interimTransport.transport();
         }
       }
       return tm.getTransport(addressesCopy);
@@ -100,9 +109,12 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
     @Override
     public void handleResolvedAddresses(
         List<ResolvedServerInfo> updatedServers, Attributes config) {
-      BlankFutureProvider.FulfillmentBatch<T> pendingPicksFulfillmentBatch;
+      InterimTransport<T> savedInterimTransport;
       final EquivalentAddressGroup newAddresses;
       synchronized (lock) {
+        if (closed) {
+          return;
+        }
         ArrayList<SocketAddress> newAddressList =
             new ArrayList<SocketAddress>(updatedServers.size());
         for (ResolvedServerInfo server : updatedServers) {
@@ -114,25 +126,49 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
         }
         addresses = newAddresses;
         nameResolutionError = null;
-        pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
+        savedInterimTransport = interimTransport;
+        interimTransport = null;
       }
-      pendingPicksFulfillmentBatch.link(new Supplier<ListenableFuture<T>>() {
-        @Override public ListenableFuture<T> get() {
-          return tm.getTransport(newAddresses);
-        }
-      });
+      if (savedInterimTransport != null) {
+        savedInterimTransport.closeWithRealTransports(new Supplier<T>() {
+            @Override public T get() {
+              return tm.getTransport(newAddresses);
+            }
+          });
+      }
     }
 
     @Override
     public void handleNameResolutionError(Status error) {
-      BlankFutureProvider.FulfillmentBatch<T> pendingPicksFulfillmentBatch;
-      StatusException statusException =
-          error.augmentDescription("Name resolution failed").asException();
+      InterimTransport<T> savedInterimTransport;
       synchronized (lock) {
-        pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
-        nameResolutionError = statusException;
+        if (closed) {
+          return;
+        }
+        error = error.augmentDescription("Name resolution failed");
+        savedInterimTransport = interimTransport;
+        interimTransport = null;
+        nameResolutionError = error;
       }
-      pendingPicksFulfillmentBatch.fail(statusException);
+      if (savedInterimTransport != null) {
+        savedInterimTransport.closeWithError(error);
+      }
+    }
+
+    @Override
+    public void shutdown() {
+      InterimTransport<T> savedInterimTransport;
+      synchronized (lock) {
+        if (closed) {
+          return;
+        }
+        closed = true;
+        savedInterimTransport = interimTransport;
+        interimTransport = null;
+      }
+      if (savedInterimTransport != null) {
+        savedInterimTransport.closeWithError(SHUTDOWN_STATUS);
+      }
     }
   }
 }

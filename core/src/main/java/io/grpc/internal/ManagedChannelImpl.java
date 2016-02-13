@@ -35,8 +35,7 @@ import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.base.Supplier;
 
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
@@ -54,6 +53,7 @@ import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.Status;
 import io.grpc.TransportManager;
+import io.grpc.TransportManager.InterimTransport;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 
 import java.net.URI;
@@ -61,6 +61,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -79,13 +80,13 @@ import javax.annotation.concurrent.ThreadSafe;
 public final class ManagedChannelImpl extends ManagedChannel {
   private static final Logger log = Logger.getLogger(ManagedChannelImpl.class.getName());
 
-  private static final ListenableFuture<ClientTransport> NULL_VALUE_TRANSPORT_FUTURE =
-        Futures.immediateFuture(null);
-
   // Matching this pattern means the target string is a URI target or at least intended to be one.
   // A URI target must be an absolute hierarchical URI.
   // From RFC 2396: scheme = alpha *( alpha | digit | "+" | "-" | "." )
   private static final Pattern URI_PATTERN = Pattern.compile("[a-zA-Z][a-zA-Z0-9+-.]*:/.*");
+
+  private static final ClientTransport SHUTDOWN_TRANSPORT =
+      new FailingClientTransport(Status.UNAVAILABLE.withDescription("Channel is shutdown"));
 
   private final ClientTransportFactory transportFactory;
   private final Executor executor;
@@ -120,16 +121,20 @@ public final class ManagedChannelImpl extends ManagedChannel {
       new HashMap<EquivalentAddressGroup, TransportSet>();
 
   @GuardedBy("lock")
+  private final HashSet<DelayedClientTransport> delayedTransports =
+      new HashSet<DelayedClientTransport>();
+
+  @GuardedBy("lock")
   private boolean shutdown;
   @GuardedBy("lock")
   private boolean terminated;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
-    public ListenableFuture<ClientTransport> get(CallOptions callOptions) {
+    public ClientTransport get(CallOptions callOptions) {
       synchronized (lock) {
         if (shutdown) {
-          return NULL_VALUE_TRANSPORT_FUTURE;
+          return SHUTDOWN_TRANSPORT;
         }
       }
       return loadBalancer.pickTransport(callOptions.getRequestKey());
@@ -227,6 +232,8 @@ public final class ManagedChannelImpl extends ManagedChannel {
   @Override
   public ManagedChannelImpl shutdown() {
     ArrayList<TransportSet> transportsCopy = new ArrayList<TransportSet>();
+    ArrayList<DelayedClientTransport> delayedTransportsCopy =
+        new ArrayList<DelayedClientTransport>();
     synchronized (lock) {
       if (shutdown) {
         return this;
@@ -234,18 +241,19 @@ public final class ManagedChannelImpl extends ManagedChannel {
       shutdown = true;
       // After shutdown there are no new calls, so no new cancellation tasks are needed
       scheduledExecutor = SharedResourceHolder.release(TIMER_SERVICE, scheduledExecutor);
-      if (transports.isEmpty()) {
-        terminated = true;
-        lock.notifyAll();
-        onChannelTerminated();
-      } else {
+      maybeTerminateChannel();
+      if (!terminated) {
         transportsCopy.addAll(transports.values());
+        delayedTransportsCopy.addAll(delayedTransports);
       }
     }
     loadBalancer.shutdown();
     nameResolver.shutdown();
     for (TransportSet ts : transportsCopy) {
       ts.shutdown();
+    }
+    for (DelayedClientTransport transport : delayedTransportsCopy) {
+      transport.shutdown();
     }
     return this;
   }
@@ -331,14 +339,22 @@ public final class ManagedChannelImpl extends ManagedChannel {
   }
 
   /**
-   * If we're using the shared executor, returns its reference.
+   * Terminate the channel if termination conditions are met.
    */
-  private void onChannelTerminated() {
-    if (usingSharedExecutor) {
-      SharedResourceHolder.release(GrpcUtil.SHARED_CHANNEL_EXECUTOR, (ExecutorService) executor);
+  @GuardedBy("lock")
+  private void maybeTerminateChannel() {
+    if (terminated) {
+      return;
     }
-    // Release the transport factory so that it can deallocate any resources.
-    transportFactory.release();
+    if (shutdown && transports.isEmpty() && delayedTransports.isEmpty()) {
+      terminated = true;
+      lock.notifyAll();
+      if (usingSharedExecutor) {
+        SharedResourceHolder.release(GrpcUtil.SHARED_CHANNEL_EXECUTOR, (ExecutorService) executor);
+      }
+      // Release the transport factory so that it can deallocate any resources.
+      transportFactory.release();
+    }
   }
 
   private final TransportManager<ClientTransport> tm = new TransportManager<ClientTransport>() {
@@ -348,13 +364,12 @@ public final class ManagedChannelImpl extends ManagedChannel {
     }
 
     @Override
-    public ListenableFuture<ClientTransport> getTransport(
-        final EquivalentAddressGroup addressGroup) {
+    public ClientTransport getTransport(final EquivalentAddressGroup addressGroup) {
       Preconditions.checkNotNull(addressGroup, "addressGroup");
       TransportSet ts;
       synchronized (lock) {
         if (shutdown) {
-          return NULL_VALUE_TRANSPORT_FUTURE;
+          return SHUTDOWN_TRANSPORT;
         }
         ts = transports.get(addressGroup);
         if (ts == null) {
@@ -364,14 +379,7 @@ public final class ManagedChannelImpl extends ManagedChannel {
                 public void onTerminated() {
                   synchronized (lock) {
                     transports.remove(addressGroup);
-                    if (shutdown && transports.isEmpty()) {
-                      if (terminated) {
-                        log.warning("transportTerminated called after already terminated");
-                      }
-                      terminated = true;
-                      lock.notifyAll();
-                      onChannelTerminated();
-                    }
+                    maybeTerminateChannel();
                   }
                 }
               });
@@ -386,5 +394,62 @@ public final class ManagedChannelImpl extends ManagedChannel {
       return new SingleTransportChannel(
           transport, executor, scheduledExecutor, authority());
     }
+
+    @Override
+    public ClientTransport createFailingTransport(Status error) {
+      return new FailingClientTransport(error);
+    }
+
+    @Override
+    public InterimTransport<ClientTransport> createInterimTransport() {
+      return new InterimTransportImpl();
+    }
   };
+
+  private class InterimTransportImpl implements InterimTransport<ClientTransport> {
+    private final DelayedClientTransport delayedTransport;
+    private boolean closed;
+
+    InterimTransportImpl() {
+      delayedTransport = new DelayedClientTransport();
+      delayedTransport.start(new ManagedClientTransport.Listener() {
+          @Override public void transportShutdown(Status status) {}
+
+          @Override public void transportTerminated() {
+            synchronized (lock) {
+              delayedTransports.remove(delayedTransport);
+              maybeTerminateChannel();
+            }
+          }
+
+          @Override public void transportReady() {}
+        });
+      boolean savedShutdown;
+      synchronized (lock) {
+        delayedTransports.add(delayedTransport);
+        savedShutdown = shutdown;
+      }
+      if (savedShutdown) {
+        delayedTransport.setTransport(SHUTDOWN_TRANSPORT);
+        delayedTransport.shutdown();
+      }
+    }
+
+    @Override
+    public ClientTransport transport() {
+      Preconditions.checkState(!closed, "already closed");
+      return delayedTransport;
+    }
+
+    @Override
+    public void closeWithRealTransports(Supplier<ClientTransport> realTransports) {
+      delayedTransport.setTransportSupplier(realTransports);
+      delayedTransport.shutdown();
+    }
+
+    @Override
+    public void closeWithError(Status error) {
+      delayedTransport.shutdownNow(error);
+    }
+  }
 }

@@ -31,8 +31,6 @@
 
 package io.grpc;
 
-import com.google.common.util.concurrent.ListenableFuture;
-
 import java.util.List;
 
 import javax.annotation.Nullable;
@@ -55,13 +53,12 @@ public abstract class LoadBalancer<T> {
   /**
    * Pick a transport that Channel will use for next RPC.
    *
-   * <p>If the caller gives up before the futrue is done, it should call either {@code cancel(true)}
-   * or {@code cancel(false)} (they have the same effect) on the future to avoid leaking of
-   * resources.
+   * <p>If called after {@link #shutdown} has been called, this method will return
+   * a transport that would fail all requests.
    *
    * @param requestKey for affinity-based routing
    */
-  public abstract ListenableFuture<T> pickTransport(@Nullable RequestKey requestKey);
+  public abstract T pickTransport(@Nullable RequestKey requestKey);
 
   /**
    * Shuts down this {@code LoadBalancer}.
@@ -85,12 +82,12 @@ public abstract class LoadBalancer<T> {
   /**
    * Called when a transport is fully connected and ready to accept traffic.
    */
-  public void transportReady(EquivalentAddressGroup addressGroup, T transport) { }
+  public void handleTransportReady(EquivalentAddressGroup addressGroup) { }
 
   /**
    * Called when a transport is shutting down.
    */
-  public void transportShutdown(EquivalentAddressGroup addressGroup, T transport, Status s) { }
+  public void handleTransportShutdown(EquivalentAddressGroup addressGroup, Status s) { }
 
   public abstract static class Factory {
     /**

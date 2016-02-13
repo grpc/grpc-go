@@ -35,9 +35,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.Attributes;
 import io.grpc.Channel;
@@ -46,10 +43,8 @@ import io.grpc.LoadBalancer;
 import io.grpc.RequestKey;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.Status;
-import io.grpc.StatusException;
+import io.grpc.TransportManager.InterimTransport;
 import io.grpc.TransportManager;
-import io.grpc.internal.BlankFutureProvider;
-import io.grpc.internal.BlankFutureProvider.FulfillmentBatch;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.stub.StreamObserver;
@@ -72,15 +67,18 @@ import javax.annotation.concurrent.GuardedBy;
 class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
   private static final Logger logger = Logger.getLogger(GrpclbLoadBalancer.class.getName());
 
+  private static final Status SHUTDOWN_STATUS =
+      Status.UNAVAILABLE.augmentDescription("GrpclbLoadBalancer has shut down");
+
   private final Object lock = new Object();
   private final String serviceName;
   private final TransportManager<T> tm;
 
   // General states
   @GuardedBy("lock")
-  private final BlankFutureProvider<T> pendingPicks = new BlankFutureProvider<T>();
+  private InterimTransport<T> interimTransport;
   @GuardedBy("lock")
-  private Throwable lastError;
+  private Status lastError;
 
   @GuardedBy("lock")
   private boolean closed;
@@ -91,7 +89,7 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
   @GuardedBy("lock")
   private T lbTransport;
   @GuardedBy("lock")
-  private ListenableFuture<T> directTransport;
+  private T directTransport;
   @GuardedBy("lock")
   private StreamObserver<LoadBalanceResponse> lbResponseObserver;
   @GuardedBy("lock")
@@ -127,19 +125,23 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
   }
 
   @Override
-  public ListenableFuture<T> pickTransport(@Nullable RequestKey requestKey) {
+  public T pickTransport(@Nullable RequestKey requestKey) {
     RoundRobinServerList<T> serverListCopy;
     synchronized (lock) {
-      Preconditions.checkState(!closed, "already closed");
+      if (closed) {
+        return tm.createFailingTransport(SHUTDOWN_STATUS);
+      }
       if (directTransport != null) {
         return directTransport;
       }
       if (roundRobinServerList == null) {
-        if (lastError == null) {
-          return pendingPicks.newBlankFuture();
-        } else {
-          return Futures.immediateFailedFuture(lastError);
+        if (lastError != null) {
+          return tm.createFailingTransport(lastError);
         }
+        if (interimTransport == null) {
+          interimTransport = tm.createInterimTransport();
+        }
+        return interimTransport.transport();
       }
       serverListCopy = roundRobinServerList;
     }
@@ -150,6 +152,9 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
   public void handleResolvedAddresses(
       List<ResolvedServerInfo> updatedServers, Attributes config) {
     synchronized (lock) {
+      if (closed) {
+        return;
+      }
       ArrayList<SocketAddress> addrs = new ArrayList<SocketAddress>(updatedServers.size());
       for (ResolvedServerInfo serverInfo : updatedServers) {
         addrs.add(serverInfo.getAddress());
@@ -173,30 +178,8 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
     Preconditions.checkNotNull(lbAddresses, "lbAddresses");
     // TODO(zhangkun83): LB servers may use an authority different from the service's.
     // getTransport() will need to add an argument for the authority.
-    ListenableFuture<T> transportFuture = tm.getTransport(lbAddresses);
-    Futures.addCallback(
-        Preconditions.checkNotNull(transportFuture),
-        new FutureCallback<T>() {
-          @Override public void onSuccess(T transport) {
-            synchronized (lock) {
-              if (closed) {
-                return;
-              }
-              lbTransport = transport;
-              startNegotiation();
-            }
-          }
-
-          @Override public void onFailure(Throwable t) {
-            Error error = new AssertionError(
-                "The future from TransportManager failed, but it shouldn't", t);
-            synchronized (lock) {
-              lastError = error;
-            }
-            throw error;
-          }
-        },
-        executor);
+    lbTransport = tm.getTransport(lbAddresses);
+    startNegotiation();
   }
 
   @GuardedBy("lock")
@@ -204,7 +187,7 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
     if (closed) {
       return;
     }
-    Preconditions.checkState(lbTransport != null, "currentLbTransport must be available");
+    Preconditions.checkState(lbTransport != null, "lbTransport must be available");
     logger.info("Starting LB negotiation");
     LoadBalanceRequest initRequest = LoadBalanceRequest.newBuilder()
         .setInitialRequest(InitialLoadBalanceRequest.newBuilder()
@@ -230,6 +213,7 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
 
   @Override
   public void shutdown() {
+    InterimTransport<T> savedInterimTransport;
     synchronized (lock) {
       if (closed) {
         return;
@@ -238,28 +222,38 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
       if (lbRequestWriter != null) {
         lbRequestWriter.onCompleted();
       }
+      savedInterimTransport = interimTransport;
+      interimTransport = null;
       executor = SharedResourceHolder.release(GrpcUtil.SHARED_CHANNEL_EXECUTOR, executor);
+    }
+    if (savedInterimTransport != null) {
+      savedInterimTransport.closeWithError(SHUTDOWN_STATUS);
     }
   }
 
   @Override
-  public void transportShutdown(EquivalentAddressGroup addressGroup, T transport, Status status) {
+  public void handleTransportShutdown(EquivalentAddressGroup addressGroup, Status status) {
     handleError(status.augmentDescription("Transport to LB server closed"));
     synchronized (lock) {
-      if (transport == lbTransport) {
+      if (closed) {
+        return;
+      }
+      if (addressGroup.equals(lbAddresses)) {
         connectToLb();
       }
     }
   }
 
   private void handleError(Status error) {
-    FulfillmentBatch<T> pendingPicksFulfillmentBatch;
-    StatusException statusException = error.asException();
+    InterimTransport<T> savedInterimTransport;
     synchronized (lock) {
-      lastError = statusException;
-      pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
+      savedInterimTransport = interimTransport;
+      interimTransport = null;
+      lastError = error;
     }
-    pendingPicksFulfillmentBatch.fail(statusException);
+    if (savedInterimTransport != null) {
+      savedInterimTransport.closeWithError(error);
+    }
   }
 
   private void updateRetainedTransports() {
@@ -307,7 +301,7 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
         // serverList will be empty.
         return;
       }
-      FulfillmentBatch<T> pendingPicksFulfillmentBatch;
+      InterimTransport<T> savedInterimTransport;
       synchronized (lock) {
         if (lbResponseObserver != this) {
           // Make sure I am still the current stream.
@@ -315,16 +309,18 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
         }
         roundRobinServerList = newRoundRobinServerList;
         servers = newServerMap;
-        pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
+        savedInterimTransport = interimTransport;
+        interimTransport = null;
       }
       updateRetainedTransports();
-      pendingPicksFulfillmentBatch.link(
-          new Supplier<ListenableFuture<T>>() {
+      if (savedInterimTransport != null) {
+        savedInterimTransport.closeWithRealTransports(new Supplier<T>() {
             @Override
-            public ListenableFuture<T> get() {
+            public T get() {
               return newRoundRobinServerList.getTransportForNextServer();
             }
           });
+      }
     }
 
     @Override public void onError(Throwable error) {
@@ -339,8 +335,8 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
 
     private void onStreamClosed(Status status) {
       if (status.getCode() == Status.Code.UNIMPLEMENTED) {
-        FulfillmentBatch<T> pendingPicksFulfillmentBatch;
-        final ListenableFuture<T> transportFuture;
+        InterimTransport<T> savedInterimTransport;
+        final T transport;
         // This LB transport doesn't seem to be an actual LB server, if the LB address comes
         // directly from NameResolver, just use it to serve normal RPCs.
         // TODO(zhangkun83): check if lbAddresses are from NameResolver after we start getting
@@ -349,10 +345,13 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
           if (lbResponseObserver != this) {
             return;
           }
-          directTransport = transportFuture = Futures.immediateFuture(lbTransport);
-          pendingPicksFulfillmentBatch = pendingPicks.createFulfillmentBatch();
+          directTransport = transport = lbTransport;
+          savedInterimTransport = interimTransport;
+          interimTransport = null;
         }
-        pendingPicksFulfillmentBatch.link(Suppliers.ofInstance(transportFuture));
+        if (savedInterimTransport != null) {
+          savedInterimTransport.closeWithRealTransports(Suppliers.ofInstance(transport));
+        }
       } else {
         handleError(status);
         synchronized (lock) {

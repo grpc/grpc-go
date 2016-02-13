@@ -41,6 +41,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.google.common.base.Supplier;
+
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -57,6 +59,8 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.concurrent.Executor;
 
 /**
@@ -66,7 +70,9 @@ import java.util.concurrent.Executor;
 public class DelayedClientTransportTest {
   @Mock private ManagedClientTransport.Listener transportListener;
   @Mock private ClientTransport mockRealTransport;
+  @Mock private ClientTransport mockRealTransport2;
   @Mock private ClientStream mockRealStream;
+  @Mock private ClientStream mockRealStream2;
   @Mock private ClientStreamListener streamListener;
   @Mock private ClientTransport.PingCallback pingCallback;
   @Mock private Executor mockExecutor;
@@ -75,14 +81,37 @@ public class DelayedClientTransportTest {
   private final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
       MethodDescriptor.MethodType.UNKNOWN, "/service/method",
       new StringMarshaller(), new IntegerMarshaller());
+
+  private final MethodDescriptor<String, Integer> method2 = MethodDescriptor.create(
+      MethodDescriptor.MethodType.UNKNOWN, "/service/method2",
+      new StringMarshaller(), new IntegerMarshaller());
+
   private final Metadata headers = new Metadata();
+
+  private final Metadata headers2 = new Metadata();
 
   private final DelayedClientTransport delayedTransport = new DelayedClientTransport();
 
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
     when(mockRealTransport.newStream(same(method), same(headers))).thenReturn(mockRealStream);
+    when(mockRealTransport2.newStream(same(method2), same(headers2))).thenReturn(mockRealStream2);
     delayedTransport.start(transportListener);
+  }
+
+  @Test public void transportsAreUsedInOrder() {
+    ClientStream s1 = delayedTransport.newStream(method, headers);
+    ClientStream s2 = delayedTransport.newStream(method2, headers2);
+    delayedTransport.setTransportSupplier(new Supplier<ClientTransport>() {
+        final Iterator<ClientTransport> it =
+            Arrays.asList(mockRealTransport, mockRealTransport2).iterator();
+
+        @Override public ClientTransport get() {
+          return it.next();
+        }
+      });
+    verify(mockRealTransport).newStream(same(method), same(headers));
+    verify(mockRealTransport2).newStream(same(method2), same(headers2));
   }
 
   @Test public void streamStartThenSetTransport() {

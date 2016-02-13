@@ -368,7 +368,6 @@ public class ManagedChannelImplTest {
     call.start(mockCallListener, headers);
     channel.shutdown();
     assertTrue(channel.isShutdown());
-    assertTrue(channel.isTerminated());
     // Name resolved after the channel is shut down, which is possible if the name resolution takes
     // time and is not cancellable. The resolved address will still be passed to the LoadBalancer.
     nameResolverFactory.allResolved();

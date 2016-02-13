@@ -34,8 +34,6 @@ package io.grpc.internal;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
@@ -61,6 +59,9 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 final class TransportSet {
   private static final Logger log = Logger.getLogger(TransportSet.class.getName());
+
+  private static final ClientTransport SHUTDOWN_TRANSPORT =
+      new FailingClientTransport(Status.UNAVAILABLE.withDescription("TransportSet is shutdown"));
 
   private final Object lock = new Object();
   private final EquivalentAddressGroup addressGroup;
@@ -145,27 +146,28 @@ final class TransportSet {
   }
 
   /**
-   * Returns a future for the active transport that will be used to create new streams.
+   * Returns the active transport that will be used to create new streams.
    *
-   * <p>Cancelling the return future has no effect. The future will never fail. If this {@code
-   * TransportSet} has been shut down, the returned future will have {@code null} value.
+   * <p>Never returns {@code null}.
    */
-  // TODO(zhangkun83): change it to return a ClientTransport directly
-  final ListenableFuture<ClientTransport> obtainActiveTransport() {
+  final ClientTransport obtainActiveTransport() {
     ClientTransport savedTransport = activeTransport;
     if (savedTransport != null) {
-      return Futures.<ClientTransport>immediateFuture(savedTransport);
+      return savedTransport;
     }
     synchronized (lock) {
       // Check again, since it could have changed before acquiring the lock
-      if (activeTransport == null && !shutdown) {
+      if (activeTransport == null) {
+        if (shutdown) {
+          return SHUTDOWN_TRANSPORT;
+        }
         delayedTransport = new DelayedClientTransport();
         transports.add(delayedTransport);
         delayedTransport.start(new BaseTransportListener(delayedTransport));
         activeTransport = delayedTransport;
         scheduleConnection();
       }
-      return Futures.<ClientTransport>immediateFuture(activeTransport);
+      return activeTransport;
     }
   }
 
@@ -334,7 +336,7 @@ final class TransportSet {
           headIndex = -1;
         }
       }
-      loadBalancer.transportReady(addressGroup, transport);
+      loadBalancer.handleTransportReady(addressGroup);
     }
 
     @Override
@@ -347,10 +349,7 @@ final class TransportSet {
           activeTransport = null;
         }
       }
-      // TODO(zhangkun83): if loadBalancer was given delayedTransport earlier, it will get the real
-      // transport's shutdown event, and loadBalancer won't be able to match the two. This beats the
-      // purpose of passing the transport. We may just remove the second argument.
-      loadBalancer.transportShutdown(addressGroup, transport, s);
+      loadBalancer.handleTransportShutdown(addressGroup, s);
     }
 
     @Override

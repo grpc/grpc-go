@@ -40,7 +40,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -49,7 +48,6 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 
@@ -65,7 +63,6 @@ import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
-import io.grpc.internal.ClientCallImpl.StreamCreationTask;
 
 import org.junit.After;
 import org.junit.Before;
@@ -133,6 +130,8 @@ public class ClientCallImplTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+    when(provider.get(any(CallOptions.class))).thenReturn(transport);
+    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
 
     decompressorRegistry.register(new Codec.Gzip(), true);
   }
@@ -144,12 +143,6 @@ public class ClientCallImplTest {
 
   @Test
   public void advertisedEncodingsAreSent() {
-    final ClientTransport transport = mock(ClientTransport.class);
-    final ClientStream stream = mock(ClientStream.class);
-    when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
-
-    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
-
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
         MoreExecutors.directExecutor(),
@@ -171,12 +164,6 @@ public class ClientCallImplTest {
 
   @Test
   public void authorityPropagatedToStream() {
-    final ClientTransport transport = mock(ClientTransport.class);
-    final ClientStream stream = mock(ClientStream.class);
-    when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
-
-    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
-
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
         MoreExecutors.directExecutor(),
@@ -191,12 +178,6 @@ public class ClientCallImplTest {
 
   @Test
   public void authorityNotPropagatedToStream() {
-    final ClientTransport transport = mock(ClientTransport.class);
-    final ClientStream stream = mock(ClientStream.class);
-    when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
-
-    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
-
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
         MoreExecutors.directExecutor(),
@@ -293,10 +274,6 @@ public class ClientCallImplTest {
 
   @Test
   public void callerContextPropagatedToListener() throws Exception {
-
-    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
-    when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
-
     // Attach the context which is recorded when the call is created
     final Context.Key<String> testKey = Context.key("testing");
     Context.current().withValue(testKey, "testValue").attach();
@@ -370,9 +347,6 @@ public class ClientCallImplTest {
 
   @Test
   public void contextCancellationCancelsStream() throws Exception {
-    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
-    when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
-
     // Attach the context which is recorded when the call is created
     Context.CancellableContext cancellableContext = Context.current().withCancellation();
     Context previous = cancellableContext.attach();
@@ -403,7 +377,6 @@ public class ClientCallImplTest {
 
   @Test
   public void contextAlreadyCancelledNotifiesImmediately() throws Exception {
-    when(provider.get(any(CallOptions.class))).thenReturn(Futures.immediateFuture(transport));
     // Attach the context which is recorded when the call is created
     Context.CancellableContext cancellableContext = Context.current().withCancellation();
     Throwable cause = new Throwable();
@@ -450,13 +423,9 @@ public class ClientCallImplTest {
   }
 
   @Test
-  public void deadlineExceededBeforeTransportIsAcquired() {
-    SettableFuture<ClientTransport> future = SettableFuture.create();
-    when(provider.get(any(CallOptions.class))).thenReturn(future);
-    CallOptions callOptions = CallOptions.DEFAULT.withDeadlineAfter(1, TimeUnit.SECONDS);
-    // nanoTime() can sometimes tick backwards. We set the fake clock slightly ahead of the base
-    // time of the deadline, to make sure deadline-exceeded is always triggered in the test.
-    fakeClock.forwardTime(System.nanoTime() + 100, TimeUnit.NANOSECONDS);
+  public void deadlineExceededBeforeCallStarted() {
+    CallOptions callOptions = CallOptions.DEFAULT.withDeadlineNanoTime(TimeUnit.SECONDS.toNanos(1));
+    fakeClock.forwardTime(1, TimeUnit.SECONDS);
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         DESCRIPTOR,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
@@ -465,62 +434,10 @@ public class ClientCallImplTest {
         deadlineCancellationExecutor)
             .setDecompressorRegistry(decompressorRegistry);
     call.start(callListener, new Metadata());
-    assertFalse(future.isDone());
-    fakeClock.forwardTime(1, TimeUnit.SECONDS);
-    assertTrue(future.isCancelled());
     verify(transport, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class));
     verify(callListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
     assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
-  }
-
-  @Test
-  public void streamCreationTask_failure() {
-    StreamCreationTask task = new StreamCreationTask(
-        delayedStream, new Metadata(), method, CallOptions.DEFAULT);
-
-    task.onFailure(Status.CANCELLED.asException());
-
-    verify(delayedStream).setError(statusCaptor.capture());
-    assertEquals(Status.Code.CANCELLED, statusCaptor.getValue().getCode());
-  }
-
-  @Test
-  public void streamCreationTask_transportShutdown() {
-    StreamCreationTask task = new StreamCreationTask(
-        delayedStream, new Metadata(), method, CallOptions.DEFAULT);
-
-    // null means no transport available
-    task.onSuccess(null);
-
-    verify(delayedStream).setError(statusCaptor.capture());
-    assertEquals(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
-  }
-
-  @Test
-  public void streamCreationTask_deadlineExceeded() {
-    Metadata headers = new Metadata();
-    headers.put(GrpcUtil.TIMEOUT_KEY, 1L);
-    CallOptions callOptions = CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime() - 1);
-    StreamCreationTask task =
-        new StreamCreationTask(delayedStream, headers, method, callOptions);
-
-    task.onSuccess(clientTransport);
-
-    verify(delayedStream).setError(statusCaptor.capture());
-    assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
-  }
-
-  @Test
-  public void streamCreationTask_success() {
-    Metadata headers = new Metadata();
-    StreamCreationTask task =
-        new StreamCreationTask(delayedStream, headers, method, CallOptions.DEFAULT);
-    when(clientTransport.newStream(method, headers))
-        .thenReturn(NoopClientStream.INSTANCE);
-
-    task.onSuccess(clientTransport);
-
-    verify(clientTransport).newStream(method, headers);
+    verifyZeroInteractions(provider);
   }
 
   private static class TestMarshaller<T> implements Marshaller<T> {

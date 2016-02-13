@@ -32,8 +32,6 @@
 package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -61,8 +59,8 @@ final class SingleTransportChannel extends Channel {
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
-    public ListenableFuture<ClientTransport> get(CallOptions callOptions) {
-      return Futures.immediateFuture(transport);
+    public ClientTransport get(CallOptions callOptions) {
+      return transport;
     }
   };
 

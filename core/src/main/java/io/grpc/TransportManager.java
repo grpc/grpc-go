@@ -31,7 +31,7 @@
 
 package io.grpc;
 
-import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.base.Supplier;
 
 import java.util.Collection;
 
@@ -47,20 +47,63 @@ public abstract class TransportManager<T> {
   public abstract void updateRetainedTransports(Collection<EquivalentAddressGroup> addrs);
 
   /**
-   * Returns the future of a transport for any of the addresses from the given address group.
+   * Returns a transport for any of the addresses from the given address group.
    *
-   * <p>If the channel has been shut down, the value of the future will be {@code null}.
-   *
-   * <p>Cancelling the returned future has no effect. The future will never fail. If the channel has
-   * been shut down, the value of the future will be {@code null}.
+   * <p>Never returns {@code null}
    */
   // TODO(zhangkun83): GrpcLoadBalancer will use this to get transport to connect to LB servers,
   // which would have a different authority than the primary servers. We need to figure out how to
   // do it.
-  public abstract ListenableFuture<T> getTransport(EquivalentAddressGroup addressGroup);
+  public abstract T getTransport(EquivalentAddressGroup addressGroup);
+
+  /**
+   * Creates a transport that would fail all RPCs with the given error.
+   */
+  public abstract T createFailingTransport(Status error);
+
+  /**
+   * Returns a transport that is not associated with any address. It holds RPCs until it's closed,
+   * at which moment all held RPCs are transferred to actual transports.
+   *
+   * <p>This method is typically used in lieu of {@link #getTransport} before server addresses are
+   * known.
+   *
+   * <p>The returned interim transport is tracked by this {@link TransportManager}. You must call
+   * {@link InterimTransport#closeWithRealTransports} or {@link InterimTransport#closeWithError}
+   * when it's no longer used, so that {@link TransportManager} can get rid of it.
+   */
+  public abstract InterimTransport<T> createInterimTransport();
 
   /**
    * Returns a channel that uses {@code transport}; useful for issuing RPCs on a transport.
    */
   public abstract Channel makeChannel(T transport);
+
+  /**
+   * A transport provided as a temporary holder of new requests, which will be eventually
+   * transferred to real transports or fail.
+   *
+   * @see #createInterimTransport
+   */
+  public static interface InterimTransport<T> {
+    /**
+     * Returns the transport object.
+     *
+     * @throws IllegalStateException if {@link #closeWithRealTransports} or {@link #closeWithError}
+     *     has been called
+     */
+    T transport();
+
+    /**
+     * Closes the interim transport by transferring pending RPCs to the given real transports.
+     *
+     * <p>Each pending RPC will result in an invocation to {@link Supplier#get} once.
+     */
+    void closeWithRealTransports(Supplier<T> realTransports);
+
+    /**
+     * Closes the interim transport by failing all pending RPCs with the given error.
+     */
+    void closeWithError(Status error);
+  }
 }

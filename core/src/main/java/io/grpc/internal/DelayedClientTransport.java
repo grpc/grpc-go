@@ -33,6 +33,8 @@ package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -40,14 +42,14 @@ import io.grpc.Status;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.concurrent.Executor;
 
 import javax.annotation.concurrent.GuardedBy;
 
 /**
  * A client transport that queues requests before a real transport is available. When a backing
- * transport is later provided, this class delegates to it.
+ * transport supplier is later provided, this class delegates to the transports from it.
  *
  * <p>This transport owns the streams that it has created before {@link #setTransport} is
  * called. When {@link #setTransport} is called, the ownership of pending streams and subsequent new
@@ -57,11 +59,11 @@ class DelayedClientTransport implements ManagedClientTransport {
   private final Object lock = new Object();
 
   private Listener listener;
-  /** 'lock' must be held when assigning to delegate. */
-  private volatile ClientTransport delegate;
+  /** 'lock' must be held when assigning to transportSupplier. */
+  private volatile Supplier<ClientTransport> transportSupplier;
 
   @GuardedBy("lock")
-  private Collection<PendingStream> pendingStreams = new HashSet<PendingStream>();
+  private Collection<PendingStream> pendingStreams = new LinkedHashSet<PendingStream>();
   @GuardedBy("lock")
   private Collection<PendingPing> pendingPings = new ArrayList<PendingPing>();
   /**
@@ -77,15 +79,15 @@ class DelayedClientTransport implements ManagedClientTransport {
 
   @Override
   public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
-    ClientTransport transport = delegate;
-    if (transport != null) {
-      return transport.newStream(method, headers);
+    Supplier<ClientTransport> supplier = transportSupplier;
+    if (supplier != null) {
+      return supplier.get().newStream(method, headers);
     }
     synchronized (lock) {
       // Check again, since it may have changed while waiting for lock
-      transport = delegate;
-      if (transport != null) {
-        return transport.newStream(method, headers);
+      supplier = transportSupplier;
+      if (supplier != null) {
+        return supplier.get().newStream(method, headers);
       }
       if (!shutdown) {
         PendingStream pendingStream = new PendingStream(method, headers);
@@ -99,16 +101,16 @@ class DelayedClientTransport implements ManagedClientTransport {
   }
 
   public void ping(final PingCallback callback, Executor executor) {
-    ClientTransport transport = delegate;
-    if (transport != null) {
-      transport.ping(callback, executor);
+    Supplier<ClientTransport> supplier = transportSupplier;
+    if (supplier != null) {
+      supplier.get().ping(callback, executor);
       return;
     }
     synchronized (lock) {
       // Check again, since it may have changed while waiting for lock
-      transport = delegate;
-      if (transport != null) {
-        transport.ping(callback, executor);
+      supplier = transportSupplier;
+      if (supplier != null) {
+        supplier.get().ping(callback, executor);
         return;
       }
       if (!shutdown) {
@@ -169,7 +171,7 @@ class DelayedClientTransport implements ManagedClientTransport {
   }
 
   /**
-   * Transfers all the pending and future requests and pings to the given transport.
+   * Transfers all the pending and future streams and pings to the given transport.
    *
    * <p>May only be called after {@link #start(Listener)}.
    *
@@ -177,13 +179,29 @@ class DelayedClientTransport implements ManagedClientTransport {
    * transport is {@link #shutdown}.
    */
   public void setTransport(ClientTransport transport) {
+    setTransportSupplier(Suppliers.ofInstance(transport));
+  }
+
+  /**
+   * Transfers all the pending and future streams and pings to the transports from the given {@link
+   * Supplier}.
+   *
+   * <p>May only be called after {@link #start}. No effect if already called.
+   *
+   * <p>Each stream or ping will result in an invocation to {@link Supplier#get} once. The supplier
+   * will be used for all future calls to {@link #newStream}, even if this transport is {@link
+   * #shutdown}.
+   */
+  public void setTransportSupplier(Supplier<ClientTransport> supplier) {
     Collection<PendingStream> savedPendingStreams;
     synchronized (lock) {
-      Preconditions.checkState(delegate == null, "setTransport already called");
+      if (transportSupplier != null) {
+        return;
+      }
       Preconditions.checkState(listener != null, "start() not called");
-      delegate = Preconditions.checkNotNull(transport, "transport");
+      transportSupplier = Preconditions.checkNotNull(supplier, "supplier");
       for (PendingPing ping : pendingPings) {
-        ping.createRealPing(transport);
+        ping.createRealPing(supplier.get());
       }
       pendingPings = null;
       if (shutdown && pendingStreams != null) {
@@ -201,7 +219,7 @@ class DelayedClientTransport implements ManagedClientTransport {
     // TODO(zhangkun83): may consider doing it in a different thread.
     if (savedPendingStreams != null) {
       for (PendingStream stream : savedPendingStreams) {
-        stream.createRealStream(transport);
+        stream.createRealStream(supplier.get());
       }
     }
   }

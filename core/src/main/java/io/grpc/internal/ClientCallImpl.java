@@ -43,9 +43,6 @@ import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -119,11 +116,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
    */
   interface ClientTransportProvider {
     /**
-     * @return a future for client transport. If no more transports can be created, e.g., channel is
-     *         shut down, the future's value will be {@code null}. If the call is cancelled, it will
-     *         also cancel the future.
+     * Returns a transport for a new call.
      */
-    ListenableFuture<ClientTransport> get(CallOptions callOptions);
+    ClientTransport get(CallOptions callOptions);
   }
 
   ClientCallImpl<ReqT, RespT> setUserAgent(String userAgent) {
@@ -203,30 +198,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
     prepareHeaders(headers, callOptions, userAgent, decompressorRegistry, compressor);
 
-    ListenableFuture<ClientTransport> transportFuture = clientTransportProvider.get(callOptions);
-
-    if (transportFuture.isDone()) {
-      // Try to skip DelayedStream when possible to avoid the overhead of a volatile read in the
-      // fast path. If that fails, stream will stay null and DelayedStream will be created.
-      ClientTransport transport;
-      try {
-        transport = transportFuture.get();
-        if (transport != null && updateTimeoutHeader(callOptions.getDeadlineNanoTime(), headers)) {
-          stream = transport.newStream(method, headers);
-        }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      } catch (Exception e) {
-        // Fall through to DelayedStream
-      }
-    }
-
-    if (stream == null) {
-      DelayedStream delayed;
-      stream = delayed = new DelayedStream();
-      Futures.addCallback(transportFuture,
-          new StreamCreationTask(delayed, headers, method, callOptions),
-          transportFuture.isDone() ? directExecutor() : callExecutor);
+    if (updateTimeoutHeader(callOptions.getDeadlineNanoTime(), headers)) {
+      ClientTransport transport = clientTransportProvider.get(callOptions);
+      stream = transport.newStream(method, headers);
+    } else {
+      stream = new FailingClientStream(Status.DEADLINE_EXCEEDED);
     }
 
     if (callOptions.getAuthority() != null) {
@@ -237,7 +213,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       stream.setMessageCompression(true);
     }
 
-    stream.start(new ClientStreamListenerImpl(observer, transportFuture));
+    stream.start(new ClientStreamListenerImpl(observer));
     // Delay any sources of cancellation after start(), because most of the transports are broken if
     // they receive cancel before start. Issue #1343 has more details
 
@@ -369,13 +345,10 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
   private class ClientStreamListenerImpl implements ClientStreamListener {
     private final Listener<RespT> observer;
-    private final ListenableFuture<ClientTransport> transportFuture;
     private boolean closed;
 
-    public ClientStreamListenerImpl(Listener<RespT> observer,
-        ListenableFuture<ClientTransport> transportFuture) {
+    public ClientStreamListenerImpl(Listener<RespT> observer) {
       this.observer = Preconditions.checkNotNull(observer, "observer");
-      this.transportFuture = Preconditions.checkNotNull(transportFuture, "transportFuture");
     }
 
     @Override
@@ -435,7 +408,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     @Override
     public void closed(Status status, Metadata trailers) {
       Long timeoutNanos = getRemainingTimeoutNanos(callOptions.getDeadlineNanoTime());
-      transportFuture.cancel(false);
       if (status.getCode() == Status.Code.CANCELLED && timeoutNanos != null) {
         // When the server's deadline expires, it can only reset the stream with CANCEL and no
         // description. Since our timer may be delayed in firing, we double-check the deadline and
@@ -475,44 +447,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
           observer.onReady();
         }
       });
-    }
-  }
-
-  /**
-   * Wakes up delayed stream when the transport is ready or failed.
-   */
-  @VisibleForTesting
-  static final class StreamCreationTask implements FutureCallback<ClientTransport> {
-    private final DelayedStream stream;
-    private final MethodDescriptor<?, ?> method;
-    private final Metadata headers;
-    private final CallOptions callOptions;
-
-    StreamCreationTask(DelayedStream stream, Metadata headers, MethodDescriptor<?, ?> method,
-        CallOptions callOptions) {
-      this.stream = stream;
-      this.headers = headers;
-      this.method = method;
-      this.callOptions = callOptions;
-    }
-
-    @Override
-    public void onSuccess(ClientTransport transport) {
-      if (transport == null) {
-        stream.setError(Status.UNAVAILABLE.withDescription("Channel is shutdown"));
-        return;
-      }
-      if (!updateTimeoutHeader(callOptions.getDeadlineNanoTime(), headers)) {
-        stream.setError(Status.DEADLINE_EXCEEDED);
-        return;
-      }
-      // setStream correctly handles being cancelled.
-      stream.setStream(transport.newStream(method, headers));
-    }
-
-    @Override
-    public void onFailure(Throwable t) {
-      stream.setError(Status.fromThrowable(t));
     }
   }
 }

@@ -32,13 +32,11 @@
 package io.grpc.grpclb;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
@@ -47,18 +45,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
+import com.google.common.base.Supplier;
 
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.Status;
+import io.grpc.TransportManager.InterimTransport;
 import io.grpc.TransportManager;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -66,8 +69,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -76,16 +77,28 @@ import java.util.concurrent.TimeUnit;
 public class GrpclbLoadBalancerTest {
 
   private static final String serviceName = "testlbservice";
-  @SuppressWarnings("unchecked")
-  private final TransportManager<Transport> mockTransportManager = mock(TransportManager.class);
+
+  @Mock private TransportManager<Transport> mockTransportManager;
+  @Mock private InterimTransport<Transport> interimTransport;
+  @Mock private Transport interimTransportAsTransport;
+  @Mock private Transport failingTransport;
+  @Captor private ArgumentCaptor<Supplier<Transport>> transportSupplierCaptor;
 
   // The test subject
-  private TestGrpclbLoadBalancer loadBalancer = new TestGrpclbLoadBalancer();
+  private TestGrpclbLoadBalancer loadBalancer;
 
   // Current addresses of the LB server
   private EquivalentAddressGroup lbAddressGroup;
-  // The future of the currently requested transport for an LB server
-  private SettableFuture<Transport> lbTransportFuture;
+
+  @Before
+  public void setUp() {
+    MockitoAnnotations.initMocks(this);
+    when(mockTransportManager.createInterimTransport()).thenReturn(interimTransport);
+    when(mockTransportManager.createFailingTransport(any(Status.class)))
+        .thenReturn(failingTransport);
+    when(interimTransport.transport()).thenReturn(interimTransportAsTransport);
+    loadBalancer = new TestGrpclbLoadBalancer();
+  }
 
   @Test
   public void balancing() throws Exception {
@@ -93,32 +106,33 @@ public class GrpclbLoadBalancerTest {
 
     // Set up mocks
     List<Transport> transports = new ArrayList<Transport>(servers.size());
-    List<SettableFuture<Transport>> transportFutures =
-        new ArrayList<SettableFuture<Transport>>(servers.size());
-
     for (ResolvedServerInfo server : servers) {
-      transports.add(mock(Transport.class, withSettings().name("Transport for "  + server)));
-      SettableFuture<Transport> future = SettableFuture.create();
-      transportFutures.add(future);
+      Transport transport = mock(Transport.class, withSettings().name("Transport for "  + server));
+      transports.add(transport);
       when(mockTransportManager.getTransport(eq(new EquivalentAddressGroup(server.getAddress()))))
-          .thenReturn(future);
+          .thenReturn(transport);
     }
 
-    ListenableFuture<Transport> pick0;
-    ListenableFuture<Transport> pick1;
+    Transport pick0;
+    Transport pick1;
+    Transport pick2;
 
     // Pick before name resolved
     pick0 = loadBalancer.pickTransport(null);
 
     // Name resolved
-    simulateLbAddressResolved(30001);
+    Transport lbTransport = simulateLbAddressResolved(30001);
 
     // Pick after name resolved
     pick1 = loadBalancer.pickTransport(null);
+    pick2 = loadBalancer.pickTransport(null);
 
-    // Make the transport for LB server ready
-    Transport lbTransport = new Transport();
-    lbTransportFuture.set(lbTransport);
+    // Both picks end up with interimTransport
+    verify(mockTransportManager).createInterimTransport();
+    assertSame(interimTransportAsTransport, pick0);
+    assertSame(interimTransportAsTransport, pick1);
+    assertSame(interimTransportAsTransport, pick2);
+
     // An LB request is sent
     SendLbRequestArgs sentLbRequest = loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS);
     assertNotNull(sentLbRequest);
@@ -138,30 +152,16 @@ public class GrpclbLoadBalancerTest {
 
     verify(mockTransportManager).updateRetainedTransports(eq(buildRetainedAddressSet(servers)));
 
-    assertFalse(pick0.isDone());
-    assertFalse(pick1.isDone());
-
+    verify(interimTransport).closeWithRealTransports(transportSupplierCaptor.capture());
+    assertSame(transports.get(0), transportSupplierCaptor.getValue().get());
+    assertSame(transports.get(1), transportSupplierCaptor.getValue().get());
+    assertSame(transports.get(1), transportSupplierCaptor.getValue().get());
     verify(mockTransportManager).getTransport(eq(buildAddressGroup(servers.get(0))));
-    verify(mockTransportManager).getTransport(eq(buildAddressGroup(servers.get(1))));
-
-    // Make the transports for serverList1 ready
-    for (int i = 0; i < 2; i++) {
-      transportFutures.get(i).set(transports.get(i));
-    }
-    assertTrue(pick0.isDone());
-    assertTrue(pick1.isDone());
-    assertSame(transports.get(0), pick0.get());
-    assertSame(transports.get(1), pick1.get());
-
-    // Pick after LB server responded. Server 1 is repeated in the list.
-    pick0 = loadBalancer.pickTransport(null);
-    assertTrue(pick0.isDone());
-    assertSame(transports.get(1), pick0.get());
+    verify(mockTransportManager, times(2)).getTransport(eq(buildAddressGroup(servers.get(1))));
 
     // Pick beyond the end of the list. Go back to the beginning.
     pick0 = loadBalancer.pickTransport(null);
-    assertTrue(pick0.isDone());
-    assertSame(transports.get(0), pick0.get());
+    assertSame(transports.get(0), pick0);
 
     // Only one LB request has ever been sent at this point
     assertEquals(0, loadBalancer.sentLbRequests.size());
@@ -169,11 +169,7 @@ public class GrpclbLoadBalancerTest {
 
   @Test public void serverListUpdated() throws Exception {
     // Simulate the initial set of LB addresses resolved
-    simulateLbAddressResolved(30001);
-
-    // Make the transport for LB server ready
-    Transport lbTransport = new Transport();
-    lbTransportFuture.set(lbTransport);
+    Transport lbTransport = simulateLbAddressResolved(30001);
 
     // An LB request is sent
     SendLbRequestArgs sentLbRequest = loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS);
@@ -199,15 +195,11 @@ public class GrpclbLoadBalancerTest {
 
   @Test public void newLbAddressesResolved() throws Exception {
     // Simulate the initial set of LB addresses resolved
-    simulateLbAddressResolved(30001);
+    Transport lbTransport = simulateLbAddressResolved(30001);
 
     EquivalentAddressGroup lbAddress1 = lbAddressGroup;
     verify(mockTransportManager).updateRetainedTransports(eq(Collections.singleton(lbAddress1)));
     verify(mockTransportManager).getTransport(eq(lbAddressGroup));
-
-    // Make the transport for LB server ready
-    Transport lbTransport = new Transport();
-    lbTransportFuture.set(lbTransport);
 
     // An LB request is sent
     SendLbRequestArgs sentLbRequest = loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS);
@@ -215,13 +207,11 @@ public class GrpclbLoadBalancerTest {
     assertSame(lbTransport, sentLbRequest.transport);
 
     // Simulate a second set of LB addresses resolved
-    simulateLbAddressResolved(30002);
+    lbTransport = simulateLbAddressResolved(30002);
     EquivalentAddressGroup lbAddress2 = lbAddressGroup;
     assertNotEquals(lbAddress1, lbAddress2);
     verify(mockTransportManager).updateRetainedTransports(eq(Collections.singleton(lbAddress2)));
     verify(mockTransportManager).getTransport(eq(lbAddressGroup));
-    lbTransport = new Transport();
-    lbTransportFuture.set(lbTransport);
 
     // Another LB request is sent
     sentLbRequest = loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS);
@@ -240,9 +230,6 @@ public class GrpclbLoadBalancerTest {
   @Test public void lbStreamErrorAfterResponse() throws Exception {
     // Simulate the initial set of LB addresses resolved
     simulateLbAddressResolved(30001);
-
-    // Make the transport for LB server ready
-    lbTransportFuture.set(new Transport());
 
     // An LB request is sent
     assertNotNull(loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS));
@@ -267,14 +254,11 @@ public class GrpclbLoadBalancerTest {
 
   @Test public void lbStreamErrorWithoutResponse() throws Exception {
     // Simulate the initial set of LB addresses resolved
-    simulateLbAddressResolved(30001);
+    Transport lbTransport = simulateLbAddressResolved(30001);
 
     // First pick, will be pending
-    ListenableFuture<Transport> pick = loadBalancer.pickTransport(null);
-
-    // Make the transport for LB server ready
-    Transport lbTransport = new Transport();
-    lbTransportFuture.set(lbTransport);
+    Transport pick = loadBalancer.pickTransport(null);
+    assertSame(interimTransportAsTransport, pick);
 
     // An LB request is sent
     SendLbRequestArgs sentLbRequest = loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS);
@@ -286,9 +270,8 @@ public class GrpclbLoadBalancerTest {
         Status.UNAVAILABLE.withDescription("simulated").asException());
 
     // The pending pick will fail
-    assertTrue(pick.isDone());
-    assertFutureFailedWithError(pick, Status.Code.UNAVAILABLE,
-        "simulated", "Stream to GRPCLB LoadBalancer had an error");
+    verifyInterimTransportClosedWithError(Status.Code.UNAVAILABLE, "simulated",
+        "Stream to GRPCLB LoadBalancer had an error");
 
     // Another LB request is sent
     sentLbRequest = loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS);
@@ -300,14 +283,11 @@ public class GrpclbLoadBalancerTest {
 
   @Test public void lbStreamUnimplemented() throws Exception {
     // Simulate the initial set of LB addresses resolved
-    simulateLbAddressResolved(30001);
+    Transport lbTransport = simulateLbAddressResolved(30001);
 
     // First pick, will be pending
-    ListenableFuture<Transport> pick = loadBalancer.pickTransport(null);
-
-    // Make the transport for LB server ready
-    Transport lbTransport = new Transport();
-    lbTransportFuture.set(lbTransport);
+    Transport pick = loadBalancer.pickTransport(null);
+    assertSame(interimTransportAsTransport, pick);
 
     // An LB request is sent
     SendLbRequestArgs sentLbRequest = loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS);
@@ -318,13 +298,12 @@ public class GrpclbLoadBalancerTest {
     loadBalancer.getLbResponseObserver().onError(Status.UNIMPLEMENTED.asException());
 
     // The pending pick will succeed with lbTransport
-    assertTrue(pick.isDone());
-    assertSame(lbTransport, pick.get());
+    verify(interimTransport).closeWithRealTransports(transportSupplierCaptor.capture());
+    assertSame(lbTransport, transportSupplierCaptor.getValue().get());
 
     // Subsequent picks will also get lbTransport
     pick = loadBalancer.pickTransport(null);
-    assertTrue(pick.isDone());
-    assertSame(lbTransport, pick.get());
+    assertSame(lbTransport, pick);
 
     // Round-robin list NOT available at this point
     assertNull(loadBalancer.getRoundRobinServerList());
@@ -335,28 +314,23 @@ public class GrpclbLoadBalancerTest {
     assertEquals(0, loadBalancer.sentLbRequests.size());
 
     // Shut down the transport
-    loadBalancer.transportShutdown(lbAddressGroup, lbTransport,
+    loadBalancer.handleTransportShutdown(lbAddressGroup,
         Status.UNAVAILABLE.withDescription("simulated"));
 
-    // Subsequent pick will fail because an error has occurred
+    // Subsequent pick will result in a failing transport because an error has occurred
     pick = loadBalancer.pickTransport(null);
-    assertTrue(pick.isDone());
-    assertFutureFailedWithError(pick, Status.Code.UNAVAILABLE,
+    assertSame(failingTransport, pick);
+    verifyCreateFailingTransport(Status.Code.UNAVAILABLE,
         "simulated", "Transport to LB server closed");
 
     // Will get another lbTransport, and send another LB request
     verify(mockTransportManager, times(2)).getTransport(eq(lbAddressGroup));
-    lbTransportFuture.set(lbTransport);
     assertNotNull(loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS));
   }
 
   @Test public void lbConnectionClosedAfterResponse() throws Exception {
     // Simulate the initial set of LB addresses resolved
     simulateLbAddressResolved(30001);
-
-    // Make the transport for LB server ready
-    Transport lbTransport = new Transport();
-    lbTransportFuture.set(lbTransport);
 
     // An LB request is sent
     assertNotNull(loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS));
@@ -366,18 +340,11 @@ public class GrpclbLoadBalancerTest {
     loadBalancer.getLbResponseObserver().onNext(buildLbResponse(serverList));
     assertEquals(buildRoundRobinList(serverList), loadBalancer.getRoundRobinServerList().getList());
 
-    // Refresh mocks to prepare for the next getTransport() call
-    lbTransportFuture = SettableFuture.create();
-    when(mockTransportManager.getTransport(eq(lbAddressGroup))).thenReturn(lbTransportFuture);
-
     // Simulate transport closes
-    loadBalancer.transportShutdown(lbAddressGroup, lbTransport, Status.UNAVAILABLE);
+    loadBalancer.handleTransportShutdown(lbAddressGroup, Status.UNAVAILABLE);
 
     // Will get another transport
     verify(mockTransportManager, times(2)).getTransport(eq(lbAddressGroup));
-
-    // Make the new transport ready
-    lbTransportFuture.set(new Transport());
 
     // Another LB request is sent
     assertNotNull(loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS));
@@ -385,14 +352,11 @@ public class GrpclbLoadBalancerTest {
 
   @Test public void lbConnectionClosedWithoutResponse() throws Exception {
     // Simulate the initial set of LB addresses resolved
-    simulateLbAddressResolved(30001);
+    Transport lbTransport = simulateLbAddressResolved(30001);
 
     // First pick, will be pending
-    ListenableFuture<Transport> pick = loadBalancer.pickTransport(null);
-
-    // Make the transport for LB server ready
-    Transport lbTransport = new Transport();
-    lbTransportFuture.set(lbTransport);
+    Transport pick = loadBalancer.pickTransport(null);
+    assertSame(interimTransportAsTransport, pick);
 
     // An LB request is sent
     SendLbRequestArgs sentLbRequest = loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS);
@@ -400,12 +364,11 @@ public class GrpclbLoadBalancerTest {
     assertSame(lbTransport, sentLbRequest.transport);
 
     // Simulate that the transport closed
-    loadBalancer.transportShutdown(
-        lbAddressGroup, lbTransport, Status.UNAVAILABLE.withDescription("simulated"));
+    loadBalancer.handleTransportShutdown(
+        lbAddressGroup, Status.UNAVAILABLE.withDescription("simulated"));
 
-    // The pending pick will fail
-    assertTrue(pick.isDone());
-    assertFutureFailedWithError(pick, Status.Code.UNAVAILABLE,
+    // The interim transport will close with error
+    verifyInterimTransportClosedWithError(Status.Code.UNAVAILABLE,
         "simulated", "Transport to LB server closed");
 
     // Will try to get another transport
@@ -416,25 +379,19 @@ public class GrpclbLoadBalancerTest {
   }
 
   @Test public void nameResolutionFailed() throws Exception {
-    ListenableFuture<Transport> pick0 = loadBalancer.pickTransport(null);
-    assertFalse(pick0.isDone());
+    Transport pick0 = loadBalancer.pickTransport(null);
+    assertSame(interimTransportAsTransport, pick0);
 
     loadBalancer.handleNameResolutionError(Status.UNAVAILABLE);
-
-    assertTrue(pick0.isDone());
-    ListenableFuture<Transport> pick1 = loadBalancer.pickTransport(null);
-    assertTrue(pick1.isDone());
-    assertFutureFailedWithError(pick0, Status.Code.UNAVAILABLE, "Name resolution failed");
-    assertFutureFailedWithError(pick1, Status.Code.UNAVAILABLE, "Name resolution failed");
+    verifyInterimTransportClosedWithError(Status.Code.UNAVAILABLE, "Name resolution failed");
+    Transport pick1 = loadBalancer.pickTransport(null);
+    assertSame(failingTransport, pick1);
+    verifyCreateFailingTransport(Status.Code.UNAVAILABLE, "Name resolution failed");
   }
 
   @Test public void shutdown() throws Exception {
     // Simulate the initial set of LB addresses resolved
     simulateLbAddressResolved(30001);
-
-    // Make the transport for LB server ready
-    Transport lbTransport = new Transport();
-    lbTransportFuture.set(lbTransport);
 
     // An LB request is sent
     assertNotNull(loadBalancer.sentLbRequests.poll(1000, TimeUnit.SECONDS));
@@ -455,24 +412,25 @@ public class GrpclbLoadBalancerTest {
     assertEquals(0, loadBalancer.sentLbRequests.size());
 
     // Simulate transport closure
-    loadBalancer.transportShutdown(lbAddressGroup, lbTransport, Status.CANCELLED);
+    loadBalancer.handleTransportShutdown(lbAddressGroup, Status.CANCELLED);
 
     // Won't get a new transport. getTransport() was call once before.
     verify(mockTransportManager).getTransport(any(EquivalentAddressGroup.class));
   }
 
   /**
-   * Simulates a single LB address is resolved, and sets up lbAddressGroup and lbTransportFuture.
+   * Simulates a single LB address is resolved and sets up lbAddressGroup. Returns the transport
+   * to LB.
    */
-  private void simulateLbAddressResolved(int lbPort) {
+  private Transport simulateLbAddressResolved(int lbPort) {
     ResolvedServerInfo lbServerInfo = new ResolvedServerInfo(
         new InetSocketAddress("127.0.0.1", lbPort), Attributes.EMPTY);
     lbAddressGroup = buildAddressGroup(lbServerInfo);
     Transport lbTransport = new Transport();
-    lbTransportFuture = SettableFuture.create();
-    when(mockTransportManager.getTransport(eq(lbAddressGroup))).thenReturn(lbTransportFuture);
+    when(mockTransportManager.getTransport(eq(lbAddressGroup))).thenReturn(lbTransport);
     loadBalancer.handleResolvedAddresses(Collections.singletonList(lbServerInfo), Attributes.EMPTY);
     verify(mockTransportManager).getTransport(eq(lbAddressGroup));
+    return lbTransport;
   }
 
   private HashSet<EquivalentAddressGroup> buildRetainedAddressSet(
@@ -548,18 +506,26 @@ public class GrpclbLoadBalancerTest {
     return result;
   }
 
-  private static void assertFutureFailedWithError(
-      Future<?> future, Status.Code statusCode, String ... descriptions) throws Exception {
-    try {
-      future.get();
-      fail("Should have thrown");
-    } catch (ExecutionException e) {
-      Status s = Status.fromThrowable(e);
-      assertEquals(statusCode, s.getCode());
-      for (String desc : descriptions) {
-        assertTrue("'" + s.getDescription() + "' contains '" + desc + "'",
-            s.getDescription().contains(desc));
-      }
+  private void verifyInterimTransportClosedWithError(
+      Status.Code statusCode, String ... descriptions) {
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(interimTransport).closeWithError(statusCaptor.capture());
+    assertError(statusCaptor.getValue(), statusCode, descriptions);
+  }
+
+  private void verifyCreateFailingTransport(
+      Status.Code statusCode, String ... descriptions) {
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockTransportManager).createFailingTransport(statusCaptor.capture());
+    assertError(statusCaptor.getValue(), statusCode, descriptions);
+  }
+
+
+  private static void assertError(Status s, Status.Code statusCode, String ... descriptions) {
+    assertEquals(statusCode, s.getCode());
+    for (String desc : descriptions) {
+      assertTrue("'" + s.getDescription() + "' contains '" + desc + "'",
+          s.getDescription().contains(desc));
     }
   }
 

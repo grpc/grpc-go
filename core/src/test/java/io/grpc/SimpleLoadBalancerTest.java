@@ -31,9 +31,6 @@
 
 package io.grpc;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -43,13 +40,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
+import com.google.common.base.Supplier;
+
+import io.grpc.TransportManager.InterimTransport;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -64,8 +64,11 @@ public class SimpleLoadBalancerTest {
   private ArrayList<ResolvedServerInfo> servers;
   private EquivalentAddressGroup addressGroup;
 
-  @Mock
-  private TransportManager<Transport> mockTransportManager;
+  @Mock private TransportManager<Transport> mockTransportManager;
+  @Mock private Transport mockTransport;
+  @Mock private InterimTransport<Transport> mockInterimTransport;
+  @Mock private Transport mockInterimTransportAsTransport;
+  @Captor private ArgumentCaptor<Supplier<Transport>> transportSupplierCaptor;
 
   @Before
   public void setUp() {
@@ -80,47 +83,38 @@ public class SimpleLoadBalancerTest {
       addresses.add(addr);
     }
     addressGroup = new EquivalentAddressGroup(addresses);
+    when(mockTransportManager.getTransport(eq(addressGroup))).thenReturn(mockTransport);
+    when(mockTransportManager.createInterimTransport()).thenReturn(mockInterimTransport);
+    when(mockInterimTransport.transport()).thenReturn(mockInterimTransportAsTransport);
   }
 
   @Test
   public void pickBeforeResolved() throws Exception {
-    Transport mockTransport = new Transport();
-    SettableFuture<Transport> sourceFuture = SettableFuture.create();
-    when(mockTransportManager.getTransport(eq(addressGroup)))
-        .thenReturn(sourceFuture);
-    ListenableFuture<Transport> f1 = loadBalancer.pickTransport(null);
-    ListenableFuture<Transport> f2 = loadBalancer.pickTransport(null);
-    assertNotNull(f1);
-    assertNotNull(f2);
-    assertNotSame(f1, f2);
-    assertFalse(f1.isDone());
-    assertFalse(f2.isDone());
+    Transport t1 = loadBalancer.pickTransport(null);
+    Transport t2 = loadBalancer.pickTransport(null);
+    assertSame(mockInterimTransportAsTransport, t1);
+    assertSame(mockInterimTransportAsTransport, t2);
+    verify(mockTransportManager).createInterimTransport();
     verify(mockTransportManager, never()).getTransport(any(EquivalentAddressGroup.class));
+    verify(mockInterimTransport, times(2)).transport();
+
     loadBalancer.handleResolvedAddresses(servers, Attributes.EMPTY);
+    verify(mockInterimTransport).closeWithRealTransports(transportSupplierCaptor.capture());
+    for (int i = 0; i < 2; i++) {
+      assertSame(mockTransport, transportSupplierCaptor.getValue().get());
+    }
     verify(mockTransportManager, times(2)).getTransport(eq(addressGroup));
-    assertFalse(f1.isDone());
-    assertFalse(f2.isDone());
-    assertNotSame(sourceFuture, f1);
-    assertNotSame(sourceFuture, f2);
-    sourceFuture.set(mockTransport);
-    assertSame(mockTransport, f1.get());
-    assertSame(mockTransport, f2.get());
     verifyNoMoreInteractions(mockTransportManager);
+    verifyNoMoreInteractions(mockInterimTransport);
   }
 
   @Test
   public void pickAfterResolved() throws Exception {
-    Transport mockTransport = new Transport();
-    SettableFuture<Transport> sourceFuture = SettableFuture.create();
-    when(mockTransportManager.getTransport(eq(addressGroup)))
-        .thenReturn(sourceFuture);
     loadBalancer.handleResolvedAddresses(servers, Attributes.EMPTY);
-    ListenableFuture<Transport> f = loadBalancer.pickTransport(null);
-    assertSame(sourceFuture, f);
-    assertFalse(f.isDone());
-    sourceFuture.set(mockTransport);
-    assertSame(mockTransport, f.get());
+    Transport t = loadBalancer.pickTransport(null);
+    assertSame(mockTransport, t);
     verify(mockTransportManager).getTransport(addressGroup);
+    verifyNoMoreInteractions(mockTransportManager);
   }
 
   private static class FakeSocketAddress extends SocketAddress {
