@@ -59,6 +59,8 @@ javadoc {
 }
 
 task jacocoMerge(type: JacocoMerge) {
+    dependsOn(subprojects.jacocoTestReport.dependsOn)
+    mustRunAfter(subprojects.jacocoTestReport.mustRunAfter)
     destinationFile = file("${buildDir}/jacoco/test.exec")
     executionData = files(subprojects.jacocoTestReport.executionData)
         .plus(project(':grpc-interop-testing').jacocoTestReport.executionData)
