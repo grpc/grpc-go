@@ -293,13 +293,14 @@ func newHandleStreamTest(t *testing.T) *handleStreamTest {
 
 func TestHandlerTransport_HandleStreams(t *testing.T) {
 	st := newHandleStreamTest(t)
-	st.ht.HandleStreams(func(s *Stream) {
+	handleStream := func(s *Stream) {
 		if want := "/service/foo.bar"; s.method != want {
 			t.Errorf("stream method = %q; want %q", s.method, want)
 		}
 		st.bodyw.Close() // no body
 		st.ht.WriteStatus(s, codes.OK, "")
-	})
+	}
+	st.ht.HandleStreams(func(s *Stream) { go handleStream(s) })
 	wantHeader := http.Header{
 		"Date":         nil,
 		"Content-Type": {"application/grpc"},
@@ -323,9 +324,10 @@ func TestHandlerTransport_HandleStreams_InvalidArgument(t *testing.T) {
 
 func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) {
 	st := newHandleStreamTest(t)
-	st.ht.HandleStreams(func(s *Stream) {
+	handleStream := func(s *Stream) {
 		st.ht.WriteStatus(s, statusCode, msg)
-	})
+	}
+	st.ht.HandleStreams(func(s *Stream) { go handleStream(s) })
 	wantHeader := http.Header{
 		"Date":         nil,
 		"Content-Type": {"application/grpc"},
@@ -358,7 +360,7 @@ func TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ht.HandleStreams(func(s *Stream) {
+	runStream := func(s *Stream) {
 		defer bodyw.Close()
 		select {
 		case <-s.ctx.Done():
@@ -372,7 +374,8 @@ func TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 			return
 		}
 		ht.WriteStatus(s, codes.DeadlineExceeded, "too slow")
-	})
+	}
+	ht.HandleStreams(func(s *Stream) { go runStream(s) })
 	wantHeader := http.Header{
 		"Date":         nil,
 		"Content-Type": {"application/grpc"},
@@ -381,6 +384,6 @@ func TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		"Grpc-Message": {"too slow"},
 	}
 	if !reflect.DeepEqual(rw.HeaderMap, wantHeader) {
-		t.Errorf("Header+Trailer Map: %#v; want %#v", rw.HeaderMap, wantHeader)
+		t.Errorf("Header+Trailer Map mismatch.\n got: %#v\nwant: %#v", rw.HeaderMap, wantHeader)
 	}
 }

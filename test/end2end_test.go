@@ -34,6 +34,7 @@
 package grpc_test
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -374,9 +375,71 @@ func listTestEnv() (envs []env) {
 	return envs
 }
 
+// serverSetUp is the old way to start a test server. New callers should use newTest.
+// TODO(bradfitz): update all tests to newTest and delete this.
 func serverSetUp(t *testing.T, servON bool, hs *health.HealthServer, maxStream uint32, cp grpc.Compressor, dc grpc.Decompressor, e env) (s *grpc.Server, addr string) {
-	t.Logf("Running test in %s environment...", e.name)
-	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(maxStream), grpc.RPCCompressor(cp), grpc.RPCDecompressor(dc)}
+	te := &test{
+		t:            t,
+		e:            e,
+		healthServer: hs,
+		maxStream:    maxStream,
+		cp:           cp,
+		dc:           dc,
+	}
+	if servON {
+		te.testServer = &testServer{security: e.security}
+	}
+	te.startServer()
+	return te.srv, te.srvAddr
+}
+
+// test is an end-to-end test. It should be created with the newTest
+// func, modified as needed, and then started with its startServer method.
+// It should be cleaned up with the tearDown method.
+type test struct {
+	t *testing.T
+	e env
+
+	// Configurable knobs, after newTest returns:
+	testServer   testpb.TestServiceServer // nil means none
+	healthServer *health.HealthServer     // nil means disabled
+	maxStream    uint32
+	cp           grpc.Compressor   // nil means no server compression
+	dc           grpc.Decompressor // nil means no server decompression
+	userAgent    string
+
+	// srv and srvAddr are set once startServer is called.
+	srv     *grpc.Server
+	srvAddr string
+
+	cc *grpc.ClientConn // nil until requested via clientConn
+}
+
+func (te *test) tearDown() {
+	te.srv.Stop()
+	if te.cc != nil {
+		te.cc.Close()
+	}
+}
+
+// newTest returns a new test using the provided testing.T and
+// environment.  It is returned with default values. Tests should
+// modify it before calling its startServer and clientConn methods.
+func newTest(t *testing.T, e env) *test {
+	return &test{
+		t:          t,
+		e:          e,
+		testServer: &testServer{security: e.security},
+		maxStream:  math.MaxUint32,
+	}
+}
+
+// startServer starts a gRPC server listening. Callers should defer a
+// call to te.tearDown to clean up.
+func (te *test) startServer() {
+	e := te.e
+	te.t.Logf("Running test in %s environment...", e.name)
+	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream), grpc.RPCCompressor(te.cp), grpc.RPCDecompressor(te.dc)}
 	la := ":0"
 	switch e.network {
 	case "unix":
@@ -385,37 +448,46 @@ func serverSetUp(t *testing.T, servON bool, hs *health.HealthServer, maxStream u
 	}
 	lis, err := net.Listen(e.network, la)
 	if err != nil {
-		t.Fatalf("Failed to listen: %v", err)
+		te.t.Fatalf("Failed to listen: %v", err)
 	}
 	if e.security == "tls" {
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
-			t.Fatalf("Failed to generate credentials %v", err)
+			te.t.Fatalf("Failed to generate credentials %v", err)
 		}
 		sopts = append(sopts, grpc.Creds(creds))
 	}
-	s = grpc.NewServer(sopts...)
+	s := grpc.NewServer(sopts...)
+	te.srv = s
 	if e.httpHandler {
 		s.TestingUseHandlerImpl()
 	}
-	if hs != nil {
-		healthpb.RegisterHealthServer(s, hs)
+	if te.healthServer != nil {
+		healthpb.RegisterHealthServer(s, te.healthServer)
 	}
-	if servON {
-		testpb.RegisterTestServiceServer(s, &testServer{security: e.security})
+	if te.testServer != nil {
+		testpb.RegisterTestServiceServer(s, te.testServer)
 	}
-	go s.Serve(lis)
-	addr = la
+	addr := la
 	switch e.network {
 	case "unix":
 	default:
 		_, port, err := net.SplitHostPort(lis.Addr().String())
 		if err != nil {
-			t.Fatalf("Failed to parse listener address: %v", err)
+			te.t.Fatalf("Failed to parse listener address: %v", err)
 		}
 		addr = "localhost:" + port
 	}
-	return
+
+	go s.Serve(lis)
+	te.srvAddr = addr
+}
+
+func (te *test) clientConn() *grpc.ClientConn {
+	if te.cc == nil {
+		te.cc = clientSetUp(te.t, te.srvAddr, te.cp, te.dc, te.userAgent, te.e)
+	}
+	return te.cc
 }
 
 func clientSetUp(t *testing.T, addr string, cp grpc.Compressor, dc grpc.Decompressor, ua string, e env) (cc *grpc.ClientConn) {
@@ -888,17 +960,28 @@ func testCancelNoIO(t *testing.T, e env) {
 	cc := clientSetUp(t, addr, nil, nil, "", e)
 	tc := testpb.NewTestServiceClient(cc)
 	defer tearDown(s, cc)
-	ctx, cancel := context.WithCancel(context.Background())
+
+	// Start one blocked RPC for which we'll never send streaming
+	// input. This will consume the 1 maximum concurrent streams,
+	// causing future RPCs to hang.
+	ctx, cancelFirst := context.WithCancel(context.Background())
 	_, err := tc.StreamingInputCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
 	}
-	// Loop until receiving the new max stream setting from the server.
+
+	// Loop until the ClientConn receives the initial settings
+	// frame from the server, notifying it about the maximum
+	// concurrent streams. We know when it's received it because
+	// an RPC will fail with codes.DeadlineExceeded instead of
+	// succeeding.
+	// TODO(bradfitz): add internal test hook for this (Issue 534)
 	for {
-		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancelSecond := context.WithTimeout(context.Background(), 250*time.Millisecond)
 		_, err := tc.StreamingInputCall(ctx)
+		cancelSecond()
 		if err == nil {
-			time.Sleep(time.Second)
+			time.Sleep(50 * time.Millisecond)
 			continue
 		}
 		if grpc.Code(err) == codes.DeadlineExceeded {
@@ -906,19 +989,23 @@ func testCancelNoIO(t *testing.T, e env) {
 		}
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %d", tc, err, codes.DeadlineExceeded)
 	}
-	// If there are any RPCs slipping before the client receives the max streams setting,
-	// let them be expired.
-	time.Sleep(2 * time.Second)
+	// If there are any RPCs in flight before the client receives
+	// the max streams setting, let them be expired.
+	// TODO(bradfitz): add internal test hook for this (Issue 534)
+	time.Sleep(500 * time.Millisecond)
+
 	ch := make(chan struct{})
 	go func() {
 		defer close(ch)
+
 		// This should be blocked until the 1st is canceled.
-		ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancelThird := context.WithTimeout(context.Background(), 2*time.Second)
 		if _, err := tc.StreamingInputCall(ctx); err != nil {
 			t.Errorf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
 		}
+		cancelThird()
 	}()
-	cancel()
+	cancelFirst()
 	<-ch
 }
 
@@ -1167,6 +1254,87 @@ func testFailedServerStreaming(t *testing.T, e env) {
 	if _, err := stream.Recv(); err != grpc.Errorf(codes.DataLoss, "got extra metadata") {
 		t.Fatalf("%v.Recv() = _, %v, want _, %v", stream, err, grpc.Errorf(codes.DataLoss, "got extra metadata"))
 	}
+}
+
+// concurrentSendServer is a TestServiceServer whose
+// StreamingOutputCall makes ten serial Send calls, sending payloads
+// "0".."9", inclusive.  TestServerStreaming_Concurrent verifies they
+// were received in the correct order, and that there were no races.
+//
+// All other TestServiceServer methods crash if called.
+type concurrentSendServer struct {
+	testpb.TestServiceServer
+}
+
+func (s concurrentSendServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
+	for i := 0; i < 10; i++ {
+		stream.Send(&testpb.StreamingOutputCallResponse{
+			Payload: &testpb.Payload{
+				Body: []byte{'0' + uint8(i)},
+			},
+		})
+	}
+	return nil
+}
+
+// Tests doing a bunch of concurrent streaming output calls.
+func TestServerStreaming_Concurrent(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testServerStreaming_Concurrent(t, e)
+	}
+}
+
+func testServerStreaming_Concurrent(t *testing.T, e env) {
+	et := newTest(t, e)
+	et.testServer = concurrentSendServer{}
+	et.startServer()
+	defer et.tearDown()
+
+	cc := et.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+
+	doStreamingCall := func() {
+		req := &testpb.StreamingOutputCallRequest{}
+		stream, err := tc.StreamingOutputCall(context.Background(), req)
+		if err != nil {
+			t.Errorf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
+			return
+		}
+		var ngot int
+		var buf bytes.Buffer
+		for {
+			reply, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			ngot++
+			if buf.Len() > 0 {
+				buf.WriteByte(',')
+			}
+			buf.Write(reply.GetPayload().GetBody())
+		}
+		if want := 10; ngot != want {
+			t.Errorf("Got %d replies, want %d", ngot, want)
+		}
+		if got, want := buf.String(), "0,1,2,3,4,5,6,7,8,9"; got != want {
+			t.Errorf("Got replies %q; want %q", got, want)
+		}
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			doStreamingCall()
+		}()
+	}
+	wg.Wait()
+
 }
 
 func TestClientStreaming(t *testing.T) {

@@ -75,10 +75,10 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request) (ServerTr
 	}
 
 	st := &serverHandlerTransport{
-		rw:          w,
-		req:         r,
-		closedCh:    make(chan struct{}),
-		wroteStatus: make(chan struct{}),
+		rw:       w,
+		req:      r,
+		closedCh: make(chan struct{}),
+		writes:   make(chan func()),
 	}
 
 	if v := r.Header.Get("grpc-timeout"); v != "" {
@@ -132,7 +132,10 @@ type serverHandlerTransport struct {
 	closeOnce sync.Once
 	closedCh  chan struct{} // closed on Close
 
-	wroteStatus chan struct{} // closed on WriteStatus
+	// writes is a channel of code to run serialized in the
+	// ServeHTTP (HandleStreams) goroutine. The channel is closed
+	// when WriteStatus is called.
+	writes chan func()
 }
 
 func (ht *serverHandlerTransport) Close() error {
@@ -166,31 +169,43 @@ func (a strAddr) Network() string {
 
 func (a strAddr) String() string { return string(a) }
 
-func (ht *serverHandlerTransport) WriteStatus(s *Stream, statusCode codes.Code, statusDesc string) error {
-	ht.writeCommonHeaders(s)
-
-	// And flush, in case no header or body has been sent yet.
-	// This forces a separation of headers and trailers if this is the
-	// first call (for example, in end2end tests's TestNoService).
-	ht.rw.(http.Flusher).Flush()
-
-	h := ht.rw.Header()
-	h.Set("Grpc-Status", fmt.Sprintf("%d", statusCode))
-	if statusDesc != "" {
-		h.Set("Grpc-Message", statusDesc)
+// do runs fn in the ServeHTTP goroutine.
+func (ht *serverHandlerTransport) do(fn func()) error {
+	select {
+	case ht.writes <- fn:
+		return nil
+	case <-ht.closedCh:
+		return ErrConnClosing
 	}
-	if md := s.Trailer(); len(md) > 0 {
-		for k, vv := range md {
-			for _, v := range vv {
-				// http2 ResponseWriter mechanism to
-				// send undeclared Trailers after the
-				// headers have possibly been written.
-				h.Add(http2.TrailerPrefix+k, v)
+}
+
+func (ht *serverHandlerTransport) WriteStatus(s *Stream, statusCode codes.Code, statusDesc string) error {
+	err := ht.do(func() {
+		ht.writeCommonHeaders(s)
+
+		// And flush, in case no header or body has been sent yet.
+		// This forces a separation of headers and trailers if this is the
+		// first call (for example, in end2end tests's TestNoService).
+		ht.rw.(http.Flusher).Flush()
+
+		h := ht.rw.Header()
+		h.Set("Grpc-Status", fmt.Sprintf("%d", statusCode))
+		if statusDesc != "" {
+			h.Set("Grpc-Message", statusDesc)
+		}
+		if md := s.Trailer(); len(md) > 0 {
+			for k, vv := range md {
+				for _, v := range vv {
+					// http2 ResponseWriter mechanism to
+					// send undeclared Trailers after the
+					// headers have possibly been written.
+					h.Add(http2.TrailerPrefix+k, v)
+				}
 			}
 		}
-	}
-	close(ht.wroteStatus)
-	return nil
+	})
+	close(ht.writes)
+	return err
 }
 
 // writeCommonHeaders sets common headers on the first write
@@ -219,28 +234,30 @@ func (ht *serverHandlerTransport) writeCommonHeaders(s *Stream) {
 }
 
 func (ht *serverHandlerTransport) Write(s *Stream, data []byte, opts *Options) error {
-	ht.writeCommonHeaders(s)
-	ht.rw.Write(data)
-	if !opts.Delay {
-		ht.rw.(http.Flusher).Flush()
-	}
-	return nil
+	return ht.do(func() {
+		ht.writeCommonHeaders(s)
+		ht.rw.Write(data)
+		if !opts.Delay {
+			ht.rw.(http.Flusher).Flush()
+		}
+	})
 }
 
 func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
-	ht.writeCommonHeaders(s)
-	h := ht.rw.Header()
-	for k, vv := range md {
-		for _, v := range vv {
-			h.Add(k, v)
+	return ht.do(func() {
+		ht.writeCommonHeaders(s)
+		h := ht.rw.Header()
+		for k, vv := range md {
+			for _, v := range vv {
+				h.Add(k, v)
+			}
 		}
-	}
-	ht.rw.WriteHeader(200)
-	ht.rw.(http.Flusher).Flush()
-	return nil
+		ht.rw.WriteHeader(200)
+		ht.rw.(http.Flusher).Flush()
+	})
 }
 
-func (ht *serverHandlerTransport) HandleStreams(runStream func(*Stream)) {
+func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream)) {
 	// With this transport type there will be exactly 1 stream: this HTTP request.
 
 	var ctx context.Context
@@ -251,12 +268,18 @@ func (ht *serverHandlerTransport) HandleStreams(runStream func(*Stream)) {
 		ctx, cancel = context.WithCancel(context.Background())
 	}
 
+	// requestOver is closed when either the request's context is done
+	// or the status has been written via WriteStatus.
+	requestOver := make(chan struct{})
+
 	// clientGone receives a single value if peer is gone, either
 	// because the underlying connection is dead or because the
 	// peer sends an http2 RST_STREAM.
 	clientGone := ht.rw.(http.CloseNotifier).CloseNotify()
 	go func() {
 		select {
+		case <-requestOver:
+			return
 		case <-ht.closedCh:
 		case <-clientGone:
 		}
@@ -285,10 +308,6 @@ func (ht *serverHandlerTransport) HandleStreams(runStream func(*Stream)) {
 	s.ctx = newContextWithStream(ctx, s)
 	s.dec = &recvBufferReader{ctx: s.ctx, recv: s.buf}
 
-	// requestOver is closed when either the request's context is done
-	// or the status has been written via WriteStatus.
-	requestOver := make(chan struct{})
-
 	// readerDone is closed when the Body.Read-ing goroutine exits.
 	readerDone := make(chan struct{})
 	go func() {
@@ -296,34 +315,40 @@ func (ht *serverHandlerTransport) HandleStreams(runStream func(*Stream)) {
 		for {
 			buf := make([]byte, 1024) // TODO: minimize garbage, optimize recvBuffer code/ownership
 			n, err := req.Body.Read(buf)
-			select {
-			case <-requestOver:
-				return
-			default:
-			}
 			if n > 0 {
 				s.buf.put(&recvMsg{data: buf[:n]})
 			}
 			if err != nil {
 				s.buf.put(&recvMsg{err: err})
-				break
+				return
 			}
 		}
 	}()
 
-	// runStream is provided by the *grpc.Server.serveStreams.
-	// It starts a goroutine handling s and exits immediately.
-	runStream(s)
+	// startStream is provided by the *grpc.Server's serveStreams.
+	// It starts a goroutine serving s and exits immediately.
+	// The goroutine that is started is the one that then calls
+	// into ht, calling WriteHeader, Write, WriteStatus, Close, etc.
+	startStream(s)
 
-	// Wait for the stream to be done. It is considered done when
-	// either its context is done, or we've written its status.
-	select {
-	case <-ctx.Done():
-	case <-ht.wroteStatus:
-	}
+	ht.runStream()
 	close(requestOver)
 
 	// Wait for reading goroutine to finish.
 	req.Body.Close()
 	<-readerDone
+}
+
+func (ht *serverHandlerTransport) runStream() {
+	for {
+		select {
+		case fn, ok := <-ht.writes:
+			if !ok {
+				return
+			}
+			fn()
+		case <-ht.closedCh:
+			return
+		}
+	}
 }
