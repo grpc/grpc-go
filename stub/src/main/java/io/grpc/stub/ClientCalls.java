@@ -135,7 +135,7 @@ public class ClientCalls {
           executor.waitAndDrain();
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
-          throw new RuntimeException(e);
+          throw Status.CANCELLED.withCause(e).asRuntimeException();
         }
       }
       return getUnchecked(responseFuture);
@@ -436,7 +436,7 @@ public class ClientCalls {
           last = waitForNext();
         } catch (InterruptedException ie) {
           Thread.interrupted();
-          throw new RuntimeException(ie);
+          throw Status.CANCELLED.withCause(ie).asRuntimeException();
         }
       }
       if (last instanceof Status) {
