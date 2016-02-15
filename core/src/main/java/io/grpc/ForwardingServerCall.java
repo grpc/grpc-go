@@ -34,52 +34,17 @@ package io.grpc;
 /**
  * A {@link ServerCall} which forwards all of it's methods to another {@link ServerCall}.
  */
-public abstract class ForwardingServerCall<RespT> extends ServerCall<RespT> {
+public abstract class ForwardingServerCall<RespT>
+    extends PartialForwardingServerCall<RespT> {
   /**
    * Returns the delegated {@code ServerCall}.
    */
+  @Override
   protected abstract ServerCall<RespT> delegate();
-
-  @Override
-  public void request(int numMessages) {
-    delegate().request(numMessages);
-  }
-
-  @Override
-  public void sendHeaders(Metadata headers) {
-    delegate().sendHeaders(headers);
-  }
 
   @Override
   public void sendMessage(RespT message) {
     delegate().sendMessage(message);
-  }
-
-  @Override
-  public boolean isReady() {
-    return delegate().isReady();
-  }
-
-  @Override
-  public void close(Status status, Metadata trailers) {
-    delegate().close(status, trailers);
-  }
-
-  @Override
-  public boolean isCancelled() {
-    return delegate().isCancelled();
-  }
-
-  @Override
-  @ExperimentalApi
-  public void setMessageCompression(boolean enabled) {
-    delegate().setMessageCompression(enabled);
-  }
-
-  @Override
-  @ExperimentalApi
-  public void setCompression(String compressor) {
-    delegate().setCompression(compressor);
   }
 
   /**

@@ -34,6 +34,7 @@ package io.grpc;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -41,7 +42,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
 
-import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall.Listener;
@@ -55,6 +55,8 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -263,6 +265,122 @@ public class ServerInterceptorsTest {
     verify(handler).startCall(method2, call2, headers);
   }
 
+  @Test
+  @SuppressWarnings("unchecked")
+  public void typedMarshalledMessages() {
+    final List<String> order = new ArrayList<String>();
+    Marshaller<Holder> marshaller = new Marshaller<Holder>() {
+      @Override
+      public InputStream stream(Holder value) {
+        return value.get();
+      }
+
+      @Override
+      public Holder parse(InputStream stream) {
+        return new Holder(stream);
+      }
+    };
+
+    ServerCallHandler<Holder, Holder> handler2 = new ServerCallHandler<Holder, Holder>() {
+      @Override
+      public Listener<Holder> startCall(final MethodDescriptor<Holder, Holder> method,
+                                        final ServerCall<Holder> call,
+                                        final Metadata headers) {
+        return new Listener<Holder>() {
+          @Override
+          public void onMessage(Holder message) {
+            order.add("handler");
+            call.sendMessage(message);
+          }
+        };
+      }
+    };
+
+    ServerServiceDefinition serviceDef = ServerServiceDefinition.builder("basic")
+        .addMethod(
+            MethodDescriptor.create(
+                MethodType.UNKNOWN, "basic/wrapped", marshaller, marshaller),
+            handler2).build();
+
+    ServerInterceptor interceptor1 = new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> Listener<ReqT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+                                                        ServerCall<RespT> call,
+                                                        Metadata headers,
+                                                        ServerCallHandler<ReqT, RespT> next) {
+        ServerCall<RespT> interceptedCall = new ForwardingServerCall
+            .SimpleForwardingServerCall<RespT>(call) {
+          @Override
+          public void sendMessage(RespT message) {
+            order.add("i1sendMessage");
+            assertTrue(message instanceof Holder);
+            super.sendMessage(message);
+          }
+        };
+
+        ServerCall.Listener<ReqT> originalListener = next
+            .startCall(method, interceptedCall, headers);
+        return new ForwardingServerCallListener
+            .SimpleForwardingServerCallListener<ReqT>(originalListener) {
+          @Override
+          public void onMessage(ReqT message) {
+            order.add("i1onMessage");
+            assertTrue(message instanceof Holder);
+            super.onMessage(message);
+          }
+        };
+      }
+    };
+
+    ServerInterceptor interceptor2 = new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> Listener<ReqT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+                                                        ServerCall<RespT> call,
+                                                        Metadata headers,
+                                                        ServerCallHandler<ReqT, RespT> next) {
+        ServerCall<RespT> interceptedCall = new ForwardingServerCall
+            .SimpleForwardingServerCall<RespT>(call) {
+          @Override
+          public void sendMessage(RespT message) {
+            order.add("i2sendMessage");
+            assertTrue(message instanceof InputStream);
+            super.sendMessage(message);
+          }
+        };
+
+        ServerCall.Listener<ReqT> originalListener = next
+            .startCall(method, interceptedCall, headers);
+        return new ForwardingServerCallListener
+            .SimpleForwardingServerCallListener<ReqT>(originalListener) {
+          @Override
+          public void onMessage(ReqT message) {
+            order.add("i2onMessage");
+            assertTrue(message instanceof InputStream);
+            super.onMessage(message);
+          }
+        };
+      }
+    };
+
+    ServerServiceDefinition intercepted = ServerInterceptors.intercept(serviceDef, interceptor1);
+    ServerServiceDefinition inputStreamMessageService = ServerInterceptors
+        .useInputStreamMessages(intercepted);
+    ServerServiceDefinition intercepted2 = ServerInterceptors
+        .intercept(inputStreamMessageService, interceptor2);
+    ServerMethodDefinition<InputStream, InputStream> serverMethod =
+        (ServerMethodDefinition<InputStream, InputStream>) intercepted2.getMethod("basic/wrapped");
+    MethodDescriptor<InputStream, InputStream> method2 = serverMethod.getMethodDescriptor();
+    ServerCall<InputStream> call2 = mock(ServerCall.class);
+    byte[] bytes = {};
+    serverMethod
+        .getServerCallHandler()
+        .startCall(method2, call2, headers)
+        .onMessage(new ByteArrayInputStream(bytes));
+    assertEquals(
+        Arrays.asList("i2onMessage", "i1onMessage", "handler", "i1sendMessage", "i2sendMessage"),
+        order);
+  }
+
   @SuppressWarnings("unchecked")
   private static ServerMethodDefinition<String, Integer> getSoleMethod(
       ServerServiceDefinition serviceDef) {
@@ -290,6 +408,18 @@ public class ServerInterceptorsTest {
         Metadata headers,
         ServerCallHandler<ReqT, RespT> next) {
       return next.startCall(method, call, headers);
+    }
+  }
+
+  private static class Holder {
+    private final InputStream inputStream;
+
+    Holder(InputStream inputStream) {
+      this.inputStream = inputStream;
+    }
+
+    public InputStream get() {
+      return inputStream;
     }
   }
 }

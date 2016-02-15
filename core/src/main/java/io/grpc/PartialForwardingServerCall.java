@@ -32,38 +32,49 @@
 package io.grpc;
 
 /**
- * A {@link ServerCall.Listener} which forwards all of its methods to another {@link
- * ServerCall.Listener} of matching parameterized types.
+ * A {@link ServerCall} which forwards all of it's methods to another {@link ServerCall} which
+ * may have a different onMessage() message type.
  */
-public abstract class ForwardingServerCallListener<ReqT>
-    extends PartialForwardingServerCallListener<ReqT> {
+abstract class PartialForwardingServerCall<RespT> extends ServerCall<RespT> {
   /**
-   * Returns the delegated {@code ServerCall.Listener}.
+   * Returns the delegated {@code ServerCall}.
    */
-  @Override
-  protected abstract ServerCall.Listener<ReqT> delegate();
+  protected abstract ServerCall<?> delegate();
 
   @Override
-  public void onMessage(ReqT message) {
-    delegate().onMessage(message);
+  public void request(int numMessages) {
+    delegate().request(numMessages);
   }
 
-  /**
-   * A simplified version of {@link ForwardingServerCallListener} where subclasses can pass in a
-   * {@link ServerCall.Listener} as the delegate.
-   */
-  public abstract static class SimpleForwardingServerCallListener<ReqT>
-      extends ForwardingServerCallListener<ReqT> {
+  @Override
+  public void sendHeaders(Metadata headers) {
+    delegate().sendHeaders(headers);
+  }
 
-    private final ServerCall.Listener<ReqT> delegate;
+  @Override
+  public boolean isReady() {
+    return delegate().isReady();
+  }
 
-    protected SimpleForwardingServerCallListener(ServerCall.Listener<ReqT> delegate) {
-      this.delegate = delegate;
-    }
+  @Override
+  public void close(Status status, Metadata trailers) {
+    delegate().close(status, trailers);
+  }
 
-    @Override
-    protected ServerCall.Listener<ReqT> delegate() {
-      return delegate;
-    }
+  @Override
+  public boolean isCancelled() {
+    return delegate().isCancelled();
+  }
+
+  @Override
+  @ExperimentalApi
+  public void setMessageCompression(boolean enabled) {
+    delegate().setMessageCompression(enabled);
+  }
+
+  @Override
+  @ExperimentalApi
+  public void setCompression(String compressor) {
+    delegate().setCompression(compressor);
   }
 }

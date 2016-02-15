@@ -33,37 +33,33 @@ package io.grpc;
 
 /**
  * A {@link ServerCall.Listener} which forwards all of its methods to another {@link
- * ServerCall.Listener} of matching parameterized types.
+ * ServerCall.Listener} which may have a different parameterized type than the
+ * onMessage() message type.
  */
-public abstract class ForwardingServerCallListener<ReqT>
-    extends PartialForwardingServerCallListener<ReqT> {
+abstract class PartialForwardingServerCallListener<ReqT>
+    extends ServerCall.Listener<ReqT> {
   /**
    * Returns the delegated {@code ServerCall.Listener}.
    */
-  @Override
-  protected abstract ServerCall.Listener<ReqT> delegate();
+  protected abstract ServerCall.Listener<?> delegate();
 
   @Override
-  public void onMessage(ReqT message) {
-    delegate().onMessage(message);
+  public void onHalfClose() {
+    delegate().onHalfClose();
   }
 
-  /**
-   * A simplified version of {@link ForwardingServerCallListener} where subclasses can pass in a
-   * {@link ServerCall.Listener} as the delegate.
-   */
-  public abstract static class SimpleForwardingServerCallListener<ReqT>
-      extends ForwardingServerCallListener<ReqT> {
+  @Override
+  public void onCancel() {
+    delegate().onCancel();
+  }
 
-    private final ServerCall.Listener<ReqT> delegate;
+  @Override
+  public void onComplete() {
+    delegate().onComplete();
+  }
 
-    protected SimpleForwardingServerCallListener(ServerCall.Listener<ReqT> delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override
-    protected ServerCall.Listener<ReqT> delegate() {
-      return delegate;
-    }
+  @Override
+  public void onReady() {
+    delegate().onReady();
   }
 }
