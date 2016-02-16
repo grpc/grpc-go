@@ -1,16 +1,11 @@
 #!/bin/bash
 #
-# Build protoc & openssl
+# Build protoc
 set -ev
 
 DOWNLOAD_DIR=/tmp/source
 INSTALL_DIR=/tmp/protobuf-${PROTOBUF_VERSION}
 mkdir -p $DOWNLOAD_DIR
-
-# We may have set this elsewhere in order to allow gRPC find our custom
-# built openssl to run ALPN, but it may be incompatible with wget which
-# uses the system openssl. We unset this variable for this script.
-export -n LD_LIBRARY_PATH
 
 # Make protoc
 # Can't check for presence of directory as cache auto-creates it.
@@ -28,20 +23,3 @@ else
   popd
 fi
 
-INSTALL_DIR=/tmp/openssl-${OPENSSL_VERSION}
-
-if [ -f ${INSTALL_DIR}/lib/libssl.so ]; then
-  echo "Not building openssl. Already built"
-elif [ "$(uname)" = Darwin ]; then
-  brew install openssl
-else
-  # The version without the patch letter (e.g., 1.0.2 provided 1.0.2d)
-  VERSION_BASE=${OPENSSL_VERSION%%[a-z]*}
-  wget -O - https://www.openssl.org/source/old/$VERSION_BASE/openssl-${OPENSSL_VERSION}.tar.gz \
-    | tar xz -C $DOWNLOAD_DIR
-  pushd $DOWNLOAD_DIR/openssl-${OPENSSL_VERSION}
-  ./Configure linux-x86_64 shared no-ssl2 no-comp --prefix=${INSTALL_DIR}
-  make -j$(nproc)
-  make install
-  popd
-fi

@@ -3,7 +3,6 @@ REM 7za is in http://www.7-zip.org/a/7z1507-extra.7z
 
 REM Prerequisite:
 REM   7za.exe in current directory or PATH
-REM   Install http://slproweb.com/download/Win64OpenSSL_Light-1_0_2d.exe
 
 set PROTOBUF_VER=3.0.0-beta-2
 set CMAKE_NAME=cmake-3.3.2-win32-x86

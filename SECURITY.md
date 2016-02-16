@@ -16,29 +16,101 @@ You may need to [update the security provider](https://developer.android.com/tra
 
 ## TLS with OpenSSL
 
-This is currently the recommended approach for using gRPC over TLS (on non-Android systems). 
+This is currently the recommended approach for using gRPC over TLS (on non-Android systems).
 
-### Benefits of using OpenSSL
+The main benefits of using OpenSSL are:
 
 1. **Speed**: In local testing, we've seen performance improvements of 3x over the JDK. GCM, which is used by the only cipher suite required by the HTTP/2 spec, is 10-500x faster.
 2. **Ciphers**: OpenSSL has its own ciphers and is not dependent on the limitations of the JDK. This allows supporting GCM on Java 7.
 3. **ALPN to NPN Fallback**: if the remote endpoint doesn't support ALPN.
 4. **Version Independence**: does not require using a different library version depending on the JDK update.
 
-### Requirements for using OpenSSL
+Support for OpenSSL is only provided for the Netty transport via [netty-tcnative](https://github.com/netty/netty-tcnative), which is a fork of
+[Apache Tomcat's tcnative](http://tomcat.apache.org/native-doc/), a JNI wrapper around OpenSSL.
 
-1. Currently only supported by the Netty transport (via netty-tcnative).
-2. [OpenSSL](https://www.openssl.org/) version >= 1.0.2 for ALPN support, or version >= 1.0.1 for NPN.
-3. [netty-tcnative](https://github.com/netty/netty-tcnative) version >= 1.1.33.Fork7 must be on classpath.
-4. Supported platforms (for netty-tcnative): `linux-x86_64`, `mac-x86_64`, `windows-x86_64`. Supporting other platforms will require manually building netty-tcnative.
+### OpenSSL: Dynamic vs Static (which to use?)
 
-If the above requirements met, the Netty transport will automatically select OpenSSL as the default TLS provider.
+As of version `1.1.33.Fork13`, netty-tcnative provides two options for usage: statically or dynamically linked. For simplification of initial setup,
+we recommend that users first look at `netty-tcnative-boringssl-static`, which is statically linked against BoringSSL and Apache APR. Using this artifact requires no extra installation and guarantees that ALPN and the ciphers required for
+HTTP/2 are available.
 
-### Configuring netty-tcnative
+Production systems, however, may require an easy upgrade path for OpenSSL security patches. In this case, relying on the statically linked artifact also implies waiting for the Netty team
+to release the new artifact to Maven Central, which can take some time. A better solution in this case is to use the dynamically linked `netty-tcnative` artifact, which allows the site administrator
+to easily upgrade OpenSSL in the standard way (e.g. apt-get) without relying on any new builds from Netty.
 
-[Netty-tcnative](https://github.com/netty/netty-tcnative) is a fork of [Apache Tomcat's tcnative](http://tomcat.apache.org/native-doc/), a JNI wrapper around OpenSSL.
+### OpenSSL: Statically Linked (netty-tcnative-boringssl-static)
 
-Netty uses classifiers when deploying to [Maven Central](http://repo1.maven.org/maven2/io/netty/netty-tcnative/) to provide distributions for the various platforms. On Linux it should be noted that OpenSSL uses a different soname for Fedora derivatives than other Linux releases. To work around this limitation, netty-tcnative deploys two separate versions for linux.
+This is the simplest way to configure the Netty transport for OpenSSL. You just need to add the appropriate `netty-tcnative-boringssl-static` artifact to your application's classpath.
+
+Artifacts are available on [Maven Central](http://repo1.maven.org/maven2/io/netty/netty-tcnative-boringssl-static/) for the following platforms:
+
+Maven Classifier | Description
+---------------- | -----------
+windows-x86_64 | Windows distribution
+osx-x86_64 | Mac distribution
+linux-x86_64 | Linux distribution
+
+##### Getting netty-tcnative-boringssl-static from Maven
+
+In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-plugin) to help simplify the dependency.
+
+```xml
+<project>
+  <dependencies>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-tcnative-boringssl-static</artifactId>
+      <version>1.1.33.Fork13</version>
+      <classifier>${os.detected.classifier}</classifier>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <extensions>
+      <!-- Use os-maven-plugin to initialize the "os.detected" properties -->
+      <extension>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>1.4.0.Final</version>
+      </extension>
+    </extensions>
+  </build>
+</project>
+```
+
+##### Getting netty-tcnative-boringssl-static from Gradle
+
+Gradle you can use the [osdetector-gradle-plugin](https://github.com/google/osdetector-gradle-plugin), which is a wrapper around the os-maven-plugin.
+
+```gradle
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath 'com.google.gradle:osdetector-gradle-plugin:1.4.0'
+  }
+}
+
+// Use the osdetector-gradle-plugin
+apply plugin: "com.google.osdetector"
+
+dependencies {
+    compile 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork13:' + osdetector.classifier
+}
+```
+
+### OpenSSL: Dynamically Linked (netty-tcnative)
+
+If for any reason you need to dynamically link against OpenSSL (e.g. you need control over the version of OpenSSL), you can instead use the `netty-tcnative` artifact.
+
+Requirements:
+
+1. [OpenSSL](https://www.openssl.org/) version >= 1.0.2 for ALPN support, or version >= 1.0.1 for NPN.
+2. [Apache APR library (libapr-1)](https://apr.apache.org/) version >= 1.5.2.
+3. [netty-tcnative](https://github.com/netty/netty-tcnative) version >= 1.1.33.Fork7 must be on classpath. Prior versions only supported NPN and only Fedora-derivatives were supported for Linux.
+
+Artifacts are available on [Maven Central](http://repo1.maven.org/maven2/io/netty/netty-tcnative/) for the following platforms:
 
 Classifier | Description
 ---------------- | -----------
@@ -47,9 +119,9 @@ osx-x86_64 | Mac distribution
 linux-x86_64 | Used for non-Fedora derivatives of Linux
 linux-x86_64-fedora | Used for Fedora derivatives
 
-*NOTE: Make sure you use a version of netty-tcnative >= 1.1.33.Fork7.  Prior versions only supported NPN and only Fedora-derivatives were supported for Linux.*
+On Linux it should be noted that OpenSSL uses a different soname for Fedora derivatives than other Linux releases. To work around this limitation, netty-tcnative deploys two separate versions for linux.
 
-#### Getting netty-tcnative from Maven
+##### Getting netty-tcnative from Maven
 
 In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-plugin) to help simplify the dependency.
 
@@ -59,7 +131,7 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative</artifactId>
-      <version>1.1.33.Fork11</version>
+      <version>1.1.33.Fork13</version>
       <classifier>${tcnative.classifier}</classifier>
     </dependency>
   </dependencies>
@@ -102,7 +174,7 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
 </project>
 ```
 
-#### Getting netty-tcnative from Gradle
+##### Getting netty-tcnative from Gradle
 
 Gradle you can use the [osdetector-gradle-plugin](https://github.com/google/osdetector-gradle-plugin), which is a wrapper around the os-maven-plugin.
 
@@ -127,7 +199,7 @@ if (osdetector.os == "linux" && osdetector.release.isLike("fedora")) {
 }
 
 dependencies {
-    compile 'io.netty:netty-tcnative:1.1.33.Fork11:' + tcnative_classifier
+    compile 'io.netty:netty-tcnative:1.1.33.Fork13:' + tcnative_classifier
 }
 ```
 

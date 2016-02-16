@@ -118,13 +118,6 @@ subprojects {
           }
         }
 
-        def tcnative_suffix = osdetector.classifier;
-        // Fedora variants use a different soname for OpenSSL than other linux distributions
-        // (see http://netty.io/wiki/forked-tomcat-native.html).
-        if (osdetector.os == "linux" && osdetector.release.isLike("fedora")) {
-            tcnative_suffix += "-fedora";
-        }
-
         def epoll_suffix = "";
         if (osdetector.classifier in ["linux-x86_64"]) {
             // The native code is only pre-compiled on certain platforms.
@@ -145,7 +138,7 @@ subprojects {
 
                 netty: 'io.netty:netty-codec-http2:4.1.0.CR1',
                 netty_epoll: 'io.netty:netty-transport-native-epoll:4.1.0.CR1' + epoll_suffix,
-                netty_tcnative: 'io.netty:netty-tcnative:1.1.33.Fork11:' + tcnative_suffix,
+                netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork13:' + osdetector.classifier,
 
                 // Test dependencies.
                 junit: 'junit:junit:4.11',

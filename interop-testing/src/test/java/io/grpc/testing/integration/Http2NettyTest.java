@@ -36,6 +36,7 @@ import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.testing.TestUtils;
+import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import org.junit.AfterClass;
@@ -61,6 +62,7 @@ public class Http2NettyTest extends AbstractTransportTest {
           .sslContext(GrpcSslContexts
               .forServer(TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key"))
               .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
+              .sslProvider(SslProvider.OPENSSL)
               .build()));
     } catch (IOException ex) {
       throw new RuntimeException(ex);
@@ -80,6 +82,7 @@ public class Http2NettyTest extends AbstractTransportTest {
           .sslContext(GrpcSslContexts.forClient()
               .trustManager(TestUtils.loadCert("ca.pem"))
               .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
+              .sslProvider(SslProvider.OPENSSL)
               .build())
           .build();
     } catch (Exception ex) {
