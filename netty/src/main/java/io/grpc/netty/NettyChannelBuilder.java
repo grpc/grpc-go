@@ -316,7 +316,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     }
 
     @Internal  // This is strictly for internal use.  Depend on this at your own peril.
-    protected ManagedClientTransport newClientTransport(SocketAddress serverAddress,
+    public ManagedClientTransport newClientTransport(SocketAddress serverAddress,
         String authority, ProtocolNegotiator negotiator) {
       return new NettyClientTransport(serverAddress, channelType, group, negotiator,
           flowControlWindow, maxMessageSize, maxHeaderListSize, authority);
