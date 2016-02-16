@@ -52,38 +52,21 @@ For protobuf-based codegen, you can put your proto files in the `src/main/proto`
 and `src/test/proto` directories along with an appropriate plugin.
 
 For protobuf-based codegen integrated with the Maven build system, you can use
-[maven-protoc-plugin][]:
+[protobuf-maven-plugin][]:
 ```xml
-<pluginRepositories>
-  <pluginRepository>
-    <releases>
-      <updatePolicy>never</updatePolicy>
-    </releases>
-    <snapshots>
-      <enabled>false</enabled>
-    </snapshots>
-    <id>central</id>
-    <name>Central Repository</name>
-    <url>https://repo.maven.apache.org/maven2</url>
-  </pluginRepository>
-  <pluginRepository>
-    <id>protoc-plugin</id>
-    <url>https://dl.bintray.com/sergei-ivanov/maven/</url>
-  </pluginRepository>
-</pluginRepositories>
 <build>
   <extensions>
     <extension>
       <groupId>kr.motd.maven</groupId>
       <artifactId>os-maven-plugin</artifactId>
-      <version>1.4.0.Final</version>
+      <version>1.4.1.Final</version>
     </extension>
   </extensions>
   <plugins>
     <plugin>
-      <groupId>com.google.protobuf.tools</groupId>
-      <artifactId>maven-protoc-plugin</artifactId>
-      <version>0.4.2</version>
+      <groupId>org.xolstice.maven.plugins</groupId>
+      <artifactId>protobuf-maven-plugin</artifactId>
+      <version>0.5.0</version>
       <configuration>
         <!--
           The version of protoc must match protobuf-java. If you don't depend on
@@ -107,7 +90,7 @@ For protobuf-based codegen integrated with the Maven build system, you can use
 </build>
 ```
 
-[maven-protoc-plugin]: http://sergei-ivanov.github.io/maven-protoc-plugin/
+[protobuf-maven-plugin]: https://www.xolstice.org/protobuf-maven-plugin/
 
 For protobuf-based codegen integrated with the Gradle build system, you can use
 [protobuf-gradle-plugin][]:
