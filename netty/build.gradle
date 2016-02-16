@@ -1,7 +1,6 @@
 description = "gRPC: Netty"
 dependencies {
     compile project(':grpc-core'),
-            libraries.hpack,
             libraries.netty
 
     // Tests depend on base class defined by core module.
