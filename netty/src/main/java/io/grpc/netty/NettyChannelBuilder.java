@@ -267,7 +267,11 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     }
   }
 
-  private static class NettyTransportFactory extends AbstractReferenceCounted
+  /**
+   * Creates Netty transports.  Exposed for internal use, as it should be private.
+   */
+  @Internal
+  protected static final class NettyTransportFactory extends AbstractReferenceCounted
           implements ClientTransportFactory {
     private final Class<? extends Channel> channelType;
     private final NegotiationType negotiationType;
@@ -308,6 +312,12 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
         SocketAddress serverAddress, String authority) {
       ProtocolNegotiator negotiator = protocolNegotiator != null ? protocolNegotiator :
           createProtocolNegotiator(authority, negotiationType, sslContext);
+      return newClientTransport(serverAddress, authority, negotiator);
+    }
+
+    @Internal  // This is strictly for internal use.  Depend on this at your own peril.
+    protected ManagedClientTransport newClientTransport(SocketAddress serverAddress,
+        String authority, ProtocolNegotiator negotiator) {
       return new NettyClientTransport(serverAddress, channelType, group, negotiator,
           flowControlWindow, maxMessageSize, maxHeaderListSize, authority);
     }
