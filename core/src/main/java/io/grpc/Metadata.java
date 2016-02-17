@@ -70,6 +70,29 @@ public final class Metadata {
   public static final String BINARY_HEADER_SUFFIX = "-bin";
 
   /**
+   * Simple metadata marshaller that encodes bytes as is.
+   *
+   * <p>This should be used when raw bytes are favored over un-serialized version of object. Can be
+   * helpful in situations where more processing to bytes is needed on application side, avoids
+   * double encoding/decoding.</p>
+   *
+   * <p>Both #toBytes and #parseBytes methods return copy of the byte array</p>
+   */
+  public static final BinaryMarshaller<byte[]> BINARY_BYTE_MARSHALLER =
+      new BinaryMarshaller<byte[]>() {
+
+    @Override
+    public byte[] toBytes(byte[] value) {
+      return value.clone();
+    }
+
+    @Override
+    public byte[] parseBytes(byte[] serialized) {
+      return serialized.clone();
+    }
+  };
+
+  /**
    * Simple metadata marshaller that encodes strings as is.
    *
    * <p>This should be used with ASCII strings that only contain the characters listed in the class
