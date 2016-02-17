@@ -56,43 +56,66 @@ Please see the [Main Readme](README.md) for details on building protobuf.
 
 Tagging the Release
 ----------------------
-The first step in the release process is to create a release branch and then
-from it, create a tag for the release. Our release branches follow the naming
+The first step in the release process is to create a release branch, bump
+versions, and create a tag for the release. Our release branches follow the naming
 convention of `v<major>.<minor>.x`, while the tags include the patch version
 `v<major>.<minor>.<patch>`. For example, the same branch `v0.7.x`
 would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
 
-1. Create the release branch:
+1. Create the release branch and push it to GitHub:
 
    ```bash
-   $ git checkout -b v<major>.<minor>.x master
+   $ MAJOR=0 MINOR=7 PATCH=0 # Set appropriately for new release
+   $ git checkout -b v$MAJOR.$MINOR.x master
+   $ git push upstream v$MAJOR.$MINOR.x
    ```
-2. Next, increment the version in `build.gradle` in `master` to the next
-   minor snapshot (e.g. ``0.8.0-SNAPSHOT``).
-3. In the release branch, change the `build.gradle` to the next release version
-   (e.g. `0.7.0`)
-4. Push the release branch to github
+2. For `master`, change `build.gradle` and
+   `android-interop-testing/app/build.gradle` to the next minor snapshot (e.g.
+   ``0.8.0-SNAPSHOT``).
 
    ```bash
-   $ git push upstream v<major>.<minor>.x
+   $ git checkout -b bump-version master
+   # Change version to next minor (and keep -SNAPSHOT)
+   $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$((MINOR+1)).0'\1/' \
+     build.gradle android-interop-testing/app/build.gradle
+   $ git commit -a -m "Start $MAJOR.$((MINOR+1)).0 development cycle"
    ```
-5. In the release branch, create the release tag using the `Major.Minor.Patch`
-   naming convention:
+3. Go through PR review and push the master branch to GitHub:
 
    ```bash
-   $ git tag -a v<major>.<minor>.<patch>
+   $ git checkout master
+   $ git merge --ff-only bump-version
+   $ git push upstream master
    ```
-6. Push the release tag to github:
+4. For vMajor.Minor.x branch, change `build.gradle` and
+   `android-interop-testing/app/build.gradle` to remove "-SNAPSHOT" for the next
+   release version (e.g. `0.7.0`). Commit the result and make a tag:
 
    ```bash
-   $ git push upstream v<major>.<minor>.<patch>
+   $ git checkout -b release v$MAJOR.$MINOR.x
+   # Change version to remove -SNAPSHOT
+   $ sed -i 's/-SNAPSHOT\(.*CURRENT_GRPC_VERSION\)/\1/' \
+     build.gradle android-interop-testing/app/build.gradle
+   $ git commit -a -m "Bump version to $MAJOR.$MINOR.$PATCH"
+   $ git tag -a v$MAJOR.$MINOR.$PATCH -m "Version $MAJOR.$MINOR.$PATCH"
    ```
-7. Update the `build.gradle` in the release branch to point to the next patch
-   snapshot (e.g. `0.7.1-SNAPSHOT`).
-8. Push the updated release branch to github.
+5. Change `build.gradle` and `android-interop-testing/app/build.gradle` to the
+   next snapshot version (e.g. `0.7.1-SNAPSHOT`). Commit the result:
 
    ```bash
-   $ git push upstream v<major>.<minor>.x
+   # Change version to next patch and add -SNAPSHOT
+   $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$MINOR.$((PATCH+1))-SNAPSHOT'\1/' \
+     build.gradle android-interop-testing/app/build.gradle
+   $ git commit -a -m "Bump version to $MAJOR.$MINOR.$((PATCH+1))-SNAPSHOT"
+   ```
+6. Go through PR review and push the release tag and updated release branch to
+   GitHub:
+
+   ```bash
+   $ git checkout v$MAJOR.$MINOR.x
+   $ git merge --ff-only release
+   $ git push upstream v$MAJOR.$MINOR.$PATCH
+   $ git push upstream v$MAJOR.$MINOR.x
    ```
 
 Setup Build Environment
