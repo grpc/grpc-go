@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 
 import io.grpc.EquivalentAddressGroup;
@@ -40,7 +39,9 @@ import io.grpc.Status;
 import io.grpc.TransportManager;
 
 import java.net.SocketAddress;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -95,8 +96,7 @@ public class RoundRobinServerList<T> {
 
   @NotThreadSafe
   public static class Builder<T> {
-    private final ImmutableList.Builder<EquivalentAddressGroup> listBuilder =
-        ImmutableList.builder();
+    private final List<EquivalentAddressGroup> list = new ArrayList<EquivalentAddressGroup>();
     private final TransportManager<T> tm;
 
     public Builder(TransportManager<T> tm) {
@@ -107,7 +107,7 @@ public class RoundRobinServerList<T> {
      * Adds a server to the list, or {@code null} for a drop entry.
      */
     public Builder<T> addSocketAddress(@Nullable SocketAddress address) {
-      listBuilder.add(new EquivalentAddressGroup(address));
+      list.add(new EquivalentAddressGroup(address));
       return this;
     }
 
@@ -117,7 +117,7 @@ public class RoundRobinServerList<T> {
      * @param addresses the addresses to add
      */
     public Builder<T> add(EquivalentAddressGroup addresses) {
-      listBuilder.add(addresses);
+      list.add(addresses);
       return this;
     }
 
@@ -127,12 +127,13 @@ public class RoundRobinServerList<T> {
      * @param addresses the list of addresses group.
      */
     public Builder<T> addAll(Collection<EquivalentAddressGroup> addresses) {
-      listBuilder.addAll(addresses);
+      list.addAll(addresses);
       return this;
     }
 
     public RoundRobinServerList<T> build() {
-      return new RoundRobinServerList<T>(tm, listBuilder.build());
+      return new RoundRobinServerList<T>(tm,
+          Collections.unmodifiableList(new ArrayList<EquivalentAddressGroup>(list)));
     }
   }
 }

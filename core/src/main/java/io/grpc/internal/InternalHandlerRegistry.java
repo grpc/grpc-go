@@ -31,18 +31,19 @@
 
 package io.grpc.internal;
 
-import com.google.common.collect.ImmutableMap;
-
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
+
 import javax.annotation.Nullable;
 
 final class InternalHandlerRegistry {
-  private final ImmutableMap<String, ServerMethodDefinition<?, ?>> methods;
+  private final Map<String, ServerMethodDefinition<?, ?>> methods;
 
-  private InternalHandlerRegistry(ImmutableMap<String, ServerMethodDefinition<?, ?>> methods) {
+  private InternalHandlerRegistry(Map<String, ServerMethodDefinition<?, ?>> methods) {
     this.methods = methods;
   }
 
@@ -62,14 +63,14 @@ final class InternalHandlerRegistry {
     }
 
     InternalHandlerRegistry build() {
-      ImmutableMap.Builder<String, ServerMethodDefinition<?, ?>> mapBuilder =
-          ImmutableMap.builder();
+      Map<String, ServerMethodDefinition<?, ?>> map =
+          new HashMap<String, ServerMethodDefinition<?, ?>>();
       for (ServerServiceDefinition service : services.values()) {
         for (ServerMethodDefinition<?, ?> method : service.getMethods()) {
-          mapBuilder.put(method.getMethodDescriptor().getFullMethodName(), method);
+          map.put(method.getMethodDescriptor().getFullMethodName(), method);
         }
       }
-      return new InternalHandlerRegistry(mapBuilder.build());
+      return new InternalHandlerRegistry(Collections.unmodifiableMap(map));
     }
   }
 }

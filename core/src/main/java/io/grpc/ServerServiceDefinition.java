@@ -35,10 +35,9 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.common.collect.ImmutableMap;
-
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,12 +54,13 @@ public final class ServerServiceDefinition {
   }
 
   private final ServiceDescriptor serviceDescriptor;
-  private final ImmutableMap<String, ServerMethodDefinition<?, ?>> methods;
+  private final Map<String, ServerMethodDefinition<?, ?>> methods;
 
   private ServerServiceDefinition(
       ServiceDescriptor serviceDescriptor, Map<String, ServerMethodDefinition<?, ?>> methods) {
     this.serviceDescriptor = checkNotNull(serviceDescriptor, "serviceDescriptor");
-    this.methods = ImmutableMap.copyOf(methods);
+    this.methods = Collections.unmodifiableMap(
+        new HashMap<String, ServerMethodDefinition<?, ?>>(methods));
   }
 
   /**

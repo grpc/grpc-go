@@ -161,7 +161,8 @@ public class ServerServiceDefinitionTest {
         .build();
     assertEquals(Collections.<MethodDescriptor<?, ?>>emptyList(),
         ssd.getServiceDescriptor().getMethods());
-    assertEquals(Collections.<ServerMethodDefinition<?, ?>>emptySet(), ssd.getMethods());
+    assertEquals(Collections.<ServerMethodDefinition<?, ?>>emptySet(),
+        new HashSet<ServerMethodDefinition<?, ?>>(ssd.getMethods()));
   }
 
   private static class NoopServerCallHandler<ReqT, RespT>

@@ -38,7 +38,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -50,6 +49,12 @@ import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -485,23 +490,32 @@ public final class GrpcUtil {
   @VisibleForTesting
   static class TimeoutMarshaller implements Metadata.AsciiMarshaller<Long> {
 
-    // ImmutableMap's have consistent iteration order.
-    private static final ImmutableMap<Character, TimeUnit> UNITS =
-        ImmutableMap.<Character, TimeUnit>builder()
-            .put('n', TimeUnit.NANOSECONDS)
-            .put('u', TimeUnit.MICROSECONDS)
-            .put('m', TimeUnit.MILLISECONDS)
-            .put('S', TimeUnit.SECONDS)
-            .put('M', TimeUnit.MINUTES)
-            .put('H', TimeUnit.HOURS)
-            .build();
+    @SuppressWarnings("unchecked") // asList uses an array which doesn't handle generics
+    private static final List<Map.Entry<Character, TimeUnit>> SERIALIZE_ORDER
+        = Collections.unmodifiableList(Arrays.<Entry<Character, TimeUnit>>asList(
+            new SimpleImmutableEntry<Character, TimeUnit>('n', TimeUnit.NANOSECONDS),
+            new SimpleImmutableEntry<Character, TimeUnit>('u', TimeUnit.MICROSECONDS),
+            new SimpleImmutableEntry<Character, TimeUnit>('m', TimeUnit.MILLISECONDS),
+            new SimpleImmutableEntry<Character, TimeUnit>('S', TimeUnit.SECONDS),
+            new SimpleImmutableEntry<Character, TimeUnit>('M', TimeUnit.MINUTES),
+            new SimpleImmutableEntry<Character, TimeUnit>('H', TimeUnit.HOURS)));
+
+    private static final Map<Character, TimeUnit> UNITS = createUnits();
+
+    private static Map<Character, TimeUnit> createUnits() {
+      Map<Character, TimeUnit> units = new HashMap<Character, TimeUnit>();
+      for (Entry<Character, TimeUnit> unit : SERIALIZE_ORDER) {
+        units.put(unit.getKey(), unit.getValue());
+      }
+      return Collections.unmodifiableMap(units);
+    }
 
     @Override
     public String toAsciiString(Long timeoutNanos) {
       checkArgument(timeoutNanos >= 0, "Negative timeout");
       // the smallest integer with 9 digits
       int cutoff = 100000000;
-      for (Entry<Character, TimeUnit> unit : UNITS.entrySet()) {
+      for (Entry<Character, TimeUnit> unit : SERIALIZE_ORDER) {
         long timeout = unit.getValue().convert(timeoutNanos, TimeUnit.NANOSECONDS);
         if (timeout < cutoff) {
           return Long.toString(timeout) + unit.getKey();

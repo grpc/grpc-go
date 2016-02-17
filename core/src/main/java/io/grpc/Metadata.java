@@ -36,14 +36,13 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Iterables;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -202,19 +201,12 @@ public final class Metadata {
    * parsed as T or null if there are none. The iterator is not guaranteed to be "live." It may or
    * may not be accurate if Metadata is mutated.
    */
-  public <T> Iterable<T> getAll(final Key<T> key) {
+  public <T> Iterable<T> getAll(Key<T> key) {
     if (containsKey(key)) {
       /* This is unmodifiable currently, but could be made to support remove() in the future.  If
        * removal support is added, the {@link #storeCount} variable needs to be updated
        * appropriately. */
-      return Iterables.unmodifiableIterable(Iterables.transform(
-          store.get(key.name()),
-          new Function<MetadataEntry, T>() {
-            @Override
-            public T apply(MetadataEntry entry) {
-              return entry.getParsed(key);
-            }
-          }));
+      return new ValueIterable<T>(key, store.get(key.name()));
     }
     return null;
   }
@@ -270,18 +262,13 @@ public final class Metadata {
   /**
    * Remove all values for the given key. If there were no values, {@code null} is returned.
    */
-  public <T> Iterable<T> removeAll(final Key<T> key) {
+  public <T> Iterable<T> removeAll(Key<T> key) {
     List<MetadataEntry> values = store.remove(key.name());
     if (values == null) {
       return null;
     }
     storeCount -= values.size();
-    return Iterables.transform(values, new Function<MetadataEntry, T>() {
-      @Override
-      public T apply(MetadataEntry metadataEntry) {
-        return metadataEntry.getParsed(key);
-      }
-    });
+    return new ValueIterable<T>(key, values);
   }
 
   /**
@@ -692,6 +679,37 @@ public final class Metadata {
           return Arrays.toString(serializedBinary);
         }
       }
+    }
+  }
+
+  private static class ValueIterable<T> implements Iterable<T> {
+    private final Key<T> key;
+    private final Iterable<MetadataEntry> entries;
+
+    public ValueIterable(Key<T> key, Iterable<MetadataEntry> entries) {
+      this.key = key;
+      this.entries = entries;
+    }
+
+    @Override
+    public Iterator<T> iterator() {
+      final Iterator<MetadataEntry> iterator = entries.iterator();
+      class ValueIterator implements Iterator<T> {
+        @Override public boolean hasNext() {
+          return iterator.hasNext();
+        }
+
+        @Override public T next() {
+          return iterator.next().getParsed(key);
+        }
+
+        @Override public void remove() {
+          // Not implemented to not need to conditionally update {@link #storeCount}.
+          throw new UnsupportedOperationException();
+        }
+      }
+
+      return new ValueIterator();
     }
   }
 }

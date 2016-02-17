@@ -32,10 +32,10 @@
 package io.grpc.internal;
 
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.Maps;
 
 import io.grpc.internal.ClientTransport.PingCallback;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -68,7 +68,8 @@ public class Http2Ping {
   /**
    * The registered callbacks and the executor used to invoke them.
    */
-  @GuardedBy("this") private Map<PingCallback, Executor> callbacks = Maps.newLinkedHashMap();
+  @GuardedBy("this") private Map<PingCallback, Executor> callbacks
+      = new LinkedHashMap<PingCallback, Executor>();
 
   /**
    * False until the operation completes, either successfully (other side sent acknowledgement) or

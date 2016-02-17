@@ -115,6 +115,18 @@ public class MetadataTest {
   }
 
   @Test
+  public void testGetAllNoRemove() {
+    Fish lance = new Fish(LANCE);
+    Metadata metadata = new Metadata();
+    metadata.put(KEY, lance);
+    Iterator<Fish> i = metadata.getAll(KEY).iterator();
+    assertSame(lance, i.next());
+
+    thrown.expect(UnsupportedOperationException.class);
+    i.remove();
+  }
+
+  @Test
   public void testWriteParsed() {
     Fish lance = new Fish(LANCE);
     Metadata metadata = new Metadata();

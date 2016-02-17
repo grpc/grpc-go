@@ -1130,16 +1130,11 @@ void GenerateService(const ServiceDescriptor* service,
   vars["ServiceDescriptor"] =
       "io.grpc.ServiceDescriptor";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";
-  vars["ImmutableList"] = "com.google.common.collect.ImmutableList";
-  vars["Collection"] = "java.util.Collection";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
   vars["NanoUtils"] = "io.grpc.protobuf.nano.NanoUtils";
   vars["StreamObserver"] = "io.grpc.stub.StreamObserver";
   vars["Iterator"] = "java.util.Iterator";
-  vars["Map"] = "java.util.Map";
-  vars["TimeUnit"] = "java.util.concurrent.TimeUnit";
   vars["Generated"] = "javax.annotation.Generated";
-  vars["Immutable"] = "javax.annotation.concurrent.Immutable";
   vars["ListenableFuture"] =
       "com.google.common.util.concurrent.ListenableFuture";
   vars["ExperimentalApi"] = "io.grpc.ExperimentalApi";
