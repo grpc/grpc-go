@@ -4,12 +4,12 @@ RUN scl enable devtoolset-1.1 'bash -c "cd /protobuf && \
     git fetch && \
     git checkout v3.0.0-beta-2 && \
     ./autogen.sh && \
-    CXXFLAGS=-m32 ./configure --disable-shared --prefix=/protobuf-32 -j$(nproc) && \
-    make clean && make && make install"'
+    CXXFLAGS=-m32 ./configure --disable-shared --prefix=/protobuf-32 && \
+    make clean && make -j$(nproc) && make -j$(nproc) install"'
 
 RUN scl enable devtoolset-1.1 'bash -c "cd /protobuf && \
-    CXXFLAGS=-m64 ./configure --disable-shared --prefix=/protobuf-64 -j$(nproc) && \
-    make clean && make && make install"'
+    CXXFLAGS=-m64 ./configure --disable-shared --prefix=/protobuf-64 && \
+    make clean && make -j$(nproc) && make -j$(nproc) install"'
 
 ENV CXXFLAGS=-I/protobuf-32/include \
     LDFLAGS="-L/protobuf-32/lib -L/protobuf-64/lib"
