@@ -17,3 +17,10 @@ dependencies {
 }
 
 configureProtoCompilation()
+
+idea {
+    module {
+        sourceDirs += file("${projectDir}/src/generated/main/grpc");
+        sourceDirs += file("${projectDir}/src/generated/main/java");
+    }
+}
