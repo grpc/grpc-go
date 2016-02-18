@@ -58,7 +58,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/health"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1alpha"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -603,13 +603,13 @@ func TestHealthCheckOnSuccess(t *testing.T) {
 func testHealthCheckOnSuccess(t *testing.T, e env) {
 	te := newTest(t, e)
 	hs := health.NewHealthServer()
-	hs.SetServingStatus("grpc.health.v1alpha.Health", 1)
+	hs.SetServingStatus("grpc.health.v1.Health", 1)
 	te.healthServer = hs
 	te.startServer()
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.Health"); err != nil {
+	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1.Health"); err != nil {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, <nil>", err)
 	}
 }
@@ -629,13 +629,13 @@ func testHealthCheckOnFailure(t *testing.T, e env) {
 		"grpc: the client connection is closing; please retry",
 	)
 	hs := health.NewHealthServer()
-	hs.SetServingStatus("grpc.health.v1alpha.HealthCheck", 1)
+	hs.SetServingStatus("grpc.health.v1.HealthCheck", 1)
 	te.healthServer = hs
 	te.startServer()
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1alpha.Health"); err != grpc.Errorf(codes.DeadlineExceeded, "context deadline exceeded") {
+	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1.Health"); err != grpc.Errorf(codes.DeadlineExceeded, "context deadline exceeded") {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %d", err, codes.DeadlineExceeded)
 	}
 	awaitNewConnLogOutput()
@@ -652,7 +652,7 @@ func testHealthCheckOff(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.startServer()
 	defer te.tearDown()
-	want := grpc.Errorf(codes.Unimplemented, "unknown service grpc.health.v1alpha.Health")
+	want := grpc.Errorf(codes.Unimplemented, "unknown service grpc.health.v1.Health")
 	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); err != want {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, error %v", err, want)
 	}
@@ -680,19 +680,19 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 	if out.Status != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("Got the serving status %v, want SERVING", out.Status)
 	}
-	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1alpha.Health"); err != grpc.Errorf(codes.NotFound, "unknown service") {
+	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1.Health"); err != grpc.Errorf(codes.NotFound, "unknown service") {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %d", err, codes.NotFound)
 	}
-	hs.SetServingStatus("grpc.health.v1alpha.Health", healthpb.HealthCheckResponse_SERVING)
-	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1alpha.Health")
+	hs.SetServingStatus("grpc.health.v1.Health", healthpb.HealthCheckResponse_SERVING)
+	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1.Health")
 	if err != nil {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, <nil>", err)
 	}
 	if out.Status != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("Got the serving status %v, want SERVING", out.Status)
 	}
-	hs.SetServingStatus("grpc.health.v1alpha.Health", healthpb.HealthCheckResponse_NOT_SERVING)
-	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1alpha.Health")
+	hs.SetServingStatus("grpc.health.v1.Health", healthpb.HealthCheckResponse_NOT_SERVING)
+	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1.Health")
 	if err != nil {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, <nil>", err)
 	}
