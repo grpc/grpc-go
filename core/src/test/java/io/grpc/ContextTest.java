@@ -49,7 +49,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.io.Closeable;
 import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.Callable;
@@ -145,7 +144,7 @@ public class ContextTest {
   @Test
   public void rootIsNotCancelled() {
     assertFalse(Context.ROOT.isCancelled());
-    assertNull(Context.ROOT.cause());
+    assertNull(Context.ROOT.cancellationCause());
   }
 
   @Test
@@ -359,10 +358,10 @@ public class ContextTest {
     IllegalStateException cause = new IllegalStateException();
     base.cancel(cause);
     assertTrue(base.isCancelled());
-    assertSame(cause, base.cause());
+    assertSame(cause, base.cancellationCause());
     assertSame(child, listenerNotifedContext);
     assertTrue(child.isCancelled());
-    assertSame(cause, child.cause());
+    assertSame(cause, child.cancellationCause());
     assertEquals(0, base.listenerCount());
     assertEquals(0, child.listenerCount());
   }
@@ -374,7 +373,7 @@ public class ContextTest {
     Throwable t = new Throwable();
     base.cancel(t);
     assertTrue(child.isCancelled());
-    assertSame(t, child.cause());
+    assertSame(t, child.cancellationCause());
   }
 
   @Test
@@ -386,7 +385,7 @@ public class ContextTest {
     Context attached = Context.current();
     assertSame("fish", FOOD.get());
     assertFalse(attached.isCancelled());
-    assertNull(attached.cause());
+    assertNull(attached.cancellationCause());
     assertTrue(attached.canBeCancelled());
     assertTrue(attached.isCurrent());
     assertTrue(base.isCurrent());
@@ -395,7 +394,7 @@ public class ContextTest {
     Throwable t = new Throwable();
     base.cancel(t);
     assertTrue(attached.isCancelled());
-    assertSame(t, attached.cause());
+    assertSame(t, attached.cancellationCause());
     assertSame(attached, listenerNotifedContext);
 
     Context.ROOT.attach();
@@ -412,10 +411,10 @@ public class ContextTest {
     IllegalStateException cause = new IllegalStateException();
     base.cancel(cause);
     assertTrue(base.isCancelled());
-    assertSame(cause, base.cause());
+    assertSame(cause, base.cancellationCause());
     assertSame(child, listenerNotifedContext);
     assertTrue(child.isCancelled());
-    assertSame(cause, child.cause());
+    assertSame(cause, child.cancellationCause());
     assertEquals(0, base.listenerCount());
     assertEquals(0, child.listenerCount());
   }
@@ -428,7 +427,7 @@ public class ContextTest {
     assertTrue(base.cancel(new Throwable()));
     assertNull(listenerNotifedContext);
     assertFalse(fork.isCancelled());
-    assertNull(fork.cause());
+    assertNull(fork.cancellationCause());
     assertEquals(1, fork.listenerCount());
   }
 
@@ -504,9 +503,9 @@ public class ContextTest {
   }
 
   @Test
-  public void propagatingExecutor() throws Exception {
+  public void currentContextExecutor() throws Exception {
     QueuedExecutor queuedExecutor = new QueuedExecutor();
-    Executor executor = Context.propagate(queuedExecutor);
+    Executor executor = Context.currentContextExecutor(queuedExecutor);
     Context base = Context.current().withValue(PET, "cat");
     Context previous = base.attach();
     try {
@@ -520,10 +519,10 @@ public class ContextTest {
   }
 
   @Test
-  public void wrapExecutor() throws Exception {
+  public void fixedContextExecutor() throws Exception {
     Context base = Context.current().withValue(PET, "cat");
     QueuedExecutor queuedExecutor = new QueuedExecutor();
-    base.wrap(queuedExecutor).execute(runner);
+    base.fixedContextExecutor(queuedExecutor).execute(runner);
     assertEquals(1, queuedExecutor.runnables.size());
     queuedExecutor.runnables.remove().run();
     assertSame(base, observed);
@@ -555,99 +554,109 @@ public class ContextTest {
       base.detachAndCancel(previous, null);
     }
     assertTrue(base.isCancelled());
-    assertNotNull(base.cause());
+    assertNotNull(base.cancellationCause());
   }
 
   @Test
-  public void testAttachAsCloseable() throws Exception {
-    Context current = Context.current();
-    Context.CancellableContext base = Context.current().withValue(FOOD, "fish").withCancellation();
-
-    Context previous = base.attach();
-    Context baseAttached = Context.current();
-    // Should not be able to get back the CancellableContext
-    assertNotSame(baseAttached, base);
-    base.detach(previous);
-
-    Closeable c = base.attachAsCloseable();
-    assertEquals("fish", FOOD.get());
-    assertFalse(base.isCancelled());
-    assertNull(base.cause());
-
-    c.close();
-    assertSame(current, Context.current());
-    assertTrue(base.isCancelled());
-    assertNull(base.cause());
+  public void rootHasNoDeadline() {
+    assertNull(Context.ROOT.getDeadline());
   }
 
-  /*
-  public void testTryWithResource() throws Exception {
-    Context.CancellableContext base = Context.current().withCancellation();
+  @Test
+  public void contextWithDeadlineHasDeadline() {
+    Context.CancellableContext cancellableContext =
+        Context.ROOT.withDeadlineAfter(1, TimeUnit.SECONDS, scheduler);
+    assertNotNull(cancellableContext.getDeadline());
+  }
 
-    try (Closeable c = base.attachAsCloseable()) {
-      // Do something
-      throw new IllegalStateException("Argh");
-    } catch (IllegalStateException ise) {
-      // Don't capture exception
+  @Test
+  public void earlierParentDeadlineTakesPrecedenceOverLaterChildDeadline() throws Exception {
+    final Deadline sooner = Deadline.after(100, TimeUnit.MILLISECONDS);
+    final Deadline later = Deadline.after(1, TimeUnit.MINUTES);
+    Context.CancellableContext parent = Context.ROOT.withDeadline(sooner, scheduler);
+    Context.CancellableContext child = parent.withDeadline(later, scheduler);
+    assertSame(parent.getDeadline(), sooner);
+    assertSame(child.getDeadline(), sooner);
+    final CountDownLatch latch = new CountDownLatch(1);
+    final AtomicReference<Exception> error = new AtomicReference<Exception>();
+    child.addListener(new Context.CancellationListener() {
+      @Override
+      public void cancelled(Context context) {
+        try {
+          assertTrue(sooner.isExpired());
+          assertFalse(later.isExpired());
+        } catch (Exception e) {
+          error.set(e);
+        }
+        latch.countDown();
+      }
+    }, MoreExecutors.directExecutor());
+    latch.await(3, TimeUnit.SECONDS);
+    if (error.get() != null) {
+      throw error.get();
     }
-    assertTrue(base.isCancelled());
-    assertNull(base.cause());
   }
 
-  public void testTryWithResource() throws Exception {
-    Context.CancellableContext base = Context.current().withCancellation();
-
-    try (Closeable c = base.attachAsCloseable()) {
-      // Do something
-      throw new IllegalStateException("Argh");
-    } catch (IllegalStateException ise) {
-      base.cancel(ise);
-    }
-    assertTrue(base.isCancelled());
-    assertNotNull(base.cause());
+  @Test
+  public void earlierChldDeadlineTakesPrecedenceOverLaterParentDeadline() {
+    Deadline sooner = Deadline.after(1, TimeUnit.HOURS);
+    Deadline later = Deadline.after(1, TimeUnit.DAYS);
+    Context.CancellableContext parent = Context.ROOT.withDeadline(later, scheduler);
+    Context.CancellableContext child = parent.withDeadline(sooner, scheduler);
+    assertSame(parent.getDeadline(), later);
+    assertSame(child.getDeadline(), sooner);
   }
-  */
+
+  @Test
+  public void forkingContextDoesNotCarryDeadline() {
+    Deadline deadline = Deadline.after(1, TimeUnit.HOURS);
+    Context.CancellableContext parent = Context.ROOT.withDeadline(deadline, scheduler);
+    Context fork = parent.fork();
+    assertNull(fork.getDeadline());
+  }
+
+  @Test
+  public void cancellationDoesNotExpireDeadline() {
+    Deadline deadline = Deadline.after(1, TimeUnit.HOURS);
+    Context.CancellableContext parent = Context.ROOT.withDeadline(deadline, scheduler);
+    parent.cancel(null);
+    assertFalse(deadline.isExpired());
+  }
 
   @Test
   public void absoluteDeadlineTriggersAndPropagates() throws Exception {
-    Context base = Context.current().withDeadlineNanoTime(System.nanoTime()
-        + TimeUnit.SECONDS.toNanos(1), scheduler);
+    Context base = Context.current().withDeadline(Deadline.after(1, TimeUnit.SECONDS), scheduler);
     Context child = base.withValue(FOOD, "lasagna");
     child.addListener(cancellationListener, MoreExecutors.directExecutor());
     assertFalse(base.isCancelled());
     assertFalse(child.isCancelled());
     assertTrue(deadlineLatch.await(2, TimeUnit.SECONDS));
     assertTrue(base.isCancelled());
-    assertTrue(base.cause() instanceof TimeoutException);
+    assertTrue(base.cancellationCause() instanceof TimeoutException);
     assertSame(child, listenerNotifedContext);
     assertTrue(child.isCancelled());
-    assertSame(base.cause(), child.cause());
-  }
-
-  @Test(expected = IllegalArgumentException.class)
-  public void negativeDeadlineFails() {
-    Context.current().withDeadlineAfter(-1, TimeUnit.NANOSECONDS, scheduler);
+    assertSame(base.cancellationCause(), child.cancellationCause());
   }
 
   @Test
   public void relativeDeadlineTriggersAndPropagates() throws Exception {
-    Context base = Context.current().withDeadlineAfter(1, TimeUnit.SECONDS, scheduler);
+    Context base = Context.current().withDeadline(Deadline.after(1, TimeUnit.SECONDS), scheduler);
     Context child = base.withValue(FOOD, "lasagna");
     child.addListener(cancellationListener, MoreExecutors.directExecutor());
     assertFalse(base.isCancelled());
     assertFalse(child.isCancelled());
     assertTrue(deadlineLatch.await(2, TimeUnit.SECONDS));
     assertTrue(base.isCancelled());
-    assertTrue(base.cause() instanceof TimeoutException);
+    assertTrue(base.cancellationCause() instanceof TimeoutException);
     assertSame(child, listenerNotifedContext);
     assertTrue(child.isCancelled());
-    assertSame(base.cause(), child.cause());
+    assertSame(base.cancellationCause(), child.cancellationCause());
   }
 
   @Test
   public void innerDeadlineCompletesBeforeOuter() throws Exception {
-    Context base = Context.current().withDeadlineAfter(2, TimeUnit.SECONDS, scheduler);
-    Context child = base.withDeadlineAfter(1, TimeUnit.SECONDS, scheduler);
+    Context base = Context.current().withDeadline(Deadline.after(2, TimeUnit.SECONDS), scheduler);
+    Context child = base.withDeadline(Deadline.after(1, TimeUnit.SECONDS), scheduler);
     child.addListener(cancellationListener, MoreExecutors.directExecutor());
     assertFalse(base.isCancelled());
     assertFalse(child.isCancelled());
@@ -655,14 +664,14 @@ public class ContextTest {
     assertFalse(base.isCancelled());
     assertSame(child, listenerNotifedContext);
     assertTrue(child.isCancelled());
-    assertTrue(child.cause() instanceof TimeoutException);
+    assertTrue(child.cancellationCause() instanceof TimeoutException);
 
     deadlineLatch = new CountDownLatch(1);
     base.addListener(cancellationListener, MoreExecutors.directExecutor());
     assertTrue(deadlineLatch.await(2, TimeUnit.SECONDS));
     assertTrue(base.isCancelled());
-    assertTrue(base.cause() instanceof TimeoutException);
-    assertNotSame(base.cause(), child.cause());
+    assertTrue(base.cancellationCause() instanceof TimeoutException);
+    assertNotSame(base.cancellationCause(), child.cancellationCause());
   }
 
   @Test
@@ -671,7 +680,7 @@ public class ContextTest {
     try {
       assertEquals(0, executor.getQueue().size());
       Context.CancellableContext base
-          = Context.current().withDeadlineAfter(1, TimeUnit.DAYS, executor);
+          = Context.current().withDeadline(Deadline.after(1, TimeUnit.DAYS), executor);
       assertEquals(1, executor.getQueue().size());
       base.cancel(null);
       executor.purge();

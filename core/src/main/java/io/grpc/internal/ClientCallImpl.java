@@ -171,7 +171,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public void runInContext() {
-          observer.onClose(Status.CANCELLED.withCause(context.cause()), new Metadata());
+          observer.onClose(Status.CANCELLED.withCause(context.cancellationCause()), new Metadata());
         }
       });
       return;

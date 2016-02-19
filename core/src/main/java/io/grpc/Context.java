@@ -34,8 +34,6 @@ package io.grpc;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
@@ -49,13 +47,11 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
- * A context propagation mechanism which carries deadlines, cancellation signals,
- * and other scoped values across API boundaries and between threads. Examples of functionality
- * propagated via context include:
+ * A context propagation mechanism which can carry scoped-values across API boundaries and between
+ * threads. Examples of state propagated via context include:
  * <ul>
- *   <li>Deadlines for a local operation or remote call.</li>
  *   <li>Security principals and credentials.</li>
- *   <li>Local and distributed tracing context.</li>
+ *   <li>Local and distributed tracing information.</li>
  * </ul>
  *
  * <p>Context objects make their state available by being attached to the executing thread using
@@ -73,8 +69,10 @@ import javax.annotation.Nullable;
 
  * </pre>
  *
- * <p>Context objects will cascade cancellation from their parent and propagate it to their
- * children. You can add a {@link CancellationListener} to a context to be notified when it or
+ *
+ * <p>Contexts are also used to represent a scoped unit of work. When the unit of work is
+ * done the context can be cancelled. This cancellation will also cascade to all descendant
+ * contexts. You can add a {@link CancellationListener} to a context to be notified when it or
  * one of its ancestors has been cancelled. Cancellation does not release the state stored by
  * a context and it's perfectly valid to {@link #attach()} an already cancelled context to a
  * thread to make it current. To cancel a context (and its descendants) you first create a
@@ -94,6 +92,9 @@ import javax.annotation.Nullable;
  *   }
  * </pre>
  *
+ * <p>Contexts can also be created with a timeout relative to the system nano clock which will
+ * cause it to automatically cancel at the desired time.
+ *
  *
  * <p>Notes and cautions on use:
  * <ul>
@@ -111,6 +112,8 @@ public class Context {
   private static final Logger LOG = Logger.getLogger(Context.class.getName());
 
   private static final Object[][] EMPTY_ENTRIES = new Object[0][2];
+
+  private static final Key<Deadline> DEADLINE_KEY = new Key<Deadline>("deadline");
 
   /**
    * The logical root context which is {@link #current()} if no other context is bound. This context
@@ -172,7 +175,8 @@ public class Context {
    */
   private Context(Context parent) {
     this.parent = parent;
-    keyValueEntries = EMPTY_ENTRIES;
+    // Not inheriting cancellation implies not inheriting a deadline too.
+    keyValueEntries = new Object[][]{{DEADLINE_KEY, null}};
     cascadesCancellation = false;
     canBeCancelled = false;
   }
@@ -228,21 +232,6 @@ public class Context {
   }
 
   /**
-   * Create a new context which will cancel itself after an absolute deadline expressed as
-   * nanoseconds in the {@link System#nanoTime()} clock. The returned context will cascade
-   * cancellation of its parent. Callers may explicitly cancel the returned context prior to
-   * the deadline just as for {@link #withCancellation()},
-   *
-   * <p>It is recommended that callers only use this method when propagating a derivative of
-   * a received existing deadline. When establishing a new deadline, {@link #withDeadlineAfter}
-   * is the better mechanism.
-   */
-  public CancellableContext withDeadlineNanoTime(long deadlineNanoTime,
-      ScheduledExecutorService scheduler) {
-    return withDeadlineAfter(deadlineNanoTime - System.nanoTime(), TimeUnit.NANOSECONDS, scheduler);
-  }
-
-  /**
    * Create a new context which will cancel itself after the given {@code duration} from now.
    * The returned context will cascade cancellation of its parent. Callers may explicitly cancel
    * the returned context prior to the deadline just as for {@link #withCancellation()},
@@ -262,11 +251,34 @@ public class Context {
    * </pre>
    */
   public CancellableContext withDeadlineAfter(long duration, TimeUnit unit,
+                                              ScheduledExecutorService scheduler) {
+    return withDeadline(Deadline.after(duration, unit), scheduler);
+  }
+
+  /**
+   * Create a new context which will cancel itself at the given {@link Deadline}.
+   * The returned context will cascade cancellation of its parent. Callers may explicitly cancel
+   * the returned context prior to the deadline just as for {@link #withCancellation()},
+   *
+   * <p>Sample usage:
+   * <pre>
+   *   Context.CancellableContext withDeadline = Context.current()
+   *      .withDeadline(someReceivedDeadline);
+   *   executorService.execute(withDeadline.wrap(new Runnable() {
+   *     public void run() {
+   *       Context current = Context.current();
+   *       while (!current.isCancelled()) {
+   *         keepWorking();
+   *       }
+   *     }
+   *   });
+   * </pre>
+   */
+  public CancellableContext withDeadline(Deadline deadline,
       ScheduledExecutorService scheduler) {
-    Preconditions.checkArgument(duration >= 0, "duration must be greater than or equal to 0");
-    Preconditions.checkNotNull(unit, "unit");
+    Preconditions.checkNotNull(deadline, "deadline");
     Preconditions.checkNotNull(scheduler, "scheduler");
-    return new CancellableContext(this, unit.toNanos(duration), scheduler);
+    return new CancellableContext(this, deadline, scheduler);
   }
 
   /**
@@ -304,7 +316,7 @@ public class Context {
   }
 
   /**
-   * Create a new context which copies the values of this context but does not propagate its
+   * Create a new context which propagates the values of this context but does not cascade its
    * cancellation and is its own independent root for cancellation.
    */
   public CancellableContext fork() {
@@ -320,6 +332,11 @@ public class Context {
   /**
    * Attach this context to the thread and make it {@link #current}, the previously current context
    * is returned. It is allowed to attach contexts where {@link #isCancelled()} is {@code true}.
+   *
+   * <p>Instead of using {@link #attach()} & {@link #detach(Context)} most use-cases are better
+   * served by using the {@link #run(Runnable)} or {@link #call(java.util.concurrent.Callable)}
+   * to execute work immediately within a context. If work needs to be done in other threads
+   * it is recommended to use the 'wrap' methods or to use a propagating executor.
    */
   public Context attach() {
     Context previous = current();
@@ -334,15 +351,13 @@ public class Context {
    */
   public void detach(Context toAttach) {
     Preconditions.checkNotNull(toAttach);
-    Context previous = current();
-    if (previous != this) {
+    if (toAttach.attach() != this) {
       // Log a severe message instead of throwing an exception as the context to attach is assumed
       // to be the correct one and the unbalanced state represents a coding mistake in a lower
       // layer in the stack that cannot be recovered from here.
       LOG.log(Level.SEVERE, "Context was not attached when detaching",
           new Throwable().fillInStackTrace());
     }
-    localContext.set(toAttach);
   }
 
   // Visible for testing
@@ -366,16 +381,25 @@ public class Context {
    * {@code null} if context was cancelled without a cause. If the context is not yet cancelled
    * will always return {@code null}.
    *
-   * <p>The cause is provided for informational purposes only and implementations should generally
-   * assume that it has already been handled and logged properly.
+   * <p>The cancellation cause is provided for informational purposes only and implementations
+   * should generally assume that it has already been handled and logged properly.
    */
   @Nullable
-  public Throwable cause() {
+  public Throwable cancellationCause() {
     if (parent == null || !cascadesCancellation) {
       return null;
     } else {
-      return parent.cause();
+      return parent.cancellationCause();
     }
+  }
+
+  /**
+   * A context may have an associated {@link Deadline} at which it will be automatically cancelled.
+   * @return A {@link io.grpc.Deadline} or {@code null} if no deadline is set.
+   */
+  @Nullable
+  public Deadline getDeadline() {
+    return DEADLINE_KEY.get(this);
   }
 
   /**
@@ -465,12 +489,38 @@ public class Context {
     parent.removeListener(parentListener);
   }
 
-  // Used in tests to ensure that listeners are defined and released based on
-  // cancellation propagation. It's very important to ensure that we do not
-  // accidentally retain listeners.
+  // Used in tests to ensure that listeners are defined and released when cancellation cascades.
+  // It's very important to ensure that we do not accidentally retain listeners.
   int listenerCount() {
     synchronized (this) {
       return listeners == null ? 0 : listeners.size();
+    }
+  }
+
+  /**
+   * Immediately run a {@link Runnable} with this context as the {@link #current} context.
+   * @param r {@link Runnable} to run.
+   */
+  public void run(Runnable r) {
+    Context previous = attach();
+    try {
+      r.run();
+    } finally {
+      detach(previous);
+    }
+  }
+
+  /**
+   * Immediately call a {@link Callable} with this context as the {@link #current} context.
+   * @param c {@link Callable} to call.
+   * @return result of call.
+   */
+  public <V> V call(Callable<V> c) throws Exception {
+    Context previous = attach();
+    try {
+      return c.call();
+    } finally {
+      detach(previous);
     }
   }
 
@@ -509,39 +559,42 @@ public class Context {
   }
 
   /**
-   * Wrap an {@link Executor} so that it executes with this context as the {@link #current} context.
-   * It is generally expected that {@link #propagate(Executor)} would be used more commonly than
-   * this method.
+   * Wrap an {@link Executor} so that it always executes with this context as the {@link #current}
+   * context. It is generally expected that {@link #currentContextExecutor(Executor)} would be
+   * used more commonly than this method.
    *
-   * @see #propagate(Executor)
+   * <p>One scenario in which this executor may be useful is when a single thread is sharding work
+   * to multiple threads.
+   *
+   * @see #currentContextExecutor(Executor)
    */
-  public Executor wrap(final Executor e) {
-    class WrappingExecutor implements Executor {
+  public Executor fixedContextExecutor(final Executor e) {
+    class FixedContextExecutor implements Executor {
       @Override
       public void execute(Runnable r) {
         e.execute(wrap(r));
       }
     }
 
-    return new WrappingExecutor();
+    return new FixedContextExecutor();
   }
 
   /**
    * Create an executor that propagates the {@link #current} context when {@link Executor#execute}
-   * is called to the {@link #current} context of the {@code Runnable} scheduled. <em>Note that this
+   * is called as the {@link #current} context of the {@code Runnable} scheduled. <em>Note that this
    * is a static method.</em>
    *
-   * @see #wrap(Executor)
+   * @see #fixedContextExecutor(Executor)
    */
-  public static Executor propagate(final Executor e) {
-    class PropagatingExecutor implements Executor {
+  public static Executor currentContextExecutor(final Executor e) {
+    class CurrentContextExecutor implements Executor {
       @Override
       public void execute(Runnable r) {
         e.execute(Context.current().wrap(r));
       }
     }
 
-    return new PropagatingExecutor();
+    return new CurrentContextExecutor();
   }
 
   /**
@@ -566,65 +619,64 @@ public class Context {
   public static final class CancellableContext extends Context {
 
     private boolean cancelled;
-    private Throwable cause;
-    private final Context dummy;
-    private ScheduledFuture<?> scheduledFuture;
+    private Throwable cancellationCause;
+    private final Context uncancellableSurrogate;
+    private ScheduledFuture<?> pendingDeadline;
+
+    /**
+     * If the parent deadline is before the given deadline there is no need to install the value
+     * or listen for its expiration as the parent context will already be listening for it.
+     */
+    private static Object[][] deriveDeadline(Context parent, Deadline deadline) {
+      Deadline parentDeadline = DEADLINE_KEY.get(parent);
+      return parentDeadline == null || deadline.isBefore(parentDeadline)
+          ? new Object[][]{{ DEADLINE_KEY, deadline}} :
+          EMPTY_ENTRIES;
+    }
 
     /**
      * Create a cancellable context that does not have a deadline.
      */
     private CancellableContext(Context parent) {
       super(parent, EMPTY_ENTRIES, true);
-      // Create a dummy that inherits from this to attach so that you cannot retrieve a
+      // Create a surrogate that inherits from this to attach so that you cannot retrieve a
       // cancellable context from Context.current()
-      dummy = new Context(this, EMPTY_ENTRIES);
+      uncancellableSurrogate = new Context(this, EMPTY_ENTRIES);
     }
 
     /**
      * Create a cancellable context that has a deadline.
      */
-    private CancellableContext(Context parent, long delayNanos,
+    private CancellableContext(Context parent, Deadline deadline,
         ScheduledExecutorService scheduler) {
-      this(parent);
-      scheduledFuture = scheduler.schedule(new Runnable() {
-        @Override
-        public void run() {
-          cancel(new TimeoutException("context timed out"));
-        }
-      }, delayNanos, TimeUnit.NANOSECONDS);
+      super(parent, deriveDeadline(parent, deadline), true);
+      if (DEADLINE_KEY.get(this) == deadline) {
+        // The parent deadline was after the new deadline so we need to install a listener
+        // on the new earlier deadline to trigger expiration for this context.
+        pendingDeadline = deadline.runOnExpiration(new Runnable() {
+          @Override
+          public void run() {
+            cancel(new TimeoutException("context timed out"));
+          }
+        }, scheduler);
+      }
+      uncancellableSurrogate = new Context(this, EMPTY_ENTRIES);
     }
 
 
     @Override
     public Context attach() {
-      return dummy.attach();
+      return uncancellableSurrogate.attach();
     }
 
     @Override
     public void detach(Context toAttach) {
-      dummy.detach(toAttach);
+      uncancellableSurrogate.detach(toAttach);
     }
 
     @Override
     public boolean isCurrent() {
-      return dummy.isCurrent();
-    }
-
-    /**
-     * Attach this context to the thread and return a {@link AutoCloseable} that can be
-     * used with try-with-resource statements to properly attach the previously bound context
-     * when {@link AutoCloseable#close()} is called.
-     *
-     * @return a {@link java.io.Closeable} which can be used with try-with-resource blocks.
-     */
-    public Closeable attachAsCloseable() {
-      final Context previous = attach();
-      return new Closeable() {
-        @Override
-        public void close() throws IOException {
-          detachAndCancel(previous, null);
-        }
-      };
+      return uncancellableSurrogate.isCurrent();
     }
 
     /**
@@ -639,12 +691,12 @@ public class Context {
       synchronized (this) {
         if (!cancelled) {
           cancelled = true;
-          if (scheduledFuture != null) {
+          if (pendingDeadline != null) {
             // If we have a scheduled cancellation pending attempt to cancel it.
-            scheduledFuture.cancel(false);
-            scheduledFuture = null;
+            pendingDeadline.cancel(false);
+            pendingDeadline = null;
           }
-          this.cause = cause;
+          this.cancellationCause = cause;
           triggeredCancel = true;
         }
       }
@@ -678,7 +730,7 @@ public class Context {
       // Detect cancellation of parent in the case where we have no listeners and
       // record it.
       if (super.isCancelled()) {
-        cancel(super.cause());
+        cancel(super.cancellationCause());
         return true;
       }
       return false;
@@ -686,9 +738,9 @@ public class Context {
 
     @Nullable
     @Override
-    public Throwable cause() {
+    public Throwable cancellationCause() {
       if (isCancelled()) {
-        return cause;
+        return cancellationCause;
       }
       return null;
     }
@@ -774,8 +826,8 @@ public class Context {
     @Override
     public void cancelled(Context context) {
       if (Context.this instanceof CancellableContext) {
-        // Record cancellation with its cause.
-        ((CancellableContext) Context.this).cancel(context.cause());
+        // Record cancellation with its cancellationCause.
+        ((CancellableContext) Context.this).cancel(context.cancellationCause());
       } else {
         notifyAndClearListeners();
       }

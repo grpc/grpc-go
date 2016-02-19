@@ -219,7 +219,7 @@ public class ServerCallImplTest {
     verify(callListener).onComplete();
     assertTrue(timeout.isCancelled());
     assertTrue(context.isCancelled());
-    assertNull(context.cause());
+    assertNull(context.cancellationCause());
   }
 
   @Test
@@ -232,7 +232,7 @@ public class ServerCallImplTest {
     verify(callListener).onCancel();
     assertTrue(timeout.isCancelled());
     assertTrue(context.isCancelled());
-    assertNull(context.cause());
+    assertNull(context.cancellationCause());
   }
 
   @Test
