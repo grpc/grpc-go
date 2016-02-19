@@ -78,6 +78,7 @@ import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamVisitor;
+import io.netty.handler.codec.http2.StreamBufferingEncoder;
 import io.netty.handler.logging.LogLevel;
 
 import java.util.Random;
@@ -144,7 +145,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
     frameWriter = new Http2OutboundFrameLogger(frameWriter, frameLogger);
 
-    BufferingHttp2ConnectionEncoder encoder = new BufferingHttp2ConnectionEncoder(
+    StreamBufferingEncoder encoder = new StreamBufferingEncoder(
         new DefaultHttp2ConnectionEncoder(connection, frameWriter)) {
       private boolean firstSettings = true;
 
@@ -174,7 +175,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   }
 
   private NettyClientHandler(Http2ConnectionDecoder decoder,
-                             BufferingHttp2ConnectionEncoder encoder, Http2Settings settings,
+                             StreamBufferingEncoder encoder, Http2Settings settings,
                              Ticker ticker) {
     super(decoder, encoder, settings);
     this.ticker = ticker;
@@ -323,7 +324,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   protected boolean isGracefulShutdownComplete() {
     // Only allow graceful shutdown to complete after all pending streams have completed.
     return super.isGracefulShutdownComplete()
-        && ((BufferingHttp2ConnectionEncoder) encoder()).numBufferedStreams() == 0;
+        && ((StreamBufferingEncoder) encoder()).numBufferedStreams() == 0;
   }
 
   /**
@@ -385,8 +386,9 @@ class NettyClientHandler extends AbstractNettyHandler {
                   promise.setSuccess();
                 } else {
                   final Throwable cause = future.cause();
-                  if (cause instanceof GoAwayClosedStreamException) {
-                    GoAwayClosedStreamException e = (GoAwayClosedStreamException) cause;
+                  if (cause instanceof StreamBufferingEncoder.Http2GoAwayException) {
+                    StreamBufferingEncoder.Http2GoAwayException e =
+                        (StreamBufferingEncoder.Http2GoAwayException) cause;
                     goAwayStatus(statusFromGoAway(e.errorCode(), e.debugData()));
                     promise.setFailure(goAwayStatusThrowable);
                   } else {

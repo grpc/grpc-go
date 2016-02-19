@@ -173,7 +173,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
   @Test
   public void cancelWhileBufferedShouldSucceed() throws Exception {
-    connection().local().maxActiveStreams(0);
+    // Force the stream to be buffered.
+    receiveMaxConcurrentStreams(0);
 
     ChannelFuture createFuture = createStream();
     assertFalse(createFuture.isDone());
