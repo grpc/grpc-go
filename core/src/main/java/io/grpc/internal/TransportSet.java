@@ -194,7 +194,7 @@ final class TransportSet {
             backoffWatch.reset().start();
           }
           newActiveTransport = transportFactory.newClientTransport(address, authority);
-          log.log(Level.INFO, "Created transport {0} for {1}",
+          log.log(Level.FINE, "Created transport {0} for {1}",
               new Object[] {newActiveTransport, address});
           transports.add(newActiveTransport);
           newActiveTransport.start(
@@ -327,7 +327,7 @@ final class TransportSet {
 
     @Override
     public void transportReady() {
-      log.log(Level.INFO, "Transport {0} for {1} is ready", new Object[] {transport, address});
+      log.log(Level.FINE, "Transport {0} for {1} is ready", new Object[] {transport, address});
       super.transportReady();
       synchronized (lock) {
         if (isAttachedToActiveTransport()) {
@@ -339,7 +339,7 @@ final class TransportSet {
 
     @Override
     public void transportShutdown(Status s) {
-      log.log(Level.INFO, "Transport {0} for {1} is being shutdown",
+      log.log(Level.FINE, "Transport {0} for {1} is being shutdown",
           new Object[] {transport, address});
       super.transportShutdown(s);
       synchronized (lock) {
@@ -355,7 +355,7 @@ final class TransportSet {
 
     @Override
     public void transportTerminated() {
-      log.log(Level.INFO, "Transport {0} for {1} is terminated",
+      log.log(Level.FINE, "Transport {0} for {1} is terminated",
           new Object[] {transport, address});
       super.transportTerminated();
       Preconditions.checkState(!isAttachedToActiveTransport(),
