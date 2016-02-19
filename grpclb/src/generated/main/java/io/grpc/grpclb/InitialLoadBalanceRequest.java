@@ -4,11 +4,11 @@
 package io.grpc.grpclb;
 
 /**
- * Protobuf type {@code loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest}
+ * Protobuf type {@code grpc.lb.v1.InitialLoadBalanceRequest}
  */
 public  final class InitialLoadBalanceRequest extends
     com.google.protobuf.GeneratedMessage implements
-    // @@protoc_insertion_point(message_implements:loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest)
+    // @@protoc_insertion_point(message_implements:grpc.lb.v1.InitialLoadBalanceRequest)
     InitialLoadBalanceRequestOrBuilder {
   // Use InitialLoadBalanceRequest.newBuilder() to construct.
   private InitialLoadBalanceRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -62,12 +62,12 @@ public  final class InitialLoadBalanceRequest extends
   }
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_InitialLoadBalanceRequest_descriptor;
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_InitialLoadBalanceRequest_descriptor;
   }
 
   protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_InitialLoadBalanceRequest_fieldAccessorTable
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_InitialLoadBalanceRequest_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.grpclb.InitialLoadBalanceRequest.class, io.grpc.grpclb.InitialLoadBalanceRequest.Builder.class);
   }
@@ -216,20 +216,20 @@ public  final class InitialLoadBalanceRequest extends
     return builder;
   }
   /**
-   * Protobuf type {@code loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest}
+   * Protobuf type {@code grpc.lb.v1.InitialLoadBalanceRequest}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-      // @@protoc_insertion_point(builder_implements:loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest)
+      // @@protoc_insertion_point(builder_implements:grpc.lb.v1.InitialLoadBalanceRequest)
       io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_InitialLoadBalanceRequest_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_InitialLoadBalanceRequest_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_InitialLoadBalanceRequest_fieldAccessorTable
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_InitialLoadBalanceRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.grpclb.InitialLoadBalanceRequest.class, io.grpc.grpclb.InitialLoadBalanceRequest.Builder.class);
     }
@@ -257,7 +257,7 @@ public  final class InitialLoadBalanceRequest extends
 
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_InitialLoadBalanceRequest_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_InitialLoadBalanceRequest_descriptor;
     }
 
     public io.grpc.grpclb.InitialLoadBalanceRequest getDefaultInstanceForType() {
@@ -419,10 +419,10 @@ public  final class InitialLoadBalanceRequest extends
     }
 
 
-    // @@protoc_insertion_point(builder_scope:loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest)
+    // @@protoc_insertion_point(builder_scope:grpc.lb.v1.InitialLoadBalanceRequest)
   }
 
-  // @@protoc_insertion_point(class_scope:loadbalancer_gslb.client.grpc.InitialLoadBalanceRequest)
+  // @@protoc_insertion_point(class_scope:grpc.lb.v1.InitialLoadBalanceRequest)
   private static final io.grpc.grpclb.InitialLoadBalanceRequest DEFAULT_INSTANCE;
   static {
     DEFAULT_INSTANCE = new io.grpc.grpclb.InitialLoadBalanceRequest();

@@ -4,11 +4,11 @@
 package io.grpc.grpclb;
 
 /**
- * Protobuf type {@code loadbalancer_gslb.client.grpc.Server}
+ * Protobuf type {@code grpc.lb.v1.Server}
  */
 public  final class Server extends
     com.google.protobuf.GeneratedMessage implements
-    // @@protoc_insertion_point(message_implements:loadbalancer_gslb.client.grpc.Server)
+    // @@protoc_insertion_point(message_implements:grpc.lb.v1.Server)
     ServerOrBuilder {
   // Use Server.newBuilder() to construct.
   private Server(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -81,12 +81,12 @@ public  final class Server extends
   }
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_Server_descriptor;
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_Server_descriptor;
   }
 
   protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_Server_fieldAccessorTable
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_Server_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.grpclb.Server.class, io.grpc.grpclb.Server.Builder.class);
   }
@@ -326,20 +326,20 @@ public  final class Server extends
     return builder;
   }
   /**
-   * Protobuf type {@code loadbalancer_gslb.client.grpc.Server}
+   * Protobuf type {@code grpc.lb.v1.Server}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-      // @@protoc_insertion_point(builder_implements:loadbalancer_gslb.client.grpc.Server)
+      // @@protoc_insertion_point(builder_implements:grpc.lb.v1.Server)
       io.grpc.grpclb.ServerOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_Server_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_Server_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_Server_fieldAccessorTable
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_Server_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.grpclb.Server.class, io.grpc.grpclb.Server.Builder.class);
     }
@@ -373,7 +373,7 @@ public  final class Server extends
 
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_Server_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_Server_descriptor;
     }
 
     public io.grpc.grpclb.Server getDefaultInstanceForType() {
@@ -719,10 +719,10 @@ public  final class Server extends
     }
 
 
-    // @@protoc_insertion_point(builder_scope:loadbalancer_gslb.client.grpc.Server)
+    // @@protoc_insertion_point(builder_scope:grpc.lb.v1.Server)
   }
 
-  // @@protoc_insertion_point(class_scope:loadbalancer_gslb.client.grpc.Server)
+  // @@protoc_insertion_point(class_scope:grpc.lb.v1.Server)
   private static final io.grpc.grpclb.Server DEFAULT_INSTANCE;
   static {
     DEFAULT_INSTANCE = new io.grpc.grpclb.Server();

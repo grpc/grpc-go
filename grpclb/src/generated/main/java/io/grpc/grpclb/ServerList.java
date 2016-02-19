@@ -4,11 +4,11 @@
 package io.grpc.grpclb;
 
 /**
- * Protobuf type {@code loadbalancer_gslb.client.grpc.ServerList}
+ * Protobuf type {@code grpc.lb.v1.ServerList}
  */
 public  final class ServerList extends
     com.google.protobuf.GeneratedMessage implements
-    // @@protoc_insertion_point(message_implements:loadbalancer_gslb.client.grpc.ServerList)
+    // @@protoc_insertion_point(message_implements:grpc.lb.v1.ServerList)
     ServerListOrBuilder {
   // Use ServerList.newBuilder() to construct.
   private ServerList(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -80,12 +80,12 @@ public  final class ServerList extends
   }
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_ServerList_descriptor;
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ServerList_descriptor;
   }
 
   protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_ServerList_fieldAccessorTable
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ServerList_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
             io.grpc.grpclb.ServerList.class, io.grpc.grpclb.ServerList.Builder.class);
   }
@@ -94,7 +94,7 @@ public  final class ServerList extends
   public static final int SERVERS_FIELD_NUMBER = 1;
   private java.util.List<io.grpc.grpclb.Server> servers_;
   /**
-   * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
    *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
@@ -107,7 +107,7 @@ public  final class ServerList extends
     return servers_;
   }
   /**
-   * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
    *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
@@ -121,7 +121,7 @@ public  final class ServerList extends
     return servers_;
   }
   /**
-   * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
    *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
@@ -134,7 +134,7 @@ public  final class ServerList extends
     return servers_.size();
   }
   /**
-   * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
    *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
@@ -147,7 +147,7 @@ public  final class ServerList extends
     return servers_.get(index);
   }
   /**
-   * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
    *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
@@ -313,20 +313,20 @@ public  final class ServerList extends
     return builder;
   }
   /**
-   * Protobuf type {@code loadbalancer_gslb.client.grpc.ServerList}
+   * Protobuf type {@code grpc.lb.v1.ServerList}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-      // @@protoc_insertion_point(builder_implements:loadbalancer_gslb.client.grpc.ServerList)
+      // @@protoc_insertion_point(builder_implements:grpc.lb.v1.ServerList)
       io.grpc.grpclb.ServerListOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_ServerList_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ServerList_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_ServerList_fieldAccessorTable
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ServerList_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.grpclb.ServerList.class, io.grpc.grpclb.ServerList.Builder.class);
     }
@@ -365,7 +365,7 @@ public  final class ServerList extends
 
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_loadbalancer_gslb_client_grpc_ServerList_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ServerList_descriptor;
     }
 
     public io.grpc.grpclb.ServerList getDefaultInstanceForType() {
@@ -483,7 +483,7 @@ public  final class ServerList extends
         io.grpc.grpclb.Server, io.grpc.grpclb.Server.Builder, io.grpc.grpclb.ServerOrBuilder> serversBuilder_;
 
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -500,7 +500,7 @@ public  final class ServerList extends
       }
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -517,7 +517,7 @@ public  final class ServerList extends
       }
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -534,7 +534,7 @@ public  final class ServerList extends
       }
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -558,7 +558,7 @@ public  final class ServerList extends
       return this;
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -579,7 +579,7 @@ public  final class ServerList extends
       return this;
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -602,7 +602,7 @@ public  final class ServerList extends
       return this;
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -626,7 +626,7 @@ public  final class ServerList extends
       return this;
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -647,7 +647,7 @@ public  final class ServerList extends
       return this;
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -668,7 +668,7 @@ public  final class ServerList extends
       return this;
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -690,7 +690,7 @@ public  final class ServerList extends
       return this;
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -710,7 +710,7 @@ public  final class ServerList extends
       return this;
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -730,7 +730,7 @@ public  final class ServerList extends
       return this;
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -744,7 +744,7 @@ public  final class ServerList extends
       return getServersFieldBuilder().getBuilder(index);
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -761,7 +761,7 @@ public  final class ServerList extends
       }
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -779,7 +779,7 @@ public  final class ServerList extends
       }
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -793,7 +793,7 @@ public  final class ServerList extends
           io.grpc.grpclb.Server.getDefaultInstance());
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -808,7 +808,7 @@ public  final class ServerList extends
           index, io.grpc.grpclb.Server.getDefaultInstance());
     }
     /**
-     * <code>repeated .loadbalancer_gslb.client.grpc.Server servers = 1;</code>
+     * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
      *
      * <pre>
      * Contains a list of servers selected by the load balancer. The list will
@@ -1026,10 +1026,10 @@ public  final class ServerList extends
     }
 
 
-    // @@protoc_insertion_point(builder_scope:loadbalancer_gslb.client.grpc.ServerList)
+    // @@protoc_insertion_point(builder_scope:grpc.lb.v1.ServerList)
   }
 
-  // @@protoc_insertion_point(class_scope:loadbalancer_gslb.client.grpc.ServerList)
+  // @@protoc_insertion_point(class_scope:grpc.lb.v1.ServerList)
   private static final io.grpc.grpclb.ServerList DEFAULT_INSTANCE;
   static {
     DEFAULT_INSTANCE = new io.grpc.grpclb.ServerList();

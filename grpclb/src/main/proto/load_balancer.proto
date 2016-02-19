@@ -4,7 +4,7 @@ syntax = "proto3";
 
 import "google/protobuf/duration.proto";
 
-package loadbalancer_gslb.client.grpc;
+package grpc.lb.v1;
 
 option java_multiple_files = true;
 option java_package = "io.grpc.grpclb";

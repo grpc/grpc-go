@@ -4,7 +4,7 @@
 package io.grpc.grpclb;
 
 public interface ServerOrBuilder extends
-    // @@protoc_insertion_point(interface_extends:loadbalancer_gslb.client.grpc.Server)
+    // @@protoc_insertion_point(interface_extends:grpc.lb.v1.Server)
     com.google.protobuf.MessageOrBuilder {
 
   /**
