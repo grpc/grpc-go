@@ -132,14 +132,14 @@ class NettyClientTransport implements ManagedClientTransport {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
         if (!future.isSuccess()) {
-          ChannelHandlerContext ctx = channel.pipeline().context(handler);
+          ChannelHandlerContext ctx = future.channel().pipeline().context(handler);
           if (ctx != null) {
             // NettyClientHandler doesn't propagate exceptions, but the negotiator will need the
             // exception to fail any writes. Note that this fires after handler, because it is as if
             // handler was propagating the notification.
             ctx.fireExceptionCaught(future.cause());
           }
-          channel.pipeline().fireExceptionCaught(future.cause());
+          future.channel().pipeline().fireExceptionCaught(future.cause());
         }
       }
     }).channel();
