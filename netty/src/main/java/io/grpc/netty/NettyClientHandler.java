@@ -114,7 +114,6 @@ class NettyClientHandler extends AbstractNettyHandler {
   private Http2Ping ping;
   private Status goAwayStatus;
   private Throwable goAwayStatusThrowable;
-  private int nextStreamId;
 
   static NettyClientHandler newHandler(ManagedClientTransport.Listener listener,
                                        int flowControlWindow, int maxHeaderListSize,
@@ -185,7 +184,6 @@ class NettyClientHandler extends AbstractNettyHandler {
 
     Http2Connection connection = encoder.connection();
     streamKey = connection.newKey();
-    nextStreamId = connection.local().nextStreamId();
     connection.addListener(new Http2ConnectionAdapter() {
       @Override
       public void onGoAwayReceived(int lastStreamId, long errorCode, ByteBuf debugData) {
@@ -336,7 +334,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     // Get the stream ID for the new stream.
     final int streamId;
     try {
-      streamId = getAndIncrementNextStreamId();
+      streamId = incrementAndGetNextStreamId();
     } catch (StatusException e) {
       // Stream IDs have been exhausted for this connection. Fail the promise immediately.
       promise.setFailure(e);
@@ -531,16 +529,14 @@ class NettyClientHandler extends AbstractNettyHandler {
     return stream == null ? null : (NettyClientStream) stream.getProperty(streamKey);
   }
 
-  private int getAndIncrementNextStreamId() throws StatusException {
+  private int incrementAndGetNextStreamId() throws StatusException {
+    int nextStreamId = connection().local().incrementAndGetNextStreamId();
     if (nextStreamId < 0) {
       logger.fine("Stream IDs have been exhausted for this connection. "
               + "Initiating graceful shutdown of the connection.");
       throw EXHAUSTED_STREAMS_STATUS.asException();
     }
-
-    int id = nextStreamId;
-    nextStreamId += 2;
-    return id;
+    return nextStreamId;
   }
 
   private Http2Stream requireHttp2Stream(int streamId) {

@@ -30,7 +30,7 @@ Support for OpenSSL is only provided for the Netty transport via [netty-tcnative
 
 ### OpenSSL: Dynamic vs Static (which to use?)
 
-As of version `1.1.33.Fork13`, netty-tcnative provides two options for usage: statically or dynamically linked. For simplification of initial setup,
+As of version `1.1.33.Fork14`, netty-tcnative provides two options for usage: statically or dynamically linked. For simplification of initial setup,
 we recommend that users first look at `netty-tcnative-boringssl-static`, which is statically linked against BoringSSL and Apache APR. Using this artifact requires no extra installation and guarantees that ALPN and the ciphers required for
 HTTP/2 are available.
 
@@ -60,7 +60,7 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative-boringssl-static</artifactId>
-      <version>1.1.33.Fork13</version>
+      <version>1.1.33.Fork14</version>
       <classifier>${os.detected.classifier}</classifier>
     </dependency>
   </dependencies>
@@ -96,7 +96,7 @@ buildscript {
 apply plugin: "com.google.osdetector"
 
 dependencies {
-    compile 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork13:' + osdetector.classifier
+    compile 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork14:' + osdetector.classifier
 }
 ```
 
@@ -131,7 +131,7 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative</artifactId>
-      <version>1.1.33.Fork13</version>
+      <version>1.1.33.Fork14</version>
       <classifier>${tcnative.classifier}</classifier>
     </dependency>
   </dependencies>
@@ -199,7 +199,7 @@ if (osdetector.os == "linux" && osdetector.release.isLike("fedora")) {
 }
 
 dependencies {
-    compile 'io.netty:netty-tcnative:1.1.33.Fork13:' + tcnative_classifier
+    compile 'io.netty:netty-tcnative:1.1.33.Fork14:' + tcnative_classifier
 }
 ```
 
