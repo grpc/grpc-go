@@ -121,6 +121,17 @@ public abstract class ReadableBufferTestBase {
     assertEquals(msg.length() - 2, buffer.readableBytes());
   }
 
+  @Test
+  public void partialReadToReadableBufferShouldSucceed() {
+    ReadableBuffer buffer = buffer();
+    ReadableBuffer newBuffer = buffer.readBytes(2);
+    assertEquals(2, newBuffer.readableBytes());
+    assertEquals(msg.length() - 2, buffer.readableBytes());
+    byte[] array = new byte[2];
+    newBuffer.readBytes(array, 0, 2);
+    assertArrayEquals(new byte[] {'h', 'e'}, Arrays.copyOfRange(array, 0, 2));     
+  }
+
   protected abstract ReadableBuffer buffer();
 
   private static String repeatUntilLength(String toRepeat, int length) {

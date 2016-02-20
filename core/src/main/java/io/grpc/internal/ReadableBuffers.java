@@ -288,8 +288,8 @@ public final class ReadableBuffers {
     public ByteReadableBufferWrapper readBytes(int length) {
       checkReadable(length);
       ByteBuffer buffer = bytes.duplicate();
-      bytes.position(bytes.position() + length);
       buffer.limit(bytes.position() + length);
+      bytes.position(bytes.position() + length);
       return new ByteReadableBufferWrapper(buffer);
     }
 
