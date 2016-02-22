@@ -238,9 +238,8 @@ public class MessageFramerTest {
   @Test
   public void compressed() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
-    framer = new MessageFramer(sink, allocator)
-        .setCompressor(new Codec.Gzip())
-        .setMessageCompression(true);
+    // setMessageCompression should default to true
+    framer = new MessageFramer(sink, allocator).setCompressor(new Codec.Gzip());
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
     // The GRPC header is written first as a separate frame.

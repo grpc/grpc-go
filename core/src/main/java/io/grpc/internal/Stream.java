@@ -97,7 +97,8 @@ public interface Stream {
 
   /**
    * Enables per-message compression, if an encoding type has been negotiated.  If no message
-   * encoding has been negotiated, this is a no-op.
+   * encoding has been negotiated, this is a no-op. By default per-message compression is enabled,
+   * but may not have any effect if compression is not enabled on the call.
    */
   void setMessageCompression(boolean enable);
 }

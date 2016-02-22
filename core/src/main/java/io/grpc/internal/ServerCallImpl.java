@@ -107,16 +107,6 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     headers.removeAll(MESSAGE_ENCODING_KEY);
     if (compressor == null) {
       compressor = Codec.Identity.NONE;
-      if (inboundHeaders.containsKey(MESSAGE_ACCEPT_ENCODING_KEY)) {
-        String acceptEncodings = inboundHeaders.get(MESSAGE_ACCEPT_ENCODING_KEY);
-        for (String acceptEncoding : ACCEPT_ENCODING_SPLITER.split(acceptEncodings)) {
-          Compressor c = compressorRegistry.lookupCompressor(acceptEncoding);
-          if (c != null) {
-            compressor = c;
-            break;
-          }
-        }
-      }
     } else {
       if (inboundHeaders.containsKey(MESSAGE_ACCEPT_ENCODING_KEY)) {
         String acceptEncodings = inboundHeaders.get(MESSAGE_ACCEPT_ENCODING_KEY);

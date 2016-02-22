@@ -81,7 +81,7 @@ public class MessageFramer {
   private final Sink sink;
   private WritableBuffer buffer;
   private Compressor compressor = Codec.Identity.NONE;
-  private boolean messageCompression;
+  private boolean messageCompression = true;
   private final OutputStreamAdapter outputStreamAdapter = new OutputStreamAdapter();
   private final byte[] headerScratch = new byte[HEADER_LENGTH];
   private final WritableBufferAllocator bufferAllocator;

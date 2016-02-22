@@ -99,11 +99,9 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
           // fallthrough, just use gzip
         case GZIP:
           obs.setCompression("gzip");
-          obs.setMessageCompression(true);
           break;
         case NONE:
           obs.setCompression("identity");
-          obs.setMessageCompression(false);
           break;
         case UNRECOGNIZED:
           // fallthrough

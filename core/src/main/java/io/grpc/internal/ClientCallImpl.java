@@ -216,9 +216,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     stream.setCompressor(compressor);
 
     stream.start(new ClientStreamListenerImpl(observer));
-    if (compressor != Codec.Identity.NONE) {
-      stream.setMessageCompression(true);
-    }
 
     // Delay any sources of cancellation after start(), because most of the transports are broken if
     // they receive cancel before start. Issue #1343 has more details
