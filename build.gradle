@@ -124,7 +124,7 @@ subprojects {
             epoll_suffix = ":" + osdetector.classifier
         }
         libraries = [
-                guava: 'com.google.guava:guava:18.0',
+                guava: 'com.google.guava:guava:19.0',
                 // used to collect benchmark results
                 hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.4',
                 hpack: 'com.twitter:hpack:0.10.1',
