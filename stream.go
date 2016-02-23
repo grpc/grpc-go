@@ -204,6 +204,9 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		cs.mu.Unlock()
 	}
 	defer func() {
+		if err != nil {
+			cs.finish(err)
+		}
 		if err == nil || err == io.EOF {
 			return
 		}
@@ -251,6 +254,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		}
 		if err == io.EOF {
 			if cs.s.StatusCode() == codes.OK {
+				cs.finish(err)
 				return nil
 			}
 			return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
@@ -272,6 +276,11 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 
 func (cs *clientStream) CloseSend() (err error) {
 	err = cs.t.Write(cs.s, nil, &transport.Options{Last: true})
+	defer func() {
+		if err != nil {
+			cs.finish(err)
+		}
+	}()
 	if err == nil || err == io.EOF {
 		return
 	}
