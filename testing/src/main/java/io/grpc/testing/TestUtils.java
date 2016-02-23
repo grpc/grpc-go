@@ -248,7 +248,7 @@ public class TestUtils {
    * Creates an SSLSocketFactory which contains {@code certChainFile} as its only root certificate.
    */
   public static SSLSocketFactory newSslSocketFactoryForCa(InputStream certChain) throws Exception {
-    KeyStore ks = KeyStore.getInstance("JKS");
+    KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
     ks.load(null, null);
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
     X509Certificate cert = (X509Certificate) cf.generateCertificate(
