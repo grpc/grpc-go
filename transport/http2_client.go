@@ -550,14 +550,8 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 func (t *http2Client) getStream(f http2.Frame) (*Stream, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.activeStreams == nil {
-		// The transport is closing.
-		return nil, false
-	}
-	if s, ok := t.activeStreams[f.Header().StreamID]; ok {
-		return s, true
-	}
-	return nil, false
+	s, ok := t.activeStreams[f.Header().StreamID]
+	return s, ok
 }
 
 // updateWindow adjusts the inbound quota for the stream and the transport.
@@ -680,54 +674,49 @@ func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 	}
 }
 
-// operateHeader takes action on the decoded headers. It returns the current
-// stream if there are remaining headers on the wire (in the following
-// Continuation frame).
-func (t *http2Client) operateHeaders(hDec *hpackDecoder, s *Stream, frame headerFrame, endStream bool) (pendingStream *Stream) {
-	defer func() {
-		if pendingStream == nil {
-			hDec.state = decodeState{}
-		}
-	}()
-	endHeaders, err := hDec.decodeClientHTTP2Headers(frame)
-	if s == nil {
-		// s has been closed.
-		return nil
+// operateHeaders takes action on the decoded headers.
+func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
+	s, ok := t.getStream(frame)
+	if !ok {
+		return
 	}
-	if err != nil {
-		s.write(recvMsg{err: err})
+	var state decodeState
+	for _, hf := range frame.Fields {
+		state.processHeaderField(hf)
+	}
+	if state.err != nil {
+		s.write(recvMsg{err: state.err})
 		// Something wrong. Stops reading even when there is remaining.
-		return nil
+		return
 	}
-	if !endHeaders {
-		return s
-	}
+
+	endStream := frame.StreamEnded()
+
 	s.mu.Lock()
 	if !endStream {
-		s.recvCompress = hDec.state.encoding
+		s.recvCompress = state.encoding
 	}
 	if !s.headerDone {
-		if !endStream && len(hDec.state.mdata) > 0 {
-			s.header = hDec.state.mdata
+		if !endStream && len(state.mdata) > 0 {
+			s.header = state.mdata
 		}
 		close(s.headerChan)
 		s.headerDone = true
 	}
 	if !endStream || s.state == streamDone {
 		s.mu.Unlock()
-		return nil
+		return
 	}
 
-	if len(hDec.state.mdata) > 0 {
-		s.trailer = hDec.state.mdata
+	if len(state.mdata) > 0 {
+		s.trailer = state.mdata
 	}
 	s.state = streamDone
-	s.statusCode = hDec.state.statusCode
-	s.statusDesc = hDec.state.statusDesc
+	s.statusCode = state.statusCode
+	s.statusDesc = state.statusDesc
 	s.mu.Unlock()
 
 	s.write(recvMsg{err: io.EOF})
-	return nil
 }
 
 // reader runs as a separate goroutine in charge of reading data from network
@@ -750,8 +739,6 @@ func (t *http2Client) reader() {
 	}
 	t.handleSettings(sf)
 
-	hDec := newHPACKDecoder()
-	var curStream *Stream
 	// loop to keep reading incoming messages on this transport.
 	for {
 		frame, err := t.framer.readFrame()
@@ -760,15 +747,8 @@ func (t *http2Client) reader() {
 			return
 		}
 		switch frame := frame.(type) {
-		case *http2.HeadersFrame:
-			// operateHeaders has to be invoked regardless the value of curStream
-			// because the HPACK decoder needs to be updated using the received
-			// headers.
-			curStream, _ = t.getStream(frame)
-			endStream := frame.Header().Flags.Has(http2.FlagHeadersEndStream)
-			curStream = t.operateHeaders(hDec, curStream, frame, endStream)
-		case *http2.ContinuationFrame:
-			curStream = t.operateHeaders(hDec, curStream, frame, frame.HeadersEnded())
+		case *http2.MetaHeadersFrame:
+			t.operateHeaders(frame)
 		case *http2.DataFrame:
 			t.handleData(frame)
 		case *http2.RSTStreamFrame:
@@ -866,6 +846,17 @@ func (t *http2Client) Error() <-chan struct{} {
 func (t *http2Client) notifyError(err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	// Abort an active stream if the http2.Framer returns a
+	// http2.StreamError. This can happen only if the server's response
+	// is malformed http2.
+	if se, ok := err.(http2.StreamError); ok {
+		if s, ok := t.activeStreams[se.StreamID]; ok {
+			s.write(recvMsg{err: StreamErrorf(http2ErrConvTab[se.Code], "%v", err)})
+			return
+		}
+	}
+
 	// make sure t.errorChan is closed only once.
 	if t.state == reachable {
 		t.state = unreachable

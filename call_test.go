@@ -39,6 +39,7 @@ import (
 	"math"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -95,7 +96,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 			return
 		}
 		if v != expectedRequest {
-			h.t.WriteStatus(s, codes.Internal, string(make([]byte, sizeLargeErr)))
+			h.t.WriteStatus(s, codes.Internal, strings.Repeat("A", sizeLargeErr))
 			return
 		}
 	}
