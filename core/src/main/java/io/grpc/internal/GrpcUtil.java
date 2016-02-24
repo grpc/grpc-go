@@ -32,8 +32,6 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static io.grpc.Status.Code.CANCELLED;
-import static io.grpc.Status.Code.DEADLINE_EXCEEDED;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
@@ -51,9 +49,7 @@ import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.EnumSet;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -145,12 +141,6 @@ public final class GrpcUtil {
    * The default maximum size (in bytes) for inbound header/trailer.
    */
   public static final int DEFAULT_MAX_HEADER_LIST_SIZE = 8192;
-
-  /**
-   * The set of valid status codes for client cancellation.
-   */
-  public static final Set<Status.Code> CANCEL_REASONS =
-          EnumSet.of(CANCELLED, DEADLINE_EXCEEDED, Status.Code.INTERNAL, Status.Code.UNKNOWN);
 
   public static final Splitter ACCEPT_ENCODING_SPLITER = Splitter.on(',').trimResults();
 

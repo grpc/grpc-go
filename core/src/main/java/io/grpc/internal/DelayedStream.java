@@ -34,6 +34,8 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import com.google.common.base.Preconditions;
+
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.Metadata;
@@ -53,8 +55,6 @@ import javax.annotation.concurrent.GuardedBy;
  * DelayedStream} may be internally altered by different threads, thus internal synchronization is
  * necessary.
  */
-// TODO(zhangkun83): merge it with DelayedClientTransport.PendingStream as it will be no longer
-// needed by ClientCallImpl as we move away from ListenableFuture<ClientTransport>
 class DelayedStream implements ClientStream {
 
   // set to non null once both listener and realStream are valid.  After this point it is safe
@@ -163,32 +163,20 @@ class DelayedStream implements ClientStream {
     startedRealStream = realStream;
   }
 
-  void setStream(ClientStream stream) {
+  /**
+   * Transfers all pending and future requests and mutations to the given stream.
+   *
+   * <p>No-op if either this method or {@link #cancel} have already been called.
+   */
+  final void setStream(ClientStream stream) {
     synchronized (this) {
-      if (error != null) {
-        // If there is an error, unstartedStream will be a Noop.
+      if (error != null || realStream != null) {
         return;
       }
-      checkState(realStream == null, "Stream already created: %s", realStream);
       realStream = checkNotNull(stream, "stream");
       // listener can only be non-null if start has already been called.
       if (listener != null) {
         startStream();
-      }
-    }
-  }
-
-  void setError(Status reason) {
-    synchronized (this) {
-      // If the client has already cancelled the stream don't bother keeping the next error.
-      if (error == null) {
-        error = checkNotNull(reason);
-        realStream = NoopClientStream.INSTANCE;
-        if (listener != null) {
-          listener.closed(error, new Metadata());
-          // call startStream anyways to drain pending messages.
-          startStream();
-        }
       }
     }
   }
@@ -221,15 +209,34 @@ class DelayedStream implements ClientStream {
 
   @Override
   public void cancel(Status reason) {
-    if (startedRealStream == null) {
+    // At least one of them is null.
+    ClientStream streamToBeCancelled = startedRealStream;
+    ClientStreamListener listenerToBeCalled = null;
+    if (streamToBeCancelled == null) {
       synchronized (this) {
-        if (startedRealStream == null) {
-          setError(reason);
-          return;
-        }
+        if (realStream != null) {
+          // realStream already set. Just cancel it.
+          streamToBeCancelled = realStream;
+        } else if (error == null) {
+          // Neither realStream and error are set. Will set the error and call the listener if
+          // it's set.
+          error = checkNotNull(reason);
+          realStream = NoopClientStream.INSTANCE;
+          if (listener != null) {
+            // call startStream anyways to drain pending messages.
+            startStream();
+            listenerToBeCalled = listener;
+          }
+        }  // else: error already set, do nothing.
       }
     }
-    startedRealStream.cancel(reason);
+    if (listenerToBeCalled != null) {
+      Preconditions.checkState(streamToBeCancelled == null, "unexpected streamToBeCancelled");
+      listenerToBeCalled.closed(reason, new Metadata());
+    }
+    if (streamToBeCancelled != null) {
+      streamToBeCancelled.cancel(reason);
+    }
   }
 
   @Override

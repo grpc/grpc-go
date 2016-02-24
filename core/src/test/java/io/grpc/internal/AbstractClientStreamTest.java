@@ -83,13 +83,12 @@ public class AbstractClientStreamTest {
   };
 
   @Test
-  public void cancel_onlyExpectedCodesAccepted() {
+  public void cancel_doNotAcceptOk() {
     for (Code code : Code.values()) {
       ClientStreamListener listener = new BaseClientStreamListener();
       AbstractClientStream<Integer> stream = new BaseAbstractClientStream<Integer>(allocator);
       stream.start(listener);
-      if (code == Code.DEADLINE_EXCEEDED || code == Code.CANCELLED || code == Code.INTERNAL
-          || code == Code.UNKNOWN) {
+      if (code != Code.OK) {
         stream.cancel(Status.fromCodeValue(code.value()));
       } else {
         try {

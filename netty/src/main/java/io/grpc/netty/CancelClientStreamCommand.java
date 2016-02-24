@@ -31,8 +31,6 @@
 
 package io.grpc.netty;
 
-import static io.grpc.internal.GrpcUtil.CANCEL_REASONS;
-
 import com.google.common.base.Preconditions;
 
 import io.grpc.Status;
@@ -47,8 +45,7 @@ class CancelClientStreamCommand {
   CancelClientStreamCommand(NettyClientStream stream, Status reason) {
     this.stream = Preconditions.checkNotNull(stream, "stream");
     Preconditions.checkNotNull(reason);
-    Preconditions.checkArgument(CANCEL_REASONS.contains(reason.getCode()),
-            "Invalid cancellation reason");
+    Preconditions.checkArgument(!reason.isOk(), "Should not cancel with OK status");
     this.reason = reason;
   }
 

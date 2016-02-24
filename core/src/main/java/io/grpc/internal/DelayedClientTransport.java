@@ -95,9 +95,7 @@ class DelayedClientTransport implements ManagedClientTransport {
         return pendingStream;
       }
     }
-    DelayedStream stream = new DelayedStream();
-    stream.setError(Status.UNAVAILABLE.withDescription("transport shutdown"));
-    return stream;
+    return new FailingClientStream(Status.UNAVAILABLE.withDescription("transport shutdown"));
   }
 
   @Override
@@ -164,7 +162,7 @@ class DelayedClientTransport implements ManagedClientTransport {
     }
     if (savedPendingStreams != null) {
       for (PendingStream stream : savedPendingStreams) {
-        stream.setError(status);
+        stream.cancel(status);
       }
       listener.transportTerminated();
     }
@@ -245,10 +243,9 @@ class DelayedClientTransport implements ManagedClientTransport {
       setStream(transport.newStream(method, headers));
     }
 
-    // TODO(zhangkun83): DelayedStream.setError() doesn't have a clearly-defined semantic to be
-    // overriden. Make it clear or find another method to override.
     @Override
-    void setError(Status reason) {
+    public void cancel(Status reason) {
+      super.cancel(reason);
       synchronized (lock) {
         if (pendingStreams != null) {
           pendingStreams.remove(this);
@@ -258,7 +255,6 @@ class DelayedClientTransport implements ManagedClientTransport {
           }
         }
       }
-      super.setError(reason);
     }
   }
 

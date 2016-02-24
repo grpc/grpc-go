@@ -34,7 +34,6 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static io.grpc.internal.GrpcUtil.CANCEL_REASONS;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
@@ -292,7 +291,7 @@ public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
    */
   @Override
   public final void cancel(Status reason) {
-    checkArgument(CANCEL_REASONS.contains(reason.getCode()), "Invalid cancellation reason");
+    checkArgument(!reason.isOk(), "Should not cancel with OK status");
     cancelled = true;
     sendCancel(reason);
     dispose();

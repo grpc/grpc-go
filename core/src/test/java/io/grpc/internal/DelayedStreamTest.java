@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -138,21 +139,41 @@ public class DelayedStreamTest {
   }
 
   @Test
-  public void setStream_cantCreateTwice() {
+  public void startThenCancelled() {
     stream.start(listener);
-    // The first call will be a success
-    stream.setStream(realStream);
-
-    thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("Stream already created");
-
-    stream.setStream(realStream);
+    stream.cancel(Status.CANCELLED);
+    verify(listener).closed(eq(Status.CANCELLED), isA(Metadata.class));
   }
 
   @Test
-  public void streamCancelled() {
+  public void startThenSetStreamThenCancelled() {
+    stream.start(listener);
+    stream.setStream(realStream);
+    stream.cancel(Status.CANCELLED);
+    verify(realStream).start(same(listener));
+    verify(realStream).cancel(same(Status.CANCELLED));
+  }
+
+  @Test
+  public void setStreamThenStartThenCancelled() {
+    stream.setStream(realStream);
     stream.start(listener);
     stream.cancel(Status.CANCELLED);
+    verify(realStream).start(same(listener));
+    verify(realStream).cancel(same(Status.CANCELLED));
+  }
+
+  @Test
+  public void setStreamThenCancelled() {
+    stream.setStream(realStream);
+    stream.cancel(Status.CANCELLED);
+    verify(realStream).cancel(same(Status.CANCELLED));
+  }
+
+  @Test
+  public void cancelledThenStart() {
+    stream.cancel(Status.CANCELLED);
+    stream.start(listener);
     verify(listener).closed(eq(Status.CANCELLED), isA(Metadata.class));
   }
 }

@@ -109,7 +109,6 @@ public class ClientCallImplTest {
 
   @Mock private ClientStreamListener streamListener;
   @Mock private ClientTransport clientTransport;
-  @Mock private DelayedStream delayedStream;
   @Captor private ArgumentCaptor<Status> statusCaptor;
 
   @Mock
