@@ -109,7 +109,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
 		Method: method,
-		Flush:  desc.ServerStreams&&desc.ClientStreams,
+		Flush:  desc.ServerStreams && desc.ClientStreams,
 	}
 	if cc.dopts.cp != nil {
 		callHdr.SendCompress = cc.dopts.cp.Type()
@@ -141,7 +141,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	cs.t = t
 	cs.s = s
-	cs.p = &parser{s: s}
+	cs.p = &parser{r: s}
 	// Listen on ctx.Done() to detect cancellation when there is no pending
 	// I/O operations on this stream.
 	go func() {
