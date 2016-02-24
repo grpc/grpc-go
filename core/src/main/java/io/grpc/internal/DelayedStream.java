@@ -128,6 +128,9 @@ class DelayedStream implements ClientStream {
   private void startStream() {
     checkState(realStream != null, "realStream");
     checkState(listener != null, "listener");
+    if (authority != null) {
+      realStream.setAuthority(authority);
+    }
     realStream.start(listener);
 
     if (decompressor != null) {

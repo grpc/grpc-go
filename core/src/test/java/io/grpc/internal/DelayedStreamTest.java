@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -46,8 +47,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -64,12 +64,22 @@ public class DelayedStreamTest {
 
   @Mock private ClientStreamListener listener;
   @Mock private ClientStream realStream;
-  @Captor private ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
   private DelayedStream stream = new DelayedStream();
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+  }
+
+  @Test
+  public void setStream_setAuthority() {
+    final String authority = "becauseIsaidSo";
+    stream.setAuthority(authority);
+    stream.start(listener);
+    stream.setStream(realStream);
+    InOrder inOrder = inOrder(realStream);
+    inOrder.verify(realStream).setAuthority(authority);
+    inOrder.verify(realStream).start(listener);
   }
 
   @Test

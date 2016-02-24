@@ -100,6 +100,7 @@ class DelayedClientTransport implements ManagedClientTransport {
     return stream;
   }
 
+  @Override
   public void ping(final PingCallback callback, Executor executor) {
     Supplier<ClientTransport> supplier = transportSupplier;
     if (supplier != null) {
