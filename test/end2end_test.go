@@ -1633,7 +1633,9 @@ func interestingGoroutines() (gs []string) {
 			strings.Contains(stack, "runtime.goexit") ||
 			strings.Contains(stack, "created by runtime.gc") ||
 			strings.Contains(stack, "interestingGoroutines") ||
-			strings.Contains(stack, "runtime.MHeap_Scavenger") {
+			strings.Contains(stack, "runtime.MHeap_Scavenger") ||
+			strings.Contains(stack, "signal.signal_recv") ||
+			strings.Contains(stack, "sigterm.handler") {
 			continue
 		}
 		gs = append(gs, g)
