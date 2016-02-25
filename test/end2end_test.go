@@ -62,6 +62,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -484,7 +485,7 @@ func (te *test) startServer() {
 	s := grpc.NewServer(sopts...)
 	te.srv = s
 	if e.httpHandler {
-		s.TestingUseHandlerImpl()
+		internal.TestingUseHandlerImpl(s)
 	}
 	if te.healthServer != nil {
 		healthpb.RegisterHealthServer(s, te.healthServer)
@@ -958,7 +959,7 @@ func testRetry(t *testing.T, e env) {
 		// The server shuts down the network connection to make a
 		// transport error which will be detected by the client side
 		// code.
-		te.srv.TestingCloseConns()
+		internal.TestingCloseConns(te.srv)
 		wg.Done()
 	}()
 	// All these RPCs should succeed eventually.
