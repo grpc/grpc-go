@@ -131,9 +131,9 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
 	var err error
 	if port == 0 {
-		s.lis, err = net.Listen("tcp", ":0")
+		s.lis, err = net.Listen("tcp", "localhost:0")
 	} else {
-		s.lis, err = net.Listen("tcp", ":"+strconv.Itoa(port))
+		s.lis, err = net.Listen("tcp", "localhost:"+strconv.Itoa(port))
 	}
 	if err != nil {
 		s.startedErr <- fmt.Errorf("failed to listen: %v", err)
@@ -568,7 +568,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 		sent++
 	}
 	// Server sent a resetStream for s already.
-	code := http2RSTErrConvTab[http2.ErrCodeFlowControl]
+	code := http2ErrConvTab[http2.ErrCodeFlowControl]
 	if _, err := io.ReadFull(s, make([]byte, 1)); err != io.EOF || s.statusCode != code {
 		t.Fatalf("%v got err %v with statusCode %d, want err <EOF> with statusCode %d", s, err, s.statusCode, code)
 	}

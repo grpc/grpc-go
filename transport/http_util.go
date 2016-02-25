@@ -62,8 +62,8 @@ const (
 )
 
 var (
-	clientPreface      = []byte(http2.ClientPreface)
-	http2RSTErrConvTab = map[http2.ErrCode]codes.Code{
+	clientPreface   = []byte(http2.ClientPreface)
+	http2ErrConvTab = map[http2.ErrCode]codes.Code{
 		http2.ErrCodeNo:                 codes.Internal,
 		http2.ErrCodeProtocol:           codes.Internal,
 		http2.ErrCodeInternal:           codes.Internal,
@@ -76,6 +76,7 @@ var (
 		http2.ErrCodeConnect:            codes.Internal,
 		http2.ErrCodeEnhanceYourCalm:    codes.ResourceExhausted,
 		http2.ErrCodeInadequateSecurity: codes.PermissionDenied,
+		http2.ErrCodeHTTP11Required:     codes.FailedPrecondition,
 	}
 	statusCodeConvTab = map[codes.Code]http2.ErrCode{
 		codes.Internal:          http2.ErrCodeInternal,

@@ -35,6 +35,8 @@ package grpc_test
 
 import (
 	"bytes"
+	"crypto/tls"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -53,6 +55,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -62,6 +65,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+	"google.golang.org/grpc/transport"
 )
 
 var (
@@ -290,7 +294,7 @@ func TestReconnectTimeout(t *testing.T) {
 	)
 	defer restore()
 
-	lis, err := net.Listen("tcp", ":0")
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
@@ -352,6 +356,15 @@ func (e env) runnable() bool {
 		return false
 	}
 	return true
+}
+
+func (e env) getDialer() func(addr string, timeout time.Duration) (net.Conn, error) {
+	if e.dialer != nil {
+		return e.dialer
+	}
+	return func(addr string, timeout time.Duration) (net.Conn, error) {
+		return net.DialTimeout("tcp", addr, timeout)
+	}
 }
 
 var (
@@ -451,7 +464,7 @@ func (te *test) startServer() {
 		)
 	}
 
-	la := ":0"
+	la := "localhost:0"
 	switch e.network {
 	case "unix":
 		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now())
@@ -528,6 +541,25 @@ func (te *test) clientConn() *grpc.ClientConn {
 
 func (te *test) declareLogNoise(phrases ...string) {
 	te.restoreLogs = declareLogNoise(te.t, phrases...)
+}
+
+func (te *test) withServerTester(fn func(st *serverTester)) {
+	var c net.Conn
+	var err error
+	c, err = te.e.getDialer()(te.srvAddr, 10*time.Second)
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	defer c.Close()
+	if te.e.security == "tls" {
+		c = tls.Client(c, &tls.Config{
+			InsecureSkipVerify: true,
+			NextProtos:         []string{http2.NextProtoTLS},
+		})
+	}
+	st := newServerTesterFromConn(te.t, c)
+	st.greet()
+	fn(st)
 }
 
 func TestTimeoutOnDeadServer(t *testing.T) {
@@ -1611,6 +1643,145 @@ func testCompressOK(t *testing.T, e env) {
 	if _, err := stream.Recv(); err != nil {
 		t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
 	}
+}
+
+// funcServer implements methods of TestServiceServer using funcs,
+// similar to an http.HandlerFunc.
+// Any unimplemented method will crash. Tests implement the method(s)
+// they need.
+type funcServer struct {
+	testpb.TestServiceServer
+	unaryCall          func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
+	streamingInputCall func(stream testpb.TestService_StreamingInputCallServer) error
+}
+
+func (s *funcServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	return s.unaryCall(ctx, in)
+}
+
+func (s *funcServer) StreamingInputCall(stream testpb.TestService_StreamingInputCallServer) error {
+	return s.streamingInputCall(stream)
+}
+
+func TestClientRequestBodyError_UnexpectedEOF(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testClientRequestBodyError_UnexpectedEOF(t, e)
+	}
+}
+
+func testClientRequestBodyError_UnexpectedEOF(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.testServer = &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		errUnexpectedCall := errors.New("unexpected call func server method")
+		t.Error(errUnexpectedCall)
+		return nil, errUnexpectedCall
+	}}
+	te.startServer()
+	defer te.tearDown()
+	te.withServerTester(func(st *serverTester) {
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall")
+		// Say we have 5 bytes coming, but set END_STREAM flag:
+		st.writeData(1, true, []byte{0, 0, 0, 0, 5})
+		st.wantAnyFrame() // wait for server to crash (it used to crash)
+	})
+}
+
+func TestClientRequestBodyError_CloseAfterLength(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testClientRequestBodyError_CloseAfterLength(t, e)
+	}
+}
+
+func testClientRequestBodyError_CloseAfterLength(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.declareLogNoise("Server.processUnaryRPC failed to write status")
+	te.testServer = &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		errUnexpectedCall := errors.New("unexpected call func server method")
+		t.Error(errUnexpectedCall)
+		return nil, errUnexpectedCall
+	}}
+	te.startServer()
+	defer te.tearDown()
+	te.withServerTester(func(st *serverTester) {
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall")
+		// say we're sending 5 bytes, but then close the connection instead.
+		st.writeData(1, false, []byte{0, 0, 0, 0, 5})
+		st.cc.Close()
+	})
+}
+
+func TestClientRequestBodyError_Cancel(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testClientRequestBodyError_Cancel(t, e)
+	}
+}
+
+func testClientRequestBodyError_Cancel(t *testing.T, e env) {
+	te := newTest(t, e)
+	gotCall := make(chan bool, 1)
+	te.testServer = &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		gotCall <- true
+		return new(testpb.SimpleResponse), nil
+	}}
+	te.startServer()
+	defer te.tearDown()
+	te.withServerTester(func(st *serverTester) {
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall")
+		// Say we have 5 bytes coming, but cancel it instead.
+		st.writeData(1, false, []byte{0, 0, 0, 0, 5})
+		st.writeRSTStream(1, http2.ErrCodeCancel)
+
+		// Verify we didn't a call yet.
+		select {
+		case <-gotCall:
+			t.Fatal("unexpected call")
+		default:
+		}
+
+		// And now send an uncanceled (but still invalid), just to get a response.
+		st.writeHeadersGRPC(3, "/grpc.testing.TestService/UnaryCall")
+		st.writeData(3, true, []byte{0, 0, 0, 0, 0})
+		<-gotCall
+		st.wantAnyFrame()
+	})
+}
+
+func TestClientRequestBodyError_Cancel_StreamingInput(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testClientRequestBodyError_Cancel_StreamingInput(t, e)
+	}
+}
+
+func testClientRequestBodyError_Cancel_StreamingInput(t *testing.T, e env) {
+	te := newTest(t, e)
+	recvErr := make(chan error, 1)
+	te.testServer = &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
+		_, err := stream.Recv()
+		recvErr <- err
+		return nil
+	}}
+	te.startServer()
+	defer te.tearDown()
+	te.withServerTester(func(st *serverTester) {
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall")
+		// Say we have 5 bytes coming, but cancel it instead.
+		st.writeData(1, false, []byte{0, 0, 0, 0, 5})
+		st.writeRSTStream(1, http2.ErrCodeCancel)
+
+		var got error
+		select {
+		case got = <-recvErr:
+		case <-time.After(3 * time.Second):
+			t.Fatal("timeout waiting for error")
+		}
+		if se, ok := got.(transport.StreamError); !ok || se.Code != codes.Canceled {
+			t.Errorf("error = %#v; want transport.StreamError with code Canceled")
+		}
+	})
 }
 
 // interestingGoroutines returns all goroutines we care about for the purpose
