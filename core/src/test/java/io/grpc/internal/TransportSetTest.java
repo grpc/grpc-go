@@ -176,81 +176,51 @@ public class TransportSetTest {
     transportSet.obtainActiveTransport();
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr1)).newClientTransport(addr1, authority);
-    // Let this one through
-    transports.peek().listener.transportReady();
-    // Then shut it down
-    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
-
-
-    ////// Now start a series of failing attempts, where addr2 is the head.
-    // First attempt after a connection closed. Reset back-off policy.
-    transportSet.obtainActiveTransport();
-    verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
-    verify(mockTransportFactory, times(++transportsAddr2)).newClientTransport(addr2, authority);
-    // Fail this one
+    // Let this one fail without success
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
     // Second attempt will start immediately. Keep back-off policy.
     transportSet.obtainActiveTransport();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
-    verify(mockTransportFactory, times(++transportsAddr1)).newClientTransport(addr1, authority);
+    verify(mockTransportFactory, times(++transportsAddr2)).newClientTransport(addr2, authority);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
-    // Third attempt is on head, thus controlled by the first back-off interval.
+    // Third attempt is the first address, thus controlled by the first back-off interval.
     transportSet.obtainActiveTransport();
-    verify(mockBackoffPolicy2, times(++backoff2Consulted)).nextBackoffMillis();
+    verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     fakeClock.forwardMillis(9);
-    verify(mockTransportFactory, times(transportsAddr2)).newClientTransport(addr2, authority);
+    verify(mockTransportFactory, times(transportsAddr1)).newClientTransport(addr1, authority);
     fakeClock.forwardMillis(1);
-    verify(mockTransportFactory, times(++transportsAddr2)).newClientTransport(addr2, authority);
+    verify(mockTransportFactory, times(++transportsAddr1)).newClientTransport(addr1, authority);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
     // Forth attempt will start immediately. Keep back-off policy.
     transportSet.obtainActiveTransport();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
-    verify(mockTransportFactory, times(++transportsAddr1)).newClientTransport(addr1, authority);
+    verify(mockTransportFactory, times(++transportsAddr2)).newClientTransport(addr2, authority);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
-    // Fifth attempt is on head, thus controlled by the second back-off interval.
+    // Fifth attempt for the first address, thus controlled by the second back-off interval.
     transportSet.obtainActiveTransport();
-    verify(mockBackoffPolicy2, times(++backoff2Consulted)).nextBackoffMillis();
+    verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     fakeClock.forwardMillis(99);
-    verify(mockTransportFactory, times(transportsAddr2)).newClientTransport(addr2, authority);
+    verify(mockTransportFactory, times(transportsAddr1)).newClientTransport(addr1, authority);
     fakeClock.forwardMillis(1);
-    verify(mockTransportFactory, times(++transportsAddr2)).newClientTransport(addr2, authority);
+    verify(mockTransportFactory, times(++transportsAddr1)).newClientTransport(addr1, authority);
     // Let it through
     transports.peek().listener.transportReady();
     // Then close it.
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
-
-    ////// Now start a series of failing attempts, where addr1 is the head.
-    // First attempt after a connection closed. Reset back-off policy.
+    // First attempt after a successful connection. Reset back-off policy, and start from the first
+    // address.
     transportSet.obtainActiveTransport();
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
-    verify(mockTransportFactory, times(++transportsAddr1)).newClientTransport(addr1, authority);
-    // Fail this one
-    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
-
-    // Second attempt will start immediately. Keep back-off policy.
-    transportSet.obtainActiveTransport();
-    verify(mockBackoffPolicyProvider, times(backoffReset)).get();
-    verify(mockTransportFactory, times(++transportsAddr2)).newClientTransport(addr2, authority);
-    // Fail this one too
-    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
-
-    // Third attempt is on head, thus controlled by the first back-off interval.
-    transportSet.obtainActiveTransport();
-    verify(mockBackoffPolicy3, times(++backoff3Consulted)).nextBackoffMillis();
-    verify(mockBackoffPolicyProvider, times(backoffReset)).get();
-    fakeClock.forwardMillis(9);
-    verify(mockTransportFactory, times(transportsAddr1)).newClientTransport(addr1, authority);
-    fakeClock.forwardMillis(1);
     verify(mockTransportFactory, times(++transportsAddr1)).newClientTransport(addr1, authority);
 
     // Final checks on invocations on back-off policies

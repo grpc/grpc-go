@@ -77,12 +77,11 @@ final class TransportSet {
   @GuardedBy("lock")
   private BackoffPolicy reconnectPolicy;
 
-  // The address index from which the current series of consecutive failing connection attempts
-  // started. -1 means the current series have not started.
-  // In the case of consecutive failures, the time between two attempts for this address is
-  // controlled by connectPolicy.
+  // True if the next connect attempt is the first attempt ever, or the one right after a successful
+  // connection (i.e., transportReady() was called).  If true, the next connect attempt will start
+  // from the first address and will reset back-off.
   @GuardedBy("lock")
-  private int headIndex = -1;
+  private boolean firstAttempt = true;
 
   @GuardedBy("lock")
   private final Stopwatch backoffWatch;
@@ -176,6 +175,9 @@ final class TransportSet {
     Preconditions.checkState(reconnectTask == null || reconnectTask.isDone(),
         "previous reconnectTask is not done");
 
+    if (firstAttempt) {
+      nextAddressIndex = 0;
+    }
     final int currentAddressIndex = nextAddressIndex;
     List<SocketAddress> addrs = addressGroup.getAddresses();
     final SocketAddress address = addrs.get(currentAddressIndex);
@@ -192,7 +194,7 @@ final class TransportSet {
         boolean savedShutdown;
         synchronized (lock) {
           savedShutdown = shutdown;
-          if (currentAddressIndex == headIndex) {
+          if (currentAddressIndex == 0) {
             backoffWatch.reset().start();
           }
           newActiveTransport = transportFactory.newClientTransport(address, authority);
@@ -224,19 +226,18 @@ final class TransportSet {
       }
     };
 
-    long delayMillis;
-    if (currentAddressIndex == headIndex) {
-      // Back to the first attempted address. Calculate back-off delay.
-      delayMillis =
-          reconnectPolicy.nextBackoffMillis() - backoffWatch.elapsed(TimeUnit.MILLISECONDS);
-    } else {
-      delayMillis = 0;
-      if (headIndex == -1) {
+    long delayMillis = 0;
+    if (currentAddressIndex == 0) {
+      if (firstAttempt) {
         // First connect attempt, or the first attempt since last successful connection.
-        headIndex = currentAddressIndex;
         reconnectPolicy = backoffPolicyProvider.get();
+      } else {
+        // Back to the first address. Calculate back-off delay.
+        delayMillis =
+            reconnectPolicy.nextBackoffMillis() - backoffWatch.elapsed(TimeUnit.MILLISECONDS);
       }
     }
+    firstAttempt = false;
     if (delayMillis <= 0) {
       reconnectTask = null;
       // No back-off this time.
@@ -333,7 +334,7 @@ final class TransportSet {
       super.transportReady();
       synchronized (lock) {
         if (isAttachedToActiveTransport()) {
-          headIndex = -1;
+          firstAttempt = true;
         }
       }
       loadBalancer.handleTransportReady(addressGroup);
