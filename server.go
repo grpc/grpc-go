@@ -52,6 +52,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/transport"
 )
@@ -705,23 +706,24 @@ func (s *Server) Stop() {
 	s.mu.Unlock()
 }
 
-// TestingCloseConns closes all exiting transports but keeps s.lis accepting new
-// connections.
-// This is only for tests and is subject to removal.
-func (s *Server) TestingCloseConns() {
+func init() {
+	internal.TestingCloseConns = func(arg interface{}) {
+		arg.(*Server).testingCloseConns()
+	}
+	internal.TestingUseHandlerImpl = func(arg interface{}) {
+		arg.(*Server).opts.useHandlerImpl = true
+	}
+}
+
+// testingCloseConns closes all existing transports but keeps s.lis
+// accepting new connections.
+func (s *Server) testingCloseConns() {
 	s.mu.Lock()
 	for c := range s.conns {
 		c.Close()
 		delete(s.conns, c)
 	}
 	s.mu.Unlock()
-}
-
-// TestingUseHandlerImpl enables the http.Handler-based server implementation.
-// It must be called before Serve and requires TLS credentials.
-// This is only for tests and is subject to removal.
-func (s *Server) TestingUseHandlerImpl() {
-	s.opts.useHandlerImpl = true
 }
 
 // SendHeader sends header metadata. It may be called at most once from a unary
