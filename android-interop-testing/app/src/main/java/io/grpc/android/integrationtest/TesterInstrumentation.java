@@ -80,17 +80,18 @@ public class TesterInstrumentation extends Instrumentation {
       } catch (GooglePlayServicesRepairableException e) {
         // The provider is helpful, but it is possible to succeed without it.
         // Hope that the system-provided libraries are new enough.
-        Log.w(TesterActivity.LOG_TAG, "Failed installing security provider", e);
+        Log.w(InteropTester.LOG_TAG, "Failed installing security provider", e);
       } catch (GooglePlayServicesNotAvailableException e) {
         // The provider is helpful, but it is possible to succeed without it.
         // Hope that the system-provided libraries are new enough.
-        Log.w(TesterActivity.LOG_TAG, "Failed installing security provider", e);
+        Log.w(InteropTester.LOG_TAG, "Failed installing security provider", e);
       }
     }
 
     try {
-      new InteropTester(testCase, host, port, serverHostOverride, useTls, testCa,
-          androidSocketFactoryTls,
+      new InteropTester(testCase,
+          TesterOkHttpChannelBuilder.build(host, port, serverHostOverride, useTls, testCa,
+              androidSocketFactoryTls),
           new InteropTester.TestListener() {
             @Override
             public void onPreTest() {

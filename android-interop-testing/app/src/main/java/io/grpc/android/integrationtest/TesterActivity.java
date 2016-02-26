@@ -50,7 +50,6 @@ import java.util.List;
 
 public class TesterActivity extends AppCompatActivity
     implements ProviderInstaller.ProviderInstallListener {
-  final static String LOG_TAG = "GrpcTest";
   private List<Button> buttons;
   private EditText hostEdit;
   private EditText portEdit;
@@ -111,8 +110,9 @@ public class TesterActivity extends AppCompatActivity
     int port = TextUtils.isEmpty(portStr) ? 8080 : Integer.valueOf(portStr);
 
     // TODO (madongfly) support server_host_override, useTls and useTestCa in the App UI.
-    new InteropTester(testCase, host, port, "foo.test.google.fr", true,
-        getResources().openRawResource(R.raw.ca), null,
+    new InteropTester(testCase,
+        TesterOkHttpChannelBuilder.build(host, port, "foo.test.google.fr", true,
+            getResources().openRawResource(R.raw.ca), null),
         new InteropTester.TestListener() {
       @Override public void onPreTest() {
         resultText.setText("Testing...");
@@ -135,7 +135,7 @@ public class TesterActivity extends AppCompatActivity
   public void onProviderInstallFailed(int errorCode, Intent recoveryIntent) {
     // The provider is helpful, but it is possible to succeed without it.
     // Hope that the system-provided libraries are new enough.
-    Log.w(LOG_TAG, "Failed installing security provider, error code: " + errorCode);
+    Log.w(InteropTester.LOG_TAG, "Failed installing security provider, error code: " + errorCode);
     enableButtons(true);
   }
 }

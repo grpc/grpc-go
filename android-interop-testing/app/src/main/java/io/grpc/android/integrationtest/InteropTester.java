@@ -34,11 +34,7 @@ package io.grpc.android.integrationtest;
 import com.google.protobuf.nano.EmptyProtos;
 import com.google.protobuf.nano.MessageNano;
 
-import android.annotation.TargetApi;
-import android.net.SSLCertificateSocketFactory;
 import android.os.AsyncTask;
-import android.os.Build;
-import android.support.annotation.Nullable;
 import android.util.Log;
 
 import static junit.framework.Assert.assertEquals;
@@ -68,31 +64,21 @@ import io.grpc.okhttp.NegotiationType;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.StreamRecorder;
 
-import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.RuntimeException;
-import java.lang.reflect.Method;
-import java.security.KeyStore;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
-import javax.security.auth.x500.X500Principal;
-
 /**
  * Implementation of the integration tests, as an AsyncTask.
  */
 public final class InteropTester extends AsyncTask<Void, Void, String> {
   final static String SUCCESS_MESSAGE = "Succeed!!!";
+  final static String LOG_TAG = "GrpcTest";
 
   private ManagedChannel channel;
   private TestServiceGrpc.TestServiceBlockingStub blockingStub;
@@ -112,7 +98,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
 
     @Override
     public void onError(Throwable t) {
-      Log.e(TesterActivity.LOG_TAG, "Encounter an error", t);
+      Log.e(LOG_TAG, "Encounter an error", t);
       responses.add(t);
     }
 
@@ -124,39 +110,11 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
 
 
   public InteropTester(String testCase,
-                       String host,
-                       int port,
-                       @Nullable String serverHostOverride,
-                       boolean useTls,
-                       @Nullable InputStream testCa,
-                       @Nullable String androidSocketFactoryTls,
+                       ManagedChannel channel,
                        TestListener listener) {
     this.testCase = testCase;
     this.listener = listener;
-
-    ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port);
-    if (serverHostOverride != null) {
-      // Force the hostname to match the cert the server uses.
-      channelBuilder.overrideAuthority(serverHostOverride);
-    }
-    if (useTls) {
-      try {
-        SSLSocketFactory factory;
-        if (androidSocketFactoryTls != null) {
-          factory = getSslCertificateSocketFactory(testCa, androidSocketFactoryTls);
-        } else {
-          factory = getSslSocketFactory(testCa);
-        }
-        ((OkHttpChannelBuilder) channelBuilder).negotiationType(NegotiationType.TLS);
-        ((OkHttpChannelBuilder) channelBuilder).sslSocketFactory(factory);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    } else {
-      channelBuilder.usePlaintext(true);
-    }
-
-    channel = channelBuilder.build();
+    this.channel = channel;
     blockingStub = TestServiceGrpc.newBlockingStub(channel);
     asyncStub = TestServiceGrpc.newStub(channel);
   }
@@ -194,7 +152,7 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
   }
 
   public void runTest(String testCase) throws Exception {
-    Log.i(TesterActivity.LOG_TAG, "Running test " + testCase);
+    Log.i(LOG_TAG, "Running test " + testCase);
     if ("all".equals(testCase)) {
       runTest("empty_unary");
       runTest("large_unary");
@@ -776,61 +734,6 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
     if (actual == null || !expected.getCode().equals(actual.getCode())) {
       assertEquals(expected, actual);
     }
-  }
-
-  private SSLSocketFactory getSslSocketFactory(@Nullable InputStream testCa) throws Exception {
-    if (testCa == null) {
-      return (SSLSocketFactory) SSLSocketFactory.getDefault();
-    }
-
-    SSLContext context = SSLContext.getInstance("TLS");
-    context.init(null, getTrustManagers(testCa) , null);
-    return context.getSocketFactory();
-  }
-
-  @TargetApi(14)
-  private SSLCertificateSocketFactory getSslCertificateSocketFactory(
-      @Nullable InputStream testCa, String androidSocketFatoryTls) throws Exception {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH /* API level 14 */) {
-      throw new RuntimeException(
-          "android_socket_factory_tls doesn't work with API level less than 14.");
-    }
-    SSLCertificateSocketFactory factory = (SSLCertificateSocketFactory)
-        SSLCertificateSocketFactory.getDefault(5000 /* Timeout in ms*/);
-    // Use HTTP/2.0
-    byte[] h2 = "h2".getBytes();
-    byte[][] protocols = new byte[][]{h2};
-    if (androidSocketFatoryTls.equals("alpn")) {
-      Method setAlpnProtocols =
-          factory.getClass().getDeclaredMethod("setAlpnProtocols", byte[][].class);
-      setAlpnProtocols.invoke(factory, new Object[] { protocols });
-    } else if (androidSocketFatoryTls.equals("npn")) {
-      Method setNpnProtocols =
-          factory.getClass().getDeclaredMethod("setNpnProtocols", byte[][].class);
-      setNpnProtocols.invoke(factory, new Object[]{protocols});
-    } else {
-      throw new RuntimeException("Unknown protocol: " + androidSocketFatoryTls);
-    }
-
-    if (testCa != null) {
-      factory.setTrustManagers(getTrustManagers(testCa));
-    }
-
-    return factory;
-  }
-
-  private TrustManager[] getTrustManagers(InputStream testCa) throws Exception {
-    KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
-    ks.load(null);
-    CertificateFactory cf = CertificateFactory.getInstance("X.509");
-    X509Certificate cert = (X509Certificate) cf.generateCertificate(testCa);
-    X500Principal principal = cert.getSubjectX500Principal();
-    ks.setCertificateEntry(principal.getName("RFC2253"), cert);
-    // Set up trust manager factory to use our key store.
-    TrustManagerFactory trustManagerFactory =
-        TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-    trustManagerFactory.init(ks);
-    return trustManagerFactory.getTrustManagers();
   }
 
   public interface TestListener {
