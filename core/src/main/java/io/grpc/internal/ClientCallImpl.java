@@ -42,7 +42,6 @@ import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -275,6 +274,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
   @Override
   public void cancel() {
+    cancel(Status.CANCELLED);
+  }
+
+  // TODO(carl-mastrangelo): Look at removing this method and just calling stream.cancel from the
+  // callers.
+  private void cancel(Status status) {
     if (cancelCalled) {
       return;
     }
@@ -283,7 +288,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       // Cancel is called in exception handling cases, so it may be the case that the
       // stream was never successfully created.
       if (stream != null) {
-        stream.cancel(Status.CANCELLED);
+        stream.cancel(status);
       }
     } finally {
       context.removeListener(ClientCallImpl.this);
@@ -304,16 +309,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     Preconditions.checkState(stream != null, "Not started");
     Preconditions.checkState(!cancelCalled, "call was cancelled");
     Preconditions.checkState(!halfCloseCalled, "call was half-closed");
-    boolean failed = true;
     try {
+      // TODO(notcarl): Find out if messageIs needs to be closed.
       InputStream messageIs = method.streamRequest(message);
       stream.writeMessage(messageIs);
-      failed = false;
-    } finally {
-      // TODO(notcarl): Find out if messageIs needs to be closed.
-      if (failed) {
-        cancel();
-      }
+    } catch (Throwable e) {
+      cancel(Status.CANCELLED.withCause(e).withDescription("Failed to stream message"));
+      return;
     }
     // For unary requests, we don't flush since we know that halfClose should be coming soon. This
     // allows us to piggy-back the END_STREAM=true on the last message frame without opening the
@@ -375,8 +377,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
             observer.onHeaders(headers);
           } catch (Throwable t) {
-            cancel();
-            throw Throwables.propagate(t);
+            cancel(Status.CANCELLED.withCause(t).withDescription("Failed to read headers"));
+            return;
           }
         }
       });
@@ -398,8 +400,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
               message.close();
             }
           } catch (Throwable t) {
-            cancel();
-            throw Throwables.propagate(t);
+            cancel(Status.CANCELLED.withCause(t).withDescription("Failed to read message."));
+            return;
           }
         }
       });
