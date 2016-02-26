@@ -1807,7 +1807,7 @@ func interestingGoroutines() (gs []string) {
 			strings.Contains(stack, "runtime.MHeap_Scavenger") ||
 			strings.Contains(stack, "signal.signal_recv") ||
 			strings.Contains(stack, "sigterm.handler") ||
-			strings.Contains(stack, "created by mgc") ||
+			strings.Contains(stack, "runtime_mcall") ||
 			strings.Contains(stack, "goroutine in C code") {
 			continue
 		}
