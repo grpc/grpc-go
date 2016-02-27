@@ -1317,7 +1317,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void unreachableServer() throws Exception {
     clientTransport = new OkHttpClientTransport(
-        new InetSocketAddress("localhost", 1234),
+        new InetSocketAddress("localhost", 0),
         "authority",
         executor,
         null,
