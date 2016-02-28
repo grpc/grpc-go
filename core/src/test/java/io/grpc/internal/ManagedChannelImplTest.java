@@ -48,6 +48,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -196,6 +197,7 @@ public class ManagedChannelImplTest {
         .newClientTransport(same(socketAddress), eq(authority));
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();
+    transportListener.transportReady();
     verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
     verify(mockStream).start(streamListenerCaptor.capture());
     verify(mockStream).setCompressor(isA(Compressor.class));
@@ -341,6 +343,8 @@ public class ManagedChannelImplTest {
     ClientCall<String, Integer> call =
         channel.newCall(method, CallOptions.DEFAULT.withExecutor(executor));
     call.start(mockCallListener, headers);
+    verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
+    transportListenerCaptor.getValue().transportReady();
     verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
     verify(mockStream).start(streamListenerCaptor.capture());
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
@@ -385,16 +389,27 @@ public class ManagedChannelImplTest {
   }
 
   /**
-   * Verify that if one resolved address points to a bad server, the retry will use another address.
+   * Verify that if the first resolved address points to a server that cannot be connected, the call
+   * will end up with the second address which works.
    */
   @Test
-  public void firstResolvedServerIsBad() throws Exception {
-    final SocketAddress goodAddress = new SocketAddress() {};
-    final SocketAddress badAddress = new SocketAddress() {};
+  public void firstResolvedServerFailedToConnect() throws Exception {
+    final SocketAddress goodAddress = new SocketAddress() {
+        @Override public String toString() {
+          return "goodAddress";
+        }
+      };
+    final SocketAddress badAddress = new SocketAddress() {
+        @Override public String toString() {
+          return "badAddress";
+        }
+      };
     final ResolvedServerInfo goodServer = new ResolvedServerInfo(goodAddress, Attributes.EMPTY);
     final ResolvedServerInfo badServer = new ResolvedServerInfo(badAddress, Attributes.EMPTY);
     final ManagedClientTransport goodTransport = mock(ManagedClientTransport.class);
     final ManagedClientTransport badTransport = mock(ManagedClientTransport.class);
+    when(goodTransport.newStream(any(MethodDescriptor.class), any(Metadata.class)))
+        .thenReturn(mock(ClientStream.class));
     when(mockTransportFactory.newClientTransport(same(goodAddress), any(String.class)))
         .thenReturn(goodTransport);
     when(mockTransportFactory.newClientTransport(same(badAddress), any(String.class)))
@@ -405,31 +420,131 @@ public class ManagedChannelImplTest {
     ManagedChannel channel = createChannel(nameResolverFactory, NO_INTERCEPTOR);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     Metadata headers = new Metadata();
-    ClientStream badStream = mock(ClientStream.class);
-    when(badTransport.newStream(same(method), same(headers))).thenReturn(badStream);
-    doAnswer(new Answer<ClientStream>() {
-      @Override
-      public ClientStream answer(InvocationOnMock invocation) throws Throwable {
-        Object[] args = invocation.getArguments();
-        final ClientStreamListener listener = (ClientStreamListener) args[0];
-        listener.closed(Status.UNAVAILABLE, new Metadata());
-        return mock(ClientStream.class);
-      }
-    }).when(badStream).start(any(ClientStreamListener.class));
-    when(goodTransport.newStream(same(method), same(headers))).thenReturn(mock(ClientStream.class));
 
-    // First try should fail with the bad address.
+    // Start a call. The channel will starts with the first address (badAddress)
     call.start(mockCallListener, headers);
     ArgumentCaptor<ManagedClientTransport.Listener> badTransportListenerCaptor =
         ArgumentCaptor.forClass(ManagedClientTransport.Listener.class);
-    verify(mockCallListener, timeout(1000)).onClose(same(Status.UNAVAILABLE), any(Metadata.class));
     verify(badTransport, timeout(1000)).start(badTransportListenerCaptor.capture());
+    verify(mockTransportFactory).newClientTransport(same(badAddress), any(String.class));
+    verify(mockTransportFactory, times(0))
+          .newClientTransport(same(goodAddress), any(String.class));
     badTransportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
 
-    // Retry should work with the good address.
+    // The channel then try the second address (goodAddress)
+    ArgumentCaptor<ManagedClientTransport.Listener> goodTransportListenerCaptor =
+        ArgumentCaptor.forClass(ManagedClientTransport.Listener.class);
+    verify(mockTransportFactory, timeout(1000))
+          .newClientTransport(same(goodAddress), any(String.class));
+    verify(goodTransport, timeout(1000)).start(goodTransportListenerCaptor.capture());
+    goodTransportListenerCaptor.getValue().transportReady();
+    verify(goodTransport, timeout(1000)).newStream(same(method), same(headers));
+    // The bad transport was never used.
+    verify(badTransport, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class));
+  }
+
+  /**
+   * Verify that if all resolved addresses failed to connect, the call will fail.
+   */
+  @Test
+  public void allServersFailedToConnect() throws Exception {
+    final SocketAddress addr1 = new SocketAddress() {
+        @Override public String toString() {
+          return "addr1";
+        }
+      };
+    final SocketAddress addr2 = new SocketAddress() {
+        @Override public String toString() {
+          return "addr2";
+        }
+      };
+    final ResolvedServerInfo server1 = new ResolvedServerInfo(addr1, Attributes.EMPTY);
+    final ResolvedServerInfo server2 = new ResolvedServerInfo(addr2, Attributes.EMPTY);
+    final ManagedClientTransport transport1 = mock(ManagedClientTransport.class);
+    final ManagedClientTransport transport2 = mock(ManagedClientTransport.class);
+    when(mockTransportFactory.newClientTransport(same(addr1), any(String.class)))
+        .thenReturn(transport1);
+    when(mockTransportFactory.newClientTransport(same(addr2), any(String.class)))
+        .thenReturn(transport2);
+
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory(Arrays.asList(server1, server2));
+    ManagedChannel channel = createChannel(nameResolverFactory, NO_INTERCEPTOR);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    Metadata headers = new Metadata();
+
+    // Start a call. The channel will starts with the first address, which will fail to connect.
+    call.start(mockCallListener, headers);
+    verify(transport1, timeout(1000)).start(transportListenerCaptor.capture());
+    verify(mockTransportFactory).newClientTransport(same(addr1), any(String.class));
+    verify(mockTransportFactory, times(0))
+          .newClientTransport(same(addr2), any(String.class));
+    transportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
+
+    // The channel then try the second address, which will fail to connect too.
+    verify(transport2, timeout(1000)).start(transportListenerCaptor.capture());
+    verify(mockTransportFactory).newClientTransport(same(addr2), any(String.class));
+    verify(transport2, timeout(1000)).start(transportListenerCaptor.capture());
+    transportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
+
+    // Call fails
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
+    assertEquals(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
+    // No real stream was ever created
+    verify(transport1, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class));
+    verify(transport2, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class));
+  }
+
+  /**
+   * Verify that if the first resolved address points to a server that is at first connected, but
+   * disconnected later, all calls will stick to the first address.
+   */
+  @Test
+  public void firstResolvedServerConnectedThenDisconnected() throws Exception {
+    final SocketAddress addr1 = new SocketAddress() {
+        @Override public String toString() {
+          return "addr1";
+        }
+      };
+    final SocketAddress addr2 = new SocketAddress() {
+        @Override public String toString() {
+          return "addr2";
+        }
+      };
+    final ResolvedServerInfo server1 = new ResolvedServerInfo(addr1, Attributes.EMPTY);
+    final ResolvedServerInfo server2 = new ResolvedServerInfo(addr2, Attributes.EMPTY);
+    // Addr1 will have two transports throughout this test.
+    final ManagedClientTransport transport1 = mock(ManagedClientTransport.class);
+    final ManagedClientTransport transport2 = mock(ManagedClientTransport.class);
+    when(transport1.newStream(any(MethodDescriptor.class), any(Metadata.class)))
+        .thenReturn(mock(ClientStream.class));
+    when(transport2.newStream(any(MethodDescriptor.class), any(Metadata.class)))
+        .thenReturn(mock(ClientStream.class));
+    when(mockTransportFactory.newClientTransport(same(addr1), any(String.class)))
+        .thenReturn(transport1, transport2);
+
+    FakeNameResolverFactory nameResolverFactory =
+        new FakeNameResolverFactory(Arrays.asList(server1, server2));
+    ManagedChannel channel = createChannel(nameResolverFactory, NO_INTERCEPTOR);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    Metadata headers = new Metadata();
+
+    // First call will use the first address
+    call.start(mockCallListener, headers);
+    verify(mockTransportFactory, timeout(1000)).newClientTransport(same(addr1), any(String.class));
+    verify(transport1, timeout(1000)).start(transportListenerCaptor.capture());
+    transportListenerCaptor.getValue().transportReady();
+    verify(transport1, timeout(1000)).newStream(same(method), same(headers));
+    transportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
+
+    // Second call still use the first address, since it was successfully connected.
     ClientCall<String, Integer> call2 = channel.newCall(method, CallOptions.DEFAULT);
     call2.start(mockCallListener, headers);
-    verify(goodTransport, timeout(1000)).newStream(same(method), same(headers));
+    verify(transport2, timeout(1000)).start(transportListenerCaptor.capture());
+    verify(mockTransportFactory, times(2)).newClientTransport(same(addr1), any(String.class));
+    transportListenerCaptor.getValue().transportReady();
+    verify(transport2, timeout(1000)).newStream(same(method), same(headers));
   }
 
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {

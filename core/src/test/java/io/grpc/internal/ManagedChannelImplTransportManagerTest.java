@@ -165,13 +165,12 @@ public class ManagedChannelImplTransportManagerTest {
     ClientTransport t1 = tm.getTransport(addressGroup);
     verify(mockTransportFactory, timeout(1000)).newClientTransport(addr, authority);
     // The real transport
-    ClientTransport rt = transports.poll(1, TimeUnit.SECONDS).transport;
+    MockClientTransportInfo transportInfo = transports.poll(1, TimeUnit.SECONDS);
+    transportInfo.listener.transportReady();
     ClientTransport t2 = tm.getTransport(addressGroup);
-    // Make sure the first transport is always a real transport. This promise is especially made for
-    // InProcessTransport, because it may run into deadlock if it works under a delayed transport
-    // (https://github.com/grpc/grpc-java/issues/1510).
-    assertSame(rt, t1);
-    assertSame(rt, t2);
+    assertTrue(t1 instanceof DelayedClientTransport);
+    assertFalse(t2 instanceof DelayedClientTransport);
+    assertSame(transportInfo.transport, t2);
     verify(mockBackoffPolicyProvider).get();
     verify(mockBackoffPolicy, times(0)).nextBackoffMillis();
     verifyNoMoreInteractions(mockTransportFactory);

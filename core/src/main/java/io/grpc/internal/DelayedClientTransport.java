@@ -45,6 +45,7 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.concurrent.Executor;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -230,6 +231,12 @@ class DelayedClientTransport implements ManagedClientTransport {
   @Override
   public String getLogId() {
     return GrpcUtil.getLogId(this);
+  }
+
+  @VisibleForTesting
+  @Nullable
+  Supplier<ClientTransport> getTransportSupplier() {
+    return transportSupplier;
   }
 
   private class PendingStream extends DelayedStream {

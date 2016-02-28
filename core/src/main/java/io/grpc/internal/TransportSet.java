@@ -34,7 +34,6 @@ package io.grpc.internal;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
-import com.google.common.base.Throwables;
 
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
@@ -44,7 +43,6 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -108,19 +106,15 @@ final class TransportSet implements WithLogId {
   /*
    * The transport for new outgoing requests.
    * - If shutdown == true, activeTransport is null (shutdown)
-   * - Otherwise, if delayedTransport != null,
-   *   activeTransport is delayedTransport (waiting to connect)
+   * - Otherwise, if a connection is pending or connecting,
+   *   activeTransport is a DelayedClientTransport
    * - Otherwise, activeTransport is either null (initially or when idle)
-   *   or points to a real transport (when connecting or connected).
+   *   or points to a real transport (when ready).
    *
    * 'lock' must be held when assigning to it.
    */
   @Nullable
   private volatile ManagedClientTransport activeTransport;
-
-  @GuardedBy("lock")
-  @Nullable
-  private DelayedClientTransport delayedTransport;
 
   TransportSet(EquivalentAddressGroup addressGroup, String authority,
       LoadBalancer<ClientTransport> loadBalancer, BackoffPolicy.Provider backoffPolicyProvider,
@@ -155,40 +149,24 @@ final class TransportSet implements WithLogId {
     if (savedTransport != null) {
       return savedTransport;
     }
-    Callable<ClientTransport> immediateConnectionTask = null;
     synchronized (lock) {
       // Check again, since it could have changed before acquiring the lock
       if (activeTransport == null) {
         if (shutdown) {
           return SHUTDOWN_TRANSPORT;
         }
-        delayedTransport = new DelayedClientTransport();
+        DelayedClientTransport delayedTransport = new DelayedClientTransport();
         transports.add(delayedTransport);
         delayedTransport.start(new BaseTransportListener(delayedTransport));
         activeTransport = delayedTransport;
-        immediateConnectionTask = scheduleConnection();
+        scheduleConnection(delayedTransport);
       }
-      savedTransport = activeTransport;
+      return activeTransport;
     }
-    if (immediateConnectionTask != null) {
-      try {
-        return immediateConnectionTask.call();
-      } catch (Exception e) {
-        throw Throwables.propagate(e);
-      }
-    }
-    return savedTransport;
   }
 
-  /**
-   * Schedule a task that creates a new transport.
-   *
-   * @return if not {@code null}, caller should run the returned callable outside of lock. The
-   *         callable returns the real transport that has been created.
-   */
-  @Nullable
   @GuardedBy("lock")
-  private Callable<ClientTransport> scheduleConnection() {
+  private void scheduleConnection(final DelayedClientTransport delayedTransport) {
     Preconditions.checkState(reconnectTask == null || reconnectTask.isDone(),
         "previous reconnectTask is not done");
 
@@ -203,47 +181,23 @@ final class TransportSet implements WithLogId {
       nextAddressIndex = 0;
     }
 
-    final Callable<ClientTransport> createTransportCallable = new Callable<ClientTransport>() {
+    Runnable createTransportRunnable = new Runnable() {
       @Override
-      public ClientTransport call() {
-        DelayedClientTransport savedDelayedTransport;
-        ManagedClientTransport newActiveTransport;
-        boolean savedShutdown;
+      public void run() {
         synchronized (lock) {
-          savedShutdown = shutdown;
           reconnectTask = null;
           if (currentAddressIndex == 0) {
             backoffWatch.reset().start();
           }
-          newActiveTransport = transportFactory.newClientTransport(address, authority);
+          ManagedClientTransport transport =
+              transportFactory.newClientTransport(address, authority);
           if (log.isLoggable(Level.FINE)) {
             log.log(Level.FINE, "[{0}] Created {1} for {2}",
-                new Object[] {getLogId(), newActiveTransport.getLogId(), address});
+                new Object[] {getLogId(), transport.getLogId(), address});
           }
-          transports.add(newActiveTransport);
-          newActiveTransport.start(
-              new TransportListener(newActiveTransport, address));
-          if (shutdown) {
-            // If TransportSet already shutdown, newActiveTransport is only to take care of pending
-            // streams in delayedTransport, but will not serve new streams, and it will be shutdown
-            // as soon as it's set to the delayedTransport.
-            // activeTransport should have already been set to null by shutdown(). We keep it null.
-            Preconditions.checkState(activeTransport == null,
-                "Unexpected non-null activeTransport");
-          } else {
-            activeTransport = newActiveTransport;
-          }
-          savedDelayedTransport = delayedTransport;
-          delayedTransport = null;
+          transports.add(transport);
+          transport.start(new TransportListener(transport, delayedTransport, address));
         }
-        savedDelayedTransport.setTransport(newActiveTransport);
-        // This delayed transport will terminate and be removed from transports.
-        savedDelayedTransport.shutdown();
-        if (savedShutdown) {
-          // See comments in the synchronized block above on why we shutdown here.
-          newActiveTransport.shutdown();
-        }
-        return newActiveTransport;
       }
     };
 
@@ -266,20 +220,10 @@ final class TransportSet implements WithLogId {
     if (delayMillis <= 0) {
       reconnectTask = null;
       // No back-off this time.
-      // Note createTransportRunnable is not supposed to run under the lock.
-      return createTransportCallable;
+      createTransportRunnable.run();
     } else {
       reconnectTask = scheduledExecutor.schedule(
-          new Runnable() {
-            @Override public void run() {
-              try {
-                createTransportCallable.call();
-              } catch (Exception e) {
-                throw Throwables.propagate(e);
-              }
-            }
-          }, delayMillis, TimeUnit.MILLISECONDS);
-      return null;
+          createTransportRunnable, delayMillis, TimeUnit.MILLISECONDS);
     }
   }
 
@@ -301,7 +245,6 @@ final class TransportSet implements WithLogId {
       if (transports.isEmpty()) {
         runCallback = true;
         Preconditions.checkState(reconnectTask == null, "Should have no reconnectTask scheduled");
-        Preconditions.checkState(delayedTransport == null, "Should have no delayedTransport");
       }  // else: the callback will be run once all transports have been terminated
     }
     if (savedActiveTransport != null) {
@@ -361,14 +304,13 @@ final class TransportSet implements WithLogId {
   /** Listener for real transports. */
   private class TransportListener extends BaseTransportListener {
     private final SocketAddress address;
+    private final DelayedClientTransport delayedTransport;
 
-    public TransportListener(ManagedClientTransport transport, SocketAddress address) {
+    public TransportListener(ManagedClientTransport transport,
+        DelayedClientTransport delayedTransport, SocketAddress address) {
       super(transport);
       this.address = address;
-    }
-
-    private boolean isAttachedToActiveTransport() {
-      return activeTransport == transport;
+      this.delayedTransport = delayedTransport;
     }
 
     @Override
@@ -378,10 +320,27 @@ final class TransportSet implements WithLogId {
             new Object[] {getLogId(), transport.getLogId(), address});
       }
       super.transportReady();
+      boolean savedShutdown;
       synchronized (lock) {
-        if (isAttachedToActiveTransport()) {
-          firstAttempt = true;
+        savedShutdown = shutdown;
+        firstAttempt = true;
+        if (shutdown) {
+          // If TransportSet already shutdown, transport is only to take care of pending
+          // streams in delayedTransport, but will not serve new streams, and it will be shutdown
+          // as soon as it's set to the delayedTransport.
+          // activeTransport should have already been set to null by shutdown(). We keep it null.
+          Preconditions.checkState(activeTransport == null,
+              "Unexpected non-null activeTransport");
+        } else if (activeTransport == delayedTransport) {
+          activeTransport = transport;
         }
+      }
+      delayedTransport.setTransport(transport);
+      // This delayed transport will terminate and be removed from transports.
+      delayedTransport.shutdown();
+      if (savedShutdown) {
+        // See comments in the synchronized block above on why we shutdown here.
+        transport.shutdown();
       }
       loadBalancer.handleTransportReady(addressGroup);
     }
@@ -394,8 +353,18 @@ final class TransportSet implements WithLogId {
       }
       super.transportShutdown(s);
       synchronized (lock) {
-        if (isAttachedToActiveTransport()) {
+        if (activeTransport == transport) {
           activeTransport = null;
+        } else if (activeTransport == delayedTransport) {
+          // Continue reconnect if there are still addresses to try.
+          // Fail if all addresses have been tried and failed in a row.
+          if (nextAddressIndex == 0) {
+            delayedTransport.setTransport(new FailingClientTransport(s));
+            delayedTransport.shutdown();
+            activeTransport = null;
+          } else {
+            scheduleConnection(delayedTransport);
+          }
         }
       }
       loadBalancer.handleTransportShutdown(addressGroup, s);
@@ -408,9 +377,9 @@ final class TransportSet implements WithLogId {
             new Object[] {getLogId(), transport.getLogId(), address});
       }
       super.transportTerminated();
-      Preconditions.checkState(!isAttachedToActiveTransport(),
-          "Listener is still attached to activeTransport. "
-          + "Seems transportTerminated was not called.");
+      Preconditions.checkState(activeTransport != transport,
+          "activeTransport still points to the delayedTransport. "
+          + "Seems transportShutdown() was not called.");
     }
   }
 
