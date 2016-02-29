@@ -90,6 +90,7 @@ public class TlsTest {
   public SslProvider sslProvider;
 
   private int port = TestUtils.pickUnusedPort();
+  private ScheduledExecutorService executor;
   private Server server;
   private ManagedChannel channel;
   private SslContextBuilder clientContextBuilder;
@@ -236,6 +237,49 @@ public class TlsTest {
   }
 
 
+  /**
+   * Tests that a client configured using GrpcSslContexts refuses to talk to a server that has an
+   * an untrusted certificate.
+   */
+  @Test
+  public void clientRejectsUntrustedServerCert() throws Exception {
+    // Create & start a server.
+    File serverCertFile = TestUtils.loadCert("badserver.pem");
+    File serverPrivateKeyFile = TestUtils.loadCert("badserver.key");
+    X509Certificate[] serverTrustedCaCerts = {
+      TestUtils.loadX509Cert("ca.pem")
+    };
+    server = serverBuilder(port, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
+        .addService(TestServiceGrpc.bindService(new TestServiceImpl(executor)))
+        .build()
+        .start();
+
+    // Create a client.
+    File clientCertChainFile = TestUtils.loadCert("client.pem");
+    File clientPrivateKeyFile = TestUtils.loadCert("client.key");
+    X509Certificate[] clientTrustedCaCerts = {
+      TestUtils.loadX509Cert("ca.pem")
+    };
+    channel = clientChannel(port, clientContextBuilder
+        .keyManager(clientCertChainFile, clientPrivateKeyFile)
+        .trustManager(clientTrustedCaCerts)
+        .build());
+    TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
+
+    // Check that the TLS handshake fails.
+    Empty request = Empty.getDefaultInstance();
+    try {
+      client.emptyCall(request);
+      fail("TLS handshake should have failed, but didn't; received RPC response");
+    } catch (StatusRuntimeException e) {
+      // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
+      // javax.net.ssl.SSLHandshakeException or a java.nio.channels.ClosedChannelException.
+      // Thus, reliably detecting the underlying cause is not feasible.
+      assertEquals(Status.Code.UNAVAILABLE, e.getStatus().getCode());
+    }
+  }
+
+
   private ServerBuilder<?> serverBuilder(int port, File serverCertChainFile,
       File serverPrivateKeyFile, X509Certificate[] serverTrustedCaCerts) throws IOException {
     SslContextBuilder sslContextBuilder
@@ -256,7 +300,4 @@ public class TlsTest {
         .sslContext(sslContext)
         .build();
   }
-
-
-  private ScheduledExecutorService executor;
 }
