@@ -639,10 +639,13 @@ static void PrintService(const ServiceDescriptor* service,
                          Printer* p,
                          bool generate_nano) {
   (*vars)["service_name"] = service->name();
+  (*vars)["file_name"] = service->file()->name();
   (*vars)["service_class_name"] = ServiceClassName(service);
   p->Print(
       *vars,
-      "@$Generated$(\"by gRPC proto compiler\")\n"
+      "@$Generated$(\n"
+      "    value = \"by gRPC proto compiler\",\n"
+      "    comments = \"Source: $file_name$\")\n"
       "public class $service_class_name$ {\n\n");
   p->Indent();
   p->Print(

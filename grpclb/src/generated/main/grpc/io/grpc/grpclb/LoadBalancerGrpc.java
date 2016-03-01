@@ -13,7 +13,9 @@ import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 
-@javax.annotation.Generated("by gRPC proto compiler")
+@javax.annotation.Generated(
+    value = "by gRPC proto compiler",
+    comments = "Source: load_balancer.proto")
 public class LoadBalancerGrpc {
 
   private LoadBalancerGrpc() {}

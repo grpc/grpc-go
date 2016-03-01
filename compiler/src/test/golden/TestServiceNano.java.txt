@@ -15,7 +15,9 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 
 import java.io.IOException;
 
-@javax.annotation.Generated("by gRPC proto compiler")
+@javax.annotation.Generated(
+    value = "by gRPC proto compiler",
+    comments = "Source: test.proto")
 public class TestServiceGrpc {
 
   private TestServiceGrpc() {}
