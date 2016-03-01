@@ -75,6 +75,7 @@ const (
 	normal hType = iota
 	suspended
 	misbehaved
+	malformedStatus
 )
 
 func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
@@ -127,6 +128,12 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 	}
 }
 
+func (h *testStreamHandler) handleStreamMalformedStatus(t *testing.T, s *Stream) {
+	// raw newline is not accepted by http2 framer and a http2.StreamError is
+	// generated.
+	h.t.WriteStatus(s, codes.Internal, "\n")
+}
+
 // start starts server. Other goroutines should block on s.readyChan for futher operations.
 func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
 	var err error
@@ -171,6 +178,10 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
 		case misbehaved:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamMisbehave(t, s)
+			})
+		case malformedStatus:
+			go transport.HandleStreams(func(s *Stream) {
+				go h.handleStreamMalformedStatus(t, s)
 			})
 		default:
 			go transport.HandleStreams(func(s *Stream) {
@@ -648,6 +659,32 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	}
 	// http2Client.errChan is closed due to connection flow control window size violation.
 	<-conn.Error()
+	ct.Close()
+	server.stop()
+}
+
+func TestMalformedStatus(t *testing.T) {
+	server, ct := setUp(t, 0, math.MaxUint32, malformedStatus)
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo",
+	}
+	s, err := ct.NewStream(context.Background(), callHdr)
+	if err != nil {
+		return
+	}
+	opts := Options{
+		Last:  true,
+		Delay: false,
+	}
+	if err := ct.Write(s, expectedRequest, &opts); err != nil {
+		t.Fatalf("Failed to write the request: %v", err)
+	}
+	p := make([]byte, http2MaxFrameLen)
+	expectedErr := StreamErrorf(codes.Internal, "stream error: stream ID 1; PROTOCOL_ERROR")
+	if _, err = s.dec.Read(p); err != expectedErr {
+		t.Fatalf("Read the err %v, want %v", err, expectedErr)
+	}
 	ct.Close()
 	server.stop()
 }
