@@ -24,6 +24,11 @@ public final class RouteGuideProto {
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_routeguide_Feature_fieldAccessorTable;
   static com.google.protobuf.Descriptors.Descriptor
+    internal_static_routeguide_FeatureDatabase_descriptor;
+  static
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_routeguide_FeatureDatabase_fieldAccessorTable;
+  static com.google.protobuf.Descriptors.Descriptor
     internal_static_routeguide_RouteNote_descriptor;
   static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -47,19 +52,21 @@ public final class RouteGuideProto {
       "\tRectangle\022\035\n\002lo\030\001 \001(\0132\021.routeguide.Poin" +
       "t\022\035\n\002hi\030\002 \001(\0132\021.routeguide.Point\"<\n\007Feat" +
       "ure\022\014\n\004name\030\001 \001(\t\022#\n\010location\030\002 \001(\0132\021.ro" +
-      "uteguide.Point\"A\n\tRouteNote\022#\n\010location\030" +
-      "\001 \001(\0132\021.routeguide.Point\022\017\n\007message\030\002 \001(" +
-      "\t\"b\n\014RouteSummary\022\023\n\013point_count\030\001 \001(\005\022\025" +
-      "\n\rfeature_count\030\002 \001(\005\022\020\n\010distance\030\003 \001(\005\022" +
-      "\024\n\014elapsed_time\030\004 \001(\0052\205\002\n\nRouteGuide\0226\n\n",
-      "GetFeature\022\021.routeguide.Point\032\023.routegui" +
-      "de.Feature\"\000\022>\n\014ListFeatures\022\025.routeguid" +
-      "e.Rectangle\032\023.routeguide.Feature\"\0000\001\022>\n\013" +
-      "RecordRoute\022\021.routeguide.Point\032\030.routegu" +
-      "ide.RouteSummary\"\000(\001\022?\n\tRouteChat\022\025.rout" +
-      "eguide.RouteNote\032\025.routeguide.RouteNote\"" +
-      "\000(\0010\001B6\n\033io.grpc.examples.routeguideB\017Ro" +
-      "uteGuideProtoP\001\242\002\003RTGb\006proto3"
+      "uteguide.Point\"7\n\017FeatureDatabase\022$\n\007fea" +
+      "ture\030\001 \003(\0132\023.routeguide.Feature\"A\n\tRoute" +
+      "Note\022#\n\010location\030\001 \001(\0132\021.routeguide.Poin" +
+      "t\022\017\n\007message\030\002 \001(\t\"b\n\014RouteSummary\022\023\n\013po" +
+      "int_count\030\001 \001(\005\022\025\n\rfeature_count\030\002 \001(\005\022\020",
+      "\n\010distance\030\003 \001(\005\022\024\n\014elapsed_time\030\004 \001(\0052\205" +
+      "\002\n\nRouteGuide\0226\n\nGetFeature\022\021.routeguide" +
+      ".Point\032\023.routeguide.Feature\"\000\022>\n\014ListFea" +
+      "tures\022\025.routeguide.Rectangle\032\023.routeguid" +
+      "e.Feature\"\0000\001\022>\n\013RecordRoute\022\021.routeguid" +
+      "e.Point\032\030.routeguide.RouteSummary\"\000(\001\022?\n" +
+      "\tRouteChat\022\025.routeguide.RouteNote\032\025.rout" +
+      "eguide.RouteNote\"\000(\0010\001B6\n\033io.grpc.exampl" +
+      "es.routeguideB\017RouteGuideProtoP\001\242\002\003RTGb\006" +
+      "proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -91,14 +98,20 @@ public final class RouteGuideProto {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_routeguide_Feature_descriptor,
         new java.lang.String[] { "Name", "Location", });
-    internal_static_routeguide_RouteNote_descriptor =
+    internal_static_routeguide_FeatureDatabase_descriptor =
       getDescriptor().getMessageTypes().get(3);
+    internal_static_routeguide_FeatureDatabase_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_routeguide_FeatureDatabase_descriptor,
+        new java.lang.String[] { "Feature", });
+    internal_static_routeguide_RouteNote_descriptor =
+      getDescriptor().getMessageTypes().get(4);
     internal_static_routeguide_RouteNote_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_routeguide_RouteNote_descriptor,
         new java.lang.String[] { "Location", "Message", });
     internal_static_routeguide_RouteSummary_descriptor =
-      getDescriptor().getMessageTypes().get(4);
+      getDescriptor().getMessageTypes().get(5);
     internal_static_routeguide_RouteSummary_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_routeguide_RouteSummary_descriptor,

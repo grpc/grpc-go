@@ -97,6 +97,11 @@ message Feature {
   Point location = 2;
 }
 
+// Not used in the RPC.  Instead, this is here for the form serialized to disk.
+message FeatureDatabase {
+  repeated Feature feature = 1;
+}
+
 // A RouteNote is a message sent while at a given point.
 message RouteNote {
   // The location from which the message is sent.

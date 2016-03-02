@@ -31,16 +31,14 @@
 
 package io.grpc.examples.routeguide;
 
+import com.google.protobuf.util.JsonFormat;
+
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.List;
-
-import javax.json.Json;
-import javax.json.JsonObject;
-import javax.json.JsonReader;
-import javax.json.JsonValue;
 
 /**
  * Common utilities for the RouteGuide demo.
@@ -75,25 +73,14 @@ public class RouteGuideUtil {
   public static List<Feature> parseFeatures(URL file) throws IOException {
     InputStream input = file.openStream();
     try {
-      JsonReader reader = Json.createReader(input);
-      List<Feature> features = new ArrayList<Feature>();
-      for (JsonValue value : reader.readArray()) {
-        JsonObject obj = (JsonObject) value;
-        String name = obj.getString("name", "");
-        JsonObject location = obj.getJsonObject("location");
-        int lat = location.getInt("latitude");
-        int lon = location.getInt("longitude");
-        Feature feature =
-            Feature
-                .newBuilder()
-                .setName(name)
-                .setLocation(
-                    Point.newBuilder().setLatitude(lat)
-                        .setLongitude(lon).build()).build();
-        features.add(feature);
+      Reader reader = new InputStreamReader(input);
+      try {
+        FeatureDatabase.Builder database = FeatureDatabase.newBuilder();
+        JsonFormat.parser().merge(reader, database);
+        return database.getFeatureList();
+      } finally {
+        reader.close();
       }
-
-      return features;
     } finally {
       input.close();
     }

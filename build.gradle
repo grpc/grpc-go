@@ -135,6 +135,7 @@ subprojects {
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufNanoVersion}",
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.4',
+                protobuf_util: "com.google.protobuf:protobuf-java-util:${protobufVersion}",
 
                 netty: 'io.netty:netty-codec-http2:4.1.0.CR3',
                 netty_epoll: 'io.netty:netty-transport-native-epoll:4.1.0.CR3' + epoll_suffix,

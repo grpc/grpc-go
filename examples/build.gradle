@@ -29,7 +29,7 @@ dependencies {
             project(':grpc-netty'),
             project(':grpc-protobuf'),
             project(':grpc-stub'),
-            'org.glassfish:javax.json:1.0.4'
+            libraries.protobuf_util
 }
 
 configureProtoCompilation()
