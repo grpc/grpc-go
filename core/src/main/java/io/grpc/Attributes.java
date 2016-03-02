@@ -33,7 +33,9 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -45,7 +47,7 @@ import javax.annotation.concurrent.Immutable;
 @Immutable
 public final class Attributes {
 
-  private final HashMap<String, Object> data = new HashMap<String, Object>();
+  private final HashMap<Key<?>, Object> data = new HashMap<Key<?>, Object>();
 
   public static final Attributes EMPTY = new Attributes();
 
@@ -58,7 +60,16 @@ public final class Attributes {
   @SuppressWarnings("unchecked")
   @Nullable
   public <T> T get(Key<T> key) {
-    return (T) data.get(key.name);
+    return (T) data.get(key);
+  }
+
+  /**
+   * Returns set of keys stored in container.
+   *
+   * @return Set of Key objects.
+   */
+  public Set<Key<?>> keys() {
+    return Collections.unmodifiableSet(data.keySet());
   }
 
   /**
@@ -71,19 +82,25 @@ public final class Attributes {
   public static final class Key<T> {
     private final String name;
 
-    /**
-     * Construct the key.
-     *
-     * @param name the name, which should be namespaced like com.foo.BarAttribute to avoid
-     *             collision.
-     */
-    public Key(String name) {
+    private Key(String name) {
       this.name = name;
     }
 
     @Override
     public String toString() {
       return name;
+    }
+
+    /**
+     * Factory method for creating instances of {@link Key}.
+     *
+     * @param name the name of Key, which should be namespaced like com.foo.BarAttribute to avoid
+     *             collision. Name collision, won't cause key collision.
+     * @param <T> Key type
+     * @return Key object
+     */
+    public static <T> Key<T> of(String name) {
+      return new Key<T>(name);
     }
   }
 
@@ -100,7 +117,7 @@ public final class Attributes {
     }
 
     public <T> Builder set(Key<T> key, T value) {
-      product.data.put(key.name, value);
+      product.data.put(key, value);
       return this;
     }
 

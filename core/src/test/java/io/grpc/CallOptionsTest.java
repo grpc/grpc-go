@@ -53,7 +53,7 @@ import java.util.concurrent.TimeUnit;
 public class CallOptionsTest {
   private String sampleAuthority = "authority";
   private Long sampleDeadlineNanoTime = 1L;
-  private Key<String> sampleKey = new Attributes.Key<String>("sample");
+  private Key<String> sampleKey = Attributes.Key.of("sample");
   private Attributes sampleAffinity = Attributes.newBuilder().set(sampleKey, "blah").build();
   private CallOptions allSet = CallOptions.DEFAULT
       .withAuthority(sampleAuthority)
