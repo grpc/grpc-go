@@ -200,15 +200,17 @@ public final class GrpcUtil {
     HTTP_1_1_REQUIRED(0xD, Status.UNKNOWN);
 
     // Populate a mapping of code to enum value for quick look-up.
-    private static final Http2Error[] codeMap;
-    static {
+    private static final Http2Error[] codeMap = buildHttp2CodeMap();
+
+    private static Http2Error[] buildHttp2CodeMap() {
       Http2Error[] errors = Http2Error.values();
       int size = (int) errors[errors.length - 1].code() + 1;
-      codeMap = new Http2Error[size];
+      Http2Error[] http2CodeMap = new Http2Error[size];
       for (Http2Error error : errors) {
         int index = (int) error.code();
-        codeMap[index] = error;
+        http2CodeMap[index] = error;
       }
+      return http2CodeMap;
     }
 
     private final int code;

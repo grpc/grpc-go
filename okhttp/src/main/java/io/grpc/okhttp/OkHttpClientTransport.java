@@ -88,11 +88,11 @@ import javax.net.ssl.SSLSocketFactory;
  * A okhttp-based {@link ManagedClientTransport} implementation.
  */
 class OkHttpClientTransport implements ManagedClientTransport {
-  private static final Map<ErrorCode, Status> ERROR_CODE_TO_STATUS;
+  private static final Map<ErrorCode, Status> ERROR_CODE_TO_STATUS = buildErrorCodeToStatusMap();
   private static final Logger log = Logger.getLogger(OkHttpClientTransport.class.getName());
   private static final OkHttpClientStream[] EMPTY_STREAM_ARRAY = new OkHttpClientStream[0];
 
-  static {
+  private static Map<ErrorCode, Status> buildErrorCodeToStatusMap() {
     Map<ErrorCode, Status> errorToStatus = new EnumMap<ErrorCode, Status>(ErrorCode.class);
     errorToStatus.put(ErrorCode.NO_ERROR,
         Status.INTERNAL.withDescription("No error: A GRPC status of OK should have been sent"));
@@ -118,7 +118,7 @@ class OkHttpClientTransport implements ManagedClientTransport {
         Status.RESOURCE_EXHAUSTED.withDescription("Enhance your calm"));
     errorToStatus.put(ErrorCode.INADEQUATE_SECURITY,
         Status.PERMISSION_DENIED.withDescription("Inadequate security"));
-    ERROR_CODE_TO_STATUS = Collections.unmodifiableMap(errorToStatus);
+    return Collections.unmodifiableMap(errorToStatus);
   }
 
   private final InetSocketAddress address;

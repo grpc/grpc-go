@@ -128,7 +128,7 @@ public abstract class AbstractBenchmark {
 
   private static final CallOptions CALL_OPTIONS = CallOptions.DEFAULT;
 
-  private static final InetAddress BENCHMARK_ADDR;
+  private static final InetAddress BENCHMARK_ADDR = buildBenchmarkAddr();
 
   /**
    * Resolve the address bound to the benchmark interface. Currently we assume it's a
@@ -148,7 +148,7 @@ public abstract class AbstractBenchmark {
    * sudo ip addr add dev lo 127.127.127.127/32 label lo:benchmark
    * </pre>
    */
-  static {
+  private static InetAddress buildBenchmarkAddr() {
     InetAddress tmp = null;
     try {
       Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
@@ -180,9 +180,8 @@ public abstract class AbstractBenchmark {
         throw new RuntimeException(uhe);
       }
     }
-    BENCHMARK_ADDR = tmp;
+    return tmp;
   }
-
 
   protected Server server;
   protected ByteBuf request;

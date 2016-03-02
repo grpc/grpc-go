@@ -37,6 +37,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.TreeMap;
 
@@ -233,9 +234,9 @@ public final class Status {
   }
 
   // Create the canonical list of Status instances indexed by their code values.
-  private static final List<Status> STATUS_LIST;
+  private static final List<Status> STATUS_LIST = buildStatusList();
 
-  static {
+  private static List<Status> buildStatusList() {
     TreeMap<Integer, Status> canonicalizer = new TreeMap<Integer, Status>();
     for (Code code : Code.values()) {
       Status replaced = canonicalizer.put(code.value(), new Status(code));
@@ -244,7 +245,7 @@ public final class Status {
             + replaced.getCode().name() + " & " + code.name());
       }
     }
-    STATUS_LIST = new ArrayList<Status>(canonicalizer.values());
+    return Collections.unmodifiableList(new ArrayList<Status>(canonicalizer.values()));
   }
 
   // A pseudo-enum of Status instances mapped 1:1 with values in Code. This simplifies construction

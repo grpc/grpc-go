@@ -67,6 +67,7 @@ import io.grpc.StringMarshaller;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -98,7 +99,8 @@ public class ServerImplTest {
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance();
 
-  static {
+  @BeforeClass
+  public static void beforeStartUp() {
     // Cancel the root context. Server will fork it so the per-call context should not
     // be cancelled.
     SERVER_CONTEXT.cancel(null);
