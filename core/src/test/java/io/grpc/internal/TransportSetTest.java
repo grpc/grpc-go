@@ -62,7 +62,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.net.SocketAddress;
 import java.util.Arrays;
-import java.util.LinkedList;
+import java.util.concurrent.BlockingQueue;
 
 /**
  * Unit tests for {@link TransportSet}.
@@ -92,7 +92,7 @@ public class TransportSetTest {
 
   private TransportSet transportSet;
   private EquivalentAddressGroup addressGroup;
-  private LinkedList<MockClientTransportInfo> transports;
+  private BlockingQueue<MockClientTransportInfo> transports;
 
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);

@@ -43,7 +43,8 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.net.SocketAddress;
-import java.util.LinkedList;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * Common utility methods for tests.
@@ -74,9 +75,10 @@ final class TestUtils {
    * returns a list of {@link MockClientTransportInfo}, each of which is a started mock transport
    * and its listener.
    */
-  static LinkedList<MockClientTransportInfo> captureTransports(
+  static BlockingQueue<MockClientTransportInfo> captureTransports(
       ClientTransportFactory mockTransportFactory) {
-    final LinkedList<MockClientTransportInfo> captor = new LinkedList<MockClientTransportInfo>();
+    final BlockingQueue<MockClientTransportInfo> captor =
+        new LinkedBlockingQueue<MockClientTransportInfo>();
 
     doAnswer(new Answer<ManagedClientTransport>() {
       @Override

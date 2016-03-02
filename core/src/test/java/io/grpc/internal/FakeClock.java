@@ -102,6 +102,7 @@ final class FakeClock {
     @Override public ScheduledFuture<?> schedule(Runnable cmd, long delay, TimeUnit unit) {
       ScheduledTask task = new ScheduledTask(currentTimeNanos + unit.toNanos(delay), cmd);
       tasks.add(task);
+      runDueTasks();
       return task;
     }
 
