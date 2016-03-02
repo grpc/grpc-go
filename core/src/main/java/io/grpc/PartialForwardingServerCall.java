@@ -77,4 +77,10 @@ abstract class PartialForwardingServerCall<RespT> extends ServerCall<RespT> {
   public void setCompression(String compressor) {
     delegate().setCompression(compressor);
   }
+
+  @Override
+  @ExperimentalApi
+  public Attributes attributes() {
+    return delegate().attributes();
+  }
 }

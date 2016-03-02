@@ -35,6 +35,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Preconditions;
 
+import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 
@@ -277,5 +278,9 @@ public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
       closeDeframer();
       listener().closed(newStatus);
     }
+  }
+
+  @Override public Attributes attributes() {
+    return Attributes.EMPTY;
   }
 }

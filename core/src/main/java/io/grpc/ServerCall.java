@@ -196,4 +196,15 @@ public abstract class ServerCall<RespT> {
   public void setCompression(String compressor) {
     // noop
   }
+
+  /**
+   * Returns properties of a single call. This is a generic container which can contain any kind of
+   * information describing call like for example remote address, TLS information (OU etc.)
+   *
+   * @return Attributes container
+   */
+  @ExperimentalApi
+  public Attributes attributes() {
+    return Attributes.EMPTY;
+  }
 }

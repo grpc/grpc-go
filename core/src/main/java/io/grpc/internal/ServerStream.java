@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 
@@ -66,4 +67,11 @@ public interface ServerStream extends Stream {
    * times and from any thread.
    */
   void cancel(Status status);
+
+  /**
+   * Attributes describing stream.
+   *
+   * @return Attributes container
+   */
+  Attributes attributes();
 }

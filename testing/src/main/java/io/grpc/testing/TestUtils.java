@@ -128,6 +128,25 @@ public class TestUtils {
   }
 
   /**
+   * Capture the request attributes. Useful for testing ServerCalls.
+   * {@link ServerCall#attributes()}
+   */
+  public static ServerInterceptor recordServerCallInterceptor(
+      final AtomicReference<ServerCall> serverCallCapture) {
+    return new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          MethodDescriptor<ReqT, RespT> method,
+          ServerCall<RespT> call,
+          Metadata requestHeaders,
+          ServerCallHandler<ReqT, RespT> next) {
+        serverCallCapture.set(call);
+        return next.startCall(method, call, requestHeaders);
+      }
+    };
+  }
+
+  /**
    * Picks an unused port.
    */
   public static int pickUnusedPort() {

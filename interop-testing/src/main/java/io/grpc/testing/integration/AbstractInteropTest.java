@@ -50,6 +50,8 @@ import com.google.auth.oauth2.OAuth2Credentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.auth.oauth2.ServiceAccountJwtAccessCredentials;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import com.google.common.net.HostAndPort;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 
@@ -59,6 +61,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerCall;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.Status;
@@ -88,6 +91,8 @@ import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -96,6 +101,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
+
 /**
  * Abstract base class for all GRPC transport tests.
  */
@@ -103,6 +111,8 @@ public abstract class AbstractInteropTest {
 
   public static final Metadata.Key<Messages.SimpleContext> METADATA_KEY =
       ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
+  private static final AtomicReference<ServerCall> serverCallCapture =
+      new AtomicReference<ServerCall>();
   private static final AtomicReference<Metadata> requestHeadersCapture =
       new AtomicReference<Metadata>();
   private static ScheduledExecutorService testServiceExecutor;
@@ -114,6 +124,7 @@ public abstract class AbstractInteropTest {
     testServiceExecutor = Executors.newScheduledThreadPool(2);
 
     List<ServerInterceptor> allInterceptors = ImmutableList.<ServerInterceptor>builder()
+        .add(TestUtils.recordServerCallInterceptor(serverCallCapture))
         .add(TestUtils.recordRequestHeadersInterceptor(requestHeadersCapture))
         .add(TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY))
         .add(interceptors)
@@ -919,5 +930,39 @@ public abstract class AbstractInteropTest {
     if (recorder.getError() != null) {
       throw new AssertionError(recorder.getError());
     }
+  }
+
+  /** Helper for asserting remote address {@link io.grpc.ServerCall#attributes()} */
+  protected void assertRemoteAddr(String expectedRemoteAddress) {
+    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
+            .withDeadlineAfter(5, TimeUnit.SECONDS);
+
+    stub.unaryCall(SimpleRequest.getDefaultInstance());
+
+    HostAndPort remoteAddress = HostAndPort.fromString(serverCallCapture.get().attributes()
+            .get(GrpcUtil.REMOTE_ADDR_STREAM_ATTR_KEY).toString());
+    assertEquals(expectedRemoteAddress, remoteAddress.getHostText());
+  }
+
+  /** Helper for asserting TLS info in SSLSession {@link io.grpc.ServerCall#attributes()} */
+  protected void assertX500SubjectDn(String tlsInfo) {
+    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
+            .withDeadlineAfter(5, TimeUnit.SECONDS);
+
+    stub.unaryCall(SimpleRequest.getDefaultInstance());
+
+    List<Certificate> certificates = Lists.newArrayList();
+    SSLSession sslSession =
+        serverCallCapture.get().attributes().get(GrpcUtil.SSL_SESSION_STREAM_ATTR_KEY);
+    try {
+      certificates = Arrays.asList(sslSession.getPeerCertificates());
+    } catch (SSLPeerUnverifiedException e) {
+      fail("No cert");
+    }
+
+    X509Certificate x509cert = (X509Certificate) certificates.get(0);
+
+    assertEquals(1, certificates.size());
+    assertEquals(tlsInfo, x509cert.getSubjectDN().toString());
   }
 }

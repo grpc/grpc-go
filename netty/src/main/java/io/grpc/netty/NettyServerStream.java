@@ -33,9 +33,11 @@ package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -43,6 +45,8 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
+
+import javax.net.ssl.SSLSession;
 
 /**
  * Server stream for a Netty HTTP2 transport.
@@ -53,6 +57,7 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   private final NettyServerHandler handler;
   private final Http2Stream http2Stream;
   private final WriteQueue writeQueue;
+  private final Attributes attributes;
 
   NettyServerStream(Channel channel, Http2Stream http2Stream, NettyServerHandler handler,
                     int maxMessageSize) {
@@ -61,6 +66,7 @@ class NettyServerStream extends AbstractServerStream<Integer> {
     this.channel = checkNotNull(channel, "channel");
     this.http2Stream = checkNotNull(http2Stream, "http2Stream");
     this.handler = checkNotNull(handler, "handler");
+    this.attributes = buildAttributes(channel);
   }
 
   @Override
@@ -139,5 +145,22 @@ class NettyServerStream extends AbstractServerStream<Integer> {
   @Override
   public void cancel(Status status) {
     writeQueue.enqueue(new CancelServerStreamCommand(this, status), true);
+  }
+
+  @Override public Attributes attributes() {
+    return attributes;
+  }
+
+  private static Attributes buildAttributes(Channel channel) {
+    // NB(lukaszx0) SSLSession will be set only if SSL handshake was successful
+    SSLSession sslSession = null;
+    if (channel.hasAttr(Utils.SSL_SESSION_ATTR_KEY)) {
+      sslSession = channel.attr(Utils.SSL_SESSION_ATTR_KEY).get();
+    }
+
+    return Attributes.newBuilder()
+        .set(GrpcUtil.REMOTE_ADDR_STREAM_ATTR_KEY, channel.remoteAddress())
+        .set(GrpcUtil.SSL_SESSION_STREAM_ATTR_KEY, sslSession)
+        .build();
   }
 }

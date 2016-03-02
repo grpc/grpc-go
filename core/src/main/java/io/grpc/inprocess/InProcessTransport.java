@@ -33,6 +33,7 @@ package io.grpc.inprocess;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import io.grpc.Attributes;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.Metadata;
@@ -366,6 +367,11 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
 
       @Override
       public void setDecompressor(Decompressor decompressor) {}
+
+      // TODO(lukasz) should we return something here?
+      @Override public Attributes attributes() {
+        return Attributes.EMPTY;
+      }
     }
 
     private class InProcessClientStream implements ClientStream {

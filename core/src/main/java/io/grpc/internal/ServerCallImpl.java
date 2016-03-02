@@ -42,6 +42,7 @@ import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 
+import io.grpc.Attributes;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
@@ -198,6 +199,11 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
   ServerStreamListener newServerStreamListener(ServerCall.Listener<ReqT> listener,
       Future<?> timeout) {
     return new ServerStreamListenerImpl<ReqT>(this, listener, timeout, context);
+  }
+
+  @Override
+  public Attributes attributes() {
+    return stream.attributes();
   }
 
   /**

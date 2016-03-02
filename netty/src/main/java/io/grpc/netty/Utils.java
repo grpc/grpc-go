@@ -49,6 +49,7 @@ import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
+import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
@@ -59,6 +60,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+
+import javax.net.ssl.SSLSession;
 
 /**
  * Common utility methods.
@@ -80,6 +83,9 @@ class Utils {
 
   public static final Resource<EventLoopGroup> DEFAULT_WORKER_EVENT_LOOP_GROUP =
       new DefaultEventLoopGroupResource(0, "grpc-default-worker-ELG");
+
+  public static final AttributeKey<SSLSession> SSL_SESSION_ATTR_KEY =
+      AttributeKey.valueOf(SSLSession.class, "ssl-session");
 
   public static Metadata convertHeaders(Http2Headers http2Headers) {
     return new Metadata(convertHeadersToArray(http2Headers));
