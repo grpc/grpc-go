@@ -62,29 +62,27 @@ public class RouteGuideServer {
   private static final Logger logger = Logger.getLogger(RouteGuideServer.class.getName());
 
   private final int port;
-  private final Collection<Feature> features;
-  private Server server;
+  private final Server server;
 
-  public RouteGuideServer(int port) {
+  public RouteGuideServer(int port) throws IOException {
     this(port, RouteGuideUtil.getDefaultFeaturesFile());
   }
 
   /** Create a RouteGuide server listening on {@code port} using {@code featureFile} database. */
-  public RouteGuideServer(int port, URL featureFile) {
-    try {
-      this.port = port;
-      features = RouteGuideUtil.parseFeatures(featureFile);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
+  public RouteGuideServer(int port, URL featureFile) throws IOException {
+    this(ServerBuilder.forPort(port), port, RouteGuideUtil.parseFeatures(featureFile));
+  }
+
+  /** Create a RouteGuide server using serverBuilder as a base and features as data. */
+  public RouteGuideServer(ServerBuilder<?> serverBuilder, int port, Collection<Feature> features) {
+    this.port = port;
+    server = serverBuilder.addService(RouteGuideGrpc.bindService(new RouteGuideService(features)))
+        .build();
   }
 
   /** Start serving requests. */
   public void start() throws IOException {
-    server = ServerBuilder.forPort(port)
-        .addService(RouteGuideGrpc.bindService(new RouteGuideService(features)))
-        .build()
-        .start();
+    server.start();
     logger.info("Server started, listening on " + port);
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override

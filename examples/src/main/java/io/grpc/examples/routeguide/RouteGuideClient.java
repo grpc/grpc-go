@@ -58,11 +58,14 @@ public class RouteGuideClient {
   private final RouteGuideBlockingStub blockingStub;
   private final RouteGuideStub asyncStub;
 
-  /** Construct client for accessing RoutGuide server at {@code host:port}. */
+  /** Construct client for accessing RouteGuide server at {@code host:port}. */
   public RouteGuideClient(String host, int port) {
-    channel = ManagedChannelBuilder.forAddress(host, port)
-        .usePlaintext(true)
-        .build();
+    this(ManagedChannelBuilder.forAddress(host, port).usePlaintext(true));
+  }
+
+  /** Construct client for accessing RouteGuide server using the existing channel. */
+  public RouteGuideClient(ManagedChannelBuilder<?> channelBuilder) {
+    channel = channelBuilder.build();
     blockingStub = RouteGuideGrpc.newBlockingStub(channel);
     asyncStub = RouteGuideGrpc.newStub(channel);
   }
