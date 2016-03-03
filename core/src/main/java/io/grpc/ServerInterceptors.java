@@ -35,7 +35,9 @@ import com.google.common.base.Preconditions;
 
 import java.io.BufferedInputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -44,6 +46,37 @@ import java.util.List;
 public class ServerInterceptors {
   // Prevent instantiation
   private ServerInterceptors() {}
+
+  /**
+   * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call
+   * {@code interceptors} before calling the pre-existing {@code ServerCallHandler}. The first
+   * interceptor will have its {@link ServerInterceptor#interceptCall} called first.
+   *
+   * @param serviceDef   the service definition for which to intercept all its methods.
+   * @param interceptors array of interceptors to apply to the service.
+   * @return a wrapped version of {@code serviceDef} with the interceptors applied.
+   */
+  public static ServerServiceDefinition interceptForward(ServerServiceDefinition serviceDef,
+                                                         ServerInterceptor... interceptors) {
+    return interceptForward(serviceDef, Arrays.asList(interceptors));
+  }
+
+  /**
+   * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call
+   * {@code interceptors} before calling the pre-existing {@code ServerCallHandler}. The first
+   * interceptor will have its {@link ServerInterceptor#interceptCall} called first.
+   *
+   * @param serviceDef   the service definition for which to intercept all its methods.
+   * @param interceptors list of interceptors to apply to the service.
+   * @return a wrapped version of {@code serviceDef} with the interceptors applied.
+   */
+  public static ServerServiceDefinition interceptForward(
+      ServerServiceDefinition serviceDef,
+      List<? extends ServerInterceptor> interceptors) {
+    List<? extends ServerInterceptor> copy = new ArrayList<ServerInterceptor>(interceptors);
+    Collections.reverse(copy);
+    return intercept(serviceDef, copy);
+  }
 
   /**
    * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call

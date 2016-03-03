@@ -33,7 +33,9 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -43,6 +45,35 @@ public class ClientInterceptors {
 
   // Prevent instantiation
   private ClientInterceptors() {}
+
+  /**
+   * Create a new {@link Channel} that will call {@code interceptors} before starting a call on the
+   * given channel. The first interceptor will have its {@link ClientInterceptor#interceptCall}
+   * called first.
+   *
+   * @param channel the underlying channel to intercept.
+   * @param interceptors array of interceptors to bind to {@code channel}.
+   * @return a new channel instance with the interceptors applied.
+   */
+  public static Channel interceptForward(Channel channel, ClientInterceptor... interceptors) {
+    return interceptForward(channel, Arrays.asList(interceptors));
+  }
+
+  /**
+   * Create a new {@link Channel} that will call {@code interceptors} before starting a call on the
+   * given channel. The first interceptor will have its {@link ClientInterceptor#interceptCall}
+   * called first.
+   *
+   * @param channel the underlying channel to intercept.
+   * @param interceptors a list of interceptors to bind to {@code channel}.
+   * @return a new channel instance with the interceptors applied.
+   */
+  public static Channel interceptForward(Channel channel,
+                                         List<? extends ClientInterceptor> interceptors) {
+    List<? extends ClientInterceptor> copy = new ArrayList<ClientInterceptor>(interceptors);
+    Collections.reverse(copy);
+    return intercept(channel, copy);
+  }
 
   /**
    * Create a new {@link Channel} that will call {@code interceptors} before starting a call on the

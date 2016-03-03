@@ -235,6 +235,51 @@ public class ServerInterceptorsTest {
   }
 
   @Test
+  public void orderedForward() {
+    final List<String> order = new ArrayList<String>();
+    handler = new ServerCallHandler<String, Integer>() {
+      @Override
+      public ServerCall.Listener<String> startCall(
+          MethodDescriptor<String, Integer> method,
+          ServerCall<Integer> call,
+          Metadata headers) {
+        order.add("handler");
+        return listener;
+      }
+    };
+    ServerInterceptor interceptor1 = new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          MethodDescriptor<ReqT, RespT> method,
+          ServerCall<RespT> call,
+          Metadata headers,
+          ServerCallHandler<ReqT, RespT> next) {
+        order.add("i1");
+        return next.startCall(method, call, headers);
+      }
+    };
+    ServerInterceptor interceptor2 = new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          MethodDescriptor<ReqT, RespT> method,
+          ServerCall<RespT> call,
+          Metadata headers,
+          ServerCallHandler<ReqT, RespT> next) {
+        order.add("i2");
+        return next.startCall(method, call, headers);
+      }
+    };
+    ServerServiceDefinition serviceDefinition = ServerServiceDefinition.builder("basic")
+        .addMethod(MethodDescriptor.create(MethodType.UNKNOWN, "basic/flow",
+            requestMarshaller, responseMarshaller), handler).build();
+    ServerServiceDefinition intercepted = ServerInterceptors.interceptForward(
+        serviceDefinition, interceptor1, interceptor2);
+    assertSame(listener,
+        getSoleMethod(intercepted).getServerCallHandler().startCall(method, call, headers));
+    assertEquals(Arrays.asList("i1", "i2", "handler"), order);
+  }
+
+  @Test
   public void argumentsPassed() {
     final MethodDescriptor<String, Integer> method2 = MethodDescriptor.create(
         MethodType.UNKNOWN, "someOtherRandom/Method", requestMarshaller, responseMarshaller);

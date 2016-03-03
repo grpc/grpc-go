@@ -201,6 +201,48 @@ public class ClientInterceptorsTest {
   }
 
   @Test
+  public void orderedForward() {
+    final List<String> order = new ArrayList<String>();
+    channel = new Channel() {
+      @SuppressWarnings("unchecked")
+      @Override
+      public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(
+          MethodDescriptor<ReqT, RespT> method, CallOptions callOptions) {
+        order.add("channel");
+        return (ClientCall<ReqT, RespT>) call;
+      }
+
+      @Override
+      public String authority() {
+        return null;
+      }
+    };
+    ClientInterceptor interceptor1 = new ClientInterceptor() {
+      @Override
+      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+          MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
+          Channel next) {
+        order.add("i1");
+        return next.newCall(method, callOptions);
+      }
+    };
+    ClientInterceptor interceptor2 = new ClientInterceptor() {
+      @Override
+      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+          MethodDescriptor<ReqT, RespT> method,
+          CallOptions callOptions,
+          Channel next) {
+        order.add("i2");
+        return next.newCall(method, callOptions);
+      }
+    };
+    Channel intercepted = ClientInterceptors.interceptForward(channel, interceptor1, interceptor2);
+    assertSame(call, intercepted.newCall(method, CallOptions.DEFAULT));
+    assertEquals(Arrays.asList("i1", "i2", "channel"), order);
+  }
+
+  @Test
   public void callOptions() {
     final CallOptions initialCallOptions = CallOptions.DEFAULT.withDeadlineNanoTime(100L);
     final CallOptions newCallOptions = initialCallOptions.withDeadlineNanoTime(300L);
