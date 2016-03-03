@@ -39,6 +39,8 @@ import static org.junit.Assert.assertTrue;
 import com.google.common.base.Objects;
 import com.google.common.util.concurrent.MoreExecutors;
 
+import io.grpc.Attributes.Key;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -51,17 +53,18 @@ import java.util.concurrent.TimeUnit;
 public class CallOptionsTest {
   private String sampleAuthority = "authority";
   private Long sampleDeadlineNanoTime = 1L;
-  private RequestKey sampleRequestKey = new RequestKey();
+  private Key<String> sampleKey = new Attributes.Key<String>("sample");
+  private Attributes sampleAffinity = Attributes.newBuilder().set(sampleKey, "blah").build();
   private CallOptions allSet = CallOptions.DEFAULT
       .withAuthority(sampleAuthority)
       .withDeadlineNanoTime(sampleDeadlineNanoTime)
-      .withRequestKey(sampleRequestKey);
+      .withAffinity(sampleAffinity);
 
   @Test
   public void defaultsAreAllNull() {
     assertNull(CallOptions.DEFAULT.getDeadlineNanoTime());
     assertNull(CallOptions.DEFAULT.getAuthority());
-    assertNull(CallOptions.DEFAULT.getRequestKey());
+    assertEquals(Attributes.EMPTY, CallOptions.DEFAULT.getAffinity());
     assertNull(CallOptions.DEFAULT.getExecutor());
   }
 
@@ -69,7 +72,7 @@ public class CallOptionsTest {
   public void allWiths() {
     assertSame(sampleAuthority, allSet.getAuthority());
     assertSame(sampleDeadlineNanoTime, allSet.getDeadlineNanoTime());
-    assertSame(sampleRequestKey, allSet.getRequestKey());
+    assertSame(sampleAffinity, allSet.getAffinity());
   }
 
   @Test
@@ -79,7 +82,7 @@ public class CallOptionsTest {
     assertTrue(equal(allSet,
           allSet.withDeadlineNanoTime(314L).withDeadlineNanoTime(sampleDeadlineNanoTime)));
     assertTrue(equal(allSet,
-          allSet.withRequestKey(new RequestKey()).withRequestKey(sampleRequestKey)));
+          allSet.withAffinity(Attributes.EMPTY).withAffinity(sampleAffinity)));
   }
 
   @Test
@@ -127,6 +130,6 @@ public class CallOptionsTest {
   private static boolean equal(CallOptions o1, CallOptions o2) {
     return Objects.equal(o1.getDeadlineNanoTime(), o2.getDeadlineNanoTime())
         && Objects.equal(o1.getAuthority(), o2.getAuthority())
-        && Objects.equal(o1.getRequestKey(), o2.getRequestKey());
+        && Objects.equal(o1.getAffinity(), o2.getAffinity());
   }
 }

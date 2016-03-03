@@ -32,6 +32,7 @@
 package io.grpc;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -60,8 +61,7 @@ public final class CallOptions {
   @Nullable
   private String authority;
 
-  @Nullable
-  private RequestKey requestKey;
+  private Attributes affinity = Attributes.EMPTY;
 
   @Nullable
   private String compressorName;
@@ -127,22 +127,21 @@ public final class CallOptions {
   }
 
   /**
-   * Returns a new {@code CallOptions} with a request key for affinity-based routing.
+   * Returns a new {@code CallOptions} with attributes for affinity-based routing.
    */
   @ExperimentalApi
-  public CallOptions withRequestKey(@Nullable RequestKey requestKey) {
+  public CallOptions withAffinity(Attributes affinity) {
     CallOptions newOptions = new CallOptions(this);
-    newOptions.requestKey = requestKey;
+    newOptions.affinity = Preconditions.checkNotNull(affinity);
     return newOptions;
   }
 
   /**
-   * Returns the request key for affinity-based routing.
+   * Returns the attributes for affinity-based routing.
    */
   @ExperimentalApi
-  @Nullable
-  public RequestKey getRequestKey() {
-    return requestKey;
+  public Attributes getAffinity() {
+    return affinity;
   }
 
 
@@ -194,7 +193,7 @@ public final class CallOptions {
   private CallOptions(CallOptions other) {
     deadlineNanoTime = other.deadlineNanoTime;
     authority = other.authority;
-    requestKey = other.requestKey;
+    affinity = other.affinity;
     executor = other.executor;
     compressorName = other.compressorName;
   }

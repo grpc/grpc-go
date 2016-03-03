@@ -33,7 +33,6 @@ package io.grpc;
 
 import java.util.List;
 
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -56,9 +55,9 @@ public abstract class LoadBalancer<T> {
    * <p>If called after {@link #shutdown} has been called, this method will return
    * a transport that would fail all requests.
    *
-   * @param requestKey for affinity-based routing
+   * @param affinity for affinity-based routing
    */
-  public abstract T pickTransport(@Nullable RequestKey requestKey);
+  public abstract T pickTransport(Attributes affinity);
 
   /**
    * Shuts down this {@code LoadBalancer}.

@@ -138,7 +138,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
           return SHUTDOWN_TRANSPORT;
         }
       }
-      return loadBalancer.pickTransport(callOptions.getRequestKey());
+      return loadBalancer.pickTransport(callOptions.getAffinity());
     }
   };
 

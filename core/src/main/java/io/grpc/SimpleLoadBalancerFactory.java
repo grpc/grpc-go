@@ -39,7 +39,6 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -86,7 +85,7 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
     }
 
     @Override
-    public T pickTransport(@Nullable RequestKey requestKey) {
+    public T pickTransport(Attributes affinity) {
       EquivalentAddressGroup addressesCopy;
       synchronized (lock) {
         if (closed) {

@@ -41,7 +41,6 @@ import io.grpc.Attributes;
 import io.grpc.Channel;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
-import io.grpc.RequestKey;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.Status;
 import io.grpc.TransportManager.InterimTransport;
@@ -61,7 +60,6 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.logging.Logger;
 
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -128,7 +126,7 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
   }
 
   @Override
-  public T pickTransport(@Nullable RequestKey requestKey) {
+  public T pickTransport(Attributes affinity) {
     RoundRobinServerList<T> serverListCopy;
     synchronized (lock) {
       if (closed) {
