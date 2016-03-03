@@ -34,6 +34,7 @@ package io.grpc.testing.integration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.EmptyProtos.Empty;
 
@@ -76,6 +77,7 @@ import java.util.concurrent.TimeUnit;
  */
 @RunWith(Parameterized.class)
 public class TlsTest {
+
   /**
    * Iterable of various configurations to use for tests.
    */
@@ -192,7 +194,9 @@ public class TlsTest {
       // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
       // javax.net.ssl.SSLHandshakeException or a java.nio.channels.ClosedChannelException.
       // Thus, reliably detecting the underlying cause is not feasible.
-      assertEquals(Status.Code.UNAVAILABLE, e.getStatus().getCode());
+      assertEquals(
+          Throwables.getStackTraceAsString(e),
+          Status.Code.UNAVAILABLE, e.getStatus().getCode());
     }
   }
 
@@ -232,7 +236,9 @@ public class TlsTest {
       // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
       // javax.net.ssl.SSLHandshakeException or a java.nio.channels.ClosedChannelException.
       // Thus, reliably detecting the underlying cause is not feasible.
-      assertEquals(Status.Code.UNAVAILABLE, e.getStatus().getCode());
+      assertEquals(
+          Throwables.getStackTraceAsString(e),
+          Status.Code.UNAVAILABLE, e.getStatus().getCode());
     }
   }
 
@@ -275,7 +281,10 @@ public class TlsTest {
       // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
       // javax.net.ssl.SSLHandshakeException or a java.nio.channels.ClosedChannelException.
       // Thus, reliably detecting the underlying cause is not feasible.
-      assertEquals(Status.Code.UNAVAILABLE, e.getStatus().getCode());
+      // TODO(carl-mastrangelo): eventually replace this with a hamcrest matcher.
+      assertEquals(
+          Throwables.getStackTraceAsString(e),
+          Status.Code.UNAVAILABLE, e.getStatus().getCode());
     }
   }
 
