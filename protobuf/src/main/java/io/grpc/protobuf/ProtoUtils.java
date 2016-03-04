@@ -35,14 +35,23 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
+import com.google.protobuf.Message.Builder;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.Parser;
+import com.google.protobuf.util.JsonFormat;
+import com.google.protobuf.util.JsonFormat.Printer;
 
+import io.grpc.ExperimentalApi;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.Charset;
 
 /**
  * Utility methods for using protobuf with grpc.
@@ -51,9 +60,8 @@ public class ProtoUtils {
 
   /** Create a {@code Marshaller} for protos of the same type as {@code defaultInstance}. */
   public static <T extends MessageLite> Marshaller<T> marshaller(final T defaultInstance) {
-    Parser<?> parserGeneric = defaultInstance.getParserForType();
     @SuppressWarnings("unchecked")
-    final Parser<T> parser = (Parser<T>) parserGeneric;
+    final Parser<T> parser = (Parser<T>) defaultInstance.getParserForType();
     return new Marshaller<T>() {
       @Override
       public InputStream stream(T value) {
@@ -105,6 +113,53 @@ public class ProtoUtils {
           e.setUnfinishedMessage(message);
           throw e;
         }
+      }
+    };
+  }
+
+  /**
+   * Create a {@code Marshaller} for json protos of the same type as {@code defaultInstance}.
+   *
+   * <p>This is an unstable API and has not been optimized yet for performance.
+   */
+  @ExperimentalApi
+  public static <T extends Message> Marshaller<T> jsonMarshaller(final T defaultInstance) {
+    final Printer printer = JsonFormat.printer();
+    final JsonFormat.Parser parser = JsonFormat.parser();
+    final Charset charset = Charset.forName("UTF-8");
+
+    return new Marshaller<T>() {
+      @Override
+      public InputStream stream(T value) {
+        try {
+          return new ByteArrayInputStream(printer.print(value).getBytes(charset));
+        } catch (InvalidProtocolBufferException e) {
+          throw Status.INVALID_ARGUMENT
+              .withCause(e)
+              .withDescription("Unable to print json proto")
+              .asRuntimeException();
+        }
+      }
+
+      @SuppressWarnings("unchecked")
+      @Override
+      public T parse(InputStream stream) {
+        Builder builder = defaultInstance.newBuilderForType();
+        Reader reader = new InputStreamReader(stream, charset);
+        T proto;
+        try {
+          parser.merge(reader, builder);
+          proto = (T) builder.build();
+          reader.close();
+        } catch (InvalidProtocolBufferException e) {
+          throw Status.INTERNAL.withDescription("Invalid protobuf byte sequence")
+              .withCause(e).asRuntimeException();
+        } catch (IOException e) {
+          // Same for now, might be unavailable
+          throw Status.INTERNAL.withDescription("Invalid protobuf byte sequence")
+              .withCause(e).asRuntimeException();
+        }
+        return proto;
       }
     };
   }
