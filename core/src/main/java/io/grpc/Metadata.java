@@ -361,7 +361,8 @@ public final class Metadata {
    * Marshaller for metadata values that are serialized into ASCII strings that contain only
    * following characters:
    * <ul>
-   *   <li>Space: {@code 0x20}, but must not be at the beginning or at the end of the value.</li>
+   *   <li>Space: {@code 0x20}, but must not be at the beginning or at the end of the value.
+   *   Leading or trailing whitespace may not be preserved.</li>
    *   <li>ASCII visible characters ({@code 0x21-0x7E}).
    * </ul>
    *

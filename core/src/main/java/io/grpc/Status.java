@@ -36,6 +36,10 @@ import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 
+import io.grpc.Metadata.AsciiMarshaller;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -317,11 +321,74 @@ public final class Status {
       = Metadata.Key.of("grpc-status", new StatusCodeMarshaller());
 
   /**
+   * Marshals status messages for ({@link #MESSAGE_KEY}.  gRPC does not use binary coding of
+   * status messages by default, which makes sending arbitrary strings difficult.  This marshaller
+   * uses ASCII printable characters by default, and percent encodes (e.g. %0A) all non ASCII bytes.
+   * This leads to normal text being mostly readable (especially useful for debugging), and special
+   * text still being sent.
+   *
+   * <p>By default, the HTTP spec says that header values must be encoded using a strict subset of
+   * ASCII (See RFC 7230 section 3.2.6).  HTTP/2 HPACK allows use of arbitrary binary headers, but
+   * we do not use them for interoperating with existing HTTP/1.1 code.  Since the grpc-message
+   * is encoded to such a header, it needs to not use forbidden characters.
+   *
+   * <p>This marshaller works by converting the passed in string into UTF-8, checking to see if
+   * each individual byte is an allowable byte, and then either percent encoding or passing it
+   * through.  When percent encoding, the byte is converted into hexadecimal notation with a '%'
+   * prepended.
+   *
+   * <p>When unmarshalling, bytes are passed through unless they match the "%XX" pattern.  If they
+   * do match, the unmarshaller attempts to convert them back into their original UTF-8 byte
+   * sequence.  After the input header bytes are converted into UTF-8 bytes, the new byte array is
+   * reinterpretted back as a string.
+   */
+  private static final AsciiMarshaller<String> STATUS_MESSAGE_MARSHALLER =
+      new AsciiMarshaller<String>() {
+
+    @Override
+    public String toAsciiString(String value) {
+      // This can be made faster if necessary.
+      StringBuilder sb = new StringBuilder(value.length());
+      for (byte b : value.getBytes(Charset.forName("UTF-8"))) {
+        if (b >= ' ' && b < '%' || b > '%' && b < '~') {
+          // fast path, if it's plain ascii and not a percent, pass it through.
+          sb.append((char) b);
+        } else {
+          sb.append(String.format("%%%02X", b));
+        }
+      }
+      return sb.toString();
+    }
+
+    @Override
+    public String parseAsciiString(String value) {
+      Charset transerEncoding = Charset.forName("US-ASCII");
+      // This can be made faster if necessary.
+      byte[] source = value.getBytes(transerEncoding);
+      ByteBuffer buf = ByteBuffer.allocate(source.length);
+      for (int i = 0; i < source.length; ) {
+        if (source[i] == '%' && i + 2 < source.length) {
+          try {
+            buf.put((byte)Integer.parseInt(new String(source, i + 1, 2, transerEncoding), 16));
+            i += 3;
+            continue;
+          } catch (NumberFormatException e) {
+            // ignore, fall through, just push the bytes.
+          }
+        }
+        buf.put(source[i]);
+        i += 1;
+      }
+      return new String(buf.array(), 0, buf.position(), Charset.forName("UTF-8"));
+    }
+  };
+
+  /**
    * Key to bind status message to trailing metadata.
    */
   @Internal
   public static final Metadata.Key<String> MESSAGE_KEY
-      = Metadata.Key.of("grpc-message", Metadata.ASCII_STRING_MARSHALLER);
+      = Metadata.Key.of("grpc-message", STATUS_MESSAGE_MARSHALLER);
 
   /**
    * Extract an error {@link Status} from the causal chain of a {@link Throwable}.
@@ -371,7 +438,8 @@ public final class Status {
   }
 
   /**
-   * Create a derived instance of {@link Status} with the given description.
+   * Create a derived instance of {@link Status} with the given description.  Leading and trailing
+   * whitespace may be removed; this may change in the future.
    */
   public Status withDescription(String description) {
     if (Objects.equal(this.description, description)) {
@@ -382,7 +450,8 @@ public final class Status {
 
   /**
    * Create a derived instance of {@link Status} augmenting the current description with
-   * additional detail.
+   * additional detail.  Leading and trailing whitespace may be removed; this may change in the
+   * future.
    */
   public Status augmentDescription(String additionalDetail) {
     if (additionalDetail == null) {

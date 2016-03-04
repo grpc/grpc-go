@@ -40,9 +40,13 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.nio.charset.Charset;
+
 /** Unit tests for {@link Status}. */
 @RunWith(JUnit4.class)
 public class StatusTest {
+  private final Charset ascii = Charset.forName("US-ASCII");
+
   @Test
   public void verifyExceptionMessage() {
     assertEquals("UNKNOWN", Status.UNKNOWN.asRuntimeException().getMessage());
@@ -72,5 +76,73 @@ public class StatusTest {
   @Test
   public void useObjectHashCode() {
     assertEquals(Status.CANCELLED.hashCode(), System.identityHashCode(Status.CANCELLED));
+  }
+
+  @Test
+  public void metadataEncode_lowAscii() {
+    byte[] b = Status.MESSAGE_KEY.toBytes("my favorite character is \u0000");
+    assertEquals("my favorite character is %00", new String(b, ascii));
+  }
+
+  @Test
+  public void metadataEncode_percent() {
+    byte[] b = Status.MESSAGE_KEY.toBytes("my favorite character is %");
+    assertEquals("my favorite character is %25", new String(b, ascii));
+  }
+
+  @Test
+  public void metadataEncode_surrogatePair() {
+    byte[] b = Status.MESSAGE_KEY.toBytes("my favorite character is 𐀁");
+    assertEquals("my favorite character is %F0%90%80%81", new String(b, ascii));
+  }
+
+  @Test
+  public void metadataEncode_unmatchedHighSurrogate() {
+    byte[] b = Status.MESSAGE_KEY.toBytes("my favorite character is " + ((char) 0xD801));
+    assertEquals("my favorite character is ?", new String(b, ascii));
+  }
+
+  @Test
+  public void metadataEncode_unmatchedLowSurrogate() {
+    byte[] b = Status.MESSAGE_KEY.toBytes("my favorite character is " + ((char)0xDC37));
+    assertEquals("my favorite character is ?", new String(b, ascii));
+  }
+
+  @Test
+  public void metadataEncode_maxSurrogatePair() {
+    byte[] b = Status.MESSAGE_KEY.toBytes(
+        "my favorite character is " + ((char)0xDBFF) + ((char)0xDFFF));
+    assertEquals("my favorite character is %F4%8F%BF%BF", new String(b, ascii));
+  }
+
+  @Test
+  public void metadataDecode_ascii() {
+    String s = Status.MESSAGE_KEY.parseBytes(new byte[]{'H', 'e', 'l', 'l', 'o'});
+    assertEquals("Hello", s);
+  }
+
+  @Test
+  public void metadataDecode_percent() {
+    String s = Status.MESSAGE_KEY.parseBytes(new byte[]{'H', '%', '6', '1', 'o'});
+    assertEquals("Hao", s);
+  }
+
+  @Test
+  public void metadataDecode_percentUnderflow() {
+    String s = Status.MESSAGE_KEY.parseBytes(new byte[]{'H', '%', '6'});
+    assertEquals("H%6", s);
+  }
+
+  @Test
+  public void metadataDecode_surrogate() {
+    String s = Status.MESSAGE_KEY.parseBytes(
+        new byte[]{'%', 'F', '0', '%', '9', '0', '%', '8', '0', '%', '8', '1'});
+    assertEquals("𐀁", s);
+  }
+
+  @Test
+  public void metadataDecode_badEncoding() {
+    String s = Status.MESSAGE_KEY.parseBytes(new byte[]{'%', 'G', '0'});
+    assertEquals("%G0", s);
   }
 }
