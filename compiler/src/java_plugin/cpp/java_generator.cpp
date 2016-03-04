@@ -501,6 +501,7 @@ static void PrintMethodHandlerClass(const ServiceDescriptor* service,
   p->Indent();
   p->Print(
       *vars,
+      "@$Override$\n"
       "@java.lang.SuppressWarnings(\"unchecked\")\n"
       "public void invoke(Req request, $StreamObserver$<Resp> responseObserver) {\n"
       "  switch (methodId) {\n");
@@ -535,6 +536,7 @@ static void PrintMethodHandlerClass(const ServiceDescriptor* service,
 
   p->Print(
       *vars,
+      "@$Override$\n"
       "@java.lang.SuppressWarnings(\"unchecked\")\n"
       "public $StreamObserver$<Req> invoke(\n"
       "    $StreamObserver$<Resp> responseObserver) {\n"
