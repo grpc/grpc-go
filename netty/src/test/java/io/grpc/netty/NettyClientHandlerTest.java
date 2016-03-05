@@ -496,7 +496,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     };
 
     return NettyClientHandler.newHandler(connection, frameReader(), frameWriter(),
-        listener, flowControlWindow,ticker);
+        new ClientTransportLifecycleManager(listener), flowControlWindow, ticker);
   }
 
   @Override

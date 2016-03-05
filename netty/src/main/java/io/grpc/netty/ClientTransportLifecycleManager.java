@@ -32,19 +32,55 @@
 package io.grpc.netty;
 
 import io.grpc.Status;
+import io.grpc.internal.ManagedClientTransport;
 
-/**
- * A command to trigger close. It is buffered differently than normal close and also includes
- * reason for closure.
- */
-class GracefulCloseCommand {
-  private final Status status;
+/** Maintainer of transport lifecycle status. */
+final class ClientTransportLifecycleManager {
+  private final ManagedClientTransport.Listener listener;
+  private boolean transportReady;
+  private boolean transportShutdown;
+  /** null iff !transportShutdown. */
+  private Status shutdownStatus;
+  /** null iff !transportShutdown. */
+  private Throwable shutdownThrowable;
+  private boolean transportTerminated;
 
-  public GracefulCloseCommand(Status status) {
-    this.status = status;
+  public ClientTransportLifecycleManager(ManagedClientTransport.Listener listener) {
+    this.listener = listener;
   }
 
-  public Status getStatus() {
-    return status;
+  public void notifyReady() {
+    if (transportReady || transportShutdown) {
+      return;
+    }
+    transportReady = true;
+    listener.transportReady();
+  }
+
+  public void notifyShutdown(Status s) {
+    if (transportShutdown) {
+      return;
+    }
+    transportShutdown = true;
+    shutdownStatus = s;
+    shutdownThrowable = s.asException();
+    listener.transportShutdown(s);
+  }
+
+  public void notifyTerminated(Status s) {
+    if (transportTerminated) {
+      return;
+    }
+    transportTerminated = true;
+    notifyShutdown(s);
+    listener.transportTerminated();
+  }
+
+  public Status getShutdownStatus() {
+    return shutdownStatus;
+  }
+
+  public Throwable getShutdownThrowable() {
+    return shutdownThrowable;
   }
 }

@@ -55,8 +55,6 @@ import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.Executor;
 
-import javax.annotation.concurrent.GuardedBy;
-
 /**
  * A Netty-based {@link ManagedClientTransport} implementation.
  */
@@ -74,16 +72,8 @@ class NettyClientTransport implements ManagedClientTransport {
   // We should not send on the channel until negotiation completes. This is a hard requirement
   // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
   private Channel channel;
-  private Listener listener;
-  /** Whether the transport started shutting down. */
-  @GuardedBy("this")
-  private boolean shutdown;
-  /** The cause of the shutdown. {@code null} iff not {@code shutdown} */
-  @GuardedBy("this")
-  private Status shutdownStatus;
-  /** Whether the transport completed shutting down. */
-  @GuardedBy("this")
-  private boolean terminated;
+  /** Since not thread-safe, may only be used from event loop. */
+  private ClientTransportLifecycleManager lifecycleManager;
 
   NettyClientTransport(SocketAddress address, Class<? extends Channel> channelType,
                        EventLoopGroup group, ProtocolNegotiator negotiator,
@@ -130,7 +120,8 @@ class NettyClientTransport implements ManagedClientTransport {
 
   @Override
   public void start(Listener transportListener) {
-    listener = Preconditions.checkNotNull(transportListener, "listener");
+    lifecycleManager = new ClientTransportLifecycleManager(
+        Preconditions.checkNotNull(transportListener, "listener"));
 
     handler = newHandler();
     negotiationHandler = negotiator.newHandler(handler);
@@ -171,9 +162,9 @@ class NettyClientTransport implements ManagedClientTransport {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
         if (!future.isSuccess()) {
-          // Need to notify of this failure, because handler.connectionError() is not guaranteed to
-          // have seen this cause.
-          notifyTerminated(Utils.statusFromThrowable(future.cause()));
+          // Need to notify of this failure, because NettyClientHandler may not have been added to
+          // the pipeline before the error occurred.
+          lifecycleManager.notifyTerminated(Utils.statusFromThrowable(future.cause()));
         }
       }
     });
@@ -181,23 +172,20 @@ class NettyClientTransport implements ManagedClientTransport {
     channel.closeFuture().addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
-        Status status = handler.errorStatus();
-        if (status == null) {
-          // We really only expect this to happen if shutdown() was called, but in that case this
-          // status is ignored.
-          status = Status.INTERNAL.withDescription("Connection closed with unknown cause");
-        }
-        notifyTerminated(status);
+        // Typically we should have noticed shutdown before this point.
+        lifecycleManager.notifyTerminated(
+            Status.INTERNAL.withDescription("Connection closed with unknown cause"));
       }
     });
   }
 
   @Override
   public void shutdown() {
-    notifyShutdown(Status.UNAVAILABLE.withDescription("Channel requested transport to shut down"));
     // Notifying of termination is automatically done when the channel closes.
-    if (channel != null && channel.isOpen()) {
-      handler.getWriteQueue().enqueue(new GracefulCloseCommand(), true);
+    if (channel.isOpen()) {
+      Status status
+          = Status.UNAVAILABLE.withDescription("Channel requested transport to shut down");
+      handler.getWriteQueue().enqueue(new GracefulCloseCommand(status), true);
     }
   }
 
@@ -215,6 +203,7 @@ class NettyClientTransport implements ManagedClientTransport {
     Throwable t = f.cause();
     if (t instanceof ClosedChannelException) {
       synchronized (this) {
+        Status shutdownStatus = lifecycleManager.getShutdownStatus();
         if (shutdownStatus == null) {
           return Status.UNKNOWN.withDescription("Channel closed but for unknown reason");
         }
@@ -224,35 +213,8 @@ class NettyClientTransport implements ManagedClientTransport {
     return Utils.statusFromThrowable(t);
   }
 
-  private void notifyShutdown(Status status) {
-    Preconditions.checkNotNull(status, "status");
-    boolean notifyShutdown = false;
-    synchronized (this) {
-      if (!shutdown) {
-        notifyShutdown = true;
-        shutdown = true;
-        shutdownStatus = status;
-      }
-    }
-    if (notifyShutdown) {
-      listener.transportShutdown(status);
-    }
-  }
-
-  private void notifyTerminated(Status status) {
-    notifyShutdown(status);
-    boolean notifyTerminated;
-    synchronized (this) {
-      notifyTerminated = !terminated;
-      terminated = true;
-    }
-    if (notifyTerminated) {
-      listener.transportTerminated();
-    }
-  }
-
   private NettyClientHandler newHandler() {
-    return NettyClientHandler.newHandler(listener, flowControlWindow, maxHeaderListSize,
+    return NettyClientHandler.newHandler(lifecycleManager, flowControlWindow, maxHeaderListSize,
         Ticker.systemTicker());
   }
 }

@@ -112,6 +112,7 @@ abstract class NettyClientStream extends Http2ClientStream {
 
   /**
    * Intended to be overriden by NettyClientTransport, which has more information about failures.
+   * May only be called from event loop.
    */
   protected abstract Status statusFromFailedFuture(ChannelFuture f);
 
