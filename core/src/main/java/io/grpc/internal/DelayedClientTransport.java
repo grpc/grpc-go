@@ -80,20 +80,19 @@ class DelayedClientTransport implements ManagedClientTransport {
   @Override
   public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
     Supplier<ClientTransport> supplier = transportSupplier;
+    if (supplier == null) {
+      synchronized (lock) {
+        // Check again, since it may have changed while waiting for lock
+        supplier = transportSupplier;
+        if (supplier == null && !shutdown) {
+          PendingStream pendingStream = new PendingStream(method, headers);
+          pendingStreams.add(pendingStream);
+          return pendingStream;
+        }
+      }
+    }
     if (supplier != null) {
       return supplier.get().newStream(method, headers);
-    }
-    synchronized (lock) {
-      // Check again, since it may have changed while waiting for lock
-      supplier = transportSupplier;
-      if (supplier != null) {
-        return supplier.get().newStream(method, headers);
-      }
-      if (!shutdown) {
-        PendingStream pendingStream = new PendingStream(method, headers);
-        pendingStreams.add(pendingStream);
-        return pendingStream;
-      }
     }
     return new FailingClientStream(Status.UNAVAILABLE.withDescription("transport shutdown"));
   }
@@ -101,22 +100,20 @@ class DelayedClientTransport implements ManagedClientTransport {
   @Override
   public void ping(final PingCallback callback, Executor executor) {
     Supplier<ClientTransport> supplier = transportSupplier;
+    if (supplier == null) {
+      synchronized (lock) {
+        // Check again, since it may have changed while waiting for lock
+        supplier = transportSupplier;
+        if (supplier == null && !shutdown) {
+          PendingPing pendingPing = new PendingPing(callback, executor);
+          pendingPings.add(pendingPing);
+          return;
+        }
+      }
+    }
     if (supplier != null) {
       supplier.get().ping(callback, executor);
       return;
-    }
-    synchronized (lock) {
-      // Check again, since it may have changed while waiting for lock
-      supplier = transportSupplier;
-      if (supplier != null) {
-        supplier.get().ping(callback, executor);
-        return;
-      }
-      if (!shutdown) {
-        PendingPing pendingPing = new PendingPing(callback, executor);
-        pendingPings.add(pendingPing);
-        return;
-      }
     }
     executor.execute(new Runnable() {
         @Override public void run() {

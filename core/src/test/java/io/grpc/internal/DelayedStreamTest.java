@@ -31,12 +31,18 @@
 
 package io.grpc.internal;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 import io.grpc.Codec;
 import io.grpc.Metadata;
@@ -83,11 +89,28 @@ public class DelayedStreamTest {
     inOrder.verify(realStream).start(listener);
   }
 
+  @Test(expected = IllegalStateException.class)
+  public void setAuthority_afterStart() {
+    stream.start(listener);
+    stream.setAuthority("notgonnawork");
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void start_afterStart() {
+    stream.start(listener);
+    stream.start(mock(ClientStreamListener.class));
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void setDecompressor_beforeSetStream() {
+    stream.start(listener);
+    stream.setDecompressor(Codec.Identity.NONE);
+  }
+
   @Test
   public void setStream_sendsAllMessages() {
     stream.start(listener);
     stream.setCompressor(Codec.Identity.NONE);
-    stream.setDecompressor(Codec.Identity.NONE);
 
     stream.setMessageCompression(true);
     InputStream message = new ByteArrayInputStream(new byte[]{'a'});
@@ -96,17 +119,19 @@ public class DelayedStreamTest {
     stream.writeMessage(message);
 
     stream.setStream(realStream);
+    stream.setDecompressor(Codec.Identity.NONE);
 
     verify(realStream).setCompressor(Codec.Identity.NONE);
     verify(realStream).setDecompressor(Codec.Identity.NONE);
 
-    // Verify that the order was correct, even though they should be interleaved with the
-    // writeMessage calls
     verify(realStream).setMessageCompression(true);
-    verify(realStream, times(2)).setMessageCompression(false);
+    verify(realStream).setMessageCompression(false);
 
     verify(realStream, times(2)).writeMessage(message);
     verify(realStream).start(listener);
+
+    stream.writeMessage(message);
+    verify(realStream, times(3)).writeMessage(message);
   }
 
   @Test
@@ -123,8 +148,10 @@ public class DelayedStreamTest {
     stream.start(listener);
     stream.flush();
     stream.setStream(realStream);
-
     verify(realStream).flush();
+
+    stream.flush();
+    verify(realStream, times(2)).flush();
   }
 
   @Test
@@ -132,17 +159,45 @@ public class DelayedStreamTest {
     stream.start(listener);
     stream.request(1);
     stream.request(2);
-
     stream.setStream(realStream);
+    verify(realStream).request(1);
+    verify(realStream).request(2);
 
+    stream.request(3);
     verify(realStream).request(3);
+  }
+
+  @Test
+  public void setStream_setMessageCompression() {
+    stream.start(listener);
+    stream.setMessageCompression(false);
+    stream.setStream(realStream);
+    verify(realStream).setMessageCompression(false);
+
+    stream.setMessageCompression(true);
+    verify(realStream).setMessageCompression(true);
+  }
+
+  @Test
+  public void setStream_isReady() {
+    stream.start(listener);
+    assertFalse(stream.isReady());
+    stream.setStream(realStream);
+    verify(realStream, never()).isReady();
+
+    assertFalse(stream.isReady());
+    verify(realStream).isReady();
+
+    when(realStream.isReady()).thenReturn(true);
+    assertTrue(stream.isReady());
+    verify(realStream, times(2)).isReady();
   }
 
   @Test
   public void startThenCancelled() {
     stream.start(listener);
     stream.cancel(Status.CANCELLED);
-    verify(listener).closed(eq(Status.CANCELLED), isA(Metadata.class));
+    verify(listener).closed(eq(Status.CANCELLED), any(Metadata.class));
   }
 
   @Test
@@ -171,9 +226,36 @@ public class DelayedStreamTest {
   }
 
   @Test
+  public void setStreamTwice() {
+    stream.start(listener);
+    stream.setStream(realStream);
+    verify(realStream).start(listener);
+    stream.setStream(mock(ClientStream.class));
+    stream.flush();
+    verify(realStream).flush();
+  }
+
+  @Test
+  public void cancelThenSetStream() {
+    stream.cancel(Status.CANCELLED);
+    stream.setStream(realStream);
+    stream.start(listener);
+    stream.isReady();
+    verifyNoMoreInteractions(realStream);
+  }
+
+  @Test
+  public void cancel_beforeStart() {
+    Status status = Status.CANCELLED.withDescription("that was quick");
+    stream.cancel(status);
+    stream.start(listener);
+    verify(listener).closed(same(status), any(Metadata.class));
+  }
+
+  @Test
   public void cancelledThenStart() {
     stream.cancel(Status.CANCELLED);
     stream.start(listener);
-    verify(listener).closed(eq(Status.CANCELLED), isA(Metadata.class));
+    verify(listener).closed(eq(Status.CANCELLED), any(Metadata.class));
   }
 }

@@ -219,6 +219,18 @@ public class DelayedClientTransportTest {
     verify(mockRealTransport).ping(same(pingCallback), same(mockExecutor));
   }
 
+  @Test public void shutdownThenPing() {
+    delayedTransport.shutdown();
+    verify(transportListener).transportShutdown(any(Status.class));
+    verify(transportListener).transportTerminated();
+    delayedTransport.ping(pingCallback, mockExecutor);
+    verifyNoMoreInteractions(pingCallback);
+    ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+    verify(mockExecutor).execute(runnableCaptor.capture());
+    runnableCaptor.getValue().run();
+    verify(pingCallback).onFailure(any(Throwable.class));
+  }
+
   @Test public void shutdownThenNewStream() {
     delayedTransport.shutdown();
     verify(transportListener).transportShutdown(any(Status.class));

@@ -34,15 +34,13 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.common.base.Preconditions;
-
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.Metadata;
 import io.grpc.Status;
 
 import java.io.InputStream;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.concurrent.GuardedBy;
@@ -56,263 +54,251 @@ import javax.annotation.concurrent.GuardedBy;
  * necessary.
  */
 class DelayedStream implements ClientStream {
-
-  // set to non null once both listener and realStream are valid.  After this point it is safe
-  // to call methods on startedRealStream.  Note: this may be true even after the delayed stream is
-  // cancelled.  This should be okay.
-  private volatile ClientStream startedRealStream;
-  @GuardedBy("this")
-  private String authority;
-  @GuardedBy("this")
+  /** {@code true} once realStream is valid and all pending calls have been drained. */
+  private volatile boolean passThrough;
+  /**
+   * Non-{@code null} iff start has been called. Used to assert methods are called in appropriate
+   * order, but also used if an error occurrs before {@code realStream} is set.
+   */
   private ClientStreamListener listener;
-  @GuardedBy("this")
+  /** Must hold {@code this} lock when setting. */
   private ClientStream realStream;
   @GuardedBy("this")
   private Status error;
-
   @GuardedBy("this")
-  private final List<PendingMessage> pendingMessages = new LinkedList<PendingMessage>();
-  private boolean messageCompressionEnabled;
-  @GuardedBy("this")
-  private boolean pendingHalfClose;
-  @GuardedBy("this")
-  private int pendingFlowControlRequests;
-  @GuardedBy("this")
-  private boolean pendingFlush;
-  @GuardedBy("this")
-  private Compressor compressor;
-  @GuardedBy("this")
-  private Decompressor decompressor;
-
-  static final class PendingMessage {
-    final InputStream message;
-    final boolean shouldBeCompressed;
-
-    public PendingMessage(InputStream message, boolean shouldBeCompressed) {
-      this.message = message;
-      this.shouldBeCompressed = shouldBeCompressed;
-    }
-  }
-
-  @Override
-  public synchronized void setAuthority(String authority) {
-    checkState(listener == null, "must be called before start");
-    checkNotNull(authority, "authority");
-    if (realStream == null) {
-      this.authority = authority;
-    } else {
-      realStream.setAuthority(authority);
-    }
-  }
-
-  @Override
-  public void start(ClientStreamListener listener) {
-    synchronized (this) {
-      // start may be called at most once.
-      checkState(this.listener == null, "already started");
-      this.listener = checkNotNull(listener, "listener");
-
-      // Check error first rather than success.
-      if (error != null) {
-        listener.closed(error, new Metadata());
-      }
-      // In the event that an error happened, realStream will be a noop stream.  We still call
-      // start stream in order to drain references to pending messages.
-      if (realStream != null) {
-        startStream();
-      }
-    }
-  }
-
-  @GuardedBy("this")
-  private void startStream() {
-    checkState(realStream != null, "realStream");
-    checkState(listener != null, "listener");
-    if (authority != null) {
-      realStream.setAuthority(authority);
-    }
-    realStream.start(listener);
-
-    if (decompressor != null) {
-      realStream.setDecompressor(decompressor);
-    }
-    if (compressor != null) {
-      realStream.setCompressor(compressor);
-    }
-
-    for (PendingMessage message : pendingMessages) {
-      realStream.setMessageCompression(message.shouldBeCompressed);
-      realStream.writeMessage(message.message);
-    }
-    // Set this again, incase no messages were sent.
-    realStream.setMessageCompression(messageCompressionEnabled);
-    pendingMessages.clear();
-    if (pendingHalfClose) {
-      realStream.halfClose();
-      pendingHalfClose = false;
-    }
-    if (pendingFlowControlRequests > 0) {
-      realStream.request(pendingFlowControlRequests);
-      pendingFlowControlRequests = 0;
-    }
-    if (pendingFlush) {
-      realStream.flush();
-      pendingFlush = false;
-    }
-    // Ensures visibility.
-    startedRealStream = realStream;
-  }
+  private List<Runnable> pendingCalls = new ArrayList<Runnable>();
 
   /**
    * Transfers all pending and future requests and mutations to the given stream.
    *
    * <p>No-op if either this method or {@link #cancel} have already been called.
    */
+  // When this method returns, passThrough is guaranteed to be true
   final void setStream(ClientStream stream) {
     synchronized (this) {
-      if (error != null || realStream != null) {
+      // If realStream != null, then either setStream() or cancel() has been called.
+      if (realStream != null) {
         return;
       }
       realStream = checkNotNull(stream, "stream");
-      // listener can only be non-null if start has already been called.
-      if (listener != null) {
-        startStream();
+    }
+
+    drainPendingCalls();
+  }
+
+  /**
+   * Called to transition {@code passThrough} to {@code true}. This method is not safe to be called
+   * multiple times; the caller must ensure it will only be called once, ever. {@code this} lock
+   * should not be held when calling this method.
+   */
+  private void drainPendingCalls() {
+    assert realStream != null;
+    assert !passThrough;
+    List<Runnable> toRun = new ArrayList<Runnable>();
+    while (true) {
+      synchronized (this) {
+        if (pendingCalls.isEmpty()) {
+          pendingCalls = null;
+          passThrough = true;
+          break;
+        }
+        // Since there were pendingCalls, we need to process them. To maintain ordering we can't set
+        // passThrough=true until we run all pendingCalls, but new Runnables may be added after we
+        // drop the lock. So we will have to re-check pendingCalls.
+        List<Runnable> tmp = toRun;
+        toRun = pendingCalls;
+        pendingCalls = tmp;
       }
+      for (Runnable runnable : toRun) {
+        // Must not call transport while lock is held to prevent deadlocks.
+        // TODO(ejona): exception handling
+        runnable.run();
+      }
+      toRun.clear();
     }
   }
 
-  @Override
-  public void writeMessage(InputStream message) {
-    if (startedRealStream == null) {
-      synchronized (this) {
-        if (startedRealStream == null) {
-          pendingMessages.add(new PendingMessage(message, messageCompressionEnabled));
-          return;
-        }
+  /**
+   * Enqueue the runnable or execute it now. Call sites that may be called many times may want avoid
+   * this method if {@code passThrough == true}.
+   *
+   * <p>Note that this method is no more thread-safe than {@code runnable}. It is thread-safe if and
+   * only if {@code runnable} is thread-safe.
+   */
+  private void delayOrExecute(Runnable runnable) {
+    synchronized (this) {
+      if (!passThrough) {
+        pendingCalls.add(runnable);
+        return;
       }
     }
-    startedRealStream.writeMessage(message);
+    runnable.run();
+  }
+
+  @Override
+  public void setAuthority(final String authority) {
+    checkState(listener == null, "May only be called before start");
+    checkNotNull(authority, "authority");
+    delayOrExecute(new Runnable() {
+      @Override
+      public void run() {
+        realStream.setAuthority(authority);
+      }
+    });
+  }
+
+  @Override
+  public void start(final ClientStreamListener listener) {
+    checkState(this.listener == null, "already started");
+
+    Status savedError;
+    synchronized (this) {
+      this.listener = checkNotNull(listener, "listener");
+      // If error != null, then cancel() has been called and was unable to close the listener
+      savedError = error;
+    }
+    if (savedError != null) {
+      listener.closed(savedError, new Metadata());
+      return;
+    }
+
+    delayOrExecute(new Runnable() {
+      @Override
+      public void run() {
+        realStream.start(listener);
+      }
+    });
+  }
+
+  @Override
+  public void writeMessage(final InputStream message) {
+    checkNotNull(message, "message");
+    if (passThrough) {
+      realStream.writeMessage(message);
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realStream.writeMessage(message);
+        }
+      });
+    }
   }
 
   @Override
   public void flush() {
-    if (startedRealStream == null) {
-      synchronized (this) {
-        if (startedRealStream == null) {
-          pendingFlush = true;
-          return;
+    if (passThrough) {
+      realStream.flush();
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realStream.flush();
         }
-      }
+      });
     }
-    startedRealStream.flush();
   }
 
+  // When this method returns, passThrough is guaranteed to be true
   @Override
-  public void cancel(Status reason) {
-    // At least one of them is null.
-    ClientStream streamToBeCancelled = startedRealStream;
-    ClientStreamListener listenerToBeCalled = null;
-    if (streamToBeCancelled == null) {
-      synchronized (this) {
-        if (realStream != null) {
-          // realStream already set. Just cancel it.
-          streamToBeCancelled = realStream;
-        } else if (error == null) {
-          // Neither realStream and error are set. Will set the error and call the listener if
-          // it's set.
-          error = checkNotNull(reason);
-          realStream = NoopClientStream.INSTANCE;
-          if (listener != null) {
-            // call startStream anyways to drain pending messages.
-            startStream();
-            listenerToBeCalled = listener;
-          }
-        }  // else: error already set, do nothing.
+  public void cancel(final Status reason) {
+    checkNotNull(reason, "reason");
+    boolean delegateToRealStream = true;
+    ClientStreamListener listenerToClose = null;
+    synchronized (this) {
+      // If realStream != null, then either setStream() or cancel() has been called
+      if (realStream == null) {
+        realStream = NoopClientStream.INSTANCE;
+        delegateToRealStream = false;
+
+        // If listener == null, then start() will later call listener with 'error'
+        listenerToClose = listener;
+        error = reason;
       }
     }
-    if (listenerToBeCalled != null) {
-      Preconditions.checkState(streamToBeCancelled == null, "unexpected streamToBeCancelled");
-      listenerToBeCalled.closed(reason, new Metadata());
-    }
-    if (streamToBeCancelled != null) {
-      streamToBeCancelled.cancel(reason);
+    if (delegateToRealStream) {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realStream.cancel(reason);
+        }
+      });
+    } else {
+      if (listenerToClose != null) {
+        listenerToClose.closed(reason, new Metadata());
+      }
+      drainPendingCalls();
     }
   }
 
   @Override
   public void halfClose() {
-    if (startedRealStream == null) {
-      synchronized (this) {
-        if (startedRealStream == null) {
-          pendingHalfClose = true;
-          return;
-        }
+    delayOrExecute(new Runnable() {
+      @Override
+      public void run() {
+        realStream.halfClose();
       }
-    }
-    startedRealStream.halfClose();
+    });
   }
 
   @Override
-  public void request(int numMessages) {
-    if (startedRealStream == null) {
-      synchronized (this) {
-        if (startedRealStream == null) {
-          pendingFlowControlRequests += numMessages;
-          return;
+  public void request(final int numMessages) {
+    if (passThrough) {
+      realStream.request(numMessages);
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realStream.request(numMessages);
         }
-      }
+      });
     }
-    startedRealStream.request(numMessages);
   }
 
   @Override
-  public void setCompressor(Compressor compressor) {
-    if (startedRealStream == null) {
-      synchronized (this) {
-        if (startedRealStream == null) {
-          this.compressor = compressor;
-          return;
-        }
+  public void setCompressor(final Compressor compressor) {
+    checkNotNull(compressor, "compressor");
+    delayOrExecute(new Runnable() {
+      @Override
+      public void run() {
+        realStream.setCompressor(compressor);
       }
-    }
-    startedRealStream.setCompressor(compressor);
+    });
   }
 
   @Override
   public void setDecompressor(Decompressor decompressor) {
-    if (startedRealStream == null) {
-      synchronized (this) {
-        if (startedRealStream == null) {
-          this.decompressor = decompressor;
-          return;
-        }
-      }
-    }
-    startedRealStream.setDecompressor(decompressor);
+    checkNotNull(decompressor, "decompressor");
+    // This method being called only makes sense after setStream() has been called (but not
+    // necessarily returned), but there is not necessarily a happens-before relationship. This
+    // synchronized block creates one.
+    synchronized (this) { }
+    checkState(realStream != null, "How did we receive a reply before the request is sent?");
+    // ClientStreamListenerImpl (in ClientCallImpl) requires setDecompressor to be set immediately,
+    // since messages may be processed immediately after this method returns.
+    realStream.setDecompressor(decompressor);
   }
 
   @Override
   public boolean isReady() {
-    if (startedRealStream == null) {
-      synchronized (this) {
-        if (startedRealStream == null) {
-          return false;
-        }
-      }
+    if (passThrough) {
+      return realStream.isReady();
+    } else {
+      return false;
     }
-    return startedRealStream.isReady();
   }
 
   @Override
-  public void setMessageCompression(boolean enable) {
-    if (startedRealStream == null) {
-      synchronized (this) {
-        if (startedRealStream == null) {
-          messageCompressionEnabled = enable;
-          return;
+  public void setMessageCompression(final boolean enable) {
+    if (passThrough) {
+      realStream.setMessageCompression(enable);
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realStream.setMessageCompression(enable);
         }
-      }
+      });
     }
-    startedRealStream.setMessageCompression(enable);
   }
 }

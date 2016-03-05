@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
@@ -208,11 +209,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       stream.setAuthority(callOptions.getAuthority());
     }
     stream.setCompressor(compressor);
+
+    stream.start(new ClientStreamListenerImpl(observer));
     if (compressor != Codec.Identity.NONE) {
       stream.setMessageCompression(true);
     }
-
-    stream.start(new ClientStreamListenerImpl(observer));
     // Delay any sources of cancellation after start(), because most of the transports are broken if
     // they receive cancel before start. Issue #1343 has more details
 
@@ -269,6 +270,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   @Override
   public void request(int numMessages) {
     Preconditions.checkState(stream != null, "Not started");
+    checkArgument(numMessages >= 0, "Number requested must be non-negative");
     stream.request(numMessages);
   }
 
