@@ -274,8 +274,8 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
   private class LbResponseObserver implements StreamObserver<LoadBalanceResponse> {
     @Override public void onNext(LoadBalanceResponse response) {
       logger.info("Got a LB response: " + response);
-      InitialLoadBalanceResponse initialResponse = response.getInitialResponse();
       // TODO(zhangkun83): make use of initialResponse
+      // InitialLoadBalanceResponse initialResponse = response.getInitialResponse();
       RoundRobinServerList.Builder<T> listBuilder = new RoundRobinServerList.Builder<T>(tm);
       ServerList serverList = response.getServerList();
       HashMap<SocketAddress, ResolvedServerInfo> newServerMap =

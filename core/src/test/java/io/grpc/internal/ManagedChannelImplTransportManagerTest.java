@@ -223,6 +223,7 @@ public class ManagedChannelImplTransportManagerTest {
     transportInfo.listener.transportReady();
     verify(rt3, timeout(1000)).newStream(same(method2), any(Metadata.class));
 
+    verify(rt1, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class));
     // Back-off policy was never consulted.
     verify(mockBackoffPolicy, times(0)).nextBackoffMillis();
     verifyNoMoreInteractions(mockTransportFactory);

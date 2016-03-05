@@ -221,6 +221,7 @@ public class GrpclbLoadBalancerTest {
     // Simulate that an identical set of LB addresses is resolved
     simulateLbAddressResolved(30002);
     EquivalentAddressGroup lbAddress3 = lbAddressGroup;
+    assertEquals(lbAddress2, lbAddress3);
     verify(mockTransportManager).getTransport(eq(lbAddressGroup));
 
     // Only when LB address changes, getTransport is called.

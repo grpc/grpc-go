@@ -571,7 +571,6 @@ public abstract class AbstractTransportTest {
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
-    ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
 
     Status status = Status.CANCELLED.withDescription("Nevermind");

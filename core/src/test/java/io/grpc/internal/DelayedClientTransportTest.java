@@ -100,8 +100,8 @@ public class DelayedClientTransportTest {
   }
 
   @Test public void transportsAreUsedInOrder() {
-    ClientStream s1 = delayedTransport.newStream(method, headers);
-    ClientStream s2 = delayedTransport.newStream(method2, headers2);
+    delayedTransport.newStream(method, headers);
+    delayedTransport.newStream(method2, headers2);
     delayedTransport.setTransportSupplier(new Supplier<ClientTransport>() {
         final Iterator<ClientTransport> it =
             Arrays.asList(mockRealTransport, mockRealTransport2).iterator();
