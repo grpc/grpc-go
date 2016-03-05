@@ -68,7 +68,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
@@ -78,8 +77,6 @@ import javax.annotation.concurrent.ThreadSafe;
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
 public final class ManagedChannelImpl extends ManagedChannel {
-  private static final Logger log = Logger.getLogger(ManagedChannelImpl.class.getName());
-
   // Matching this pattern means the target string is a URI target or at least intended to be one.
   // A URI target must be an absolute hierarchical URI.
   // From RFC 2396: scheme = alpha *( alpha | digit | "+" | "-" | "." )
