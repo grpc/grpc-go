@@ -265,6 +265,113 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void callAndShutdownNow() {
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(true);
+    ManagedChannel channel = createChannel(nameResolverFactory, NO_INTERCEPTOR);
+    verifyNoMoreInteractions(mockTransportFactory);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    verifyNoMoreInteractions(mockTransportFactory);
+
+    // Create transport and call
+    ClientStream mockStream = mock(ClientStream.class);
+    Metadata headers = new Metadata();
+    when(mockTransportFactory.newClientTransport(
+            any(SocketAddress.class), any(String.class), any(String.class)))
+        .thenReturn(mockTransport);
+    when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
+    call.start(mockCallListener, headers);
+    verify(mockTransportFactory, timeout(1000))
+        .newClientTransport(same(socketAddress), eq(authority), any(String.class));
+    verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
+    ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();
+    transportListener.transportReady();
+    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
+    verify(mockStream, timeout(1000)).start(streamListenerCaptor.capture());
+    verify(mockStream).setCompressor(isA(Compressor.class));
+    // Depends on how quick the real transport is created, ClientCallImpl may start on mockStream
+    // directly, or on a DelayedStream which later starts mockStream. In the former case,
+    // setMessageCompression() is not called. In the latter case, it is (in
+    // DelayedStream.startStream()).
+    verify(mockStream, atMost(1)).setMessageCompression(anyBoolean());
+    ClientStreamListener streamListener = streamListenerCaptor.getValue();
+
+    // ShutdownNow
+    channel.shutdownNow();
+    assertTrue(channel.isShutdown());
+    assertFalse(channel.isTerminated());
+    // ShutdownNow may or may not invoke shutdown. Ideally it wouldn't, but it doesn't matter much
+    // either way.
+    verify(mockTransport, atMost(1)).shutdown();
+    verify(mockTransport).shutdownNow(any(Status.class));
+    assertEquals(1, nameResolverFactory.resolvers.size());
+    assertTrue(nameResolverFactory.resolvers.get(0).shutdown);
+    assertEquals(1, loadBalancerFactory.balancers.size());
+    verify(loadBalancerFactory.balancers.get(0)).shutdown();
+
+    // Further calls should fail without going to the transport
+    ClientCall<String, Integer> call3 = channel.newCall(method, CallOptions.DEFAULT);
+    call3.start(mockCallListener3, new Metadata());
+    verify(mockCallListener3, timeout(1000))
+        .onClose(statusCaptor.capture(), any(Metadata.class));
+    assertSame(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
+
+    // Finish shutdown
+    transportListener.transportShutdown(Status.CANCELLED);
+    assertFalse(channel.isTerminated());
+    Metadata trailers = new Metadata();
+    streamListener.closed(Status.CANCELLED, trailers);
+    verify(mockCallListener, timeout(1000)).onClose(Status.CANCELLED, trailers);
+    assertFalse(channel.isTerminated());
+
+    transportListener.transportTerminated();
+    assertTrue(channel.isTerminated());
+
+    verify(mockTransportFactory).close();
+    verifyNoMoreInteractions(mockTransportFactory);
+    verify(mockTransport, atLeast(0)).getLogId();
+    verifyNoMoreInteractions(mockTransport);
+    verifyNoMoreInteractions(mockStream);
+  }
+
+  /** Make sure shutdownNow() after shutdown() has an effect. */
+  @Test
+  public void callAndShutdownAndShutdownNow() {
+    ManagedChannel channel = createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+
+    // Create transport and call
+    ClientStream mockStream = mock(ClientStream.class);
+    Metadata headers = new Metadata();
+    when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
+    call.start(mockCallListener, headers);
+    verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
+    ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();
+    transportListener.transportReady();
+    verify(mockStream, timeout(1000)).start(streamListenerCaptor.capture());
+    ClientStreamListener streamListener = streamListenerCaptor.getValue();
+
+    // ShutdownNow
+    channel.shutdown();
+    channel.shutdownNow();
+    // ShutdownNow may or may not invoke shutdown. Ideally it wouldn't, but it doesn't matter much
+    // either way.
+    verify(mockTransport, atMost(2)).shutdown();
+    verify(mockTransport).shutdownNow(any(Status.class));
+
+    // Finish shutdown
+    transportListener.transportShutdown(Status.CANCELLED);
+    assertFalse(channel.isTerminated());
+    Metadata trailers = new Metadata();
+    streamListener.closed(Status.CANCELLED, trailers);
+    verify(mockCallListener, timeout(1000)).onClose(Status.CANCELLED, trailers);
+    assertFalse(channel.isTerminated());
+
+    transportListener.transportTerminated();
+    assertTrue(channel.isTerminated());
+  }
+
+
+  @Test
   public void interceptor() throws Exception {
     final AtomicLong atomic = new AtomicLong();
     ClientInterceptor interceptor = new ClientInterceptor() {

@@ -33,6 +33,7 @@ package io.grpc.netty;
 
 import com.google.common.base.Preconditions;
 
+import io.grpc.Status;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.netty.channel.Channel;
@@ -91,6 +92,13 @@ class NettyServerTransport implements ServerTransport {
   public void shutdown() {
     if (channel.isOpen()) {
       channel.close();
+    }
+  }
+
+  @Override
+  public void shutdownNow(Status reason) {
+    if (channel.isOpen()) {
+      channel.writeAndFlush(new ForcefulCloseCommand(reason));
     }
   }
 

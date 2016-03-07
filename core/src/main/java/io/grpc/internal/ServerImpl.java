@@ -84,6 +84,10 @@ public final class ServerImpl extends io.grpc.Server {
   private final HandlerRegistry fallbackRegistry;
   private boolean started;
   private boolean shutdown;
+  /** non-{@code null} if immediate shutdown has been requested. */
+  private Status shutdownNowStatus;
+  /** {@code true} if ServerListenerImpl.serverShutdown() was called. */
+  private boolean serverShutdownCallbackInvoked;
   private boolean terminated;
   /** Service encapsulating something similar to an accept() socket. */
   private final InternalServer transportServer;
@@ -179,13 +183,31 @@ public final class ServerImpl extends io.grpc.Server {
     return this;
   }
 
-  /**
-   * NOT YET IMPLEMENTED. This method currently behaves identically to shutdown().
-   */
-  // TODO(ejona86): cancel preexisting calls.
   @Override
   public ServerImpl shutdownNow() {
     shutdown();
+    Collection<ServerTransport> transportsCopy;
+    Status nowStatus = Status.UNAVAILABLE.withDescription("Server shutdownNow invoked");
+    boolean savedServerShutdownCallbackInvoked;
+    synchronized (lock) {
+      // Short-circuiting not strictly necessary, but prevents transports from needing to handle
+      // multiple shutdownNow invocations if shutdownNow is called multiple times.
+      if (shutdownNowStatus != null) {
+        return this;
+      }
+      shutdownNowStatus = nowStatus;
+      transportsCopy = new ArrayList<ServerTransport>(transports);
+      savedServerShutdownCallbackInvoked = serverShutdownCallbackInvoked;
+    }
+    // Short-circuiting not strictly necessary, but prevents transports from needing to handle
+    // multiple shutdownNow invocations, between here and the serverShutdown callback.
+    if (serverShutdownCallbackInvoked) {
+      // Have to call shutdownNow, because serverShutdown callback only called shutdown, not
+      // shutdownNow
+      for (ServerTransport transport : transportsCopy) {
+        transport.shutdownNow(nowStatus);
+      }
+    }
     return this;
   }
 
@@ -265,13 +287,20 @@ public final class ServerImpl extends io.grpc.Server {
     @Override
     public void serverShutdown() {
       ArrayList<ServerTransport> copiedTransports;
+      Status shutdownNowStatusCopy;
       synchronized (lock) {
         // transports collection can be modified during shutdown(), even if we hold the lock, due
         // to reentrancy.
         copiedTransports = new ArrayList<ServerTransport>(transports);
+        shutdownNowStatusCopy = shutdownNowStatus;
+        serverShutdownCallbackInvoked = true;
       }
       for (ServerTransport transport : copiedTransports) {
-        transport.shutdown();
+        if (shutdownNowStatusCopy == null) {
+          transport.shutdown();
+        } else {
+          transport.shutdownNow(shutdownNowStatusCopy);
+        }
       }
       synchronized (lock) {
         transportServerTerminated = true;

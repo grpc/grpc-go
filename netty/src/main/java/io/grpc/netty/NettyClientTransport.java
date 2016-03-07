@@ -196,6 +196,14 @@ class NettyClientTransport implements ManagedClientTransport {
   }
 
   @Override
+  public void shutdownNow(Status reason) {
+    // Notifying of termination is automatically done when the channel closes.
+    if (channel != null && channel.isOpen()) {
+      handler.getWriteQueue().enqueue(new ForcefulCloseCommand(reason), true);
+    }
+  }
+
+  @Override
   public String toString() {
     return getLogId() + "(" + address + ")";
   }

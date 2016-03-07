@@ -292,6 +292,17 @@ final class TransportSet implements WithLogId {
     }
   }
 
+  void shutdownNow(Status reason) {
+    shutdown();
+    Collection<ManagedClientTransport> transportsCopy;
+    synchronized (lock) {
+      transportsCopy = new ArrayList<ManagedClientTransport>(transports);
+    }
+    for (ManagedClientTransport transport : transportsCopy) {
+      transport.shutdownNow(reason);
+    }
+  }
+
   @GuardedBy("lock")
   private void cancelReconnectTask() {
     if (reconnectTask != null) {

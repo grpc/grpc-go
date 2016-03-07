@@ -52,7 +52,9 @@ import io.grpc.internal.ServerTransportListener;
 
 import java.io.InputStream;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;
@@ -168,6 +170,22 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
     notifyShutdown(shutdownStatus);
     if (streams.isEmpty()) {
       notifyTerminated();
+    }
+  }
+
+  @Override
+  public void shutdownNow(Status reason) {
+    checkNotNull(reason, "reason");
+    List<InProcessStream> streamsCopy;
+    synchronized (this) {
+      shutdown();
+      if (terminated) {
+        return;
+      }
+      streamsCopy = new ArrayList<InProcessStream>(streams);
+    }
+    for (InProcessStream stream : streamsCopy) {
+      stream.clientStream.cancel(reason);
     }
   }
 
@@ -460,6 +478,7 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
         return serverRequested > 0;
       }
 
+      // Must be thread-safe for shutdownNow()
       @Override
       public void cancel(Status reason) {
         if (!internalCancel(stripCause(reason))) {

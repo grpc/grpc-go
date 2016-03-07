@@ -69,6 +69,12 @@ public interface ManagedClientTransport extends ClientTransport, WithLogId {
   void shutdown();
 
   /**
+   * Initiates a forceful shutdown in which preexisting and new calls are closed. Existing calls
+   * should be closed with the provided {@code reason}.
+   */
+  void shutdownNow(Status reason);
+
+  /**
    * Receives notifications for the transport life-cycle events. Implementation does not need to be
    * thread-safe, so notifications must be properly synchronized externally.
    */

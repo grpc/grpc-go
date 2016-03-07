@@ -41,6 +41,7 @@ import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -145,12 +146,10 @@ public abstract class AbstractTransportTest {
   @After
   public void tearDown() throws InterruptedException {
     if (client != null) {
-      // TODO(ejona): swap to shutdownNow
-      client.shutdown();
+      client.shutdownNow(Status.UNKNOWN.withDescription("teardown"));
     }
     if (serverTransport != null) {
-      // TODO(ejona): swap to shutdownNow
-      serverTransport.shutdown();
+      serverTransport.shutdownNow(Status.UNKNOWN.withDescription("teardown"));
     }
     if (server != null) {
       server.shutdown();
@@ -314,6 +313,66 @@ public abstract class AbstractTransportTest {
 
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
     assertTrue(serverTransportListener.waitForTermination(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+  }
+
+  @Test
+  public void shutdownNowKillsClientStream() throws Exception {
+    server.start(serverListener);
+    client.start(mockClientTransportListener);
+    MockServerTransportListener serverTransportListener
+        = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    serverTransport = serverTransportListener.transport;
+
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    clientStream.start(mockClientStreamListener);
+    StreamCreation serverStreamCreation
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    ServerStream serverStream = serverStreamCreation.stream;
+    ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+
+    Status status = Status.UNKNOWN.withDescription("test shutdownNow");
+    client.shutdownNow(status);
+    client = null;
+
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
+    assertTrue(serverTransportListener.waitForTermination(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertTrue(serverTransportListener.isTerminated());
+
+    verify(mockClientStreamListener, timeout(TIMEOUT_MS))
+        .closed(same(status), any(Metadata.class));
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(any(Status.class));
+  }
+
+  @Test
+  public void shutdownNowKillsServerStream() throws Exception {
+    server.start(serverListener);
+    client.start(mockClientTransportListener);
+    MockServerTransportListener serverTransportListener
+        = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    serverTransport = serverTransportListener.transport;
+
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    clientStream.start(mockClientStreamListener);
+    StreamCreation serverStreamCreation
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    ServerStream serverStream = serverStreamCreation.stream;
+    ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+
+    serverTransport.shutdownNow(Status.UNKNOWN.withDescription("test shutdownNow"));
+    serverTransport = null;
+
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
+    assertTrue(serverTransportListener.waitForTermination(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertTrue(serverTransportListener.isTerminated());
+
+    verify(mockClientStreamListener, timeout(TIMEOUT_MS))
+        .closed(any(Status.class), any(Metadata.class));
+    // Generally will be same status provided to shutdownNow, but InProcessTransport can't
+    // differentiate between client and server shutdownNow. The status is not really used on
+    // server-side, so we don't care much.
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(any(Status.class));
   }
 
   @Test

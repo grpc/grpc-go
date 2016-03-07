@@ -290,7 +290,7 @@ class NettyServerHandler extends AbstractNettyHandler {
    */
   @Override
   public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise)
-      throws Http2Exception {
+      throws Exception {
     if (msg instanceof SendGrpcFrameCommand) {
       sendGrpcFrame(ctx, (SendGrpcFrameCommand) msg, promise);
     } else if (msg instanceof SendResponseHeadersCommand) {
@@ -299,6 +299,8 @@ class NettyServerHandler extends AbstractNettyHandler {
       ((RequestMessagesCommand) msg).requestMessages();
     } else if (msg instanceof CancelServerStreamCommand) {
       cancelStream(ctx, (CancelServerStreamCommand) msg, promise);
+    } else if (msg instanceof ForcefulCloseCommand) {
+      forcefulClose(ctx, (ForcefulCloseCommand) msg, promise);
     } else {
       AssertionError e =
           new AssertionError("Write called for unexpected type: " + msg.getClass().getName());
@@ -358,6 +360,23 @@ class NettyServerHandler extends AbstractNettyHandler {
     cmd.stream().transportReportStatus(cmd.reason());
     // Terminate the stream.
     encoder().writeRstStream(ctx, cmd.stream().id(), Http2Error.CANCEL.code(), promise);
+  }
+
+  private void forcefulClose(final ChannelHandlerContext ctx, final ForcefulCloseCommand msg,
+      ChannelPromise promise) throws Exception {
+    close(ctx, promise);
+    connection().forEachActiveStream(new Http2StreamVisitor() {
+      @Override
+      public boolean visit(Http2Stream stream) throws Http2Exception {
+        NettyServerStream.TransportState serverStream = serverStream(stream);
+        if (serverStream != null) {
+          serverStream.transportReportStatus(msg.getStatus());
+          resetStream(ctx, stream.id(), Http2Error.CANCEL.code(), ctx.newPromise());
+        }
+        stream.close();
+        return true;
+      }
+    });
   }
 
   private void verifyContentType(int streamId, Http2Headers headers) throws Http2Exception {

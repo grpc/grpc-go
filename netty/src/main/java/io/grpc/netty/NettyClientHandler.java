@@ -198,6 +198,8 @@ class NettyClientHandler extends AbstractNettyHandler {
       sendPingFrame(ctx, (SendPingCommand) msg, promise);
     } else if (msg instanceof GracefulCloseCommand) {
       gracefulClose(ctx, (GracefulCloseCommand) msg, promise);
+    } else if (msg instanceof ForcefulCloseCommand) {
+      forcefulClose(ctx, (ForcefulCloseCommand) msg, promise);
     } else if (msg == NOOP_MESSAGE) {
       ctx.write(Unpooled.EMPTY_BUFFER, promise);
     } else {
@@ -465,6 +467,25 @@ class NettyClientHandler extends AbstractNettyHandler {
     // TODO(ejona): determine if the need to flush is a bug in Netty
     flush(ctx);
     close(ctx, promise);
+  }
+
+  private void forcefulClose(final ChannelHandlerContext ctx, final ForcefulCloseCommand msg,
+      ChannelPromise promise) throws Exception {
+    lifecycleManager.notifyShutdown(
+        Status.UNAVAILABLE.withDescription("Channel requested transport to shut down"));
+    close(ctx, promise);
+    connection().forEachActiveStream(new Http2StreamVisitor() {
+      @Override
+      public boolean visit(Http2Stream stream) throws Http2Exception {
+        NettyClientStream clientStream = clientStream(stream);
+        if (clientStream != null) {
+          clientStream.transportReportStatus(msg.getStatus(), true, new Metadata());
+          resetStream(ctx, stream.id(), Http2Error.CANCEL.code(), ctx.newPromise());
+        }
+        stream.close();
+        return true;
+      }
+    });
   }
 
   /**

@@ -155,6 +155,7 @@ class DelayedClientTransport implements ManagedClientTransport {
    * Shuts down this transport and cancels all streams that it owns, hence immediately terminates
    * this transport.
    */
+  @Override
   public void shutdownNow(Status status) {
     shutdown();
     Collection<PendingStream> savedPendingStreams = null;

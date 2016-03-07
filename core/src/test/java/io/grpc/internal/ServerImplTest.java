@@ -199,6 +199,95 @@ public class ServerImplTest {
   }
 
   @Test
+  public void startShutdownNowImmediateWithChildTransport() throws IOException {
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+    server.start();
+    class DelayedShutdownServerTransport extends SimpleServerTransport {
+      boolean shutdown;
+
+      @Override
+      public void shutdown() {}
+
+      @Override
+      public void shutdownNow(Status reason) {
+        shutdown = true;
+      }
+    }
+
+    DelayedShutdownServerTransport serverTransport = new DelayedShutdownServerTransport();
+    transportServer.registerNewServerTransport(serverTransport);
+    server.shutdownNow();
+    assertTrue(server.isShutdown());
+    assertFalse(server.isTerminated());
+    assertTrue(serverTransport.shutdown);
+    serverTransport.listener.transportTerminated();
+    assertTrue(server.isTerminated());
+  }
+
+  @Test
+  public void shutdownNowAfterShutdown() throws IOException {
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+    server.start();
+    class DelayedShutdownServerTransport extends SimpleServerTransport {
+      boolean shutdown;
+
+      @Override
+      public void shutdown() {}
+
+      @Override
+      public void shutdownNow(Status reason) {
+        shutdown = true;
+      }
+    }
+
+    DelayedShutdownServerTransport serverTransport = new DelayedShutdownServerTransport();
+    transportServer.registerNewServerTransport(serverTransport);
+    server.shutdown();
+    assertTrue(server.isShutdown());
+    server.shutdownNow();
+    assertFalse(server.isTerminated());
+    assertTrue(serverTransport.shutdown);
+    serverTransport.listener.transportTerminated();
+    assertTrue(server.isTerminated());
+  }
+
+  @Test
+  public void shutdownNowAfterSlowShutdown() throws IOException {
+    SimpleServer transportServer = new SimpleServer() {
+      @Override
+      public void shutdown() {
+        // Don't call super which calls listener.serverShutdown(). We'll call it manually.
+      }
+    };
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+    server.start();
+    class DelayedShutdownServerTransport extends SimpleServerTransport {
+      boolean shutdown;
+
+      @Override
+      public void shutdown() {}
+
+      @Override
+      public void shutdownNow(Status reason) {
+        shutdown = true;
+      }
+    }
+
+    DelayedShutdownServerTransport serverTransport = new DelayedShutdownServerTransport();
+    transportServer.registerNewServerTransport(serverTransport);
+    server.shutdown();
+    server.shutdownNow();
+    transportServer.listener.serverShutdown();
+    assertTrue(server.isShutdown());
+    assertFalse(server.isTerminated());
+    serverTransport.listener.transportTerminated();
+    assertTrue(server.isTerminated());
+  }
+
+  @Test
   public void transportServerFailsStartup() {
     final IOException ex = new IOException();
     class FailingStartupServer extends SimpleServer {
@@ -639,6 +728,11 @@ public class ServerImplTest {
 
     @Override
     public void shutdown() {
+      listener.transportTerminated();
+    }
+
+    @Override
+    public void shutdownNow(Status status) {
       listener.transportTerminated();
     }
   }

@@ -128,11 +128,13 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       new HashSet<DelayedClientTransport>();
 
   @GuardedBy("lock")
-  private final HashSet<OobTransportProvider<ClientTransport>> oobTransports =
-      new HashSet<OobTransportProvider<ClientTransport>>();
+  private final HashSet<OobTransportProviderImpl> oobTransports =
+      new HashSet<OobTransportProviderImpl>();
 
   @GuardedBy("lock")
   private boolean shutdown;
+  @GuardedBy("lock")
+  private boolean shutdownNowed;
   @GuardedBy("lock")
   private boolean terminated;
 
@@ -255,6 +257,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     ArrayList<TransportSet> transportsCopy = new ArrayList<TransportSet>();
     ArrayList<DelayedClientTransport> delayedTransportsCopy =
         new ArrayList<DelayedClientTransport>();
+    ArrayList<OobTransportProviderImpl> oobTransportsCopy =
+        new ArrayList<OobTransportProviderImpl>();
     synchronized (lock) {
       if (shutdown) {
         return this;
@@ -266,6 +270,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       if (!terminated) {
         transportsCopy.addAll(transports.values());
         delayedTransportsCopy.addAll(delayedTransports);
+        oobTransportsCopy.addAll(oobTransports);
       }
     }
     loadBalancer.shutdown();
@@ -276,7 +281,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     for (DelayedClientTransport transport : delayedTransportsCopy) {
       transport.shutdown();
     }
-    for (OobTransportProvider<ClientTransport> provider : oobTransports) {
+    for (OobTransportProviderImpl provider : oobTransportsCopy) {
       provider.close();
     }
     if (log.isLoggable(Level.FINE)) {
@@ -289,14 +294,39 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
    * Initiates a forceful shutdown in which preexisting and new calls are cancelled. Although
    * forceful, the shutdown process is still not instantaneous; {@link #isTerminated()} will likely
    * return {@code false} immediately after this method returns.
-   *
-   * <p>NOT YET IMPLEMENTED. This method currently behaves identically to shutdown().
    */
-  // TODO(ejona86): cancel preexisting calls.
   @Override
   public ManagedChannelImpl shutdownNow() {
+    synchronized (lock) {
+      // Short-circuiting not strictly necessary, but prevents transports from needing to handle
+      // multiple shutdownNow invocations.
+      if (shutdownNowed) {
+        return this;
+      }
+      shutdownNowed = true;
+    }
     shutdown();
-    // TODO(zhangkun): also call shutdownNow() on oobTransports.
+    List<TransportSet> transportsCopy;
+    List<DelayedClientTransport> delayedTransportsCopy;
+    List<OobTransportProviderImpl> oobTransportsCopy;
+    synchronized (lock) {
+      transportsCopy = new ArrayList<TransportSet>(transports.values());
+      delayedTransportsCopy = new ArrayList<DelayedClientTransport>(delayedTransports);
+      oobTransportsCopy = new ArrayList<OobTransportProviderImpl>(oobTransports);
+    }
+    if (log.isLoggable(Level.FINE)) {
+      log.log(Level.FINE, "[{0}] Shutting down now", getLogId());
+    }
+    Status nowStatus = Status.UNAVAILABLE.withDescription("Channel shutdownNow invoked");
+    for (TransportSet ts : transportsCopy) {
+      ts.shutdownNow(nowStatus);
+    }
+    for (DelayedClientTransport transport : delayedTransportsCopy) {
+      transport.shutdownNow(nowStatus);
+    }
+    for (OobTransportProviderImpl provider : oobTransportsCopy) {
+      provider.shutdownNow(nowStatus);
+    }
     return this;
   }
 
@@ -547,6 +577,12 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     public void close() {
       if (transportSet != null) {
         transportSet.shutdown();
+      }
+    }
+
+    void shutdownNow(Status reason) {
+      if (transportSet != null) {
+        transportSet.shutdownNow(reason);
       }
     }
   }

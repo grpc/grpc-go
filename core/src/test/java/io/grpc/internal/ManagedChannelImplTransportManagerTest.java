@@ -370,4 +370,20 @@ public class ManagedChannelImplTransportManagerTest {
     transportInfo2.listener.transportTerminated();
     assertTrue(channel.isTerminated());
   }
+
+  @Test
+  public void interimTransportShutdownNow() {
+    InterimTransport<ClientTransport> interimTransport = tm.createInterimTransport();
+    ClientTransport transport = interimTransport.transport();
+    assertTrue(transport instanceof DelayedClientTransport);
+    ClientStream s1 = transport.newStream(method, new Metadata());
+    ClientStreamListener sl1 = mock(ClientStreamListener.class);
+    s1.start(sl1);
+
+    // Shutting down the channel will shutdownNow the interim transport, thus kill existing streams.
+    channel.shutdownNow();
+    verify(sl1).closed(any(Status.class), any(Metadata.class));
+    assertTrue(channel.isShutdown());
+    assertTrue(channel.isTerminated());
+  }
 }

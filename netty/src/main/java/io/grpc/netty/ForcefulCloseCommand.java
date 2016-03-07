@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,22 +29,22 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.internal;
+package io.grpc.netty;
 
 import io.grpc.Status;
 
-/** An inbound connection. */
-public interface ServerTransport {
-  /**
-   * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
-   * eventually begin failing. New streams "eventually" begin failing because shutdown may need to
-   * be processed on a separate thread. May only be called once.
-   */
-  void shutdown();
+/**
+ * A command to trigger close and close all streams. It is buffered differently than normal close
+ * and also includes reason for closure.
+ */
+class ForcefulCloseCommand {
+  private final Status status;
 
-  /**
-   * Initiates a forceful shutdown in which preexisting and new calls are closed. Existing calls
-   * should be closed with the provided {@code reason}.
-   */
-  void shutdownNow(Status reason);
+  public ForcefulCloseCommand(Status status) {
+    this.status = status;
+  }
+
+  public Status getStatus() {
+    return status;
+  }
 }

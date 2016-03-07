@@ -452,6 +452,26 @@ class OkHttpClientTransport implements ManagedClientTransport {
     }
   }
 
+  @Override
+  public void shutdownNow(Status reason) {
+    shutdown();
+    synchronized (lock) {
+      Iterator<Map.Entry<Integer, OkHttpClientStream>> it = streams.entrySet().iterator();
+      while (it.hasNext()) {
+        Map.Entry<Integer, OkHttpClientStream> entry = it.next();
+        it.remove();
+        entry.getValue().transportReportStatus(reason, false, new Metadata());
+      }
+
+      for (OkHttpClientStream stream : pendingStreams) {
+        stream.transportReportStatus(reason, true, new Metadata());
+      }
+      pendingStreams.clear();
+
+      stopIfNecessary();
+    }
+  }
+
   /**
    * Gets all active streams as an array.
    */
