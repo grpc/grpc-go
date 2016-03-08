@@ -53,6 +53,8 @@ import io.netty.handler.ssl.SslContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.File;
 import java.io.IOException;
@@ -74,6 +76,7 @@ import java.util.concurrent.TimeUnit;
  */
 // TODO: Consider augmenting this class to perform non-streaming, client streaming, and
 // bidirectional streaming requests also.
+@RunWith(JUnit4.class)
 public class ConcurrencyTest {
   /**
    * A response observer that signals a {@code CountDownLatch} when the proper number of responses
