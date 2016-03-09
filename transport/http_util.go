@@ -272,7 +272,7 @@ type framer struct {
 
 func newFramer(conn net.Conn) *framer {
 	f := &framer{
-		reader: conn,
+		reader: bufio.NewReaderSize(conn, http2IOBufSize),
 		writer: bufio.NewWriterSize(conn, http2IOBufSize),
 	}
 	f.fr = http2.NewFramer(f.writer, f.reader)
