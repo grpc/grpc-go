@@ -299,20 +299,18 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 	return
 }
 
-type key int
-
 // The key to save transport.Stream in the context.
-const streamKey = key(0)
+type streamKey struct{}
 
 // newContextWithStream creates a new context from ctx and attaches stream
 // to it.
 func newContextWithStream(ctx context.Context, stream *Stream) context.Context {
-	return context.WithValue(ctx, streamKey, stream)
+	return context.WithValue(ctx, streamKey{}, stream)
 }
 
 // StreamFromContext returns the stream saved in ctx.
 func StreamFromContext(ctx context.Context) (s *Stream, ok bool) {
-	s, ok = ctx.Value(streamKey).(*Stream)
+	s, ok = ctx.Value(streamKey{}).(*Stream)
 	return
 }
 
