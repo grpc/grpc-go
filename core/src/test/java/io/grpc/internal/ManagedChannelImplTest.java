@@ -41,6 +41,7 @@ import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -248,6 +249,7 @@ public class ManagedChannelImplTest {
 
     verify(mockTransportFactory).release();
     verifyNoMoreInteractions(mockTransportFactory);
+    verify(mockTransport, atLeast(0)).getLogId();
     verifyNoMoreInteractions(mockTransport);
     verifyNoMoreInteractions(mockStream);
   }

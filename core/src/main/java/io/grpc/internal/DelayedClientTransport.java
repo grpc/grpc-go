@@ -230,6 +230,11 @@ class DelayedClientTransport implements ManagedClientTransport {
     }
   }
 
+  @Override
+  public String getLogId() {
+    return GrpcUtil.getLogId(this);
+  }
+
   private class PendingStream extends DelayedStream {
     private final MethodDescriptor<?, ?> method;
     private final Metadata headers;

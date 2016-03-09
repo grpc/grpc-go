@@ -40,6 +40,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.NoopClientStream;
 import io.grpc.internal.ServerStream;
@@ -166,7 +167,12 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
 
   @Override
   public String toString() {
-    return super.toString() + "(" + name + ")";
+    return getLogId() + "(" + name + ")";
+  }
+
+  @Override
+  public String getLogId() {
+    return GrpcUtil.getLogId(this);
   }
 
   private synchronized void notifyShutdown(Status s) {

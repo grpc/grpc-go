@@ -59,9 +59,8 @@ import javax.annotation.concurrent.ThreadSafe;
  * Transports for a single {@link SocketAddress}.
  */
 @ThreadSafe
-final class TransportSet {
+final class TransportSet implements WithLogId {
   private static final Logger log = Logger.getLogger(TransportSet.class.getName());
-
   private static final ClientTransport SHUTDOWN_TRANSPORT =
       new FailingClientTransport(Status.UNAVAILABLE.withDescription("TransportSet is shutdown"));
 
@@ -217,8 +216,10 @@ final class TransportSet {
             backoffWatch.reset().start();
           }
           newActiveTransport = transportFactory.newClientTransport(address, authority);
-          log.log(Level.FINE, "Created transport {0} for {1}",
-              new Object[] {newActiveTransport, address});
+          if (log.isLoggable(Level.FINE)) {
+            log.log(Level.FINE, "[{0}] Created {1} for {2}",
+                new Object[] {getLogId(), newActiveTransport.getLogId(), address});
+          }
           transports.add(newActiveTransport);
           newActiveTransport.start(
               new TransportListener(newActiveTransport, address));
@@ -258,6 +259,10 @@ final class TransportSet {
       }
     }
     firstAttempt = false;
+    if (log.isLoggable(Level.FINE)) {
+      log.log(Level.FINE, "[{0}] Scheduling connection after {1} ms for {2}",
+          new Object[]{getLogId(), delayMillis, address});
+    }
     if (delayMillis <= 0) {
       reconnectTask = null;
       // No back-off this time.
@@ -315,6 +320,11 @@ final class TransportSet {
     }
   }
 
+  @Override
+  public String getLogId() {
+    return GrpcUtil.getLogId(this);
+  }
+
   /** Shared base for both delayed and real transports. */
   private class BaseTransportListener implements ManagedClientTransport.Listener {
     protected final ManagedClientTransport transport;
@@ -335,6 +345,9 @@ final class TransportSet {
       synchronized (lock) {
         transports.remove(transport);
         if (shutdown && transports.isEmpty()) {
+          if (log.isLoggable(Level.FINE)) {
+            log.log(Level.FINE, "[{0}] Terminated", getLogId());
+          }
           runCallback = true;
           cancelReconnectTask();
         }
@@ -360,7 +373,10 @@ final class TransportSet {
 
     @Override
     public void transportReady() {
-      log.log(Level.FINE, "Transport {0} for {1} is ready", new Object[] {transport, address});
+      if (log.isLoggable(Level.FINE)) {
+        log.log(Level.FINE, "[{0}] {1} for {2} is ready",
+            new Object[] {getLogId(), transport.getLogId(), address});
+      }
       super.transportReady();
       synchronized (lock) {
         if (isAttachedToActiveTransport()) {
@@ -372,8 +388,10 @@ final class TransportSet {
 
     @Override
     public void transportShutdown(Status s) {
-      log.log(Level.FINE, "Transport {0} for {1} is being shutdown",
-          new Object[] {transport, address});
+      if (log.isLoggable(Level.FINE)) {
+        log.log(Level.FINE, "[{0}] {1} for {2} is being shutdown with status {3}",
+            new Object[] {getLogId(), transport.getLogId(), address, s});
+      }
       super.transportShutdown(s);
       synchronized (lock) {
         if (isAttachedToActiveTransport()) {
@@ -385,8 +403,10 @@ final class TransportSet {
 
     @Override
     public void transportTerminated() {
-      log.log(Level.FINE, "Transport {0} for {1} is terminated",
-          new Object[] {transport, address});
+      if (log.isLoggable(Level.FINE)) {
+        log.log(Level.FINE, "[{0}] {1} for {2} is terminated",
+            new Object[] {getLogId(), transport.getLogId(), address});
+      }
       super.transportTerminated();
       Preconditions.checkState(!isAttachedToActiveTransport(),
           "Listener is still attached to activeTransport. "

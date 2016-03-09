@@ -400,7 +400,12 @@ class OkHttpClientTransport implements ManagedClientTransport {
 
   @Override
   public String toString() {
-    return super.toString() + "(" + address + ")";
+    return getLogId() + "(" + address + ")";
+  }
+
+  @Override
+  public String getLogId() {
+    return GrpcUtil.getLogId(this);
   }
 
   /**

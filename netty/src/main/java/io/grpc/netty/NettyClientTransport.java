@@ -40,6 +40,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
 import io.grpc.internal.ManagedClientTransport;
 import io.netty.bootstrap.Bootstrap;
@@ -191,7 +192,12 @@ class NettyClientTransport implements ManagedClientTransport {
 
   @Override
   public String toString() {
-    return super.toString() + "(" + address + ")";
+    return getLogId() + "(" + address + ")";
+  }
+
+  @Override
+  public String getLogId() {
+    return GrpcUtil.getLogId(this);
   }
 
   /**

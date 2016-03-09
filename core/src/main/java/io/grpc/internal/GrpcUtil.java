@@ -479,5 +479,12 @@ public final class GrpcUtil {
     }
   }
 
+  /**
+   * The canonical implementation of {@link WithLogId#getLogId}.
+   */
+  public static String getLogId(WithLogId subject) {
+    return subject.getClass().getSimpleName() + "@" + Integer.toHexString(subject.hashCode());
+  }
+
   private GrpcUtil() {}
 }

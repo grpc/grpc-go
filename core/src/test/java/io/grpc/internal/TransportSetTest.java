@@ -108,7 +108,7 @@ public class TransportSetTest {
 
   @Test public void singleAddressBackoff() {
     SocketAddress addr = mock(SocketAddress.class);
-    createTransortSet(addr);
+    createTransportSet(addr);
 
     // Invocation counters
     int transportsCreated = 0;
@@ -162,7 +162,7 @@ public class TransportSetTest {
   @Test public void twoAddressesBackoff() {
     SocketAddress addr1 = mock(SocketAddress.class);
     SocketAddress addr2 = mock(SocketAddress.class);
-    createTransortSet(addr1, addr2);
+    createTransportSet(addr1, addr2);
 
     // Invocation counters
     int transportsAddr1 = 0;
@@ -232,7 +232,7 @@ public class TransportSetTest {
   @Test
   public void connectIsLazy() {
     SocketAddress addr = mock(SocketAddress.class);
-    createTransortSet(addr);
+    createTransportSet(addr);
 
     // Invocation counters
     int transportsCreated = 0;
@@ -268,7 +268,7 @@ public class TransportSetTest {
   @Test
   public void shutdownBeforeTransportCreatedWithPendingStream() throws Exception {
     SocketAddress addr = mock(SocketAddress.class);
-    createTransortSet(addr);
+    createTransportSet(addr);
 
     // First transport is created immediately
     ClientTransport pick = transportSet.obtainActiveTransport();
@@ -316,7 +316,7 @@ public class TransportSetTest {
   @Test
   public void shutdownBeforeTransportCreatedWithoutPendingStream() throws Exception {
     SocketAddress addr = mock(SocketAddress.class);
-    createTransortSet(addr);
+    createTransportSet(addr);
 
     // First transport is created immediately
     ClientTransport pick = transportSet.obtainActiveTransport();
@@ -350,7 +350,7 @@ public class TransportSetTest {
   @Test
   public void obtainTransportAfterShutdown() throws Exception {
     SocketAddress addr = mock(SocketAddress.class);
-    createTransortSet(addr);
+    createTransportSet(addr);
 
     transportSet.shutdown();
     ClientTransport pick = transportSet.obtainActiveTransport();
@@ -358,7 +358,14 @@ public class TransportSetTest {
     verify(mockTransportFactory, times(0)).newClientTransport(addr, authority);
   }
 
-  private void createTransortSet(SocketAddress ... addrs) {
+  @Test
+  public void logId() {
+    createTransportSet(mock(SocketAddress.class));
+    assertEquals("TransportSet@" + Integer.toHexString(transportSet.hashCode()),
+        transportSet.getLogId());
+  }
+
+  private void createTransportSet(SocketAddress ... addrs) {
     addressGroup = new EquivalentAddressGroup(Arrays.asList(addrs));
     transportSet = new TransportSet(addressGroup, authority, mockLoadBalancer,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.scheduledExecutorService,
