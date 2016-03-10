@@ -65,7 +65,7 @@ static inline string MethodIdFieldName(const MethodDescriptor* method) {
 
 static inline string MessageFullJavaName(bool nano, const Descriptor* desc) {
   string name = google::protobuf::compiler::java::ClassName(desc);
-  if (nano && !desc->file()->options().javanano_use_deprecated_package()) {
+  if (nano) {
     // XXX: Add "nano" to the original package
     // (https://github.com/grpc/grpc-java/issues/900)
     if (isupper(name[0])) {
@@ -790,7 +790,7 @@ string ServiceJavaPackage(const FileDescriptor* file, bool nano) {
   } else {
     result = "";
   }
-  if (nano && !file->options().javanano_use_deprecated_package()) {
+  if (nano) {
     if (!result.empty()) {
       result += ".";
     }
