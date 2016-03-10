@@ -8,27 +8,21 @@ public interface ServerOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional string ip_address = 1;</code>
+   * <code>optional bytes ip_address = 1;</code>
    *
    * <pre>
-   * A resolved address and port for the server. The IP address string may
+   * A resolved address for the server, serialized in network-byte-order. It may
    * either be an IPv4 or IPv6 address.
    * </pre>
    */
-  java.lang.String getIpAddress();
-  /**
-   * <code>optional string ip_address = 1;</code>
-   *
-   * <pre>
-   * A resolved address and port for the server. The IP address string may
-   * either be an IPv4 or IPv6 address.
-   * </pre>
-   */
-  com.google.protobuf.ByteString
-      getIpAddressBytes();
+  com.google.protobuf.ByteString getIpAddress();
 
   /**
    * <code>optional int32 port = 2;</code>
+   *
+   * <pre>
+   * A resolved port number for the server.
+   * </pre>
    */
   int getPort();
 

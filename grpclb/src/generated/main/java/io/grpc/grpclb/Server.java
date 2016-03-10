@@ -15,7 +15,7 @@ public  final class Server extends
     super(builder);
   }
   private Server() {
-    ipAddress_ = "";
+    ipAddress_ = com.google.protobuf.ByteString.EMPTY;
     port_ = 0;
     loadBalanceToken_ = "";
     dropRequest_ = false;
@@ -46,9 +46,8 @@ public  final class Server extends
             break;
           }
           case 10: {
-            java.lang.String s = input.readStringRequireUtf8();
 
-            ipAddress_ = s;
+            ipAddress_ = input.readBytes();
             break;
           }
           case 16: {
@@ -92,53 +91,27 @@ public  final class Server extends
   }
 
   public static final int IP_ADDRESS_FIELD_NUMBER = 1;
-  private volatile java.lang.Object ipAddress_;
+  private com.google.protobuf.ByteString ipAddress_;
   /**
-   * <code>optional string ip_address = 1;</code>
+   * <code>optional bytes ip_address = 1;</code>
    *
    * <pre>
-   * A resolved address and port for the server. The IP address string may
+   * A resolved address for the server, serialized in network-byte-order. It may
    * either be an IPv4 or IPv6 address.
    * </pre>
    */
-  public java.lang.String getIpAddress() {
-    java.lang.Object ref = ipAddress_;
-    if (ref instanceof java.lang.String) {
-      return (java.lang.String) ref;
-    } else {
-      com.google.protobuf.ByteString bs = 
-          (com.google.protobuf.ByteString) ref;
-      java.lang.String s = bs.toStringUtf8();
-      ipAddress_ = s;
-      return s;
-    }
-  }
-  /**
-   * <code>optional string ip_address = 1;</code>
-   *
-   * <pre>
-   * A resolved address and port for the server. The IP address string may
-   * either be an IPv4 or IPv6 address.
-   * </pre>
-   */
-  public com.google.protobuf.ByteString
-      getIpAddressBytes() {
-    java.lang.Object ref = ipAddress_;
-    if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
-          com.google.protobuf.ByteString.copyFromUtf8(
-              (java.lang.String) ref);
-      ipAddress_ = b;
-      return b;
-    } else {
-      return (com.google.protobuf.ByteString) ref;
-    }
+  public com.google.protobuf.ByteString getIpAddress() {
+    return ipAddress_;
   }
 
   public static final int PORT_FIELD_NUMBER = 2;
   private int port_;
   /**
    * <code>optional int32 port = 2;</code>
+   *
+   * <pre>
+   * A resolved port number for the server.
+   * </pre>
    */
   public int getPort() {
     return port_;
@@ -216,8 +189,8 @@ public  final class Server extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (!getIpAddressBytes().isEmpty()) {
-      com.google.protobuf.GeneratedMessage.writeString(output, 1, ipAddress_);
+    if (!ipAddress_.isEmpty()) {
+      output.writeBytes(1, ipAddress_);
     }
     if (port_ != 0) {
       output.writeInt32(2, port_);
@@ -235,8 +208,9 @@ public  final class Server extends
     if (size != -1) return size;
 
     size = 0;
-    if (!getIpAddressBytes().isEmpty()) {
-      size += com.google.protobuf.GeneratedMessage.computeStringSize(1, ipAddress_);
+    if (!ipAddress_.isEmpty()) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBytesSize(1, ipAddress_);
     }
     if (port_ != 0) {
       size += com.google.protobuf.CodedOutputStream
@@ -360,7 +334,7 @@ public  final class Server extends
     }
     public Builder clear() {
       super.clear();
-      ipAddress_ = "";
+      ipAddress_ = com.google.protobuf.ByteString.EMPTY;
 
       port_ = 0;
 
@@ -409,9 +383,8 @@ public  final class Server extends
 
     public Builder mergeFrom(io.grpc.grpclb.Server other) {
       if (other == io.grpc.grpclb.Server.getDefaultInstance()) return this;
-      if (!other.getIpAddress().isEmpty()) {
-        ipAddress_ = other.ipAddress_;
-        onChanged();
+      if (other.getIpAddress() != com.google.protobuf.ByteString.EMPTY) {
+        setIpAddress(other.getIpAddress());
       }
       if (other.getPort() != 0) {
         setPort(other.getPort());
@@ -449,58 +422,27 @@ public  final class Server extends
       return this;
     }
 
-    private java.lang.Object ipAddress_ = "";
+    private com.google.protobuf.ByteString ipAddress_ = com.google.protobuf.ByteString.EMPTY;
     /**
-     * <code>optional string ip_address = 1;</code>
+     * <code>optional bytes ip_address = 1;</code>
      *
      * <pre>
-     * A resolved address and port for the server. The IP address string may
+     * A resolved address for the server, serialized in network-byte-order. It may
      * either be an IPv4 or IPv6 address.
      * </pre>
      */
-    public java.lang.String getIpAddress() {
-      java.lang.Object ref = ipAddress_;
-      if (!(ref instanceof java.lang.String)) {
-        com.google.protobuf.ByteString bs =
-            (com.google.protobuf.ByteString) ref;
-        java.lang.String s = bs.toStringUtf8();
-        ipAddress_ = s;
-        return s;
-      } else {
-        return (java.lang.String) ref;
-      }
+    public com.google.protobuf.ByteString getIpAddress() {
+      return ipAddress_;
     }
     /**
-     * <code>optional string ip_address = 1;</code>
+     * <code>optional bytes ip_address = 1;</code>
      *
      * <pre>
-     * A resolved address and port for the server. The IP address string may
+     * A resolved address for the server, serialized in network-byte-order. It may
      * either be an IPv4 or IPv6 address.
      * </pre>
      */
-    public com.google.protobuf.ByteString
-        getIpAddressBytes() {
-      java.lang.Object ref = ipAddress_;
-      if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
-            com.google.protobuf.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
-        ipAddress_ = b;
-        return b;
-      } else {
-        return (com.google.protobuf.ByteString) ref;
-      }
-    }
-    /**
-     * <code>optional string ip_address = 1;</code>
-     *
-     * <pre>
-     * A resolved address and port for the server. The IP address string may
-     * either be an IPv4 or IPv6 address.
-     * </pre>
-     */
-    public Builder setIpAddress(
-        java.lang.String value) {
+    public Builder setIpAddress(com.google.protobuf.ByteString value) {
       if (value == null) {
     throw new NullPointerException();
   }
@@ -510,10 +452,10 @@ public  final class Server extends
       return this;
     }
     /**
-     * <code>optional string ip_address = 1;</code>
+     * <code>optional bytes ip_address = 1;</code>
      *
      * <pre>
-     * A resolved address and port for the server. The IP address string may
+     * A resolved address for the server, serialized in network-byte-order. It may
      * either be an IPv4 or IPv6 address.
      * </pre>
      */
@@ -523,35 +465,24 @@ public  final class Server extends
       onChanged();
       return this;
     }
-    /**
-     * <code>optional string ip_address = 1;</code>
-     *
-     * <pre>
-     * A resolved address and port for the server. The IP address string may
-     * either be an IPv4 or IPv6 address.
-     * </pre>
-     */
-    public Builder setIpAddressBytes(
-        com.google.protobuf.ByteString value) {
-      if (value == null) {
-    throw new NullPointerException();
-  }
-  checkByteStringIsUtf8(value);
-      
-      ipAddress_ = value;
-      onChanged();
-      return this;
-    }
 
     private int port_ ;
     /**
      * <code>optional int32 port = 2;</code>
+     *
+     * <pre>
+     * A resolved port number for the server.
+     * </pre>
      */
     public int getPort() {
       return port_;
     }
     /**
      * <code>optional int32 port = 2;</code>
+     *
+     * <pre>
+     * A resolved port number for the server.
+     * </pre>
      */
     public Builder setPort(int value) {
       
@@ -561,6 +492,10 @@ public  final class Server extends
     }
     /**
      * <code>optional int32 port = 2;</code>
+     *
+     * <pre>
+     * A resolved port number for the server.
+     * </pre>
      */
     public Builder clearPort() {
       

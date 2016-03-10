@@ -35,6 +35,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
+import com.google.common.base.Throwables;
 
 import io.grpc.Attributes;
 import io.grpc.Channel;
@@ -49,8 +50,10 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.stub.StreamObserver;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -285,13 +288,17 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
         if (server.getDropRequest()) {
           listBuilder.add(null);
         } else {
-          InetSocketAddress address = new InetSocketAddress(
-              server.getIpAddress(), server.getPort());
-          listBuilder.add(address);
-          // TODO(zhangkun83): fill the LB token to the attributes, and insert it to the
-          // application RPCs.
-          if (!newServerMap.containsKey(address)) {
-            newServerMap.put(address, new ResolvedServerInfo(address, Attributes.EMPTY));
+          try {
+            InetSocketAddress address = new InetSocketAddress(
+                InetAddress.getByAddress(server.getIpAddress().toByteArray()), server.getPort());
+            listBuilder.add(address);
+            // TODO(zhangkun83): fill the LB token to the attributes, and insert it to the
+            // application RPCs.
+            if (!newServerMap.containsKey(address)) {
+              newServerMap.put(address, new ResolvedServerInfo(address, Attributes.EMPTY));
+            }
+          } catch (UnknownHostException e) {
+            Throwables.propagate(e);
           }
         }
       }

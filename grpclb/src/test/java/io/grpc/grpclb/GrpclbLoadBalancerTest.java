@@ -46,6 +46,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
 import com.google.common.base.Supplier;
+import com.google.protobuf.ByteString;
 
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
@@ -476,7 +477,7 @@ public class GrpclbLoadBalancerTest {
     for (ResolvedServerInfo server : servers) {
       InetSocketAddress addr = (InetSocketAddress) server.getAddress();
       serverListBuilder.addServers(Server.newBuilder()
-          .setIpAddress(addr.getHostString())
+          .setIpAddress(ByteString.copyFrom(addr.getAddress().getAddress()))
           .setPort(addr.getPort())
           .build());
     }

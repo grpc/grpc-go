@@ -72,7 +72,7 @@ public final class LoadBalancerProto {
       "sponse_type\"i\n\nServerList\022#\n\007servers\030\001 \003" +
       "(\0132\022.grpc.lb.v1.Server\0226\n\023expiration_int" +
       "erval\030\003 \001(\0132\031.google.protobuf.Duration\"\\",
-      "\n\006Server\022\022\n\nip_address\030\001 \001(\t\022\014\n\004port\030\002 \001" +
+      "\n\006Server\022\022\n\nip_address\030\001 \001(\014\022\014\n\004port\030\002 \001" +
       "(\005\022\032\n\022load_balance_token\030\003 \001(\t\022\024\n\014drop_r" +
       "equest\030\004 \001(\0102b\n\014LoadBalancer\022R\n\013BalanceL" +
       "oad\022\036.grpc.lb.v1.LoadBalanceRequest\032\037.gr" +
