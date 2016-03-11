@@ -128,9 +128,11 @@ public class ServerCalls {
           MethodDescriptor<ReqT, RespT> methodDescriptor,
           final ServerCall<RespT> call,
           Metadata headers) {
-        final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
+        final ServerCallStreamObserverImpl<RespT> responseObserver =
+            new ServerCallStreamObserverImpl<RespT>(call);
         // We expect only 1 request, but we ask for 2 requests here so that if a misbehaving client
-        // sends more than 1 requests, ServerCall will catch it.
+        // sends more than 1 requests, ServerCall will catch it. Note that disabling auto
+        // inbound flow control has no effect on unary calls.
         call.request(2);
         return new EmptyServerCallListener<ReqT>() {
           ReqT request;
@@ -145,6 +147,12 @@ public class ServerCalls {
           public void onHalfClose() {
             if (request != null) {
               method.invoke(request, responseObserver);
+              responseObserver.freeze();
+              if (call.isReady()) {
+                // Since we are calling invoke in halfClose we have missed the onReady
+                // event from the transport so recover it here.
+                onReady();
+              }
             } else {
               call.close(Status.INVALID_ARGUMENT.withDescription("Half-closed without a request"),
                   new Metadata());
@@ -154,6 +162,16 @@ public class ServerCalls {
           @Override
           public void onCancel() {
             responseObserver.cancelled = true;
+            if (responseObserver.onCancelHandler != null) {
+              responseObserver.onCancelHandler.run();
+            }
+          }
+
+          @Override
+          public void onReady() {
+            if (responseObserver.onReadyHandler != null) {
+              responseObserver.onReadyHandler.run();
+            }
           }
         };
       }
@@ -173,9 +191,13 @@ public class ServerCalls {
           MethodDescriptor<ReqT, RespT> methodDescriptor,
           final ServerCall<RespT> call,
           Metadata headers) {
-        call.request(1);
-        final ResponseObserver<RespT> responseObserver = new ResponseObserver<RespT>(call);
+        final ServerCallStreamObserverImpl<RespT> responseObserver =
+            new ServerCallStreamObserverImpl<RespT>(call);
         final StreamObserver<ReqT> requestObserver = method.invoke(responseObserver);
+        responseObserver.freeze();
+        if (responseObserver.autoFlowControlEnabled) {
+          call.request(1);
+        }
         return new EmptyServerCallListener<ReqT>() {
           boolean halfClosed = false;
 
@@ -184,7 +206,9 @@ public class ServerCalls {
             requestObserver.onNext(request);
 
             // Request delivery of the next inbound message.
-            call.request(1);
+            if (responseObserver.autoFlowControlEnabled) {
+              call.request(1);
+            }
           }
 
           @Override
@@ -196,8 +220,18 @@ public class ServerCalls {
           @Override
           public void onCancel() {
             responseObserver.cancelled = true;
+            if (responseObserver.onCancelHandler != null) {
+              responseObserver.onCancelHandler.run();
+            }
             if (!halfClosed) {
               requestObserver.onError(Status.CANCELLED.asException());
+            }
+          }
+
+          @Override
+          public void onReady() {
+            if (responseObserver.onReadyHandler != null) {
+              responseObserver.onReadyHandler.run();
             }
           }
         };
@@ -213,13 +247,22 @@ public class ServerCalls {
     StreamObserver<ReqT> invoke(StreamObserver<RespT> responseObserver);
   }
 
-  private static class ResponseObserver<RespT> implements StreamObserver<RespT> {
+  private static class ServerCallStreamObserverImpl<RespT>
+      extends ServerCallStreamObserver<RespT> {
     final ServerCall<RespT> call;
     volatile boolean cancelled;
+    private boolean frozen;
+    private boolean autoFlowControlEnabled = true;
     private boolean sentHeaders;
+    private Runnable onReadyHandler;
+    private Runnable onCancelHandler;
 
-    ResponseObserver(ServerCall<RespT> call) {
+    ServerCallStreamObserverImpl(ServerCall<RespT> call) {
       this.call = call;
+    }
+
+    private final void freeze() {
+      this.frozen = true;
     }
 
     @Override
@@ -246,6 +289,46 @@ public class ServerCalls {
       } else {
         call.close(Status.OK, new Metadata());
       }
+    }
+
+    @Override
+    public boolean isReady() {
+      return call.isReady();
+    }
+
+    @Override
+    public void setOnReadyHandler(Runnable r) {
+      if (frozen) {
+        throw new IllegalStateException("Cannot alter onReadyHandler after initialization");
+      }
+      this.onReadyHandler = r;
+    }
+
+    @Override
+    public boolean isCancelled() {
+      return call.isCancelled();
+    }
+
+    @Override
+    public void setOnCancelHandler(Runnable onCancelHandler) {
+      if (frozen) {
+        throw new IllegalStateException("Cannot alter onCancelHandler after initialization");
+      }
+      this.onCancelHandler = onCancelHandler;
+    }
+
+    @Override
+    public void disableAutoInboundFlowControl() {
+      if (frozen) {
+        throw new IllegalStateException("Cannot disable auto flow control after initialization");
+      } else {
+        autoFlowControlEnabled = false;
+      }
+    }
+
+    @Override
+    public void request(int count) {
+      call.request(count);
     }
   }
 
