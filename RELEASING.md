@@ -327,16 +327,17 @@ updated since last release. Make a new commit with description similar to
 Update Hosted Javadoc
 ---------------------
 
-Download the released Javadoc JAR for the grpc-all project from Maven Central.
-Now we need to update gh-pages with that new Javadoc:
+Now we need to update gh-pages with the new Javadoc:
 
 ```bash
 git checkout gh-pages
 rm -r javadoc/
-unzip -d javadoc path/to/grpc-all-<VERSION>-javadoc.jar
+wget -O grpc-all-javadoc.jar "http://search.maven.org/remotecontent?filepath=io/grpc/grpc-all/$MAJOR.$MINOR.$PATCH/grpc-all-$MAJOR.$MINOR.$PATCH-javadoc.jar"
+unzip -d javadoc grpc-all-javadoc.jar
+rm grpc-all-javadoc.jar
 rm -r javadoc/META-INF/
 git add -A javadoc
-git commit -m "Javadoc for <VERSION>"
+git commit -m "Javadoc for $MAJOR.$MINOR.$PATCH"
 ```
 
 Push gh-pages to the main repository and verify the current version is [live
