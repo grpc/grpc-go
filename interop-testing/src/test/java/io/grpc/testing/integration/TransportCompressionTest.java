@@ -78,7 +78,7 @@ import java.io.OutputStream;
  * Tests that compression is turned on.
  */
 @RunWith(JUnit4.class)
-public class TransportCompressionTest extends AbstractTransportTest {
+public class TransportCompressionTest extends AbstractInteropTest {
 
   private static int serverPort = TestUtils.pickUnusedPort();
 

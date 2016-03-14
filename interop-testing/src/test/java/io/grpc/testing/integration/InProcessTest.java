@@ -42,7 +42,7 @@ import org.junit.runners.JUnit4;
 
 /** Unit tests for {@link InProcess}. */
 @RunWith(JUnit4.class)
-public class InProcessTest extends AbstractTransportTest {
+public class InProcessTest extends AbstractInteropTest {
   private static String serverName = "test";
 
   /** Starts the in-process server. */

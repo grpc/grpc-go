@@ -99,7 +99,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Abstract base class for all GRPC transport tests.
  */
-public abstract class AbstractTransportTest {
+public abstract class AbstractInteropTest {
 
   public static final Metadata.Key<Messages.SimpleContext> METADATA_KEY =
       ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());

@@ -258,7 +258,7 @@ public class TestServiceClient {
     }
   }
 
-  private class Tester extends AbstractTransportTest {
+  private class Tester extends AbstractInteropTest {
     @Override
     protected ManagedChannel createChannel() {
       if (!useOkHttp) {

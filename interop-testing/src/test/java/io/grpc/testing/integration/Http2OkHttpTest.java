@@ -68,7 +68,7 @@ import javax.net.ssl.SSLPeerUnverifiedException;
  * Integration tests for GRPC over Http2 using the OkHttp framework.
  */
 @RunWith(JUnit4.class)
-public class Http2OkHttpTest extends AbstractTransportTest {
+public class Http2OkHttpTest extends AbstractInteropTest {
   private static int serverPort = TestUtils.pickUnusedPort();
 
   /** Starts the server with HTTPS. */

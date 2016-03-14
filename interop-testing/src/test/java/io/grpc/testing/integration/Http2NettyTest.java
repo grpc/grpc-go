@@ -50,7 +50,7 @@ import java.io.IOException;
  * Integration tests for GRPC over HTTP2 using the Netty framework.
  */
 @RunWith(JUnit4.class)
-public class Http2NettyTest extends AbstractTransportTest {
+public class Http2NettyTest extends AbstractInteropTest {
   private static int serverPort = TestUtils.pickUnusedPort();
 
   /** Starts the server with HTTPS. */
