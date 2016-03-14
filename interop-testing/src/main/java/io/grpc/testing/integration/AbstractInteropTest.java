@@ -644,8 +644,8 @@ public abstract class AbstractInteropTest {
                .setIntervalUs(20000))
                .build()).next();
       fail("Expected deadline to be exceeded");
-    } catch (Throwable t) {
-      assertEquals(Status.DEADLINE_EXCEEDED.getCode(), Status.fromThrowable(t).getCode());
+    } catch (StatusRuntimeException ex) {
+      assertEquals(Status.DEADLINE_EXCEEDED.getCode(), ex.getStatus().getCode());
     }
   }
 
