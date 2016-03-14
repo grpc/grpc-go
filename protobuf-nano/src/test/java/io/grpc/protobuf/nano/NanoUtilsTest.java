@@ -96,7 +96,13 @@ public class NanoUtilsTest {
     m.bs = new byte[70 * 1024 * 1024];
     Message m2 = marshaller.parse(marshaller.stream(m));
     assertNotSame(m, m2);
-    assertArrayEquals(m.bs, m2.bs);
+    // TODO(carl-mastrangelo): assertArrayEquals is REALLY slow, and been fixed in junit4.12.
+    // Eventually switch back to it once we are using 4.12 everywhere.
+    // assertArrayEquals(m.bs, m2.bs);
+    assertEquals(m.bs.length, m2.bs.length);
+    for (int i = 0; i < m.bs.length; i++) {
+      assertEquals(m.bs[i], m2.bs[i]);
+    }
   }
 
   @Test
