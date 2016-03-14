@@ -254,7 +254,7 @@ specified in PEM format. The standard TLS port is 443, but we use 8443 below to
 avoid needing extra permissions from the OS.
 
 ```java
-ServerImpl server = ServerBuilder.forPort(8443)
+Server server = ServerBuilder.forPort(8443)
     // Enable TLS
     .useTransportSecurity(certChainFile, privateKeyFile)
     .addService(TestServiceGrpc.bindService(serviceImplementation))
@@ -279,8 +279,7 @@ The following code snippet shows how you can call the Google Cloud PubSub API us
 
 ```java
 // Create a channel to the test service.
-ChannelImpl channelImpl = NettyChannelBuilder.forAddress("pubsub.googleapis.com")
-    .negotiationType(NegotiationType.TLS)
+ManagedChannel channel = ManagedChannelBuilder.forTarget("pubsub.googleapis.com")
     .build();
 // Get the default credentials from the environment
 GoogleCredentials creds = GoogleCredentials.getApplicationDefault();
