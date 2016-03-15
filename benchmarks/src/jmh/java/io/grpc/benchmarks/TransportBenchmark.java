@@ -37,6 +37,10 @@ import com.google.protobuf.ByteString;
 
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
+import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
+import io.grpc.benchmarks.proto.Messages.Payload;
+import io.grpc.benchmarks.proto.Messages.SimpleRequest;
+import io.grpc.benchmarks.proto.Messages.SimpleResponse;
 import io.grpc.benchmarks.qps.AsyncServer;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
@@ -46,10 +50,6 @@ import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
-import io.grpc.testing.Payload;
-import io.grpc.testing.SimpleRequest;
-import io.grpc.testing.SimpleResponse;
-import io.grpc.testing.TestServiceGrpc;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalServerChannel;
@@ -81,7 +81,7 @@ public class TransportBenchmark {
 
   private ManagedChannel channel;
   private Server server;
-  private TestServiceGrpc.TestServiceBlockingStub stub;
+  private BenchmarkServiceGrpc.BenchmarkServiceBlockingStub stub;
 
   @Setup
   public void setUp() throws Exception {
@@ -134,11 +134,11 @@ public class TransportBenchmark {
     }
 
     server = serverBuilder
-        .addService(TestServiceGrpc.bindService(new AsyncServer.TestServiceImpl()))
+        .addService(BenchmarkServiceGrpc.bindService(new AsyncServer.BenchmarkServiceImpl()))
         .build();
     server.start();
     channel = channelBuilder.build();
-    stub = TestServiceGrpc.newBlockingStub(channel);
+    stub = BenchmarkServiceGrpc.newBlockingStub(channel);
     // Wait for channel to start
     stub.unaryCall(SimpleRequest.getDefaultInstance());
   }

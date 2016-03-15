@@ -57,12 +57,12 @@ import com.google.protobuf.ByteString;
 import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
+import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
+import io.grpc.benchmarks.proto.BenchmarkServiceGrpc.BenchmarkServiceStub;
+import io.grpc.benchmarks.proto.Messages.Payload;
+import io.grpc.benchmarks.proto.Messages.SimpleRequest;
+import io.grpc.benchmarks.proto.Messages.SimpleResponse;
 import io.grpc.stub.StreamObserver;
-import io.grpc.testing.Payload;
-import io.grpc.testing.SimpleRequest;
-import io.grpc.testing.SimpleResponse;
-import io.grpc.testing.TestServiceGrpc;
-import io.grpc.testing.TestServiceGrpc.TestServiceStub;
 
 import org.HdrHistogram.Histogram;
 import org.HdrHistogram.HistogramIterationValue;
@@ -172,7 +172,7 @@ public class AsyncClient {
 
   private Future<Histogram> doUnaryCalls(Channel channel, final SimpleRequest request,
                                          final long endTime) {
-    final TestServiceStub stub = TestServiceGrpc.newStub(channel);
+    final BenchmarkServiceStub stub = BenchmarkServiceGrpc.newStub(channel);
     final Histogram histogram = new Histogram(HISTOGRAM_MAX_VALUE, HISTOGRAM_PRECISION);
     final HistogramFuture future = new HistogramFuture(histogram);
 
@@ -212,7 +212,7 @@ public class AsyncClient {
 
   private static Future<Histogram> doStreamingCalls(Channel channel, final SimpleRequest request,
                                              final long endTime) {
-    final TestServiceStub stub = TestServiceGrpc.newStub(channel);
+    final BenchmarkServiceStub stub = BenchmarkServiceGrpc.newStub(channel);
     final Histogram histogram = new Histogram(HISTOGRAM_MAX_VALUE, HISTOGRAM_PRECISION);
     final HistogramFuture future = new HistogramFuture(histogram);
 

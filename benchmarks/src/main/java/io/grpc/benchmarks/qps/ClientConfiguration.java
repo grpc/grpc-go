@@ -34,14 +34,12 @@ package io.grpc.benchmarks.qps;
 import static io.grpc.benchmarks.qps.SocketAddressValidator.INET;
 import static io.grpc.benchmarks.qps.SocketAddressValidator.UDS;
 import static io.grpc.benchmarks.qps.Utils.parseBoolean;
-import static io.grpc.testing.RpcType.STREAMING;
-import static io.grpc.testing.RpcType.UNARY;
 import static java.lang.Integer.parseInt;
 import static java.util.Arrays.asList;
 
+import io.grpc.benchmarks.proto.Control.RpcType;
+import io.grpc.benchmarks.proto.Messages.PayloadType;
 import io.grpc.netty.NettyChannelBuilder;
-import io.grpc.testing.PayloadType;
-import io.grpc.testing.RpcType;
 import io.grpc.testing.TestUtils;
 
 import java.net.InetSocketAddress;
@@ -74,7 +72,7 @@ class ClientConfiguration implements Configuration {
   int warmupDuration = 10;
   int targetQps;
   String histogramFile;
-  RpcType rpcType = UNARY;
+  RpcType rpcType = RpcType.UNARY;
   PayloadType payloadType = PayloadType.COMPRESSABLE;
 
   private ClientConfiguration() {
@@ -276,7 +274,7 @@ class ClientConfiguration implements Configuration {
     STREAMING_RPCS("", "Use Streaming RPCs.", "false") {
       @Override
       protected void setClientValue(ClientConfiguration config, String value) {
-        config.rpcType = STREAMING;
+        config.rpcType = RpcType.STREAMING;
       }
     },
     FLOW_CONTROL_WINDOW("BYTES", "The HTTP/2 flow control window.",

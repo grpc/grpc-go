@@ -35,13 +35,13 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 
 import io.grpc.ManagedChannel;
+import io.grpc.benchmarks.proto.Messages.Payload;
+import io.grpc.benchmarks.proto.Messages.SimpleRequest;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
-import io.grpc.testing.Payload;
-import io.grpc.testing.SimpleRequest;
 import io.grpc.testing.TestUtils;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.EpollDomainSocketChannel;

@@ -35,14 +35,14 @@ import com.google.protobuf.ByteString;
 
 import io.grpc.Server;
 import io.grpc.Status;
+import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
+import io.grpc.benchmarks.proto.Messages.Payload;
+import io.grpc.benchmarks.proto.Messages.PayloadType;
+import io.grpc.benchmarks.proto.Messages.SimpleRequest;
+import io.grpc.benchmarks.proto.Messages.SimpleResponse;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
-import io.grpc.testing.Payload;
-import io.grpc.testing.PayloadType;
-import io.grpc.testing.SimpleRequest;
-import io.grpc.testing.SimpleResponse;
-import io.grpc.testing.TestServiceGrpc;
 import io.grpc.testing.TestUtils;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
@@ -171,7 +171,7 @@ public class AsyncServer {
         .bossEventLoopGroup(boss)
         .workerEventLoopGroup(worker)
         .channelType(channelType)
-        .addService(TestServiceGrpc.bindService(new TestServiceImpl()))
+        .addService(BenchmarkServiceGrpc.bindService(new BenchmarkServiceImpl()))
         .sslContext(sslContext)
         .flowControlWindow(config.flowControlWindow);
     if (config.directExecutor) {
@@ -181,7 +181,7 @@ public class AsyncServer {
     return builder.build();
   }
 
-  public static class TestServiceImpl implements TestServiceGrpc.TestService {
+  public static class BenchmarkServiceImpl implements BenchmarkServiceGrpc.BenchmarkService {
 
     @Override
     public void unaryCall(SimpleRequest request, StreamObserver<SimpleResponse> responseObserver) {

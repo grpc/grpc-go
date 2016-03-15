@@ -52,11 +52,11 @@ import static io.grpc.benchmarks.qps.Utils.saveHistogram;
 import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
+import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
+import io.grpc.benchmarks.proto.Messages.SimpleRequest;
+import io.grpc.benchmarks.proto.Messages.SimpleResponse;
+
 import io.grpc.stub.StreamObserver;
-import io.grpc.testing.SimpleRequest;
-import io.grpc.testing.SimpleResponse;
-import io.grpc.testing.TestServiceGrpc;
-import io.grpc.testing.TestServiceGrpc.TestServiceStub;
 
 import org.HdrHistogram.AtomicHistogram;
 import org.HdrHistogram.Histogram;
@@ -147,14 +147,14 @@ public class OpenLoopClient {
 
   static class LoadGenerationWorker implements Callable<Histogram> {
     final Histogram histogram = new AtomicHistogram(HISTOGRAM_MAX_VALUE, HISTOGRAM_PRECISION);
-    final TestServiceStub stub;
+    final BenchmarkServiceGrpc.BenchmarkServiceStub stub;
     final SimpleRequest request;
     final Random rnd;
     final int targetQps;
     final long numRpcs;
 
     LoadGenerationWorker(Channel channel, SimpleRequest request, int targetQps, int duration) {
-      stub = TestServiceGrpc.newStub(checkNotNull(channel, "channel"));
+      stub = BenchmarkServiceGrpc.newStub(checkNotNull(channel, "channel"));
       this.request = checkNotNull(request, "request");
       this.targetQps = targetQps;
       numRpcs = targetQps * duration;
@@ -197,7 +197,7 @@ public class OpenLoopClient {
       return histogram;
     }
 
-    private void newRpc(TestServiceStub stub) {
+    private void newRpc(BenchmarkServiceGrpc.BenchmarkServiceStub stub) {
       stub.unaryCall(request, new StreamObserver<SimpleResponse>() {
 
         private final long start = System.nanoTime();
