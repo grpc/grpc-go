@@ -77,7 +77,8 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
    $ git checkout -b bump-version master
    # Change version to next minor (and keep -SNAPSHOT)
    $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$((MINOR+1)).0'\1/' \
-     build.gradle android-interop-testing/app/build.gradle
+     build.gradle android-interop-testing/app/build.gradle \
+     examples/android/app/build.gradle
    $ git commit -a -m "Start $MAJOR.$((MINOR+1)).0 development cycle"
    ```
 3. Go through PR review and push the master branch to GitHub:

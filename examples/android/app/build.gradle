@@ -20,6 +20,8 @@ android {
     }
     lintOptions {
         disable 'InvalidPackage', 'HardcodedText'
+        textReport true
+        textOutput "stdout"
     }
 }
 
@@ -29,7 +31,7 @@ protobuf {
     }
     plugins {
         grpc {
-            artifact = 'io.grpc:protoc-gen-grpc-java:0.9.0'
+            artifact = 'io.grpc:protoc-gen-grpc-java:0.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
         }
     }
     generateProtoTasks {
@@ -54,13 +56,11 @@ protobuf {
 dependencies {
     compile 'com.android.support:appcompat-v7:22.1.1'
     compile 'com.google.code.findbugs:jsr305:3.0.0'
-    compile 'com.squareup.okhttp:okhttp:2.2.0'
     compile 'com.google.guava:guava:18.0'
+    compile 'com.squareup.okhttp:okhttp:2.2.0'
+    // You need to build grpc-java to obtain these libraries below.
+    compile 'io.grpc:grpc-okhttp:0.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    compile 'io.grpc:grpc-protobuf-nano:0.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    compile 'io.grpc:grpc-stub:0.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'javax.annotation:javax.annotation-api:1.2'
-
-    // You need to build the https://github.com/grpc/grpc-java
-    // to obtain these libraries below.
-    compile 'io.grpc:grpc-protobuf-nano:0.9.0'
-    compile 'io.grpc:grpc-okhttp:0.9.0'
-    compile 'io.grpc:grpc-stub:0.9.0'
 }

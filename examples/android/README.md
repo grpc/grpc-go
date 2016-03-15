@@ -11,20 +11,19 @@ PREREQUISITES
 
 INSTALL
 -------
-**1 Clone the gRPC Java git repo**
+**1. Clone the gRPC Java git repo**
 ```sh
 $ git clone https://github.com/grpc/grpc-java
-```
-
-**2 Install gRPC Java, as described in [How to Build](https://github.com/grpc/grpc-java#how-to-build)**
-```sh
-$ # from this dir
 $ cd grpc-java
-$ # follow the instructions in 'How to Build'
 ```
 
-**3 Install the app**
+**2. Install gRPC Java (not necessary for released versions)**
+```sh
+$ ./gradlew install -PskipCodegen=true
+```
+
+**3. Install the app**
 ```sh
 $ cd examples/android
-$ ./gradlew installDebug
+$ ../../gradlew installDebug
 ```
