@@ -396,7 +396,7 @@ func convertCode(err error) codes.Code {
 	case os.ErrInvalid:
 		return codes.InvalidArgument
 	case context.Canceled:
-		return codes.Canceled
+		return codes.Cancelled
 	case context.DeadlineExceeded:
 		return codes.DeadlineExceeded
 	}

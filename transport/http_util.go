@@ -71,7 +71,7 @@ var (
 		http2.ErrCodeSettingsTimeout:    codes.Internal,
 		http2.ErrCodeFrameSize:          codes.Internal,
 		http2.ErrCodeRefusedStream:      codes.Unavailable,
-		http2.ErrCodeCancel:             codes.Canceled,
+		http2.ErrCodeCancel:             codes.Cancelled,
 		http2.ErrCodeCompression:        codes.Internal,
 		http2.ErrCodeConnect:            codes.Internal,
 		http2.ErrCodeEnhanceYourCalm:    codes.ResourceExhausted,
@@ -80,7 +80,7 @@ var (
 	}
 	statusCodeConvTab = map[codes.Code]http2.ErrCode{
 		codes.Internal:          http2.ErrCodeInternal,
-		codes.Canceled:          http2.ErrCodeCancel,
+		codes.Cancelled:         http2.ErrCodeCancel,
 		codes.Unavailable:       http2.ErrCodeRefusedStream,
 		codes.ResourceExhausted: http2.ErrCodeEnhanceYourCalm,
 		codes.PermissionDenied:  http2.ErrCodeInadequateSecurity,
