@@ -132,7 +132,7 @@ public class TestUtils {
    * {@link ServerCall#attributes()}
    */
   public static ServerInterceptor recordServerCallInterceptor(
-      final AtomicReference<ServerCall> serverCallCapture) {
+      final AtomicReference<ServerCall<?>> serverCallCapture) {
     return new ServerInterceptor() {
       @Override
       public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(

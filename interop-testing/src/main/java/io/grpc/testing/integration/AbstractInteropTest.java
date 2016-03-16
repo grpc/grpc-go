@@ -111,8 +111,8 @@ public abstract class AbstractInteropTest {
 
   public static final Metadata.Key<Messages.SimpleContext> METADATA_KEY =
       ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
-  private static final AtomicReference<ServerCall> serverCallCapture =
-      new AtomicReference<ServerCall>();
+  private static final AtomicReference<ServerCall<?>> serverCallCapture =
+      new AtomicReference<ServerCall<?>>();
   private static final AtomicReference<Metadata> requestHeadersCapture =
       new AtomicReference<Metadata>();
   private static ScheduledExecutorService testServiceExecutor;
