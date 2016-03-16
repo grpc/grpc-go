@@ -31,6 +31,8 @@
 
 package io.grpc.stub;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptor;
@@ -69,8 +71,8 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    * @param callOptions the runtime call options to be applied to every call on this stub
    */
   protected AbstractStub(Channel channel, CallOptions callOptions) {
-    this.channel = channel;
-    this.callOptions = callOptions;
+    this.channel = checkNotNull(channel);
+    this.callOptions = checkNotNull(callOptions);
   }
 
   /**
