@@ -36,7 +36,6 @@ import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -50,14 +49,11 @@ import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
 import io.netty.util.AttributeKey;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.GenericFutureListener;
+import io.netty.util.concurrent.DefaultThreadFactory;
 
 import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
@@ -203,23 +199,12 @@ class Utils {
 
     @Override
     public EventLoopGroup create() {
-      // Use the executor based constructor so we can work with both Netty4 & Netty5.
-      ThreadFactory threadFactory = new ThreadFactoryBuilder()
-          .setDaemon(true)
-          .setNameFormat(name + "-%d")
-          .build();
+      // Use Netty's DefaultThreadFactory in order to get the benefit of FastThreadLocal.
+      boolean useDaemonThreads = true;
+      ThreadFactory threadFactory = new DefaultThreadFactory(name, useDaemonThreads);
       int parallelism = numEventLoops == 0
           ? Runtime.getRuntime().availableProcessors() * 2 : numEventLoops;
-      final ExecutorService executor = Executors.newFixedThreadPool(parallelism, threadFactory);
-      NioEventLoopGroup nioEventLoopGroup = new NioEventLoopGroup(parallelism, executor);
-      nioEventLoopGroup.terminationFuture().addListener(
-          new GenericFutureListener<Future<Object>>() {
-            @Override
-            public void operationComplete(Future<Object> future) throws Exception {
-              executor.shutdown();
-            }
-          });
-      return nioEventLoopGroup;
+      return new NioEventLoopGroup(parallelism, threadFactory);
     }
 
     @Override
