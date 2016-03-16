@@ -487,7 +487,7 @@ func ContextErr(err error) StreamError {
 	case context.DeadlineExceeded:
 		return StreamErrorf(codes.DeadlineExceeded, "%v", err)
 	case context.Canceled:
-		return StreamErrorf(codes.Canceled, "%v", err)
+		return StreamErrorf(codes.Cancelled, "%v", err)
 	}
 	panic(fmt.Sprintf("Unexpected error from context packet: %v", err))
 }

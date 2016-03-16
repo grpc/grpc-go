@@ -1041,8 +1041,8 @@ func testCancel(t *testing.T, e env) {
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(1*time.Millisecond, cancel)
 	reply, err := tc.UnaryCall(ctx, req)
-	if grpc.Code(err) != codes.Canceled {
-		t.Fatalf(`TestService/UnaryCall(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.Canceled)
+	if grpc.Code(err) != codes.Cancelled {
+		t.Fatalf(`TestService/UnaryCall(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.Cancelled)
 	}
 	cc.Close()
 
@@ -1779,8 +1779,8 @@ func testClientRequestBodyError_Cancel_StreamingInput(t *testing.T, e env) {
 		case <-time.After(3 * time.Second):
 			t.Fatal("timeout waiting for error")
 		}
-		if se, ok := got.(transport.StreamError); !ok || se.Code != codes.Canceled {
-			t.Errorf("error = %#v; want transport.StreamError with code Canceled")
+		if se, ok := got.(transport.StreamError); !ok || se.Code != codes.Cancelled {
+			t.Errorf("error = %#v; want transport.StreamError with code Cancelled")
 		}
 	})
 }

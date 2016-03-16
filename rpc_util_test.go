@@ -169,7 +169,7 @@ func TestContextErr(t *testing.T) {
 		errOut transport.StreamError
 	}{
 		{context.DeadlineExceeded, transport.StreamErrorf(codes.DeadlineExceeded, "%v", context.DeadlineExceeded)},
-		{context.Canceled, transport.StreamErrorf(codes.Canceled, "%v", context.Canceled)},
+		{context.Canceled, transport.StreamErrorf(codes.Cancelled, "%v", context.Canceled)},
 	} {
 		err := transport.ContextErr(test.errIn)
 		if err != test.errOut {

@@ -432,8 +432,8 @@ func DoCancelAfterBegin(tc testpb.TestServiceClient) {
 	}
 	cancel()
 	_, err = stream.CloseAndRecv()
-	if grpc.Code(err) != codes.Canceled {
-		grpclog.Fatalf("%v.CloseAndRecv() got error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
+	if grpc.Code(err) != codes.Cancelled {
+		grpclog.Fatalf("%v.CloseAndRecv() got error code %d, want %d", stream, grpc.Code(err), codes.Cancelled)
 	}
 	grpclog.Println("CancelAfterBegin done")
 }
@@ -463,8 +463,8 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient) {
 		grpclog.Fatalf("%v.Recv() = %v", stream, err)
 	}
 	cancel()
-	if _, err := stream.Recv(); grpc.Code(err) != codes.Canceled {
-		grpclog.Fatalf("%v compleled with error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
+	if _, err := stream.Recv(); grpc.Code(err) != codes.Cancelled {
+		grpclog.Fatalf("%v compleled with error code %d, want %d", stream, grpc.Code(err), codes.Cancelled)
 	}
 	grpclog.Println("CancelAfterFirstResponse done")
 }
