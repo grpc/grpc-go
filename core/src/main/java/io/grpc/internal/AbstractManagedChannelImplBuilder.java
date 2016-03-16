@@ -237,20 +237,8 @@ public abstract class AbstractManagedChannelImplBuilder
     }
 
     @Override
-    public int referenceCount() {
-      return factory.referenceCount();
-    }
-
-    @Override
-    public ReferenceCounted retain() {
-      factory.retain();
-      return this;
-    }
-
-    @Override
-    public ReferenceCounted release() {
-      factory.release();
-      return this;
+    public void close() {
+      factory.close();
     }
   }
 

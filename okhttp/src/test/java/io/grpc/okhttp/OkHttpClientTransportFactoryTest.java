@@ -29,58 +29,19 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.netty;
+package io.grpc.okhttp;
 
 import io.grpc.internal.ClientTransportFactory;
-import io.grpc.internal.ManagedClientTransport;
-import io.grpc.internal.Server;
-import io.grpc.internal.testing.AbstractTransportTest;
+import io.grpc.internal.testing.AbstractClientTransportFactoryTest;
 import io.grpc.testing.TestUtils;
-
-import org.junit.After;
-import org.junit.Ignore;
-import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.net.InetSocketAddress;
-
-/** Unit tests for Netty transport. */
 @RunWith(JUnit4.class)
-public class NettyTransportTest extends AbstractTransportTest {
-  private static final int SERVER_PORT = TestUtils.pickUnusedPort();
-  // Avoid LocalChannel for testing because LocalChannel can fail with
-  // io.netty.channel.ChannelException instead of java.net.ConnectException which breaks
-  // serverNotListening test.
-  private ClientTransportFactory clientFactory = NettyChannelBuilder
-      // Although specified here, address is ignored because we never call build.
-      .forAddress("localhost", SERVER_PORT)
-      .flowControlWindow(65 * 1024)
-      .negotiationType(NegotiationType.PLAINTEXT)
-      .buildTransportFactory();
-
-  @After
-  public void releaseClientFactory() {
-    clientFactory.close();
-  }
-
+public class OkHttpClientTransportFactoryTest extends AbstractClientTransportFactoryTest {
   @Override
-  protected Server newServer() {
-    return NettyServerBuilder
-        .forPort(SERVER_PORT)
-        .flowControlWindow(65 * 1024)
-        .buildTransportServer();
+  protected ClientTransportFactory newClientTransportFactory() {
+    return OkHttpChannelBuilder.forAddress("localhost", TestUtils.pickUnusedPort())
+        .buildTransportFactory();
   }
-
-  @Override
-  protected ManagedClientTransport newClientTransport() {
-    return clientFactory.newClientTransport(
-        new InetSocketAddress("localhost", SERVER_PORT), "localhost:" + SERVER_PORT);
-  }
-
-  // TODO(ejona): Flaky
-  @Test
-  @Ignore
-  @Override
-  public void flowControlPushBack() {}
 }

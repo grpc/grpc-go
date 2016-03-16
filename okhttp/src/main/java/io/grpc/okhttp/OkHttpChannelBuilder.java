@@ -43,9 +43,9 @@ import com.squareup.okhttp.TlsVersion;
 
 import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
+import io.grpc.Internal;
 import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
-import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ManagedClientTransport;
@@ -229,13 +229,18 @@ public class OkHttpChannelBuilder extends
     }
   }
 
-  private static class OkHttpTransportFactory extends AbstractReferenceCounted
-          implements ClientTransportFactory {
+  /**
+   * Creates OkHttp transports. Exposed for internal use, as it should be private.
+   */
+  @Internal
+  static final class OkHttpTransportFactory implements ClientTransportFactory {
     private final Executor executor;
     private final boolean usingSharedExecutor;
     private final SSLSocketFactory socketFactory;
     private final ConnectionSpec connectionSpec;
     private final int maxMessageSize;
+
+    private boolean closed;
 
     private OkHttpTransportFactory(Executor executor,
                                    SSLSocketFactory socketFactory,
@@ -256,13 +261,21 @@ public class OkHttpChannelBuilder extends
 
     @Override
     public ManagedClientTransport newClientTransport(SocketAddress addr, String authority) {
+      if (closed) {
+        throw new IllegalStateException("The transport factory is closed.");
+      }
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
       return new OkHttpClientTransport(inetSocketAddr, authority, executor, socketFactory,
           Utils.convertSpec(connectionSpec), maxMessageSize);
     }
 
     @Override
-    protected void deallocate() {
+    public void close() {
+      if (closed) {
+        return;
+      }
+      closed = true;
+
       if (usingSharedExecutor) {
         SharedResourceHolder.release(SHARED_EXECUTOR, (ExecutorService) executor);
       }

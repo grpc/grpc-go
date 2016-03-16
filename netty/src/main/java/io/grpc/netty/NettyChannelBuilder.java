@@ -42,7 +42,6 @@ import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
 import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
-import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ManagedClientTransport;
@@ -268,11 +267,10 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   }
 
   /**
-   * Creates Netty transports.  Exposed for internal use, as it should be private.
+   * Creates Netty transports. Exposed for internal use, as it should be private.
    */
   @Internal
-  protected static final class NettyTransportFactory extends AbstractReferenceCounted
-          implements ClientTransportFactory {
+  static final class NettyTransportFactory implements ClientTransportFactory {
     private final Class<? extends Channel> channelType;
     private final NegotiationType negotiationType;
     private final ProtocolNegotiator protocolNegotiator;
@@ -282,6 +280,8 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     private final int flowControlWindow;
     private final int maxMessageSize;
     private final int maxHeaderListSize;
+
+    private boolean closed;
 
     private NettyTransportFactory(Class<? extends Channel> channelType,
                                   NegotiationType negotiationType,
@@ -310,6 +310,9 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     @Override
     public ManagedClientTransport newClientTransport(
         SocketAddress serverAddress, String authority) {
+      if (closed) {
+        throw new IllegalStateException("The transport factory is closed.");
+      }
       ProtocolNegotiator negotiator = protocolNegotiator != null ? protocolNegotiator :
           createProtocolNegotiator(authority, negotiationType, sslContext);
       return newClientTransport(serverAddress, authority, negotiator);
@@ -318,12 +321,20 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     @Internal  // This is strictly for internal use.  Depend on this at your own peril.
     public ManagedClientTransport newClientTransport(SocketAddress serverAddress,
         String authority, ProtocolNegotiator negotiator) {
+      if (closed) {
+        throw new IllegalStateException("The transport factory is closed.");
+      }
       return new NettyClientTransport(serverAddress, channelType, group, negotiator,
           flowControlWindow, maxMessageSize, maxHeaderListSize, authority);
     }
 
     @Override
-    protected void deallocate() {
+    public void close() {
+      if (closed) {
+        return;
+      }
+      closed = true;
+
       if (usingSharedGroup) {
         SharedResourceHolder.release(Utils.DEFAULT_WORKER_EVENT_LOOP_GROUP, group);
       }

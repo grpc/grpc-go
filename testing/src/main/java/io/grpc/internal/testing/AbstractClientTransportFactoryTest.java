@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,28 +29,35 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.internal;
+package io.grpc.internal.testing;
 
-/**
- * A reference-counted object that requires explicit deallocation.
- */
-public interface ReferenceCounted {
-  /**
-   * Gets the current reference count.
-   */
-  int referenceCount();
+import io.grpc.internal.ClientTransportFactory;
+import io.grpc.testing.TestUtils;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-  /**
-   * Increases the reference count by 1.
-   */
-  ReferenceCounted retain();
+import java.net.InetSocketAddress;
 
-  /**
-   * Decreases the reference count by {@code 1} and deallocates this object if the reference count
-   * reaches at {@code 0}.
-   *
-   * @return {@code true} if and only if the reference count became {@code 0} and this object has
-   *         been deallocated
-   */
-  ReferenceCounted release();
+@RunWith(JUnit4.class)
+public abstract class AbstractClientTransportFactoryTest {
+
+  protected abstract ClientTransportFactory newClientTransportFactory();
+
+  @Test
+  public void multipleCallsToCloseShouldNotThrow() {
+    ClientTransportFactory transportFactory = newClientTransportFactory();
+    transportFactory.close();
+    transportFactory.close();
+    transportFactory.close();
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void newClientTransportAfterCloseShouldThrow() {
+    int port = TestUtils.pickUnusedPort();
+    ClientTransportFactory transportFactory = newClientTransportFactory();
+    transportFactory.close();
+    transportFactory.newClientTransport(
+        new InetSocketAddress("localhost", port), "localhost:" + port);
+  }
 }

@@ -363,7 +363,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         SharedResourceHolder.release(GrpcUtil.SHARED_CHANNEL_EXECUTOR, (ExecutorService) executor);
       }
       // Release the transport factory so that it can deallocate any resources.
-      transportFactory.release();
+      transportFactory.close();
     }
   }
 

@@ -31,10 +31,11 @@
 
 package io.grpc.internal;
 
+import java.io.Closeable;
 import java.net.SocketAddress;
 
 /** Pre-configured factory for creating {@link ManagedClientTransport} instances. */
-public interface ClientTransportFactory extends ReferenceCounted {
+public interface ClientTransportFactory extends Closeable {
   /**
    * Creates an unstarted transport for exclusive use.
    *
@@ -42,4 +43,14 @@ public interface ClientTransportFactory extends ReferenceCounted {
    * @param authority the HTTP/2 authority of the server
    */
   ManagedClientTransport newClientTransport(SocketAddress serverAddress, String authority);
+
+  /**
+   * Releases any resources.
+   *
+   *<p>
+   * After this method has been called, it's no longer valid to call
+   * {@link #newClientTransport(SocketAddress, String)}. No guarantees about thread-safety are made.
+   */
+  @Override
+  void close();
 }

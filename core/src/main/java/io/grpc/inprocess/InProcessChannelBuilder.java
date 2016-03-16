@@ -34,8 +34,8 @@ package io.grpc.inprocess;
 import com.google.common.base.Preconditions;
 
 import io.grpc.ExperimentalApi;
+import io.grpc.Internal;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
-import io.grpc.internal.AbstractReferenceCounted;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ManagedClientTransport;
 
@@ -80,9 +80,14 @@ public class InProcessChannelBuilder extends
     return new InProcessClientTransportFactory(name);
   }
 
-  private static class InProcessClientTransportFactory extends AbstractReferenceCounted
-          implements ClientTransportFactory {
+  /**
+   * Creates InProcess transports. Exposed for internal use, as it should be private.
+   */
+  @Internal
+  static final class InProcessClientTransportFactory implements ClientTransportFactory {
     private final String name;
+
+    private boolean closed;
 
     private InProcessClientTransportFactory(String name) {
       this.name = name;
@@ -90,11 +95,15 @@ public class InProcessChannelBuilder extends
 
     @Override
     public ManagedClientTransport newClientTransport(SocketAddress addr, String authority) {
+      if (closed) {
+        throw new IllegalStateException("The transport factory is closed.");
+      }
       return new InProcessTransport(name);
     }
 
     @Override
-    protected void deallocate() {
+    public void close() {
+      closed = true;
       // Do nothing.
     }
   }

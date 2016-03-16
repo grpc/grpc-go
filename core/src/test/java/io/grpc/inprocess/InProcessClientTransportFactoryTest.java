@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,50 +29,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.internal;
+package io.grpc.inprocess;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.testing.AbstractClientTransportFactoryTest;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-/**
- * Base implementation for all reference counted objects.
- */
-public abstract class AbstractReferenceCounted implements ReferenceCounted {
-  private final AtomicInteger refCount = new AtomicInteger(1);
-
-  @Override
-  public final int referenceCount() {
-    return refCount.get();
-  }
+@RunWith(JUnit4.class)
+public class InProcessClientTransportFactoryTest extends AbstractClientTransportFactoryTest {
 
   @Override
-  public final ReferenceCounted retain() {
-    int newCount = refCount.incrementAndGet();
-    if (newCount <= 1) {
-      throw illegalReferenceCount(newCount);
-    }
-    return this;
-  }
-
-  @Override
-  public final ReferenceCounted release() {
-    int newCount = refCount.decrementAndGet();
-    if (newCount < 0) {
-      throw illegalReferenceCount(newCount);
-    }
-    if (newCount == 0) {
-      deallocate();
-    }
-    return this;
-  }
-
-  /**
-   * Called once {@link #referenceCount()} is equals 0.
-   */
-  protected abstract void deallocate();
-
-  private IllegalStateException illegalReferenceCount(int count) {
-    throw new IllegalStateException(String.format("Illegal reference count for class %s: %d",
-            getClass().getName(),
-            count));
+  protected ClientTransportFactory newClientTransportFactory() {
+    return InProcessChannelBuilder.forName("test-transport").buildTransportFactory();
   }
 }

@@ -249,7 +249,7 @@ public class ManagedChannelImplTest {
     transportListener.transportTerminated();
     assertTrue(channel.isTerminated());
 
-    verify(mockTransportFactory).release();
+    verify(mockTransportFactory).close();
     verifyNoMoreInteractions(mockTransportFactory);
     verify(mockTransport, atLeast(0)).getLogId();
     verifyNoMoreInteractions(mockTransport);
