@@ -122,7 +122,7 @@ func newTestServer() *server {
 	return &server{startedErr: make(chan error, 1)}
 }
 
-// start starts server. Other goroutines should block on s.startedErr for futher operations.
+// start starts server. Other goroutines should block on s.startedErr for further operations.
 func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 	var err error
 	if port == 0 {
