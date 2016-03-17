@@ -31,6 +31,9 @@
 
 package io.grpc;
 
+import java.net.SocketAddress;
+
+import javax.net.ssl.SSLSession;
 
 /**
  * Encapsulates a single call received from a remote client. Calls may not simply be unary
@@ -49,6 +52,21 @@ package io.grpc;
  * @param <RespT> parsed type of response message.
  */
 public abstract class ServerCall<RespT> {
+  /**
+   * {@link Attributes.Key} for the remote address of server call attributes
+   * {@link ServerCall#attributes()}
+   */
+  @ExperimentalApi
+  public static final Attributes.Key<SocketAddress> REMOTE_ADDR_KEY =
+          Attributes.Key.of("io.grpc.RemoteAddr");
+  /**
+   * {@link Attributes.Key} for the SSL session of server call attributes
+   * {@link ServerCall#attributes()}
+   */
+  @ExperimentalApi
+  public static final Attributes.Key<SSLSession> SSL_SESSION_KEY =
+          Attributes.Key.of("io.grpc.SslSession");
+
   /**
    * Callbacks for consuming incoming RPC messages.
    *

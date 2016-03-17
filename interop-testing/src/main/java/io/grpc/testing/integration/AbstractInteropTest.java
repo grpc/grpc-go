@@ -940,7 +940,7 @@ public abstract class AbstractInteropTest {
     stub.unaryCall(SimpleRequest.getDefaultInstance());
 
     HostAndPort remoteAddress = HostAndPort.fromString(serverCallCapture.get().attributes()
-            .get(GrpcUtil.REMOTE_ADDR_STREAM_ATTR_KEY).toString());
+            .get(ServerCall.REMOTE_ADDR_KEY).toString());
     assertEquals(expectedRemoteAddress, remoteAddress.getHostText());
   }
 
@@ -953,7 +953,7 @@ public abstract class AbstractInteropTest {
 
     List<Certificate> certificates = Lists.newArrayList();
     SSLSession sslSession =
-        serverCallCapture.get().attributes().get(GrpcUtil.SSL_SESSION_STREAM_ATTR_KEY);
+        serverCallCapture.get().attributes().get(ServerCall.SSL_SESSION_KEY);
     try {
       certificates = Arrays.asList(sslSession.getPeerCertificates());
     } catch (SSLPeerUnverifiedException e) {

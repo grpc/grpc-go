@@ -41,14 +41,12 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
-import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map.Entry;
@@ -58,7 +56,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
-import javax.net.ssl.SSLSession;
 
 /**
  * Common utilities for GRPC.
@@ -94,18 +91,6 @@ public final class GrpcUtil {
    */
   public static final Metadata.Key<String> USER_AGENT_KEY =
           Metadata.Key.of("user-agent", Metadata.ASCII_STRING_MARSHALLER);
-
-  /**
-   * {@link io.grpc.Attributes.Key} for the remote address of stream call.
-   */
-  public static final Attributes.Key<SocketAddress> REMOTE_ADDR_STREAM_ATTR_KEY =
-          Attributes.Key.of("io.grpc.RemoteAddr");
-
-  /**
-   * {@link io.grpc.Attributes.Key} for the SSL session of stream call.
-   */
-  public static final Attributes.Key<SSLSession> SSL_SESSION_STREAM_ATTR_KEY =
-          Attributes.Key.of("io.grpc.SslSession");
 
   /**
    * The default port for plain-text connections.

@@ -35,9 +35,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.grpc.Attributes;
 import io.grpc.Metadata;
+import io.grpc.ServerCall;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream;
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -159,8 +159,8 @@ class NettyServerStream extends AbstractServerStream<Integer> {
     }
 
     return Attributes.newBuilder()
-        .set(GrpcUtil.REMOTE_ADDR_STREAM_ATTR_KEY, channel.remoteAddress())
-        .set(GrpcUtil.SSL_SESSION_STREAM_ATTR_KEY, sslSession)
+        .set(ServerCall.REMOTE_ADDR_KEY, channel.remoteAddress())
+        .set(ServerCall.SSL_SESSION_KEY, sslSession)
         .build();
   }
 }
