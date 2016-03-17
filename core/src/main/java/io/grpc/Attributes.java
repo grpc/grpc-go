@@ -94,8 +94,7 @@ public final class Attributes {
     /**
      * Factory method for creating instances of {@link Key}.
      *
-     * @param name the name of Key, which should be namespaced like com.foo.BarAttribute to avoid
-     *             collision. Name collision, won't cause key collision.
+     * @param name the name of Key. Name collision, won't cause key collision.
      * @param <T> Key type
      * @return Key object
      */

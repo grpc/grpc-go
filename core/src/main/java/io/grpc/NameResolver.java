@@ -74,7 +74,7 @@ public abstract class NameResolver {
      * port number.
      */
     public static final Attributes.Key<Integer> PARAMS_DEFAULT_PORT =
-        Attributes.Key.of("io.grpc.NameResolverDefaultPort");
+        Attributes.Key.of("params-default-port");
 
     /**
      * Creates a {@link NameResolver} for the given target URI, or {@code null} if the given URI
