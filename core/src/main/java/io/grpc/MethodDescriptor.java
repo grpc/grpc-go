@@ -53,6 +53,7 @@ public class MethodDescriptor<ReqT, RespT> {
   private final String fullMethodName;
   private final Marshaller<ReqT> requestMarshaller;
   private final Marshaller<RespT> responseMarshaller;
+  private final boolean idempotent;
 
   /**
    * The call type of a method.
@@ -148,16 +149,18 @@ public class MethodDescriptor<ReqT, RespT> {
       Marshaller<RequestT> requestMarshaller,
       Marshaller<ResponseT> responseMarshaller) {
     return new MethodDescriptor<RequestT, ResponseT>(
-        type, fullMethodName, requestMarshaller, responseMarshaller);
+        type, fullMethodName, requestMarshaller, responseMarshaller, false);
   }
 
   private MethodDescriptor(MethodType type, String fullMethodName,
                            Marshaller<ReqT> requestMarshaller,
-                           Marshaller<RespT> responseMarshaller) {
+                           Marshaller<RespT> responseMarshaller,
+                           boolean idempotent) {
     this.type = Preconditions.checkNotNull(type, "type");
     this.fullMethodName = Preconditions.checkNotNull(fullMethodName, "fullMethodName");
     this.requestMarshaller = Preconditions.checkNotNull(requestMarshaller, "requestMarshaller");
     this.responseMarshaller = Preconditions.checkNotNull(responseMarshaller, "responseMarshaller");
+    this.idempotent = idempotent;
   }
 
   /**
@@ -212,6 +215,26 @@ public class MethodDescriptor<ReqT, RespT> {
    */
   public InputStream streamResponse(RespT response) {
     return responseMarshaller.stream(response);
+  }
+
+  /**
+   * Returns whether this method is idempotent.
+   */
+  @ExperimentalApi
+  public boolean isIdempotent() {
+    return idempotent;
+  }
+
+  /**
+   * Set idempotency on this method.
+   *
+   * @param idempotent the idempotency of this method.
+   * @return a new copy of MethodDescriptor.
+   */
+  @ExperimentalApi
+  public MethodDescriptor<ReqT, RespT> withIdempotent(boolean idempotent) {
+    return new MethodDescriptor<ReqT, RespT>(type, fullMethodName, requestMarshaller,
+        responseMarshaller, idempotent);
   }
 
   /**
