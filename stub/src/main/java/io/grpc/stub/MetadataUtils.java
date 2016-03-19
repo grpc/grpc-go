@@ -95,7 +95,8 @@ public class MetadataUtils {
    * @param stub to capture for
    * @param headersCapture to record the last received headers
    * @param trailersCapture to record the last received trailers
-   * @return an implementation of the stub with {@code extraHeaders} bound to each call.
+   * @return an implementation of the stub that allows to access the last received call's
+   *         headers and trailers via {@code headersCapture} and {@code trailersCapture}.
    */
   @ExperimentalApi
   public static <T extends AbstractStub<T>> T captureMetadata(
