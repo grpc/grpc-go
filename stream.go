@@ -257,7 +257,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 				cs.finish(err)
 				return nil
 			}
-			return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
+			return Errorf(cs.s.StatusCode(), "%s", cs.s.StatusDesc())
 		}
 		return toRPCErr(err)
 	}
@@ -269,7 +269,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			// Returns io.EOF to indicate the end of the stream.
 			return
 		}
-		return Errorf(cs.s.StatusCode(), cs.s.StatusDesc())
+		return Errorf(cs.s.StatusCode(), "%s", cs.s.StatusDesc())
 	}
 	return toRPCErr(err)
 }

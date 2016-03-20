@@ -185,6 +185,6 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if lastErr != nil {
 			return toRPCErr(lastErr)
 		}
-		return Errorf(stream.StatusCode(), stream.StatusDesc())
+		return Errorf(stream.StatusCode(), "%s", stream.StatusDesc())
 	}
 }
