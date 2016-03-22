@@ -180,6 +180,12 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   public abstract T compressorRegistry(CompressorRegistry registry);
 
   /**
+   * Provides a custom {@link BackoffPolicy.Provider} for reconnects.
+   */
+  @ExperimentalApi
+  public abstract T backoffPolicyProvider(BackoffPolicy.Provider backoffPolicyProvider);
+
+  /**
    * Builds a channel using the given parameters.
    */
   public abstract ManagedChannel build();
