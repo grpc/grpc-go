@@ -330,6 +330,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: timeoutEncode(timeout)})
 	}
 	for k, v := range authData {
+		// Capital header names are illegal in HTTP/2.
+		k = strings.ToLower(k)
 		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
 	}
 	var (
