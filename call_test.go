@@ -52,6 +52,7 @@ import (
 var (
 	expectedRequest  = "ping"
 	expectedResponse = "pong"
+	weirdError       = "format verbs: %v%s"
 	sizeLargeErr     = 1024 * 1024
 )
 
@@ -93,6 +94,10 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		codec := testCodec{}
 		if err := codec.Unmarshal(req, &v); err != nil {
 			t.Errorf("Failed to unmarshal the received message: %v", err)
+			return
+		}
+		if v == "weird error" {
+			h.t.WriteStatus(s, codes.Internal, weirdError)
 			return
 		}
 		if v != expectedRequest {
@@ -219,6 +224,22 @@ func TestInvokeLargeErr(t *testing.T) {
 	}
 	if Code(err) != codes.Internal || len(ErrorDesc(err)) != sizeLargeErr {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want an error of code %d and desc size %d", err, codes.Internal, sizeLargeErr)
+	}
+	cc.Close()
+	server.stop()
+}
+
+// TestInvokeErrorSpecialChars checks that error messages don't get mangled.
+func TestInvokeErrorSpecialChars(t *testing.T) {
+	server, cc := setUp(t, 0, math.MaxUint32)
+	var reply string
+	req := "weird error"
+	err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
+	if _, ok := err.(rpcError); !ok {
+		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
+	}
+	if got, want := ErrorDesc(err), weirdError; got != want {
+		t.Fatalf("grpc.Invoke(_, _, _, _, _) error = %q, want %q", got, want)
 	}
 	cc.Close()
 	server.stop()
