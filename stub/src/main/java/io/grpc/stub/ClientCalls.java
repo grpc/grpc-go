@@ -32,7 +32,6 @@
 package io.grpc.stub;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.AbstractFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -115,7 +114,7 @@ public class ClientCalls {
       return getUnchecked(futureUnaryCall(call, param));
     } catch (Throwable t) {
       call.cancel();
-      throw Throwables.propagate(t);
+      throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
     }
   }
 
@@ -141,7 +140,7 @@ public class ClientCalls {
       return getUnchecked(responseFuture);
     } catch (Throwable t) {
       call.cancel();
-      throw Throwables.propagate(t);
+      throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
     }
   }
 
@@ -228,7 +227,7 @@ public class ClientCalls {
       call.halfClose();
     } catch (Throwable t) {
       call.cancel();
-      throw Throwables.propagate(t);
+      throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
     }
   }
 

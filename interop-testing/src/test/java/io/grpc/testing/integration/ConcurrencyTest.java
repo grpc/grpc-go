@@ -32,7 +32,6 @@
 package io.grpc.testing.integration;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.ManagedChannel;
@@ -88,7 +87,7 @@ public class ConcurrencyTest {
       this.responsesDoneSignal = responsesDoneSignal;
     }
 
-    @Override 
+    @Override
     public void onCompleted() {
       Preconditions.checkState(numResponsesReceived == NUM_RESPONSES_PER_REQUEST);
       responsesDoneSignal.countDown();
@@ -138,7 +137,7 @@ public class ConcurrencyTest {
         startBarrier.await();
         clientStub.streamingOutputCall(request, new SignalingResponseObserver(responsesDoneSignal));
       } catch (Exception e) {
-        Throwables.propagate(e);
+        throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
       }
     }
 

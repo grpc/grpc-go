@@ -32,7 +32,6 @@
 package io.grpc.netty;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 
 import io.grpc.internal.AbstractReadableBuffer;
 import io.netty.buffer.ByteBuf;
@@ -42,9 +41,9 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
- * A {@link Buffer} implementation that is backed by a Netty {@link ByteBuf}. This class does not
- * call {@link ByteBuf#retain}, so if that is needed it should be called prior to creating this
- * buffer.
+ * A {@link java.nio.Buffer} implementation that is backed by a Netty {@link ByteBuf}. This class
+ * does not call {@link ByteBuf#retain}, so if that is needed it should be called prior to creating
+ * this buffer.
  */
 class NettyReadableBuffer extends AbstractReadableBuffer {
   private final ByteBuf buffer;
@@ -88,7 +87,7 @@ class NettyReadableBuffer extends AbstractReadableBuffer {
     try {
       buffer.readBytes(dest, length);
     } catch (IOException e) {
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
   }
 

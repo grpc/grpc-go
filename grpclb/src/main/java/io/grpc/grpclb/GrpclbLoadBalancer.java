@@ -35,7 +35,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
-import com.google.common.base.Throwables;
 
 import io.grpc.Attributes;
 import io.grpc.Channel;
@@ -43,8 +42,8 @@ import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.Status;
-import io.grpc.TransportManager.InterimTransport;
 import io.grpc.TransportManager;
+import io.grpc.TransportManager.InterimTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.stub.StreamObserver;
@@ -296,7 +295,7 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
               newServerMap.put(address, new ResolvedServerInfo(address, Attributes.EMPTY));
             }
           } catch (UnknownHostException e) {
-            Throwables.propagate(e);
+            throw new RuntimeException(e);
           }
         }
       }

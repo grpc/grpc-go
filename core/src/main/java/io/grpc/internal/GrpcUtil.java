@@ -37,7 +37,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -407,8 +406,10 @@ public final class GrpcUtil {
             method.invoke(service, true);
           } catch (NoSuchMethodException e) {
             // no op
+          } catch (RuntimeException e) {
+            throw e;
           } catch (Exception e) {
-            throw Throwables.propagate(e);
+            throw new RuntimeException(e);
           }
 
           return service;

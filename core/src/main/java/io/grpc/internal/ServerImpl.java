@@ -36,7 +36,6 @@ import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -324,10 +323,14 @@ public final class ServerImpl extends io.grpc.Server {
                 return;
               }
               listener = startCall(stream, methodName, method, timeout, headers, context);
+            } catch (RuntimeException e) {
+              stream.close(Status.fromThrowable(e), new Metadata());
+              timeout.cancel(true);
+              throw e;
             } catch (Throwable t) {
               stream.close(Status.fromThrowable(t), new Metadata());
               timeout.cancel(true);
-              throw Throwables.propagate(t);
+              throw new RuntimeException(t);
             } finally {
               jumpListener.setListener(listener);
             }
@@ -441,9 +444,12 @@ public final class ServerImpl extends io.grpc.Server {
         public void runInContext() {
           try {
             getListener().messageRead(message);
+          } catch (RuntimeException e) {
+            internalClose(Status.fromThrowable(e), new Metadata());
+            throw e;
           } catch (Throwable t) {
             internalClose(Status.fromThrowable(t), new Metadata());
-            throw Throwables.propagate(t);
+            throw new RuntimeException(t);
           }
         }
       });
@@ -456,9 +462,12 @@ public final class ServerImpl extends io.grpc.Server {
         public void runInContext() {
           try {
             getListener().halfClosed();
+          } catch (RuntimeException e) {
+            internalClose(Status.fromThrowable(e), new Metadata());
+            throw e;
           } catch (Throwable t) {
             internalClose(Status.fromThrowable(t), new Metadata());
-            throw Throwables.propagate(t);
+            throw new RuntimeException(t);
           }
         }
       });

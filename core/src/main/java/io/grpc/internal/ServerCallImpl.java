@@ -40,7 +40,6 @@ import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Throwables;
 
 import io.grpc.Attributes;
 import io.grpc.Codec;
@@ -158,9 +157,12 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
       InputStream resp = method.streamResponse(message);
       stream.writeMessage(resp);
       stream.flush();
+    } catch (RuntimeException e) {
+      close(Status.fromThrowable(e), new Metadata());
+      throw e;
     } catch (Throwable t) {
       close(Status.fromThrowable(t), new Metadata());
-      throw Throwables.propagate(t);
+      throw new RuntimeException(t);
     }
   }
 
