@@ -38,6 +38,10 @@ using namespace std;
 
 namespace java_grpc_generator {
 
+enum ProtoFlavor {
+  NORMAL, LITE, NANO
+};
+
 // Returns the package name of the gRPC services defined in the given file.
 string ServiceJavaPackage(const google::protobuf::FileDescriptor* file, bool nano);
 
@@ -48,7 +52,7 @@ string ServiceClassName(const google::protobuf::ServiceDescriptor* service);
 // Writes the generated service interface into the given ZeroCopyOutputStream
 void GenerateService(const google::protobuf::ServiceDescriptor* service,
                      google::protobuf::io::ZeroCopyOutputStream* out,
-                     bool generate_nano);
+                     ProtoFlavor flavor);
 
 }  // namespace java_grpc_generator
 

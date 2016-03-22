@@ -2,14 +2,12 @@ plugins {
     id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
 }
 
-description = 'gRPC: Protobuf'
+description = 'gRPC: Protobuf Lite'
 
 dependencies {
     compile project(':grpc-core'),
-            project(':grpc-protobuf-lite'),
             libraries.protobuf,
-            libraries.guava,
-            libraries.protobuf_util
+            libraries.guava
 }
 
 animalsniffer {

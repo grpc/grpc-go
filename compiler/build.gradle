@@ -127,6 +127,11 @@ sourceSets {
   }
 }
 
+compileTestJava {
+  // Protobuf-generated Lite produces quite a few warnings.
+  it.options.compilerArgs.removeAll(["-Xlint:unchecked", "-Xlint:rawtypes"])
+}
+
 protobuf {
   protoc {
     if (project.hasProperty('protoc')) {
@@ -223,10 +228,11 @@ artifacts {
   }
 }
 
-test.dependsOn('testGolden', 'testNanoGolden')
+test.dependsOn('testGolden', 'testLiteGolden', 'testNanoGolden')
 
-def configureTestTask(Task task, String suffix, String extraPackage) {
-  task.dependsOn "generateTest${suffix}Proto"
+def configureTestTask(Task task, String suffix, String dep,
+    String extraPackage) {
+  task.dependsOn "generateTest${dep}Proto"
   if (osdetector.os != 'windows') {
     task.executable "diff"
   } else {
@@ -234,11 +240,13 @@ def configureTestTask(Task task, String suffix, String extraPackage) {
   }
   // File isn't found on Windows if last slash is forward-slash
   def slash = System.getProperty("file.separator")
-  task.args "$buildDir/generated/source/proto/test${suffix}/grpc/io/grpc/testing/integration${extraPackage}${slash}TestServiceGrpc.java",
+  task.args "$buildDir/generated/source/proto/test${dep}/grpc/io/grpc/testing/integration${extraPackage}${slash}TestServiceGrpc.java",
        "$projectDir/src/test/golden/TestService${suffix}.java.txt"
 }
 
 task testGolden(type: Exec)
+task testLiteGolden(type: Exec)
 task testNanoGolden(type: Exec)
-configureTestTask(testGolden, '', '')
-configureTestTask(testNanoGolden, 'Nano', '/nano')
+configureTestTask(testGolden, '', '', '')
+configureTestTask(testLiteGolden, 'Lite', '', '/lite')
+configureTestTask(testNanoGolden, 'Nano', 'Nano', '/nano')

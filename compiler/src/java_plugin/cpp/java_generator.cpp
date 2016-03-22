@@ -83,7 +83,7 @@ static inline string MessageFullJavaName(bool nano, const Descriptor* desc) {
 
 static void PrintMethodFields(
     const ServiceDescriptor* service, map<string, string>* vars, Printer* p,
-    bool generate_nano) {
+    ProtoFlavor flavor) {
   p->Print("// Static method descriptors that strictly reflect the proto.\n");
   (*vars)["service_name"] = service->name();
   for (int i = 0; i < service->method_count(); ++i) {
@@ -91,9 +91,9 @@ static void PrintMethodFields(
     (*vars)["arg_in_id"] = to_string(2 * i);
     (*vars)["arg_out_id"] = to_string(2 * i + 1);
     (*vars)["method_name"] = method->name();
-    (*vars)["input_type"] = MessageFullJavaName(generate_nano,
+    (*vars)["input_type"] = MessageFullJavaName(flavor == ProtoFlavor::NANO,
                                                 method->input_type());
-    (*vars)["output_type"] = MessageFullJavaName(generate_nano,
+    (*vars)["output_type"] = MessageFullJavaName(flavor == ProtoFlavor::NANO,
                                                  method->output_type());
     (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
     bool client_streaming = method->client_streaming();
@@ -112,7 +112,7 @@ static void PrintMethodFields(
       }
     }
 
-    if (generate_nano) {
+    if (flavor == ProtoFlavor::NANO) {
       // TODO(zsurocking): we're creating two NanoFactories for each method right now.
       // We could instead create static NanoFactories and reuse them if some methods
       // share the same request or response messages.
@@ -133,6 +133,11 @@ static void PrintMethodFields(
           "            new NanoFactory<$output_type$>(ARG_OUT_$method_field_name$))\n"
           "        );\n");
     } else {
+      if (flavor == ProtoFlavor::LITE) {
+        (*vars)["ProtoUtils"] = "io.grpc.protobuf.lite.ProtoLiteUtils";
+      } else {
+        (*vars)["ProtoUtils"] = "io.grpc.protobuf.ProtoUtils";
+      }
       p->Print(
           *vars,
           "@$ExperimentalApi$\n"
@@ -148,7 +153,7 @@ static void PrintMethodFields(
   }
   p->Print("\n");
 
-  if (generate_nano) {
+  if (flavor == ProtoFlavor::NANO) {
     p->Print(
         "private static final class NanoFactory<T extends com.google.protobuf.nano.MessageNano>\n"
         "    implements io.grpc.protobuf.nano.MessageNanoFactory<T> {\n"
@@ -162,6 +167,7 @@ static void PrintMethodFields(
         "  public T newInstance() {\n"
         "    Object o;\n"
         "    switch (id) {\n");
+    bool generate_nano = true;
     for (int i = 0; i < service->method_count(); ++i) {
       const MethodDescriptor* method = service->method(i);
       (*vars)["input_type"] = MessageFullJavaName(generate_nano,
@@ -639,7 +645,7 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
 static void PrintService(const ServiceDescriptor* service,
                          map<string, string>* vars,
                          Printer* p,
-                         bool generate_nano) {
+                         ProtoFlavor flavor) {
   (*vars)["service_name"] = service->name();
   (*vars)["file_name"] = service->file()->name();
   (*vars)["service_class_name"] = ServiceClassName(service);
@@ -659,7 +665,7 @@ static void PrintService(const ServiceDescriptor* service,
       "public static final String SERVICE_NAME = "
       "\"$Package$$service_name$\";\n\n");
 
-  PrintMethodFields(service, vars, p, generate_nano);
+  PrintMethodFields(service, vars, p, flavor);
 
   p->Print(
       *vars,
@@ -691,6 +697,7 @@ static void PrintService(const ServiceDescriptor* service,
   p->Outdent();
   p->Print("}\n\n");
 
+  bool generate_nano = flavor == ProtoFlavor::NANO;
   PrintStub(service, vars, p, ASYNC_INTERFACE, generate_nano);
   PrintStub(service, vars, p, BLOCKING_CLIENT_INTERFACE, generate_nano);
   PrintStub(service, vars, p, FUTURE_CLIENT_INTERFACE, generate_nano);
@@ -736,7 +743,7 @@ void PrintImports(Printer* p, bool generate_nano) {
 
 void GenerateService(const ServiceDescriptor* service,
                      google::protobuf::io::ZeroCopyOutputStream* out,
-                     bool generate_nano) {
+                     ProtoFlavor flavor) {
   // All non-generated classes must be referred by fully qualified names to
   // avoid collision with generated classes.
   map<string, string> vars;
@@ -753,7 +760,6 @@ void GenerateService(const ServiceDescriptor* service,
   vars["ImmutableList"] = "com.google.common.collect.ImmutableList";
   vars["Collection"] = "java.util.Collection";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
-  vars["ProtoUtils"] = "io.grpc.protobuf.ProtoUtils";
   vars["NanoUtils"] = "io.grpc.protobuf.nano.NanoUtils";
   vars["StreamObserver"] = "io.grpc.stub.StreamObserver";
   vars["Iterator"] = "java.util.Iterator";
@@ -766,20 +772,21 @@ void GenerateService(const ServiceDescriptor* service,
   vars["ExperimentalApi"] = "io.grpc.ExperimentalApi";
 
   Printer printer(out, '$');
-  string package_name = ServiceJavaPackage(service->file(), generate_nano);
+  string package_name = ServiceJavaPackage(service->file(),
+                                           flavor == ProtoFlavor::NANO);
   if (!package_name.empty()) {
     printer.Print(
         "package $package_name$;\n\n",
         "package_name", package_name);
   }
-  PrintImports(&printer, generate_nano);
+  PrintImports(&printer, flavor == ProtoFlavor::NANO);
 
   // Package string is used to fully qualify method names.
   vars["Package"] = service->file()->package();
   if (!vars["Package"].empty()) {
     vars["Package"].append(".");
   }
-  PrintService(service, &vars, &printer, generate_nano);
+  PrintService(service, &vars, &printer, flavor);
 }
 
 string ServiceJavaPackage(const FileDescriptor* file, bool nano) {

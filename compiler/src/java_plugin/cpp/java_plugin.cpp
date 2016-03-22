@@ -9,6 +9,7 @@
 #include <google/protobuf/compiler/code_generator.h>
 #include <google/protobuf/compiler/plugin.h>
 #include <google/protobuf/descriptor.h>
+#include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/io/zero_copy_stream.h>
 
 static string JavaPackageToDir(const string& package_name) {
@@ -34,14 +35,20 @@ class JavaGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
     vector<pair<string, string> > options;
     google::protobuf::compiler::ParseGeneratorParameter(parameter, &options);
 
-    bool generate_nano = false;
+    java_grpc_generator::ProtoFlavor flavor =
+        java_grpc_generator::ProtoFlavor::NORMAL;
+    if (file->options().optimize_for() ==
+        google::protobuf::FileOptions::LITE_RUNTIME) {
+      flavor = java_grpc_generator::ProtoFlavor::LITE;
+    }
     for (int i = 0; i < options.size(); i++) {
       if (options[i].first == "nano" && options[i].second == "true") {
-        generate_nano = true;
+        flavor = java_grpc_generator::ProtoFlavor::NANO;
       }
     }
 
-    string package_name = java_grpc_generator::ServiceJavaPackage(file, generate_nano);
+    string package_name = java_grpc_generator::ServiceJavaPackage(
+        file, flavor == java_grpc_generator::ProtoFlavor::NANO);
     string package_filename = JavaPackageToDir(package_name);
     for (int i = 0; i < file->service_count(); ++i) {
       const google::protobuf::ServiceDescriptor* service = file->service(i);
@@ -49,7 +56,7 @@ class JavaGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
           + java_grpc_generator::ServiceClassName(service) + ".java";
       std::unique_ptr<google::protobuf::io::ZeroCopyOutputStream> output(
           context->Open(filename));
-      java_grpc_generator::GenerateService(service, output.get(), generate_nano);
+      java_grpc_generator::GenerateService(service, output.get(), flavor);
     }
     return true;
   }

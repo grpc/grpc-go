@@ -4,6 +4,7 @@ include ":grpc-stub"
 include ":grpc-auth"
 include ":grpc-okhttp"
 include ":grpc-protobuf"
+include ":grpc-protobuf-lite"
 include ":grpc-protobuf-nano"
 include ":grpc-netty"
 include ":grpc-grpclb"
@@ -18,6 +19,7 @@ project(':grpc-stub').projectDir = "$rootDir/stub" as File
 project(':grpc-auth').projectDir = "$rootDir/auth" as File
 project(':grpc-okhttp').projectDir = "$rootDir/okhttp" as File
 project(':grpc-protobuf').projectDir = "$rootDir/protobuf" as File
+project(':grpc-protobuf-lite').projectDir = "$rootDir/protobuf-lite" as File
 project(':grpc-protobuf-nano').projectDir = "$rootDir/protobuf-nano" as File
 project(':grpc-netty').projectDir = "$rootDir/netty" as File
 project(':grpc-grpclb').projectDir = "$rootDir/grpclb" as File

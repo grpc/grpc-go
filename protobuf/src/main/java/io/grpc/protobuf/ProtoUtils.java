@@ -31,13 +31,10 @@
 
 package io.grpc.protobuf;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.Message.Builder;
 import com.google.protobuf.MessageLite;
-import com.google.protobuf.Parser;
 import com.google.protobuf.util.JsonFormat;
 import com.google.protobuf.util.JsonFormat.Printer;
 
@@ -45,6 +42,7 @@ import io.grpc.ExperimentalApi;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
+import io.grpc.protobuf.lite.ProtoLiteUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -58,63 +56,19 @@ import java.nio.charset.Charset;
  */
 public class ProtoUtils {
 
-  /** Create a {@code Marshaller} for protos of the same type as {@code defaultInstance}. */
+  /**
+   * Create a {@code Marshaller} for protos of the same type as {@code defaultInstance}.
+   *
+   * @deprecated Use ProtoLiteUtils.marshaller() or Message-based marshaller() instead
+   */
+  @Deprecated
   public static <T extends MessageLite> Marshaller<T> marshaller(final T defaultInstance) {
-    @SuppressWarnings("unchecked")
-    final Parser<T> parser = (Parser<T>) defaultInstance.getParserForType();
-    return new Marshaller<T>() {
-      @Override
-      public InputStream stream(T value) {
-        return new ProtoInputStream(value, parser);
-      }
+    return ProtoLiteUtils.marshaller(defaultInstance);
+  }
 
-      @Override
-      public T parse(InputStream stream) {
-        if (stream instanceof ProtoInputStream) {
-          ProtoInputStream protoStream = (ProtoInputStream) stream;
-          // Optimization for in-memory transport. Returning provided object is safe since protobufs
-          // are immutable.
-          //
-          // However, we can't assume the types match, so we have to verify the parser matches.
-          // Today the parser is always the same for a given proto, but that isn't guaranteed. Even
-          // if not, using the same MethodDescriptor would ensure the parser matches and permit us
-          // to enable this optimization.
-          if (protoStream.parser() == parser) {
-            try {
-              @SuppressWarnings("unchecked")
-              T message = (T) ((ProtoInputStream) stream).message();
-              return message;
-            } catch (IllegalStateException ex) {
-              // Stream must have been read from, which is a strange state. Since the point of this
-              // optimization is to be transparent, instead of throwing an error we'll continue,
-              // even though it seems likely there's a bug.
-            }
-          }
-        }
-        try {
-          return parseFrom(stream);
-        } catch (InvalidProtocolBufferException ipbe) {
-          throw Status.INTERNAL.withDescription("Invalid protobuf byte sequence")
-            .withCause(ipbe).asRuntimeException();
-        }
-      }
-
-      private T parseFrom(InputStream stream) throws InvalidProtocolBufferException {
-        // Pre-create the CodedInputStream so that we can remove the size limit restriction
-        // when parsing.
-        CodedInputStream codedInput = CodedInputStream.newInstance(stream);
-        codedInput.setSizeLimit(Integer.MAX_VALUE);
-
-        T message = parser.parseFrom(codedInput);
-        try {
-          codedInput.checkLastTagWas(0);
-          return message;
-        } catch (InvalidProtocolBufferException e) {
-          e.setUnfinishedMessage(message);
-          throw e;
-        }
-      }
-    };
+  /** Create a {@code Marshaller} for protos of the same type as {@code defaultInstance}. */
+  public static <T extends Message> Marshaller<T> marshaller(final T defaultInstance) {
+    return ProtoLiteUtils.marshaller(defaultInstance);
   }
 
   /**
@@ -170,27 +124,7 @@ public class ProtoUtils {
   public static <T extends Message> Metadata.Key<T> keyForProto(T instance) {
     return Metadata.Key.of(
         instance.getDescriptorForType().getFullName() + Metadata.BINARY_HEADER_SUFFIX,
-        keyMarshaller(instance));
-  }
-
-  @VisibleForTesting
-  static <T extends MessageLite> Metadata.BinaryMarshaller<T> keyMarshaller(final T instance) {
-    return new Metadata.BinaryMarshaller<T>() {
-      @Override
-      public byte[] toBytes(T value) {
-        return value.toByteArray();
-      }
-
-      @Override
-      @SuppressWarnings("unchecked")
-      public T parseBytes(byte[] serialized) {
-        try {
-          return (T) instance.getParserForType().parseFrom(serialized);
-        } catch (InvalidProtocolBufferException ipbe) {
-          throw new IllegalArgumentException(ipbe);
-        }
-      }
-    };
+        ProtoLiteUtils.metadataMarshaller(instance));
   }
 
   private ProtoUtils() {
