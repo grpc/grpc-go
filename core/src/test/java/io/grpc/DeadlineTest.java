@@ -117,7 +117,7 @@ public class DeadlineTest {
             latch.countDown();
           }
         }, Executors.newSingleThreadScheduledExecutor());
-    if (!latch.await(55, TimeUnit.MILLISECONDS)) {
+    if (!latch.await(70, TimeUnit.MILLISECONDS)) {
       fail("Deadline listener did not execute in time");
     }
   }
