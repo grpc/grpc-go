@@ -80,6 +80,10 @@ var (
 		"tkey1": []string{"trailerValue1"},
 		"tkey2": []string{"trailerValue2"},
 	}
+	// capital "Key" is illegal in HTTP/2.
+	malformedHTTP2Metadata = metadata.MD{
+		"Key": []string{"foo"},
+	}
 	testAppUA = "myApp1/1.0 myApp2/0.9"
 )
 
@@ -886,6 +890,37 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 	}
 	if !reflect.DeepEqual(trailer, testTrailerMetadata) {
 		t.Fatalf("Received trailer metadata %v, want %v", trailer, testTrailerMetadata)
+	}
+}
+
+// TestMalformedHTTP2Metedata verfies the returned error when the client
+// sends an illegal metadata.
+func TestMalformedHTTP2Metadata(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testMalformedHTTP2Metadata(t, e)
+	}
+}
+
+func testMalformedHTTP2Metadata(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer()
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 2718)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(314),
+		Payload:      payload,
+	}
+	ctx := metadata.NewContext(context.Background(), malformedHTTP2Metadata)
+	if _, err := tc.UnaryCall(ctx, req); grpc.Code(err) != codes.Internal {
+		t.Fatalf("TestService.UnaryCall(%v, _) = _, %v; want _, %q", ctx, err, codes.Internal)
 	}
 }
 
