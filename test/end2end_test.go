@@ -80,6 +80,7 @@ var (
 		"tkey1": []string{"trailerValue1"},
 		"tkey2": []string{"trailerValue2"},
 	}
+	// capital "Key" is illegal in HTTP/2.
 	malformedHTTP2Metadata = metadata.MD{
 		"Key": []string{"foo"},
 	}
@@ -892,6 +893,8 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 	}
 }
 
+// TestMalformedHTTP2Metedata verfies the returned error when the client
+// sends an illegal metadata.
 func TestMalformedHTTP2Metadata(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
