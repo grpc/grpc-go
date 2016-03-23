@@ -58,7 +58,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Future;
 
 final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
   private final ServerStream stream;
@@ -198,9 +197,8 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
     return cancelled;
   }
 
-  ServerStreamListener newServerStreamListener(ServerCall.Listener<ReqT> listener,
-      Future<?> timeout) {
-    return new ServerStreamListenerImpl<ReqT>(this, listener, timeout, context);
+  ServerStreamListener newServerStreamListener(ServerCall.Listener<ReqT> listener) {
+    return new ServerStreamListenerImpl<ReqT>(this, listener, context);
   }
 
   @Override
@@ -216,16 +214,14 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
   static final class ServerStreamListenerImpl<ReqT> implements ServerStreamListener {
     private final ServerCallImpl<ReqT, ?> call;
     private final ServerCall.Listener<ReqT> listener;
-    private final Future<?> timeout;
     private final Context.CancellableContext context;
     private boolean messageReceived;
 
     public ServerStreamListenerImpl(
-        ServerCallImpl<ReqT, ?> call, ServerCall.Listener<ReqT> listener, Future<?> timeout,
+        ServerCallImpl<ReqT, ?> call, ServerCall.Listener<ReqT> listener,
         Context.CancellableContext context) {
       this.call = checkNotNull(call, "call");
       this.listener = checkNotNull(listener, "listener must not be null");
-      this.timeout = checkNotNull(timeout, "timeout");
       this.context = checkNotNull(context, "context");
     }
 
@@ -265,7 +261,6 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
 
     @Override
     public void closed(Status status) {
-      timeout.cancel(true);
       try {
         if (status.isOk()) {
           listener.onComplete();

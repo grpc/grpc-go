@@ -643,7 +643,7 @@ public abstract class AbstractInteropTest {
                .build()).next();
       fail("Expected deadline to be exceeded");
     } catch (Throwable t) {
-      assertEquals(Status.DEADLINE_EXCEEDED, Status.fromThrowable(t));
+      assertEquals(Status.DEADLINE_EXCEEDED.getCode(), Status.fromThrowable(t).getCode());
     }
   }
 
@@ -666,7 +666,8 @@ public abstract class AbstractInteropTest {
         .withDeadlineAfter(30, TimeUnit.MILLISECONDS)
         .streamingOutputCall(request, recorder);
     recorder.awaitCompletion();
-    assertEquals(Status.DEADLINE_EXCEEDED, Status.fromThrowable(recorder.getError()));
+    assertEquals(Status.DEADLINE_EXCEEDED.getCode(),
+        Status.fromThrowable(recorder.getError()).getCode());
   }
 
   @Test(timeout = 10000)

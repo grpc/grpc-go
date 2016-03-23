@@ -165,8 +165,10 @@ public class ManagedChannelImplTest {
     ClientCall<String, Integer> call =
         channel.newCall(method, CallOptions.DEFAULT.withDeadlineAfter(0, TimeUnit.NANOSECONDS));
     call.start(mockCallListener, new Metadata());
-    verify(mockCallListener, timeout(1000)).onClose(
-        same(Status.DEADLINE_EXCEEDED), any(Metadata.class));
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
+    Status status = statusCaptor.getValue();
+    assertSame(Status.DEADLINE_EXCEEDED.getCode(), status.getCode());
   }
 
   @Test

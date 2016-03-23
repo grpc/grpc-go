@@ -31,6 +31,10 @@
 
 package io.grpc;
 
+import com.google.common.base.Preconditions;
+
+import java.util.concurrent.TimeoutException;
+
 /**
  * Utility methods for working with {@link Context}s in GRPC.
  */
@@ -129,5 +133,34 @@ public class Contexts {
         context.detach(previous);
       }
     }
+  }
+
+  /**
+   * Returns the {@link Status} of a cancelled context or {@code null} if the context
+   * is not cancelled.
+   */
+  public static Status statusFromCancelled(Context context) {
+    Preconditions.checkNotNull(context, "context must not be null");
+    if (!context.isCancelled()) {
+      return null;
+    }
+
+    Throwable cancellationCause = context.cancellationCause();
+    if (cancellationCause == null) {
+      return Status.CANCELLED;
+    }
+    if (cancellationCause instanceof TimeoutException) {
+      return Status.DEADLINE_EXCEEDED
+          .withDescription(cancellationCause.getMessage())
+          .withCause(cancellationCause);
+    }
+    Status status = Status.fromThrowable(cancellationCause);
+    if (Status.Code.UNKNOWN.equals(status.getCode())
+        && status.getCause() == cancellationCause) {
+      // If fromThrowable could not determine a status, then
+      // just return CANCELLED.
+      return Status.CANCELLED.withCause(cancellationCause);
+    }
+    return status.withCause(cancellationCause);
   }
 }

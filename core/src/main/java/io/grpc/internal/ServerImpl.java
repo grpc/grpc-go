@@ -32,12 +32,14 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+import static io.grpc.Contexts.statusFromCancelled;
+import static io.grpc.Status.DEADLINE_EXCEEDED;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
@@ -55,10 +57,8 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Default implementation of {@link io.grpc.Server}, for creation by transports.
@@ -76,17 +76,6 @@ import java.util.concurrent.TimeoutException;
  */
 public final class ServerImpl extends io.grpc.Server {
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
-
-  private static final Future<?> DEFAULT_TIMEOUT_FUTURE = Futures.immediateCancelledFuture();
-
-  private static final TimeoutException TIMEOUT_EXCEPTION =
-      new TimeoutException("request timed out") {
-        @Override
-        public synchronized Throwable fillInStackTrace() {
-          // Suppress the stack trace as it would be confusing.
-          return this;
-        }
-      };
 
   /** Executor for application processing. */
   private Executor executor;
@@ -200,7 +189,7 @@ public final class ServerImpl extends io.grpc.Server {
       long timeoutNanos = unit.toNanos(timeout);
       long endTimeNanos = System.nanoTime() + timeoutNanos;
       while (!terminated && (timeoutNanos = endTimeNanos - System.nanoTime()) > 0) {
-        TimeUnit.NANOSECONDS.timedWait(lock, timeoutNanos);
+        NANOSECONDS.timedWait(lock, timeoutNanos);
       }
       return terminated;
     }
@@ -293,12 +282,11 @@ public final class ServerImpl extends io.grpc.Server {
     @Override
     public ServerStreamListener streamCreated(final ServerStream stream, final String methodName,
         final Metadata headers) {
-      final Context.CancellableContext context = rootContext.withCancellation();
-      final Future<?> timeout = scheduleTimeout(stream, headers, context);
+      final Context.CancellableContext context = createContext(stream, headers);
       final Executor wrappedExecutor;
       // This is a performance optimization that avoids the synchronization and queuing overhead
       // that comes with SerializingExecutor.
-      if (executor == MoreExecutors.directExecutor()) {
+      if (executor == directExecutor()) {
         wrappedExecutor = new SerializeReentrantCallsDirectExecutor();
       } else {
         wrappedExecutor = new SerializingExecutor(executor);
@@ -319,17 +307,17 @@ public final class ServerImpl extends io.grpc.Server {
                 stream.close(
                     Status.UNIMPLEMENTED.withDescription("Method not found: " + methodName),
                     new Metadata());
-                timeout.cancel(true);
+                context.cancel(null);
                 return;
               }
-              listener = startCall(stream, methodName, method, timeout, headers, context);
+              listener = startCall(stream, methodName, method, headers, context);
             } catch (RuntimeException e) {
               stream.close(Status.fromThrowable(e), new Metadata());
-              timeout.cancel(true);
+              context.cancel(null);
               throw e;
             } catch (Throwable t) {
               stream.close(Status.fromThrowable(t), new Metadata());
-              timeout.cancel(true);
+              context.cancel(null);
               throw new RuntimeException(t);
             } finally {
               jumpListener.setListener(listener);
@@ -339,31 +327,34 @@ public final class ServerImpl extends io.grpc.Server {
       return jumpListener;
     }
 
-    private Future<?> scheduleTimeout(final ServerStream stream, Metadata headers,
-                                      final Context.CancellableContext context) {
+    private Context.CancellableContext createContext(final ServerStream stream, Metadata headers) {
       Long timeoutNanos = headers.get(TIMEOUT_KEY);
+
       if (timeoutNanos == null) {
-        return DEFAULT_TIMEOUT_FUTURE;
+        return rootContext.withCancellation();
       }
-      return timeoutService.schedule(new Runnable() {
-          @Override
-          public void run() {
+
+      Context.CancellableContext context =
+          rootContext.withDeadlineAfter(timeoutNanos, NANOSECONDS, timeoutService);
+      context.addListener(new Context.CancellationListener() {
+        @Override
+        public void cancelled(Context context) {
+          Status status = statusFromCancelled(context);
+          if (DEADLINE_EXCEEDED.getCode().equals(status.getCode())) {
             // This should rarely get run, since the client will likely cancel the stream before
             // the timeout is reached.
-            stream.cancel(Status.DEADLINE_EXCEEDED);
-            // Cancel the context using a statically created exception as this event may occur
-            // often enough that stack trace alloc impacts performance.
-            context.cancel(TIMEOUT_EXCEPTION);
+            stream.cancel(status);
           }
-        },
-          timeoutNanos,
-        TimeUnit.NANOSECONDS);
+        }
+      }, directExecutor());
+
+      return context;
     }
 
     /** Never returns {@code null}. */
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
-        ServerMethodDefinition<ReqT, RespT> methodDef, Future<?> timeout,
-        Metadata headers, Context.CancellableContext context) {
+        ServerMethodDefinition<ReqT, RespT> methodDef, Metadata headers,
+        Context.CancellableContext context) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
           stream, methodDef.getMethodDescriptor(), headers, context, decompressorRegistry,
@@ -374,7 +365,7 @@ public final class ServerImpl extends io.grpc.Server {
         throw new NullPointerException(
             "startCall() returned a null listener for method " + fullMethodName);
       }
-      return call.newServerStreamListener(listener, timeout);
+      return call.newServerStreamListener(listener);
     }
   }
 

@@ -121,7 +121,7 @@ public class CascadingTest {
     } catch (StatusRuntimeException sre) {
       // Wait for the workers to finish
       Status status = Status.fromThrowable(sre);
-      assertEquals(Status.Code.CANCELLED, status.getCode());
+      assertEquals(Status.Code.DEADLINE_EXCEEDED, status.getCode());
 
       // Should have 3 calls before timeout propagates
       assertEquals(3, nodeCount.get());
@@ -229,7 +229,8 @@ public class CascadingTest {
                           blockingStub.unaryCall((Messages.SimpleRequest) message);
                         } catch (Exception e) {
                           Status status = Status.fromThrowable(e);
-                          if (status.getCode() == Status.Code.CANCELLED) {
+                          if (status.getCode() == Status.Code.CANCELLED
+                              || status.getCode() == Status.Code.DEADLINE_EXCEEDED) {
                             observedCancellations.countDown();
                           } else if (status.getCode() == Status.Code.ABORTED) {
                             // Propagate aborted back up

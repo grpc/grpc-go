@@ -31,12 +31,14 @@
 
 package io.grpc;
 
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -733,5 +735,22 @@ public class ContextTest {
     parent.cancel(null);
     assertTrue(parentCalled.get());
     assertTrue(childAfterParent.get());
+  }
+
+  @Test
+  public void expiredDeadlineShouldCancelContextImmediately() {
+    Context parent = Context.current();
+    assertFalse(parent.isCancelled());
+
+    Context.CancellableContext context = parent.withDeadlineAfter(0, TimeUnit.SECONDS, scheduler);
+    assertTrue(context.isCancelled());
+    assertThat(context.cancellationCause(), instanceOf(TimeoutException.class));
+
+    assertFalse(parent.isCancelled());
+    Deadline deadline = Deadline.after(-10, TimeUnit.SECONDS);
+    assertTrue(deadline.isExpired());
+    context = parent.withDeadline(deadline, scheduler);
+    assertTrue(context.isCancelled());
+    assertThat(context.cancellationCause(), instanceOf(TimeoutException.class));
   }
 }

@@ -34,6 +34,7 @@ package io.grpc.internal;
 import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -125,6 +126,9 @@ public class ClientCallImplTest {
 
   @Captor
   private ArgumentCaptor<ClientStreamListener> listenerArgumentCaptor;
+
+  @Captor
+  private ArgumentCaptor<Status> statusArgumentCaptor;
 
   @Before
   public void setUp() {
@@ -362,7 +366,10 @@ public class ClientCallImplTest {
 
     call.start(callListener, new Metadata());
 
-    cancellableContext.cancel(new Throwable());
+    Throwable t = new Throwable();
+    cancellableContext.cancel(t);
+
+    verify(stream, times(1)).cancel(statusArgumentCaptor.capture());
 
     verify(stream, times(1)).cancel(statusCaptor.capture());
     assertEquals(Status.Code.CANCELLED, statusCaptor.getValue().getCode());
@@ -433,6 +440,107 @@ public class ClientCallImplTest {
     verifyZeroInteractions(provider);
   }
 
+  @Test
+  public void contextDeadlineShouldBePropagatedInMetadata() {
+    long deadlineNanos = TimeUnit.SECONDS.toNanos(1);
+    Context context = Context.current().withDeadlineAfter(deadlineNanos, TimeUnit.NANOSECONDS,
+        deadlineCancellationExecutor);
+    context.attach();
+
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        MoreExecutors.directExecutor(),
+        CallOptions.DEFAULT,
+        provider,
+        deadlineCancellationExecutor);
+
+    Metadata headers = new Metadata();
+
+    call.start(callListener, headers);
+
+    assertTrue(headers.containsKey(GrpcUtil.TIMEOUT_KEY));
+    Long timeout = headers.get(GrpcUtil.TIMEOUT_KEY);
+    assertNotNull(timeout);
+
+    long deltaNanos = TimeUnit.MILLISECONDS.toNanos(400);
+    assertTimeoutBetween(timeout, deadlineNanos - deltaNanos, deadlineNanos);
+  }
+
+  @Test
+  public void contextDeadlineShouldOverrideLargerMetadataTimeout() {
+    long deadlineNanos = TimeUnit.SECONDS.toNanos(1);
+    Context context = Context.current().withDeadlineAfter(deadlineNanos, TimeUnit.NANOSECONDS,
+        deadlineCancellationExecutor);
+    context.attach();
+
+    CallOptions callOpts = CallOptions.DEFAULT.withDeadlineAfter(2, TimeUnit.SECONDS);
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        MoreExecutors.directExecutor(),
+        callOpts,
+        provider,
+        deadlineCancellationExecutor);
+
+    Metadata headers = new Metadata();
+
+    call.start(callListener, headers);
+
+    assertTrue(headers.containsKey(GrpcUtil.TIMEOUT_KEY));
+    Long timeout = headers.get(GrpcUtil.TIMEOUT_KEY);
+    assertNotNull(timeout);
+
+    long deltaNanos = TimeUnit.MILLISECONDS.toNanos(400);
+    assertTimeoutBetween(timeout, deadlineNanos - deltaNanos, deadlineNanos);
+  }
+
+  @Test
+  public void contextDeadlineShouldNotOverrideSmallerMetadataTimeout() {
+    long deadlineNanos = TimeUnit.SECONDS.toNanos(2);
+    Context context = Context.current().withDeadlineAfter(deadlineNanos, TimeUnit.NANOSECONDS,
+        deadlineCancellationExecutor);
+    context.attach();
+
+    CallOptions callOpts = CallOptions.DEFAULT.withDeadlineAfter(1, TimeUnit.SECONDS);
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        MoreExecutors.directExecutor(),
+        callOpts,
+        provider,
+        deadlineCancellationExecutor);
+
+    Metadata headers = new Metadata();
+
+    call.start(callListener, headers);
+
+    assertTrue(headers.containsKey(GrpcUtil.TIMEOUT_KEY));
+    Long timeout = headers.get(GrpcUtil.TIMEOUT_KEY);
+    assertNotNull(timeout);
+
+    long callOptsNanos = TimeUnit.SECONDS.toNanos(1);
+    long deltaNanos = TimeUnit.MILLISECONDS.toNanos(400);
+    assertTimeoutBetween(timeout, callOptsNanos - deltaNanos, callOptsNanos);
+  }
+
+  /**
+   * Without a context or call options deadline,
+   * a timeout should not be set in metadata.
+   */
+  @Test
+  public void timeoutShouldNotBeSet() {
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        MoreExecutors.directExecutor(),
+        CallOptions.DEFAULT,
+        provider,
+        deadlineCancellationExecutor);
+
+    Metadata headers = new Metadata();
+
+    call.start(callListener, headers);
+
+    assertFalse(headers.containsKey(GrpcUtil.TIMEOUT_KEY));
+  }
+
   private static class TestMarshaller<T> implements Marshaller<T> {
     @Override
     public InputStream stream(T value) {
@@ -444,5 +552,11 @@ public class ClientCallImplTest {
       return null;
     }
   }
+
+  private static void assertTimeoutBetween(long timeout, long from, long to) {
+    assertTrue("timeout: " + timeout + " ns", timeout <= to);
+    assertTrue("timeout: " + timeout + " ns", timeout >= from);
+  }
+
 }
 
