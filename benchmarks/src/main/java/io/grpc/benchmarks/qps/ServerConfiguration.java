@@ -31,11 +31,11 @@
 
 package io.grpc.benchmarks.qps;
 
-import static io.grpc.benchmarks.qps.SocketAddressValidator.INET;
-import static io.grpc.benchmarks.qps.SocketAddressValidator.UDS;
-import static io.grpc.benchmarks.qps.Utils.parseBoolean;
+import static io.grpc.benchmarks.Utils.parseBoolean;
 import static java.lang.Integer.parseInt;
 
+import io.grpc.benchmarks.SocketAddressValidator;
+import io.grpc.benchmarks.Utils;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.testing.TestUtils;
 
@@ -104,14 +104,17 @@ class ServerConfiguration implements Configuration {
   /**
    * All of the supported transports.
    */
-  enum Transport {
+  public enum Transport {
     NETTY_NIO(true, "The Netty Java NIO transport. Using this with TLS requires "
-        + "that the Java bootclasspath be configured with Jetty ALPN boot.", INET),
+        + "that the Java bootclasspath be configured with Jetty ALPN boot.",
+        SocketAddressValidator.INET),
     NETTY_EPOLL(true, "The Netty native EPOLL transport. Using this with TLS requires that "
         + "OpenSSL be installed and configured as described in "
-        + "http://netty.io/wiki/forked-tomcat-native.html. Only supported on Linux.", INET),
+        + "http://netty.io/wiki/forked-tomcat-native.html. Only supported on Linux.",
+        SocketAddressValidator.INET),
     NETTY_UNIX_DOMAIN_SOCKET(false, "The Netty Unix Domain Socket transport. This currently "
-        + "does not support TLS.", UDS);
+        + "does not support TLS.",
+        SocketAddressValidator.UDS);
 
     private final boolean tlsSupported;
     private final String description;

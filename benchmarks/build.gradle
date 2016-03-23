@@ -13,6 +13,7 @@ buildscript {
         }
     }
     dependencies {
+        classpath libraries.math
         classpath libraries.protobuf_plugin
         classpath "gradle.plugin.me.champeau.gradle:jmh-gradle-plugin:0.3.0"
     }
@@ -24,7 +25,7 @@ jmh {
     warmupIterations = 10
     iterations = 10
     fork = 1
-    jvmArgs = "-server -Xms2g -Xmx2g -dsa -da -XX:+AggressiveOpts -XX:+UseBiasedLocking -XX:+UseFastAccessorMethods -XX:+OptimizeStringConcat"
+    jvmArgs = "-server -Xms2g -Xmx2g"
 }
 
 dependencies {
@@ -38,15 +39,22 @@ dependencies {
             libraries.mockito,
             libraries.hdrhistogram,
             libraries.netty_tcnative,
-            libraries.netty_epoll
+            libraries.netty_epoll,
+            libraries.math
 }
 
 configureProtoCompilation()
 
+def vmArgs = [
+        "-server",
+        "-Xms2g",
+        "-Xmx2g"
+]
+
 task qps_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.benchmarks.qps.AsyncClient"
     applicationName = "qps_client"
-    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath] + vmArgs
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }
@@ -54,7 +62,7 @@ task qps_client(type: CreateStartScripts) {
 task openloop_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.benchmarks.qps.OpenLoopClient"
     applicationName = "openloop_client"
-    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath] + vmArgs
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }
@@ -62,7 +70,15 @@ task openloop_client(type: CreateStartScripts) {
 task qps_server(type: CreateStartScripts) {
     mainClassName = "io.grpc.benchmarks.qps.AsyncServer"
     applicationName = "qps_server"
-    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath]
+    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath] + vmArgs
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
+
+task benchmark_worker(type: CreateStartScripts) {
+    mainClassName = "io.grpc.benchmarks.driver.LoadWorker"
+    applicationName = "benchmark_worker"
+    defaultJvmOpts = ["-Xbootclasspath/p:" + configurations.alpnboot.asPath] + vmArgs
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }
@@ -71,6 +87,7 @@ applicationDistribution.into("bin") {
     from(qps_client)
     from(openloop_client)
     from(qps_server)
+    from(benchmark_worker)
     fileMode = 0755
 }
 

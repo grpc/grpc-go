@@ -33,8 +33,6 @@ package io.grpc.benchmarks.netty;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
-import io.grpc.Drainable;
-import io.grpc.KnownLength;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -44,22 +42,19 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
+import io.grpc.benchmarks.ByteBufOutputMarshaller;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.ClientCalls;
 import io.grpc.stub.StreamObserver;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalServerChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
@@ -520,66 +515,4 @@ public abstract class AbstractBenchmark {
     server.shutdown().awaitTermination(5, TimeUnit.SECONDS);
   }
 
-  /**
-   * Simple {@link io.grpc.MethodDescriptor.Marshaller} for Netty ByteBuf.
-   */
-  protected static class ByteBufOutputMarshaller implements MethodDescriptor.Marshaller<ByteBuf> {
-
-    public static final EmptyByteBuf EMPTY_BYTE_BUF =
-        new EmptyByteBuf(PooledByteBufAllocator.DEFAULT);
-
-    protected ByteBufOutputMarshaller() {
-    }
-
-    @Override
-    public InputStream stream(ByteBuf value) {
-      return new ByteBufInputStream(value);
-    }
-
-    @Override
-    public ByteBuf parse(InputStream stream) {
-      try {
-        // We don't do anything with the message and it's already been read into buffers
-        // so just skip copying it.
-        stream.skip(stream.available());
-        return EMPTY_BYTE_BUF;
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
-      }
-    }
-  }
-
-  /**
-   * A {@link Drainable} {@code InputStream} that reads an {@link io.netty.buffer.ByteBuf}.
-   */
-  private static class ByteBufInputStream extends InputStream
-      implements Drainable, KnownLength {
-
-    private ByteBuf buf;
-
-    private ByteBufInputStream(ByteBuf buf) {
-      this.buf = buf;
-    }
-
-    @Override
-    public int drainTo(OutputStream target) throws IOException {
-      int readbableBytes = buf.readableBytes();
-      buf.readBytes(target, readbableBytes);
-      buf = null;
-      return readbableBytes;
-    }
-
-    @Override
-    public int available() throws IOException {
-      if (buf != null) {
-        return buf.readableBytes();
-      }
-      return 0;
-    }
-
-    @Override
-    public int read() throws IOException {
-      throw new UnsupportedOperationException();
-    }
-  }
 }

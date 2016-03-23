@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,37 +29,46 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.benchmarks.qps;
+package io.grpc.benchmarks;
 
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
+import io.grpc.Drainable;
+import io.grpc.KnownLength;
+import io.netty.buffer.ByteBuf;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 /**
- * Verifies whether or not the given {@link SocketAddress} is valid.
+ * A {@link Drainable} {@code InputStream} that reads an {@link ByteBuf}.
  */
-interface SocketAddressValidator {
-  /**
-   * Verifier for {@link InetSocketAddress}es.
-   */
-  SocketAddressValidator INET = new SocketAddressValidator() {
-    @Override
-    public boolean isValidSocketAddress(SocketAddress address) {
-      return address instanceof InetSocketAddress;
-    }
-  };
+public class ByteBufInputStream extends InputStream
+    implements Drainable, KnownLength {
 
-  /**
-   * Verifier for Netty Unix Domain Socket addresses.
-   */
-  SocketAddressValidator UDS = new SocketAddressValidator() {
-    @Override
-    public boolean isValidSocketAddress(SocketAddress address) {
-      return "DomainSocketAddress".equals(address.getClass().getSimpleName());
-    }
-  };
+  private ByteBuf buf;
 
-  /**
-   * Returns {@code true} if the given address is valid.
-   */
-  boolean isValidSocketAddress(SocketAddress address);
+  ByteBufInputStream(ByteBuf buf) {
+    this.buf = buf;
+  }
+
+  @Override
+  public int drainTo(OutputStream target) throws IOException {
+    int readableBytes = buf.readableBytes();
+    buf.readBytes(target, readableBytes);
+    buf = null;
+    return readableBytes;
+  }
+
+  @Override
+  public int available() throws IOException {
+    if (buf != null) {
+      return buf.readableBytes();
+    }
+    return 0;
+  }
+
+  @Override
+  public int read() throws IOException {
+    throw new UnsupportedOperationException();
+  }
 }

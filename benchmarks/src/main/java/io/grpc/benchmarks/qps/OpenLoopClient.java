@@ -32,6 +32,9 @@
 package io.grpc.benchmarks.qps;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static io.grpc.benchmarks.Utils.HISTOGRAM_MAX_VALUE;
+import static io.grpc.benchmarks.Utils.HISTOGRAM_PRECISION;
+import static io.grpc.benchmarks.Utils.saveHistogram;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.ADDRESS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CLIENT_PAYLOAD;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.DURATION;
@@ -43,11 +46,6 @@ import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TESTCA;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TLS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TRANSPORT;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.USE_DEFAULT_CIPHERS;
-import static io.grpc.benchmarks.qps.Utils.HISTOGRAM_MAX_VALUE;
-import static io.grpc.benchmarks.qps.Utils.HISTOGRAM_PRECISION;
-import static io.grpc.benchmarks.qps.Utils.newClientChannel;
-import static io.grpc.benchmarks.qps.Utils.newRequest;
-import static io.grpc.benchmarks.qps.Utils.saveHistogram;
 
 import io.grpc.Channel;
 import io.grpc.ManagedChannel;
@@ -108,8 +106,8 @@ public class OpenLoopClient {
     }
     config.channels = 1;
     config.directExecutor = true;
-    ManagedChannel ch = newClientChannel(config);
-    SimpleRequest req = newRequest(config);
+    ManagedChannel ch = config.newChannel();
+    SimpleRequest req = config.newRequest();
     LoadGenerationWorker worker =
         new LoadGenerationWorker(ch, req, config.targetQps, config.duration);
     final long start = System.nanoTime();

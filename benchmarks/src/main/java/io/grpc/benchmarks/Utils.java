@@ -29,12 +29,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.benchmarks.qps;
+package io.grpc.benchmarks;
+
+import static io.grpc.benchmarks.proto.Messages.SimpleResponse;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 
 import io.grpc.ManagedChannel;
+import io.grpc.Status;
+import io.grpc.benchmarks.proto.Messages;
 import io.grpc.benchmarks.proto.Messages.Payload;
 import io.grpc.benchmarks.proto.Messages.SimpleRequest;
 import io.grpc.internal.GrpcUtil;
@@ -64,27 +68,33 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.concurrent.ThreadFactory;
 
+import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
  * Utility methods to support benchmarking classes.
  */
-final class Utils {
+public final class Utils {
   private static final String UNIX_DOMAIN_SOCKET_PREFIX = "unix://";
 
   // The histogram can record values between 1 microsecond and 1 min.
-  static final long HISTOGRAM_MAX_VALUE = 60000000L;
+  public static final long HISTOGRAM_MAX_VALUE = 60000000L;
   // Value quantization will be no larger than 1/10^3 = 0.1%.
-  static final int HISTOGRAM_PRECISION = 3;
+  public static final int HISTOGRAM_PRECISION = 3;
+
+  public static int DEFAULT_FLOW_CONTROL_WINDOW = NettyChannelBuilder.DEFAULT_FLOW_CONTROL_WINDOW;
 
   private Utils() {
   }
 
-  static boolean parseBoolean(String value) {
+  public static boolean parseBoolean(String value) {
     return value.isEmpty() || Boolean.parseBoolean(value);
   }
 
-  static SocketAddress parseSocketAddress(String value) {
+  /**
+   * Parse a {@link SocketAddress} from the given string.
+   */
+  public static SocketAddress parseSocketAddress(String value) {
     if (value.startsWith(UNIX_DOMAIN_SOCKET_PREFIX)) {
       // Unix Domain Socket address.
       // Create the underlying file for the Unix Domain Socket.
@@ -116,35 +126,26 @@ final class Utils {
     }
   }
 
-  static SimpleRequest newRequest(ClientConfiguration config) {
-    ByteString body = ByteString.copyFrom(new byte[config.clientPayload]);
-    Payload payload = Payload.newBuilder()
-        .setType(config.payloadType)
-        .setBody(body)
-        .build();
-
-    return SimpleRequest.newBuilder()
-        .setResponseType(config.payloadType)
-        .setResponseSize(config.serverPayload)
-        .setPayload(payload)
-        .build();
-  }
-
-  static ManagedChannel newClientChannel(ClientConfiguration config) throws IOException {
-    if (config.transport == ClientConfiguration.Transport.OK_HTTP) {
-      InetSocketAddress addr = (InetSocketAddress) config.address;
+  /**
+   * Create a {@link ManagedChannel} for the given parameters.
+   */
+  public static ManagedChannel newClientChannel(Transport transport, SocketAddress address,
+        boolean tls, boolean testca, @Nullable String authorityOverride, boolean useDefaultCiphers,
+        int flowControlWindow, boolean directExecutor) throws IOException {
+    if (transport == Transport.OK_HTTP) {
+      InetSocketAddress addr = (InetSocketAddress) address;
       OkHttpChannelBuilder builder = OkHttpChannelBuilder
           .forAddress(addr.getHostName(), addr.getPort());
-      if (config.directExecutor) {
+      if (directExecutor) {
         builder.directExecutor();
       }
-      builder.negotiationType(config.tls ? io.grpc.okhttp.NegotiationType.TLS
+      builder.negotiationType(tls ? io.grpc.okhttp.NegotiationType.TLS
           : io.grpc.okhttp.NegotiationType.PLAINTEXT);
-      if (config.tls) {
+      if (tls) {
         SSLSocketFactory factory;
-        if (config.testca) {
+        if (testca) {
           builder.overrideAuthority(
-              GrpcUtil.authorityFromHostAndPort(TestUtils.TEST_SERVER_HOST, addr.getPort()));
+              GrpcUtil.authorityFromHostAndPort(authorityOverride, addr.getPort()));
           try {
             factory = TestUtils.newSslSocketFactoryForCa(TestUtils.loadCert("ca.pem"));
           } catch (Exception e) {
@@ -155,22 +156,25 @@ final class Utils {
         }
         builder.sslSocketFactory(factory);
       }
+      if (authorityOverride != null) {
+        builder.overrideAuthority(authorityOverride);
+      }
       return builder.build();
     }
 
     // It's a Netty transport.
     SslContext sslContext = null;
-    NegotiationType negotiationType = config.tls ? NegotiationType.TLS : NegotiationType.PLAINTEXT;
-    if (config.tls && config.testca) {
+    NegotiationType negotiationType = tls ? NegotiationType.TLS : NegotiationType.PLAINTEXT;
+    if (tls && testca) {
       File cert = TestUtils.loadCert("ca.pem");
       SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient().trustManager(cert);
-      if (config.transport == ClientConfiguration.Transport.NETTY_NIO) {
+      if (transport == Transport.NETTY_NIO) {
         sslContextBuilder = GrpcSslContexts.configure(sslContextBuilder, SslProvider.JDK);
       } else {
         // Native transport with OpenSSL
         sslContextBuilder = GrpcSslContexts.configure(sslContextBuilder, SslProvider.OPENSSL);
       }
-      if (config.useDefaultCiphers) {
+      if (useDefaultCiphers) {
         sslContextBuilder.ciphers(null);
       }
       sslContext = sslContextBuilder.build();
@@ -181,7 +185,7 @@ final class Utils {
         .setDaemon(true)
         .setNameFormat("ELG-%d")
         .build();
-    switch (config.transport) {
+    switch (transport) {
       case NETTY_NIO:
         group = new NioEventLoopGroup(0, tf);
         channelType = NioSocketChannel.class;
@@ -201,22 +205,28 @@ final class Utils {
 
       default:
         // Should never get here.
-        throw new IllegalArgumentException("Unsupported transport: " + config.transport);
+        throw new IllegalArgumentException("Unsupported transport: " + transport);
     }
     NettyChannelBuilder builder = NettyChannelBuilder
-        .forAddress(config.address)
+        .forAddress(address)
         .eventLoopGroup(group)
         .channelType(channelType)
         .negotiationType(negotiationType)
         .sslContext(sslContext)
-        .flowControlWindow(config.flowControlWindow);
-    if (config.directExecutor) {
+        .flowControlWindow(flowControlWindow);
+    if (authorityOverride != null) {
+      builder.overrideAuthority(authorityOverride);
+    }
+    if (directExecutor) {
       builder.directExecutor();
     }
     return builder.build();
   }
 
-  static void saveHistogram(Histogram histogram, String filename) throws IOException {
+  /**
+   * Save a {@link Histogram} to a file.
+   */
+  public static void saveHistogram(Histogram histogram, String filename) throws IOException {
     File file;
     PrintStream log = null;
     try {
@@ -231,5 +241,41 @@ final class Utils {
         log.close();
       }
     }
+  }
+
+  /**
+   * Construct a {@link SimpleResponse} for the given request.
+   */
+  public static SimpleResponse makeResponse(SimpleRequest request) {
+    if (request.getResponseSize() > 0) {
+      if (!Messages.PayloadType.COMPRESSABLE.equals(request.getResponseType())) {
+        throw Status.INTERNAL.augmentDescription("Error creating payload.").asRuntimeException();
+      }
+
+      ByteString body = ByteString.copyFrom(new byte[request.getResponseSize()]);
+      Messages.PayloadType type = request.getResponseType();
+
+      Payload payload = Payload.newBuilder().setType(type).setBody(body).build();
+      return SimpleResponse.newBuilder().setPayload(payload).build();
+    }
+    return SimpleResponse.getDefaultInstance();
+  }
+
+  /**
+   * Construct a {@link SimpleRequest} with the specified dimensions.
+   */
+  public static SimpleRequest makeRequest(Messages.PayloadType payloadType, int reqLength,
+                                          int respLength) {
+    ByteString body = ByteString.copyFrom(new byte[reqLength]);
+    Payload payload = Payload.newBuilder()
+        .setType(payloadType)
+        .setBody(body)
+        .build();
+
+    return SimpleRequest.newBuilder()
+        .setResponseType(payloadType)
+        .setResponseSize(respLength)
+        .setPayload(payload)
+        .build();
   }
 }

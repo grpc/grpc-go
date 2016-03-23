@@ -31,6 +31,9 @@
 
 package io.grpc.benchmarks.qps;
 
+import static io.grpc.benchmarks.Utils.HISTOGRAM_MAX_VALUE;
+import static io.grpc.benchmarks.Utils.HISTOGRAM_PRECISION;
+import static io.grpc.benchmarks.Utils.saveHistogram;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.ADDRESS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CHANNELS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.CLIENT_PAYLOAD;
@@ -46,10 +49,6 @@ import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TLS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.TRANSPORT;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.USE_DEFAULT_CIPHERS;
 import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.WARMUP_DURATION;
-import static io.grpc.benchmarks.qps.Utils.HISTOGRAM_MAX_VALUE;
-import static io.grpc.benchmarks.qps.Utils.HISTOGRAM_PRECISION;
-import static io.grpc.benchmarks.qps.Utils.newClientChannel;
-import static io.grpc.benchmarks.qps.Utils.saveHistogram;
 
 import com.google.common.base.Preconditions;
 import com.google.protobuf.ByteString;
@@ -98,7 +97,7 @@ public class AsyncClient {
 
     List<ManagedChannel> channels = new ArrayList<ManagedChannel>(config.channels);
     for (int i = 0; i < config.channels; i++) {
-      channels.add(newClientChannel(config));
+      channels.add(config.newChannel());
     }
 
     // Do a warmup first. It's the same as the actual benchmark, except that

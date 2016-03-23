@@ -31,17 +31,19 @@
 
 package io.grpc.benchmarks.qps;
 
-import static io.grpc.benchmarks.qps.SocketAddressValidator.INET;
-import static io.grpc.benchmarks.qps.SocketAddressValidator.UDS;
-import static io.grpc.benchmarks.qps.Utils.parseBoolean;
+import static io.grpc.benchmarks.Utils.parseBoolean;
 import static java.lang.Integer.parseInt;
 import static java.util.Arrays.asList;
 
+import io.grpc.ManagedChannel;
+import io.grpc.benchmarks.Transport;
+import io.grpc.benchmarks.Utils;
 import io.grpc.benchmarks.proto.Control.RpcType;
+import io.grpc.benchmarks.proto.Messages;
 import io.grpc.benchmarks.proto.Messages.PayloadType;
-import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.testing.TestUtils;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Collection;
@@ -52,12 +54,13 @@ import java.util.Set;
 /**
  * Configuration options for benchmark clients.
  */
-class ClientConfiguration implements Configuration {
+public class ClientConfiguration implements Configuration {
   private static final ClientConfiguration DEFAULT = new ClientConfiguration();
 
   Transport transport = Transport.NETTY_NIO;
   boolean tls;
   boolean testca;
+  String authorityOverride = TestUtils.TEST_SERVER_HOST;
   boolean useDefaultCiphers;
   boolean directExecutor;
   SocketAddress address;
@@ -65,7 +68,7 @@ class ClientConfiguration implements Configuration {
   int outstandingRpcsPerChannel = 10;
   int serverPayload;
   int clientPayload;
-  int flowControlWindow = NettyChannelBuilder.DEFAULT_FLOW_CONTROL_WINDOW;
+  int flowControlWindow = Utils.DEFAULT_FLOW_CONTROL_WINDOW;
   // seconds
   int duration = 60;
   // seconds
@@ -78,15 +81,24 @@ class ClientConfiguration implements Configuration {
   private ClientConfiguration() {
   }
 
+  public ManagedChannel newChannel() throws IOException {
+    return Utils.newClientChannel(Transport.NETTY_EPOLL, address, tls, testca, authorityOverride,
+        useDefaultCiphers, flowControlWindow, directExecutor);
+  }
+
+  public Messages.SimpleRequest newRequest() {
+    return Utils.makeRequest(payloadType, clientPayload, serverPayload);
+  }
+
   /**
    * Constructs a builder for configuring a client application with supported parameters. If no
    * parameters are provided, all parameters are assumed to be supported.
    */
-  static Builder newBuilder(ClientParam... supportedParams) {
+  public static Builder newBuilder(ClientParam... supportedParams) {
     return new Builder(supportedParams);
   }
 
-  static class Builder extends AbstractConfigurationBuilder<ClientConfiguration> {
+  public static class Builder extends AbstractConfigurationBuilder<ClientConfiguration> {
     private final Collection<Param> supportedParams;
 
     private Builder(ClientParam... supportedParams) {
@@ -132,58 +144,6 @@ class ClientConfiguration implements Configuration {
         supportedParams = ClientParam.values();
       }
       return Collections.unmodifiableSet(new LinkedHashSet<Param>(asList(supportedParams)));
-    }
-  }
-
-  /**
-   * All of the supported transports.
-   */
-  enum Transport {
-    NETTY_NIO(true, "The Netty Java NIO transport. Using this with TLS requires "
-        + "that the Java bootclasspath be configured with Jetty ALPN boot.", INET),
-    NETTY_EPOLL(true, "The Netty native EPOLL transport. Using this with TLS requires that "
-        + "OpenSSL be installed and configured as described in "
-        + "http://netty.io/wiki/forked-tomcat-native.html. Only supported on Linux.", INET),
-    NETTY_UNIX_DOMAIN_SOCKET(false, "The Netty Unix Domain Socket transport. This currently "
-        + "does not support TLS.", UDS),
-    OK_HTTP(true, "The OkHttp transport.", INET);
-
-    final boolean tlsSupported;
-    final String description;
-    final SocketAddressValidator socketAddressValidator;
-
-    Transport(boolean tlsSupported, String description,
-              SocketAddressValidator socketAddressValidator) {
-      this.tlsSupported = tlsSupported;
-      this.description = description;
-      this.socketAddressValidator = socketAddressValidator;
-    }
-
-    /**
-     * Validates the given address for this transport.
-     *
-     * @throws IllegalArgumentException if the given address is invalid for this transport.
-     */
-    void validateSocketAddress(SocketAddress address) {
-      if (!socketAddressValidator.isValidSocketAddress(address)) {
-        throw new IllegalArgumentException(
-            "Invalid address " + address + " for transport " + this);
-      }
-    }
-
-    static String getDescriptionString() {
-      StringBuilder builder = new StringBuilder("Select the transport to use. Options:\n");
-      boolean first = true;
-      for (Transport transport : Transport.values()) {
-        if (!first) {
-          builder.append("\n");
-        }
-        builder.append(transport.name().toLowerCase());
-        builder.append(": ");
-        builder.append(transport.description);
-        first = false;
-      }
-      return builder.toString();
     }
   }
 

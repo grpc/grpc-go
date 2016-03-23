@@ -31,13 +31,9 @@
 
 package io.grpc.benchmarks.qps;
 
-import com.google.protobuf.ByteString;
-
 import io.grpc.Server;
-import io.grpc.Status;
+import io.grpc.benchmarks.Utils;
 import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
-import io.grpc.benchmarks.proto.Messages.Payload;
-import io.grpc.benchmarks.proto.Messages.PayloadType;
 import io.grpc.benchmarks.proto.Messages.SimpleRequest;
 import io.grpc.benchmarks.proto.Messages.SimpleResponse;
 import io.grpc.netty.GrpcSslContexts;
@@ -185,7 +181,7 @@ public class AsyncServer {
 
     @Override
     public void unaryCall(SimpleRequest request, StreamObserver<SimpleResponse> responseObserver) {
-      SimpleResponse response = buildSimpleResponse(request);
+      SimpleResponse response = Utils.makeResponse(request);
       responseObserver.onNext(response);
       responseObserver.onCompleted();
     }
@@ -196,7 +192,7 @@ public class AsyncServer {
       return new StreamObserver<SimpleRequest>() {
         @Override
         public void onNext(SimpleRequest request) {
-          SimpleResponse response = buildSimpleResponse(request);
+          SimpleResponse response = Utils.makeResponse(request);
           responseObserver.onNext(response);
         }
 
@@ -213,19 +209,5 @@ public class AsyncServer {
       };
     }
 
-    private static SimpleResponse buildSimpleResponse(SimpleRequest request) {
-      if (request.getResponseSize() > 0) {
-        if (!PayloadType.COMPRESSABLE.equals(request.getResponseType())) {
-          throw Status.INTERNAL.augmentDescription("Error creating payload.").asRuntimeException();
-        }
-
-        ByteString body = ByteString.copyFrom(new byte[request.getResponseSize()]);
-        PayloadType type = request.getResponseType();
-
-        Payload payload = Payload.newBuilder().setType(type).setBody(body).build();
-        return SimpleResponse.newBuilder().setPayload(payload).build();
-      }
-      return SimpleResponse.getDefaultInstance();
-    }
   }
 }

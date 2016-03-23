@@ -125,8 +125,6 @@ subprojects {
         }
         libraries = [
                 guava: 'com.google.guava:guava:19.0',
-                // used to collect benchmark results
-                hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.4',
                 hpack: 'com.twitter:hpack:0.10.1',
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
                 oauth_client: 'com.google.auth:google-auth-library-oauth2-http:0.3.0',
@@ -144,7 +142,11 @@ subprojects {
                 // Test dependencies.
                 junit: 'junit:junit:4.11',
                 mockito: 'org.mockito:mockito-core:1.9.5',
-                truth: 'com.google.truth:truth:0.28'
+                truth: 'com.google.truth:truth:0.28',
+
+                // Benchmark dependencies
+                hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.8',
+                math: 'org.apache.commons:commons-math3:3.6',
         ]
 
         // Determine the correct version of Jetty ALPN boot to use based
