@@ -108,7 +108,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
   @Override
   public void cancelled(Context context) {
-    cancel();
+    stream.cancel(Status.CANCELLED.withCause(context.cancellationCause()));
   }
 
   /**
@@ -316,7 +316,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       InputStream messageIs = method.streamRequest(message);
       stream.writeMessage(messageIs);
     } catch (Throwable e) {
-      cancel(Status.CANCELLED.withCause(e).withDescription("Failed to stream message"));
+      stream.cancel(Status.CANCELLED.withCause(e).withDescription("Failed to stream message"));
       return;
     }
     // For unary requests, we don't flush since we know that halfClose should be coming soon. This
@@ -379,7 +379,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
             observer.onHeaders(headers);
           } catch (Throwable t) {
-            cancel(Status.CANCELLED.withCause(t).withDescription("Failed to read headers"));
+            stream.cancel(Status.CANCELLED.withCause(t).withDescription("Failed to read headers"));
             return;
           }
         }
@@ -402,7 +402,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
               message.close();
             }
           } catch (Throwable t) {
-            cancel(Status.CANCELLED.withCause(t).withDescription("Failed to read message."));
+            stream.cancel(Status.CANCELLED.withCause(t).withDescription("Failed to read message."));
             return;
           }
         }

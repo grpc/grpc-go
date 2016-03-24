@@ -364,14 +364,8 @@ public class ClientCallImplTest {
 
     cancellableContext.cancel(new Throwable());
 
-    verify(stream, times(1)).cancel(Status.CANCELLED);
-
-    try {
-      call.sendMessage(null);
-      fail("Call has been cancelled");
-    } catch (IllegalStateException ise) {
-      // expected
-    }
+    verify(stream, times(1)).cancel(statusCaptor.capture());
+    assertEquals(Status.Code.CANCELLED, statusCaptor.getValue().getCode());
   }
 
   @Test
