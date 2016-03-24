@@ -118,6 +118,7 @@ public class TransportSetTest {
     int backoff1Consulted = 0;
     int backoff2Consulted = 0;
     int backoffReset = 0;
+    int onAllAddressesFailed = 0;
 
     // First attempt
     transportSet.obtainActiveTransport();
@@ -125,6 +126,7 @@ public class TransportSetTest {
     verify(mockTransportFactory, times(++transportsCreated)).newClientTransport(addr, authority);
     // Fail this one
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
+    verify(mockTransportSetCallback, times(++onAllAddressesFailed)).onAllAddressesFailed();
 
     // Second attempt uses the first back-off value interval.
     transportSet.obtainActiveTransport();
@@ -137,6 +139,7 @@ public class TransportSetTest {
     verify(mockTransportFactory, times(++transportsCreated)).newClientTransport(addr, authority);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
+    verify(mockTransportSetCallback, times(++onAllAddressesFailed)).onAllAddressesFailed();
 
     // Third attempt uses the second back-off interval.
     transportSet.obtainActiveTransport();
@@ -151,6 +154,7 @@ public class TransportSetTest {
     transports.peek().listener.transportReady();
     // And close it
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
+    verify(mockTransportSetCallback, times(onAllAddressesFailed)).onAllAddressesFailed();
 
     // Back-off is reset, and the next attempt will happen immediately
     transportSet.obtainActiveTransport();
@@ -174,6 +178,7 @@ public class TransportSetTest {
     int backoff2Consulted = 0;
     int backoff3Consulted = 0;
     int backoffReset = 0;
+    int onAllAddressesFailed = 0;
 
     // First attempt
     DelayedClientTransport delayedTransport1 =
@@ -183,6 +188,7 @@ public class TransportSetTest {
     // Let this one fail without success
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertNull(delayedTransport1.getTransportSupplier());
+    verify(mockTransportSetCallback, times(onAllAddressesFailed)).onAllAddressesFailed();
 
     // Second attempt will start immediately. Keep back-off policy.
     DelayedClientTransport delayedTransport2 =
@@ -194,6 +200,7 @@ public class TransportSetTest {
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     // All addresses have failed. Delayed transport will see an error.
     assertTrue(delayedTransport2.getTransportSupplier().get() instanceof FailingClientTransport);
+    verify(mockTransportSetCallback, times(++onAllAddressesFailed)).onAllAddressesFailed();
 
     // Third attempt is the first address, thus controlled by the first back-off interval.
     DelayedClientTransport delayedTransport3 =
@@ -208,6 +215,7 @@ public class TransportSetTest {
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertNull(delayedTransport3.getTransportSupplier());
+    verify(mockTransportSetCallback, times(onAllAddressesFailed)).onAllAddressesFailed();
 
     // Forth attempt will start immediately. Keep back-off policy.
     DelayedClientTransport delayedTransport4 =
@@ -219,6 +227,7 @@ public class TransportSetTest {
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     // All addresses have failed again. Delayed transport will see an error
     assertTrue(delayedTransport4.getTransportSupplier().get() instanceof FailingClientTransport);
+    verify(mockTransportSetCallback, times(++onAllAddressesFailed)).onAllAddressesFailed();
 
     // Fifth attempt for the first address, thus controlled by the second back-off interval.
     DelayedClientTransport delayedTransport5 =
@@ -236,6 +245,7 @@ public class TransportSetTest {
     assertSame(transports.peek().transport, delayedTransport5.getTransportSupplier().get());
     // Then close it.
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
+    verify(mockTransportSetCallback, times(onAllAddressesFailed)).onAllAddressesFailed();
 
     // First attempt after a successful connection. Reset back-off policy, and start from the first
     // address.

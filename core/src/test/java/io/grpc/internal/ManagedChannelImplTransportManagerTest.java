@@ -87,27 +87,6 @@ import java.util.concurrent.TimeUnit;
 public class ManagedChannelImplTransportManagerTest {
 
   private static final String authority = "fakeauthority";
-  private static final NameResolver.Factory nameResolverFactory = new NameResolver.Factory() {
-    @Override
-    public NameResolver newNameResolver(final URI targetUri, Attributes params) {
-      return new NameResolver() {
-        @Override public void start(final Listener listener) {
-        }
-
-        @Override public String getServiceAuthority() {
-          return authority;
-        }
-
-        @Override public void shutdown() {
-        }
-      };
-    }
-
-    @Override
-    public String getDefaultScheme() {
-      return "fake";
-    }
-  };
 
   private final ExecutorService executor = Executors.newSingleThreadExecutor();
   private final MethodDescriptor<String, String> method = MethodDescriptor.create(
@@ -121,6 +100,8 @@ public class ManagedChannelImplTransportManagerTest {
 
   @Mock private ClientTransportFactory mockTransportFactory;
   @Mock private LoadBalancer.Factory mockLoadBalancerFactory;
+  @Mock private NameResolver mockNameResolver;
+  @Mock private NameResolver.Factory mockNameResolverFactory;
   @Mock private BackoffPolicy.Provider mockBackoffPolicyProvider;
   @Mock private BackoffPolicy mockBackoffPolicy;
 
@@ -133,6 +114,10 @@ public class ManagedChannelImplTransportManagerTest {
     MockitoAnnotations.initMocks(this);
 
     when(mockBackoffPolicyProvider.get()).thenReturn(mockBackoffPolicy);
+    when(mockNameResolver.getServiceAuthority()).thenReturn(authority);
+    when(mockNameResolverFactory
+        .newNameResolver(any(URI.class), any(Attributes.class)))
+        .thenReturn(mockNameResolver);
     @SuppressWarnings("unchecked")
     LoadBalancer<ClientTransport> loadBalancer = mock(LoadBalancer.class);
     when(mockLoadBalancerFactory
@@ -140,13 +125,15 @@ public class ManagedChannelImplTransportManagerTest {
         .thenReturn(loadBalancer);
 
     channel = new ManagedChannelImpl("fake://target", mockBackoffPolicyProvider,
-        nameResolverFactory, Attributes.EMPTY, mockLoadBalancerFactory,
+        mockNameResolverFactory, Attributes.EMPTY, mockLoadBalancerFactory,
         mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
         CompressorRegistry.getDefaultInstance(), executor, null,
         Collections.<ClientInterceptor>emptyList());
 
     ArgumentCaptor<TransportManager<ClientTransport>> tmCaptor
         = ArgumentCaptor.forClass(null);
+    verify(mockNameResolverFactory).newNameResolver(any(URI.class), any(Attributes.class));
+    verify(mockNameResolver).start(any(NameResolver.Listener.class));
     verify(mockLoadBalancerFactory).newLoadBalancer(anyString(), tmCaptor.capture());
     tm = tmCaptor.getValue();
     transports = TestUtils.captureTransports(mockTransportFactory);
@@ -226,6 +213,8 @@ public class ManagedChannelImplTransportManagerTest {
     // Back-off policy was never consulted.
     verify(mockBackoffPolicy, times(0)).nextBackoffMillis();
     verifyNoMoreInteractions(mockTransportFactory);
+    // Never refreshed NameResolver
+    verify(mockNameResolver, times(0)).refresh();
   }
 
   @Test
@@ -239,6 +228,7 @@ public class ManagedChannelImplTransportManagerTest {
     int transportsAddr2 = 0;
     int backoffConsulted = 0;
     int backoffReset = 0;
+    int nameResolverRefresh = 0;
 
     // First pick succeeds
     ClientTransport t1 = tm.getTransport(addressGroup);
@@ -251,6 +241,7 @@ public class ManagedChannelImplTransportManagerTest {
     transportInfo.listener.transportReady();
     // Then close it
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
+    verify(mockNameResolver, times(nameResolverRefresh)).refresh();
 
     // Second pick fails. This is the beginning of a series of failures.
     ClientTransport t2 = tm.getTransport(addressGroup);
@@ -260,6 +251,7 @@ public class ManagedChannelImplTransportManagerTest {
     // Back-off policy was reset.
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
     transports.poll(1, TimeUnit.SECONDS).listener.transportShutdown(Status.UNAVAILABLE);
+    verify(mockNameResolver, times(nameResolverRefresh)).refresh();
 
     // Third pick fails too
     ClientTransport t3 = tm.getTransport(addressGroup);
@@ -269,6 +261,7 @@ public class ManagedChannelImplTransportManagerTest {
     // Back-off policy was not reset.
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     transports.poll(1, TimeUnit.SECONDS).listener.transportShutdown(Status.UNAVAILABLE);
+    verify(mockNameResolver, times(++nameResolverRefresh)).refresh();
 
     // Forth pick is on the first address, back-off policy kicks in.
     ClientTransport t4 = tm.getTransport(addressGroup);
@@ -278,6 +271,7 @@ public class ManagedChannelImplTransportManagerTest {
     // Back-off policy was not reset, but was consulted.
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockBackoffPolicy, times(++backoffConsulted)).nextBackoffMillis();
+    verify(mockNameResolver, times(nameResolverRefresh)).refresh();
   }
 
   @Test

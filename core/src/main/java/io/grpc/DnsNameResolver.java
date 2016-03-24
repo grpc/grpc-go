@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * A DNS-based {@link NameResolver}.
@@ -53,7 +54,12 @@ final class DnsNameResolver extends NameResolver {
   private final String authority;
   private final String host;
   private final int port;
+  @GuardedBy("this")
   private ExecutorService executor;
+  @GuardedBy("this")
+  private boolean resolving;
+  @GuardedBy("this")
+  private Listener listener;
 
   DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params) {
     // TODO: if a DNS server is provided as nsAuthority, use it.
@@ -84,27 +90,50 @@ final class DnsNameResolver extends NameResolver {
   }
 
   @Override
-  public synchronized void start(final Listener listener) {
+  public synchronized void start(Listener listener) {
     Preconditions.checkState(executor == null, "already started");
     executor = SharedResourceHolder.get(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
+    this.listener = listener;
+    resolve();
+  }
+
+  @Override
+  public synchronized void refresh() {
+    Preconditions.checkState(executor != null, "not started");
+    resolve();
+  }
+
+  @GuardedBy("this")
+  private void resolve() {
+    if (resolving) {
+      return;
+    }
+    resolving = true;
+    final Listener savedListener = Preconditions.checkNotNull(listener);
     executor.execute(new Runnable() {
       @Override
       public void run() {
         InetAddress[] inetAddrs;
         try {
-          inetAddrs = InetAddress.getAllByName(host);
-        } catch (Exception e) {
-          listener.onError(Status.UNAVAILABLE.withCause(e));
-          return;
+          try {
+            inetAddrs = InetAddress.getAllByName(host);
+          } catch (Exception e) {
+            savedListener.onError(Status.UNAVAILABLE.withCause(e));
+            return;
+          }
+          ArrayList<ResolvedServerInfo> servers =
+              new ArrayList<ResolvedServerInfo>(inetAddrs.length);
+          for (int i = 0; i < inetAddrs.length; i++) {
+            InetAddress inetAddr = inetAddrs[i];
+            servers.add(
+                new ResolvedServerInfo(new InetSocketAddress(inetAddr, port), Attributes.EMPTY));
+          }
+          savedListener.onUpdate(servers, Attributes.EMPTY);
+        } finally {
+          synchronized (DnsNameResolver.this) {
+            resolving = false;
+          }
         }
-        ArrayList<ResolvedServerInfo> servers
-            = new ArrayList<ResolvedServerInfo>(inetAddrs.length);
-        for (int i = 0; i < inetAddrs.length; i++) {
-          InetAddress inetAddr = inetAddrs[i];
-          servers.add(
-              new ResolvedServerInfo(new InetSocketAddress(inetAddr, port), Attributes.EMPTY));
-        }
-        listener.onUpdate(servers, Attributes.EMPTY);
       }
     });
   }

@@ -347,6 +347,7 @@ final class TransportSet implements WithLogId {
 
     @Override
     public void transportShutdown(Status s) {
+      boolean allAddressesFailed = false;
       if (log.isLoggable(Level.FINE)) {
         log.log(Level.FINE, "[{0}] {1} for {2} is being shutdown with status {3}",
             new Object[] {getLogId(), transport.getLogId(), address, s});
@@ -359,6 +360,7 @@ final class TransportSet implements WithLogId {
           // Continue reconnect if there are still addresses to try.
           // Fail if all addresses have been tried and failed in a row.
           if (nextAddressIndex == 0) {
+            allAddressesFailed = true;
             delayedTransport.setTransport(new FailingClientTransport(s));
             delayedTransport.shutdown();
             activeTransport = null;
@@ -368,6 +370,9 @@ final class TransportSet implements WithLogId {
         }
       }
       loadBalancer.handleTransportShutdown(addressGroup, s);
+      if (allAddressesFailed) {
+        callback.onAllAddressesFailed();
+      }
     }
 
     @Override
@@ -385,5 +390,7 @@ final class TransportSet implements WithLogId {
 
   interface Callback {
     void onTerminated();
+
+    void onAllAddressesFailed();
   }
 }

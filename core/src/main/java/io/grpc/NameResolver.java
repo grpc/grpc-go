@@ -68,6 +68,16 @@ public abstract class NameResolver {
    */
   public abstract void shutdown();
 
+  /**
+   * Re-resolve the name.
+   *
+   * <p>Can only be called after {@link #start} has been called.
+   *
+   * <p>This is only a hint. Implementation takes it as a signal but may not start resolution
+   * immediately.
+   */
+  public abstract void refresh();
+
   public abstract static class Factory {
     /**
      * The port number used in case the target or the underlying naming system doesn't provide a

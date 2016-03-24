@@ -267,6 +267,9 @@ public abstract class AbstractManagedChannelImplBuilder
         }
 
         @Override
+        public void refresh() {}
+
+        @Override
         public void shutdown() {}
       };
     }
