@@ -276,12 +276,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
   @Override
   public void cancel() {
-    cancel(Status.CANCELLED);
-  }
-
-  // TODO(carl-mastrangelo): Look at removing this method and just calling stream.cancel from the
-  // callers.
-  private void cancel(Status status) {
     if (cancelCalled) {
       return;
     }
@@ -290,7 +284,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       // Cancel is called in exception handling cases, so it may be the case that the
       // stream was never successfully created.
       if (stream != null) {
-        stream.cancel(status);
+        stream.cancel(Status.CANCELLED);
       }
     } finally {
       context.removeListener(ClientCallImpl.this);
