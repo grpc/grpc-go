@@ -55,7 +55,7 @@ public final class CallOptions {
   // Although {@code CallOptions} is immutable, its fields are not final, so that we can initialize
   // them outside of constructor. Otherwise the constructor will have a potentially long list of
   // unnamed arguments, which is undesirable.
-  private Long deadlineNanoTime;
+  private Deadline deadline;
   private Executor executor;
 
   @Nullable
@@ -94,6 +94,21 @@ public final class CallOptions {
   }
 
   /**
+   * Returns a new {@code CallOptions} with the given absolute deadline.
+   *
+   * <p>This is mostly used for propagating an existing deadline. {@link #withDeadlineAfter} is the
+   * recommended way of setting a new deadline,
+   *
+   * @param deadline the deadline or {@code null} for unsetting the deadline.
+   */
+  @ExperimentalApi
+  public CallOptions withDeadline(@Nullable Deadline deadline) {
+    CallOptions newOptions = new CallOptions(this);
+    newOptions.deadline = deadline;
+    return newOptions;
+  }
+
+  /**
    * Returns a new {@code CallOptions} with the given absolute deadline in nanoseconds in the clock
    * as per {@link System#nanoTime()}.
    *
@@ -102,11 +117,14 @@ public final class CallOptions {
    *
    * @param deadlineNanoTime the deadline in the clock as per {@link System#nanoTime()}.
    *                         {@code null} for unsetting the deadline.
+   * @deprecated  Use {@link #withDeadline(Deadline)} instead.
    */
+  @Deprecated
   public CallOptions withDeadlineNanoTime(@Nullable Long deadlineNanoTime) {
-    CallOptions newOptions = new CallOptions(this);
-    newOptions.deadlineNanoTime = deadlineNanoTime;
-    return newOptions;
+    Deadline deadline = deadlineNanoTime != null
+        ? Deadline.after(deadlineNanoTime - System.nanoTime(), TimeUnit.NANOSECONDS)
+        : null;
+    return withDeadline(deadline);
   }
 
   /**
@@ -114,16 +132,30 @@ public final class CallOptions {
    * now.
    */
   public CallOptions withDeadlineAfter(long duration, TimeUnit unit) {
-    return withDeadlineNanoTime(System.nanoTime() + unit.toNanos(duration));
+    return withDeadline(Deadline.after(duration, unit));
   }
 
   /**
    * Returns the deadline in nanoseconds in the clock as per {@link System#nanoTime()}. {@code null}
    * if the deadline is not set.
+   *
+   * @deprecated  Use {@link #getDeadline()} instead.
    */
-  @Nullable
+  @Deprecated
   public Long getDeadlineNanoTime() {
-    return deadlineNanoTime;
+    if (getDeadline() == null) {
+      return null;
+    }
+    return System.nanoTime() + getDeadline().timeRemaining(TimeUnit.NANOSECONDS);
+  }
+
+  /**
+   * Returns the deadline or {@code null} if the deadline is not set.
+   */
+  @ExperimentalApi
+  @Nullable
+  public Deadline getDeadline() {
+    return deadline;
   }
 
   /**
@@ -191,7 +223,7 @@ public final class CallOptions {
    * Copy constructor.
    */
   private CallOptions(CallOptions other) {
-    deadlineNanoTime = other.deadlineNanoTime;
+    deadline = other.deadline;
     authority = other.authority;
     affinity = other.affinity;
     executor = other.executor;
@@ -201,12 +233,11 @@ public final class CallOptions {
   @Override
   public String toString() {
     MoreObjects.ToStringHelper toStringHelper = MoreObjects.toStringHelper(this);
-    toStringHelper.add("deadlineNanoTime", deadlineNanoTime);
-    if (deadlineNanoTime != null) {
-      long remainingNanos = deadlineNanoTime - System.nanoTime();
-      toStringHelper.addValue(remainingNanos + " ns from now");
-    }
+    toStringHelper.add("deadline", deadline);
     toStringHelper.add("authority", authority);
+    toStringHelper.add("affinity", affinity);
+    toStringHelper.add("executor", executor != null ? executor.getClass() : null);
+    toStringHelper.add("compressorName", compressorName);
 
     return toStringHelper.toString();
   }

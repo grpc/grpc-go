@@ -37,6 +37,7 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
+import io.grpc.Deadline;
 import io.grpc.ExperimentalApi;
 
 import java.util.concurrent.TimeUnit;
@@ -98,6 +99,19 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
   protected abstract S build(Channel channel, CallOptions callOptions);
 
   /**
+   * Returns a new stub with an absolute deadline.
+   *
+   * <p>This is mostly used for propagating an existing deadline. {@link #withDeadlineAfter} is the
+   * recommended way of setting a new deadline,
+   *
+   * @param deadline the deadline or {@code null} for unsetting the deadline.
+   */
+  @ExperimentalApi
+  public final S withDeadline(@Nullable Deadline deadline) {
+    return build(channel, callOptions.withDeadline(deadline));
+  }
+
+  /**
    * Returns a new stub with an absolute deadline in nanoseconds in the clock as per {@link
    * System#nanoTime()}.
    *
@@ -105,7 +119,9 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    * recommended way of setting a new deadline,
    *
    * @param deadlineNanoTime nanoseconds in the clock as per {@link System#nanoTime()}
+   * @deprecated  Use {@link #withDeadline(Deadline)} instead.
    */
+  @Deprecated
   public final S withDeadlineNanoTime(@Nullable Long deadlineNanoTime) {
     return build(channel, callOptions.withDeadlineNanoTime(deadlineNanoTime));
   }

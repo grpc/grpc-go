@@ -139,4 +139,9 @@ public class Deadline {
     Preconditions.checkNotNull(scheduler, "scheduler");
     return scheduler.schedule(task, deadlineNanos - System.nanoTime(), TimeUnit.NANOSECONDS);
   }
+
+  @Override
+  public String toString() {
+    return timeRemaining(TimeUnit.NANOSECONDS) + " ns from now";
+  }
 }

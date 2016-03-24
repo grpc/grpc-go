@@ -96,6 +96,7 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** Unit tests for {@link ManagedChannelImpl}. */
@@ -162,7 +163,7 @@ public class ManagedChannelImplTest {
     ManagedChannel channel = createChannel(
         new FakeNameResolverFactory(true), NO_INTERCEPTOR);
     ClientCall<String, Integer> call =
-        channel.newCall(method, CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime()));
+        channel.newCall(method, CallOptions.DEFAULT.withDeadlineAfter(0, TimeUnit.NANOSECONDS));
     call.start(mockCallListener, new Metadata());
     verify(mockCallListener, timeout(1000)).onClose(
         same(Status.DEADLINE_EXCEEDED), any(Metadata.class));

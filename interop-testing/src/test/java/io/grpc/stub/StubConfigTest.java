@@ -31,7 +31,11 @@
 
 package io.grpc.stub;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.any;
@@ -42,8 +46,8 @@ import static org.mockito.Mockito.when;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
+import io.grpc.Deadline;
 import io.grpc.MethodDescriptor;
-import io.grpc.stub.StreamObserver;
 import io.grpc.testing.integration.Messages.SimpleRequest;
 import io.grpc.testing.integration.Messages.SimpleResponse;
 import io.grpc.testing.integration.TestServiceGrpc;
@@ -83,13 +87,31 @@ public class StubConfigTest {
 
   @Test
   public void testConfigureDeadline() {
+    Deadline deadline = Deadline.after(2, NANOSECONDS);
+    // Create a default stub
+    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel);
+    assertNull(stub.getCallOptions().getDeadline());
+    // Reconfigure it
+    TestServiceGrpc.TestServiceBlockingStub reconfiguredStub = stub.withDeadline(deadline);
+    // New altered config
+    assertEquals(deadline, reconfiguredStub.getCallOptions().getDeadline());
+    // Default config unchanged
+    assertNull(stub.getCallOptions().getDeadline());
+  }
+
+  @Test
+  @Deprecated
+  public void testConfigureDeadlineNanoTime() {
+    long deadline = System.nanoTime() + SECONDS.toNanos(1);
     // Create a default stub
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel);
     assertNull(stub.getCallOptions().getDeadlineNanoTime());
     // Reconfigure it
-    TestServiceGrpc.TestServiceBlockingStub reconfiguredStub = stub.withDeadlineNanoTime(2L);
+    TestServiceGrpc.TestServiceBlockingStub reconfiguredStub = stub.withDeadlineNanoTime(deadline);
     // New altered config
-    assertEquals(2L, (long) reconfiguredStub.getCallOptions().getDeadlineNanoTime());
+    assertNotNull(reconfiguredStub.getCallOptions().getDeadlineNanoTime());
+    long delta = MILLISECONDS.toNanos(10);
+    assertEquals(deadline, reconfiguredStub.getCallOptions().getDeadlineNanoTime(), delta);
     // Default config unchanged
     assertNull(stub.getCallOptions().getDeadlineNanoTime());
   }
@@ -101,7 +123,7 @@ public class StubConfigTest {
     SimpleRequest request = SimpleRequest.getDefaultInstance();
     stub.unaryCall(request, responseObserver);
     verify(channel).newCall(same(TestServiceGrpc.METHOD_UNARY_CALL), same(options1));
-    stub = stub.withDeadlineNanoTime(2L);
+    stub = stub.withDeadlineAfter(2, NANOSECONDS);
     CallOptions options2 = stub.getCallOptions();
     assertNotSame(options1, options2);
     stub.unaryCall(request, responseObserver);

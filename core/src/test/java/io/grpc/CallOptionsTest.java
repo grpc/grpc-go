@@ -31,7 +31,12 @@
 
 package io.grpc;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.MINUTES;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -41,28 +46,31 @@ import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.Attributes.Key;
 
+import io.grpc.internal.SerializingExecutor;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Unit tests for {@link CallOptions}. */
 @RunWith(JUnit4.class)
 public class CallOptionsTest {
   private String sampleAuthority = "authority";
-  private Long sampleDeadlineNanoTime = 1L;
+  private Deadline sampleDeadline = Deadline.after(1, NANOSECONDS);
   private Key<String> sampleKey = Attributes.Key.of("sample");
   private Attributes sampleAffinity = Attributes.newBuilder().set(sampleKey, "blah").build();
   private CallOptions allSet = CallOptions.DEFAULT
       .withAuthority(sampleAuthority)
-      .withDeadlineNanoTime(sampleDeadlineNanoTime)
+      .withDeadline(sampleDeadline)
       .withAffinity(sampleAffinity);
 
   @Test
   public void defaultsAreAllNull() {
-    assertNull(CallOptions.DEFAULT.getDeadlineNanoTime());
+    assertNull(CallOptions.DEFAULT.getDeadline());
     assertNull(CallOptions.DEFAULT.getAuthority());
     assertEquals(Attributes.EMPTY, CallOptions.DEFAULT.getAffinity());
     assertNull(CallOptions.DEFAULT.getExecutor());
@@ -71,28 +79,30 @@ public class CallOptionsTest {
   @Test
   public void allWiths() {
     assertSame(sampleAuthority, allSet.getAuthority());
-    assertSame(sampleDeadlineNanoTime, allSet.getDeadlineNanoTime());
+    assertSame(sampleDeadline, allSet.getDeadline());
     assertSame(sampleAffinity, allSet.getAffinity());
   }
 
   @Test
   public void noStrayModifications() {
     assertTrue(equal(allSet,
-          allSet.withAuthority("blah").withAuthority(sampleAuthority)));
+        allSet.withAuthority("blah").withAuthority(sampleAuthority)));
     assertTrue(equal(allSet,
-          allSet.withDeadlineNanoTime(314L).withDeadlineNanoTime(sampleDeadlineNanoTime)));
+        allSet.withDeadline(Deadline.after(314, NANOSECONDS))
+            .withDeadline(sampleDeadline)));
     assertTrue(equal(allSet,
           allSet.withAffinity(Attributes.EMPTY).withAffinity(sampleAffinity)));
   }
 
   @Test
   public void mutation() {
-    CallOptions options1 = CallOptions.DEFAULT.withDeadlineNanoTime(10L);
-    assertNull(CallOptions.DEFAULT.getDeadlineNanoTime());
-    assertEquals(10L, (long) options1.getDeadlineNanoTime());
-    CallOptions options2 = options1.withDeadlineNanoTime(null);
-    assertEquals(10L, (long) options1.getDeadlineNanoTime());
-    assertNull(options2.getDeadlineNanoTime());
+    Deadline deadline = Deadline.after(10, SECONDS);
+    CallOptions options1 = CallOptions.DEFAULT.withDeadline(deadline);
+    assertNull(CallOptions.DEFAULT.getDeadline());
+    assertEquals(deadline, options1.getDeadline());
+    CallOptions options2 = options1.withDeadline(null);
+    assertEquals(deadline, options1.getDeadline());
+    assertNull(options2.getDeadline());
   }
 
   @Test
@@ -108,27 +118,54 @@ public class CallOptionsTest {
 
   @Test
   public void testWithDeadlineAfter() {
-    long deadline = CallOptions.DEFAULT
-        .withDeadlineAfter(1, TimeUnit.MINUTES).getDeadlineNanoTime();
-    long expected = System.nanoTime() + 1L * 60 * 1000 * 1000 * 1000;
+    Deadline deadline = CallOptions.DEFAULT.withDeadlineAfter(1, MINUTES).getDeadline();
+    long expected = MINUTES.toNanos(1);
     // 10 milliseconds of leeway
-    long epsilon = 1000 * 1000 * 10;
-
-    assertEquals(expected, deadline, epsilon);
+    long epsilon = MILLISECONDS.toNanos(10);
+    assertNotNull(deadline);
+    assertEquals(expected, deadline.timeRemaining(NANOSECONDS), epsilon);
   }
 
   @Test
   public void testToString() {
-    assertEquals("CallOptions{deadlineNanoTime=null, authority=null}",
-        CallOptions.DEFAULT.toString());
+    assertEquals("CallOptions{deadline=null, authority=null, "
+        + "affinity={}, executor=null, compressorName=null}", CallOptions.DEFAULT.toString());
+
     // Deadline makes it hard to check string for equality.
-    assertEquals("CallOptions{deadlineNanoTime=null, authority=authority}",
-        allSet.withDeadlineNanoTime(null).toString());
-    assertTrue(allSet.toString().contains("deadlineNanoTime=" + sampleDeadlineNanoTime + ","));
+    assertEquals("CallOptions{deadline=null, authority=authority, "
+        + "affinity={sample=blah}, executor=class io.grpc.internal.SerializingExecutor, "
+        + "compressorName=null}",
+        allSet.withDeadline(null)
+            .withExecutor(new SerializingExecutor(MoreExecutors.directExecutor())).toString());
+
+    long remainingNanos = extractRemainingTime(allSet.toString());
+    long delta = TimeUnit.MILLISECONDS.toNanos(10);
+    assertNotNull(allSet.getDeadline());
+    assertEquals(remainingNanos, allSet.getDeadline().timeRemaining(NANOSECONDS), delta);
+  }
+
+  @Test
+  @Deprecated
+  public void testWithDeadlineNanoTime() {
+    CallOptions opts = CallOptions.DEFAULT.withDeadlineNanoTime(10L);
+    assertNotNull(opts.getDeadlineNanoTime());
+    assertTrue(opts.getDeadlineNanoTime() <= System.nanoTime());
+    assertNotNull(opts.getDeadline());
+    assertEquals(0, opts.getDeadline().timeRemaining(NANOSECONDS));
+    assertTrue(opts.getDeadline().isExpired());
+  }
+
+  private static long extractRemainingTime(String deadlineStr) {
+    final Pattern p = Pattern.compile(".+deadline=(\\-?[0-9]+) ns from now,.+");
+    Matcher m = p.matcher(deadlineStr);
+    assertTrue(m.matches());
+    assertEquals(1, m.groupCount());
+
+    return Long.valueOf(m.group(1));
   }
 
   private static boolean equal(CallOptions o1, CallOptions o2) {
-    return Objects.equal(o1.getDeadlineNanoTime(), o2.getDeadlineNanoTime())
+    return Objects.equal(o1.getDeadline(), o2.getDeadline())
         && Objects.equal(o1.getAuthority(), o2.getAuthority())
         && Objects.equal(o1.getAffinity(), o2.getAffinity());
   }

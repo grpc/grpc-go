@@ -40,6 +40,7 @@ import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -50,6 +51,7 @@ import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
+import io.grpc.Deadline;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
@@ -61,7 +63,6 @@ import java.io.InputStream;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
@@ -198,7 +199,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
     prepareHeaders(headers, callOptions, userAgent, decompressorRegistry, compressor);
 
-    if (updateTimeoutHeader(callOptions.getDeadlineNanoTime(), headers)) {
+    if (updateTimeoutHeader(callOptions.getDeadline(), headers)) {
       ClientTransport transport = clientTransportProvider.get(callOptions);
       stream = transport.newStream(method, headers);
     } else {
@@ -218,8 +219,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     // they receive cancel before start. Issue #1343 has more details
 
     // Start the deadline timer after stream creation because it will close the stream
-    Long timeoutNanos = getRemainingTimeoutNanos(callOptions.getDeadlineNanoTime());
-    if (timeoutNanos != null) {
+    if (callOptions.getDeadline() != null) {
+      long timeoutNanos = callOptions.getDeadline().timeRemaining(NANOSECONDS);
       deadlineCancellationFuture = startDeadlineTimer(timeoutNanos);
       if (deadlineCancellationFutureShouldBeCancelled) {
         // Race detected! ClientStreamListener.closed may have been called before
@@ -237,15 +238,16 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
    *
    * @return {@code false} if deadline already exceeded
    */
-  static boolean updateTimeoutHeader(@Nullable Long deadlineNanoTime, Metadata headers) {
+  static boolean updateTimeoutHeader(@Nullable Deadline deadline, Metadata headers) {
     // Fill out timeout on the headers
     // TODO(carl-mastrangelo): Find out if this should always remove the timeout,
     // even when returning false.
     headers.removeAll(TIMEOUT_KEY);
-    // Convert the deadline to timeout. Timeout is more favorable than deadline on the wire
-    // because timeout tolerates the clock difference between machines.
-    Long timeoutNanos = getRemainingTimeoutNanos(deadlineNanoTime);
-    if (timeoutNanos != null) {
+
+    if (deadline != null) {
+      // Convert the deadline to timeout. Timeout is more favorable than deadline on the wire
+      // because timeout tolerates the clock difference between machines.
+      long timeoutNanos = deadline.timeRemaining(NANOSECONDS);
       if (timeoutNanos <= 0) {
         return false;
       }
@@ -338,7 +340,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       public void run() {
         stream.cancel(Status.DEADLINE_EXCEEDED);
       }
-    }, timeoutNanos, TimeUnit.NANOSECONDS);
+    }, timeoutNanos, NANOSECONDS);
   }
 
   private class ClientStreamListenerImpl implements ClientStreamListener {
@@ -405,11 +407,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
     @Override
     public void closed(Status status, Metadata trailers) {
-      Long timeoutNanos = getRemainingTimeoutNanos(callOptions.getDeadlineNanoTime());
-      if (status.getCode() == Status.Code.CANCELLED && timeoutNanos != null) {
+      if (status.getCode() == Status.Code.CANCELLED && callOptions.getDeadline() != null) {
         // When the server's deadline expires, it can only reset the stream with CANCEL and no
         // description. Since our timer may be delayed in firing, we double-check the deadline and
         // turn the failure into the likely more helpful DEADLINE_EXCEEDED status.
+        long timeoutNanos = callOptions.getDeadline().timeRemaining(NANOSECONDS);
         if (timeoutNanos <= 0) {
           status = Status.DEADLINE_EXCEEDED;
           // Replace trailers to prevent mixing sources of status and trailers.

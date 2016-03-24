@@ -417,8 +417,8 @@ public class ClientCallImplTest {
 
   @Test
   public void deadlineExceededBeforeCallStarted() {
-    CallOptions callOptions = CallOptions.DEFAULT.withDeadlineNanoTime(TimeUnit.SECONDS.toNanos(1));
-    fakeClock.forwardTime(1, TimeUnit.SECONDS);
+    CallOptions callOptions = CallOptions.DEFAULT.withDeadlineAfter(0, TimeUnit.SECONDS);
+    fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         DESCRIPTOR,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),

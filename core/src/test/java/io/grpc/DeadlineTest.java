@@ -44,6 +44,8 @@ import org.junit.runners.JUnit4;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Tests for {@link Context}.
@@ -136,5 +138,26 @@ public class DeadlineTest {
     if (!latch.await(10, TimeUnit.MILLISECONDS)) {
       fail("Deadline listener did not execute in time");
     }
+  }
+
+  @Test
+  public void testToString() {
+    Deadline d = Deadline.after(0, TimeUnit.MILLISECONDS);
+    assertEquals(0, extractRemainingTime(d.toString()), delta);
+
+    d = Deadline.after(-1, TimeUnit.HOURS);
+    assertEquals(d.timeRemaining(TimeUnit.NANOSECONDS), extractRemainingTime(d.toString()), delta);
+
+    d = Deadline.after(10, TimeUnit.SECONDS);
+    assertEquals(d.timeRemaining(TimeUnit.NANOSECONDS), extractRemainingTime(d.toString()), delta);
+  }
+
+  private static long extractRemainingTime(String deadlineStr) {
+    final Pattern p = Pattern.compile("(\\-?[0-9]+) ns from now");
+    Matcher m = p.matcher(deadlineStr);
+    assertTrue(m.matches());
+    assertEquals(1, m.groupCount());
+
+    return Long.valueOf(m.group(1));
   }
 }

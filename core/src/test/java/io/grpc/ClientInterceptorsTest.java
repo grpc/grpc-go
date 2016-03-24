@@ -31,6 +31,7 @@
 
 package io.grpc;
 
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
@@ -244,8 +245,8 @@ public class ClientInterceptorsTest {
 
   @Test
   public void callOptions() {
-    final CallOptions initialCallOptions = CallOptions.DEFAULT.withDeadlineNanoTime(100L);
-    final CallOptions newCallOptions = initialCallOptions.withDeadlineNanoTime(300L);
+    final CallOptions initialCallOptions = CallOptions.DEFAULT.withDeadlineAfter(100, NANOSECONDS);
+    final CallOptions newCallOptions = initialCallOptions.withDeadlineAfter(300, NANOSECONDS);
     assertNotSame(initialCallOptions, newCallOptions);
     ClientInterceptor interceptor = spy(new ClientInterceptor() {
       @Override
