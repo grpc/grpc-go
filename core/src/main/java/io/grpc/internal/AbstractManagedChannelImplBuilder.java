@@ -37,12 +37,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.Attributes;
-import io.grpc.BackoffPolicy;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.ExperimentalApi;
-import io.grpc.ExponentialBackoffPolicy;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
@@ -95,9 +93,6 @@ public abstract class AbstractManagedChannelImplBuilder
 
   @Nullable
   private CompressorRegistry compressorRegistry;
-
-  @Nullable
-  private BackoffPolicy.Provider backoffPolicyProvider;
 
   protected AbstractManagedChannelImplBuilder(String target) {
     this.target = Preconditions.checkNotNull(target);
@@ -164,13 +159,6 @@ public abstract class AbstractManagedChannelImplBuilder
     return thisT();
   }
 
-  @Override
-  @ExperimentalApi
-  public final T backoffPolicyProvider(BackoffPolicy.Provider backoffPolicyProvider) {
-    this.backoffPolicyProvider = backoffPolicyProvider;
-    return thisT();
-  }
-
   private T thisT() {
     @SuppressWarnings("unchecked")
     T thisT = (T) this;
@@ -204,7 +192,8 @@ public abstract class AbstractManagedChannelImplBuilder
         buildTransportFactory(), authorityOverride);
     return new ManagedChannelImpl(
         target,
-        firstNonNull(backoffPolicyProvider, new ExponentialBackoffPolicy.Provider()),
+        // TODO(carl-mastrangelo): Allow clients to pass this in
+        new ExponentialBackoffPolicy.Provider(),
         firstNonNull(nameResolverFactory, NameResolverRegistry.getDefaultRegistry()),
         getNameResolverParams(),
         firstNonNull(loadBalancerFactory, SimpleLoadBalancerFactory.getInstance()),

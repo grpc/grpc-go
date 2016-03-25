@@ -38,7 +38,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 
 import io.grpc.Attributes;
-import io.grpc.BackoffPolicy;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;

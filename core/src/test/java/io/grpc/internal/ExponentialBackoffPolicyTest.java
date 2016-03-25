@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -39,13 +39,13 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Test for {@link ExponentialBackoffPolicy}.
  */
 @RunWith(JUnit4.class)
 public class ExponentialBackoffPolicyTest {
+  private ExponentialBackoffPolicy policy = new ExponentialBackoffPolicy();
   private Random notRandom = new Random() {
     @Override
     public double nextDouble() {
@@ -56,26 +56,18 @@ public class ExponentialBackoffPolicyTest {
   @Test
   public void maxDelayReached() {
     long maxBackoffMillis = 120 * 1000;
-
-    ExponentialBackoffPolicy policy = ExponentialBackoffPolicy.builder()
-        .random(notRandom)
-        .initialBackoffMilis(1, TimeUnit.SECONDS)
-        .maxBackoffMillis(maxBackoffMillis, TimeUnit.MILLISECONDS)
-        .multiplier(1.6)
-        .jitter(0)
-        .build();
-
+    policy.setMaxBackoffMillis(maxBackoffMillis)
+        .setJitter(0)
+        .setRandom(notRandom);
     for (int i = 0; i < 50; i++) {
       if (maxBackoffMillis == policy.nextBackoffMillis()) {
         return; // Success
       }
     }
-
     assertEquals("max delay not reached", maxBackoffMillis, policy.nextBackoffMillis());
   }
 
-  @Test
-  public void canProvide() {
+  @Test public void canProvide() {
     assertNotNull(new ExponentialBackoffPolicy.Provider().get());
   }
 }

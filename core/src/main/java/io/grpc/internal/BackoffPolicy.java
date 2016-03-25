@@ -29,12 +29,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
 /**
  * Determines how long to wait before doing some action (typically a retry, or a reconnect).
  */
-public interface BackoffPolicy {
+interface BackoffPolicy {
   interface Provider {
     BackoffPolicy get();
   }
