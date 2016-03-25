@@ -139,7 +139,7 @@ public class CallOptionsTest {
             .withExecutor(new SerializingExecutor(MoreExecutors.directExecutor())).toString());
 
     long remainingNanos = extractRemainingTime(allSet.toString());
-    long delta = TimeUnit.MILLISECONDS.toNanos(10);
+    long delta = TimeUnit.MILLISECONDS.toNanos(20);
     assertNotNull(allSet.getDeadline());
     assertEquals(remainingNanos, allSet.getDeadline().timeRemaining(NANOSECONDS), delta);
   }
@@ -147,11 +147,12 @@ public class CallOptionsTest {
   @Test
   @Deprecated
   public void testWithDeadlineNanoTime() {
-    CallOptions opts = CallOptions.DEFAULT.withDeadlineNanoTime(10L);
+    CallOptions opts = CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime());
     assertNotNull(opts.getDeadlineNanoTime());
     assertTrue(opts.getDeadlineNanoTime() <= System.nanoTime());
     assertNotNull(opts.getDeadline());
-    assertEquals(0, opts.getDeadline().timeRemaining(NANOSECONDS));
+    long delta = MILLISECONDS.toNanos(10);
+    assertEquals(0, opts.getDeadline().timeRemaining(NANOSECONDS), delta);
     assertTrue(opts.getDeadline().isExpired());
   }
 

@@ -114,18 +114,15 @@ public class Deadline {
   /**
    * How much time is remaining in the specified time unit. Internal units are maintained as
    * nanoseconds and conversions are subject to the constraints documented for
-   * {@link TimeUnit#convert}. If there is no time remaining {@code 0} is always returned.
+   * {@link TimeUnit#convert}. If there is no time remaining, the returned duration is how
+   * long ago the deadline expired.
    */
   public long timeRemaining(TimeUnit unit) {
-    if (!expired) {
-      long nowNanos = System.nanoTime();
-      if (deadlineNanos <= nowNanos) {
-        expired = true;
-      } else {
-        return unit.convert(Math.max(0, deadlineNanos - nowNanos), TimeUnit.NANOSECONDS);
-      }
+    final long nowNanos = System.nanoTime();
+    if (!expired && deadlineNanos <= nowNanos) {
+      expired = true;
     }
-    return 0;
+    return unit.convert(deadlineNanos - nowNanos, TimeUnit.NANOSECONDS);
   }
 
   /**

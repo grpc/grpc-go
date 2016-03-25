@@ -110,7 +110,7 @@ public class StubConfigTest {
     TestServiceGrpc.TestServiceBlockingStub reconfiguredStub = stub.withDeadlineNanoTime(deadline);
     // New altered config
     assertNotNull(reconfiguredStub.getCallOptions().getDeadlineNanoTime());
-    long delta = MILLISECONDS.toNanos(10);
+    long delta = MILLISECONDS.toNanos(20);
     assertEquals(deadline, reconfiguredStub.getCallOptions().getDeadlineNanoTime(), delta);
     // Default config unchanged
     assertNull(stub.getCallOptions().getDeadlineNanoTime());

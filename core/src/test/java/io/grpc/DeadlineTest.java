@@ -53,11 +53,14 @@ import java.util.regex.Pattern;
 @RunWith(JUnit4.class)
 public class DeadlineTest {
 
+  // Allowed inaccuracy when comparing the remaining time of a deadline.
+  private final long delta = TimeUnit.MILLISECONDS.toNanos(20);
+
   @Test
   public void immediateDeadlineIsExpired() {
     Deadline deadline = Deadline.after(0, TimeUnit.SECONDS);
     assertTrue(deadline.isExpired());
-    assertEquals(0, deadline.timeRemaining(TimeUnit.NANOSECONDS));
+    assertEquals(0, deadline.timeRemaining(TimeUnit.NANOSECONDS), delta);
   }
 
   @Test
@@ -67,14 +70,14 @@ public class DeadlineTest {
     assertFalse(deadline.isExpired());
     Thread.sleep(101);
     assertTrue(deadline.isExpired());
-    assertEquals(0, deadline.timeRemaining(TimeUnit.NANOSECONDS));
+    assertEquals(0, deadline.timeRemaining(TimeUnit.NANOSECONDS), delta);
   }
 
   @Test
   public void pastDeadlineIsExpired() {
     Deadline deadline = Deadline.after(-1, TimeUnit.SECONDS);
     assertTrue(deadline.isExpired());
-    assertEquals(0, deadline.timeRemaining(TimeUnit.NANOSECONDS));
+    assertEquals(TimeUnit.SECONDS.toNanos(-1), deadline.timeRemaining(TimeUnit.NANOSECONDS), delta);
   }
 
   @Test
