@@ -485,7 +485,7 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 			Name:  "grpc-status",
 			Value: strconv.Itoa(int(statusCode)),
 		})
-	t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-message", Value: statusDesc})
+	t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-message", Value: strconv.Quote(statusDesc)})
 	// Attach the trailer metadata.
 	for k, v := range s.trailer {
 		for _, entry := range v {

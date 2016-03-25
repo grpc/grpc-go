@@ -149,7 +149,12 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		}
 		d.statusCode = codes.Code(code)
 	case "grpc-message":
-		d.statusDesc = f.Value
+		var err error
+		d.statusDesc, err = strconv.Unquote(f.Value)
+		if err != nil {
+			d.setErr(StreamErrorf(codes.Internal, "transport: malformed grpc-message: %v %s", err, f.Value))
+			return
+		}
 	case "grpc-timeout":
 		d.timeoutSet = true
 		var err error
