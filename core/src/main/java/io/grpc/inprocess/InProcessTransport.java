@@ -38,6 +38,7 @@ import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.ServerCall;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
@@ -66,6 +67,7 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
 
   private final String name;
   private ServerTransportListener serverTransportListener;
+  private final Attributes serverStreamAttributes;
   private ManagedClientTransport.Listener clientTransportListener;
   @GuardedBy("this")
   private boolean shutdown;
@@ -78,6 +80,9 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
 
   public InProcessTransport(String name) {
     this.name = name;
+    this.serverStreamAttributes = Attributes.newBuilder()
+        .set(ServerCall.REMOTE_ADDR_KEY, new InProcessSocketAddress(name))
+        .build();
   }
 
   @Override
@@ -368,9 +373,8 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
       @Override
       public void setDecompressor(Decompressor decompressor) {}
 
-      // TODO(lukasz) should we return something here?
       @Override public Attributes attributes() {
-        return Attributes.EMPTY;
+        return serverStreamAttributes;
       }
     }
 

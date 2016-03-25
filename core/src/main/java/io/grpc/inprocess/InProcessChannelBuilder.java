@@ -107,17 +107,4 @@ public class InProcessChannelBuilder extends
       // Do nothing.
     }
   }
-
-  private static class InProcessSocketAddress extends SocketAddress {
-    final String name;
-
-    InProcessSocketAddress(String name) {
-      this.name = name;
-    }
-
-    @Override
-    public String toString() {
-      return name;
-    }
-  }
 }
