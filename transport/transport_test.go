@@ -663,7 +663,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	server.stop()
 }
 
-func TestMalformedStatus(t *testing.T) {
+func TestNewlineStatus(t *testing.T) {
 	server, ct := setUp(t, 0, math.MaxUint32, malformedStatus)
 	callHdr := &CallHdr{
 		Host:   "localhost",
@@ -681,9 +681,8 @@ func TestMalformedStatus(t *testing.T) {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
-	expectedErr := StreamErrorf(codes.Internal, "stream error: stream ID 1; PROTOCOL_ERROR")
-	if _, err = s.dec.Read(p); err != expectedErr {
-		t.Fatalf("Read the err %v, want %v", err, expectedErr)
+	if _, err = s.dec.Read(p); err != io.EOF {
+		t.Fatalf("Read the err %v, want %v", err, io.EOF)
 	}
 	ct.Close()
 	server.stop()
