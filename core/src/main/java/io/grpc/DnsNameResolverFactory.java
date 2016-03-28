@@ -33,6 +33,8 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 
+import io.grpc.internal.GrpcUtil;
+
 import java.net.URI;
 
 /**
@@ -63,7 +65,8 @@ public final class DnsNameResolverFactory extends NameResolver.Factory {
       Preconditions.checkArgument(targetPath.startsWith("/"),
           "the path component (%s) of the target (%s) must start with '/'", targetPath, targetUri);
       String name = targetPath.substring(1);
-      return new DnsNameResolver(targetUri.getAuthority(), name, params);
+      return new DnsNameResolver(targetUri.getAuthority(), name, params, GrpcUtil.TIMER_SERVICE,
+          GrpcUtil.SHARED_CHANNEL_EXECUTOR);
     } else {
       return null;
     }

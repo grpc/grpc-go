@@ -385,7 +385,7 @@ public final class GrpcUtil {
       };
 
   /**
-   * Shared executor for managing channel timers.
+   * Shared single-threaded executor for managing channel timers.
    */
   public static final Resource<ScheduledExecutorService> TIMER_SERVICE =
       new Resource<ScheduledExecutorService>() {

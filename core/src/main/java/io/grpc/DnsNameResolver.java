@@ -31,16 +31,21 @@
 
 package io.grpc;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
+import io.grpc.internal.SharedResourceHolder.Resource;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -50,21 +55,33 @@ import javax.annotation.concurrent.GuardedBy;
  *
  * @see DnsNameResolverFactory
  */
-final class DnsNameResolver extends NameResolver {
+class DnsNameResolver extends NameResolver {
   private final String authority;
   private final String host;
   private final int port;
+  private final Resource<ScheduledExecutorService> timerServiceResource;
+  private final Resource<ExecutorService> executorResource;
+  @GuardedBy("this")
+  private boolean shutdown;
+  @GuardedBy("this")
+  private ScheduledExecutorService timerService;
   @GuardedBy("this")
   private ExecutorService executor;
+  @GuardedBy("this")
+  private ScheduledFuture<?> resolutionTask;
   @GuardedBy("this")
   private boolean resolving;
   @GuardedBy("this")
   private Listener listener;
 
-  DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params) {
+  DnsNameResolver(@Nullable String nsAuthority, String name, Attributes params,
+      Resource<ScheduledExecutorService> timerServiceResource,
+      Resource<ExecutorService> executorResource) {
     // TODO: if a DNS server is provided as nsAuthority, use it.
     // https://www.captechconsulting.com/blogs/accessing-the-dusty-corners-of-dns-with-java
 
+    this.timerServiceResource = timerServiceResource;
+    this.executorResource = executorResource;
     // Must prepend a "//" to the name when constructing a URI, otherwise it will be treated as an
     // opaque URI, thus the authority and host of the resulted URI would be null.
     URI nameUri = URI.create("//" + name);
@@ -85,39 +102,55 @@ final class DnsNameResolver extends NameResolver {
   }
 
   @Override
-  public String getServiceAuthority() {
+  public final String getServiceAuthority() {
     return authority;
   }
 
   @Override
-  public synchronized void start(Listener listener) {
-    Preconditions.checkState(executor == null, "already started");
-    executor = SharedResourceHolder.get(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
-    this.listener = listener;
+  public final synchronized void start(Listener listener) {
+    Preconditions.checkState(this.listener == null, "already started");
+    timerService = SharedResourceHolder.get(timerServiceResource);
+    executor = SharedResourceHolder.get(executorResource);
+    this.listener = Preconditions.checkNotNull(listener, "listener");
     resolve();
   }
 
   @Override
-  public synchronized void refresh() {
-    Preconditions.checkState(executor != null, "not started");
+  public final synchronized void refresh() {
+    Preconditions.checkState(listener != null, "not started");
     resolve();
   }
 
-  @GuardedBy("this")
-  private void resolve() {
-    if (resolving) {
-      return;
-    }
-    resolving = true;
-    final Listener savedListener = Preconditions.checkNotNull(listener);
-    executor.execute(new Runnable() {
+  private final Runnable resolutionRunnable = new Runnable() {
       @Override
       public void run() {
         InetAddress[] inetAddrs;
+        Listener savedListener;
+        synchronized (DnsNameResolver.this) {
+          // If this task is started by refresh(), there might already be a scheduled task.
+          if (resolutionTask != null) {
+            resolutionTask.cancel(false);
+            resolutionTask = null;
+          }
+          if (shutdown) {
+            return;
+          }
+          savedListener = listener;
+          resolving = true;
+        }
         try {
           try {
-            inetAddrs = InetAddress.getAllByName(host);
-          } catch (Exception e) {
+            inetAddrs = getAllByName(host);
+          } catch (UnknownHostException e) {
+            synchronized (DnsNameResolver.this) {
+              if (shutdown) {
+                return;
+              }
+              // Because timerService is the single-threaded GrpcUtil.TIMER_SERVICE in production,
+              // we need to delegate the blocking work to the executor
+              resolutionTask = timerService.schedule(resolutionRunnableOnExecutor,
+                  1, TimeUnit.MINUTES);
+            }
             savedListener.onError(Status.UNAVAILABLE.withCause(e));
             return;
           }
@@ -135,17 +168,51 @@ final class DnsNameResolver extends NameResolver {
           }
         }
       }
-    });
+    };
+
+  private final Runnable resolutionRunnableOnExecutor = new Runnable() {
+      @Override
+      public void run() {
+        synchronized (DnsNameResolver.this) {
+          if (!shutdown) {
+            executor.execute(resolutionRunnable);
+          }
+        }
+      }
+    };
+
+  // To be mocked out in tests
+  @VisibleForTesting
+  InetAddress[] getAllByName(String host) throws UnknownHostException {
+    return InetAddress.getAllByName(host);
+  }
+
+  @GuardedBy("this")
+  private void resolve() {
+    if (resolving || shutdown) {
+      return;
+    }
+    executor.execute(resolutionRunnable);
   }
 
   @Override
-  public synchronized void shutdown() {
+  public final synchronized void shutdown() {
+    if (shutdown) {
+      return;
+    }
+    shutdown = true;
+    if (resolutionTask != null) {
+      resolutionTask.cancel(false);
+    }
+    if (timerService != null) {
+      timerService = SharedResourceHolder.release(timerServiceResource, timerService);
+    }
     if (executor != null) {
-      executor = SharedResourceHolder.release(GrpcUtil.SHARED_CHANNEL_EXECUTOR, executor);
+      executor = SharedResourceHolder.release(executorResource, executor);
     }
   }
 
-  int getPort() {
+  final int getPort() {
     return port;
   }
 }

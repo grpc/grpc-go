@@ -47,9 +47,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * A manipulated clock that exports a {@link Ticker} and a {@link ScheduledExecutorService}.
  */
-final class FakeClock {
+public final class FakeClock {
 
-  final ScheduledExecutorService scheduledExecutorService = new ScheduledExecutorImpl();
+  public final ScheduledExecutorService scheduledExecutorService = new ScheduledExecutorImpl();
   final Ticker ticker = new Ticker() {
       @Override public long read() {
         return TimeUnit.MILLISECONDS.toNanos(currentTimeNanos);
@@ -183,12 +183,16 @@ final class FakeClock {
     }
   }
 
-  void forwardTime(long value, TimeUnit unit) {
+  public void forwardTime(long value, TimeUnit unit) {
     currentTimeNanos += unit.toNanos(value);
     runDueTasks();
   }
 
-  void forwardMillis(long millis) {
+  public void forwardMillis(long millis) {
     forwardTime(millis, TimeUnit.MILLISECONDS);
+  }
+
+  public int numPendingTasks() {
+    return tasks.size();
   }
 }
