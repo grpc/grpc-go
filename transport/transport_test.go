@@ -708,7 +708,7 @@ func TestIsReservedHeader(t *testing.T) {
 		{"content-type", true},
 		{"grpc-message-type", true},
 		{"grpc-encoding", true},
-		{"grpc-message", true},
+		{"grpc-message-bin", true},
 		{"grpc-status", true},
 		{"grpc-timeout", true},
 		{"te", true},

@@ -117,7 +117,7 @@ func isReservedHeader(hdr string) bool {
 	case "content-type",
 		"grpc-message-type",
 		"grpc-encoding",
-		"grpc-message",
+		"grpc-message-bin",
 		"grpc-status",
 		"grpc-timeout",
 		"te":
@@ -153,7 +153,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		if f.Value != "" {
 			statusDescBytes, err := base64.StdEncoding.DecodeString(f.Value)
 			if err != nil {
-				d.setErr(StreamErrorf(codes.Internal, "transport: could not base64 decode grpc-message: %v", err))
+				d.setErr(StreamErrorf(codes.Internal, "transport: could not base64 decode grpc-message-bin: %v", err))
 				return
 			}
 			d.statusDesc = string(statusDescBytes)

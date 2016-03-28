@@ -33,6 +33,7 @@
 package transport
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -304,7 +305,7 @@ func TestHandlerTransport_HandleStreams(t *testing.T) {
 	wantHeader := http.Header{
 		"Date":         nil,
 		"Content-Type": {"application/grpc"},
-		"Trailer":      {"Grpc-Status", "Grpc-Message"},
+		"Trailer":      {"Grpc-Status", "Grpc-Message-Bin"},
 		"Grpc-Status":  {"0"},
 	}
 	if !reflect.DeepEqual(st.rw.HeaderMap, wantHeader) {
@@ -329,11 +330,11 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 	}
 	st.ht.HandleStreams(func(s *Stream) { go handleStream(s) })
 	wantHeader := http.Header{
-		"Date":         nil,
-		"Content-Type": {"application/grpc"},
-		"Trailer":      {"Grpc-Status", "Grpc-Message"},
-		"Grpc-Status":  {fmt.Sprint(uint32(statusCode))},
-		"Grpc-Message": {msg},
+		"Date":             nil,
+		"Content-Type":     {"application/grpc"},
+		"Trailer":          {"Grpc-Status", "Grpc-Message-Bin"},
+		"Grpc-Status":      {fmt.Sprint(uint32(statusCode))},
+		"Grpc-Message-Bin": {base64.StdEncoding.EncodeToString([]byte(msg))},
 	}
 	if !reflect.DeepEqual(st.rw.HeaderMap, wantHeader) {
 		t.Errorf("Header+Trailer mismatch.\n got: %#v\nwant: %#v", st.rw.HeaderMap, wantHeader)
@@ -377,11 +378,11 @@ func TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 	}
 	ht.HandleStreams(func(s *Stream) { go runStream(s) })
 	wantHeader := http.Header{
-		"Date":         nil,
-		"Content-Type": {"application/grpc"},
-		"Trailer":      {"Grpc-Status", "Grpc-Message"},
-		"Grpc-Status":  {"4"},
-		"Grpc-Message": {"too slow"},
+		"Date":             nil,
+		"Content-Type":     {"application/grpc"},
+		"Trailer":          {"Grpc-Status", "Grpc-Message-Bin"},
+		"Grpc-Status":      {"4"},
+		"Grpc-Message-Bin": {base64.StdEncoding.EncodeToString([]byte("too slow"))},
 	}
 	if !reflect.DeepEqual(rw.HeaderMap, wantHeader) {
 		t.Errorf("Header+Trailer Map mismatch.\n got: %#v\nwant: %#v", rw.HeaderMap, wantHeader)

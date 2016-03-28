@@ -38,6 +38,7 @@
 package transport
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -192,7 +193,7 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, statusCode codes.Code, 
 		h := ht.rw.Header()
 		h.Set("Grpc-Status", fmt.Sprintf("%d", statusCode))
 		if statusDesc != "" {
-			h.Set("Grpc-Message", statusDesc)
+			h.Set("Grpc-Message-Bin", base64.StdEncoding.EncodeToString([]byte(statusDesc)))
 		}
 		if md := s.Trailer(); len(md) > 0 {
 			for k, vv := range md {
@@ -227,7 +228,7 @@ func (ht *serverHandlerTransport) writeCommonHeaders(s *Stream) {
 	// See https://golang.org/pkg/net/http/#ResponseWriter
 	// and https://golang.org/pkg/net/http/#example_ResponseWriter_trailers
 	h.Add("Trailer", "Grpc-Status")
-	h.Add("Trailer", "Grpc-Message")
+	h.Add("Trailer", "Grpc-Message-Bin")
 
 	if s.sendCompress != "" {
 		h.Set("Grpc-Encoding", s.sendCompress)
