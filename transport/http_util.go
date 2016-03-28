@@ -149,7 +149,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		}
 		d.statusCode = codes.Code(code)
 	case "grpc-message":
-		d.statusDesc = f.Value
+		d.statusDesc = grpcMessageDecode(f.Value)
 	case "grpc-timeout":
 		d.timeoutSet = true
 		var err error

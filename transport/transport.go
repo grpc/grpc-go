@@ -43,6 +43,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -505,4 +506,51 @@ func wait(ctx context.Context, closing <-chan struct{}, proceed <-chan int) (int
 	case i := <-proceed:
 		return i, nil
 	}
+}
+
+const (
+	spaceByte   = byte(int(' '))
+	tildaByte   = byte(int('~'))
+	percentByte = byte(int('%'))
+)
+
+// matching https://github.com/grpc/grpc-java/pull/1517/files
+func grpcMessageEncode(grpcMessage string) string {
+	if grpcMessage == "" {
+		return ""
+	}
+	var buffer bytes.Buffer
+	for _, c := range []byte(grpcMessage) {
+		if c >= spaceByte && c < tildaByte && c != percentByte {
+			_ = buffer.WriteByte(c)
+		} else {
+			_, _ = buffer.WriteString(fmt.Sprintf("%%%02X", c))
+		}
+	}
+	return buffer.String()
+}
+
+// matching https://github.com/grpc/grpc-java/pull/1517/files
+func grpcMessageDecode(encodedGrpcMessage string) string {
+	if encodedGrpcMessage == "" {
+		return ""
+	}
+	var buffer bytes.Buffer
+	data := []byte(encodedGrpcMessage)
+	lenData := len(data)
+	for i := 0; i < lenData; i++ {
+		c := data[i]
+		if c == percentByte && i+2 < lenData {
+			parsed, err := strconv.ParseInt(string(data[i+1:i+3]), 16, 8)
+			if err != nil {
+				_ = buffer.WriteByte(c)
+			} else {
+				_ = buffer.WriteByte(byte(parsed))
+				i += 2
+			}
+		} else {
+			_ = buffer.WriteByte(c)
+		}
+	}
+	return buffer.String()
 }

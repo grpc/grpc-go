@@ -192,7 +192,7 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, statusCode codes.Code, 
 		h := ht.rw.Header()
 		h.Set("Grpc-Status", fmt.Sprintf("%d", statusCode))
 		if statusDesc != "" {
-			h.Set("Grpc-Message", statusDesc)
+			h.Set("Grpc-Message", grpcMessageEncode(statusDesc))
 		}
 		if md := s.Trailer(); len(md) > 0 {
 			for k, vv := range md {
