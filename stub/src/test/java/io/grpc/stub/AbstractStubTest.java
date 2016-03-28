@@ -34,8 +34,11 @@ package io.grpc.stub;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 
+@RunWith(JUnit4.class)
 public class AbstractStubTest {
 
   @Mock
