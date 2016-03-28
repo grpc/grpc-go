@@ -681,7 +681,7 @@ func TestMalformedStatus(t *testing.T) {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
-	expectedErr := StreamErrorf(codes.Internal, "stream error: stream ID 1; PROTOCOL_ERROR")
+	expectedErr := StreamErrorf(codes.Internal, "invalid header field value \"\\n\"")
 	if _, err = s.dec.Read(p); err != expectedErr {
 		t.Fatalf("Read the err %v, want %v", err, expectedErr)
 	}

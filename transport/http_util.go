@@ -404,3 +404,7 @@ func (f *framer) flushWrite() error {
 func (f *framer) readFrame() (http2.Frame, error) {
 	return f.fr.ReadFrame()
 }
+
+func (f *framer) errorDetail() error {
+	return f.fr.ErrorDetail()
+}
