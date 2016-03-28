@@ -509,48 +509,72 @@ func wait(ctx context.Context, closing <-chan struct{}, proceed <-chan int) (int
 }
 
 const (
-	spaceByte   = byte(int(' '))
-	tildaByte   = byte(int('~'))
-	percentByte = byte(int('%'))
+	spaceByte   = ' '
+	tildaByte   = '~'
+	percentByte = '%'
 )
 
-// matching https://github.com/grpc/grpc-java/pull/1517/files
-func grpcMessageEncode(grpcMessage string) string {
-	if grpcMessage == "" {
+// grpcMessageEncode encodes the grpc-message field in the same
+// manner as https://github.com/grpc/grpc-java/pull/1517.
+func grpcMessageEncode(msg string) string {
+	if msg == "" {
 		return ""
 	}
-	var buffer bytes.Buffer
-	for _, c := range []byte(grpcMessage) {
-		if c >= spaceByte && c < tildaByte && c != percentByte {
-			_ = buffer.WriteByte(c)
-		} else {
-			_, _ = buffer.WriteString(fmt.Sprintf("%%%02X", c))
+	lenMsg := len(msg)
+	for i := 0; i < lenMsg; i++ {
+		c := msg[i]
+		if !(c >= spaceByte && c < tildaByte && c != percentByte) {
+			return grpcMessageEncodeUnchecked(msg)
 		}
 	}
-	return buffer.String()
+	return msg
 }
 
-// matching https://github.com/grpc/grpc-java/pull/1517/files
-func grpcMessageDecode(encodedGrpcMessage string) string {
-	if encodedGrpcMessage == "" {
+func grpcMessageEncodeUnchecked(msg string) string {
+	var buf bytes.Buffer
+	lenMsg := len(msg)
+	for i := 0; i < lenMsg; i++ {
+		c := msg[i]
+		if c >= spaceByte && c < tildaByte && c != percentByte {
+			_ = buf.WriteByte(c)
+		} else {
+			_, _ = buf.WriteString(fmt.Sprintf("%%%02X", c))
+		}
+	}
+	return buf.String()
+}
+
+// grpcMessageDecode decodes the grpc-message field in the same
+// manner as https://github.com/grpc/grpc-java/pull/1517.
+func grpcMessageDecode(msg string) string {
+	if msg == "" {
 		return ""
 	}
-	var buffer bytes.Buffer
-	data := []byte(encodedGrpcMessage)
-	lenData := len(data)
-	for i := 0; i < lenData; i++ {
-		c := data[i]
-		if c == percentByte && i+2 < lenData {
-			parsed, err := strconv.ParseInt(string(data[i+1:i+3]), 16, 8)
+	lenMsg := len(msg)
+	for i := 0; i < lenMsg; i++ {
+		if msg[i] == percentByte && i+2 < lenMsg {
+			return grpcMessageDecodeUnchecked(msg)
+		}
+	}
+	return msg
+}
+
+func grpcMessageDecodeUnchecked(msg string) string {
+	var buf bytes.Buffer
+	lenMsg := len(msg)
+	for i := 0; i < lenMsg; i++ {
+		c := msg[i]
+		if c == percentByte && i+2 < lenMsg {
+			parsed, err := strconv.ParseInt(msg[i+1:i+3], 16, 8)
 			if err != nil {
-				_ = buffer.WriteByte(c)
+				_ = buf.WriteByte(c)
 			} else {
-				_ = buffer.WriteByte(byte(parsed))
+				_ = buf.WriteByte(byte(parsed))
 				i += 2
 			}
 		} else {
-			_ = buffer.WriteByte(c)
+			_ = buf.WriteByte(c)
 		}
 	}
-	return buffer.String()
+	return buf.String()
 }
