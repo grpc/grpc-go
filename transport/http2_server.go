@@ -35,6 +35,7 @@ package transport
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"io"
 	"math"
@@ -485,7 +486,11 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 			Name:  "grpc-status",
 			Value: strconv.Itoa(int(statusCode)),
 		})
-	t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-message", Value: statusDesc})
+	value := ""
+	if statusDesc != "" {
+		value = base64.StdEncoding.EncodeToString([]byte(statusDesc))
+	}
+	t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-message", Value: value})
 	// Attach the trailer metadata.
 	for k, v := range s.trailer {
 		for _, entry := range v {
