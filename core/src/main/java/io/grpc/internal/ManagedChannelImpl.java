@@ -397,6 +397,11 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
                 public void onAllAddressesFailed() {
                   nameResolver.refresh();
                 }
+
+                @Override
+                public void onConnectionClosedByServer(Status status) {
+                  nameResolver.refresh();
+                }
               });
           if (log.isLoggable(Level.FINE)) {
             log.log(Level.FINE, "[{0}] {1} created for {2}",

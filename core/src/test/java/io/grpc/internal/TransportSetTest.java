@@ -37,6 +37,7 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.same;
@@ -152,8 +153,10 @@ public class TransportSetTest {
     verify(mockTransportFactory, times(++transportsCreated)).newClientTransport(addr, authority);
     // Let this one succeed
     transports.peek().listener.transportReady();
+    verify(mockTransportSetCallback, never()).onConnectionClosedByServer(any(Status.class));
     // And close it
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
+    verify(mockTransportSetCallback).onConnectionClosedByServer(same(Status.UNAVAILABLE));
     verify(mockTransportSetCallback, times(onAllAddressesFailed)).onAllAddressesFailed();
 
     // Back-off is reset, and the next attempt will happen immediately
@@ -164,6 +167,7 @@ public class TransportSetTest {
     // Final checks for consultations on back-off policies
     verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicy2, times(backoff2Consulted)).nextBackoffMillis();
+    verifyNoMoreInteractions(mockTransportSetCallback);
   }
 
   @Test public void twoAddressesReconnect() {
@@ -243,8 +247,10 @@ public class TransportSetTest {
     transports.peek().listener.transportReady();
     // Delayed transport will see the connected transport.
     assertSame(transports.peek().transport, delayedTransport5.getTransportSupplier().get());
+    verify(mockTransportSetCallback, never()).onConnectionClosedByServer(any(Status.class));
     // Then close it.
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
+    verify(mockTransportSetCallback).onConnectionClosedByServer(same(Status.UNAVAILABLE));
     verify(mockTransportSetCallback, times(onAllAddressesFailed)).onAllAddressesFailed();
 
     // First attempt after a successful connection. Reset back-off policy, and start from the first
@@ -259,6 +265,7 @@ public class TransportSetTest {
     verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicy2, times(backoff2Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicy3, times(backoff3Consulted)).nextBackoffMillis();
+    verifyNoMoreInteractions(mockTransportSetCallback);
   }
 
   @Test

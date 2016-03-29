@@ -194,8 +194,11 @@ public class ManagedChannelImplTransportManagerTest {
     // Make the second transport ready
     transportInfo.listener.transportReady();
     verify(rt2, timeout(1000)).newStream(same(method), any(Metadata.class));
+    verify(mockNameResolver, times(0)).refresh();
     // Disconnect the second transport
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
+    // Will trigger NameResolver refresh
+    verify(mockNameResolver).refresh();
 
     // Subsequent getTransport() will use the next address, which is the first one since we have run
     // out of addresses.
@@ -213,8 +216,8 @@ public class ManagedChannelImplTransportManagerTest {
     // Back-off policy was never consulted.
     verify(mockBackoffPolicy, times(0)).nextBackoffMillis();
     verifyNoMoreInteractions(mockTransportFactory);
-    // Never refreshed NameResolver
-    verify(mockNameResolver, times(0)).refresh();
+    // NameResolver was refreshed only once
+    verify(mockNameResolver).refresh();
   }
 
   @Test
@@ -238,10 +241,11 @@ public class ManagedChannelImplTransportManagerTest {
     // Back-off policy was set initially.
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
     MockClientTransportInfo transportInfo = transports.poll(1, TimeUnit.SECONDS);
+    verify(mockNameResolver, times(nameResolverRefresh)).refresh();
     transportInfo.listener.transportReady();
     // Then close it
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
-    verify(mockNameResolver, times(nameResolverRefresh)).refresh();
+    verify(mockNameResolver, times(++nameResolverRefresh)).refresh();
 
     // Second pick fails. This is the beginning of a series of failures.
     ClientTransport t2 = tm.getTransport(addressGroup);

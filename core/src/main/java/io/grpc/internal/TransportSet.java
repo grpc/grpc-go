@@ -348,6 +348,7 @@ final class TransportSet implements WithLogId {
     @Override
     public void transportShutdown(Status s) {
       boolean allAddressesFailed = false;
+      boolean closedByServer = false;
       if (log.isLoggable(Level.FINE)) {
         log.log(Level.FINE, "[{0}] {1} for {2} is being shutdown with status {3}",
             new Object[] {getLogId(), transport.getLogId(), address, s});
@@ -355,7 +356,9 @@ final class TransportSet implements WithLogId {
       super.transportShutdown(s);
       synchronized (lock) {
         if (activeTransport == transport) {
+          // This is true only if the transport was ready.
           activeTransport = null;
+          closedByServer = !shutdown;
         } else if (activeTransport == delayedTransport) {
           // Continue reconnect if there are still addresses to try.
           // Fail if all addresses have been tried and failed in a row.
@@ -373,6 +376,9 @@ final class TransportSet implements WithLogId {
       if (allAddressesFailed) {
         callback.onAllAddressesFailed();
       }
+      if (closedByServer) {
+        callback.onConnectionClosedByServer(s);
+      }
     }
 
     @Override
@@ -389,8 +395,20 @@ final class TransportSet implements WithLogId {
   }
 
   interface Callback {
+    /**
+     * Called when the TransportSet is terminated, which means it's shut down and all transports
+     * have been terminated.
+     */
     void onTerminated();
 
+    /**
+     * Called when all addresses have failed to connect.
+     */
     void onAllAddressesFailed();
+
+    /**
+     * Called when a once-live connection is shut down by server-side.
+     */
+    void onConnectionClosedByServer(Status status);
   }
 }
