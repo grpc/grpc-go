@@ -89,12 +89,14 @@ func newRecvBuffer() *recvBuffer {
 func (b *recvBuffer) put(r item) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.backlog = append(b.backlog, r)
-	select {
-	case b.c <- b.backlog[0]:
-		b.backlog = b.backlog[1:]
-	default:
+	if len(b.backlog) == 0 {
+		select {
+		case b.c <- r:
+			return
+		default:
+		}
 	}
+	b.backlog = append(b.backlog, r)
 }
 
 func (b *recvBuffer) load() {
