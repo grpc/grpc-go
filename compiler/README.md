@@ -40,7 +40,7 @@ $ protoc --plugin=protoc-gen-grpc-java=build/binaries/java_pluginExecutable/prot
 To generate Java interfaces with protobuf nano:
 ```
 $ protoc --plugin=protoc-gen-grpc-java=build/binaries/java_pluginExecutable/protoc-gen-grpc-java \
-  --grpc-java_out=nano=true:"$OUTPUT_FILE" --proto_path="$DIR_OF_PROTO_FILE" "$PROTO_FILE"
+  --grpc-java_out=nano:"$OUTPUT_FILE" --proto_path="$DIR_OF_PROTO_FILE" "$PROTO_FILE"
 ```
 
 ## Installing the codegen to Maven local repository

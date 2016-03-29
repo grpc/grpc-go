@@ -47,7 +47,7 @@ protobuf {
             task.plugins {
                 grpc {
                     // Options added to --grpc_out
-                    option 'nano=true'
+                    option 'nano'
                 }
             }
         }
