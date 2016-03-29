@@ -270,7 +270,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
    * Creates Netty transports. Exposed for internal use, as it should be private.
    */
   @Internal
-  static final class NettyTransportFactory implements ClientTransportFactory {
+  protected static final class NettyTransportFactory implements ClientTransportFactory {
     private final Class<? extends Channel> channelType;
     private final NegotiationType negotiationType;
     private final ProtocolNegotiator protocolNegotiator;
