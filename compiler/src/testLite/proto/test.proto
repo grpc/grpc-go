@@ -1,9 +1,9 @@
 // A simple service definition for testing the protoc plugin.
 syntax = "proto2";
 
-package grpc.testing.lite;
+package grpc.testing;
 
-option java_package = "io.grpc.testing.integration.lite";
+option java_package = "io.grpc.testing.integration";
 option optimize_for = LITE_RUNTIME;
 
 message SimpleRequest {

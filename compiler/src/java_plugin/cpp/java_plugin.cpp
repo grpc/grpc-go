@@ -37,13 +37,11 @@ class JavaGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
 
     java_grpc_generator::ProtoFlavor flavor =
         java_grpc_generator::ProtoFlavor::NORMAL;
-    if (file->options().optimize_for() ==
-        google::protobuf::FileOptions::LITE_RUNTIME) {
-      flavor = java_grpc_generator::ProtoFlavor::LITE;
-    }
     for (int i = 0; i < options.size(); i++) {
       if (options[i].first == "nano" && options[i].second == "true") {
         flavor = java_grpc_generator::ProtoFlavor::NANO;
+      } else if (options[i].first == "lite") {
+        flavor = java_grpc_generator::ProtoFlavor::LITE;
       }
     }
 

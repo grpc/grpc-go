@@ -109,17 +109,21 @@ model {
 }
 
 configurations {
+  testLiteCompile
   testNanoCompile
 }
 
 dependencies {
   testCompile project(':grpc-protobuf'),
               project(':grpc-stub')
+  testLiteCompile project(':grpc-protobuf-lite'),
+                  project(':grpc-stub')
   testNanoCompile project(':grpc-protobuf-nano'),
                   project(':grpc-stub')
 }
 
 sourceSets {
+  testLite {}
   testNano {
     proto {
       setSrcDirs(['src/test/proto'])
@@ -127,7 +131,7 @@ sourceSets {
   }
 }
 
-compileTestJava {
+compileTestLiteJava {
   // Protobuf-generated Lite produces quite a few warnings.
   it.options.compilerArgs.removeAll(["-Xlint:unchecked", "-Xlint:rawtypes"])
 }
@@ -149,6 +153,11 @@ protobuf {
     all()*.dependsOn 'java_pluginExecutable'
     ofSourceSet('test')*.plugins {
       grpc {}
+    }
+    ofSourceSet('testLite')*.plugins {
+      grpc {
+        option 'lite'
+      }
     }
     ofSourceSet('testNano').each { task ->
       task.builtins {
@@ -228,10 +237,8 @@ artifacts {
   }
 }
 
-test.dependsOn('testGolden', 'testLiteGolden', 'testNanoGolden')
-
-def configureTestTask(Task task, String suffix, String dep,
-    String extraPackage) {
+def configureTestTask(Task task, String dep, String extraPackage) {
+  test.dependsOn task
   task.dependsOn "generateTest${dep}Proto"
   if (osdetector.os != 'windows') {
     task.executable "diff"
@@ -241,12 +248,12 @@ def configureTestTask(Task task, String suffix, String dep,
   // File isn't found on Windows if last slash is forward-slash
   def slash = System.getProperty("file.separator")
   task.args "$buildDir/generated/source/proto/test${dep}/grpc/io/grpc/testing/integration${extraPackage}${slash}TestServiceGrpc.java",
-       "$projectDir/src/test/golden/TestService${suffix}.java.txt"
+       "$projectDir/src/test${dep}/golden/TestService.java.txt"
 }
 
 task testGolden(type: Exec)
 task testLiteGolden(type: Exec)
 task testNanoGolden(type: Exec)
-configureTestTask(testGolden, '', '', '')
-configureTestTask(testLiteGolden, 'Lite', '', '/lite')
-configureTestTask(testNanoGolden, 'Nano', 'Nano', '/nano')
+configureTestTask(testGolden, '', '')
+configureTestTask(testLiteGolden, 'Lite', '')
+configureTestTask(testNanoGolden, 'Nano', '/nano')
