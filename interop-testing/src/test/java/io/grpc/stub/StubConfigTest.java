@@ -38,8 +38,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.same;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -110,8 +111,9 @@ public class StubConfigTest {
     TestServiceGrpc.TestServiceBlockingStub reconfiguredStub = stub.withDeadlineNanoTime(deadline);
     // New altered config
     assertNotNull(reconfiguredStub.getCallOptions().getDeadlineNanoTime());
-    long delta = MILLISECONDS.toNanos(20);
-    assertEquals(deadline, reconfiguredStub.getCallOptions().getDeadlineNanoTime(), delta);
+    long maxDelta = MILLISECONDS.toNanos(20);
+    long actualDelta = Math.abs(reconfiguredStub.getCallOptions().getDeadlineNanoTime() - deadline);
+    assertTrue(maxDelta + " < " + actualDelta, maxDelta >= actualDelta);
     // Default config unchanged
     assertNull(stub.getCallOptions().getDeadlineNanoTime());
   }
