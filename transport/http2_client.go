@@ -636,6 +636,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	s.statusCode, ok = http2ErrConvTab[http2.ErrCode(f.ErrCode)]
 	if !ok {
 		grpclog.Println("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error ", f.ErrCode)
+		s.statusCode = codes.Unknown
 	}
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
