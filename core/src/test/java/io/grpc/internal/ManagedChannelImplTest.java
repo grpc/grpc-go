@@ -612,8 +612,6 @@ public class ManagedChannelImplTest {
         }
       }
 
-      @Override public void refresh() {}
-
       void resolved() {
         listener.onUpdate(servers, Attributes.EMPTY);
       }
@@ -641,8 +639,6 @@ public class ManagedChannelImplTest {
         @Override public void start(final Listener listener) {
           listener.onError(error);
         }
-
-        @Override public void refresh() {}
 
         @Override public void shutdown() {}
       };

@@ -75,8 +75,10 @@ public abstract class NameResolver {
    *
    * <p>This is only a hint. Implementation takes it as a signal but may not start resolution
    * immediately.
+   *
+   * <p>The default implementation is no-op.
    */
-  public abstract void refresh();
+  public void refresh() {}
 
   public abstract static class Factory {
     /**

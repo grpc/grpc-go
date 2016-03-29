@@ -174,8 +174,6 @@ public class ManagedChannelImplGetNameResolverTest {
 
     @Override public void start(final Listener listener) {}
 
-    @Override public void refresh() {}
-
     @Override public void shutdown() {}
   }
 }
