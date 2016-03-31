@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import static io.grpc.DeadlineTest.assertDeadlineEquals;
+import static io.grpc.DeadlineTest.extractRemainingTime;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -45,16 +47,14 @@ import com.google.common.base.Objects;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.Attributes.Key;
-
 import io.grpc.internal.SerializingExecutor;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /** Unit tests for {@link CallOptions}. */
 @RunWith(JUnit4.class)
@@ -117,17 +117,14 @@ public class CallOptionsTest {
   }
 
   @Test
-  public void testWithDeadlineAfter() {
+  public void withDeadlineAfter() {
     Deadline deadline = CallOptions.DEFAULT.withDeadlineAfter(1, MINUTES).getDeadline();
-    long expected = MINUTES.toNanos(1);
-    // 10 milliseconds of leeway
-    long epsilon = MILLISECONDS.toNanos(10);
-    assertNotNull(deadline);
-    assertEquals(expected, deadline.timeRemaining(NANOSECONDS), epsilon);
+    Deadline expected = Deadline.after(1, MINUTES);
+    assertDeadlineEquals(deadline, expected, 10, MILLISECONDS);
   }
 
   @Test
-  public void testToString() {
+  public void toStringMatches() {
     assertEquals("CallOptions{deadline=null, authority=null, "
         + "affinity={}, executor=null, compressorName=null}", CallOptions.DEFAULT.toString());
 
@@ -138,31 +135,19 @@ public class CallOptionsTest {
         allSet.withDeadline(null)
             .withExecutor(new SerializingExecutor(MoreExecutors.directExecutor())).toString());
 
-    long remainingNanos = extractRemainingTime(allSet.toString());
-    long delta = TimeUnit.MILLISECONDS.toNanos(20);
-    assertNotNull(allSet.getDeadline());
-    assertEquals(remainingNanos, allSet.getDeadline().timeRemaining(NANOSECONDS), delta);
+    assertDeadlineEquals(
+        allSet.getDeadline(), extractRemainingTime(allSet.toString()), 20, MILLISECONDS);
   }
 
   @Test
-  @Deprecated
-  public void testWithDeadlineNanoTime() {
+  @SuppressWarnings("deprecation")
+  public void withDeadlineNanoTime() {
     CallOptions opts = CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime());
     assertNotNull(opts.getDeadlineNanoTime());
     assertTrue(opts.getDeadlineNanoTime() <= System.nanoTime());
-    assertNotNull(opts.getDeadline());
-    long delta = MILLISECONDS.toNanos(10);
-    assertEquals(0, opts.getDeadline().timeRemaining(NANOSECONDS), delta);
     assertTrue(opts.getDeadline().isExpired());
-  }
 
-  private static long extractRemainingTime(String deadlineStr) {
-    final Pattern p = Pattern.compile(".+deadline=(\\-?[0-9]+) ns from now,.+");
-    Matcher m = p.matcher(deadlineStr);
-    assertTrue(m.matches());
-    assertEquals(1, m.groupCount());
-
-    return Long.valueOf(m.group(1));
+    assertDeadlineEquals(opts.getDeadline(), Deadline.after(0, SECONDS), 20, TimeUnit.MILLISECONDS);
   }
 
   private static boolean equal(CallOptions o1, CallOptions o2) {

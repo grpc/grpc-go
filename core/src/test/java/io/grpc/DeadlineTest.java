@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
@@ -41,6 +43,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.math.BigInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -54,13 +57,12 @@ import java.util.regex.Pattern;
 public class DeadlineTest {
 
   // Allowed inaccuracy when comparing the remaining time of a deadline.
-  private final long delta = TimeUnit.MILLISECONDS.toNanos(20);
+  private final long maxDelta = TimeUnit.MILLISECONDS.toNanos(20);
 
   @Test
   public void immediateDeadlineIsExpired() {
     Deadline deadline = Deadline.after(0, TimeUnit.SECONDS);
     assertTrue(deadline.isExpired());
-    assertEquals(0, deadline.timeRemaining(TimeUnit.NANOSECONDS), delta);
   }
 
   @Test
@@ -69,15 +71,25 @@ public class DeadlineTest {
     assertTrue(deadline.timeRemaining(TimeUnit.NANOSECONDS) > 0);
     assertFalse(deadline.isExpired());
     Thread.sleep(101);
+
     assertTrue(deadline.isExpired());
-    assertEquals(0, deadline.timeRemaining(TimeUnit.NANOSECONDS), delta);
+    assertFalse(deadline.timeRemaining(TimeUnit.NANOSECONDS) > 0);
+    assertDeadlineEquals(deadline, Deadline.after(0, SECONDS), maxDelta, NANOSECONDS);
+  }
+
+  @Test
+  public void deadlineMatchesLongValue() {
+    long minutes = Deadline.after(10, TimeUnit.MINUTES).timeRemaining(TimeUnit.MINUTES);
+
+    assertTrue(minutes + " != " + 10, Math.abs(minutes - 10) <= 1);
   }
 
   @Test
   public void pastDeadlineIsExpired() {
     Deadline deadline = Deadline.after(-1, TimeUnit.SECONDS);
     assertTrue(deadline.isExpired());
-    assertEquals(TimeUnit.SECONDS.toNanos(-1), deadline.timeRemaining(TimeUnit.NANOSECONDS), delta);
+
+    assertDeadlineEquals(deadline, Deadline.after(-1, SECONDS), maxDelta, NANOSECONDS);
   }
 
   @Test
@@ -144,23 +156,45 @@ public class DeadlineTest {
   }
 
   @Test
-  public void testToString() {
+  public void toString_exact() {
     Deadline d = Deadline.after(0, TimeUnit.MILLISECONDS);
-    assertEquals(0, extractRemainingTime(d.toString()), delta);
 
-    d = Deadline.after(-1, TimeUnit.HOURS);
-    assertEquals(d.timeRemaining(TimeUnit.NANOSECONDS), extractRemainingTime(d.toString()), delta);
-
-    d = Deadline.after(10, TimeUnit.SECONDS);
-    assertEquals(d.timeRemaining(TimeUnit.NANOSECONDS), extractRemainingTime(d.toString()), delta);
+    assertDeadlineEquals(d, extractRemainingTime(d.toString()), maxDelta, NANOSECONDS);
   }
 
-  private static long extractRemainingTime(String deadlineStr) {
-    final Pattern p = Pattern.compile("(\\-?[0-9]+) ns from now");
-    Matcher m = p.matcher(deadlineStr);
-    assertTrue(m.matches());
-    assertEquals(1, m.groupCount());
+  @Test
+  public void toString_after() {
+    Deadline d = Deadline.after(-1, TimeUnit.HOURS);
 
-    return Long.valueOf(m.group(1));
+    assertDeadlineEquals(d, extractRemainingTime(d.toString()), maxDelta, NANOSECONDS);
+  }
+
+  @Test
+  public void toString_before() {
+    Deadline d = Deadline.after(10, TimeUnit.SECONDS);
+
+    assertDeadlineEquals(d, extractRemainingTime(d.toString()), maxDelta, NANOSECONDS);
+  }
+
+  /**
+   * Asserts two deadlines are roughly equal.
+   */
+  public static void assertDeadlineEquals(
+      Deadline expected, Deadline actual, long delta, TimeUnit timeUnit) {
+    // This is probably overkill, but easier than thinking about overflow.
+    BigInteger actualTimeRemaining = BigInteger.valueOf(actual.timeRemaining(NANOSECONDS));
+    BigInteger expectedTimeRemaining = BigInteger.valueOf(expected.timeRemaining(NANOSECONDS));
+    BigInteger deltaNanos = BigInteger.valueOf(timeUnit.toNanos(delta));
+    if (actualTimeRemaining.subtract(expectedTimeRemaining).abs().compareTo(deltaNanos) > 0) {
+      throw new AssertionError(String.format("%s != %s", expected, actual));
+    }
+  }
+
+  static Deadline extractRemainingTime(String deadlineStr) {
+    final Pattern p = Pattern.compile(".*?(-?\\d+) ns from now.*");
+    Matcher m = p.matcher(deadlineStr);
+    assertTrue(deadlineStr, m.matches());
+    assertEquals(deadlineStr, 1, m.groupCount());
+    return Deadline.after(Long.valueOf(m.group(1)), NANOSECONDS);
   }
 }
