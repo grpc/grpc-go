@@ -638,7 +638,8 @@ class OkHttpClientTransport implements ManagedClientTransport {
         // nothing, otherwise, we finish all streams since it's a real IO issue.
         // We don't call onException() here since we don't want to log the warning in case this is
         // triggered by socket closing.
-        startGoAway(0, Status.UNAVAILABLE);
+        startGoAway(0,
+            Status.UNAVAILABLE.withDescription("End of stream or IOException"));
       } catch (Exception t) {
         // TODO(madongfly): Send the exception message to the server.
         frameWriter.goAway(0, ErrorCode.PROTOCOL_ERROR, new byte[0]);

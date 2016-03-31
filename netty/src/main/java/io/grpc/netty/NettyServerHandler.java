@@ -93,8 +93,6 @@ import javax.annotation.Nullable;
 class NettyServerHandler extends AbstractNettyHandler {
   private static Logger logger = Logger.getLogger(NettyServerHandler.class.getName());
 
-  private static final Status GOAWAY_STATUS = Status.UNAVAILABLE;
-
   private final Http2Connection.PropertyKey streamKey;
   private final ServerTransportListener transportListener;
   private final int maxMessageSize;
@@ -263,13 +261,15 @@ class NettyServerHandler extends AbstractNettyHandler {
   @Override
   public void channelInactive(ChannelHandlerContext ctx) throws Exception {
     try {
+      final Status status =
+          Status.UNAVAILABLE.withDescription("connection terminated for unknown reason");
       // Any streams that are still active must be closed
       connection().forEachActiveStream(new Http2StreamVisitor() {
         @Override
         public boolean visit(Http2Stream stream) throws Http2Exception {
           NettyServerStream serverStream = serverStream(stream);
           if (serverStream != null) {
-            serverStream.abortStream(GOAWAY_STATUS, false);
+            serverStream.abortStream(status, false);
           }
           return true;
         }
