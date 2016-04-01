@@ -143,7 +143,8 @@ subprojects {
 
                 // Test dependencies.
                 junit: 'junit:junit:4.11',
-                mockito: 'org.mockito:mockito-core:1.9.5'
+                mockito: 'org.mockito:mockito-core:1.9.5',
+                truth: 'com.google.truth:truth:0.28'
         ]
 
         // Determine the correct version of Jetty ALPN boot to use based

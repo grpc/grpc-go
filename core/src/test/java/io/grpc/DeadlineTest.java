@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import static com.google.common.truth.Truth.assertAbout;
+import static io.grpc.testing.DeadlineSubject.deadline;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
@@ -39,11 +41,12 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.truth.Truth;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.math.BigInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -67,14 +70,14 @@ public class DeadlineTest {
 
   @Test
   public void shortDeadlineEventuallyExpires() throws Exception {
-    Deadline deadline = Deadline.after(100, TimeUnit.MILLISECONDS);
-    assertTrue(deadline.timeRemaining(TimeUnit.NANOSECONDS) > 0);
-    assertFalse(deadline.isExpired());
+    Deadline d = Deadline.after(100, TimeUnit.MILLISECONDS);
+    assertTrue(d.timeRemaining(TimeUnit.NANOSECONDS) > 0);
+    assertFalse(d.isExpired());
     Thread.sleep(101);
 
-    assertTrue(deadline.isExpired());
-    assertFalse(deadline.timeRemaining(TimeUnit.NANOSECONDS) > 0);
-    assertDeadlineEquals(deadline, Deadline.after(0, SECONDS), maxDelta, NANOSECONDS);
+    assertTrue(d.isExpired());
+    assertFalse(d.timeRemaining(TimeUnit.NANOSECONDS) > 0);
+    assertAbout(deadline()).that(d).isWithin(maxDelta, NANOSECONDS).of(Deadline.after(0, SECONDS));
   }
 
   @Test
@@ -86,10 +89,10 @@ public class DeadlineTest {
 
   @Test
   public void pastDeadlineIsExpired() {
-    Deadline deadline = Deadline.after(-1, TimeUnit.SECONDS);
-    assertTrue(deadline.isExpired());
+    Deadline d = Deadline.after(-1, TimeUnit.SECONDS);
+    assertTrue(d.isExpired());
 
-    assertDeadlineEquals(deadline, Deadline.after(-1, SECONDS), maxDelta, NANOSECONDS);
+    assertAbout(deadline()).that(d).isWithin(maxDelta, NANOSECONDS).of(Deadline.after(-1, SECONDS));
   }
 
   @Test
@@ -159,35 +162,47 @@ public class DeadlineTest {
   public void toString_exact() {
     Deadline d = Deadline.after(0, TimeUnit.MILLISECONDS);
 
-    assertDeadlineEquals(d, extractRemainingTime(d.toString()), maxDelta, NANOSECONDS);
+    assertAbout(deadline()).that(extractRemainingTime(d.toString()))
+        .isWithin(maxDelta, NANOSECONDS).of(d);
   }
 
   @Test
   public void toString_after() {
     Deadline d = Deadline.after(-1, TimeUnit.HOURS);
 
-    assertDeadlineEquals(d, extractRemainingTime(d.toString()), maxDelta, NANOSECONDS);
+    assertAbout(deadline()).that(extractRemainingTime(d.toString()))
+        .isWithin(maxDelta, NANOSECONDS).of(d);
+  }
+
+  @Test
+  public void compareTo_greater() {
+    Deadline d1 = Deadline.after(10, TimeUnit.SECONDS);
+    Deadline d2 = Deadline.after(10, TimeUnit.SECONDS);
+    // Assume that two calls take more than 1 ns.
+    Truth.assertThat(d2).isGreaterThan(d1);
+  }
+
+  @Test
+  public void compareTo_less() {
+    Deadline d1 = Deadline.after(10, TimeUnit.SECONDS);
+    Deadline d2 = Deadline.after(10, TimeUnit.SECONDS);
+    // Assume that two calls take more than 1 ns.
+    Truth.assertThat(d1).isLessThan(d2);
+  }
+
+  @Test
+  public void compareTo_same() {
+    Deadline d1 = Deadline.after(10, TimeUnit.SECONDS);
+    Deadline d2 = d1.offset(0, TimeUnit.SECONDS);
+    Truth.assertThat(d1).isEquivalentAccordingToCompareTo(d2);
   }
 
   @Test
   public void toString_before() {
     Deadline d = Deadline.after(10, TimeUnit.SECONDS);
 
-    assertDeadlineEquals(d, extractRemainingTime(d.toString()), maxDelta, NANOSECONDS);
-  }
-
-  /**
-   * Asserts two deadlines are roughly equal.
-   */
-  public static void assertDeadlineEquals(
-      Deadline expected, Deadline actual, long delta, TimeUnit timeUnit) {
-    // This is probably overkill, but easier than thinking about overflow.
-    BigInteger actualTimeRemaining = BigInteger.valueOf(actual.timeRemaining(NANOSECONDS));
-    BigInteger expectedTimeRemaining = BigInteger.valueOf(expected.timeRemaining(NANOSECONDS));
-    BigInteger deltaNanos = BigInteger.valueOf(timeUnit.toNanos(delta));
-    if (actualTimeRemaining.subtract(expectedTimeRemaining).abs().compareTo(deltaNanos) > 0) {
-      throw new AssertionError(String.format("%s != %s", expected, actual));
-    }
+    assertAbout(deadline()).that(extractRemainingTime(d.toString()))
+        .isWithin(maxDelta, NANOSECONDS).of(d);
   }
 
   static Deadline extractRemainingTime(String deadlineStr) {

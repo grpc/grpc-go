@@ -3,5 +3,6 @@ dependencies {
     compile project(':grpc-core'),
             project(':grpc-stub'),
             libraries.junit,
-            libraries.mockito
+            libraries.mockito,
+            libraries.truth
 }

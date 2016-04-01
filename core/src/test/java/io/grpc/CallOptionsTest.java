@@ -31,20 +31,17 @@
 
 package io.grpc;
 
-import static io.grpc.DeadlineTest.assertDeadlineEquals;
+import static com.google.common.truth.Truth.assertAbout;
+import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.grpc.DeadlineTest.extractRemainingTime;
+import static io.grpc.testing.DeadlineSubject.deadline;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
 
 import com.google.common.base.Objects;
-import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.Attributes.Key;
 import io.grpc.internal.SerializingExecutor;
@@ -54,7 +51,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 /** Unit tests for {@link CallOptions}. */
 @RunWith(JUnit4.class)
@@ -70,86 +66,103 @@ public class CallOptionsTest {
 
   @Test
   public void defaultsAreAllNull() {
-    assertNull(CallOptions.DEFAULT.getDeadline());
-    assertNull(CallOptions.DEFAULT.getAuthority());
-    assertEquals(Attributes.EMPTY, CallOptions.DEFAULT.getAffinity());
-    assertNull(CallOptions.DEFAULT.getExecutor());
+    assertThat(CallOptions.DEFAULT.getDeadline()).isNull();
+    assertThat(CallOptions.DEFAULT.getAuthority()).isNull();
+    assertThat(CallOptions.DEFAULT.getAffinity()).isEqualTo(Attributes.EMPTY);
+    assertThat(CallOptions.DEFAULT.getExecutor()).isNull();
   }
 
   @Test
   public void allWiths() {
-    assertSame(sampleAuthority, allSet.getAuthority());
-    assertSame(sampleDeadline, allSet.getDeadline());
-    assertSame(sampleAffinity, allSet.getAffinity());
+    assertThat(allSet.getAuthority()).isSameAs(sampleAuthority);
+    assertThat(allSet.getDeadline()).isSameAs(sampleDeadline);
+    assertThat(allSet.getAffinity()).isSameAs(sampleAffinity);
   }
 
   @Test
   public void noStrayModifications() {
-    assertTrue(equal(allSet,
-        allSet.withAuthority("blah").withAuthority(sampleAuthority)));
-    assertTrue(equal(allSet,
-        allSet.withDeadline(Deadline.after(314, NANOSECONDS))
-            .withDeadline(sampleDeadline)));
-    assertTrue(equal(allSet,
-          allSet.withAffinity(Attributes.EMPTY).withAffinity(sampleAffinity)));
+    assertThat(equal(allSet, allSet.withAuthority("blah").withAuthority(sampleAuthority)))
+        .isTrue();
+    assertThat(
+        equal(allSet,
+            allSet.withDeadline(Deadline.after(314, NANOSECONDS)).withDeadline(sampleDeadline)))
+        .isTrue();
+    assertThat(
+        equal(allSet,
+            allSet.withAffinity(Attributes.EMPTY).withAffinity(sampleAffinity)))
+        .isTrue();
   }
 
   @Test
   public void mutation() {
     Deadline deadline = Deadline.after(10, SECONDS);
     CallOptions options1 = CallOptions.DEFAULT.withDeadline(deadline);
-    assertNull(CallOptions.DEFAULT.getDeadline());
-    assertEquals(deadline, options1.getDeadline());
+    assertThat(CallOptions.DEFAULT.getDeadline()).isNull();
+    assertThat(deadline).isSameAs(options1.getDeadline());
+
     CallOptions options2 = options1.withDeadline(null);
-    assertEquals(deadline, options1.getDeadline());
-    assertNull(options2.getDeadline());
+    assertThat(deadline).isSameAs(options1.getDeadline());
+    assertThat(options2.getDeadline()).isNull();
   }
 
   @Test
   public void mutateExecutor() {
-    Executor executor = MoreExecutors.directExecutor();
+    Executor executor = directExecutor();
     CallOptions options1 = CallOptions.DEFAULT.withExecutor(executor);
-    assertNull(CallOptions.DEFAULT.getExecutor());
-    assertSame(executor, options1.getExecutor());
+    assertThat(CallOptions.DEFAULT.getExecutor()).isNull();
+    assertThat(executor).isSameAs(options1.getExecutor());
+
     CallOptions options2 = options1.withExecutor(null);
-    assertSame(executor, options1.getExecutor());
-    assertNull(options2.getExecutor());
+    assertThat(executor).isSameAs(options1.getExecutor());
+    assertThat(options2.getExecutor()).isNull();
   }
 
   @Test
   public void withDeadlineAfter() {
-    Deadline deadline = CallOptions.DEFAULT.withDeadlineAfter(1, MINUTES).getDeadline();
+    Deadline actual = CallOptions.DEFAULT.withDeadlineAfter(1, MINUTES).getDeadline();
     Deadline expected = Deadline.after(1, MINUTES);
-    assertDeadlineEquals(deadline, expected, 10, MILLISECONDS);
+
+    assertAbout(deadline()).that(actual).isWithin(10, MILLISECONDS).of(expected);
   }
 
   @Test
-  public void toStringMatches() {
-    assertEquals("CallOptions{deadline=null, authority=null, "
-        + "affinity={}, executor=null, compressorName=null}", CallOptions.DEFAULT.toString());
+  public void toStringMatches_noDeadline_default() {
+    String expected = "CallOptions{deadline=null, authority=authority, affinity={sample=blah}, "
+        + "executor=class io.grpc.internal.SerializingExecutor, compressorName=null}";
+    String actual = allSet
+        .withDeadline(null)
+        .withExecutor(new SerializingExecutor(directExecutor()))
+        .toString();
 
-    // Deadline makes it hard to check string for equality.
-    assertEquals("CallOptions{deadline=null, authority=authority, "
-        + "affinity={sample=blah}, executor=class io.grpc.internal.SerializingExecutor, "
-        + "compressorName=null}",
-        allSet.withDeadline(null)
-            .withExecutor(new SerializingExecutor(MoreExecutors.directExecutor())).toString());
+    assertThat(actual).isEqualTo(expected);
+  }
 
-    assertDeadlineEquals(
-        allSet.getDeadline(), extractRemainingTime(allSet.toString()), 20, MILLISECONDS);
+  @Test
+  public void toStringMatches_noDeadline() {
+    assertThat("CallOptions{deadline=null, authority=null, "
+        + "affinity={}, executor=null, compressorName=null}")
+            .isEqualTo(CallOptions.DEFAULT.toString());
+  }
+
+  @Test
+  public void toStringMatches_withDeadline() {
+    assertAbout(deadline()).that(extractRemainingTime(allSet.toString()))
+        .isWithin(20, MILLISECONDS).of(allSet.getDeadline());
   }
 
   @Test
   @SuppressWarnings("deprecation")
   public void withDeadlineNanoTime() {
     CallOptions opts = CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime());
-    assertNotNull(opts.getDeadlineNanoTime());
-    assertTrue(opts.getDeadlineNanoTime() <= System.nanoTime());
-    assertTrue(opts.getDeadline().isExpired());
+    assertThat(opts.getDeadlineNanoTime()).isNotNull();
+    assertThat(opts.getDeadlineNanoTime()).isAtMost(System.nanoTime());
+    assertThat(opts.getDeadline().isExpired()).isTrue();
 
-    assertDeadlineEquals(opts.getDeadline(), Deadline.after(0, SECONDS), 20, TimeUnit.MILLISECONDS);
+    assertAbout(deadline()).that(opts.getDeadline())
+        .isWithin(20, MILLISECONDS).of(Deadline.after(0, SECONDS));
   }
 
+  // TODO(carl-mastrangelo): consider making a CallOptionsSubject for Truth.
   private static boolean equal(CallOptions o1, CallOptions o2) {
     return Objects.equal(o1.getDeadline(), o2.getDeadline())
         && Objects.equal(o1.getAuthority(), o2.getAuthority())

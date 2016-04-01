@@ -41,7 +41,7 @@ import java.util.concurrent.TimeUnit;
  * An absolute deadline in system time.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/262")
-public class Deadline {
+public final class Deadline implements Comparable<Deadline> {
 
   /**
    * Create a deadline that will expire at the specified offset from the current system clock.
@@ -108,7 +108,7 @@ public class Deadline {
     if (offset == 0) {
       return this;
     }
-    return new Deadline(deadlineNanos,  units.toNanos(offset), isExpired());
+    return new Deadline(deadlineNanos, units.toNanos(offset), isExpired());
   }
 
   /**
@@ -140,5 +140,16 @@ public class Deadline {
   @Override
   public String toString() {
     return timeRemaining(TimeUnit.NANOSECONDS) + " ns from now";
+  }
+
+  @Override
+  public int compareTo(Deadline that) {
+    long diff = this.deadlineNanos - that.deadlineNanos;
+    if (diff < 0) {
+      return -1;
+    } else if (diff > 0) {
+      return 1;
+    }
+    return 0;
   }
 }
