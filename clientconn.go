@@ -288,10 +288,9 @@ func NewConn(cc *ClientConn) (*Conn, error) {
 	if !c.dopts.insecure {
 		var ok bool
 		for _, cd := range c.dopts.copts.AuthOptions {
-			if _, ok := cd.(credentials.TransportAuthenticator); !ok {
-				continue
+			if _, ok = cd.(credentials.TransportAuthenticator); ok {
+				break
 			}
-			ok = true
 		}
 		if !ok {
 			return nil, ErrNoTransportSecurity
