@@ -256,19 +256,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     return true;
   }
 
-  /**
-   * Return the remaining amount of nanoseconds before the deadline is reached.
-   *
-   * <p>{@code null} if deadline is not set. Negative value if already expired.
-   */
-  @Nullable
-  private static Long getRemainingTimeoutNanos(@Nullable Long deadlineNanoTime) {
-    if (deadlineNanoTime == null) {
-      return null;
-    }
-    return deadlineNanoTime - System.nanoTime();
-  }
-
   @Override
   public void request(int numMessages) {
     Preconditions.checkState(stream != null, "Not started");
