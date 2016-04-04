@@ -63,13 +63,11 @@ type recvMsg struct {
 	err error
 }
 
-func (recvMsg) isItem() bool {
-	return true
-}
+func (*recvMsg) item() {}
 
 // All items in an out of a recvBuffer should be the same type.
 type item interface {
-	isItem() bool
+	item()
 }
 
 // recvBuffer is an unbounded channel of item.

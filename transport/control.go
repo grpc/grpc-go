@@ -56,43 +56,33 @@ type windowUpdate struct {
 	increment uint32
 }
 
-func (windowUpdate) isItem() bool {
-	return true
-}
+func (*windowUpdate) item() {}
 
 type settings struct {
 	ack bool
 	ss  []http2.Setting
 }
 
-func (settings) isItem() bool {
-	return true
-}
+func (*settings) item() {}
 
 type resetStream struct {
 	streamID uint32
 	code     http2.ErrCode
 }
 
-func (resetStream) isItem() bool {
-	return true
-}
+func (*resetStream) item() {}
 
 type flushIO struct {
 }
 
-func (flushIO) isItem() bool {
-	return true
-}
+func (*flushIO) item() {}
 
 type ping struct {
 	ack  bool
 	data [8]byte
 }
 
-func (ping) isItem() bool {
-	return true
-}
+func (*ping) item() {}
 
 // quotaPool is a pool which accumulates the quota and sends it to acquire()
 // when it is available.
