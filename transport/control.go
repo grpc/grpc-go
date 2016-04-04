@@ -185,7 +185,7 @@ func (f *inFlow) onData(n uint32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.pendingData+f.pendingUpdate+n > f.limit {
-		return fmt.Errorf("recieved %d-bytes data exceeding the limit %d bytes", f.pendingData+f.pendingUpdate+n, f.limit)
+		return fmt.Errorf("received %d-bytes data exceeding the limit %d bytes", f.pendingData+f.pendingUpdate+n, f.limit)
 	}
 	if f.conn != nil {
 		if err := f.conn.onData(n); err != nil {
