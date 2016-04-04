@@ -313,15 +313,21 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream)) {
 	readerDone := make(chan struct{})
 	go func() {
 		defer close(readerDone)
-		for {
-			buf := make([]byte, 1024) // TODO: minimize garbage, optimize recvBuffer code/ownership
+
+		// TODO: minimize garbage, optimize recvBuffer code/ownership
+		const readSize = 8196
+		for buf := make([]byte, readSize); ; {
 			n, err := req.Body.Read(buf)
 			if n > 0 {
-				s.buf.put(&recvMsg{data: buf[:n]})
+				s.buf.put(&recvMsg{data: buf[:n:n]})
+				buf = buf[n:]
 			}
 			if err != nil {
 				s.buf.put(&recvMsg{err: mapRecvMsgError(err)})
 				return
+			}
+			if len(buf) == 0 {
+				buf = make([]byte, readSize)
 			}
 		}
 	}()
