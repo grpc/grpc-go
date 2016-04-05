@@ -480,9 +480,13 @@ class OkHttpClientTransport implements ManagedClientTransport {
   /**
    * Finish all active streams due to an IOException, then close the transport.
    */
-  void onException(Throwable failureCause) {
-    log.log(Level.WARNING, "Transport failed", failureCause);
-    startGoAway(0, Status.UNAVAILABLE.withCause(failureCause));
+  void onException(Throwable cause) {
+    log.log(Level.WARNING, "Transport failed", cause);
+    Status status = Status.UNAVAILABLE.withCause(cause);
+    if (cause != null) {
+      status = status.augmentDescription("No provided cause");
+    }
+    startGoAway(0, status);
   }
 
   /**
@@ -721,7 +725,7 @@ class OkHttpClientTransport implements ManagedClientTransport {
 
     @Override
     public void rstStream(int streamId, ErrorCode errorCode) {
-      finishStream(streamId, toGrpcStatus(errorCode), null);
+      finishStream(streamId, toGrpcStatus(errorCode).augmentDescription("Rst Stream"), null);
     }
 
     @Override
@@ -782,6 +786,7 @@ class OkHttpClientTransport implements ManagedClientTransport {
     @Override
     public void goAway(int lastGoodStreamId, ErrorCode errorCode, ByteString debugData) {
       Status status = GrpcUtil.Http2Error.statusForCode(errorCode.httpCode);
+      status.augmentDescription("Received Goaway");
       if (debugData != null && debugData.size() > 0) {
         // If a debug message was provided, use it.
         status.augmentDescription(debugData.utf8());

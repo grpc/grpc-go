@@ -224,8 +224,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     }
   }
 
-  private void onHeadersRead(int streamId, Http2Headers headers, boolean endStream)
-      throws Http2Exception {
+  private void onHeadersRead(int streamId, Http2Headers headers, boolean endStream) {
     NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
     stream.transportHeadersReceived(headers, endStream);
   }
@@ -233,7 +232,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   /**
    * Handler for an inbound HTTP/2 DATA frame.
    */
-  private void onDataRead(int streamId, ByteBuf data, boolean endOfStream) throws Http2Exception {
+  private void onDataRead(int streamId, ByteBuf data, boolean endOfStream) {
     NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
     stream.transportDataReceived(data, endOfStream);
   }
@@ -241,10 +240,11 @@ class NettyClientHandler extends AbstractNettyHandler {
   /**
    * Handler for an inbound HTTP/2 RST_STREAM frame, terminating a stream.
    */
-  private void onRstStreamRead(int streamId, long errorCode) throws Http2Exception {
+  private void onRstStreamRead(int streamId, long errorCode) {
     NettyClientStream stream = clientStream(connection().stream(streamId));
     if (stream != null) {
-      Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode);
+      Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode)
+          .augmentDescription("Received Rst Stream");
       stream.transportReportStatus(status, false /*stop delivery*/, new Metadata());
     }
   }
@@ -500,6 +500,7 @@ class NettyClientHandler extends AbstractNettyHandler {
 
   private Status statusFromGoAway(long errorCode, byte[] debugData) {
     Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode);
+    status.augmentDescription("Received Goaway");
     if (debugData != null && debugData.length > 0) {
       // If a debug message was provided, use it.
       String msg = new String(debugData, UTF_8);
