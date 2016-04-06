@@ -44,6 +44,10 @@ import java.util.concurrent.TimeUnit;
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/262")
 public final class Deadline implements Comparable<Deadline> {
   private static final SystemTicker SYSTEM_TICKER = new SystemTicker();
+  // nanoTime has a range of just under 300 years. Only allow up to 100 years in the past or future
+  // to prevent wraparound as long as process runs for less than ~100 years.
+  private static final long MAX_OFFSET = TimeUnit.DAYS.toNanos(100 * 365);
+  private static final long MIN_OFFSET = -MAX_OFFSET;
 
   /**
    * Create a deadline that will expire at the specified offset from the current system clock.
@@ -72,16 +76,10 @@ public final class Deadline implements Comparable<Deadline> {
   private Deadline(Ticker ticker, long baseInstant, long offset,
       boolean baseInstantAlreadyExpired) {
     this.ticker = ticker;
-    if (offset > 0 && Long.MAX_VALUE - offset < baseInstant) {
-      deadlineNanos = Long.MAX_VALUE;
-      expired = false;
-    } else if (offset < 0 && Long.MIN_VALUE - offset > baseInstant) {
-      deadlineNanos = Long.MIN_VALUE;
-      expired = true;
-    } else {
-      deadlineNanos = baseInstant + offset;
-      expired = baseInstantAlreadyExpired && offset <= 0;
-    }
+    // Clamp to range [MIN_OFFSET, MAX_OFFSET]
+    offset = Math.min(MAX_OFFSET, Math.max(MIN_OFFSET, offset));
+    deadlineNanos = baseInstant + offset;
+    expired = baseInstantAlreadyExpired && offset <= 0;
   }
 
   /**
@@ -90,7 +88,7 @@ public final class Deadline implements Comparable<Deadline> {
    */
   public boolean isExpired() {
     if (!expired) {
-      if (deadlineNanos <= ticker.read()) {
+      if (deadlineNanos - ticker.read() <= 0) {
         expired = true;
       } else {
         return false;
@@ -103,7 +101,7 @@ public final class Deadline implements Comparable<Deadline> {
    * Is {@code this} deadline before another.
    */
   public boolean isBefore(Deadline other) {
-    return this.deadlineNanos < other.deadlineNanos;
+    return this.deadlineNanos - other.deadlineNanos < 0;
   }
 
   /**
@@ -117,6 +115,9 @@ public final class Deadline implements Comparable<Deadline> {
   /**
    * Create a new deadline that is offset from {@code this}.
    */
+  // TODO(ejona): This method can cause deadlines to grow too far apart. For example:
+  // Deadline.after(100 * 365, DAYS).offset(100 * 365, DAYS) would be less than
+  // Deadline.after(-100 * 365, DAYS)
   public Deadline offset(long offset, TimeUnit units) {
     // May already be expired
     if (offset == 0) {
@@ -133,7 +134,7 @@ public final class Deadline implements Comparable<Deadline> {
    */
   public long timeRemaining(TimeUnit unit) {
     final long nowNanos = ticker.read();
-    if (!expired && deadlineNanos <= nowNanos) {
+    if (!expired && deadlineNanos - nowNanos <= 0) {
       expired = true;
     }
     return unit.convert(deadlineNanos - nowNanos, TimeUnit.NANOSECONDS);

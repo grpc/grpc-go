@@ -45,10 +45,11 @@ import com.google.common.truth.Truth;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 import org.mockito.ArgumentCaptor;
 
-import java.util.Random;
+import java.util.Arrays;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,9 +57,23 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Tests for {@link Context}.
  */
-@RunWith(JUnit4.class)
+@RunWith(Parameterized.class)
 public class DeadlineTest {
+  /** Ticker epochs to vary testing. */
+  @Parameters
+  public static Iterable<Object[]> data() {
+    return Arrays.asList(new Object[][] {
+      // MAX_VALUE / 2 is important because the signs are generally the same for past and future
+      // deadlines.
+      {Long.MAX_VALUE / 2}, {0}, {Long.MAX_VALUE}, {Long.MIN_VALUE}
+    });
+  }
+
   private FakeTicker ticker = new FakeTicker();
+
+  public DeadlineTest(long epoch) {
+    ticker.reset(epoch);
+  }
 
   @Test
   public void defaultTickerIsSystemTicker() {
@@ -67,6 +82,39 @@ public class DeadlineTest {
     Deadline reference = Deadline.after(0, TimeUnit.SECONDS, ticker);
     // Allow inaccuracy to account for system time advancing during test.
     assertAbout(deadline()).that(d).isWithin(20, TimeUnit.MILLISECONDS).of(reference);
+  }
+
+  @Test
+  public void timeCanOverflow() {
+    ticker.reset(Long.MAX_VALUE);
+    Deadline d = Deadline.after(10, TimeUnit.DAYS, ticker);
+    assertEquals(10, d.timeRemaining(TimeUnit.DAYS));
+    assertTrue(Deadline.after(0, TimeUnit.DAYS, ticker).isBefore(d));
+    assertFalse(d.isExpired());
+
+    ticker.increment(10, TimeUnit.DAYS);
+    assertTrue(d.isExpired());
+  }
+
+  @Test
+  public void timeCanUnderflow() {
+    ticker.reset(Long.MIN_VALUE);
+    Deadline d = Deadline.after(-10, TimeUnit.DAYS, ticker);
+    assertEquals(-10, d.timeRemaining(TimeUnit.DAYS));
+    assertTrue(d.isBefore(Deadline.after(0, TimeUnit.DAYS, ticker)));
+    assertTrue(d.isExpired());
+  }
+
+  @Test
+  public void deadlineClamps() {
+    Deadline d = Deadline.after(-300 * 365, TimeUnit.DAYS, ticker);
+    Deadline d2 = Deadline.after(300 * 365, TimeUnit.DAYS, ticker);
+    assertTrue(d.isBefore(d2));
+
+    Deadline d3 = Deadline.after(-200 * 365, TimeUnit.DAYS, ticker);
+    // d and d3 are equal
+    assertFalse(d.isBefore(d3));
+    assertFalse(d3.isBefore(d));
   }
 
   @Test
@@ -117,10 +165,19 @@ public class DeadlineTest {
   }
 
   @Test
-  public void afterExpiredDeadlineIsNotExpired() {
-    Deadline base = Deadline.after(0, TimeUnit.SECONDS, ticker);
+  public void beforeNotExpiredDeadlineMayBeExpired() {
+    Deadline base = Deadline.after(10, TimeUnit.SECONDS, ticker);
+    assertFalse(base.isExpired());
+    assertFalse(base.offset(-1, TimeUnit.SECONDS).isExpired());
+    assertTrue(base.offset(-11, TimeUnit.SECONDS).isExpired());
+  }
+
+  @Test
+  public void afterExpiredDeadlineMayBeExpired() {
+    Deadline base = Deadline.after(-10, TimeUnit.SECONDS, ticker);
     assertTrue(base.isExpired());
-    assertFalse(base.offset(100, TimeUnit.SECONDS).isExpired());
+    assertTrue(base.offset(1, TimeUnit.SECONDS).isExpired());
+    assertFalse(base.offset(11, TimeUnit.SECONDS).isExpired());
   }
 
   @Test
@@ -209,9 +266,7 @@ public class DeadlineTest {
   }
 
   static class FakeTicker extends Deadline.Ticker {
-    private static final Random random = new Random();
-
-    private long time = random.nextLong();
+    private long time;
 
     @Override
     public long read() {
