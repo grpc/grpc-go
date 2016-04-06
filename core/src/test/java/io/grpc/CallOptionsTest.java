@@ -34,7 +34,6 @@ package io.grpc;
 import static com.google.common.truth.Truth.assertAbout;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
-import static io.grpc.DeadlineTest.extractRemainingTime;
 import static io.grpc.testing.DeadlineSubject.deadline;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -56,7 +55,8 @@ import java.util.concurrent.Executor;
 @RunWith(JUnit4.class)
 public class CallOptionsTest {
   private String sampleAuthority = "authority";
-  private Deadline sampleDeadline = Deadline.after(1, NANOSECONDS);
+  private Deadline.Ticker ticker = new DeadlineTest.FakeTicker();
+  private Deadline sampleDeadline = Deadline.after(1, NANOSECONDS, ticker);
   private Key<String> sampleKey = Attributes.Key.of("sample");
   private Attributes sampleAffinity = Attributes.newBuilder().set(sampleKey, "blah").build();
   private CallOptions allSet = CallOptions.DEFAULT
@@ -146,8 +146,7 @@ public class CallOptionsTest {
 
   @Test
   public void toStringMatches_withDeadline() {
-    assertAbout(deadline()).that(extractRemainingTime(allSet.toString()))
-        .isWithin(20, MILLISECONDS).of(allSet.getDeadline());
+    allSet.toString().contains("1 ns from now");
   }
 
   @Test

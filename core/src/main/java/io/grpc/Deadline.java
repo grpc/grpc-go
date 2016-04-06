@@ -31,6 +31,7 @@
 
 package io.grpc;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import java.util.concurrent.ScheduledExecutorService;
@@ -42,6 +43,7 @@ import java.util.concurrent.TimeUnit;
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/262")
 public final class Deadline implements Comparable<Deadline> {
+  private static final SystemTicker SYSTEM_TICKER = new SystemTicker();
 
   /**
    * Create a deadline that will expire at the specified offset from the current system clock.
@@ -50,14 +52,26 @@ public final class Deadline implements Comparable<Deadline> {
    * @return A new deadline.
    */
   public static Deadline after(long duration, TimeUnit units) {
-    Preconditions.checkNotNull(units);
-    return new Deadline(System.nanoTime(), units.toNanos(duration), true);
+    return after(duration, units, SYSTEM_TICKER);
   }
 
+  @VisibleForTesting
+  static Deadline after(long duration, TimeUnit units, Ticker ticker) {
+    Preconditions.checkNotNull(units);
+    return new Deadline(ticker, units.toNanos(duration), true);
+  }
+
+  private final Ticker ticker;
   private final long deadlineNanos;
   private volatile boolean expired;
 
-  private Deadline(long baseInstant, long offset, boolean baseInstantAlreadyExpired) {
+  private Deadline(Ticker ticker, long offset, boolean baseInstantAlreadyExpired) {
+    this(ticker, ticker.read(), offset, baseInstantAlreadyExpired);
+  }
+
+  private Deadline(Ticker ticker, long baseInstant, long offset,
+      boolean baseInstantAlreadyExpired) {
+    this.ticker = ticker;
     if (offset > 0 && Long.MAX_VALUE - offset < baseInstant) {
       deadlineNanos = Long.MAX_VALUE;
       expired = false;
@@ -76,7 +90,7 @@ public final class Deadline implements Comparable<Deadline> {
    */
   public boolean isExpired() {
     if (!expired) {
-      if (deadlineNanos <= System.nanoTime()) {
+      if (deadlineNanos <= ticker.read()) {
         expired = true;
       } else {
         return false;
@@ -108,7 +122,7 @@ public final class Deadline implements Comparable<Deadline> {
     if (offset == 0) {
       return this;
     }
-    return new Deadline(deadlineNanos, units.toNanos(offset), isExpired());
+    return new Deadline(ticker, deadlineNanos, units.toNanos(offset), isExpired());
   }
 
   /**
@@ -118,7 +132,7 @@ public final class Deadline implements Comparable<Deadline> {
    * long ago the deadline expired.
    */
   public long timeRemaining(TimeUnit unit) {
-    final long nowNanos = System.nanoTime();
+    final long nowNanos = ticker.read();
     if (!expired && deadlineNanos <= nowNanos) {
       expired = true;
     }
@@ -134,7 +148,7 @@ public final class Deadline implements Comparable<Deadline> {
   public ScheduledFuture<?> runOnExpiration(Runnable task, ScheduledExecutorService scheduler) {
     Preconditions.checkNotNull(task, "task");
     Preconditions.checkNotNull(scheduler, "scheduler");
-    return scheduler.schedule(task, deadlineNanos - System.nanoTime(), TimeUnit.NANOSECONDS);
+    return scheduler.schedule(task, deadlineNanos - ticker.read(), TimeUnit.NANOSECONDS);
   }
 
   @Override
@@ -151,5 +165,18 @@ public final class Deadline implements Comparable<Deadline> {
       return 1;
     }
     return 0;
+  }
+
+  /** Time source representing nanoseconds since fixed but arbitrary point in time. */
+  abstract static class Ticker {
+    /** Returns the number of nanoseconds since this source's epoch. */
+    public abstract long read();
+  }
+
+  private static class SystemTicker extends Ticker {
+    @Override
+    public long read() {
+      return System.nanoTime();
+    }
   }
 }

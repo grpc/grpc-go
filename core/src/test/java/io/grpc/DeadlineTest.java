@@ -33,74 +33,77 @@ package io.grpc;
 
 import static com.google.common.truth.Truth.assertAbout;
 import static io.grpc.testing.DeadlineSubject.deadline;
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.google.common.truth.Truth;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
+import java.util.Random;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Tests for {@link Context}.
  */
 @RunWith(JUnit4.class)
 public class DeadlineTest {
+  private FakeTicker ticker = new FakeTicker();
 
-  // Allowed inaccuracy when comparing the remaining time of a deadline.
-  private final long maxDelta = TimeUnit.MILLISECONDS.toNanos(20);
+  @Test
+  public void defaultTickerIsSystemTicker() {
+    Deadline d = Deadline.after(0, TimeUnit.SECONDS);
+    ticker.reset(System.nanoTime());
+    Deadline reference = Deadline.after(0, TimeUnit.SECONDS, ticker);
+    // Allow inaccuracy to account for system time advancing during test.
+    assertAbout(deadline()).that(d).isWithin(20, TimeUnit.MILLISECONDS).of(reference);
+  }
 
   @Test
   public void immediateDeadlineIsExpired() {
-    Deadline deadline = Deadline.after(0, TimeUnit.SECONDS);
+    Deadline deadline = Deadline.after(0, TimeUnit.SECONDS, ticker);
     assertTrue(deadline.isExpired());
   }
 
   @Test
   public void shortDeadlineEventuallyExpires() throws Exception {
-    Deadline d = Deadline.after(100, TimeUnit.MILLISECONDS);
+    Deadline d = Deadline.after(100, TimeUnit.MILLISECONDS, ticker);
     assertTrue(d.timeRemaining(TimeUnit.NANOSECONDS) > 0);
     assertFalse(d.isExpired());
-    Thread.sleep(101);
+    ticker.increment(101, TimeUnit.MILLISECONDS);
 
     assertTrue(d.isExpired());
-    assertFalse(d.timeRemaining(TimeUnit.NANOSECONDS) > 0);
-    assertAbout(deadline()).that(d).isWithin(maxDelta, NANOSECONDS).of(Deadline.after(0, SECONDS));
+    assertEquals(-1, d.timeRemaining(TimeUnit.MILLISECONDS));
   }
 
   @Test
   public void deadlineMatchesLongValue() {
-    long minutes = Deadline.after(10, TimeUnit.MINUTES).timeRemaining(TimeUnit.MINUTES);
-
-    assertTrue(minutes + " != " + 10, Math.abs(minutes - 10) <= 1);
+    assertEquals(10, Deadline.after(10, TimeUnit.MINUTES, ticker).timeRemaining(TimeUnit.MINUTES));
   }
 
   @Test
   public void pastDeadlineIsExpired() {
-    Deadline d = Deadline.after(-1, TimeUnit.SECONDS);
+    Deadline d = Deadline.after(-1, TimeUnit.SECONDS, ticker);
     assertTrue(d.isExpired());
-
-    assertAbout(deadline()).that(d).isWithin(maxDelta, NANOSECONDS).of(Deadline.after(-1, SECONDS));
+    assertEquals(-1000, d.timeRemaining(TimeUnit.MILLISECONDS));
   }
 
   @Test
   public void deadlineDoesNotOverflowOrUnderflow() {
-    Deadline after = Deadline.after(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+    Deadline after = Deadline.after(Long.MAX_VALUE, TimeUnit.NANOSECONDS, ticker);
     assertFalse(after.isExpired());
 
-    Deadline before = Deadline.after(-Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+    Deadline before = Deadline.after(-Long.MAX_VALUE, TimeUnit.NANOSECONDS, ticker);
     assertTrue(before.isExpired());
 
     assertTrue(before.isBefore(after));
@@ -108,108 +111,122 @@ public class DeadlineTest {
 
   @Test
   public void beforeExpiredDeadlineIsExpired() {
-    Deadline base = Deadline.after(0, TimeUnit.SECONDS);
+    Deadline base = Deadline.after(0, TimeUnit.SECONDS, ticker);
     assertTrue(base.isExpired());
     assertTrue(base.offset(-1, TimeUnit.SECONDS).isExpired());
   }
 
   @Test
   public void afterExpiredDeadlineIsNotExpired() {
-    Deadline base = Deadline.after(0, TimeUnit.SECONDS);
+    Deadline base = Deadline.after(0, TimeUnit.SECONDS, ticker);
     assertTrue(base.isExpired());
     assertFalse(base.offset(100, TimeUnit.SECONDS).isExpired());
   }
 
   @Test
   public void zeroOffsetIsSameDeadline() {
-    Deadline base = Deadline.after(0, TimeUnit.SECONDS);
+    Deadline base = Deadline.after(0, TimeUnit.SECONDS, ticker);
     assertSame(base, base.offset(0, TimeUnit.SECONDS));
   }
 
   @Test
   public void runOnEventualExpirationIsExecuted() throws Exception {
-    Deadline base = Deadline.after(50, TimeUnit.MILLISECONDS);
-    final CountDownLatch latch = new CountDownLatch(1);
+    Deadline base = Deadline.after(50, TimeUnit.MICROSECONDS, ticker);
+    ScheduledExecutorService mockScheduler = mock(ScheduledExecutorService.class);
+    final AtomicBoolean executed = new AtomicBoolean();
     base.runOnExpiration(
         new Runnable() {
           @Override
           public void run() {
-            latch.countDown();
+            executed.set(true);
           }
-        }, Executors.newSingleThreadScheduledExecutor());
-    if (!latch.await(70, TimeUnit.MILLISECONDS)) {
-      fail("Deadline listener did not execute in time");
-    }
+        }, mockScheduler);
+    assertFalse(executed.get());
+    ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+    verify(mockScheduler).schedule(runnableCaptor.capture(), eq(50000L), eq(TimeUnit.NANOSECONDS));
+    runnableCaptor.getValue().run();
+    assertTrue(executed.get());
   }
 
   @Test
-  public void runOnAlreadyExpiredIsExecuted() throws Exception {
-    Deadline base = Deadline.after(0, TimeUnit.MILLISECONDS);
-    final CountDownLatch latch = new CountDownLatch(1);
+  public void runOnAlreadyExpiredIsExecutedOnExecutor() throws Exception {
+    Deadline base = Deadline.after(0, TimeUnit.MICROSECONDS, ticker);
+    ScheduledExecutorService mockScheduler = mock(ScheduledExecutorService.class);
+    final AtomicBoolean executed = new AtomicBoolean();
     base.runOnExpiration(
         new Runnable() {
           @Override
           public void run() {
-            latch.countDown();
+            executed.set(true);
           }
-        }, Executors.newSingleThreadScheduledExecutor());
-    if (!latch.await(10, TimeUnit.MILLISECONDS)) {
-      fail("Deadline listener did not execute in time");
-    }
+        }, mockScheduler);
+    assertFalse(executed.get());
+    ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+    verify(mockScheduler).schedule(runnableCaptor.capture(), eq(0L), eq(TimeUnit.NANOSECONDS));
+    runnableCaptor.getValue().run();
+    assertTrue(executed.get());
   }
 
   @Test
   public void toString_exact() {
-    Deadline d = Deadline.after(0, TimeUnit.MILLISECONDS);
-
-    assertAbout(deadline()).that(extractRemainingTime(d.toString()))
-        .isWithin(maxDelta, NANOSECONDS).of(d);
+    Deadline d = Deadline.after(0, TimeUnit.MILLISECONDS, ticker);
+    assertEquals("0 ns from now", d.toString());
   }
 
   @Test
   public void toString_after() {
-    Deadline d = Deadline.after(-1, TimeUnit.HOURS);
-
-    assertAbout(deadline()).that(extractRemainingTime(d.toString()))
-        .isWithin(maxDelta, NANOSECONDS).of(d);
+    Deadline d = Deadline.after(-1, TimeUnit.MINUTES, ticker);
+    assertEquals("-60000000000 ns from now", d.toString());
   }
 
   @Test
   public void compareTo_greater() {
-    Deadline d1 = Deadline.after(10, TimeUnit.SECONDS);
-    Deadline d2 = Deadline.after(10, TimeUnit.SECONDS);
-    // Assume that two calls take more than 1 ns.
+    Deadline d1 = Deadline.after(10, TimeUnit.SECONDS, ticker);
+    ticker.increment(1, TimeUnit.NANOSECONDS);
+    Deadline d2 = Deadline.after(10, TimeUnit.SECONDS, ticker);
     Truth.assertThat(d2).isGreaterThan(d1);
   }
 
   @Test
   public void compareTo_less() {
-    Deadline d1 = Deadline.after(10, TimeUnit.SECONDS);
-    Deadline d2 = Deadline.after(10, TimeUnit.SECONDS);
-    // Assume that two calls take more than 1 ns.
+    Deadline d1 = Deadline.after(10, TimeUnit.SECONDS, ticker);
+    ticker.increment(1, TimeUnit.NANOSECONDS);
+    Deadline d2 = Deadline.after(10, TimeUnit.SECONDS, ticker);
     Truth.assertThat(d1).isLessThan(d2);
   }
 
   @Test
   public void compareTo_same() {
-    Deadline d1 = Deadline.after(10, TimeUnit.SECONDS);
-    Deadline d2 = d1.offset(0, TimeUnit.SECONDS);
+    Deadline d1 = Deadline.after(10, TimeUnit.SECONDS, ticker);
+    Deadline d2 = Deadline.after(10, TimeUnit.SECONDS, ticker);
     Truth.assertThat(d1).isEquivalentAccordingToCompareTo(d2);
   }
 
   @Test
   public void toString_before() {
-    Deadline d = Deadline.after(10, TimeUnit.SECONDS);
-
-    assertAbout(deadline()).that(extractRemainingTime(d.toString()))
-        .isWithin(maxDelta, NANOSECONDS).of(d);
+    Deadline d = Deadline.after(12, TimeUnit.MICROSECONDS, ticker);
+    assertEquals("12000 ns from now", d.toString());
   }
 
-  static Deadline extractRemainingTime(String deadlineStr) {
-    final Pattern p = Pattern.compile(".*?(-?\\d+) ns from now.*");
-    Matcher m = p.matcher(deadlineStr);
-    assertTrue(deadlineStr, m.matches());
-    assertEquals(deadlineStr, 1, m.groupCount());
-    return Deadline.after(Long.valueOf(m.group(1)), NANOSECONDS);
+  static class FakeTicker extends Deadline.Ticker {
+    private static final Random random = new Random();
+
+    private long time = random.nextLong();
+
+    @Override
+    public long read() {
+      return time;
+    }
+
+    public void reset(long time) {
+      this.time = time;
+    }
+
+    public void increment(long period, TimeUnit unit) {
+      if (period < 0) {
+        throw new IllegalArgumentException();
+      }
+      this.time += unit.toNanos(period);
+    }
   }
 }
