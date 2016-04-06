@@ -120,6 +120,12 @@ public class LoadBalancerGrpc {
     }
   }
 
+  public static abstract class AbstractLoadBalancer implements LoadBalancer, io.grpc.stub.BindableService {
+    @Override public io.grpc.ServerServiceDefinition bindService() {
+      return LoadBalancerGrpc.bindService(this);
+    }
+  }
+
   private static final int METHODID_BALANCE_LOAD = 0;
 
   private static class MethodHandlers<Req, Resp> implements

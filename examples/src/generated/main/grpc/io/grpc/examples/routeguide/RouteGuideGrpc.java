@@ -205,6 +205,12 @@ public class RouteGuideGrpc {
     }
   }
 
+  public static abstract class AbstractRouteGuide implements RouteGuide, io.grpc.stub.BindableService {
+    @Override public io.grpc.ServerServiceDefinition bindService() {
+      return RouteGuideGrpc.bindService(this);
+    }
+  }
+
   private static final int METHODID_GET_FEATURE = 0;
   private static final int METHODID_LIST_FEATURES = 1;
   private static final int METHODID_RECORD_ROUTE = 2;

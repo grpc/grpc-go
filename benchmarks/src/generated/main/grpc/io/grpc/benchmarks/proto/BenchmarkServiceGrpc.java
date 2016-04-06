@@ -157,6 +157,12 @@ public class BenchmarkServiceGrpc {
     }
   }
 
+  public static abstract class AbstractBenchmarkService implements BenchmarkService, io.grpc.stub.BindableService {
+    @Override public io.grpc.ServerServiceDefinition bindService() {
+      return BenchmarkServiceGrpc.bindService(this);
+    }
+  }
+
   private static final int METHODID_UNARY_CALL = 0;
   private static final int METHODID_STREAMING_CALL = 1;
 

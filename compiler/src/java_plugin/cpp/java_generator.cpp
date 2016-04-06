@@ -642,6 +642,27 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
   p->Print("}\n");
 }
 
+static void PrintAbstractServiceClass(const ServiceDescriptor* service,
+                                   map<string, string>* vars,
+                                   Printer* p) {
+  p->Print(
+      *vars,
+      "public static abstract class Abstract$service_name$"
+      " implements $service_name$, $BindableService$ {\n");
+  p->Indent();
+  p->Print(*vars,
+           "@Override public $ServerServiceDefinition$ bindService() {\n"
+           );
+  p->Indent();
+  p->Print(*vars,
+           "return $service_class_name$.bindService(this);\n"
+           );
+  p->Outdent();
+  p->Print("}\n");
+  p->Outdent();
+  p->Print("}\n\n");
+}
+
 static void PrintService(const ServiceDescriptor* service,
                          map<string, string>* vars,
                          Printer* p,
@@ -704,6 +725,7 @@ static void PrintService(const ServiceDescriptor* service,
   PrintStub(service, vars, p, ASYNC_CLIENT_IMPL, generate_nano);
   PrintStub(service, vars, p, BLOCKING_CLIENT_IMPL, generate_nano);
   PrintStub(service, vars, p, FUTURE_CLIENT_IMPL, generate_nano);
+  PrintAbstractServiceClass(service, vars, p);
   PrintMethodHandlerClass(service, vars, p, generate_nano);
   PrintBindServiceMethod(service, vars, p, generate_nano);
   p->Outdent();
@@ -754,6 +776,7 @@ void GenerateService(const ServiceDescriptor* service,
   vars["MethodType"] = "io.grpc.MethodDescriptor.MethodType";
   vars["ServerMethodDefinition"] =
       "io.grpc.ServerMethodDefinition";
+  vars["BindableService"] = "io.grpc.stub.BindableService";
   vars["ServerServiceDefinition"] =
       "io.grpc.ServerServiceDefinition";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";

@@ -261,6 +261,12 @@ public class TestServiceGrpc {
     }
   }
 
+  public static abstract class AbstractTestService implements TestService, io.grpc.stub.BindableService {
+    @Override public io.grpc.ServerServiceDefinition bindService() {
+      return TestServiceGrpc.bindService(this);
+    }
+  }
+
   private static final int METHODID_EMPTY_CALL = 0;
   private static final int METHODID_UNARY_CALL = 1;
   private static final int METHODID_STREAMING_OUTPUT_CALL = 2;

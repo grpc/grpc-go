@@ -175,6 +175,12 @@ public class ReconnectServiceGrpc {
     }
   }
 
+  public static abstract class AbstractReconnectService implements ReconnectService, io.grpc.stub.BindableService {
+    @Override public io.grpc.ServerServiceDefinition bindService() {
+      return ReconnectServiceGrpc.bindService(this);
+    }
+  }
+
   private static final int METHODID_START = 0;
   private static final int METHODID_STOP = 1;
 

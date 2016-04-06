@@ -213,6 +213,12 @@ public class WorkerServiceGrpc {
     }
   }
 
+  public static abstract class AbstractWorkerService implements WorkerService, io.grpc.stub.BindableService {
+    @Override public io.grpc.ServerServiceDefinition bindService() {
+      return WorkerServiceGrpc.bindService(this);
+    }
+  }
+
   private static final int METHODID_CORE_COUNT = 0;
   private static final int METHODID_QUIT_WORKER = 1;
   private static final int METHODID_RUN_SERVER = 2;

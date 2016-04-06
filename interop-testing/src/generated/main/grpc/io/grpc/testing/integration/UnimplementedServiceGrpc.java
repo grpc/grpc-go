@@ -138,6 +138,12 @@ public class UnimplementedServiceGrpc {
     }
   }
 
+  public static abstract class AbstractUnimplementedService implements UnimplementedService, io.grpc.stub.BindableService {
+    @Override public io.grpc.ServerServiceDefinition bindService() {
+      return UnimplementedServiceGrpc.bindService(this);
+    }
+  }
+
   private static final int METHODID_UNIMPLEMENTED_CALL = 0;
 
   private static class MethodHandlers<Req, Resp> implements

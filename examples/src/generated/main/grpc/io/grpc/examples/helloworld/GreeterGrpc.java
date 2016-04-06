@@ -138,6 +138,12 @@ public class GreeterGrpc {
     }
   }
 
+  public static abstract class AbstractGreeter implements Greeter, io.grpc.stub.BindableService {
+    @Override public io.grpc.ServerServiceDefinition bindService() {
+      return GreeterGrpc.bindService(this);
+    }
+  }
+
   private static final int METHODID_SAY_HELLO = 0;
 
   private static class MethodHandlers<Req, Resp> implements
