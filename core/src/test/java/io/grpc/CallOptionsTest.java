@@ -152,13 +152,17 @@ public class CallOptionsTest {
   @Test
   @SuppressWarnings("deprecation")
   public void withDeadlineNanoTime() {
-    CallOptions opts = CallOptions.DEFAULT.withDeadlineNanoTime(System.nanoTime());
+    // Create Deadline near calling System.nanoTime to reduce clock differences
+    Deadline reference = Deadline.after(-1, NANOSECONDS);
+    long rawDeadline = System.nanoTime() - 1;
+    CallOptions opts = CallOptions.DEFAULT.withDeadlineNanoTime(rawDeadline);
     assertThat(opts.getDeadlineNanoTime()).isNotNull();
+    // This is not technically correct, since nanoTime is permitted to overflow, but the chances of
+    // that impacting this test are very remote.
     assertThat(opts.getDeadlineNanoTime()).isAtMost(System.nanoTime());
     assertThat(opts.getDeadline().isExpired()).isTrue();
 
-    assertAbout(deadline()).that(opts.getDeadline())
-        .isWithin(20, MILLISECONDS).of(Deadline.after(0, SECONDS));
+    assertAbout(deadline()).that(opts.getDeadline()).isWithin(50, MILLISECONDS).of(reference);
   }
 
   // TODO(carl-mastrangelo): consider making a CallOptionsSubject for Truth.
