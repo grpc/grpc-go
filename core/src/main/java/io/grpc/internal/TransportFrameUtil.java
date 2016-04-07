@@ -37,7 +37,6 @@ import com.google.common.io.BaseEncoding;
 
 import io.grpc.Metadata;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.logging.Logger;
 
@@ -56,27 +55,30 @@ public final class TransportFrameUtil {
 
   /**
    * Transform the given headers to a format where only spec-compliant ASCII characters are allowed.
-   * Binary header values are encoded by Base64 in the result.
+   * Binary header values are encoded by Base64 in the result.  It is safe to modify the returned
+   * array, but not to modify any of the underlying byte arrays.
    *
    * @return the interleaved keys and values.
    */
   public static byte[][] toHttp2Headers(Metadata headers) {
     byte[][] serializedHeaders = headers.serialize();
-    ArrayList<byte[]> result = new ArrayList<byte[]>(serializedHeaders.length);
+    int k = 0;
     for (int i = 0; i < serializedHeaders.length; i += 2) {
       byte[] key = serializedHeaders[i];
       byte[] value = serializedHeaders[i + 1];
       if (endsWith(key, binaryHeaderSuffixBytes)) {
         // Binary header.
-        result.add(key);
-        result.add(BaseEncoding.base64().encode(value).getBytes(US_ASCII));
+        serializedHeaders[k] = key;
+        serializedHeaders[k + 1] = BaseEncoding.base64().encode(value).getBytes(US_ASCII);
+        k += 2;
       } else {
         // Non-binary header.
         // Filter out headers that contain non-spec-compliant ASCII characters.
         // TODO(zhangkun83): only do such check in development mode since it's expensive
         if (isSpecCompliantAscii(value)) {
-          result.add(key);
-          result.add(value);
+          serializedHeaders[k] = key;
+          serializedHeaders[k + 1] = value;
+          k += 2;
         } else {
           String keyString = new String(key, US_ASCII);
           logger.warning("Metadata key=" + keyString + ", value=" + Arrays.toString(value)
@@ -84,31 +86,35 @@ public final class TransportFrameUtil {
         }
       }
     }
-    return result.toArray(new byte[result.size()][]);
+    // Fast path, everything worked out fine.
+    if (k == serializedHeaders.length) {
+      return serializedHeaders;
+    }
+    return Arrays.copyOfRange(serializedHeaders, 0, k);
   }
 
   /**
    * Transform HTTP/2-compliant headers to the raw serialized format which can be deserialized by
-   * metadata marshallers. It decodes the Base64-encoded binary headers.
+   * metadata marshallers. It decodes the Base64-encoded binary headers.  This function modifies
+   * the headers in place.  By modifying the input array.
    *
    * @param http2Headers the interleaved keys and values of HTTP/2-compliant headers
    * @return the interleaved keys and values in the raw serialized format
    */
   public static byte[][] toRawSerializedHeaders(byte[][] http2Headers) {
-    byte[][] result = new byte[http2Headers.length][];
     for (int i = 0; i < http2Headers.length; i += 2) {
       byte[] key = http2Headers[i];
       byte[] value = http2Headers[i + 1];
-      result[i] = key;
+      http2Headers[i] = key;
       if (endsWith(key, binaryHeaderSuffixBytes)) {
         // Binary header
-        result[i + 1] = BaseEncoding.base64().decode(new String(value, US_ASCII));
+        http2Headers[i + 1] = BaseEncoding.base64().decode(new String(value, US_ASCII));
       } else {
         // Non-binary header
-        result[i + 1] = value;
+        // Nothing to do, the value is already in the right place.
       }
     }
-    return result;
+    return http2Headers;
   }
 
   /**

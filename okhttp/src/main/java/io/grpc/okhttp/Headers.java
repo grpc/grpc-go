@@ -68,7 +68,8 @@ public class Headers {
     Preconditions.checkNotNull(defaultPath, "defaultPath");
     Preconditions.checkNotNull(authority, "authority");
 
-    List<Header> okhttpHeaders = new ArrayList<Header>(6);
+    // 7 is the number of explicit add calls below.
+    List<Header> okhttpHeaders = new ArrayList<Header>(7 + headers.headerCount());
 
     // Set GRPC-specific headers.
     okhttpHeaders.add(SCHEME_HEADER);

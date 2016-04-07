@@ -170,6 +170,14 @@ public final class Metadata {
   }
 
   /**
+   * Returns the total number of key-value headers in this metadata, including duplicates.
+   */
+  @Internal
+  public int headerCount() {
+    return storeCount;
+  }
+
+  /**
    * Returns true if a value is defined for the given key.
    */
   public boolean containsKey(Key<?> key) {
@@ -286,7 +294,8 @@ public final class Metadata {
    * of {@link Key}. If the name ends with {@code "-bin"}, the value can be raw binary.  Otherwise,
    * the value must contain only characters listed in the class comments of {@link AsciiMarshaller}
    *
-   * <p>The returned byte arrays <em>must not</em> be modified.
+   * <p>The returned individual byte arrays <em>must not</em> be modified.  However, the top level
+   * array may be modified.
    *
    * <p>This method is intended for transport use only.
    */

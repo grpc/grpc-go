@@ -155,7 +155,8 @@ class Utils {
 
   private static Http2Headers convertMetadata(Metadata headers) {
     Preconditions.checkNotNull(headers, "headers");
-    Http2Headers http2Headers = new DefaultHttp2Headers();
+    boolean validate = true;
+    Http2Headers http2Headers = new DefaultHttp2Headers(validate, headers.headerCount());
     byte[][] serializedHeaders = TransportFrameUtil.toHttp2Headers(headers);
     for (int i = 0; i < serializedHeaders.length; i += 2) {
       AsciiString name = new AsciiString(serializedHeaders[i], false);
