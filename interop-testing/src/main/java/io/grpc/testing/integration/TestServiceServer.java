@@ -31,6 +31,7 @@
 
 package io.grpc.testing.integration;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.Server;
@@ -83,7 +84,8 @@ public class TestServiceServer {
   private ScheduledExecutorService executor;
   private Server server;
 
-  private void parseArgs(String[] args) {
+  @VisibleForTesting
+  void parseArgs(String[] args) {
     boolean usage = false;
     for (String arg : args) {
       if (!arg.startsWith("--")) {
@@ -131,7 +133,8 @@ public class TestServiceServer {
     }
   }
 
-  private void start() throws Exception {
+  @VisibleForTesting
+  void start() throws Exception {
     executor = Executors.newSingleThreadScheduledExecutor();
     SslContext sslContext = null;
     if (useTls) {
@@ -146,7 +149,8 @@ public class TestServiceServer {
         .build().start();
   }
 
-  private void stop() throws Exception {
+  @VisibleForTesting
+  void stop() throws Exception {
     server.shutdownNow();
     if (!server.awaitTermination(5, TimeUnit.SECONDS)) {
       System.err.println("Timed out waiting for server shutdown");

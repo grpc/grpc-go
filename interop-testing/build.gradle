@@ -69,10 +69,19 @@ task reconnect_test_client(type: CreateStartScripts) {
     classpath = jar.outputs.files + configurations.runtime + configurations.tcnative
 }
 
+task stresstest_client(type: CreateStartScripts) {
+    mainClassName = "io.grpc.testing.integration.StressTestClient"
+    applicationName = "stresstest-client"
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + configurations.runtime + configurations.tcnative
+    defaultJvmOpts = ["-verbose:gc"]
+}
+
 applicationDistribution.into("bin") {
     from(test_client)
     from(test_server)
     from(reconnect_test_client)
+    from(stresstest_client)
     fileMode = 0755
 }
 
