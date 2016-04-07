@@ -76,19 +76,21 @@ public final class Metadata {
    * helpful in situations where more processing to bytes is needed on application side, avoids
    * double encoding/decoding.</p>
    *
-   * <p>Both #toBytes and #parseBytes methods return copy of the byte array</p>
+   * <p>Both {@link BinaryMarshaller#toBytes} and {@link BinaryMarshaller#parseBytes} methods do
+   * not return a copy of the byte array.  Do _not_ modify the byte arrays of either the arguments
+   * or return values.</p>
    */
   public static final BinaryMarshaller<byte[]> BINARY_BYTE_MARSHALLER =
       new BinaryMarshaller<byte[]>() {
 
     @Override
     public byte[] toBytes(byte[] value) {
-      return value.clone();
+      return value;
     }
 
     @Override
     public byte[] parseBytes(byte[] serialized) {
-      return serialized.clone();
+      return serialized;
     }
   };
 
@@ -134,15 +136,20 @@ public final class Metadata {
   private final Map<String, List<MetadataEntry>> store =
       new LinkedHashMap<String, List<MetadataEntry>>();
 
+  /** The number of headers stored by this metadata.  */
+  private int storeCount;
+
   /**
    * Constructor called by the transport layer when it receives binary metadata.
    */
   // TODO(louiscryan): Convert to use ByteString so we can cache transformations
   @Internal
   public Metadata(byte[]... binaryValues) {
-    for (int i = 0; i < binaryValues.length; i++) {
+    checkArgument(binaryValues.length % 2 == 0,
+        "Odd number of key-value pairs: %s", binaryValues.length);
+    for (int i = 0; i < binaryValues.length; i += 2) {
       String name = new String(binaryValues[i], US_ASCII);
-      storeAdd(name, new MetadataEntry(name.endsWith(BINARY_HEADER_SUFFIX), binaryValues[++i]));
+      storeAdd(name, new MetadataEntry(name.endsWith(BINARY_HEADER_SUFFIX), binaryValues[i + 1]));
     }
   }
 
@@ -154,9 +161,11 @@ public final class Metadata {
   private void storeAdd(String name, MetadataEntry value) {
     List<MetadataEntry> values = store.get(name);
     if (values == null) {
-      values = new ArrayList<MetadataEntry>();
+      // We expect there to be usually unique header values, so prefer smaller arrays.
+      values = new ArrayList<MetadataEntry>(1);
       store.put(name, values);
     }
+    storeCount++;
     values.add(value);
   }
 
@@ -186,16 +195,18 @@ public final class Metadata {
    * may not be accurate if Metadata is mutated.
    */
   public <T> Iterable<T> getAll(final Key<T> key) {
-
     if (containsKey(key)) {
-      return Iterables.transform(
+      /* This is unmodifiable currently, but could be made to support remove() in the future.  If
+       * removal support is added, the {@link #storeCount} variable needs to be updated
+       * appropriately. */
+      return Iterables.unmodifiableIterable(Iterables.transform(
           store.get(key.name()),
           new Function<MetadataEntry, T>() {
             @Override
             public T apply(MetadataEntry entry) {
               return entry.getParsed(key);
             }
-          });
+          }));
     }
     return null;
   }
@@ -222,7 +233,7 @@ public final class Metadata {
   }
 
   /**
-   * Removes the first occurence of value for key.
+   * Removes the first occurrence of {@code value} for {@code key}.
    *
    * @param key key for value
    * @param value value
@@ -242,6 +253,7 @@ public final class Metadata {
         continue;
       }
       values.remove(i);
+      storeCount--;
       return true;
     }
     return false;
@@ -255,6 +267,7 @@ public final class Metadata {
     if (values == null) {
       return null;
     }
+    storeCount -= values.size();
     return Iterables.transform(values, new Function<MetadataEntry, T>() {
       @Override
       public T apply(MetadataEntry metadataEntry) {
@@ -279,22 +292,17 @@ public final class Metadata {
    */
   @Internal
   public byte[][] serialize() {
-    // One *2 for keys+values, one *2 to prevent resizing if a single key has multiple values
-    List<byte[]> serialized = new ArrayList<byte[]>(store.size() * 2 * 2);
-    for (Map.Entry<String, List<MetadataEntry>> keyEntry : store.entrySet()) {
-      for (int i = 0; i < keyEntry.getValue().size(); i++) {
-        MetadataEntry entry = keyEntry.getValue().get(i);
-        byte[] asciiName;
-        if (entry.key != null) {
-          asciiName = entry.key.asciiName();
-        } else {
-          asciiName = keyEntry.getKey().getBytes(US_ASCII);
-        }
-        serialized.add(asciiName);
-        serialized.add(entry.getSerialized());
+    // 2x for keys + values
+    byte[][] serialized = new byte[storeCount * 2][];
+    int i = 0;
+    for (Map.Entry<String, List<MetadataEntry>> storeEntry : store.entrySet()) {
+      for (MetadataEntry metadataEntry : storeEntry.getValue()) {
+        serialized[i++] = metadataEntry.key != null
+            ? metadataEntry.key.asciiName() : storeEntry.getKey().getBytes(US_ASCII);
+        serialized[i++] = metadataEntry.getSerialized();
       }
     }
-    return serialized.toArray(new byte[serialized.size()][]);
+    return serialized;
   }
 
   /**
@@ -398,7 +406,7 @@ public final class Metadata {
    *   <li>digits: {@code 0-9}</li>
    *   <li>uppercase letters: {@code A-Z} (normalized to lower)</li>
    *   <li>lowercase letters: {@code a-z}</li>
-   *   <li>special characters: {@code -_}</li>
+   *   <li>special characters: {@code -_.}</li>
    * </ul>
    *
    * <p>This is a a strict subset of the HTTP field-name rules.  Applications may not send or
