@@ -74,7 +74,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	}, nil
 }
 
-func (s *testServer) StreamingCall(stream testpb.TestService_StreamingCallServer) error {
+func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -101,7 +101,7 @@ func StartServer(addr string) (string, func()) {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
 	s := grpc.NewServer(grpc.MaxConcurrentStreams(math.MaxUint32))
-	testpb.RegisterTestServiceServer(s, &testServer{})
+	testpb.RegisterBenchmarkServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	return lis.Addr().String(), func() {
 		s.Stop()
@@ -109,7 +109,7 @@ func StartServer(addr string) (string, func()) {
 }
 
 // DoUnaryCall performs an unary RPC with given stub and request and response sizes.
-func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
+func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -117,12 +117,12 @@ func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
-		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		grpclog.Fatal("/BenchmarkService/UnaryCall RPC failed: ", err)
 	}
 }
 
 // DoStreamingRoundTrip performs a round trip for a single streaming rpc.
-func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService_StreamingCallClient, reqSize, respSize int) {
+func DoStreamingRoundTrip(tc testpb.BenchmarkServiceClient, stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,

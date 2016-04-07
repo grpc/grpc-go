@@ -28,18 +28,18 @@ var (
 		   1 : streaming call.`)
 )
 
-func unaryCaller(client testpb.TestServiceClient) {
+func unaryCaller(client testpb.BenchmarkServiceClient) {
 	benchmark.DoUnaryCall(client, 1, 1)
 }
 
-func streamCaller(client testpb.TestServiceClient, stream testpb.TestService_StreamingCallClient) {
+func streamCaller(client testpb.BenchmarkServiceClient, stream testpb.BenchmarkService_StreamingCallClient) {
 	benchmark.DoStreamingRoundTrip(client, stream, 1, 1)
 }
 
-func buildConnection() (s *stats.Stats, conn *grpc.ClientConn, tc testpb.TestServiceClient) {
+func buildConnection() (s *stats.Stats, conn *grpc.ClientConn, tc testpb.BenchmarkServiceClient) {
 	s = stats.NewStats(256)
 	conn = benchmark.NewClientConn(*server)
-	tc = testpb.NewTestServiceClient(conn)
+	tc = testpb.NewBenchmarkServiceClient(conn)
 	return s, conn, tc
 }
 

@@ -18,7 +18,7 @@ func runUnary(b *testing.B, maxConcurrentCalls int) {
 	target, stopper := StartServer("localhost:0")
 	defer stopper()
 	conn := NewClientConn(target)
-	tc := testpb.NewTestServiceClient(conn)
+	tc := testpb.NewBenchmarkServiceClient(conn)
 
 	// Warm up connection.
 	for i := 0; i < 10; i++ {
@@ -61,7 +61,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	target, stopper := StartServer("localhost:0")
 	defer stopper()
 	conn := NewClientConn(target)
-	tc := testpb.NewTestServiceClient(conn)
+	tc := testpb.NewBenchmarkServiceClient(conn)
 
 	// Warm up connection.
 	stream, err := tc.StreamingCall(context.Background())
@@ -106,11 +106,11 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	wg.Wait()
 	conn.Close()
 }
-func unaryCaller(client testpb.TestServiceClient) {
+func unaryCaller(client testpb.BenchmarkServiceClient) {
 	DoUnaryCall(client, 1, 1)
 }
 
-func streamCaller(client testpb.TestServiceClient, stream testpb.TestService_StreamingCallClient) {
+func streamCaller(client testpb.BenchmarkServiceClient, stream testpb.BenchmarkService_StreamingCallClient) {
 	DoStreamingRoundTrip(client, stream, 1, 1)
 }
 
