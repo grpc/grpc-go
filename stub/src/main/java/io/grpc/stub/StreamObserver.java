@@ -39,8 +39,12 @@ package io.grpc.stub;
  * to the application. For incoming messages, the application implements the {@code StreamObserver}
  * and passes it to the GRPC library for receiving.
  *
- * <p>Implementations are expected to be thread-compatible. Separate {@code StreamObserver}s do
- * not need to be sychronized together; incoming and outgoing directions are independent.
+ * <p>Implementations are expected to be
+ * <a href="http://www.ibm.com/developerworks/library/j-jtp09263/">thread-compatible</a>.
+ * Separate {@code StreamObserver}s do
+ * not need to be synchronized together; incoming and outgoing directions are independent.
+ * Since individual {@code StreamObserver}s are not thread-safe, if multiple threads will be
+ * writing to a {@code StreamObserver} concurrently, the application must synchronize calls.
  */
 public interface StreamObserver<V>  {
   /**
