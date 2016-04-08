@@ -681,6 +681,10 @@ func testHealthCheckOnFailure(t *testing.T, e env) {
 func TestHealthCheckOff(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
+		// TODO(bradfitz): Temporarily skip this env due to #619.
+		if e.name == "handler-tls" {
+			continue
+		}
 		testHealthCheckOff(t, e)
 	}
 }
