@@ -54,14 +54,12 @@ protobuf {
     }
 }
 
-
 dependencies {
     compile 'com.android.support:appcompat-v7:22.1.1'
     compile 'com.google.android.gms:play-services-base:7.3.0'
     compile 'com.google.code.findbugs:jsr305:3.0.0'
     compile 'com.google.guava:guava:18.0'
     compile 'com.squareup.okhttp:okhttp:2.2.0'
-    testCompile 'junit:junit:4.12'
     // You need to build grpc-java to obtain these libraries below.
     compile 'io.grpc:grpc-protobuf-nano:0.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-okhttp:0.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
