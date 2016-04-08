@@ -74,10 +74,21 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
   /**
    * Adds a service implementation to the handler registry.
    *
+   * @param service ServerServiceDefinition object
    * @throws UnsupportedOperationException if this builder does not support dynamically adding
    *                                       services.
    */
   public abstract T addService(ServerServiceDefinition service);
+
+  /**
+   * Adds a service implementation to the handler registry.
+   *
+   * @param bindableService BindableService object
+   * @throws UnsupportedOperationException if this builder does not support dynamically adding
+   *     services.
+   */
+  @ExperimentalApi
+  public abstract T addService(BindableService bindableService);
 
   /**
    * Makes the server use TLS.

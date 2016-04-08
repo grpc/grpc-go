@@ -213,7 +213,7 @@ public class WorkerServiceGrpc {
     }
   }
 
-  public static abstract class AbstractWorkerService implements WorkerService, io.grpc.stub.BindableService {
+  public static abstract class AbstractWorkerService implements WorkerService, io.grpc.BindableService {
     @Override public io.grpc.ServerServiceDefinition bindService() {
       return WorkerServiceGrpc.bindService(this);
     }

@@ -55,8 +55,7 @@ public class CustomHeaderServer {
 
   private void start() throws IOException {
     server = ServerBuilder.forPort(port)
-        .addService(ServerInterceptors.intercept(
-            GreeterGrpc.bindService(new GreeterImpl()), new HeaderServerInterceptor()))
+        .addService(ServerInterceptors.intercept(new GreeterImpl(), new HeaderServerInterceptor()))
         .build()
         .start();
     logger.info("Server started, listening on " + port);
@@ -95,7 +94,7 @@ public class CustomHeaderServer {
     server.blockUntilShutdown();
   }
 
-  private class GreeterImpl implements GreeterGrpc.Greeter {
+  private class GreeterImpl extends GreeterGrpc.AbstractGreeter {
 
     @Override
     public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {

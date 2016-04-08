@@ -261,7 +261,7 @@ public class TestServiceGrpc {
     }
   }
 
-  public static abstract class AbstractTestService implements TestService, io.grpc.stub.BindableService {
+  public static abstract class AbstractTestService implements TestService, io.grpc.BindableService {
     @Override public io.grpc.ServerServiceDefinition bindService() {
       return TestServiceGrpc.bindService(this);
     }

@@ -50,7 +50,7 @@ public class HelloWorldServer {
 
   private void start() throws IOException {
     server = ServerBuilder.forPort(port)
-        .addService(GreeterGrpc.bindService(new GreeterImpl()))
+        .addService(new GreeterImpl())
         .build()
         .start();
     logger.info("Server started, listening on " + port);
@@ -89,7 +89,7 @@ public class HelloWorldServer {
     server.blockUntilShutdown();
   }
 
-  private class GreeterImpl implements GreeterGrpc.Greeter {
+  private class GreeterImpl extends GreeterGrpc.AbstractGreeter {
 
     @Override
     public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {

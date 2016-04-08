@@ -205,7 +205,7 @@ public class RouteGuideGrpc {
     }
   }
 
-  public static abstract class AbstractRouteGuide implements RouteGuide, io.grpc.stub.BindableService {
+  public static abstract class AbstractRouteGuide implements RouteGuide, io.grpc.BindableService {
     @Override public io.grpc.ServerServiceDefinition bindService() {
       return RouteGuideGrpc.bindService(this);
     }

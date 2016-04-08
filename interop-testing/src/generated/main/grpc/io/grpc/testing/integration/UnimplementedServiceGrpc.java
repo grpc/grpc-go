@@ -138,7 +138,7 @@ public class UnimplementedServiceGrpc {
     }
   }
 
-  public static abstract class AbstractUnimplementedService implements UnimplementedService, io.grpc.stub.BindableService {
+  public static abstract class AbstractUnimplementedService implements UnimplementedService, io.grpc.BindableService {
     @Override public io.grpc.ServerServiceDefinition bindService() {
       return UnimplementedServiceGrpc.bindService(this);
     }

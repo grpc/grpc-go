@@ -776,7 +776,7 @@ void GenerateService(const ServiceDescriptor* service,
   vars["MethodType"] = "io.grpc.MethodDescriptor.MethodType";
   vars["ServerMethodDefinition"] =
       "io.grpc.ServerMethodDefinition";
-  vars["BindableService"] = "io.grpc.stub.BindableService";
+  vars["BindableService"] = "io.grpc.BindableService";
   vars["ServerServiceDefinition"] =
       "io.grpc.ServerServiceDefinition";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";

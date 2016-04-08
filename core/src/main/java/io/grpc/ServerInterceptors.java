@@ -61,6 +61,12 @@ public class ServerInterceptors {
     return interceptForward(serviceDef, Arrays.asList(interceptors));
   }
 
+  @ExperimentalApi
+  public static ServerServiceDefinition interceptForward(BindableService bindableService,
+      ServerInterceptor... interceptors) {
+    return interceptForward(bindableService.bindService(), Arrays.asList(interceptors));
+  }
+
   /**
    * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call
    * {@code interceptors} before calling the pre-existing {@code ServerCallHandler}. The first
@@ -90,6 +96,12 @@ public class ServerInterceptors {
   public static ServerServiceDefinition intercept(ServerServiceDefinition serviceDef,
                                                   ServerInterceptor... interceptors) {
     return intercept(serviceDef, Arrays.asList(interceptors));
+  }
+
+  @ExperimentalApi
+  public static ServerServiceDefinition intercept(BindableService bindableService,
+      ServerInterceptor... interceptors) {
+    return intercept(bindableService.bindService(), Arrays.asList(interceptors));
   }
 
   /**

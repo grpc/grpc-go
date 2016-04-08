@@ -76,7 +76,7 @@ public class RouteGuideServer {
   /** Create a RouteGuide server using serverBuilder as a base and features as data. */
   public RouteGuideServer(ServerBuilder<?> serverBuilder, int port, Collection<Feature> features) {
     this.port = port;
-    server = serverBuilder.addService(RouteGuideGrpc.bindService(new RouteGuideService(features)))
+    server = serverBuilder.addService(new RouteGuideService(features))
         .build();
   }
 
@@ -125,7 +125,7 @@ public class RouteGuideServer {
    *
    * <p> See route_guide.proto for details of the methods.
    */
-  private static class RouteGuideService implements RouteGuideGrpc.RouteGuide {
+  private static class RouteGuideService extends RouteGuideGrpc.AbstractRouteGuide {
     private final Collection<Feature> features;
     private final ConcurrentMap<Point, List<RouteNote>> routeNotes =
         new ConcurrentHashMap<Point, List<RouteNote>>();

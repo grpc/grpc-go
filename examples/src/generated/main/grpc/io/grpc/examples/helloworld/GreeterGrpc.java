@@ -138,7 +138,7 @@ public class GreeterGrpc {
     }
   }
 
-  public static abstract class AbstractGreeter implements Greeter, io.grpc.stub.BindableService {
+  public static abstract class AbstractGreeter implements Greeter, io.grpc.BindableService {
     @Override public io.grpc.ServerServiceDefinition bindService() {
       return GreeterGrpc.bindService(this);
     }

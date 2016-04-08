@@ -36,6 +36,7 @@ import static com.google.common.base.MoreObjects.firstNonNull;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 
+import io.grpc.BindableService;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
@@ -98,6 +99,8 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
    *
    * <p>This is supported only if the user didn't provide a handler registry, or the provided one is
    * a {@link MutableHandlerRegistry}. Otherwise it throws an UnsupportedOperationException.
+   *
+   * @param service ServerServiceDefinition object.
    */
   @Override
   public final T addService(ServerServiceDefinition service) {
@@ -106,6 +109,19 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
       return thisT();
     }
     throw new UnsupportedOperationException("Underlying HandlerRegistry is not mutable");
+  }
+
+  /**
+   * Adds a service implementation to the handler registry.
+   *
+   * <p>This is supported only if the user didn't provide a handler registry, or the provided one is
+   * a {@link MutableHandlerRegistry}. Otherwise it throws an UnsupportedOperationException.
+   *
+   * @param bindableService BindableService object.
+   */
+  @Override
+  public final T addService(BindableService bindableService) {
+    return addService(bindableService.bindService());
   }
 
   @Override

@@ -157,7 +157,7 @@ public class BenchmarkServiceGrpc {
     }
   }
 
-  public static abstract class AbstractBenchmarkService implements BenchmarkService, io.grpc.stub.BindableService {
+  public static abstract class AbstractBenchmarkService implements BenchmarkService, io.grpc.BindableService {
     @Override public io.grpc.ServerServiceDefinition bindService() {
       return BenchmarkServiceGrpc.bindService(this);
     }
