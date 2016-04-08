@@ -12,6 +12,8 @@ import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
@@ -99,6 +101,43 @@ public class TestServiceGrpc {
 
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> halfBidiCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver);
+  }
+
+  public static abstract class AbstractTestService implements TestService, io.grpc.BindableService {
+
+    @java.lang.Override
+    public void unaryCall(io.grpc.testing.integration.Test.SimpleRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.SimpleResponse> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_UNARY_CALL, responseObserver);
+    }
+
+    @java.lang.Override
+    public void streamingOutputCall(io.grpc.testing.integration.Test.StreamingOutputCallRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_STREAMING_OUTPUT_CALL, responseObserver);
+    }
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingInputCallRequest> streamingInputCall(
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingInputCallResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_STREAMING_INPUT_CALL, responseObserver);
+    }
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> fullBidiCall(
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_FULL_BIDI_CALL, responseObserver);
+    }
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallRequest> halfBidiCall(
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Test.StreamingOutputCallResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_HALF_BIDI_CALL, responseObserver);
+    }
+
+    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+      return TestServiceGrpc.bindService(this);
+    }
   }
 
   public static interface TestServiceBlockingClient {
@@ -221,12 +260,6 @@ public class TestServiceGrpc {
         io.grpc.testing.integration.Test.SimpleRequest request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request);
-    }
-  }
-
-  public static abstract class AbstractTestService implements TestService, io.grpc.BindableService {
-    @Override public io.grpc.ServerServiceDefinition bindService() {
-      return TestServiceGrpc.bindService(this);
     }
   }
 

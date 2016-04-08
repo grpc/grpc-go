@@ -12,6 +12,8 @@ import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
@@ -51,6 +53,19 @@ public class UnimplementedServiceGrpc {
 
     public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver);
+  }
+
+  public static abstract class AbstractUnimplementedService implements UnimplementedService, io.grpc.BindableService {
+
+    @java.lang.Override
+    public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
+        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_UNIMPLEMENTED_CALL, responseObserver);
+    }
+
+    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+      return UnimplementedServiceGrpc.bindService(this);
+    }
   }
 
   public static interface UnimplementedServiceBlockingClient {
@@ -135,12 +150,6 @@ public class UnimplementedServiceGrpc {
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_UNIMPLEMENTED_CALL, getCallOptions()), request);
-    }
-  }
-
-  public static abstract class AbstractUnimplementedService implements UnimplementedService, io.grpc.BindableService {
-    @Override public io.grpc.ServerServiceDefinition bindService() {
-      return UnimplementedServiceGrpc.bindService(this);
     }
   }
 

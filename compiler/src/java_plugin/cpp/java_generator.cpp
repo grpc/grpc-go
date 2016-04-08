@@ -155,6 +155,7 @@ static void PrintMethodFields(
 
   if (flavor == ProtoFlavor::NANO) {
     p->Print(
+        *vars,
         "private static final class NanoFactory<T extends com.google.protobuf.nano.MessageNano>\n"
         "    implements io.grpc.protobuf.nano.MessageNanoFactory<T> {\n"
         "  private final int id;\n"
@@ -163,7 +164,7 @@ static void PrintMethodFields(
         "    this.id = id;\n"
         "  }\n"
         "\n"
-        "  @Override\n"
+        "  @$Override$\n"
         "  public T newInstance() {\n"
         "    Object o;\n"
         "    switch (id) {\n");
@@ -204,7 +205,8 @@ enum StubType {
   BLOCKING_SERVER_INTERFACE = 3,
   ASYNC_CLIENT_IMPL = 4,
   BLOCKING_CLIENT_IMPL = 5,
-  FUTURE_CLIENT_IMPL = 6
+  FUTURE_CLIENT_IMPL = 6,
+  ABSTRACT = 7,
 };
 
 enum CallType {
@@ -219,9 +221,14 @@ static void PrintStub(
     map<string, string>* vars,
     Printer* p, StubType type, bool generate_nano) {
   (*vars)["service_name"] = service->name();
+  (*vars)["abstract_name"] = "Abstract" + service->name();
   string interface_name = service->name();
   string impl_name = service->name();
+  bool abstract = false;
   switch (type) {
+    case ABSTRACT:
+      abstract = true;
+      break;
     case ASYNC_INTERFACE:
     case ASYNC_CLIENT_IMPL:
       impl_name += "Stub";
@@ -242,9 +249,10 @@ static void PrintStub(
     default:
       GRPC_CODEGEN_FAIL << "Cannot determine class name for StubType: " << type;
   }
-  bool impl;
   CallType call_type;
+  bool impl = false;
   switch (type) {
+    case ABSTRACT:
     case ASYNC_INTERFACE:
       call_type = ASYNC_CALL;
       impl = false;
@@ -277,7 +285,12 @@ static void PrintStub(
   (*vars)["impl_name"] = impl_name;
 
   // Class head
-  if (!impl) {
+  if (abstract) {
+    p->Print(
+        *vars,
+        "public static abstract class $abstract_name$ implements $service_name$, "
+        "$BindableService$ {\n");
+  } else if (!impl) {
     p->Print(
         *vars,
         "public static interface $interface_name$ {\n");
@@ -343,7 +356,7 @@ static void PrintStub(
 
     // Method signature
     p->Print("\n");
-    if (impl) {
+    if (impl || abstract) {
       p->Print(
           *vars,
           "@$Override$\n");
@@ -395,10 +408,34 @@ static void PrintStub(
             "    $input_type$ request)");
         break;
     }
-    if (impl) {
-      // Method body for client impls
-      p->Print(" {\n");
-      p->Indent();
+
+    if (!(abstract || impl)) {
+      // Interface method - there will be no body, close method.
+      p->Print(";\n");
+      continue;
+    }
+
+    // Method body for abstract stub & client impls.
+    p->Print(" {\n");
+    p->Indent();
+
+    if (abstract) {
+      switch (call_type) {
+        // NB: Skipping validation of service methods. If something is wrong, we wouldn't get to
+        // this point as compiler would return errors when generating service interface.
+        case ASYNC_CALL:
+          if (client_streaming) {
+            p->Print(
+                *vars,
+                "return asyncUnimplementedStreamingCall($method_field_name$, responseObserver);\n");
+          } else {
+            p->Print(
+                *vars,
+                "asyncUnimplementedUnaryCall($method_field_name$, responseObserver);\n");
+          }
+          break;
+      }
+    } else if (impl) {
       switch (call_type) {
         case BLOCKING_CALL:
           GRPC_CODEGEN_CHECK(!client_streaming)
@@ -451,12 +488,24 @@ static void PrintStub(
               "    getChannel().newCall($method_field_name$, getCallOptions()), request);\n");
           break;
       }
-      p->Outdent();
-      p->Print("}\n");
-    } else {
-      p->Print(";\n");
     }
+    p->Outdent();
+    p->Print("}\n");
   }
+
+  if (abstract) {
+    p->Print("\n");
+    p->Print(*vars,
+             "@$Override$ public $ServerServiceDefinition$ bindService() {\n"
+             );
+    p->Indent();
+    p->Print(*vars,
+             "return $service_class_name$.bindService(this);\n"
+             );
+    p->Outdent();
+    p->Print("}\n");
+  }
+
   p->Outdent();
   p->Print("}\n\n");
 }
@@ -642,27 +691,6 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
   p->Print("}\n");
 }
 
-static void PrintAbstractServiceClass(const ServiceDescriptor* service,
-                                   map<string, string>* vars,
-                                   Printer* p) {
-  p->Print(
-      *vars,
-      "public static abstract class Abstract$service_name$"
-      " implements $service_name$, $BindableService$ {\n");
-  p->Indent();
-  p->Print(*vars,
-           "@Override public $ServerServiceDefinition$ bindService() {\n"
-           );
-  p->Indent();
-  p->Print(*vars,
-           "return $service_class_name$.bindService(this);\n"
-           );
-  p->Outdent();
-  p->Print("}\n");
-  p->Outdent();
-  p->Print("}\n\n");
-}
-
 static void PrintService(const ServiceDescriptor* service,
                          map<string, string>* vars,
                          Printer* p,
@@ -720,12 +748,12 @@ static void PrintService(const ServiceDescriptor* service,
 
   bool generate_nano = flavor == ProtoFlavor::NANO;
   PrintStub(service, vars, p, ASYNC_INTERFACE, generate_nano);
+  PrintStub(service, vars, p, ABSTRACT, generate_nano);
   PrintStub(service, vars, p, BLOCKING_CLIENT_INTERFACE, generate_nano);
   PrintStub(service, vars, p, FUTURE_CLIENT_INTERFACE, generate_nano);
   PrintStub(service, vars, p, ASYNC_CLIENT_IMPL, generate_nano);
   PrintStub(service, vars, p, BLOCKING_CLIENT_IMPL, generate_nano);
   PrintStub(service, vars, p, FUTURE_CLIENT_IMPL, generate_nano);
-  PrintAbstractServiceClass(service, vars, p);
   PrintMethodHandlerClass(service, vars, p, generate_nano);
   PrintBindServiceMethod(service, vars, p, generate_nano);
   p->Outdent();
@@ -757,7 +785,11 @@ void PrintImports(Printer* p, bool generate_nano) {
       "import static "
       "io.grpc.stub.ServerCalls.asyncClientStreamingCall;\n"
       "import static "
-      "io.grpc.stub.ServerCalls.asyncBidiStreamingCall;\n\n");
+      "io.grpc.stub.ServerCalls.asyncBidiStreamingCall;\n"
+      "import static "
+      "io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;\n"
+      "import static "
+      "io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;\n\n");
   if (generate_nano) {
     p->Print("import java.io.IOException;\n\n");
   }

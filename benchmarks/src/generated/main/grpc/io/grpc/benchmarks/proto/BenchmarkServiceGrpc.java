@@ -12,6 +12,8 @@ import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
@@ -63,6 +65,25 @@ public class BenchmarkServiceGrpc {
 
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleRequest> streamingCall(
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver);
+  }
+
+  public static abstract class AbstractBenchmarkService implements BenchmarkService, io.grpc.BindableService {
+
+    @java.lang.Override
+    public void unaryCall(io.grpc.benchmarks.proto.Messages.SimpleRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_UNARY_CALL, responseObserver);
+    }
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleRequest> streamingCall(
+        io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_STREAMING_CALL, responseObserver);
+    }
+
+    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+      return BenchmarkServiceGrpc.bindService(this);
+    }
   }
 
   public static interface BenchmarkServiceBlockingClient {
@@ -154,12 +175,6 @@ public class BenchmarkServiceGrpc {
         io.grpc.benchmarks.proto.Messages.SimpleRequest request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request);
-    }
-  }
-
-  public static abstract class AbstractBenchmarkService implements BenchmarkService, io.grpc.BindableService {
-    @Override public io.grpc.ServerServiceDefinition bindService() {
-      return BenchmarkServiceGrpc.bindService(this);
     }
   }
 

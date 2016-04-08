@@ -12,6 +12,8 @@ import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
@@ -87,6 +89,37 @@ public class RouteGuideGrpc {
 
     public io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> routeChat(
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> responseObserver);
+  }
+
+  public static abstract class AbstractRouteGuide implements RouteGuide, io.grpc.BindableService {
+
+    @java.lang.Override
+    public void getFeature(io.grpc.examples.routeguide.Point request,
+        io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Feature> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_GET_FEATURE, responseObserver);
+    }
+
+    @java.lang.Override
+    public void listFeatures(io.grpc.examples.routeguide.Rectangle request,
+        io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Feature> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_LIST_FEATURES, responseObserver);
+    }
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Point> recordRoute(
+        io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteSummary> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_RECORD_ROUTE, responseObserver);
+    }
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> routeChat(
+        io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_ROUTE_CHAT, responseObserver);
+    }
+
+    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+      return RouteGuideGrpc.bindService(this);
+    }
   }
 
   public static interface RouteGuideBlockingClient {
@@ -202,12 +235,6 @@ public class RouteGuideGrpc {
         io.grpc.examples.routeguide.Point request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_GET_FEATURE, getCallOptions()), request);
-    }
-  }
-
-  public static abstract class AbstractRouteGuide implements RouteGuide, io.grpc.BindableService {
-    @Override public io.grpc.ServerServiceDefinition bindService() {
-      return RouteGuideGrpc.bindService(this);
     }
   }
 

@@ -31,6 +31,8 @@
 
 package io.grpc.stub;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import io.grpc.ExperimentalApi;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -347,6 +349,54 @@ public class ServerCalls {
 
     @Override
     public void onComplete() {
+    }
+  }
+
+  /**
+   * Sets unimplemented status for method on given response stream for unary call.
+   *
+   * @param methodDescriptor of method for which error will be thrown.
+   * @param responseObserver on which error will be set.
+   */
+  public static void asyncUnimplementedUnaryCall(MethodDescriptor<?, ?> methodDescriptor,
+      StreamObserver<?> responseObserver) {
+    checkNotNull(methodDescriptor);
+    checkNotNull(responseObserver);
+    responseObserver.onError(Status.UNIMPLEMENTED
+        .withDescription(String.format("Method %s is unimplemented",
+            methodDescriptor.getFullMethodName()))
+        .asException());
+  }
+
+  /**
+   * Sets unimplemented status for streaming call.
+   *
+   * @param methodDescriptor of method for which error will be thrown.
+   * @param responseObserver on which error will be set.
+   */
+  public static <T> StreamObserver<T> asyncUnimplementedStreamingCall(
+      MethodDescriptor<?, ?> methodDescriptor, StreamObserver<?> responseObserver) {
+    // NB: For streaming call we want to do the same as for unary call. Fail-fast by setting error
+    // on responseObserver and then return no-op observer.
+    asyncUnimplementedUnaryCall(methodDescriptor, responseObserver);
+    return new NoopStreamObserver<T>();
+  }
+
+  /**
+   * No-op implementation of StreamObserver. Used in abstract stubs for default implementations of
+   * methods which throws UNIMPLEMENTED error and tests.
+   */
+  static class NoopStreamObserver<V> implements StreamObserver<V> {
+    @Override
+    public void onNext(V value) {
+    }
+
+    @Override
+    public void onError(Throwable t) {
+    }
+
+    @Override
+    public void onCompleted() {
     }
   }
 }

@@ -12,6 +12,8 @@ import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
@@ -63,6 +65,25 @@ public class ReconnectServiceGrpc {
 
     public void stop(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver);
+  }
+
+  public static abstract class AbstractReconnectService implements ReconnectService, io.grpc.BindableService {
+
+    @java.lang.Override
+    public void start(com.google.protobuf.EmptyProtos.Empty request,
+        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_START, responseObserver);
+    }
+
+    @java.lang.Override
+    public void stop(com.google.protobuf.EmptyProtos.Empty request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_STOP, responseObserver);
+    }
+
+    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+      return ReconnectServiceGrpc.bindService(this);
+    }
   }
 
   public static interface ReconnectServiceBlockingClient {
@@ -172,12 +193,6 @@ public class ReconnectServiceGrpc {
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_STOP, getCallOptions()), request);
-    }
-  }
-
-  public static abstract class AbstractReconnectService implements ReconnectService, io.grpc.BindableService {
-    @Override public io.grpc.ServerServiceDefinition bindService() {
-      return ReconnectServiceGrpc.bindService(this);
     }
   }
 

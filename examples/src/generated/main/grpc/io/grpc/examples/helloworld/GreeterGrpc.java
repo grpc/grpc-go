@@ -12,6 +12,8 @@ import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
@@ -51,6 +53,19 @@ public class GreeterGrpc {
 
     public void sayHello(io.grpc.examples.helloworld.HelloRequest request,
         io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloReply> responseObserver);
+  }
+
+  public static abstract class AbstractGreeter implements Greeter, io.grpc.BindableService {
+
+    @java.lang.Override
+    public void sayHello(io.grpc.examples.helloworld.HelloRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloReply> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_SAY_HELLO, responseObserver);
+    }
+
+    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+      return GreeterGrpc.bindService(this);
+    }
   }
 
   public static interface GreeterBlockingClient {
@@ -135,12 +150,6 @@ public class GreeterGrpc {
         io.grpc.examples.helloworld.HelloRequest request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_SAY_HELLO, getCallOptions()), request);
-    }
-  }
-
-  public static abstract class AbstractGreeter implements Greeter, io.grpc.BindableService {
-    @Override public io.grpc.ServerServiceDefinition bindService() {
-      return GreeterGrpc.bindService(this);
     }
   }
 

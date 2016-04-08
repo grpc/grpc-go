@@ -124,7 +124,7 @@ public class ServerCallsTest {
                   }
                 });
                 invokeCalled.set(true);
-                return new NoOpStreamObserver();
+                return new ServerCalls.NoopStreamObserver<Integer>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -156,7 +156,7 @@ public class ServerCallsTest {
               @Override
               public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
                 callObserver.set((ServerCallStreamObserver<Integer>) responseObserver);
-                return new NoOpStreamObserver();
+                return new ServerCalls.NoopStreamObserver<Integer>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -184,7 +184,7 @@ public class ServerCallsTest {
               @Override
               public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
                 callObserver.set((ServerCallStreamObserver<Integer>) responseObserver);
-                return new NoOpStreamObserver();
+                return new ServerCalls.NoopStreamObserver<Integer>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -212,7 +212,7 @@ public class ServerCallsTest {
               @Override
               public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
                 callObserver.set((ServerCallStreamObserver<Integer>) responseObserver);
-                return new NoOpStreamObserver();
+                return new ServerCalls.NoopStreamObserver<Integer>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -236,7 +236,7 @@ public class ServerCallsTest {
                 ServerCallStreamObserver<Integer> serverCallObserver =
                     (ServerCallStreamObserver<Integer>) responseObserver;
                 serverCallObserver.disableAutoInboundFlowControl();
-                return new NoOpStreamObserver();
+                return new ServerCalls.NoopStreamObserver<Integer>();
               }
             });
     ServerCall.Listener<Integer> callListener =
@@ -328,7 +328,7 @@ public class ServerCallsTest {
                     semaphore.release();
                   }
                 });
-                return new NoOpStreamObserver() {
+                return new ServerCalls.NoopStreamObserver<Integer>() {
                   @Override
                   public void onCompleted() {
                     serverCallObserver.onCompleted();
@@ -368,20 +368,6 @@ public class ServerCallsTest {
     // Very that number of messages produced in each onReady handler call matches the number
     // requested by the client.
     assertArrayEquals(new int[]{0, 1, 1, 2, 2, 2}, receivedMessages);
-  }
-
-  private static class NoOpStreamObserver implements StreamObserver<Integer> {
-    @Override
-    public void onNext(Integer value) {
-    }
-
-    @Override
-    public void onError(Throwable t) {
-    }
-
-    @Override
-    public void onCompleted() {
-    }
   }
 
   public static class IntegerMarshaller implements MethodDescriptor.Marshaller<Integer> {

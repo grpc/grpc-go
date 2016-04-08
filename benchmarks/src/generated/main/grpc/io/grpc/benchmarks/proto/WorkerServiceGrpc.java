@@ -12,6 +12,8 @@ import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
@@ -87,6 +89,37 @@ public class WorkerServiceGrpc {
 
     public void quitWorker(io.grpc.benchmarks.proto.Control.Void request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.Void> responseObserver);
+  }
+
+  public static abstract class AbstractWorkerService implements WorkerService, io.grpc.BindableService {
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.ServerArgs> runServer(
+        io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.ServerStatus> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_RUN_SERVER, responseObserver);
+    }
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.ClientArgs> runClient(
+        io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.ClientStatus> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_RUN_CLIENT, responseObserver);
+    }
+
+    @java.lang.Override
+    public void coreCount(io.grpc.benchmarks.proto.Control.CoreRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.CoreResponse> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_CORE_COUNT, responseObserver);
+    }
+
+    @java.lang.Override
+    public void quitWorker(io.grpc.benchmarks.proto.Control.Void request,
+        io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.Void> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_QUIT_WORKER, responseObserver);
+    }
+
+    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+      return WorkerServiceGrpc.bindService(this);
+    }
   }
 
   public static interface WorkerServiceBlockingClient {
@@ -210,12 +243,6 @@ public class WorkerServiceGrpc {
         io.grpc.benchmarks.proto.Control.Void request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_QUIT_WORKER, getCallOptions()), request);
-    }
-  }
-
-  public static abstract class AbstractWorkerService implements WorkerService, io.grpc.BindableService {
-    @Override public io.grpc.ServerServiceDefinition bindService() {
-      return WorkerServiceGrpc.bindService(this);
     }
   }
 

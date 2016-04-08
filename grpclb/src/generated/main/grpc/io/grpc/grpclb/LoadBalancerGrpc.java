@@ -12,6 +12,8 @@ import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
 @javax.annotation.Generated(
     value = "by gRPC proto compiler",
@@ -51,6 +53,19 @@ public class LoadBalancerGrpc {
 
     public io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceRequest> balanceLoad(
         io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse> responseObserver);
+  }
+
+  public static abstract class AbstractLoadBalancer implements LoadBalancer, io.grpc.BindableService {
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceRequest> balanceLoad(
+        io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_BALANCE_LOAD, responseObserver);
+    }
+
+    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+      return LoadBalancerGrpc.bindService(this);
+    }
   }
 
   public static interface LoadBalancerBlockingClient {
@@ -117,12 +132,6 @@ public class LoadBalancerGrpc {
     protected LoadBalancerFutureStub build(io.grpc.Channel channel,
         io.grpc.CallOptions callOptions) {
       return new LoadBalancerFutureStub(channel, callOptions);
-    }
-  }
-
-  public static abstract class AbstractLoadBalancer implements LoadBalancer, io.grpc.BindableService {
-    @Override public io.grpc.ServerServiceDefinition bindService() {
-      return LoadBalancerGrpc.bindService(this);
     }
   }
 

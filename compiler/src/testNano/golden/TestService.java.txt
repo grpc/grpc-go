@@ -12,6 +12,8 @@ import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
 import java.io.IOException;
 
@@ -104,7 +106,7 @@ public class TestServiceGrpc {
       this.id = id;
     }
 
-    @Override
+    @java.lang.Override
     public T newInstance() {
       Object o;
       switch (id) {
@@ -177,6 +179,43 @@ public class TestServiceGrpc {
 
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> halfBidiCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver);
+  }
+
+  public static abstract class AbstractTestService implements TestService, io.grpc.BindableService {
+
+    @java.lang.Override
+    public void unaryCall(io.grpc.testing.integration.nano.Test.SimpleRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.SimpleResponse> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_UNARY_CALL, responseObserver);
+    }
+
+    @java.lang.Override
+    public void streamingOutputCall(io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_STREAMING_OUTPUT_CALL, responseObserver);
+    }
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest> streamingInputCall(
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_STREAMING_INPUT_CALL, responseObserver);
+    }
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> fullBidiCall(
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_FULL_BIDI_CALL, responseObserver);
+    }
+
+    @java.lang.Override
+    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest> halfBidiCall(
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_HALF_BIDI_CALL, responseObserver);
+    }
+
+    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+      return TestServiceGrpc.bindService(this);
+    }
   }
 
   public static interface TestServiceBlockingClient {
@@ -299,12 +338,6 @@ public class TestServiceGrpc {
         io.grpc.testing.integration.nano.Test.SimpleRequest request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request);
-    }
-  }
-
-  public static abstract class AbstractTestService implements TestService, io.grpc.BindableService {
-    @Override public io.grpc.ServerServiceDefinition bindService() {
-      return TestServiceGrpc.bindService(this);
     }
   }
 
