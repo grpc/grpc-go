@@ -248,8 +248,8 @@ subprojects {
             url 'https://github.com/grpc/grpc-java'
 
             scm {
-                connection 'scm:svn:https://github.com/grpc/grpc-java.git'
-                developerConnection 'scm:svn:git@github.com:grpc/grpc-java.git'
+                connection 'scm:git:https://github.com/grpc/grpc-java.git'
+                developerConnection 'scm:git:git@github.com:grpc/grpc-java.git'
                 url 'https://github.com/grpc/grpc-java'
             }
 
