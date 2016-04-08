@@ -137,7 +137,7 @@ subprojects {
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.4',
                 protobuf_util: "com.google.protobuf:protobuf-java-util:${protobufVersion}",
 
-                netty: 'io.netty:netty-codec-http2:4.1.0.CR6',
+                netty: 'io.netty:netty-codec-http2:[4.1.0.CR6]',
                 netty_epoll: 'io.netty:netty-transport-native-epoll:4.1.0.CR6' + epoll_suffix,
                 netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork15:' + osdetector.classifier,
 
@@ -271,6 +271,14 @@ subprojects {
                     organizationUrl "https://www.google.com"
                 }
             }
+        }
+        if (!(project.name in
+            ["grpc-stub", "grpc-protobuf", "grpc-protobuf-lite", "grpc-protobuf-nano"])) {
+          def core = pom.dependencies.find {dep -> dep.artifactId == 'grpc-core'}
+          if (core != null) {
+            // Depend on specific version of grpc-core because internal package is unstable
+            core.version = "[" + core.version + "]"
+          }
         }
     }
     // At a test failure, log the stack trace to the console so that we don't
