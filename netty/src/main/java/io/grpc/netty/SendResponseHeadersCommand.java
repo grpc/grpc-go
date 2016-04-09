@@ -39,18 +39,18 @@ import io.netty.handler.codec.http2.Http2Headers;
  * Command sent from the transport to the Netty channel to send response headers to the client.
  */
 class SendResponseHeadersCommand {
-  private final int streamId;
+  private final StreamIdHolder stream;
   private final Http2Headers headers;
   private final boolean endOfStream;
 
-  SendResponseHeadersCommand(int streamId, Http2Headers headers, boolean endOfStream) {
-    this.streamId = streamId;
+  SendResponseHeadersCommand(StreamIdHolder stream, Http2Headers headers, boolean endOfStream) {
+    this.stream = Preconditions.checkNotNull(stream);
     this.headers = Preconditions.checkNotNull(headers);
     this.endOfStream = endOfStream;
   }
 
-  int streamId() {
-    return streamId;
+  StreamIdHolder stream() {
+    return stream;
   }
 
   Http2Headers headers() {
@@ -67,19 +67,19 @@ class SendResponseHeadersCommand {
       return false;
     }
     SendResponseHeadersCommand thatCmd = (SendResponseHeadersCommand) that;
-    return thatCmd.streamId == streamId
+    return thatCmd.stream.equals(stream)
         && thatCmd.headers.equals(headers)
         && thatCmd.endOfStream == endOfStream;
   }
 
   @Override
   public String toString() {
-    return getClass().getSimpleName() + "(streamId=" + streamId + ", headers=" + headers
+    return getClass().getSimpleName() + "(stream=" + stream.id() + ", headers=" + headers
         + ", endOfStream=" + endOfStream + ")";
   }
 
   @Override
   public int hashCode() {
-    return streamId;
+    return stream.hashCode();
   }
 }

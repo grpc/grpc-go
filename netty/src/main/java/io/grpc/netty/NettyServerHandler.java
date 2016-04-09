@@ -188,16 +188,19 @@ class NettyServerHandler extends AbstractNettyHandler {
       // method.
       Http2Stream http2Stream = requireHttp2Stream(streamId);
 
-      NettyServerStream stream = new NettyServerStream(ctx.channel(), http2Stream, this,
-              maxMessageSize);
+      NettyServerStream.TransportState state =
+          new NettyServerStream.TransportState(this, http2Stream, maxMessageSize);
+      NettyServerStream stream = new NettyServerStream(ctx.channel(), state);
 
       Metadata metadata = Utils.convertHeaders(headers);
-      stream.inboundHeadersReceived(metadata);
 
       ServerStreamListener listener =
           transportListener.streamCreated(stream, method, metadata);
-      stream.setListener(listener);
-      http2Stream.setProperty(streamKey, stream);
+      // TODO(ejona): this could be racy since stream could have been used before getting here. All
+      // cases appear to be fine, but some are almost only by happenstance and it is difficult to
+      // audit. It would be good to improve the API to be less prone to races.
+      state.setListener(listener);
+      http2Stream.setProperty(streamKey, state);
 
     } catch (Http2Exception e) {
       throw e;
@@ -210,7 +213,7 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   private void onDataRead(int streamId, ByteBuf data, boolean endOfStream) throws Http2Exception {
     try {
-      NettyServerStream stream = serverStream(requireHttp2Stream(streamId));
+      NettyServerStream.TransportState stream = serverStream(requireHttp2Stream(streamId));
       stream.inboundDataReceived(data, endOfStream);
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onDataRead()", e);
@@ -221,9 +224,9 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   private void onRstStreamRead(int streamId) throws Http2Exception {
     try {
-      NettyServerStream stream = serverStream(connection().stream(streamId));
+      NettyServerStream.TransportState stream = serverStream(connection().stream(streamId));
       if (stream != null) {
-        stream.abortStream(Status.CANCELLED, false);
+        stream.transportReportStatus(Status.CANCELLED);
       }
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onRstStreamRead()", e);
@@ -244,15 +247,14 @@ class NettyServerHandler extends AbstractNettyHandler {
   protected void onStreamError(ChannelHandlerContext ctx, Throwable cause,
       StreamException http2Ex) {
     logger.log(Level.WARNING, "Stream Error", cause);
-    NettyServerStream serverStream = serverStream(
+    NettyServerStream.TransportState serverStream = serverStream(
         connection().stream(Http2Exception.streamId(http2Ex)));
     if (serverStream != null) {
-      // Abort the stream with a status to help the client with debugging.
-      serverStream.abortStream(Utils.statusFromThrowable(cause), true);
-    } else {
-      // Delegate to the base class to send a RST_STREAM.
-      super.onStreamError(ctx, cause, http2Ex);
+      serverStream.transportReportStatus(Utils.statusFromThrowable(cause));
     }
+    // TODO(ejona): Abort the stream by sending headers to help the client with debugging.
+    // Delegate to the base class to send a RST_STREAM.
+    super.onStreamError(ctx, cause, http2Ex);
   }
 
   /**
@@ -267,9 +269,9 @@ class NettyServerHandler extends AbstractNettyHandler {
       connection().forEachActiveStream(new Http2StreamVisitor() {
         @Override
         public boolean visit(Http2Stream stream) throws Http2Exception {
-          NettyServerStream serverStream = serverStream(stream);
+          NettyServerStream.TransportState serverStream = serverStream(stream);
           if (serverStream != null) {
-            serverStream.abortStream(status, false);
+            serverStream.transportReportStatus(status);
           }
           return true;
         }
@@ -318,7 +320,7 @@ class NettyServerHandler extends AbstractNettyHandler {
   }
 
   private void closeStreamWhenDone(ChannelPromise promise, int streamId) throws Http2Exception {
-    final NettyServerStream stream = serverStream(requireHttp2Stream(streamId));
+    final NettyServerStream.TransportState stream = serverStream(requireHttp2Stream(streamId));
     promise.addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) {
@@ -345,15 +347,15 @@ class NettyServerHandler extends AbstractNettyHandler {
   private void sendResponseHeaders(ChannelHandlerContext ctx, SendResponseHeadersCommand cmd,
       ChannelPromise promise) throws Http2Exception {
     if (cmd.endOfStream()) {
-      closeStreamWhenDone(promise, cmd.streamId());
+      closeStreamWhenDone(promise, cmd.stream().id());
     }
-    encoder().writeHeaders(ctx, cmd.streamId(), cmd.headers(), 0, cmd.endOfStream(), promise);
+    encoder().writeHeaders(ctx, cmd.stream().id(), cmd.headers(), 0, cmd.endOfStream(), promise);
   }
 
   private void cancelStream(ChannelHandlerContext ctx, CancelServerStreamCommand cmd,
       ChannelPromise promise) {
     // Notify the listener if we haven't already.
-    cmd.stream().abortStream(cmd.reason(), false);
+    cmd.stream().transportReportStatus(cmd.reason());
     // Terminate the stream.
     encoder().writeRstStream(ctx, cmd.stream().id(), Http2Error.CANCEL.code(), promise);
   }
@@ -408,8 +410,8 @@ class NettyServerHandler extends AbstractNettyHandler {
   /**
    * Returns the server stream associated to the given HTTP/2 stream object.
    */
-  private NettyServerStream serverStream(Http2Stream stream) {
-    return stream == null ? null : (NettyServerStream) stream.getProperty(streamKey);
+  private NettyServerStream.TransportState serverStream(Http2Stream stream) {
+    return stream == null ? null : (NettyServerStream.TransportState) stream.getProperty(streamKey);
   }
 
   private Http2Exception newStreamException(int streamId, Throwable cause) {

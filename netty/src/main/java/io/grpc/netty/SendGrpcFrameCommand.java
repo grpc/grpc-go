@@ -31,7 +31,6 @@
 
 package io.grpc.netty;
 
-import io.grpc.internal.AbstractStream;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.DefaultByteBufHolder;
@@ -40,11 +39,10 @@ import io.netty.buffer.DefaultByteBufHolder;
  * Command sent from the transport to the Netty channel to send a GRPC frame to the remote endpoint.
  */
 class SendGrpcFrameCommand extends DefaultByteBufHolder {
-  private final AbstractStream<Integer> stream;
+  private final StreamIdHolder stream;
   private final boolean endStream;
 
-  SendGrpcFrameCommand(AbstractStream<Integer> stream, ByteBuf content,
-      boolean endStream) {
+  SendGrpcFrameCommand(StreamIdHolder stream, ByteBuf content, boolean endStream) {
     super(content);
     this.stream = stream;
     this.endStream = endStream;

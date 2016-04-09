@@ -31,256 +31,219 @@
 
 package io.grpc.internal;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.base.Preconditions;
 
 import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 
-import java.io.InputStream;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import javax.annotation.Nullable;
 
 /**
- * Abstract base class for {@link ServerStream} implementations.
- *
- * @param <IdT> the type of the stream identifier
+ * Abstract base class for {@link ServerStream} implementations. Extending classes only need to
+ * implement {@link #transportState()} and {@link #abstractServerStreamSink()}. Must only be called
+ * from the sending application thread.
+
  */
-public abstract class AbstractServerStream<IdT> extends AbstractStream<IdT>
-    implements ServerStream {
-  private static final Logger log = Logger.getLogger(AbstractServerStream.class.getName());
-
-  /** Whether listener.closed() has been called. */
-  private boolean listenerClosed;
-  private ServerStreamListener listener;
-
-  private boolean headersSent = false;
+public abstract class AbstractServerStream extends AbstractStream2
+    implements ServerStream, MessageFramer.Sink {
   /**
-   * Whether the stream was closed gracefully by the application (vs. a transport-level failure).
+   * A sink for outbound operations, separated from the stream simply to avoid name
+   * collisions/confusion. Only called from application thread.
    */
-  private boolean gracefulClose;
-  /** Saved trailers from close() that need to be sent once the framer has sent all messages. */
-  private Metadata stashedTrailers;
+  protected interface Sink {
+    /**
+     * Sends response headers to the remote end point.
+     *
+     * @param headers the headers to be sent to client.
+     */
+    void writeHeaders(Metadata headers);
 
-  protected AbstractServerStream(WritableBufferAllocator bufferAllocator,
-                                 int maxMessageSize) {
-    super(bufferAllocator, maxMessageSize);
+    /**
+     * Sends an outbound frame to the remote end point.
+     *
+     * @param frame a buffer containing the chunk of data to be sent.
+     * @param flush {@code true} if more data may not be arriving soon
+     */
+    void writeFrame(@Nullable WritableBuffer frame, boolean flush);
+
+    /**
+     * Sends trailers to the remote end point. This call implies end of stream.
+     *
+     * @param trailers metadata to be sent to the end point
+     * @param headersSent {@code true} if response headers have already been sent.
+     */
+    void writeTrailers(Metadata trailers, boolean headersSent);
+
+    /**
+     * Requests up to the given number of messages from the call to be delivered. This should end up
+     * triggering {@link TransportState#requestMessagesFromDeframer(int)} on the transport thread.
+     */
+    void request(int numMessages);
+
+    /**
+     * Tears down the stream, typically in the event of a timeout. This method may be called
+     * multiple times and from any thread.
+     *
+     * <p>This is a clone of {@link ServerStream#cancel()}.
+     */
+    void cancel(Status status);
   }
 
-  /**
-   * Sets the listener to receive notifications. Must be called in the context of the transport
-   * thread.
-   */
-  public final void setListener(ServerStreamListener listener) {
-    this.listener = checkNotNull(listener);
+  private final MessageFramer framer;
+  private boolean outboundClosed;
+  private boolean headersSent;
 
-    // Now that the stream has actually been initialized, call the listener's onReady callback if
-    // appropriate.
-    onStreamAllocated();
+  protected AbstractServerStream(WritableBufferAllocator bufferAllocator) {
+    framer = new MessageFramer(this, bufferAllocator);
   }
 
   @Override
-  protected ServerStreamListener listener() {
-    return listener;
+  protected abstract TransportState transportState();
+
+  /**
+   * Sink for transport to be called to perform outbound operations. Each stream must have its own
+   * unique sink.
+   */
+  protected abstract Sink abstractServerStreamSink();
+
+  @Override
+  protected final MessageFramer framer() {
+    return framer;
   }
 
   @Override
-  protected void receiveMessage(InputStream is) {
-    inboundPhase(Phase.MESSAGE);
-    listener().messageRead(is);
+  public final void request(int numMessages) {
+    abstractServerStreamSink().request(numMessages);
   }
 
   @Override
   public final void writeHeaders(Metadata headers) {
     Preconditions.checkNotNull(headers, "headers");
 
-    outboundPhase(Phase.HEADERS);
     headersSent = true;
-    internalSendHeaders(headers);
-    outboundPhase(Phase.MESSAGE);
+    abstractServerStreamSink().writeHeaders(headers);
   }
 
   @Override
-  public final void writeMessage(InputStream message) {
-    if (outboundPhase() != Phase.MESSAGE) {
-      throw new IllegalStateException("Messages are only permitted after headers and before close");
-    }
-    super.writeMessage(message);
+  public final void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+    // Since endOfStream is triggered by the sending of trailers, avoid flush here and just flush
+    // after the trailers.
+    abstractServerStreamSink().writeFrame(frame, endOfStream ? false : flush);
   }
 
   @Override
   public final void close(Status status, Metadata trailers) {
     Preconditions.checkNotNull(status, "status");
     Preconditions.checkNotNull(trailers, "trailers");
-    if (outboundPhase(Phase.STATUS) != Phase.STATUS) {
-      gracefulClose = true;
-      stashedTrailers = trailers;
-      writeStatusToTrailers(status);
-      closeFramer();
+    if (!outboundClosed) {
+      outboundClosed = true;
+      endOfMessages();
+      addStatusToTrailers(trailers, status);
+      abstractServerStreamSink().writeTrailers(trailers, headersSent);
     }
   }
 
-  private void writeStatusToTrailers(Status status) {
-    stashedTrailers.removeAll(Status.CODE_KEY);
-    stashedTrailers.removeAll(Status.MESSAGE_KEY);
-    stashedTrailers.put(Status.CODE_KEY, status);
+  private void addStatusToTrailers(Metadata trailers, Status status) {
+    trailers.removeAll(Status.CODE_KEY);
+    trailers.removeAll(Status.MESSAGE_KEY);
+    trailers.put(Status.CODE_KEY, status);
     if (status.getDescription() != null) {
-      stashedTrailers.put(Status.MESSAGE_KEY, status.getDescription());
-    }
-  }
-
-  /**
-   * Called by transport implementations when they receive headers.
-   *
-   * @param headers the parsed headers
-   */
-  protected void inboundHeadersReceived(Metadata headers) {
-    inboundPhase(Phase.MESSAGE);
-  }
-
-  /**
-   * Called in the network thread to process the content of an inbound DATA frame from the client.
-   *
-   * @param frame the inbound HTTP/2 DATA frame. If this buffer is not used immediately, it must
-   *              be retained.
-   * @param endOfStream {@code true} if no more data will be received on the stream.
-   */
-  public void inboundDataReceived(ReadableBuffer frame, boolean endOfStream) {
-    if (inboundPhase() == Phase.STATUS) {
-      frame.close();
-      return;
-    }
-    // Deframe the message. If a failure occurs, deframeFailed will be called.
-    deframe(frame, endOfStream);
-  }
-
-  @Override
-  protected final void deframeFailed(Throwable cause) {
-    log.log(Level.WARNING, "Exception processing message", cause);
-    abortStream(Status.fromThrowable(cause), true);
-  }
-
-  @Override
-  protected final void internalSendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-    if (frame != null) {
-      sendFrame(frame, false, endOfStream ? false : flush);
-    }
-    if (endOfStream) {
-      sendTrailers(stashedTrailers, headersSent);
-      headersSent = true;
-      stashedTrailers = null;
-    }
-  }
-
-  /**
-   * Sends response headers to the remote end points.
-   *
-   * @param headers the headers to be sent to client.
-   */
-  protected abstract void internalSendHeaders(Metadata headers);
-
-  /**
-   * Sends an outbound frame to the remote end point.
-   *
-   * @param frame a buffer containing the chunk of data to be sent.
-   * @param endOfStream if {@code true} indicates that no more data will be sent on the stream by
-   *        this endpoint.
-   * @param flush {@code true} if more data may not be arriving soon
-   */
-  protected abstract void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush);
-
-  /**
-   * Sends trailers to the remote end point. This call implies end of stream.
-   *
-   * @param trailers metadata to be sent to end point
-   * @param headersSent {@code true} if response headers have already been sent.
-   */
-  protected abstract void sendTrailers(Metadata trailers, boolean headersSent);
-
-  /**
-   * Indicates the stream is considered completely closed and there is no further opportunity for
-   * error. It calls the listener's {@code closed()} if it was not already done by {@link
-   * #abortStream}. Note that it is expected that either {@code closed()} or {@code abortStream()}
-   * was previously called, since {@code closed()} is required for a normal stream closure and
-   * {@code abortStream()} for abnormal.
-   */
-  public void complete() {
-    if (!gracefulClose) {
-      closeListener(Status.INTERNAL.withDescription("successful complete() without close()"));
-      throw new IllegalStateException("successful complete() without close()");
-    }
-    closeListener(Status.OK);
-  }
-
-  /**
-   * Called when the remote end half-closes the stream.
-   */
-  @Override
-  protected final void remoteEndClosed() {
-    halfCloseListener();
-  }
-
-  /**
-   * Aborts the stream with an error status, cleans up resources and notifies the listener if
-   * necessary.
-   *
-   * <p>Unlike {@link #close(Status, Metadata)}, this method is only called from the
-   * transport. The transport should use this method instead of {@code close(Status)} for internal
-   * errors to prevent exposing unexpected states and exceptions to the application.
-   *
-   * @param status the error status. Must not be {@link Status#OK}.
-   * @param notifyClient {@code true} if the stream is still writable and you want to notify the
-   *        client about stream closure and send the status
-   */
-  public final void abortStream(Status status, boolean notifyClient) {
-    // TODO(louiscryan): Investigate whether we can remove the notification to the client
-    // and rely on a transport layer stream reset instead.
-    Preconditions.checkArgument(!status.isOk(), "status must not be OK");
-    closeListener(status);
-    if (notifyClient) {
-      // TODO(louiscryan): Remove
-      if (stashedTrailers == null) {
-        stashedTrailers = new Metadata();
-      }
-      writeStatusToTrailers(status);
-      sendStreamAbortToClient(status, stashedTrailers);
+      trailers.put(Status.MESSAGE_KEY, status.getDescription());
     }
   }
 
   @Override
-  public boolean isClosed() {
-    return super.isClosed() || listenerClosed;
-  }
-
-  /**
-   * Notifies the remote client that this stream has aborted.
-   */
-  protected abstract void sendStreamAbortToClient(Status status, Metadata trailers);
-
-  /**
-   * Fires a half-closed event to the listener and frees inbound resources.
-   */
-  private void halfCloseListener() {
-    if (inboundPhase(Phase.STATUS) != Phase.STATUS && !listenerClosed) {
-      closeDeframer();
-      listener().halfClosed();
-    }
-  }
-
-  /**
-   * Closes the listener if not previously closed and frees resources.
-   */
-  private void closeListener(Status newStatus) {
-    if (!listenerClosed) {
-      listenerClosed = true;
-      closeDeframer();
-      listener().closed(newStatus);
-    }
+  public final void cancel(Status status) {
+    abstractServerStreamSink().cancel(status);
   }
 
   @Override public Attributes attributes() {
     return Attributes.EMPTY;
+  }
+
+  /** This should only called from the transport thread. */
+  protected abstract static class TransportState extends AbstractStream2.TransportState {
+    /** Whether listener.closed() has been called. */
+    private boolean listenerClosed;
+    private ServerStreamListener listener;
+
+    protected TransportState(int maxMessageSize) {
+      super(maxMessageSize);
+    }
+
+    /**
+     * Sets the listener to receive notifications. Must be called in the context of the transport
+     * thread.
+     */
+    public final void setListener(ServerStreamListener listener) {
+      this.listener = Preconditions.checkNotNull(listener);
+
+      // Now that the stream has actually been initialized, call the listener's onReady callback if
+      // appropriate.
+      onStreamAllocated();
+    }
+
+    @Override
+    public void deliveryStalled() {}
+
+    @Override
+    public void endOfStream() {
+      closeDeframer();
+      listener().halfClosed();
+    }
+
+    @Override
+    protected ServerStreamListener listener() {
+      return listener;
+    }
+
+    /**
+     * Called in the transport thread to process the content of an inbound DATA frame from the
+     * client.
+     *
+     * @param frame the inbound HTTP/2 DATA frame. If this buffer is not used immediately, it must
+     *              be retained.
+     * @param endOfStream {@code true} if no more data will be received on the stream.
+     */
+    public void inboundDataReceived(ReadableBuffer frame, boolean endOfStream) {
+      // Deframe the message. If a failure occurs, deframeFailed will be called.
+      deframe(frame, endOfStream);
+    }
+
+    /**
+     * Notifies failure to the listener of the stream. The transport is responsible for notifying
+     * the client of the failure independent of this method.
+     *
+     * <p>Unlike {@link #close(Status, Metadata)}, this method is only called from the
+     * transport. The transport should use this method instead of {@code close(Status)} for internal
+     * errors to prevent exposing unexpected states and exceptions to the application.
+     *
+     * @param status the error status. Must not be {@link Status#OK}.
+     */
+    public final void transportReportStatus(Status status) {
+      Preconditions.checkArgument(!status.isOk(), "status must not be OK");
+      closeListener(status);
+    }
+
+    /**
+     * Indicates the stream is considered completely closed and there is no further opportunity for
+     * error. It calls the listener's {@code closed()} if it was not already done by {@link
+     * #transportReportStatus}.
+     */
+    public void complete() {
+      closeListener(Status.OK);
+    }
+
+    /**
+     * Closes the listener if not previously closed and frees resources.
+     */
+    private void closeListener(Status newStatus) {
+      if (!listenerClosed) {
+        listenerClosed = true;
+        closeDeframer();
+        listener().closed(newStatus);
+      }
+    }
   }
 }

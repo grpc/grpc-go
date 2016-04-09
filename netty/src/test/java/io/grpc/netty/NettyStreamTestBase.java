@@ -43,7 +43,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.grpc.internal.AbstractStream;
+import io.grpc.internal.Stream;
 import io.grpc.internal.StreamListener;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.Channel;
@@ -71,7 +71,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Base class for Netty stream unit tests.
  */
-public abstract class NettyStreamTestBase<T extends AbstractStream<Integer>> {
+public abstract class NettyStreamTestBase<T extends Stream> {
   protected static final String MESSAGE = "hello world";
   protected static final int STREAM_ID = 1;
 
@@ -135,7 +135,8 @@ public abstract class NettyStreamTestBase<T extends AbstractStream<Integer>> {
     stream.request(1);
 
     if (stream instanceof NettyServerStream) {
-      ((NettyServerStream) stream).inboundDataReceived(messageFrame(MESSAGE), false);
+      ((NettyServerStream) stream).transportState()
+          .inboundDataReceived(messageFrame(MESSAGE), false);
     } else {
       ((NettyClientStream) stream).transportDataReceived(messageFrame(MESSAGE), false);
     }

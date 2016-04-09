@@ -51,6 +51,8 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.annotation.Nullable;
+
 /**
  * Encodes gRPC messages to be delivered via the transport layer which implements {@link
  * MessageFramer.Sink}.
@@ -69,7 +71,7 @@ public class MessageFramer {
      * @param endOfStream whether the frame is the last one for the GRPC stream
      * @param flush {@code true} if more data may not be arriving soon
      */
-    void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush);
+    void deliverFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush);
   }
 
   private static final int HEADER_LENGTH = 5;

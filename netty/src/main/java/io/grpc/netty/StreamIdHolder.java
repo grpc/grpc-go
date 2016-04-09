@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,35 +31,7 @@
 
 package io.grpc.netty;
 
-import io.grpc.internal.AbstractStream2;
-import io.grpc.internal.Stream;
-
-/**
- * Command which requests messages from the deframer.
- */
-class RequestMessagesCommand {
-
-  private final int numMessages;
-  private final Stream stream;
-  private final AbstractStream2.TransportState state;
-
-  public RequestMessagesCommand(Stream stream, int numMessages) {
-    this.state = null;
-    this.numMessages = numMessages;
-    this.stream = stream;
-  }
-
-  public RequestMessagesCommand(AbstractStream2.TransportState state, int numMessages) {
-    this.state = state;
-    this.numMessages = numMessages;
-    this.stream = null;
-  }
-
-  void requestMessages() {
-    if (stream != null) {
-      stream.request(numMessages);
-    } else {
-      state.requestMessagesFromDeframer(numMessages);
-    }
-  }
+/** Container for stream ids. */
+interface StreamIdHolder {
+  public Integer id();
 }

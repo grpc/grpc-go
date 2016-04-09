@@ -54,7 +54,7 @@ import javax.annotation.Nullable;
 /**
  * Client stream for a Netty transport.
  */
-abstract class NettyClientStream extends Http2ClientStream {
+abstract class NettyClientStream extends Http2ClientStream implements StreamIdHolder {
   private final MethodDescriptor<?, ?> method;
   /** {@code null} after start. */
   private Metadata headers;

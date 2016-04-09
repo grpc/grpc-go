@@ -32,17 +32,17 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
-import io.grpc.internal.AbstractStream.Phase;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 
 import org.junit.Rule;
@@ -50,13 +50,10 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-
-import javax.annotation.Nullable;
 
 /**
  * Tests for {@link AbstractServerStream}.
@@ -74,22 +71,24 @@ public class AbstractServerStreamTest {
     }
   };
 
-  private final AbstractServerStreamBase defaultStream =
-      new AbstractServerStreamBase(allocator, MAX_MESSAGE_SIZE);
+  private AbstractServerStream.Sink sink = mock(AbstractServerStream.Sink.class);
+  private AbstractServerStreamBase stream = new AbstractServerStreamBase(
+      allocator, sink, new AbstractServerStreamBase.TransportState(MAX_MESSAGE_SIZE));
+  private final ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
 
   @Test
   public void setListener_setOnlyOnce() {
 
-    defaultStream.setListener(new ServerStreamListenerBase());
+    stream.transportState().setListener(new ServerStreamListenerBase());
     thrown.expect(IllegalStateException.class);
 
-    defaultStream.setListener(new ServerStreamListenerBase());
+    stream.transportState().setListener(new ServerStreamListenerBase());
   }
 
   @Test
   public void setListener_readyCalled() {
     ServerStreamListener streamListener = mock(ServerStreamListener.class);
-    defaultStream.setListener(streamListener);
+    stream.transportState().setListener(streamListener);
 
     verify(streamListener).onReady();
   }
@@ -98,179 +97,87 @@ public class AbstractServerStreamTest {
   public void setListener_failsOnNull() {
     thrown.expect(NullPointerException.class);
 
-    defaultStream.setListener(null);
+    stream.transportState().setListener(null);
   }
 
   @Test
-  public void receiveMessage_listenerCalled() {
+  public void messageRead_listenerCalled() {
     final ServerStreamListener streamListener = mock(ServerStreamListener.class);
-    AbstractServerStreamBase stream = new AbstractServerStreamBase(allocator, MAX_MESSAGE_SIZE) {
-      @Override
-      protected ServerStreamListener listener() {
-        return streamListener;
-      }
-    };
+    stream.transportState().setListener(streamListener);
 
     // Normally called by a deframe event.
-    stream.receiveMessage(new ByteArrayInputStream(new byte[]{}));
+    stream.transportState().messageRead(new ByteArrayInputStream(new byte[]{}));
 
     verify(streamListener).messageRead(isA(InputStream.class));
   }
 
   @Test
-  public void receiveMessage_failsIfHalfClosed() {
-    // Simulate being closed, without invoking the listener
-    defaultStream.inboundPhase(Phase.STATUS);
-
-    thrown.expect(IllegalStateException.class);
-
-    // Normally called by a deframe event.
-    defaultStream.receiveMessage(new ByteArrayInputStream(new byte[]{}));
-  }
-
-  @Test
   public void writeHeaders_failsOnNullHeaders() {
-    AbstractServerStreamBase stream = new AbstractServerStreamBase(allocator, MAX_MESSAGE_SIZE);
     thrown.expect(NullPointerException.class);
 
     stream.writeHeaders(null);
   }
 
   @Test
-  public void writeHeaders_failsIfAlreadySent() {
-    defaultStream.writeHeaders(new Metadata());
-    thrown.expect(IllegalStateException.class);
-
-    defaultStream.writeHeaders(new Metadata());
-  }
-
-  @Test
   public void writeHeaders() {
-    final AtomicReference<Metadata> capturedHeaders = new AtomicReference<Metadata>(null);
     Metadata headers = new Metadata();
-    AbstractServerStreamBase stream = new AbstractServerStreamBase(allocator, MAX_MESSAGE_SIZE) {
-      @Override
-      protected void internalSendHeaders(Metadata captured) {
-        capturedHeaders.set(captured);
-      }
-    };
-
     stream.writeHeaders(headers);
-
-    assertEquals(headers, capturedHeaders.get());
-    assertEquals(Phase.MESSAGE, stream.outboundPhase());
-  }
-
-  @Test
-  public void writeMessage_writeHeadersIfNeeded() {
-    final AtomicReference<Metadata> capturedHeaders = new AtomicReference<Metadata>(null);
-    AbstractServerStreamBase stream = new AbstractServerStreamBase(allocator, MAX_MESSAGE_SIZE) {
-      @Override
-      protected void internalSendHeaders(Metadata captured) {
-        capturedHeaders.set(captured);
-      }
-    };
-    stream.writeHeaders(new Metadata());
-
-    stream.writeMessage(new ByteArrayInputStream(new byte[]{}));
-
-    assertNotNull(capturedHeaders.get());
+    verify(sink).writeHeaders(same(headers));
   }
 
   @Test
   public void writeMessage_dontWriteDuplicateHeaders() {
-    final AtomicReference<Metadata> capturedHeaders = new AtomicReference<Metadata>(null);
-    Metadata headers = new Metadata();
-    AbstractServerStreamBase stream = new AbstractServerStreamBase(allocator, MAX_MESSAGE_SIZE) {
-      @Override
-      protected void internalSendHeaders(Metadata captured) {
-        capturedHeaders.set(captured);
-      }
-    };
-    stream.writeHeaders(headers);
-
+    stream.writeHeaders(new Metadata());
     stream.writeMessage(new ByteArrayInputStream(new byte[]{}));
 
-    // Make sure it wasn't called twice, by checking that the exact headers sent are the ones
-    // returned.
-    assertSame(headers, capturedHeaders.get());
+    // Make sure it wasn't called twice
+    verify(sink).writeHeaders(any(Metadata.class));
   }
 
   @Test
   public void writeMessage_ignoreIfFramerClosed() {
-    final AtomicBoolean sendCalled = new AtomicBoolean();
-    AbstractServerStreamBase stream = new AbstractServerStreamBase(allocator, MAX_MESSAGE_SIZE) {
-      @Override
-      protected void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-        sendCalled.set(true);
-      }
-    };
     stream.writeHeaders(new Metadata());
-    stream.closeFramer();
+    stream.endOfMessages();
+    reset(sink);
 
     stream.writeMessage(new ByteArrayInputStream(new byte[]{}));
 
-    assertFalse(sendCalled.get());
+    verify(sink, never()).writeFrame(any(WritableBuffer.class), any(Boolean.class));
   }
 
   @Test
   public void writeMessage() {
-    final AtomicBoolean sendCalled = new AtomicBoolean();
-    AbstractServerStreamBase stream = new AbstractServerStreamBase(allocator, MAX_MESSAGE_SIZE) {
-      @Override
-      protected void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-        sendCalled.set(true);
-      }
-    };
     stream.writeHeaders(new Metadata());
 
     stream.writeMessage(new ByteArrayInputStream(new byte[]{}));
-    // Force the message to be flushed
-    stream.closeFramer();
+    stream.flush();
 
-    assertTrue(sendCalled.get());
-    assertEquals(Phase.MESSAGE, stream.outboundPhase());
+    verify(sink).writeFrame(any(WritableBuffer.class), eq(true));
   }
 
   @Test
   public void close_failsOnNullStatus() {
     thrown.expect(NullPointerException.class);
 
-    defaultStream.close(null, new Metadata());
+    stream.close(null, new Metadata());
   }
 
   @Test
   public void close_failsOnNullMetadata() {
     thrown.expect(NullPointerException.class);
 
-    defaultStream.close(Status.INTERNAL, null);
+    stream.close(Status.INTERNAL, null);
   }
 
   @Test
   public void close_sendsTrailers() {
-    final AtomicReference<Metadata> capturedTrailers = new AtomicReference<Metadata>(null);
-    AbstractServerStreamBase stream = new AbstractServerStreamBase(allocator, MAX_MESSAGE_SIZE) {
-      @Override
-      protected void sendTrailers(Metadata trailers, boolean headersSent) {
-        capturedTrailers.set(trailers);
-      }
-    };
     Metadata trailers = new Metadata();
-
     stream.close(Status.INTERNAL, trailers);
-
-    assertSame(trailers, capturedTrailers.get());
+    verify(sink).writeTrailers(any(Metadata.class), eq(false));
   }
 
   @Test
   public void close_sendTrailersClearsReservedFields() {
-    final AtomicReference<Metadata> capturedTrailers = new AtomicReference<Metadata>(null);
-    AbstractServerStreamBase stream = new AbstractServerStreamBase(allocator, MAX_MESSAGE_SIZE) {
-      @Override
-      protected void sendTrailers(Metadata trailers, boolean headersSent) {
-        capturedTrailers.set(trailers);
-      }
-    };
     // stream actually mutates trailers, so we can't check that the fields here are the same as
     // the captured ones.
     Metadata trailers = new Metadata();
@@ -279,8 +186,9 @@ public class AbstractServerStreamTest {
 
     stream.close(Status.INTERNAL.withDescription("bad"), trailers);
 
-    assertEquals(Status.Code.INTERNAL, capturedTrailers.get().get(Status.CODE_KEY).getCode());
-    assertEquals("bad", capturedTrailers.get().get(Status.MESSAGE_KEY));
+    verify(sink).writeTrailers(metadataCaptor.capture(), eq(false));
+    assertEquals(Status.Code.INTERNAL, metadataCaptor.getValue().get(Status.CODE_KEY).getCode());
+    assertEquals("bad", metadataCaptor.getValue().get(Status.MESSAGE_KEY));
   }
 
   private static class ServerStreamListenerBase implements ServerStreamListener {
@@ -297,41 +205,38 @@ public class AbstractServerStreamTest {
     public void closed(Status status) {}
   }
 
-  private static class AbstractServerStreamBase extends AbstractServerStream<Void> {
-    protected AbstractServerStreamBase(
-        WritableBufferAllocator bufferAllocator, int maxMessageSize) {
-      super(bufferAllocator, maxMessageSize);
+  private static class AbstractServerStreamBase extends AbstractServerStream {
+    private final Sink sink;
+    private final AbstractServerStream.TransportState state;
+
+    protected AbstractServerStreamBase(WritableBufferAllocator bufferAllocator, Sink sink,
+        AbstractServerStream.TransportState state) {
+      super(bufferAllocator);
+      this.sink = sink;
+      this.state = state;
     }
 
     @Override
-    public void cancel(Status status) {}
-
-    @Override
-    public void request(int numMessages) {}
-
-    @Override
-    protected void internalSendHeaders(Metadata headers) {}
-
-    @Override
-    protected void sendFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {}
-
-    @Override
-    protected void sendTrailers(Metadata trailers, boolean headersSent) {}
-
-    @Override
-    @Nullable
-    public Void id() {
-      return null;
+    protected Sink abstractServerStreamSink() {
+      return sink;
     }
 
     @Override
-    protected void inboundDeliveryPaused() {}
+    protected AbstractServerStream.TransportState transportState() {
+      return state;
+    }
 
-    @Override
-    protected void returnProcessedBytes(int processedBytes) {}
+    static class TransportState extends AbstractServerStream.TransportState {
+      protected TransportState(int maxMessageSize) {
+        super(maxMessageSize);
+      }
 
-    @Override
-    protected void sendStreamAbortToClient(Status status, Metadata trailers) {}
+      @Override
+      protected void deframeFailed(Throwable cause) {}
+
+      @Override
+      public void bytesRead(int processedBytes) {}
+    }
   }
 }
 
