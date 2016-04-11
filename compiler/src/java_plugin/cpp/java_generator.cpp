@@ -9,6 +9,15 @@
 #include <google/protobuf/io/printer.h>
 #include <google/protobuf/io/zero_copy_stream.h>
 
+// Stringify helpers used solely to cast GRPC_VERSION
+#ifndef STR
+#define STR(s) #s
+#endif
+
+#ifndef XSTR
+#define XSTR(s) STR(s)
+#endif
+
 namespace java_grpc_generator {
 
 using google::protobuf::FileDescriptor;
@@ -698,10 +707,15 @@ static void PrintService(const ServiceDescriptor* service,
   (*vars)["service_name"] = service->name();
   (*vars)["file_name"] = service->file()->name();
   (*vars)["service_class_name"] = ServiceClassName(service);
+  #ifdef GRPC_VERSION
+    (*vars)["grpc_version"] = " (version " XSTR(GRPC_VERSION) ")";
+  #else
+    (*vars)["grpc_version"] = "";
+  #endif
   p->Print(
       *vars,
       "@$Generated$(\n"
-      "    value = \"by gRPC proto compiler\",\n"
+      "    value = \"by gRPC proto compiler$grpc_version$\",\n"
       "    comments = \"Source: $file_name$\")\n"
       "public class $service_class_name$ {\n\n");
   p->Indent();

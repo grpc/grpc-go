@@ -75,6 +75,7 @@ model {
   binaries {
     all {
       if (toolChain in Gcc || toolChain in Clang) {
+        cppCompiler.define("GRPC_VERSION", version)
         cppCompiler.args "--std=c++0x"
         addEnvArgs("CXXFLAGS", cppCompiler.args)
         addEnvArgs("CPPFLAGS", cppCompiler.args)
@@ -95,6 +96,7 @@ model {
         }
         addEnvArgs("LDFLAGS", linker.args)
       } else if (toolChain in VisualCpp) {
+        cppCompiler.define("GRPC_VERSION", version)
         cppCompiler.args "/EHsc", "/MT"
         if (rootProject.hasProperty('vcProtobufInclude')) {
           cppCompiler.args "/I${rootProject.vcProtobufInclude}"
