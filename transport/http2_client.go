@@ -573,6 +573,9 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
+		if cwu := t.fc.adjustConnPendingUpdate(uint32(len(f.Data()))); cwu > 0 {
+			t.controlBuf.put(&windowUpdate{0, cwu})
+		}
 		return
 	}
 	size := len(f.Data())

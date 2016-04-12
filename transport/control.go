@@ -196,6 +196,25 @@ func (f *inFlow) onData(n uint32) error {
 	return nil
 }
 
+// adjustConnPendingUpdate increments the connection level pending updates by n.
+// This is called to make the proper connection level window updates when
+// receiving data frame targeting the canceled RPCs.
+func (f *inFlow) adjustConnPendingUpdate(n uint32) uint32 {
+	if n == 0 || f.conn != nil {
+		return 0
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pendingUpdate += n
+	if f.pendingUpdate >= f.limit/4 {
+		ret := f.pendingUpdate
+		f.pendingUpdate = 0
+		return ret
+	}
+	return 0
+
+}
+
 // connOnRead updates the connection level states when the application consumes data.
 func (f *inFlow) connOnRead(n uint32) uint32 {
 	if n == 0 || f.conn != nil {
