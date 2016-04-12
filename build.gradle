@@ -137,8 +137,8 @@ subprojects {
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.4',
                 protobuf_util: "com.google.protobuf:protobuf-java-util:${protobufVersion}",
 
-                netty: 'io.netty:netty-codec-http2:[4.1.0.CR6]',
-                netty_epoll: 'io.netty:netty-transport-native-epoll:4.1.0.CR6' + epoll_suffix,
+                netty: 'io.netty:netty-codec-http2:[4.1.0.CR7]',
+                netty_epoll: 'io.netty:netty-transport-native-epoll:4.1.0.CR7' + epoll_suffix,
                 netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork15:' + osdetector.classifier,
 
                 // Test dependencies.
