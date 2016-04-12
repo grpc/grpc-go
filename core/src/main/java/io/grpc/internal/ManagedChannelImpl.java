@@ -384,7 +384,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         ts = transports.get(addressGroup);
         if (ts == null) {
           ts = new TransportSet(addressGroup, authority(), loadBalancer, backoffPolicyProvider,
-              transportFactory, scheduledExecutor, new TransportSet.Callback() {
+              transportFactory, scheduledExecutor, executor, new TransportSet.Callback() {
                 @Override
                 public void onTerminated() {
                   synchronized (lock) {
@@ -440,7 +440,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     private boolean closed;
 
     InterimTransportImpl() {
-      delayedTransport = new DelayedClientTransport();
+      delayedTransport = new DelayedClientTransport(executor);
       delayedTransport.start(new ManagedClientTransport.Listener() {
           @Override public void transportShutdown(Status status) {}
 

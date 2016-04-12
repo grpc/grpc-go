@@ -59,6 +59,8 @@ import javax.annotation.concurrent.GuardedBy;
 class DelayedClientTransport implements ManagedClientTransport {
   private final Object lock = new Object();
 
+  private final Executor streamCreationExecutor;
+
   private Listener listener;
   /** 'lock' must be held when assigning to transportSupplier. */
   private volatile Supplier<ClientTransport> transportSupplier;
@@ -72,6 +74,10 @@ class DelayedClientTransport implements ManagedClientTransport {
    */
   @GuardedBy("lock")
   private boolean shutdown;
+
+  DelayedClientTransport(Executor streamCreationExecutor) {
+    this.streamCreationExecutor = streamCreationExecutor;
+  }
 
   @Override
   public void start(Listener listener) {
@@ -189,8 +195,7 @@ class DelayedClientTransport implements ManagedClientTransport {
    * will be used for all future calls to {@link #newStream}, even if this transport is {@link
    * #shutdown}.
    */
-  public void setTransportSupplier(Supplier<ClientTransport> supplier) {
-    Collection<PendingStream> savedPendingStreams;
+  public void setTransportSupplier(final Supplier<ClientTransport> supplier) {
     synchronized (lock) {
       if (transportSupplier != null) {
         return;
@@ -204,19 +209,21 @@ class DelayedClientTransport implements ManagedClientTransport {
       if (shutdown && pendingStreams != null) {
         listener.transportTerminated();
       }
-      savedPendingStreams = pendingStreams;
+      if (pendingStreams != null && !pendingStreams.isEmpty()) {
+        final Collection<PendingStream> savedPendingStreams = pendingStreams;
+        // createRealStream may be expensive. It will start real streams on the transport. If there
+        // are pending requests, they will be serialized too, which may be expensive. Since we are
+        // now on transport thread, we need to offload the work to an executor.
+        streamCreationExecutor.execute(new Runnable() {
+            @Override public void run() {
+              for (final PendingStream stream : savedPendingStreams) {
+                stream.createRealStream(supplier.get());
+              }
+            }});
+      }
       pendingStreams = null;
       if (!shutdown) {
         listener.transportReady();
-      }
-    }
-    // createRealStream may be expensive, so we run it outside of the lock.  It will start real
-    // streams on the transport. If there are pending requests, they will be serialized too, which
-    // may be expensive.
-    // TODO(zhangkun83): may consider doing it in a different thread.
-    if (savedPendingStreams != null) {
-      for (PendingStream stream : savedPendingStreams) {
-        stream.createRealStream(supplier.get());
       }
     }
   }

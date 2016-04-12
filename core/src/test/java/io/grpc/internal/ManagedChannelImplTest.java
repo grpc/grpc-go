@@ -93,7 +93,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -202,7 +201,7 @@ public class ManagedChannelImplTest {
     ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();
     transportListener.transportReady();
     verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
-    verify(mockStream).start(streamListenerCaptor.capture());
+    verify(mockStream, timeout(1000)).start(streamListenerCaptor.capture());
     verify(mockStream).setCompressor(isA(Compressor.class));
     // Depends on how quick the real transport is created, ClientCallImpl may start on mockStream
     // directly, or on a DelayedStream which later starts mockStream. In the former case,
@@ -218,7 +217,7 @@ public class ManagedChannelImplTest {
     when(mockTransport.newStream(same(method), same(headers2))).thenReturn(mockStream2);
     call2.start(mockCallListener2, headers2);
     verify(mockTransport, timeout(1000)).newStream(same(method), same(headers2));
-    verify(mockStream2).start(streamListenerCaptor.capture());
+    verify(mockStream2, timeout(1000)).start(streamListenerCaptor.capture());
     ClientStreamListener streamListener2 = streamListenerCaptor.getValue();
     Metadata trailers = new Metadata();
     streamListener2.closed(Status.CANCELLED, trailers);
@@ -333,31 +332,22 @@ public class ManagedChannelImplTest {
     Metadata headers = new Metadata();
     ClientStream mockStream = mock(ClientStream.class);
     when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
-
-    final List<Runnable> runnables = new ArrayList<Runnable>();
-    Executor executor = new Executor() {
-      @Override
-      public void execute(Runnable r) {
-        runnables.add(r);
-      }
-    };
+    FakeClock fakeExecutor = new FakeClock();
     ManagedChannel channel = createChannel(
         new FakeNameResolverFactory(true), NO_INTERCEPTOR);
-    ClientCall<String, Integer> call =
-        channel.newCall(method, CallOptions.DEFAULT.withExecutor(executor));
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT.withExecutor(
+        fakeExecutor.scheduledExecutorService));
     call.start(mockCallListener, headers);
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     transportListenerCaptor.getValue().transportReady();
     verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
-    verify(mockStream).start(streamListenerCaptor.capture());
+    verify(mockStream, timeout(1000)).start(streamListenerCaptor.capture());
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
     Metadata trailers = new Metadata();
+    assertEquals(0, fakeExecutor.numPendingTasks());
     streamListener.closed(Status.CANCELLED, trailers);
-    assertFalse(runnables.isEmpty());
     verify(mockCallListener, never()).onClose(same(Status.CANCELLED), same(trailers));
-    for (Runnable r : runnables) {
-      r.run();
-    }
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockCallListener).onClose(same(Status.CANCELLED), same(trailers));
   }
 

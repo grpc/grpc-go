@@ -57,6 +57,7 @@ import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -79,6 +80,7 @@ public class TransportSetTest {
   private static final String authority = "fakeauthority";
 
   private FakeClock fakeClock;
+  private FakeClock fakeExecutor;
 
   @Mock private LoadBalancer<ClientTransport> mockLoadBalancer;
   @Mock private BackoffPolicy mockBackoffPolicy1;
@@ -101,6 +103,7 @@ public class TransportSetTest {
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
     fakeClock = new FakeClock();
+    fakeExecutor = new FakeClock();
 
     when(mockBackoffPolicyProvider.get())
         .thenReturn(mockBackoffPolicy1, mockBackoffPolicy2, mockBackoffPolicy3);
@@ -108,6 +111,11 @@ public class TransportSetTest {
     when(mockBackoffPolicy2.nextBackoffMillis()).thenReturn(10L, 100L);
     when(mockBackoffPolicy3.nextBackoffMillis()).thenReturn(10L, 100L);
     transports = TestUtils.captureTransports(mockTransportFactory);
+  }
+
+  @After public void noMorePendingTasks() {
+    assertEquals(0, fakeClock.numPendingTasks());
+    assertEquals(0, fakeExecutor.numPendingTasks());
   }
 
   @Test public void singleAddressReconnect() {
@@ -339,9 +347,12 @@ public class TransportSetTest {
     // The pending stream will be started on this newly started transport after it's ready.
     // The transport is shut down by TransportSet right after the stream is created.
     transportInfo = transports.poll();
-    verify(transportInfo.transport, times(0)).newStream(same(method), same(headers));
     verify(transportInfo.transport, times(0)).shutdown();
+    assertEquals(0, fakeExecutor.numPendingTasks());
     transportInfo.listener.transportReady();
+    verify(transportInfo.transport, times(0)).newStream(
+        any(MethodDescriptor.class), any(Metadata.class));
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(transportInfo.transport).newStream(same(method), same(headers));
     verify(transportInfo.transport).shutdown();
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
@@ -412,6 +423,7 @@ public class TransportSetTest {
     addressGroup = new EquivalentAddressGroup(Arrays.asList(addrs));
     transportSet = new TransportSet(addressGroup, authority, mockLoadBalancer,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.scheduledExecutorService,
-        mockTransportSetCallback, Stopwatch.createUnstarted(fakeClock.ticker));
+        fakeExecutor.scheduledExecutorService, mockTransportSetCallback,
+        Stopwatch.createUnstarted(fakeClock.ticker));
   }
 }

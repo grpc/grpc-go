@@ -43,6 +43,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -71,7 +72,8 @@ public class DnsNameResolverTest {
 
   private final DnsNameResolverFactory factory = DnsNameResolverFactory.getInstance();
   private final FakeClock fakeClock = new FakeClock();
-  private final Resource<ScheduledExecutorService> fakeTimerService =
+  private final FakeClock fakeExecutor = new FakeClock();
+  private final Resource<ScheduledExecutorService> fakeTimerServiceResource =
       new Resource<ScheduledExecutorService>() {
         @Override
         public ScheduledExecutorService create() {
@@ -84,16 +86,16 @@ public class DnsNameResolverTest {
         }
       };
 
-  private final Resource<ExecutorService> fakeExecutor =
+  private final Resource<ExecutorService> fakeExecutorResource =
       new Resource<ExecutorService>() {
         @Override
         public ExecutorService create() {
-          return fakeClock.scheduledExecutorService;
+          return fakeExecutor.scheduledExecutorService;
         }
 
         @Override
         public void close(ExecutorService instance) {
-          assertSame(fakeClock, instance);
+          assertSame(fakeExecutor, instance);
         }
       };
 
@@ -107,6 +109,12 @@ public class DnsNameResolverTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+  }
+
+  @After
+  public void noMorePendingTasks() {
+    assertEquals(0, fakeClock.numPendingTasks());
+    assertEquals(0, fakeExecutor.numPendingTasks());
   }
 
   @Test
@@ -138,12 +146,14 @@ public class DnsNameResolverTest {
     String name = "foo.googleapis.com";
     MockResolver resolver = new MockResolver(name, 81, answer1, answer2);
     resolver.start(mockListener);
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener).onUpdate(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
     assertAnswerMatches(answer1, 81, resultCaptor.getValue());
     assertEquals(0, fakeClock.numPendingTasks());
 
     resolver.refresh();
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener, times(2)).onUpdate(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
     assertAnswerMatches(answer2, 81, resultCaptor.getValue());
@@ -159,6 +169,7 @@ public class DnsNameResolverTest {
     InetAddress[] answer = createAddressList(2);
     MockResolver resolver = new MockResolver(name, 81, error, error, answer);
     resolver.start(mockListener);
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener).onError(statusCaptor.capture());
     assertEquals(name, resolver.invocations.poll());
     Status status = statusCaptor.getValue();
@@ -172,6 +183,7 @@ public class DnsNameResolverTest {
 
     // First retry
     fakeClock.forwardMillis(1);
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener, times(2)).onError(statusCaptor.capture());
     assertEquals(name, resolver.invocations.poll());
     status = statusCaptor.getValue();
@@ -186,6 +198,7 @@ public class DnsNameResolverTest {
     // Second retry
     fakeClock.forwardMillis(1);
     assertEquals(0, fakeClock.numPendingTasks());
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener).onUpdate(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
     assertAnswerMatches(answer, 81, resultCaptor.getValue());
@@ -200,6 +213,7 @@ public class DnsNameResolverTest {
     InetAddress[] answer = createAddressList(2);
     MockResolver resolver = new MockResolver(name, 81, error, answer);
     resolver.start(mockListener);
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener).onError(statusCaptor.capture());
     assertEquals(name, resolver.invocations.poll());
     Status status = statusCaptor.getValue();
@@ -210,6 +224,7 @@ public class DnsNameResolverTest {
     assertEquals(1, fakeClock.numPendingTasks());
 
     resolver.refresh();
+    assertEquals(1, fakeExecutor.runDueTasks());
     // Refresh cancelled the retry
     assertEquals(0, fakeClock.numPendingTasks());
     verify(mockListener).onUpdate(resultCaptor.capture(), any(Attributes.class));
@@ -225,6 +240,8 @@ public class DnsNameResolverTest {
     UnknownHostException error = new UnknownHostException(name);
     MockResolver resolver = new MockResolver(name, 81, error);
     resolver.start(mockListener);
+    assertEquals(1, fakeExecutor.runDueTasks());
+
     verify(mockListener).onError(statusCaptor.capture());
     assertEquals(name, resolver.invocations.poll());
     Status status = statusCaptor.getValue();
@@ -283,8 +300,8 @@ public class DnsNameResolverTest {
 
     MockResolver(String name, int defaultPort, Object ... answers) {
       super(null, name, Attributes.newBuilder().set(
-          NameResolver.Factory.PARAMS_DEFAULT_PORT, defaultPort).build(), fakeTimerService,
-          fakeExecutor);
+          NameResolver.Factory.PARAMS_DEFAULT_PORT, defaultPort).build(), fakeTimerServiceResource,
+          fakeExecutorResource);
       for (Object answer : answers) {
         this.answers.add(answer);
       }

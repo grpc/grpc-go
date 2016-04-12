@@ -43,6 +43,7 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -69,6 +70,7 @@ final class TransportSet implements WithLogId {
   private final Callback callback;
   private final ClientTransportFactory transportFactory;
   private final ScheduledExecutorService scheduledExecutor;
+  private final Executor appExecutor;
 
   @GuardedBy("lock")
   private int nextAddressIndex;
@@ -119,22 +121,23 @@ final class TransportSet implements WithLogId {
   TransportSet(EquivalentAddressGroup addressGroup, String authority,
       LoadBalancer<ClientTransport> loadBalancer, BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
-      Callback callback) {
+      Executor appExecutor, Callback callback) {
     this(addressGroup, authority, loadBalancer, backoffPolicyProvider, transportFactory,
-        scheduledExecutor, callback, Stopwatch.createUnstarted());
+        scheduledExecutor, appExecutor, callback, Stopwatch.createUnstarted());
   }
 
   @VisibleForTesting
   TransportSet(EquivalentAddressGroup addressGroup, String authority,
       LoadBalancer<ClientTransport> loadBalancer, BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
-      Callback callback, Stopwatch backoffWatch) {
+      Executor appExecutor, Callback callback, Stopwatch backoffWatch) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.loadBalancer = loadBalancer;
     this.backoffPolicyProvider = backoffPolicyProvider;
     this.transportFactory = transportFactory;
     this.scheduledExecutor = scheduledExecutor;
+    this.appExecutor = appExecutor;
     this.callback = callback;
     this.backoffWatch = backoffWatch;
   }
@@ -155,7 +158,7 @@ final class TransportSet implements WithLogId {
         if (shutdown) {
           return SHUTDOWN_TRANSPORT;
         }
-        DelayedClientTransport delayedTransport = new DelayedClientTransport();
+        DelayedClientTransport delayedTransport = new DelayedClientTransport(appExecutor);
         transports.add(delayedTransport);
         delayedTransport.start(new BaseTransportListener(delayedTransport));
         activeTransport = delayedTransport;

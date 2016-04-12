@@ -46,6 +46,11 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * A manipulated clock that exports a {@link Ticker} and a {@link ScheduledExecutorService}.
+ *
+ * <p>To simulate the locking scenario of using real executors, it never runs tasks within {@code
+ * schedule()} or {@code execute()}. Instead, you should call {@link #runDueTasks} in your test
+ * method to run all due tasks. {@link #forwardTime} and {@link #forwardMillis} call {@link
+ * #runDueTasks} automatically.
  */
 public final class FakeClock {
 
@@ -102,7 +107,6 @@ public final class FakeClock {
     @Override public ScheduledFuture<?> schedule(Runnable cmd, long delay, TimeUnit unit) {
       ScheduledTask task = new ScheduledTask(currentTimeNanos + unit.toNanos(delay), cmd);
       tasks.add(task);
-      runDueTasks();
       return task;
     }
 
@@ -167,11 +171,17 @@ public final class FakeClock {
     }
 
     @Override public void execute(Runnable command) {
-      command.run();
+      schedule(command, 0, TimeUnit.NANOSECONDS);
     }
   }
 
-  private void runDueTasks() {
+  /**
+   * Run all due tasks.
+   *
+   * @return the number of tasks run by this call
+   */
+  public int runDueTasks() {
+    int count = 0;
     while (true) {
       ScheduledTask task = tasks.peek();
       if (task == null || task.dueTimeNanos > currentTimeNanos) {
@@ -180,18 +190,33 @@ public final class FakeClock {
       tasks.poll();
       task.command.run();
       task.complete();
+      count++;
     }
+    return count;
   }
 
-  public void forwardTime(long value, TimeUnit unit) {
+  /**
+   * Forward the time by the given duration and run all due tasks.
+   *
+   * @return the number of tasks run by this call
+   */
+  public int forwardTime(long value, TimeUnit unit) {
     currentTimeNanos += unit.toNanos(value);
-    runDueTasks();
+    return runDueTasks();
   }
 
-  public void forwardMillis(long millis) {
-    forwardTime(millis, TimeUnit.MILLISECONDS);
+  /**
+   * Forward the time by the given milliseconds and run all due tasks.
+   *
+   * @return the number of tasks run by this call
+   */
+  public int forwardMillis(long millis) {
+    return forwardTime(millis, TimeUnit.MILLISECONDS);
   }
 
+  /**
+   * Return the number of queued tasks.
+   */
   public int numPendingTasks() {
     return tasks.size();
   }

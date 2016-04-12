@@ -50,6 +50,7 @@ import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.internal.ClientTransport;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -87,10 +88,11 @@ public class DelayedClientTransportTest {
       new StringMarshaller(), new IntegerMarshaller());
 
   private final Metadata headers = new Metadata();
-
   private final Metadata headers2 = new Metadata();
 
-  private final DelayedClientTransport delayedTransport = new DelayedClientTransport();
+  private final FakeClock fakeExecutor = new FakeClock();
+  private final DelayedClientTransport delayedTransport = new DelayedClientTransport(
+      fakeExecutor.scheduledExecutorService);
 
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
@@ -99,9 +101,14 @@ public class DelayedClientTransportTest {
     delayedTransport.start(transportListener);
   }
 
+  @After public void noMorePendingTasks() {
+    assertEquals(0, fakeExecutor.numPendingTasks());
+  }
+
   @Test public void transportsAreUsedInOrder() {
     delayedTransport.newStream(method, headers);
     delayedTransport.newStream(method2, headers2);
+    assertEquals(0, fakeExecutor.numPendingTasks());
     delayedTransport.setTransportSupplier(new Supplier<ClientTransport>() {
         final Iterator<ClientTransport> it =
             Arrays.asList(mockRealTransport, mockRealTransport2).iterator();
@@ -110,6 +117,7 @@ public class DelayedClientTransportTest {
           return it.next();
         }
       });
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockRealTransport).newStream(same(method), same(headers));
     verify(mockRealTransport2).newStream(same(method2), same(headers2));
   }
@@ -119,8 +127,10 @@ public class DelayedClientTransportTest {
     stream.start(streamListener);
     assertEquals(1, delayedTransport.getPendingStreamsCount());
     assertTrue(stream instanceof DelayedStream);
+    assertEquals(0, fakeExecutor.numPendingTasks());
     delayedTransport.setTransport(mockRealTransport);
     assertEquals(0, delayedTransport.getPendingStreamsCount());
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockRealTransport).newStream(same(method), same(headers));
     verify(mockRealStream).start(same(streamListener));
   }
@@ -134,6 +144,7 @@ public class DelayedClientTransportTest {
     delayedTransport.shutdown();
     verify(transportListener).transportShutdown(any(Status.class));
     verify(transportListener).transportTerminated();
+    assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockRealTransport).newStream(same(method), same(headers));
     stream.start(streamListener);
     verify(mockRealStream).start(same(streamListener));
