@@ -38,7 +38,6 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2ConnectionHandler;
-import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
@@ -84,12 +83,12 @@ abstract class AbstractNettyHandler extends Http2ConnectionHandler {
   public final void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
     Http2Exception embedded = getEmbeddedHttp2Exception(cause);
     if (embedded == null) {
-      // Kill the connection instead of propagating the exceptionCaught(). Http2ConnectionHandler
-      // only handles Http2Exceptions and propagates everything else.
-      String message = cause.getMessage() == null ? "Unknown error occurred" : cause.getMessage();
-      cause = Http2Exception.connectionError(Http2Error.INTERNAL_ERROR, cause, message);
+      // There was no embedded Http2Exception, assume it's a connection error. Subclasses are
+      // responsible for storing the appropriate status and shutting down the connection.
+      onError(ctx, cause);
+    } else {
+      super.exceptionCaught(ctx, cause);
     }
-    super.exceptionCaught(ctx, cause);
   }
 
   protected final ChannelHandlerContext ctx() {
