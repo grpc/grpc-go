@@ -47,6 +47,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.google.common.truth.Truth;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.Compressor;
@@ -68,7 +69,9 @@ import io.grpc.StringMarshaller;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -98,6 +101,8 @@ public class ServerImplTest {
   private final CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance();
+
+  @Rule public final ExpectedException thrown = ExpectedException.none();
 
   @BeforeClass
   public static void beforeStartUp() {
@@ -511,6 +516,44 @@ public class ServerImplTest {
     assertTrue(latch.await(5, TimeUnit.SECONDS));
   }
 
+  @Test
+  public void getPort() throws Exception {
+    transportServer = new SimpleServer() {
+      @Override
+      public int getPort() {
+        return 65535;
+      }
+    };
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
+        decompressorRegistry, compressorRegistry);
+    server.start();
+
+    Truth.assertThat(server.getPort()).isEqualTo(65535);
+  }
+
+  @Test
+  public void getPortBeforeStartedFails() {
+    transportServer = new SimpleServer();
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
+        decompressorRegistry, compressorRegistry);
+    thrown.expect(IllegalStateException.class);
+    thrown.expectMessage("started");
+    server.getPort();
+  }
+
+  @Test
+  public void getPortAfterTerminationFails() throws Exception {
+    transportServer = new SimpleServer();
+    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
+        decompressorRegistry, compressorRegistry);
+    server.start();
+    server.shutdown();
+    server.awaitTermination();
+    thrown.expect(IllegalStateException.class);
+    thrown.expectMessage("terminated");
+    server.getPort();
+  }
+
   /**
    * Useful for plugging a single-threaded executor from processing tasks, or for waiting until a
    * single-threaded executor has processed queued tasks.
@@ -539,6 +582,11 @@ public class ServerImplTest {
     @Override
     public void start(ServerListener listener) throws IOException {
       this.listener = listener;
+    }
+
+    @Override
+    public int getPort() {
+      return -1;
     }
 
     @Override

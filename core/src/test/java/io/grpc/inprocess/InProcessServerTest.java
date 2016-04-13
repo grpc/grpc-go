@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,38 +29,22 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.internal;
+package io.grpc.inprocess;
 
-import java.io.IOException;
+import com.google.common.truth.Truth;
 
-import javax.annotation.concurrent.ThreadSafe;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-/**
- * An object that accepts new incoming connections. This would commonly encapsulate a bound socket
- * that {@code accept()}s new connections.
- */
-@ThreadSafe
-public interface Server {
-  /**
-   * Starts transport. Implementations must not call {@code listener} until after {@code start()}
-   * returns. The method only returns after it has done the equivalent of bind()ing, so it will be
-   * able to service any connections created after returning.
-   *
-   * @param listener non-{@code null} listener of server events
-   * @throws IOException if unable to bind
-   */
-  void start(ServerListener listener) throws IOException;
+@RunWith(JUnit4.class)
+public class InProcessServerTest {
 
-  /**
-   * Initiates an orderly shutdown of the server. Existing transports continue, but new transports
-   * will not be created (once {@link ServerListener#serverShutdown()} callback is called). This
-   * method may only be called once.
-   */
-  void shutdown();
+  @Test
+  public void getPort_notStarted() throws Exception {
+    InProcessServer s = new InProcessServer("name");
 
-  /**
-   * Returns what underlying port the server is listening on, or -1 if the port number is not
-   * available or does not make sense.
-   */
-  int getPort();
+    Truth.assertThat(s.getPort()).isEqualTo(-1);
+  }
 }
+

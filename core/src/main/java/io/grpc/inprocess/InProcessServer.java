@@ -68,6 +68,11 @@ class InProcessServer implements Server {
   }
 
   @Override
+  public int getPort() {
+    return -1;
+  }
+
+  @Override
   public void shutdown() {
     if (!registry.remove(name, this)) {
       throw new AssertionError();

@@ -52,6 +52,18 @@ public abstract class Server {
   public abstract Server start() throws IOException;
 
   /**
+   * Returns the port number the server is listening on.  This can return -1 if there is no actual
+   * port or the result otherwise does not make sense.  Result is undefined after the server is
+   * terminated.
+   *
+   * @throws IllegalStateException if the server has not yet been started.
+   */
+  @ExperimentalApi
+  public int getPort() {
+    return -1;
+  }
+
+  /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are rejected.
    */
   public abstract Server shutdown();

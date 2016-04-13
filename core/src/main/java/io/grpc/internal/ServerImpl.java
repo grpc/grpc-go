@@ -139,6 +139,15 @@ public final class ServerImpl extends io.grpc.Server {
     }
   }
 
+  @Override
+  public int getPort() {
+    synchronized (lock) {
+      checkState(started, "Not started");
+      checkState(!terminated, "Already terminated");
+      return transportServer.getPort();
+    }
+  }
+
   /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are rejected.
    */

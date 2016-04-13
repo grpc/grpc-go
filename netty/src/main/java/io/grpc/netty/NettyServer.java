@@ -50,6 +50,7 @@ import io.netty.util.AbstractReferenceCounted;
 import io.netty.util.ReferenceCounted;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -95,6 +96,18 @@ class NettyServer implements Server {
   }
 
   @Override
+  public int getPort() {
+    if (channel == null) {
+      return -1;
+    }
+    SocketAddress localAddr = channel.localAddress();
+    if (!(localAddr instanceof InetSocketAddress)) {
+      return -1;
+    }
+    return ((InetSocketAddress)localAddr).getPort();
+  }
+
+  @Override
   public void start(ServerListener serverListener) throws IOException {
     listener = checkNotNull(serverListener, "serverListener");
 
@@ -123,7 +136,6 @@ class NettyServer implements Server {
         transport.start(listener.transportCreated(transport));
       }
     });
-
     // Bind and start to accept incoming connections.
     ChannelFuture future = b.bind(address);
     try {
