@@ -14,13 +14,13 @@ buildscript {
     }
     dependencies {
         classpath libraries.protobuf_plugin
-        classpath "me.champeau.gradle:jmh-gradle-plugin:0.2.0"
+        classpath "gradle.plugin.me.champeau.gradle:jmh-gradle-plugin:0.3.0"
     }
 }
 apply plugin: 'me.champeau.gradle.jmh'
 
 jmh {
-    jmhVersion = '1.7.1'
+    jmhVersion = '1.11.3'
     warmupIterations = 10
     iterations = 10
     fork = 1
