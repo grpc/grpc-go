@@ -236,9 +236,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	var timeout time.Duration
 	if dl, ok := ctx.Deadline(); ok {
 		timeout = dl.Sub(time.Now())
-		if timeout <= 0 {
-			return nil, ContextErr(context.DeadlineExceeded)
-		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, ContextErr(err)
 	}
 	pr := &peer.Peer{
 		Addr: t.conn.RemoteAddr(),
