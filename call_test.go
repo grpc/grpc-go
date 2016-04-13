@@ -54,6 +54,7 @@ var (
 	expectedResponse = "pong"
 	weirdError       = "format verbs: %v%s"
 	sizeLargeErr     = 1024 * 1024
+	canceled         = 0
 )
 
 type testCodec struct {
@@ -98,6 +99,11 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		}
 		if v == "weird error" {
 			h.t.WriteStatus(s, codes.Internal, weirdError)
+			return
+		}
+		if v == "canceled" {
+			canceled++
+			h.t.WriteStatus(s, codes.Internal, "")
 			return
 		}
 		if v != expectedRequest {
@@ -240,6 +246,23 @@ func TestInvokeErrorSpecialChars(t *testing.T) {
 	}
 	if got, want := ErrorDesc(err), weirdError; got != want {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) error = %q, want %q", got, want)
+	}
+	cc.Close()
+	server.stop()
+}
+
+// TestInvokeCancel checks that an Invoke with a canceled context is not sent.
+func TestInvokeCancel(t *testing.T) {
+	server, cc := setUp(t, 0, math.MaxUint32)
+	var reply string
+	req := "canceled"
+	for i := 0; i < 100; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		Invoke(ctx, "/foo/bar", &req, &reply, cc)
+	}
+	if canceled != 0 {
+		t.Fatalf("received %d of 100 canceled requests", canceled)
 	}
 	cc.Close()
 	server.stop()
