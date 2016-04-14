@@ -1,10 +1,3 @@
-apply plugin: 'application'
-
-description = "grpc Benchmarks"
-
-startScripts.enabled = false
-run.enabled = false
-
 buildscript {
     repositories {
         mavenCentral()
@@ -15,10 +8,19 @@ buildscript {
     dependencies {
         classpath libraries.math
         classpath libraries.protobuf_plugin
-        classpath "gradle.plugin.me.champeau.gradle:jmh-gradle-plugin:0.3.0"
     }
 }
-apply plugin: 'me.champeau.gradle.jmh'
+
+plugins {
+  id "me.champeau.gradle.jmh" version "0.3.0"
+}
+
+apply plugin: 'application'
+
+description = "grpc Benchmarks"
+
+startScripts.enabled = false
+run.enabled = false
 
 jmh {
     jmhVersion = '1.11.3'
