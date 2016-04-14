@@ -15,6 +15,8 @@ type HistogramValue struct {
 	Count int64
 	// Sum is the sum of all the values added to the histogram.
 	Sum int64
+	// SumOfSquares is the sum of squares of all values.
+	SumOfSquares int64
 	// Min is the minimum of all the values added to the histogram.
 	Min int64
 	// Max is the maximum of all the values added to the histogram.
@@ -78,11 +80,12 @@ func (v HistogramValue) String() string {
 // latency in milliseconds. New histogram objects should be obtained via the
 // New() function.
 type Histogram struct {
-	opts    HistogramOptions
-	buckets []bucketInternal
-	count   *Counter
-	sum     *Counter
-	tracker *Tracker
+	opts         HistogramOptions
+	buckets      []bucketInternal
+	count        *Counter
+	sum          *Counter
+	sumOfSquares *Counter
+	tracker      *Tracker
 }
 
 // HistogramOptions contains the parameters that define the histogram's buckets.
@@ -116,11 +119,12 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 		opts.SmallestBucketSize = 1.0
 	}
 	h := Histogram{
-		opts:    opts,
-		buckets: make([]bucketInternal, opts.NumBuckets),
-		count:   newCounter(),
-		sum:     newCounter(),
-		tracker: newTracker(),
+		opts:         opts,
+		buckets:      make([]bucketInternal, opts.NumBuckets),
+		count:        newCounter(),
+		sum:          newCounter(),
+		sumOfSquares: newCounter(),
+		tracker:      newTracker(),
 	}
 	low := opts.MinValue
 	delta := opts.SmallestBucketSize
@@ -147,6 +151,7 @@ func (h *Histogram) Add(value int64) error {
 	h.buckets[bucket].count.Incr(1)
 	h.count.Incr(1)
 	h.sum.Incr(value)
+	h.sumOfSquares.Incr(value * value)
 	h.tracker.Push(value)
 	return nil
 }
@@ -167,11 +172,12 @@ func (h *Histogram) Value() HistogramValue {
 	}
 
 	v := HistogramValue{
-		Count:   h.count.Value(),
-		Sum:     h.sum.Value(),
-		Min:     h.tracker.Min(),
-		Max:     h.tracker.Max(),
-		Buckets: b,
+		Count:        h.count.Value(),
+		Sum:          h.sum.Value(),
+		SumOfSquares: h.sumOfSquares.Value(),
+		Min:          h.tracker.Min(),
+		Max:          h.tracker.Max(),
+		Buckets:      b,
 	}
 	return v
 }
@@ -187,11 +193,12 @@ func (h *Histogram) Delta1h() HistogramValue {
 	}
 
 	v := HistogramValue{
-		Count:   h.count.Delta1h(),
-		Sum:     h.sum.Delta1h(),
-		Min:     h.tracker.Min1h(),
-		Max:     h.tracker.Max1h(),
-		Buckets: b,
+		Count:        h.count.Delta1h(),
+		Sum:          h.sum.Delta1h(),
+		SumOfSquares: h.sumOfSquares.Delta1h(),
+		Min:          h.tracker.Min1h(),
+		Max:          h.tracker.Max1h(),
+		Buckets:      b,
 	}
 	return v
 }
@@ -207,11 +214,12 @@ func (h *Histogram) Delta10m() HistogramValue {
 	}
 
 	v := HistogramValue{
-		Count:   h.count.Delta10m(),
-		Sum:     h.sum.Delta10m(),
-		Min:     h.tracker.Min10m(),
-		Max:     h.tracker.Max10m(),
-		Buckets: b,
+		Count:        h.count.Delta10m(),
+		Sum:          h.sum.Delta10m(),
+		SumOfSquares: h.sumOfSquares.Delta10m(),
+		Min:          h.tracker.Min10m(),
+		Max:          h.tracker.Max10m(),
+		Buckets:      b,
 	}
 	return v
 }
@@ -227,11 +235,12 @@ func (h *Histogram) Delta1m() HistogramValue {
 	}
 
 	v := HistogramValue{
-		Count:   h.count.Delta1m(),
-		Sum:     h.sum.Delta1m(),
-		Min:     h.tracker.Min1m(),
-		Max:     h.tracker.Max1m(),
-		Buckets: b,
+		Count:        h.count.Delta1m(),
+		Sum:          h.sum.Delta1m(),
+		SumOfSquares: h.sumOfSquares.Delta1m(),
+		Min:          h.tracker.Min1m(),
+		Max:          h.tracker.Max1m(),
+		Buckets:      b,
 	}
 	return v
 }
