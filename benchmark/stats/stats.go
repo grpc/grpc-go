@@ -84,10 +84,9 @@ func (stats *Stats) maybeUpdate() {
 	}
 	stats.histogram = NewHistogram(HistogramOptions{
 		NumBuckets: numBuckets,
-		// max(i.e., Nth lower bound) = min + (1 + growthFactor)^(numBuckets-2).
-		GrowthFactor:       math.Pow(float64(stats.max-stats.min), 1/float64(stats.numBuckets-2)) - 1,
-		SmallestBucketSize: 1.0,
-		MinValue:           stats.min})
+		// max-min+1(i.e., Nth upper bound, excluded) = (1 + growthFactor)^numBuckets.
+		GrowthFactor: math.Pow(float64(stats.max-stats.min+1), 1/float64(numBuckets)) - 1,
+		MinValue:     stats.min})
 
 	for _, d := range stats.durations {
 		stats.histogram.Add(int64(d / stats.unit))
