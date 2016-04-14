@@ -44,6 +44,7 @@ import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -81,6 +82,8 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
@@ -120,6 +123,8 @@ public class ManagedChannelImplTest {
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
+  @Captor
+  private ArgumentCaptor<Status> statusCaptor;
   @Mock
   private ManagedClientTransport mockTransport;
   @Mock
@@ -164,7 +169,6 @@ public class ManagedChannelImplTest {
     ClientCall<String, Integer> call =
         channel.newCall(method, CallOptions.DEFAULT.withDeadlineAfter(0, TimeUnit.NANOSECONDS));
     call.start(mockCallListener, new Metadata());
-    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
     Status status = statusCaptor.getValue();
     assertSame(Status.DEADLINE_EXCEEDED.getCode(), status.getCode());
@@ -236,7 +240,6 @@ public class ManagedChannelImplTest {
     // Further calls should fail without going to the transport
     ClientCall<String, Integer> call3 = channel.newCall(method, CallOptions.DEFAULT);
     call3.start(mockCallListener3, new Metadata());
-    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     verify(mockCallListener3, timeout(1000))
         .onClose(statusCaptor.capture(), any(Metadata.class));
     assertSame(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
@@ -335,9 +338,11 @@ public class ManagedChannelImplTest {
     FakeClock fakeExecutor = new FakeClock();
     ManagedChannel channel = createChannel(
         new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT.withExecutor(
         fakeExecutor.scheduledExecutorService));
     call.start(mockCallListener, headers);
+
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     transportListenerCaptor.getValue().transportReady();
     verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
@@ -354,14 +359,18 @@ public class ManagedChannelImplTest {
   @Test
   public void nameResolutionFailed() {
     Status error = Status.UNAVAILABLE.withCause(new Throwable("fake name resolution error"));
+
+    // Name resolution is started as soon as channel is created.
     ManagedChannel channel = createChannel(new FailingNameResolverFactory(error), NO_INTERCEPTOR);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata());
-    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+
+    // The call failed with the name resolution error
     verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
     Status status = statusCaptor.getValue();
     assertSame(error.getCode(), status.getCode());
     assertSame(error.getCause(), status.getCause());
+    // LoadBalancer received the same error
     assertEquals(1, loadBalancerFactory.balancers.size());
     verify(loadBalancerFactory.balancers.get(0)).handleNameResolutionError(same(error));
   }
@@ -369,15 +378,19 @@ public class ManagedChannelImplTest {
   @Test
   public void nameResolverReturnsEmptyList() {
     String errorDescription = "NameResolver returned an empty list";
+
+    // Name resolution is started as soon as channel is created
     ManagedChannel channel = createChannel(
         new FakeNameResolverFactory(new ArrayList<ResolvedServerInfo>()), NO_INTERCEPTOR);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata());
-    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+
+    // The call failed with the name resolution error
     verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
     Status status = statusCaptor.getValue();
     assertSame(Status.Code.UNAVAILABLE, status.getCode());
     assertTrue(status.getDescription(), status.getDescription().contains(errorDescription));
+    // LoadBalancer received the same error
     assertEquals(1, loadBalancerFactory.balancers.size());
     verify(loadBalancerFactory.balancers.get(0)).handleNameResolutionError(statusCaptor.capture());
     status = statusCaptor.getValue();
@@ -386,18 +399,48 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void loadBalancerThrowsInHandleResolvedAddresses() {
+    RuntimeException ex = new RuntimeException("simulated");
+    // Delay the success of name resolution until allResolved() is called
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(false);
+    ManagedChannel channel = createChannel(nameResolverFactory, NO_INTERCEPTOR);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+    assertEquals(1, loadBalancerFactory.balancers.size());
+    LoadBalancer<?> loadBalancer = loadBalancerFactory.balancers.get(0);
+    doThrow(ex).when(loadBalancer).handleResolvedAddresses(
+        Matchers.<List<ResolvedServerInfo>>anyObject(), any(Attributes.class));
+
+    // NameResolver returns addresses.
+    nameResolverFactory.allResolved();
+
+    // The call failed with the error thrown from handleResolvedAddresses()
+    verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
+    Status status = statusCaptor.getValue();
+    assertSame(Status.Code.INTERNAL, status.getCode());
+    assertSame(ex, status.getCause());
+    // The LoadBalancer received the same error
+    verify(loadBalancer).handleNameResolutionError(statusCaptor.capture());
+    status = statusCaptor.getValue();
+    assertSame(Status.Code.INTERNAL, status.getCode());
+    assertSame(ex, status.getCause());
+  }
+
+  @Test
   public void nameResolvedAfterChannelShutdown() {
-    FakeNameResolverFactory nameResolverFactory =
-        new FakeNameResolverFactory(false);
+    // Delay the success of name resolution until allResolved() is called.
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(false);
     ManagedChannel channel = createChannel(nameResolverFactory, NO_INTERCEPTOR);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     Metadata headers = new Metadata();
+
     call.start(mockCallListener, headers);
     channel.shutdown();
     assertTrue(channel.isShutdown());
     // Name resolved after the channel is shut down, which is possible if the name resolution takes
     // time and is not cancellable. The resolved address will still be passed to the LoadBalancer.
     nameResolverFactory.allResolved();
+
     verify(mockTransportFactory, never())
         .newClientTransport(any(SocketAddress.class), any(String.class));
   }
@@ -502,7 +545,6 @@ public class ManagedChannelImplTest {
     transportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
 
     // Call fails
-    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
     assertEquals(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
     // No real stream was ever created

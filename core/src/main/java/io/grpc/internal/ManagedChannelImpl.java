@@ -171,7 +171,14 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         if (servers.isEmpty()) {
           onError(Status.UNAVAILABLE.withDescription("NameResolver returned an empty list"));
         } else {
-          loadBalancer.handleResolvedAddresses(servers, config);
+          try {
+            loadBalancer.handleResolvedAddresses(servers, config);
+          } catch (Throwable e) {
+            // It must be a bug! Push the exception back to LoadBalancer in the hope that it may be
+            // propagated to the application.
+            onError(Status.INTERNAL.withCause(e)
+                .withDescription("Thrown from handleResolvedAddresses(): " + e));
+          }
         }
       }
 
