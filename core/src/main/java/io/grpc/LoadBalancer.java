@@ -68,6 +68,9 @@ public abstract class LoadBalancer<T> {
    * Handles newly resolved addresses and service config from name resolution system.
    *
    * <p>Implementations should not modify the given {@code servers}.
+   *
+   * @param servers the resolved server addresses. Never empty.
+   * @param config extra configuration data from naming system.
    */
   public void handleResolvedAddresses(List<ResolvedServerInfo> servers, Attributes config) { }
 

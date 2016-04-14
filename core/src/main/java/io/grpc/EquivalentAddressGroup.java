@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import com.google.common.base.Preconditions;
+
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,6 +51,7 @@ public final class EquivalentAddressGroup {
   private final List<SocketAddress> addrs;
 
   public EquivalentAddressGroup(List<SocketAddress> addrs) {
+    Preconditions.checkArgument(!addrs.isEmpty(), "addrs is empty");
     this.addrs = Collections.unmodifiableList(new ArrayList<SocketAddress>(addrs));
   }
 

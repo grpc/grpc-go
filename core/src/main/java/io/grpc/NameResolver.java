@@ -119,6 +119,9 @@ public abstract class NameResolver {
      * Handles updates on resolved addresses and config.
      *
      * <p>Implementations will not modify the given {@code servers}.
+     *
+     * @param servers the resolved server addresses. An empty list will trigger {@link #onError}
+     * @param config extra configuration data from naming system
      */
     void onUpdate(List<ResolvedServerInfo> servers, Attributes config);
 

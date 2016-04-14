@@ -168,7 +168,11 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     this.nameResolver.start(new NameResolver.Listener() {
       @Override
       public void onUpdate(List<ResolvedServerInfo> servers, Attributes config) {
-        loadBalancer.handleResolvedAddresses(servers, config);
+        if (servers.isEmpty()) {
+          onError(Status.UNAVAILABLE.withDescription("NameResolver returned an empty list"));
+        } else {
+          loadBalancer.handleResolvedAddresses(servers, config);
+        }
       }
 
       @Override

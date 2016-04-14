@@ -362,6 +362,27 @@ public class ManagedChannelImplTest {
     Status status = statusCaptor.getValue();
     assertSame(error.getCode(), status.getCode());
     assertSame(error.getCause(), status.getCause());
+    assertEquals(1, loadBalancerFactory.balancers.size());
+    verify(loadBalancerFactory.balancers.get(0)).handleNameResolutionError(same(error));
+  }
+
+  @Test
+  public void nameResolverReturnsEmptyList() {
+    String errorDescription = "NameResolver returned an empty list";
+    ManagedChannel channel = createChannel(
+        new FakeNameResolverFactory(new ArrayList<ResolvedServerInfo>()), NO_INTERCEPTOR);
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    verify(mockCallListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
+    Status status = statusCaptor.getValue();
+    assertSame(Status.Code.UNAVAILABLE, status.getCode());
+    assertTrue(status.getDescription(), status.getDescription().contains(errorDescription));
+    assertEquals(1, loadBalancerFactory.balancers.size());
+    verify(loadBalancerFactory.balancers.get(0)).handleNameResolutionError(statusCaptor.capture());
+    status = statusCaptor.getValue();
+    assertSame(Status.Code.UNAVAILABLE, status.getCode());
+    assertEquals(errorDescription, status.getDescription());
   }
 
   @Test
