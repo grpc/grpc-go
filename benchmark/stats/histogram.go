@@ -28,7 +28,7 @@ type HistogramValue struct {
 // HistogramBucket is one histogram bucket.
 type HistogramBucket struct {
 	// LowBound is the lower bound of the bucket.
-	LowBound int64
+	LowBound float64
 	// Count is the number of values in the bucket.
 	Count int64
 }
@@ -42,7 +42,7 @@ func (v HistogramValue) Print(w io.Writer) {
 		return
 	}
 
-	maxBucketDigitLen := len(strconv.FormatInt(v.Buckets[len(v.Buckets)-1].LowBound, 10))
+	maxBucketDigitLen := len(strconv.FormatFloat(v.Buckets[len(v.Buckets)-1].LowBound, 'f', 6, 64))
 	if maxBucketDigitLen < 3 {
 		// For "inf".
 		maxBucketDigitLen = 3
@@ -52,9 +52,9 @@ func (v HistogramValue) Print(w io.Writer) {
 
 	accCount := int64(0)
 	for i, b := range v.Buckets {
-		fmt.Fprintf(w, "[%*d, ", maxBucketDigitLen, b.LowBound)
+		fmt.Fprintf(w, "[%*f, ", maxBucketDigitLen, b.LowBound)
 		if i+1 < len(v.Buckets) {
-			fmt.Fprintf(w, "%*d)", maxBucketDigitLen, v.Buckets[i+1].LowBound)
+			fmt.Fprintf(w, "%*f)", maxBucketDigitLen, v.Buckets[i+1].LowBound)
 		} else {
 			fmt.Fprintf(w, "%*s)", maxBucketDigitLen, "inf")
 		}
@@ -105,7 +105,7 @@ type HistogramOptions struct {
 // bucketInternal is the internal representation of a bucket, which includes a
 // rate counter.
 type bucketInternal struct {
-	lowBound int64
+	lowBound float64
 	count    *Counter
 }
 
@@ -129,7 +129,7 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 	low := opts.MinValue
 	delta := opts.SmallestBucketSize
 	for i := 0; i < opts.NumBuckets; i++ {
-		h.buckets[i].lowBound = low
+		h.buckets[i].lowBound = float64(low)
 		h.buckets[i].count = newCounter()
 		low = low + int64(delta)
 		delta = delta * (1.0 + opts.GrowthFactor)
@@ -251,10 +251,10 @@ func (h *Histogram) findBucket(value int64) (int, error) {
 	min, max := 0, lastBucket
 	for max >= min {
 		b := (min + max) / 2
-		if value >= h.buckets[b].lowBound && (b == lastBucket || value < h.buckets[b+1].lowBound) {
+		if float64(value) >= h.buckets[b].lowBound && (b == lastBucket || float64(value) < h.buckets[b+1].lowBound) {
 			return b, nil
 		}
-		if value < h.buckets[b].lowBound {
+		if float64(value) < h.buckets[b].lowBound {
 			max = b - 1
 			continue
 		}
