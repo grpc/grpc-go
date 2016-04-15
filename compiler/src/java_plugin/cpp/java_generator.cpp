@@ -215,7 +215,7 @@ enum StubType {
   ASYNC_CLIENT_IMPL = 4,
   BLOCKING_CLIENT_IMPL = 5,
   FUTURE_CLIENT_IMPL = 6,
-  ABSTRACT = 7,
+  ABSTRACT_CLASS = 7,
 };
 
 enum CallType {
@@ -235,7 +235,7 @@ static void PrintStub(
   string impl_name = service->name();
   bool abstract = false;
   switch (type) {
-    case ABSTRACT:
+    case ABSTRACT_CLASS:
       abstract = true;
       break;
     case ASYNC_INTERFACE:
@@ -261,7 +261,7 @@ static void PrintStub(
   CallType call_type;
   bool impl = false;
   switch (type) {
-    case ABSTRACT:
+    case ABSTRACT_CLASS:
     case ASYNC_INTERFACE:
       call_type = ASYNC_CALL;
       impl = false;
@@ -442,6 +442,8 @@ static void PrintStub(
                 *vars,
                 "asyncUnimplementedUnaryCall($method_field_name$, responseObserver);\n");
           }
+          break;
+        default:
           break;
       }
     } else if (impl) {
@@ -762,7 +764,7 @@ static void PrintService(const ServiceDescriptor* service,
 
   bool generate_nano = flavor == ProtoFlavor::NANO;
   PrintStub(service, vars, p, ASYNC_INTERFACE, generate_nano);
-  PrintStub(service, vars, p, ABSTRACT, generate_nano);
+  PrintStub(service, vars, p, ABSTRACT_CLASS, generate_nano);
   PrintStub(service, vars, p, BLOCKING_CLIENT_INTERFACE, generate_nano);
   PrintStub(service, vars, p, FUTURE_CLIENT_INTERFACE, generate_nano);
   PrintStub(service, vars, p, ASYNC_CLIENT_IMPL, generate_nano);
