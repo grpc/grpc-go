@@ -15,6 +15,8 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
+/**
+ */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 0.14.0-SNAPSHOT)",
     comments = "Source: services.proto")
@@ -44,25 +46,48 @@ public class BenchmarkServiceGrpc {
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Messages.SimpleResponse.getDefaultInstance()));
 
+  /**
+   * Creates a new async stub that supports all call types for the service
+   */
   public static BenchmarkServiceStub newStub(io.grpc.Channel channel) {
     return new BenchmarkServiceStub(channel);
   }
 
+  /**
+   * Creates a new blocking-style stub that supports unary and streaming output calls on the service
+   */
   public static BenchmarkServiceBlockingStub newBlockingStub(
       io.grpc.Channel channel) {
     return new BenchmarkServiceBlockingStub(channel);
   }
 
+  /**
+   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   */
   public static BenchmarkServiceFutureStub newFutureStub(
       io.grpc.Channel channel) {
     return new BenchmarkServiceFutureStub(channel);
   }
 
+  /**
+   */
   public static interface BenchmarkService {
 
+    /**
+     * <pre>
+     * One request followed by one response.
+     * The server returns the client payload as-is.
+     * </pre>
+     */
     public void unaryCall(io.grpc.benchmarks.proto.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver);
 
+    /**
+     * <pre>
+     * One request followed by one response.
+     * The server returns the client payload as-is.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleRequest> streamingCall(
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver);
   }
@@ -87,13 +112,29 @@ public class BenchmarkServiceGrpc {
     }
   }
 
+  /**
+   */
   public static interface BenchmarkServiceBlockingClient {
 
+    /**
+     * <pre>
+     * One request followed by one response.
+     * The server returns the client payload as-is.
+     * </pre>
+     */
     public io.grpc.benchmarks.proto.Messages.SimpleResponse unaryCall(io.grpc.benchmarks.proto.Messages.SimpleRequest request);
   }
 
+  /**
+   */
   public static interface BenchmarkServiceFutureClient {
 
+    /**
+     * <pre>
+     * One request followed by one response.
+     * The server returns the client payload as-is.
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.benchmarks.proto.Messages.SimpleResponse> unaryCall(
         io.grpc.benchmarks.proto.Messages.SimpleRequest request);
   }

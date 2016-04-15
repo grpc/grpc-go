@@ -15,6 +15,11 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
+/**
+ * <pre>
+ * The greeting service definition.
+ * </pre>
+ */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 0.14.0-SNAPSHOT)",
     comments = "Source: helloworld.proto")
@@ -35,22 +40,41 @@ public class GreeterGrpc {
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.helloworld.HelloReply.getDefaultInstance()));
 
+  /**
+   * Creates a new async stub that supports all call types for the service
+   */
   public static GreeterStub newStub(io.grpc.Channel channel) {
     return new GreeterStub(channel);
   }
 
+  /**
+   * Creates a new blocking-style stub that supports unary and streaming output calls on the service
+   */
   public static GreeterBlockingStub newBlockingStub(
       io.grpc.Channel channel) {
     return new GreeterBlockingStub(channel);
   }
 
+  /**
+   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   */
   public static GreeterFutureStub newFutureStub(
       io.grpc.Channel channel) {
     return new GreeterFutureStub(channel);
   }
 
+  /**
+   * <pre>
+   * The greeting service definition.
+   * </pre>
+   */
   public static interface Greeter {
 
+    /**
+     * <pre>
+     * Sends a greeting
+     * </pre>
+     */
     public void sayHello(io.grpc.examples.helloworld.HelloRequest request,
         io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloReply> responseObserver);
   }
@@ -69,13 +93,33 @@ public class GreeterGrpc {
     }
   }
 
+  /**
+   * <pre>
+   * The greeting service definition.
+   * </pre>
+   */
   public static interface GreeterBlockingClient {
 
+    /**
+     * <pre>
+     * Sends a greeting
+     * </pre>
+     */
     public io.grpc.examples.helloworld.HelloReply sayHello(io.grpc.examples.helloworld.HelloRequest request);
   }
 
+  /**
+   * <pre>
+   * The greeting service definition.
+   * </pre>
+   */
   public static interface GreeterFutureClient {
 
+    /**
+     * <pre>
+     * Sends a greeting
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.examples.helloworld.HelloReply> sayHello(
         io.grpc.examples.helloworld.HelloRequest request);
   }

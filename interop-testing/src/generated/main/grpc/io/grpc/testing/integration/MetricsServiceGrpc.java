@@ -15,6 +15,8 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
+/**
+ */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 0.14.0-SNAPSHOT)",
     comments = "Source: io/grpc/testing/integration/metrics.proto")
@@ -44,25 +46,47 @@ public class MetricsServiceGrpc {
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Metrics.GaugeRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Metrics.GaugeResponse.getDefaultInstance()));
 
+  /**
+   * Creates a new async stub that supports all call types for the service
+   */
   public static MetricsServiceStub newStub(io.grpc.Channel channel) {
     return new MetricsServiceStub(channel);
   }
 
+  /**
+   * Creates a new blocking-style stub that supports unary and streaming output calls on the service
+   */
   public static MetricsServiceBlockingStub newBlockingStub(
       io.grpc.Channel channel) {
     return new MetricsServiceBlockingStub(channel);
   }
 
+  /**
+   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   */
   public static MetricsServiceFutureStub newFutureStub(
       io.grpc.Channel channel) {
     return new MetricsServiceFutureStub(channel);
   }
 
+  /**
+   */
   public static interface MetricsService {
 
+    /**
+     * <pre>
+     * Returns the values of all the gauges that are currently being maintained by
+     * the service
+     * </pre>
+     */
     public void getAllGauges(io.grpc.testing.integration.Metrics.EmptyMessage request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Metrics.GaugeResponse> responseObserver);
 
+    /**
+     * <pre>
+     * Returns the value of one gauge
+     * </pre>
+     */
     public void getGauge(io.grpc.testing.integration.Metrics.GaugeRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Metrics.GaugeResponse> responseObserver);
   }
@@ -87,16 +111,36 @@ public class MetricsServiceGrpc {
     }
   }
 
+  /**
+   */
   public static interface MetricsServiceBlockingClient {
 
+    /**
+     * <pre>
+     * Returns the values of all the gauges that are currently being maintained by
+     * the service
+     * </pre>
+     */
     public java.util.Iterator<io.grpc.testing.integration.Metrics.GaugeResponse> getAllGauges(
         io.grpc.testing.integration.Metrics.EmptyMessage request);
 
+    /**
+     * <pre>
+     * Returns the value of one gauge
+     * </pre>
+     */
     public io.grpc.testing.integration.Metrics.GaugeResponse getGauge(io.grpc.testing.integration.Metrics.GaugeRequest request);
   }
 
+  /**
+   */
   public static interface MetricsServiceFutureClient {
 
+    /**
+     * <pre>
+     * Returns the value of one gauge
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Metrics.GaugeResponse> getGauge(
         io.grpc.testing.integration.Metrics.GaugeRequest request);
   }

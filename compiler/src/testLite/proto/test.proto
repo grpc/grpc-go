@@ -24,6 +24,7 @@ message StreamingOutputCallRequest {
 message StreamingOutputCallResponse {
 }
 
+// Test service that supports all call types.
 service TestService {
   // One request followed by one response.
   // The server returns the client payload as-is.

@@ -15,6 +15,11 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
+/**
+ * <pre>
+ * A service used to control reconnect server.
+ * </pre>
+ */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 0.14.0-SNAPSHOT)",
     comments = "Source: io/grpc/testing/integration/test.proto")
@@ -44,25 +49,43 @@ public class ReconnectServiceGrpc {
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.ReconnectInfo.getDefaultInstance()));
 
+  /**
+   * Creates a new async stub that supports all call types for the service
+   */
   public static ReconnectServiceStub newStub(io.grpc.Channel channel) {
     return new ReconnectServiceStub(channel);
   }
 
+  /**
+   * Creates a new blocking-style stub that supports unary and streaming output calls on the service
+   */
   public static ReconnectServiceBlockingStub newBlockingStub(
       io.grpc.Channel channel) {
     return new ReconnectServiceBlockingStub(channel);
   }
 
+  /**
+   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   */
   public static ReconnectServiceFutureStub newFutureStub(
       io.grpc.Channel channel) {
     return new ReconnectServiceFutureStub(channel);
   }
 
+  /**
+   * <pre>
+   * A service used to control reconnect server.
+   * </pre>
+   */
   public static interface ReconnectService {
 
+    /**
+     */
     public void start(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver);
 
+    /**
+     */
     public void stop(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver);
   }
@@ -87,18 +110,36 @@ public class ReconnectServiceGrpc {
     }
   }
 
+  /**
+   * <pre>
+   * A service used to control reconnect server.
+   * </pre>
+   */
   public static interface ReconnectServiceBlockingClient {
 
+    /**
+     */
     public com.google.protobuf.EmptyProtos.Empty start(com.google.protobuf.EmptyProtos.Empty request);
 
+    /**
+     */
     public io.grpc.testing.integration.Messages.ReconnectInfo stop(com.google.protobuf.EmptyProtos.Empty request);
   }
 
+  /**
+   * <pre>
+   * A service used to control reconnect server.
+   * </pre>
+   */
   public static interface ReconnectServiceFutureClient {
 
+    /**
+     */
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> start(
         com.google.protobuf.EmptyProtos.Empty request);
 
+    /**
+     */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.ReconnectInfo> stop(
         com.google.protobuf.EmptyProtos.Empty request);
   }

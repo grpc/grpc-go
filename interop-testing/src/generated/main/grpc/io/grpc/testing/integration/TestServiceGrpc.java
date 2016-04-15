@@ -15,6 +15,12 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
+/**
+ * <pre>
+ * A simple service to test the various types of RPCs and experiment with
+ * performance with various types of payload.
+ * </pre>
+ */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 0.14.0-SNAPSHOT)",
     comments = "Source: io/grpc/testing/integration/test.proto")
@@ -80,37 +86,89 @@ public class TestServiceGrpc {
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.getDefaultInstance()));
 
+  /**
+   * Creates a new async stub that supports all call types for the service
+   */
   public static TestServiceStub newStub(io.grpc.Channel channel) {
     return new TestServiceStub(channel);
   }
 
+  /**
+   * Creates a new blocking-style stub that supports unary and streaming output calls on the service
+   */
   public static TestServiceBlockingStub newBlockingStub(
       io.grpc.Channel channel) {
     return new TestServiceBlockingStub(channel);
   }
 
+  /**
+   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   */
   public static TestServiceFutureStub newFutureStub(
       io.grpc.Channel channel) {
     return new TestServiceFutureStub(channel);
   }
 
+  /**
+   * <pre>
+   * A simple service to test the various types of RPCs and experiment with
+   * performance with various types of payload.
+   * </pre>
+   */
   public static interface TestService {
 
+    /**
+     * <pre>
+     * One empty request followed by one empty response.
+     * </pre>
+     */
     public void emptyCall(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver);
 
+    /**
+     * <pre>
+     * One request followed by one response.
+     * </pre>
+     */
     public void unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver);
 
+    /**
+     * <pre>
+     * One request followed by a sequence of responses (streamed download).
+     * The server returns the payload with client desired type and sizes.
+     * </pre>
+     */
     public void streamingOutputCall(io.grpc.testing.integration.Messages.StreamingOutputCallRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver);
 
+    /**
+     * <pre>
+     * A sequence of requests followed by one response (streamed upload).
+     * The server returns the aggregated size of client payload as the result.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallRequest> streamingInputCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallResponse> responseObserver);
 
+    /**
+     * <pre>
+     * A sequence of requests with each request served by the server immediately.
+     * As one request could lead to multiple responses, this interface
+     * demonstrates the idea of full duplexing.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> fullDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver);
 
+    /**
+     * <pre>
+     * A sequence of requests followed by a sequence of responses.
+     * The server buffers all the client requests and then serves them in order. A
+     * stream of responses are returned to the client when the server starts with
+     * first request.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> halfDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver);
   }
@@ -159,21 +217,59 @@ public class TestServiceGrpc {
     }
   }
 
+  /**
+   * <pre>
+   * A simple service to test the various types of RPCs and experiment with
+   * performance with various types of payload.
+   * </pre>
+   */
   public static interface TestServiceBlockingClient {
 
+    /**
+     * <pre>
+     * One empty request followed by one empty response.
+     * </pre>
+     */
     public com.google.protobuf.EmptyProtos.Empty emptyCall(com.google.protobuf.EmptyProtos.Empty request);
 
+    /**
+     * <pre>
+     * One request followed by one response.
+     * </pre>
+     */
     public io.grpc.testing.integration.Messages.SimpleResponse unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request);
 
+    /**
+     * <pre>
+     * One request followed by a sequence of responses (streamed download).
+     * The server returns the payload with client desired type and sizes.
+     * </pre>
+     */
     public java.util.Iterator<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> streamingOutputCall(
         io.grpc.testing.integration.Messages.StreamingOutputCallRequest request);
   }
 
+  /**
+   * <pre>
+   * A simple service to test the various types of RPCs and experiment with
+   * performance with various types of payload.
+   * </pre>
+   */
   public static interface TestServiceFutureClient {
 
+    /**
+     * <pre>
+     * One empty request followed by one empty response.
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> emptyCall(
         com.google.protobuf.EmptyProtos.Empty request);
 
+    /**
+     * <pre>
+     * One request followed by one response.
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.SimpleResponse> unaryCall(
         io.grpc.testing.integration.Messages.SimpleRequest request);
   }

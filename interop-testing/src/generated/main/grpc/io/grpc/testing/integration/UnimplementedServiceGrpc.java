@@ -15,6 +15,12 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
+/**
+ * <pre>
+ * A simple service NOT implemented at servers so clients can test for
+ * that case.
+ * </pre>
+ */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 0.14.0-SNAPSHOT)",
     comments = "Source: io/grpc/testing/integration/test.proto")
@@ -35,22 +41,42 @@ public class UnimplementedServiceGrpc {
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()));
 
+  /**
+   * Creates a new async stub that supports all call types for the service
+   */
   public static UnimplementedServiceStub newStub(io.grpc.Channel channel) {
     return new UnimplementedServiceStub(channel);
   }
 
+  /**
+   * Creates a new blocking-style stub that supports unary and streaming output calls on the service
+   */
   public static UnimplementedServiceBlockingStub newBlockingStub(
       io.grpc.Channel channel) {
     return new UnimplementedServiceBlockingStub(channel);
   }
 
+  /**
+   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   */
   public static UnimplementedServiceFutureStub newFutureStub(
       io.grpc.Channel channel) {
     return new UnimplementedServiceFutureStub(channel);
   }
 
+  /**
+   * <pre>
+   * A simple service NOT implemented at servers so clients can test for
+   * that case.
+   * </pre>
+   */
   public static interface UnimplementedService {
 
+    /**
+     * <pre>
+     * A call that no server should implement
+     * </pre>
+     */
     public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver);
   }
@@ -69,13 +95,35 @@ public class UnimplementedServiceGrpc {
     }
   }
 
+  /**
+   * <pre>
+   * A simple service NOT implemented at servers so clients can test for
+   * that case.
+   * </pre>
+   */
   public static interface UnimplementedServiceBlockingClient {
 
+    /**
+     * <pre>
+     * A call that no server should implement
+     * </pre>
+     */
     public com.google.protobuf.EmptyProtos.Empty unimplementedCall(com.google.protobuf.EmptyProtos.Empty request);
   }
 
+  /**
+   * <pre>
+   * A simple service NOT implemented at servers so clients can test for
+   * that case.
+   * </pre>
+   */
   public static interface UnimplementedServiceFutureClient {
 
+    /**
+     * <pre>
+     * A call that no server should implement
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> unimplementedCall(
         com.google.protobuf.EmptyProtos.Empty request);
   }

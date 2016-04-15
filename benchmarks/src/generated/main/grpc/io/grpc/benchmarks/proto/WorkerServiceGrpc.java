@@ -15,6 +15,8 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
+/**
+ */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 0.14.0-SNAPSHOT)",
     comments = "Source: services.proto")
@@ -62,31 +64,72 @@ public class WorkerServiceGrpc {
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.Void.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.Void.getDefaultInstance()));
 
+  /**
+   * Creates a new async stub that supports all call types for the service
+   */
   public static WorkerServiceStub newStub(io.grpc.Channel channel) {
     return new WorkerServiceStub(channel);
   }
 
+  /**
+   * Creates a new blocking-style stub that supports unary and streaming output calls on the service
+   */
   public static WorkerServiceBlockingStub newBlockingStub(
       io.grpc.Channel channel) {
     return new WorkerServiceBlockingStub(channel);
   }
 
+  /**
+   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   */
   public static WorkerServiceFutureStub newFutureStub(
       io.grpc.Channel channel) {
     return new WorkerServiceFutureStub(channel);
   }
 
+  /**
+   */
   public static interface WorkerService {
 
+    /**
+     * <pre>
+     * Start server with specified workload.
+     * First request sent specifies the ServerConfig followed by ServerStatus
+     * response. After that, a "Mark" can be sent anytime to request the latest
+     * stats. Closing the stream will initiate shutdown of the test server
+     * and once the shutdown has finished, the OK status is sent to terminate
+     * this RPC.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.ServerArgs> runServer(
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.ServerStatus> responseObserver);
 
+    /**
+     * <pre>
+     * Start client with specified workload.
+     * First request sent specifies the ClientConfig followed by ClientStatus
+     * response. After that, a "Mark" can be sent anytime to request the latest
+     * stats. Closing the stream will initiate shutdown of the test client
+     * and once the shutdown has finished, the OK status is sent to terminate
+     * this RPC.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.ClientArgs> runClient(
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.ClientStatus> responseObserver);
 
+    /**
+     * <pre>
+     * Just return the core count - unary call
+     * </pre>
+     */
     public void coreCount(io.grpc.benchmarks.proto.Control.CoreRequest request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.CoreResponse> responseObserver);
 
+    /**
+     * <pre>
+     * Quit this worker
+     * </pre>
+     */
     public void quitWorker(io.grpc.benchmarks.proto.Control.Void request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.Void> responseObserver);
   }
@@ -123,18 +166,42 @@ public class WorkerServiceGrpc {
     }
   }
 
+  /**
+   */
   public static interface WorkerServiceBlockingClient {
 
+    /**
+     * <pre>
+     * Just return the core count - unary call
+     * </pre>
+     */
     public io.grpc.benchmarks.proto.Control.CoreResponse coreCount(io.grpc.benchmarks.proto.Control.CoreRequest request);
 
+    /**
+     * <pre>
+     * Quit this worker
+     * </pre>
+     */
     public io.grpc.benchmarks.proto.Control.Void quitWorker(io.grpc.benchmarks.proto.Control.Void request);
   }
 
+  /**
+   */
   public static interface WorkerServiceFutureClient {
 
+    /**
+     * <pre>
+     * Just return the core count - unary call
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.benchmarks.proto.Control.CoreResponse> coreCount(
         io.grpc.benchmarks.proto.Control.CoreRequest request);
 
+    /**
+     * <pre>
+     * Quit this worker
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.benchmarks.proto.Control.Void> quitWorker(
         io.grpc.benchmarks.proto.Control.Void request);
   }

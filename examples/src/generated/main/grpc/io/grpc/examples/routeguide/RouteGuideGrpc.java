@@ -15,6 +15,11 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
+/**
+ * <pre>
+ * Interface exported by the server.
+ * </pre>
+ */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 0.14.0-SNAPSHOT)",
     comments = "Source: route_guide.proto")
@@ -62,31 +67,76 @@ public class RouteGuideGrpc {
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteNote.getDefaultInstance()));
 
+  /**
+   * Creates a new async stub that supports all call types for the service
+   */
   public static RouteGuideStub newStub(io.grpc.Channel channel) {
     return new RouteGuideStub(channel);
   }
 
+  /**
+   * Creates a new blocking-style stub that supports unary and streaming output calls on the service
+   */
   public static RouteGuideBlockingStub newBlockingStub(
       io.grpc.Channel channel) {
     return new RouteGuideBlockingStub(channel);
   }
 
+  /**
+   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   */
   public static RouteGuideFutureStub newFutureStub(
       io.grpc.Channel channel) {
     return new RouteGuideFutureStub(channel);
   }
 
+  /**
+   * <pre>
+   * Interface exported by the server.
+   * </pre>
+   */
   public static interface RouteGuide {
 
+    /**
+     * <pre>
+     * A simple RPC.
+     * Obtains the feature at a given position.
+     * A feature with an empty name is returned if there's no feature at the given
+     * position.
+     * </pre>
+     */
     public void getFeature(io.grpc.examples.routeguide.Point request,
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Feature> responseObserver);
 
+    /**
+     * <pre>
+     * A server-to-client streaming RPC.
+     * Obtains the Features available within the given Rectangle.  Results are
+     * streamed rather than returned at once (e.g. in a response message with a
+     * repeated field), as the rectangle may cover a large area and contain a
+     * huge number of features.
+     * </pre>
+     */
     public void listFeatures(io.grpc.examples.routeguide.Rectangle request,
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Feature> responseObserver);
 
+    /**
+     * <pre>
+     * A client-to-server streaming RPC.
+     * Accepts a stream of Points on a route being traversed, returning a
+     * RouteSummary when traversal is completed.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.Point> recordRoute(
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteSummary> responseObserver);
 
+    /**
+     * <pre>
+     * A Bidirectional streaming RPC.
+     * Accepts a stream of RouteNotes sent while a route is being traversed,
+     * while receiving other RouteNotes (e.g. from other users).
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> routeChat(
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> responseObserver);
   }
@@ -123,16 +173,51 @@ public class RouteGuideGrpc {
     }
   }
 
+  /**
+   * <pre>
+   * Interface exported by the server.
+   * </pre>
+   */
   public static interface RouteGuideBlockingClient {
 
+    /**
+     * <pre>
+     * A simple RPC.
+     * Obtains the feature at a given position.
+     * A feature with an empty name is returned if there's no feature at the given
+     * position.
+     * </pre>
+     */
     public io.grpc.examples.routeguide.Feature getFeature(io.grpc.examples.routeguide.Point request);
 
+    /**
+     * <pre>
+     * A server-to-client streaming RPC.
+     * Obtains the Features available within the given Rectangle.  Results are
+     * streamed rather than returned at once (e.g. in a response message with a
+     * repeated field), as the rectangle may cover a large area and contain a
+     * huge number of features.
+     * </pre>
+     */
     public java.util.Iterator<io.grpc.examples.routeguide.Feature> listFeatures(
         io.grpc.examples.routeguide.Rectangle request);
   }
 
+  /**
+   * <pre>
+   * Interface exported by the server.
+   * </pre>
+   */
   public static interface RouteGuideFutureClient {
 
+    /**
+     * <pre>
+     * A simple RPC.
+     * Obtains the feature at a given position.
+     * A feature with an empty name is returned if there's no feature at the given
+     * position.
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.examples.routeguide.Feature> getFeature(
         io.grpc.examples.routeguide.Point request);
   }

@@ -15,6 +15,8 @@ import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
+/**
+ */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 0.14.0-SNAPSHOT)",
     comments = "Source: load_balancer.proto")
@@ -35,22 +37,38 @@ public class LoadBalancerGrpc {
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.grpclb.LoadBalanceRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.grpclb.LoadBalanceResponse.getDefaultInstance()));
 
+  /**
+   * Creates a new async stub that supports all call types for the service
+   */
   public static LoadBalancerStub newStub(io.grpc.Channel channel) {
     return new LoadBalancerStub(channel);
   }
 
+  /**
+   * Creates a new blocking-style stub that supports unary and streaming output calls on the service
+   */
   public static LoadBalancerBlockingStub newBlockingStub(
       io.grpc.Channel channel) {
     return new LoadBalancerBlockingStub(channel);
   }
 
+  /**
+   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   */
   public static LoadBalancerFutureStub newFutureStub(
       io.grpc.Channel channel) {
     return new LoadBalancerFutureStub(channel);
   }
 
+  /**
+   */
   public static interface LoadBalancer {
 
+    /**
+     * <pre>
+     * Bidirectional rpc to get a list of servers.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceRequest> balanceLoad(
         io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse> responseObserver);
   }
@@ -69,9 +87,13 @@ public class LoadBalancerGrpc {
     }
   }
 
+  /**
+   */
   public static interface LoadBalancerBlockingClient {
   }
 
+  /**
+   */
   public static interface LoadBalancerFutureClient {
   }
 
