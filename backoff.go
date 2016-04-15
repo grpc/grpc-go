@@ -46,6 +46,15 @@ type BackoffConfig struct {
 	jitter float64
 }
 
+func (bc *BackoffConfig) setDefaults() {
+	md := bc.MaxDelay
+	*bc = *DefaultBackoffConfig
+
+	if md > 0 {
+		bc.MaxDelay = md
+	}
+}
+
 func (bc *BackoffConfig) backoff(retries int) (t time.Duration) {
 	if retries == 0 {
 		return bc.baseDelay
