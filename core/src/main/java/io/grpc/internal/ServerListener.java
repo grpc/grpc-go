@@ -47,8 +47,8 @@ public interface ServerListener {
 
   /**
    * The server is shutting down. No new transports will be processed, but existing transports may
-   * continue. Shutdown is only caused by a call to {@link Server#shutdown()}. All resources have
-   * been released.
+   * continue. Shutdown is only caused by a call to {@link TransportServer#shutdown()}. All
+   * resources have been released.
    */
   void serverShutdown();
 }

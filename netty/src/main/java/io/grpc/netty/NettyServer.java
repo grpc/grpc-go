@@ -35,9 +35,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static io.netty.channel.ChannelOption.SO_BACKLOG;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
-import io.grpc.internal.Server;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.SharedResourceHolder;
+import io.grpc.internal.TransportServer;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -60,8 +60,8 @@ import javax.annotation.Nullable;
 /**
  * Netty-based server implementation.
  */
-class NettyServer implements Server {
-  private static final Logger log = Logger.getLogger(Server.class.getName());
+class NettyServer implements TransportServer {
+  private static final Logger log = Logger.getLogger(TransportServer.class.getName());
 
   private final SocketAddress address;
   private final Class<? extends ServerChannel> channelType;

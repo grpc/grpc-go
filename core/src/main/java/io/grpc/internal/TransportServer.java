@@ -40,7 +40,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * that {@code accept()}s new connections.
  */
 @ThreadSafe
-public interface Server {
+public interface TransportServer {
   /**
    * Starts transport. Implementations must not call {@code listener} until after {@code start()}
    * returns. The method only returns after it has done the equivalent of bind()ing, so it will be

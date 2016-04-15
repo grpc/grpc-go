@@ -576,7 +576,7 @@ public class ServerImplTest {
     return barrier;
   }
 
-  private static class SimpleServer implements io.grpc.internal.Server {
+  private static class SimpleServer implements io.grpc.internal.TransportServer {
     ServerListener listener;
 
     @Override

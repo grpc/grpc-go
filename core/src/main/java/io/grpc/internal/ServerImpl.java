@@ -85,7 +85,7 @@ public final class ServerImpl extends io.grpc.Server {
   private boolean shutdown;
   private boolean terminated;
   /** Service encapsulating something similar to an accept() socket. */
-  private final io.grpc.internal.Server transportServer;
+  private final TransportServer transportServer;
   private final Object lock = new Object();
   private boolean transportServerTerminated;
   /** {@code transportServer} and services encapsulating something similar to a TCP connection. */
@@ -103,7 +103,7 @@ public final class ServerImpl extends io.grpc.Server {
    * @param executor to call methods on behalf of remote clients
    * @param registry of methods to expose to remote clients.
    */
-  ServerImpl(Executor executor, HandlerRegistry registry, io.grpc.internal.Server transportServer,
+  ServerImpl(Executor executor, HandlerRegistry registry, TransportServer transportServer,
       Context rootContext, DecompressorRegistry decompressorRegistry,
       CompressorRegistry compressorRegistry) {
     this.executor = executor;
