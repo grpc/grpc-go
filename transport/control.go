@@ -201,7 +201,7 @@ func (f *inFlow) onRead(n uint32) uint32 {
 	return 0
 }
 
-func (f *inFlow) getPendingData() uint32 {
+func (f *inFlow) resetPendingData() uint32 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	n := f.pendingData

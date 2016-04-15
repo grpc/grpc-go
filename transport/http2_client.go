@@ -400,7 +400,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	// other goroutines.
 	s.cancel()
 	s.mu.Lock()
-	if q := s.fc.getPendingData(); q > 0 {
+	if q := s.fc.resetPendingData(); q > 0 {
 		if n := t.fc.onRead(q); n > 0 {
 			t.controlBuf.put(&windowUpdate{0, n})
 		}
@@ -579,12 +579,12 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 }
 
 func (t *http2Client) handleData(f *http2.DataFrame) {
-	// Select the right stream to dispatch.
 	size := len(f.Data())
 	if err := t.fc.onData(uint32(size)); err != nil {
 		t.notifyError(ConnectionErrorf("%v", err))
 		return
 	}
+	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
 		if w := t.fc.onRead(uint32(size)); w > 0 {

@@ -312,13 +312,13 @@ func (t *http2Server) updateWindow(s *Stream, n uint32) {
 }
 
 func (t *http2Server) handleData(f *http2.DataFrame) {
-	// Select the right stream to dispatch.
 	size := len(f.Data())
 	if err := t.fc.onData(uint32(size)); err != nil {
 		grpclog.Printf("transport: http2Server %v", err)
 		t.Close()
 		return
 	}
+	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
 		if w := t.fc.onRead(uint32(size)); w > 0 {
@@ -710,7 +710,7 @@ func (t *http2Server) closeStream(s *Stream) {
 	// called to interrupt the potential blocking on other goroutines.
 	s.cancel()
 	s.mu.Lock()
-	if q := s.fc.getPendingData(); q > 0 {
+	if q := s.fc.resetPendingData(); q > 0 {
 		if w := t.fc.onRead(q); w > 0 {
 			t.controlBuf.put(&windowUpdate{0, w})
 		}
