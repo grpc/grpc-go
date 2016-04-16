@@ -50,7 +50,9 @@ import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -63,6 +65,9 @@ import java.util.Arrays;
 /** Unit tests for {@link ProtoLiteUtils}. */
 @RunWith(JUnit4.class)
 public class ProtoLiteUtilsTest {
+
+  @Rule public final ExpectedException thrown = ExpectedException.none();
+
   private Marshaller<Type> marshaller = ProtoLiteUtils.marshaller(Type.getDefaultInstance());
   private Type proto = Type.newBuilder().setName("name").build();
 
@@ -210,5 +215,13 @@ public class ProtoLiteUtilsTest {
     } catch (IllegalArgumentException ex) {
       assertNotNull(((InvalidProtocolBufferException) ex.getCause()).getUnfinishedMessage());
     }
+  }
+
+  @Test
+  public void extensionRegistry_notNull() {
+    thrown.expect(NullPointerException.class);
+    thrown.expectMessage("newRegistry");
+
+    ProtoLiteUtils.setExtensionRegistry(null);
   }
 }

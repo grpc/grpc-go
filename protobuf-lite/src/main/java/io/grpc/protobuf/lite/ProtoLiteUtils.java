@@ -31,7 +31,10 @@
 
 package io.grpc.protobuf.lite;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.protobuf.CodedInputStream;
+import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.Parser;
@@ -48,6 +51,28 @@ import java.io.InputStream;
  */
 @ExperimentalApi("Experimental until Lite is stable in protobuf")
 public class ProtoLiteUtils {
+
+  private static volatile ExtensionRegistryLite globalRegistry =
+      ExtensionRegistryLite.getEmptyRegistry();
+
+  /**
+   * Sets the global registry for proto marshalling shared across all servers and clients.
+   *
+   * <p>Warning:  This API will likely change over time.  It is not possible to have separate
+   * registries per Process, Server, Channel, Service, or Method.  This is intentional until there
+   * is a more appropriate API to set them.
+   *
+   * <p>Warning:  Do NOT modify the extension registry after setting it.  It is thread safe to call
+   * {@link #setExtensionRegistry}, but not to modify the underlying object.
+   *
+   * <p>If you need custom parsing behavior for protos, you will need to make your own
+   * {@code MethodDescriptor.Marhsaller} for the time being.
+   *
+   */
+  @ExperimentalApi
+  public static void setExtensionRegistry(ExtensionRegistryLite newRegistry) {
+    globalRegistry = checkNotNull(newRegistry, "newRegistry");
+  }
 
   /** Create a {@code Marshaller} for protos of the same type as {@code defaultInstance}. */
   public static <T extends MessageLite> Marshaller<T> marshaller(final T defaultInstance) {
@@ -96,7 +121,7 @@ public class ProtoLiteUtils {
         CodedInputStream codedInput = CodedInputStream.newInstance(stream);
         codedInput.setSizeLimit(Integer.MAX_VALUE);
 
-        T message = parser.parseFrom(codedInput);
+        T message = parser.parseFrom(codedInput, globalRegistry);
         try {
           codedInput.checkLastTagWas(0);
           return message;
@@ -123,7 +148,7 @@ public class ProtoLiteUtils {
       @SuppressWarnings("unchecked")
       public T parseBytes(byte[] serialized) {
         try {
-          return (T) instance.getParserForType().parseFrom(serialized);
+          return (T) instance.getParserForType().parseFrom(serialized, globalRegistry);
         } catch (InvalidProtocolBufferException ipbe) {
           throw new IllegalArgumentException(ipbe);
         }

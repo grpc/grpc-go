@@ -79,6 +79,7 @@ public class ProtoUtils {
   @ExperimentalApi
   public static <T extends Message> Marshaller<T> jsonMarshaller(final T defaultInstance) {
     final Printer printer = JsonFormat.printer();
+    // TODO(carl-mastrangelo): Add support for ExtensionRegistry (TypeRegistry?)
     final JsonFormat.Parser parser = JsonFormat.parser();
     final Charset charset = Charset.forName("UTF-8");
 
