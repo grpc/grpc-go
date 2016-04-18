@@ -233,8 +233,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if dl, ok := ctx.Deadline(); ok {
 		timeout = dl.Sub(time.Now())
 	}
-	if err := ctx.Err(); err != nil {
+	select {
+	case ctx.Done():
 		return nil, ContextErr(err)
+	default:
 	}
 	pr := &peer.Peer{
 		Addr: t.conn.RemoteAddr(),
@@ -516,13 +518,15 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			}
 			return err
 		}
-		if s.ctx.Err() != nil {
+		select {
+		case s.ctx.Done():
 			t.sendQuotaPool.add(len(p))
 			if t.framer.adjustNumWriters(-1) == 0 {
 				t.controlBuf.put(&flushIO{})
 			}
 			t.writableChan <- 0
 			return ContextErr(s.ctx.Err())
+		default:
 		}
 		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 {
 			// Do a force flush iff this is last frame for the entire gRPC message
