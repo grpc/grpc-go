@@ -48,7 +48,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * Creates a channel with a target string, which can be either a valid {@link
    * NameResolver}-compliant URI, or an authority string.
    *
-   * <p>A {@code NameResolver}-compliant URI is an aboslute hierarchical URI as defined by {@link
+   * <p>A {@code NameResolver}-compliant URI is an absolute hierarchical URI as defined by {@link
    * java.net.URI}. Example URIs:
    * <ul>
    *   <li>{@code "dns:///foo.googleapis.com:8080"}</li>

@@ -188,8 +188,11 @@ public abstract class AbstractManagedChannelImplBuilder
 
   @Override
   public ManagedChannelImpl build() {
-    ClientTransportFactory transportFactory = new AuthorityOverridingTransportFactory(
-        buildTransportFactory(), authorityOverride);
+    ClientTransportFactory transportFactory = buildTransportFactory();
+    if (authorityOverride != null) {
+      transportFactory = new AuthorityOverridingTransportFactory(
+        transportFactory, authorityOverride);
+    }
     return new ManagedChannelImpl(
         target,
         // TODO(carl-mastrangelo): Allow clients to pass this in
@@ -221,19 +224,19 @@ public abstract class AbstractManagedChannelImplBuilder
 
   private static class AuthorityOverridingTransportFactory implements ClientTransportFactory {
     final ClientTransportFactory factory;
-    @Nullable final String authorityOverride;
+    final String authorityOverride;
 
     AuthorityOverridingTransportFactory(
-        ClientTransportFactory factory, @Nullable String authorityOverride) {
-      this.factory = factory;
-      this.authorityOverride = authorityOverride;
+        ClientTransportFactory factory, String authorityOverride) {
+      this.factory = Preconditions.checkNotNull(factory, "factory should not be null");
+      this.authorityOverride = Preconditions.checkNotNull(
+        authorityOverride, "authorityOverride should not be null");
     }
 
     @Override
     public ManagedClientTransport newClientTransport(SocketAddress serverAddress,
         String authority) {
-      return factory.newClientTransport(
-          serverAddress, authorityOverride != null ? authorityOverride : authority);
+      return factory.newClientTransport(serverAddress, authorityOverride);
     }
 
     @Override
