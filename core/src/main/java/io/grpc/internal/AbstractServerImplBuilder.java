@@ -138,7 +138,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   @Override
   public ServerImpl build() {
-    io.grpc.internal.TransportServer transportServer = buildTransportServer();
+    io.grpc.internal.InternalServer transportServer = buildTransportServer();
     return new ServerImpl(executor, registry, transportServer, Context.ROOT,
         firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()));
@@ -150,7 +150,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
    * used by normal users.
    */
   @Internal
-  protected abstract io.grpc.internal.TransportServer buildTransportServer();
+  protected abstract io.grpc.internal.InternalServer buildTransportServer();
 
   private T thisT() {
     @SuppressWarnings("unchecked")

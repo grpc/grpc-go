@@ -32,8 +32,8 @@
 package io.grpc.netty;
 
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
-import io.grpc.internal.TransportServer;
 import io.grpc.internal.testing.AbstractTransportTest;
 import io.grpc.testing.TestUtils;
 
@@ -65,7 +65,7 @@ public class NettyTransportTest extends AbstractTransportTest {
   }
 
   @Override
-  protected TransportServer newServer() {
+  protected InternalServer newServer() {
     return NettyServerBuilder
         .forPort(SERVER_PORT)
         .flowControlWindow(65 * 1024)

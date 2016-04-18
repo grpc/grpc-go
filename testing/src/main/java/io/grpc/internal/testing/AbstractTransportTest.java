@@ -58,13 +58,13 @@ import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
+import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
-import io.grpc.internal.TransportServer;
 
 import org.junit.After;
 import org.junit.Before;
@@ -99,7 +99,7 @@ public abstract class AbstractTransportTest {
    * returned instance should be new and yet be accessible by new client transports. This
    * effectively means that each instance should listen on the same port, or similar.
    */
-  protected abstract TransportServer newServer();
+  protected abstract InternalServer newServer();
 
   /**
    * Returns a new transport that when started will be able to connect to the server.
@@ -111,7 +111,7 @@ public abstract class AbstractTransportTest {
    * {@code serverListener}, otherwise tearDown() can't wait for shutdown which can put following
    * tests in an indeterminate state.
    */
-  private TransportServer server;
+  private InternalServer server;
   private ServerTransport serverTransport;
   private ManagedClientTransport client;
   private MethodDescriptor<String, String> methodDescriptor = MethodDescriptor.create(
@@ -215,7 +215,7 @@ public abstract class AbstractTransportTest {
   public void serverAlreadyListening() throws Exception {
     client = null;
     server.start(serverListener);
-    TransportServer server2 = newServer();
+    InternalServer server2 = newServer();
     thrown.expect(IOException.class);
     server2.start(new MockServerListener());
   }
