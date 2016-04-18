@@ -38,7 +38,6 @@ package benchmark
 
 import (
 	"io"
-	"math"
 	"net"
 
 	"golang.org/x/net/context"
@@ -95,15 +94,15 @@ func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallS
 // StartServer starts a gRPC server serving a benchmark service on the given
 // address, which may be something like "localhost:0". It returns its listen
 // address and a function to stop the server.
-func StartServer(addr string) (string, func()) {
+func StartServer(addr string, opts ...grpc.ServerOption) (int, func()) {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
-	s := grpc.NewServer(grpc.MaxConcurrentStreams(math.MaxUint32))
+	s := grpc.NewServer(opts...)
 	testpb.RegisterBenchmarkServiceServer(s, &testServer{})
 	go s.Serve(lis)
-	return lis.Addr().String(), func() {
+	return lis.Addr().(*net.TCPAddr).Port, func() {
 		s.Stop()
 	}
 }
