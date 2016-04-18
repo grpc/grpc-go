@@ -116,6 +116,12 @@ public class LoadWorker {
     LoadWorker loadWorker = new LoadWorker(driverPort, serverPort);
     loadWorker.start();
     loadWorker.driverServer.awaitTermination();
+    log.log(Level.INFO, "DriverServer has terminated.");
+
+    // Allow enough time for quitWorker to deliver OK status to the driver.
+    // Also make sure this process actually exits (see #1685).
+    Thread.sleep(3000);
+    System.exit(0);
   }
 
   /**
@@ -250,13 +256,13 @@ public class LoadWorker {
     public void quitWorker(Control.Void request,
                            StreamObserver<Control.Void> responseObserver) {
       try {
+        log.log(Level.INFO, "Received quitWorker request.");
         responseObserver.onNext(Control.Void.getDefaultInstance());
         responseObserver.onCompleted();
         driverServer.shutdownNow();
       } catch (Throwable t) {
         log.log(Level.WARNING, "Error during shutdown", t);
       }
-      System.exit(0);
     }
   }
 }
