@@ -235,7 +235,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	select {
 	case ctx.Done():
-		return nil, ContextErr(err)
+		return nil, ContextErr(ctx.Err())
 	default:
 	}
 	pr := &peer.Peer{
