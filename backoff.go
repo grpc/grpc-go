@@ -49,7 +49,7 @@ type BackoffConfig struct {
 	jitter float64
 }
 
-func (bc *BackoffConfig) setDefaults() {
+func setDefaults(bc *BackoffConfig) {
 	md := bc.MaxDelay
 	*bc = DefaultBackoffConfig
 

@@ -88,14 +88,14 @@ func TestWithBackoffConfigDefault(t *testing.T) {
 func TestWithBackoffConfig(t *testing.T) {
 	b := BackoffConfig{MaxDelay: DefaultBackoffConfig.MaxDelay / 2}
 	expected := b
-	expected.setDefaults() // defaults should be set
+	setDefaults(&expected) // defaults should be set
 	testBackoffConfigSet(t, &expected, WithBackoffConfig(b))
 }
 
 func TestWithBackoffMaxDelay(t *testing.T) {
 	md := DefaultBackoffConfig.MaxDelay / 2
 	expected := BackoffConfig{MaxDelay: md}
-	expected.setDefaults()
+	setDefaults(&expected)
 	testBackoffConfigSet(t, &expected, WithBackoffMaxDelay(md))
 }
 
