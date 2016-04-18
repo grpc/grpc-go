@@ -82,14 +82,14 @@ func TestCredentialsMisuse(t *testing.T) {
 }
 
 func TestWithBackoffConfigDefault(t *testing.T) {
-	testBackoffConfigSet(t, DefaultBackoffConfig)
+	testBackoffConfigSet(t, &DefaultBackoffConfig)
 }
 
 func TestWithBackoffConfig(t *testing.T) {
 	b := BackoffConfig{MaxDelay: DefaultBackoffConfig.MaxDelay / 2}
 	expected := b
 	expected.setDefaults() // defaults should be set
-	testBackoffConfigSet(t, &expected, WithBackoffConfig(&b))
+	testBackoffConfigSet(t, &expected, WithBackoffConfig(b))
 }
 
 func TestWithBackoffMaxDelay(t *testing.T) {
@@ -110,12 +110,12 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 		t.Fatalf("backoff config not set")
 	}
 
-	actual, ok := conn.dopts.bs.(*BackoffConfig)
+	actual, ok := conn.dopts.bs.(BackoffConfig)
 	if !ok {
-		t.Fatalf("unexpected type of backoff config: %v", conn.dopts.bs)
+		t.Fatalf("unexpected type of backoff config: %#v", conn.dopts.bs)
 	}
 
-	if *actual != *expected {
+	if actual != *expected {
 		t.Fatalf("unexpected backoff config on connection: %v, want %v", actual, expected)
 	}
 }
