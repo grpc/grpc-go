@@ -47,8 +47,7 @@ public interface ClientTransportFactory extends Closeable {
   /**
    * Releases any resources.
    *
-   *<p>
-   * After this method has been called, it's no longer valid to call
+   * <p>After this method has been called, it's no longer valid to call
    * {@link #newClientTransport(SocketAddress, String)}. No guarantees about thread-safety are made.
    */
   @Override

@@ -49,8 +49,7 @@ public interface ClientTransport {
   /**
    * Creates a new stream for sending messages to a remote end-point.
    *
-   * <p>
-   * This method returns immediately and does not wait for any validation of the request. If
+   * <p>This method returns immediately and does not wait for any validation of the request. If
    * creation fails for any reason, {@link ClientStreamListener#closed} will be called to provide
    * the error information. Any sent messages for this stream will be buffered until creation has
    * completed (either successfully or unsuccessfully).

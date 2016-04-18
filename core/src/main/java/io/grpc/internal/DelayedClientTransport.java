@@ -219,7 +219,8 @@ class DelayedClientTransport implements ManagedClientTransport {
               for (final PendingStream stream : savedPendingStreams) {
                 stream.createRealStream(supplier.get());
               }
-            }});
+            }
+        });
       }
       pendingStreams = null;
       if (!shutdown) {

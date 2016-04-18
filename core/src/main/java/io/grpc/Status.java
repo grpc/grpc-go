@@ -140,7 +140,7 @@ public final class Status {
      * to be deleted may be non-empty, an rmdir operation is applied to
      * a non-directory, etc.
      *
-     * <p> A litmus test that may help a service implementor in deciding
+     * <p>A litmus test that may help a service implementor in deciding
      * between FAILED_PRECONDITION, ABORTED, and UNAVAILABLE:
      * (a) Use UNAVAILABLE if the client can retry just the failing call.
      * (b) Use ABORTED if the client should retry at a higher-level
@@ -157,7 +157,7 @@ public final class Status {
      * The operation was aborted, typically due to a concurrency issue
      * like sequencer check failures, transaction aborts, etc.
      *
-     * <p> See litmus test above for deciding between FAILED_PRECONDITION,
+     * <p>See litmus test above for deciding between FAILED_PRECONDITION,
      * ABORTED, and UNAVAILABLE.
      */
     ABORTED(10),

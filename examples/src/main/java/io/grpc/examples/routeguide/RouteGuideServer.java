@@ -123,7 +123,7 @@ public class RouteGuideServer {
   /**
    * Our implementation of RouteGuide service.
    *
-   * <p> See route_guide.proto for details of the methods.
+   * <p>See route_guide.proto for details of the methods.
    */
   private static class RouteGuideService extends RouteGuideGrpc.AbstractRouteGuide {
     private final Collection<Feature> features;

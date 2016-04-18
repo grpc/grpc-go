@@ -4,40 +4,35 @@
           "http://www.puppycrawl.com/dtds/configuration_1_3.dtd">
 
 <!--
+    Checkstyle configuration that checks the Google coding conventions from Google Java Style
+    that can be found at https://google.github.io/styleguide/javaguide.html.
 
-    Checkstyle configuration that checks the Google coding conventions from:
-    
-    -  Google Java Style
-       https://google-styleguide.googlecode.com/svn-history/r130/trunk/javaguide.html
-       
     Checkstyle is very configurable. Be sure to read the documentation at
     http://checkstyle.sf.net (or in your downloaded distribution).
-
-    Most Checks are configurable, be sure to consult the documentation.
 
     To completely disable a check, just comment it out or delete it from the file.
 
     Authors: Max Vetrenko, Ruslan Diachenko, Roman Ivanov.
-    
  -->
- 
+
 <module name = "Checker">
     <property name="charset" value="UTF-8"/>
     
     <property name="severity" value="error"/>
-    
+
     <module name="Header">
       <property name="headerFile" value="${rootDir}/checkstyle.license"/>
       <property name="ignoreLines" value="2"/>
       <property name="fileExtensions" value="java"/>
     </module>
 
+    <property name="fileExtensions" value="java, properties, xml"/>
     <!-- Checks for whitespace                               -->
     <!-- See http://checkstyle.sf.net/config_whitespace.html -->
         <module name="FileTabCharacter">
             <property name="eachLine" value="true"/>
         </module>
-    
+
     <module name="TreeWalker">
         <module name="OuterTypeFilename"/>
         <module name="IllegalTokenText">
@@ -55,12 +50,13 @@
             <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
         </module>
         <module name="AvoidStarImport"/>
+        <!-- TODO(ejona): Upstream? -->
         <module name="UnusedImports"/>
         <module name="OneTopLevelClass"/>
         <module name="NoLineWrap"/>
         <module name="EmptyBlock">
             <property name="option" value="TEXT"/>
-            <property name="tokens" value="LITERAL_TRY, LITERAL_CATCH, LITERAL_FINALLY, LITERAL_IF, LITERAL_ELSE, LITERAL_SWITCH"/>
+            <property name="tokens" value="LITERAL_TRY, LITERAL_FINALLY, LITERAL_IF, LITERAL_ELSE, LITERAL_SWITCH"/>
         </module>
         <module name="NeedBraces"/>
         <module name="LeftCurly">
@@ -77,7 +73,7 @@
             <property name="allowEmptyTypes" value="true"/>
             <property name="allowEmptyLoops" value="true"/>
             <message key="ws.notFollowed"
-             value="WhitespaceAround: ''{0}'' is not followed by whitespace."/>
+             value="WhitespaceAround: ''{0}'' is not followed by whitespace. Empty blocks may only be represented as '{}' when not part of a multi-block statement (4.1.3)"/>
              <message key="ws.notPreceded"
              value="WhitespaceAround: ''{0}'' is not preceded with whitespace."/>
         </module>
@@ -120,6 +116,13 @@
             <message key="name.invalidPattern"
              value="Parameter name ''{0}'' must match pattern ''{1}''."/>
         </module>
+        <module name="CatchParameterName">
+            <!-- TODO(ejona): too strict, as one-character parameter names are permitted.
+            <property name="format" value="^[a-z][a-z0-9][a-zA-Z0-9]*$"/-->
+            <property name="format" value="^[a-z][a-zA-Z0-9]*$"/>
+            <message key="name.invalidPattern"
+             value="Catch parameter name ''{0}'' must match pattern ''{1}''."/>
+        </module>
         <module name="LocalVariableName">
             <property name="tokens" value="VARIABLE_DEF"/>
             <!-- TODO(ejona): too strict, as one-character parameter names are permitted.
@@ -139,6 +142,11 @@
             <property name="format" value="(^[A-Z][0-9]?)$|([A-Z][a-zA-Z0-9]*[T]$)"/>
             <message key="name.invalidPattern"
              value="Method type name ''{0}'' must match pattern ''{1}''."/>
+        </module>
+        <module name="InterfaceTypeParameterName">
+            <property name="format" value="(^[A-Z][0-9]?)$|([A-Z][a-zA-Z0-9]*[T]$)"/>
+            <message key="name.invalidPattern"
+             value="Interface type name ''{0}'' must match pattern ''{1}''."/>
         </module>
         <module name="NoFinalizer"/>
         <module name="GenericWhitespace">
@@ -167,11 +175,9 @@
         <!-- TODO(ejona): Does not consider assignment during declaration as a usage.
         <module name="VariableDeclarationUsageDistance"/-->
         <module name="CustomImportOrder">
-            <property name="thirdPartyPackageRegExp" value=".*"/>
             <property name="specialImportsRegExp" value="com.google"/>
             <property name="sortImportsInGroupAlphabetically" value="true"/>
             <property name="customImportOrderRules" value="STATIC###SPECIAL_IMPORTS###THIRD_PARTY_PACKAGE###STANDARD_JAVA_PACKAGE"/>
-            <property name="separateLineBetweenGroups" value="true"/>
         </module>
         <module name="MethodParamPad"/>
         <module name="OperatorWrap">
@@ -187,7 +193,7 @@
         </module>
         <module name="NonEmptyAtclauseDescription"/>
         <module name="JavadocTagContinuationIndentation"/>
-        <module name="SummaryJavadocCheck">
+        <module name="SummaryJavadoc">
             <property name="forbiddenSummaryFragments" value="^@return the *|^This method returns |^A [{]@code [a-zA-Z0-9]+[}]( is a )"/>
         </module>
         <module name="JavadocParagraph"/>
@@ -201,6 +207,8 @@
             <property name="allowMissingThrowsTags" value="true"/>
             <property name="allowMissingReturnTag" value="true"/>
             <property name="minLineCount" value="2"/>
+            <!-- TOOD(ejona): Too restrictive for tests
+            <property name="allowedAnnotations" value="Override, Test"/-->
             <property name="allowedAnnotations" value="Override, Test, Before, After, BeforeClass, AfterClass, Setup, TearDown"/>
             <property name="allowThrowsTagsForSubclasses" value="true"/>
         </module>
@@ -209,7 +217,13 @@
             <message key="name.invalidPattern"
              value="Method name ''{0}'' must match pattern ''{1}''."/>
         </module>
-        <!-- TODO(ejona86): too strict, as {@link} is permitted in single-line JavaDoc
-        <module name="SingleLineJavadoc"/-->
+        <module name="SingleLineJavadoc">
+            <!-- TODO(ejona): Based on mis-reading of style; consider upstreaming
+            <property name="ignoreInlineTags" value="false"/-->
+        </module>
+        <module name="EmptyCatchBlock">
+            <property name="exceptionVariableName" value="expected"/>
+        </module>
+        <module name="CommentsIndentation"/>
     </module>
 </module>

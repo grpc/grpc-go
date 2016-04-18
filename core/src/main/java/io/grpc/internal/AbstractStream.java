@@ -210,7 +210,7 @@ public abstract class AbstractStream<IdT> implements Stream {
    * Frees any resources associated with this stream. Subclass implementations must call this
    * version.
    *
-   * <p> NOTE: Can be called by both the transport thread and the application thread. Transport
+   * <p>NOTE: Can be called by both the transport thread and the application thread. Transport
    * threads need to dispose when the remote side has terminated the stream. Application threads
    * will dispose when the application decides to close the stream as part of normal processing.
    */

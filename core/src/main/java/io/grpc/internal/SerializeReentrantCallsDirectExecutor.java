@@ -42,10 +42,10 @@ import java.util.logging.Logger;
  * Executes a task directly in the calling thread, unless it's a reentrant call in which case the
  * task is enqueued and executed once the calling task completes.
  *
- * <p> The {@code Executor} assumes that reentrant calls are rare and its fast path is thus
+ * <p>The {@code Executor} assumes that reentrant calls are rare and its fast path is thus
  * optimized for that - avoiding queuing and additional object creation altogether.
  *
- * <p> This class is not thread-safe.
+ * <p>This class is not thread-safe.
  */
 class SerializeReentrantCallsDirectExecutor implements Executor {
 

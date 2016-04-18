@@ -55,7 +55,7 @@ import java.util.concurrent.Executor;
  * Client interceptor that authenticates all calls by binding header data provided by a credential.
  * Typically this will populate the Authorization header but other headers may also be filled out.
  *
- * <p> Uses the new and simplified Google auth library:
+ * <p>Uses the new and simplified Google auth library:
  * https://github.com/google/google-auth-library-java
  */
 public final class ClientAuthInterceptor implements ClientInterceptor {

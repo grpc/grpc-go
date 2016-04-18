@@ -83,7 +83,7 @@ import java.util.concurrent.ScheduledExecutorService;
  * is willing to decode, a second RPC is sent to show that the client has learned and will use
  * the encoding.
  *
- * <p> In cases where compression is negotiated, but either the client or the server doesn't
+ * <p>In cases where compression is negotiated, but either the client or the server doesn't
  * actually want to encode, a dummy codec is used to record usage.  If compression is not enabled,
  * the codec will see no data pass through.  This is checked on each test to ensure the code is
  * doing the right thing.
