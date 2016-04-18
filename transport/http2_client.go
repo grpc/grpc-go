@@ -234,7 +234,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		timeout = dl.Sub(time.Now())
 	}
 	select {
-	case ctx.Done():
+	case <-ctx.Done():
 		return nil, ContextErr(ctx.Err())
 	default:
 	}
@@ -519,7 +519,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			return err
 		}
 		select {
-		case s.ctx.Done():
+		case <-s.ctx.Done():
 			t.sendQuotaPool.add(len(p))
 			if t.framer.adjustNumWriters(-1) == 0 {
 				t.controlBuf.put(&flushIO{})

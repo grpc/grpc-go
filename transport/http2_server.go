@@ -601,7 +601,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 			return err
 		}
 		select {
-		case s.ctx.Done():
+		case <-s.ctx.Done():
 			t.sendQuotaPool.add(ps)
 			if t.framer.adjustNumWriters(-1) == 0 {
 				t.controlBuf.put(&flushIO{})
