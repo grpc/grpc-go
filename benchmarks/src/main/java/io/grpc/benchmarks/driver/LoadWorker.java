@@ -31,6 +31,8 @@
 
 package io.grpc.benchmarks.driver;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import io.grpc.Status;
 import io.grpc.benchmarks.proto.Control;
 import io.grpc.benchmarks.proto.WorkerServiceGrpc;
@@ -55,7 +57,11 @@ public class LoadWorker {
 
   LoadWorker(int driverPort, int serverPort) throws Exception {
     this.serverPort = serverPort;
-    NioEventLoopGroup singleThreadGroup = new NioEventLoopGroup(1);
+    NioEventLoopGroup singleThreadGroup = new NioEventLoopGroup(1,
+        new ThreadFactoryBuilder()
+            .setDaemon(true)
+            .setNameFormat("load-worker-%d")
+            .build());
     this.driverServer = NettyServerBuilder.forPort(driverPort)
         .directExecutor()
         .workerEventLoopGroup(singleThreadGroup)
@@ -119,9 +125,7 @@ public class LoadWorker {
     log.log(Level.INFO, "DriverServer has terminated.");
 
     // Allow enough time for quitWorker to deliver OK status to the driver.
-    // Also make sure this process actually exits (see #1685).
     Thread.sleep(3000);
-    System.exit(0);
   }
 
   /**
