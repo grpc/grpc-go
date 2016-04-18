@@ -71,6 +71,7 @@ func (byteBufCodec) String() string {
 type workerServer struct {
 	stop       chan<- bool
 	serverPort int
+	bc         *benchmarkClient
 }
 
 func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) error {
@@ -128,7 +129,48 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 }
 
 func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) error {
-	return grpc.Errorf(codes.Unimplemented, "RunClient not implemented")
+
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		var out *testpb.ClientStatus
+		switch t := in.Argtype.(type) {
+		case *testpb.ClientArgs_Setup:
+			grpclog.Printf("client setup received:")
+
+			bc, err := startBenchmarkClientWithSetup(t.Setup)
+			if err != nil {
+				return err
+			}
+			s.bc = bc
+			out = &testpb.ClientStatus{
+				Stats: s.bc.getStats(),
+			}
+		case *testpb.ClientArgs_Mark:
+			grpclog.Printf("client mark received:")
+			grpclog.Printf(" - %v", t)
+			if s.bc == nil {
+				return grpc.Errorf(codes.InvalidArgument, "client does not exist when mark received")
+			}
+			out = &testpb.ClientStatus{
+				Stats: s.bc.getStats(),
+			}
+			if t.Mark.Reset_ {
+				s.bc.reset()
+			}
+		}
+		if err := stream.Send(out); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *workerServer) CoreCount(ctx context.Context, in *testpb.CoreRequest) (*testpb.CoreResponse, error) {
@@ -139,6 +181,9 @@ func (s *workerServer) CoreCount(ctx context.Context, in *testpb.CoreRequest) (*
 func (s *workerServer) QuitWorker(ctx context.Context, in *testpb.Void) (*testpb.Void, error) {
 	grpclog.Printf("quiting worker")
 	defer func() { s.stop <- true }()
+	if s.bc != nil {
+		close(s.bc.stop)
+	}
 	return &testpb.Void{}, nil
 }
 

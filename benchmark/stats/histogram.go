@@ -145,6 +145,15 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 	return &h
 }
 
+func (h *Histogram) Clear() {
+	h.count = newCounter()
+	h.sum = newCounter()
+	h.tracker = newTracker()
+	for _, v := range h.buckets {
+		v.count = newCounter()
+	}
+}
+
 // Opts returns a copy of the options used to create the Histogram.
 func (h *Histogram) Opts() HistogramOptions {
 	return h.opts

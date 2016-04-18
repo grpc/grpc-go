@@ -70,7 +70,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 		b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 	}
 	for i := 0; i < 10; i++ {
-		streamCaller(tc, stream)
+		streamCaller(stream)
 	}
 
 	ch := make(chan int, maxConcurrentCalls*4)
@@ -89,7 +89,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 			}
 			for range ch {
 				start := time.Now()
-				streamCaller(tc, stream)
+				streamCaller(stream)
 				elapse := time.Since(start)
 				mu.Lock()
 				s.Add(elapse)
@@ -111,8 +111,8 @@ func unaryCaller(client testpb.BenchmarkServiceClient) {
 	DoUnaryCall(client, 1, 1)
 }
 
-func streamCaller(client testpb.BenchmarkServiceClient, stream testpb.BenchmarkService_StreamingCallClient) {
-	DoStreamingRoundTrip(client, stream, 1, 1)
+func streamCaller(stream testpb.BenchmarkService_StreamingCallClient) {
+	DoStreamingRoundTrip(stream, 1, 1)
 }
 
 func BenchmarkClientStreamc1(b *testing.B) {

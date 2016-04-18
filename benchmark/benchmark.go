@@ -161,7 +161,7 @@ func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) {
 }
 
 // DoStreamingRoundTrip performs a round trip for a single streaming rpc.
-func DoStreamingRoundTrip(tc testpb.BenchmarkServiceClient, stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
+func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -177,8 +177,11 @@ func DoStreamingRoundTrip(tc testpb.BenchmarkServiceClient, stream testpb.Benchm
 }
 
 // NewClientConn creates a gRPC client connection to addr.
-func NewClientConn(addr string) *grpc.ClientConn {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
+	if len(opts) <= 0 {
+		opts = append(opts, grpc.WithInsecure())
+	}
+	conn, err := grpc.Dial(addr, opts...)
 	if err != nil {
 		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
 	}
