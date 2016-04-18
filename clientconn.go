@@ -129,7 +129,7 @@ func WithBackoffMaxDelay(md time.Duration) DialOption {
 func WithBackoffConfig(b BackoffConfig) DialOption {
 	// Set defaults to ensure that provided BackoffConfig is valid and
 	// unexported fields get default values.
-	b.setDefaults()
+	setDefaults(&b)
 	return withBackoff(b)
 }
 
