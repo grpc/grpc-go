@@ -215,6 +215,16 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
+// DeregisterService deregisters a service so that it is no longer served.
+func (s *Server) DeregisterService(serviceName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[serviceName]; !ok {
+		grpclog.Fatalf("grpc: Server.DeregisterService service %q not found", serviceName)
+	}
+	delete(s.m, serviceName)
+}
+
 var (
 	// ErrServerStopped indicates that the operation is now illegal because of
 	// the server being stopped.
