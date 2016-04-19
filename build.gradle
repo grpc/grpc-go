@@ -80,7 +80,7 @@ subprojects {
                 all().each { task ->
                   task.dependsOn ':grpc-compiler:java_pluginExecutable'
                   // Delete the generated sources first, so that we can be alerted if they are not re-compiled.
-                  task.dependsOn deleteGeneratedSource
+                  task.dependsOn 'deleteGeneratedSource' + task.sourceSet.name
                   // Recompile protos when the codegen has been changed
                   task.inputs.file javaPluginPath
                   // Recompile protos when build.gradle has been changed, because
@@ -94,8 +94,10 @@ subprojects {
               generatedFilesBaseDir = generatedSourcePath
             }
 
-            task deleteGeneratedSource << {
-              project.delete project.fileTree(dir: generatedSourcePath)
+            sourceSets.each { sourceSet ->
+              task "deleteGeneratedSource${sourceSet.name}" << {
+                project.delete project.fileTree(dir: generatedSourcePath + '/' + sourceSet.name)
+              }
             }
           } else {
             // Otherwise, we just use the checked-in generated code.
