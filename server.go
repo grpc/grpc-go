@@ -99,7 +99,7 @@ type options struct {
 	codec                Codec
 	cp                   Compressor
 	dc                   Decompressor
-	unaryInt	     UnaryServerInterceptor
+	unaryInt             UnaryServerInterceptor
 	maxConcurrentStreams uint32
 	useHandlerImpl       bool // use http.Handler-based server
 }

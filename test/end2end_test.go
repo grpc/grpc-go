@@ -1688,7 +1688,6 @@ func testCompressOK(t *testing.T, e env) {
 	}
 }
 
-
 func TestUnaryServerInterceptor(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
