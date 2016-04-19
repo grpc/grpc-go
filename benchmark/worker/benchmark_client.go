@@ -114,17 +114,24 @@ func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient
 	})
 
 	grpclog.Printf(" - load params: %v", setup.LoadParams)
+	// TODO distribution
+	var dist *int
 	switch lp := setup.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
 		grpclog.Printf("   - %v", lp.ClosedLoop)
 	case *testpb.LoadParams_Poisson:
 		grpclog.Printf("   - %v", lp.Poisson)
+		return nil, grpc.Errorf(codes.InvalidArgument, "unsupported load params: %v", setup.LoadParams)
+		// TODO poisson
 	case *testpb.LoadParams_Uniform:
 		grpclog.Printf("   - %v", lp.Uniform)
+		return nil, grpc.Errorf(codes.InvalidArgument, "unsupported load params: %v", setup.LoadParams)
 	case *testpb.LoadParams_Determ:
 		grpclog.Printf("   - %v", lp.Determ)
+		return nil, grpc.Errorf(codes.InvalidArgument, "unsupported load params: %v", setup.LoadParams)
 	case *testpb.LoadParams_Pareto:
 		grpclog.Printf("   - %v", lp.Pareto)
+		return nil, grpc.Errorf(codes.InvalidArgument, "unsupported load params: %v", setup.LoadParams)
 	default:
 		return nil, grpc.Errorf(codes.InvalidArgument, "unknown load params: %v", setup.LoadParams)
 	}
@@ -133,9 +140,15 @@ func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient
 	bc.stop = make(chan bool)
 	switch setup.RpcType {
 	case testpb.RpcType_UNARY:
-		doCloseLoopUnaryBenchmark(bc.histogram, bc.conns, rpcCount, payloadReqSize, payloadRespSize, bc.stop)
+		if dist == nil {
+			doCloseLoopUnaryBenchmark(bc.histogram, bc.conns, rpcCount, payloadReqSize, payloadRespSize, bc.stop)
+		}
+		// TODO else do open loop
 	case testpb.RpcType_STREAMING:
-		doCloseLoopStreamingBenchmark(bc.histogram, bc.conns, rpcCount, payloadReqSize, payloadRespSize, payloadType, bc.stop)
+		if dist == nil {
+			doCloseLoopStreamingBenchmark(bc.histogram, bc.conns, rpcCount, payloadReqSize, payloadRespSize, payloadType, bc.stop)
+		}
+		// TODO else do open loop
 	default:
 		return nil, grpc.Errorf(codes.InvalidArgument, "unknown rpc type: %v", setup.RpcType)
 	}
