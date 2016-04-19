@@ -141,6 +141,9 @@ func Creds(c credentials.Credentials) ServerOption {
 	}
 }
 
+// UnaryInterceptor returns a ServerOption that sets the UnaryServerInterceptor for the
+// server. Only one interceptor can be installed. The construction of multiple interceptors
+// (e.g., chaining) can be implemented at the caller.
 func UnaryInterceptor(i UnaryServerInterceptor) ServerOption {
 	return func(o *options) {
 		if o.unaryInt != nil {
