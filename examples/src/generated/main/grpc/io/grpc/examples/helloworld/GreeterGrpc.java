@@ -55,6 +55,7 @@ public class GreeterGrpc {
         io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloReply> responseObserver);
   }
 
+  @io.grpc.ExperimentalApi
   public static abstract class AbstractGreeter implements Greeter, io.grpc.BindableService {
 
     @java.lang.Override

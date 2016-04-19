@@ -55,6 +55,7 @@ public class LoadBalancerGrpc {
         io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse> responseObserver);
   }
 
+  @io.grpc.ExperimentalApi
   public static abstract class AbstractLoadBalancer implements LoadBalancer, io.grpc.BindableService {
 
     @java.lang.Override

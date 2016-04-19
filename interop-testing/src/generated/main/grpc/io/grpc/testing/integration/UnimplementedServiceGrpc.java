@@ -55,6 +55,7 @@ public class UnimplementedServiceGrpc {
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver);
   }
 
+  @io.grpc.ExperimentalApi
   public static abstract class AbstractUnimplementedService implements UnimplementedService, io.grpc.BindableService {
 
     @java.lang.Override

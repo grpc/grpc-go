@@ -67,6 +67,7 @@ public class ReconnectServiceGrpc {
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver);
   }
 
+  @io.grpc.ExperimentalApi
   public static abstract class AbstractReconnectService implements ReconnectService, io.grpc.BindableService {
 
     @java.lang.Override

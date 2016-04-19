@@ -67,6 +67,7 @@ public class MetricsServiceGrpc {
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Metrics.GaugeResponse> responseObserver);
   }
 
+  @io.grpc.ExperimentalApi
   public static abstract class AbstractMetricsService implements MetricsService, io.grpc.BindableService {
 
     @java.lang.Override

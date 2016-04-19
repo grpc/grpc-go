@@ -67,6 +67,7 @@ public class BenchmarkServiceGrpc {
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Messages.SimpleResponse> responseObserver);
   }
 
+  @io.grpc.ExperimentalApi
   public static abstract class AbstractBenchmarkService implements BenchmarkService, io.grpc.BindableService {
 
     @java.lang.Override

@@ -297,6 +297,7 @@ static void PrintStub(
   if (abstract) {
     p->Print(
         *vars,
+        "@$ExperimentalApi$\n"
         "public static abstract class $abstract_name$ implements $service_name$, "
         "$BindableService$ {\n");
   } else if (!impl) {

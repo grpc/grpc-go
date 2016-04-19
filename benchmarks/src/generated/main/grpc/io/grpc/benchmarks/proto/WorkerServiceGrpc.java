@@ -91,6 +91,7 @@ public class WorkerServiceGrpc {
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.Void> responseObserver);
   }
 
+  @io.grpc.ExperimentalApi
   public static abstract class AbstractWorkerService implements WorkerService, io.grpc.BindableService {
 
     @java.lang.Override

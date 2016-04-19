@@ -115,6 +115,7 @@ public class TestServiceGrpc {
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver);
   }
 
+  @io.grpc.ExperimentalApi
   public static abstract class AbstractTestService implements TestService, io.grpc.BindableService {
 
     @java.lang.Override

@@ -91,6 +91,7 @@ public class RouteGuideGrpc {
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> responseObserver);
   }
 
+  @io.grpc.ExperimentalApi
   public static abstract class AbstractRouteGuide implements RouteGuide, io.grpc.BindableService {
 
     @java.lang.Override
