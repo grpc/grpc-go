@@ -42,7 +42,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * <p>Note to implementations: all methods are expected to return quickly. Any work that may block
  * should be done asynchronously.
  *
- * @param T the transport type to balance
+ * @param <T> the transport type to balance
  */
 // TODO(zhangkun83): since it's also used for non-loadbalancing cases like pick-first,
 // "RequestRouter" might be a better name.

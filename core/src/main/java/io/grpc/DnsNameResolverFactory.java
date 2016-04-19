@@ -42,7 +42,7 @@ import java.net.URI;
  *
  * <p>It resolves a target URI whose scheme is {@code "dns"}. The (optional) authority of the target
  * URI is reserved for the address of alternative DNS server (not implemented yet). The path of the
- * target URI, exluding the leading slash {@code '/'}, is treated as the host name and the optional
+ * target URI, excluding the leading slash {@code '/'}, is treated as the host name and the optional
  * port to be resolved by DNS. Example target URIs:
  *
  * <ul>

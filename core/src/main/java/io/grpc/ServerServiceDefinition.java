@@ -71,7 +71,7 @@ public final class ServerServiceDefinition {
   }
 
   /**
-   * Look up a method by its fuly qualified name.
+   * Look up a method by its fully qualified name.
    *
    * @param name the fully qualified name without leading slash. E.g., "com.foo.Foo/Bar"
    */
