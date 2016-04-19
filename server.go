@@ -99,6 +99,7 @@ type options struct {
 	codec                Codec
 	cp                   Compressor
 	dc                   Decompressor
+	unaryInt	     UnaryServerInterceptor
 	maxConcurrentStreams uint32
 	useHandlerImpl       bool // use http.Handler-based server
 }
@@ -137,6 +138,15 @@ func MaxConcurrentStreams(n uint32) ServerOption {
 func Creds(c credentials.Credentials) ServerOption {
 	return func(o *options) {
 		o.creds = c
+	}
+}
+
+func UnaryInterceptor(i UnaryServerInterceptor) ServerOption {
+	return func(o *options) {
+		if o.unaryInt != nil {
+			panic("The unary server interceptor has been set.")
+		}
+		o.unaryInt = i
 	}
 }
 
@@ -494,7 +504,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 			return nil
 		}
-		reply, appErr := md.Handler(srv.server, stream.Context(), df, nil)
+		reply, appErr := md.Handler(srv.server, stream.Context(), df, s.opts.unaryInt)
 		if appErr != nil {
 			if err, ok := appErr.(rpcError); ok {
 				statusCode = err.code
