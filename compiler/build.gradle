@@ -152,7 +152,10 @@ protobuf {
     }
   }
   generateProtoTasks {
-    all()*.dependsOn 'java_pluginExecutable'
+    all().each { task ->
+      task.dependsOn 'java_pluginExecutable'
+      task.inputs.file javaPluginPath
+    }
     ofSourceSet('test')*.plugins {
       grpc {}
     }
