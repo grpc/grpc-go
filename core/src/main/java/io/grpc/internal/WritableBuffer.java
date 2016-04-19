@@ -51,6 +51,11 @@ public interface WritableBuffer {
   void write(byte[] src, int srcIndex, int length);
 
   /**
+   * Appends a single byte to the buffer.  This is slow so don't call it.
+   */
+  void write(byte b);
+
+  /**
    * Returns the number of bytes one can write to the buffer.
    */
   int writableBytes();

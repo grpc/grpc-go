@@ -51,6 +51,11 @@ class NettyWritableBuffer implements WritableBuffer {
   }
 
   @Override
+  public void write(byte b) {
+    bytebuf.writeByte(b);
+  }
+
+  @Override
   public int writableBytes() {
     return bytebuf.writableBytes();
   }

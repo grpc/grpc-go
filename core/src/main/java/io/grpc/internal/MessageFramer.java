@@ -331,14 +331,21 @@ public class MessageFramer {
    * {@link OutputStream}.
    */
   private final class BufferChainOutputStream extends OutputStream {
-
-    private final byte[] singleByte = new byte[1];
     private final List<WritableBuffer> bufferList = new ArrayList<WritableBuffer>();
     private WritableBuffer current;
 
+    /**
+     * This is slow, don't call it.  If you care about write overhead, use a BufferedOutputStream.
+     * Better yet, you can use your own single byte buffer and called
+     * {@link #write(byte[], int, int)}.
+     */
     @Override
-    public void write(int b) {
-      singleByte[0] = (byte) b;
+    public void write(int b) throws IOException {
+      if (current != null && current.writableBytes() > 0) {
+        current.write((byte)b);
+        return;
+      }
+      byte[] singleByte = new byte[]{(byte)b};
       write(singleByte, 0, 1);
     }
 

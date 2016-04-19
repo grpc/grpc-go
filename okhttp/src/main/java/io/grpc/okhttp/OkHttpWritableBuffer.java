@@ -32,6 +32,7 @@
 package io.grpc.okhttp;
 
 import io.grpc.internal.WritableBuffer;
+
 import okio.Buffer;
 
 class OkHttpWritableBuffer implements WritableBuffer {
@@ -50,6 +51,13 @@ class OkHttpWritableBuffer implements WritableBuffer {
     buffer.write(src, srcIndex, length);
     writableBytes -= length;
     readableBytes += length;
+  }
+
+  @Override
+  public void write(byte b) {
+    buffer.writeByte(b);
+    writableBytes -= 1;
+    readableBytes += 1;
   }
 
   @Override

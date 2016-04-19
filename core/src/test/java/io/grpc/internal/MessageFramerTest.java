@@ -371,6 +371,11 @@ public class MessageFramerTest {
     }
 
     @Override
+    public void write(byte b) {
+      data[writeIdx++] = b;
+    }
+
+    @Override
     public int writableBytes() {
       return data.length - writeIdx;
     }
