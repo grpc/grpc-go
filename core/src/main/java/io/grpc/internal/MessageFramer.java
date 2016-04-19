@@ -330,24 +330,20 @@ public class MessageFramer {
    * Produce a collection of {@link WritableBuffer} instances from the data written to an
    * {@link OutputStream}.
    */
-  private class BufferChainOutputStream extends OutputStream {
+  private final class BufferChainOutputStream extends OutputStream {
 
     private final byte[] singleByte = new byte[1];
-    private List<WritableBuffer> bufferList;
+    private final List<WritableBuffer> bufferList = new ArrayList<WritableBuffer>();
     private WritableBuffer current;
 
-    private BufferChainOutputStream() {
-      bufferList = new ArrayList<WritableBuffer>();
-    }
-
     @Override
-    public void write(int b) throws IOException {
+    public void write(int b) {
       singleByte[0] = (byte) b;
       write(singleByte, 0, 1);
     }
 
     @Override
-    public void write(byte[] b, int off, int len) throws IOException {
+    public void write(byte[] b, int off, int len) {
       if (current == null) {
         // Request len bytes initially from the allocator, it may give us more.
         current = bufferAllocator.allocate(len);
@@ -358,7 +354,8 @@ public class MessageFramer {
         if (canWrite == 0) {
           // Assume message is twice as large as previous assumption if were still not done,
           // the allocator may allocate more or less than this amount.
-          current = bufferAllocator.allocate(current.readableBytes() * 2);
+          int needed = Math.max(len, current.readableBytes() * 2);
+          current = bufferAllocator.allocate(needed);
           bufferList.add(current);
         } else {
           current.write(b, off, canWrite);
