@@ -420,6 +420,7 @@ type test struct {
 	userAgent         string
 	clientCompression bool
 	serverCompression bool
+	unaryInt          grpc.UnaryServerInterceptor
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -468,7 +469,9 @@ func (te *test) startServer() {
 			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
 		)
 	}
-
+	if te.unaryInt != nil {
+		sopts = append(sopts, grpc.UnaryInterceptor(te.unaryInt))
+	}
 	la := "localhost:0"
 	switch e.network {
 	case "unix":
@@ -1682,6 +1685,29 @@ func testCompressOK(t *testing.T, e env) {
 	}
 	if _, err := stream.Recv(); err != nil {
 		t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
+	}
+}
+
+func TestUnaryServerInterceptor(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testUnaryServerInterceptor(t, e)
+	}
+}
+
+func errInjector(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return nil, grpc.Errorf(codes.PermissionDenied, "")
+}
+
+func testUnaryServerInterceptor(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.unaryInt = errInjector
+	te.startServer()
+	defer te.tearDown()
+
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.PermissionDenied {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, error code %d", err, codes.PermissionDenied)
 	}
 }
 
