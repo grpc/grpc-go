@@ -78,8 +78,8 @@ func (v HistogramValue) String() string {
 
 // Histogram accumulates values in the form of a histogram with
 // exponentially increased bucket sizes.
-// The first bucket is [0, m) where m = 1 + GrowthFactor
-// Bucket n (n>=1) contains [m**n, m**(n+1))
+// The first bucket (with index 0) is [0, n) where n = baseBucketSize
+// Bucket i (i>=1) contains [n * m^(i-1), n * m^i), where m = 1 + GrowthFactor
 // The type of the values is int64, which is suitable for keeping track
 // of things such as RPC latency
 // New histogram objects should be obtained via the New() function.
@@ -90,6 +90,9 @@ type Histogram struct {
 	sum          *Counter
 	sumOfSquares *Counter
 	tracker      *Tracker
+
+	logBaseBucketSize             float64
+	oneOverLogOnePlusGrowthFactor float64
 }
 
 // HistogramOptions contains the parameters that define the histogram's buckets.
@@ -99,6 +102,8 @@ type HistogramOptions struct {
 	// GrowthFactor is the growth factor of the buckets. A value of 0.1
 	// indicates that bucket N+1 will be 10% larger than bucket N.
 	GrowthFactor float64
+	// BaseBucketSize is the size of the first bucket.
+	BaseBucketSize float64
 	// MinValue is the lower bound of the first bucket.
 	MinValue int64
 }
@@ -116,6 +121,9 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 	if opts.NumBuckets == 0 {
 		opts.NumBuckets = 32
 	}
+	if opts.BaseBucketSize == 0.0 {
+		opts.BaseBucketSize = 1.0
+	}
 	h := Histogram{
 		opts:         opts,
 		buckets:      make([]bucketInternal, opts.NumBuckets),
@@ -123,14 +131,18 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 		sum:          newCounter(),
 		sumOfSquares: newCounter(),
 		tracker:      newTracker(),
+
+		logBaseBucketSize:             math.Log(opts.BaseBucketSize),
+		oneOverLogOnePlusGrowthFactor: 1 / math.Log(1+opts.GrowthFactor),
 	}
-	delta := 1.0
+	m := 1.0 + opts.GrowthFactor
+	delta := opts.BaseBucketSize
 	h.buckets[0].lowBound = float64(opts.MinValue)
 	h.buckets[0].count = newCounter()
 	for i := 1; i < opts.NumBuckets; i++ {
-		delta = delta * (1.0 + opts.GrowthFactor)
 		h.buckets[i].lowBound = float64(opts.MinValue) + delta
 		h.buckets[i].count = newCounter()
+		delta = delta * m
 	}
 	return &h
 }
@@ -247,10 +259,10 @@ func (h *Histogram) Delta1m() HistogramValue {
 func (h *Histogram) findBucket(value int64) (int, error) {
 	deltaValue := float64(value - h.opts.MinValue)
 	var b int
-	if deltaValue < 1 {
+	if deltaValue < h.opts.BaseBucketSize {
 		b = 0
 	} else {
-		b = int(math.Log(deltaValue) / math.Log(1+h.opts.GrowthFactor))
+		b = int((math.Log(deltaValue)-h.logBaseBucketSize)*h.oneOverLogOnePlusGrowthFactor + 1)
 	}
 	if b >= len(h.buckets) {
 		return 0, fmt.Errorf("no bucket for value: %d", value)
