@@ -37,9 +37,9 @@ import static java.util.Collections.singletonList;
 import static java.util.concurrent.Executors.newFixedThreadPool;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-import com.google.api.client.repackaged.com.google.common.base.Joiner;
-import com.google.api.client.repackaged.com.google.common.base.Objects;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Iterators;
