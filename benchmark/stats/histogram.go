@@ -76,12 +76,13 @@ func (v HistogramValue) String() string {
 	return b.String()
 }
 
-// A histograms is stored with exponentially increasing bucket sizes.
+// Histogram accumulates values in the form of a histogram with
+// exponentially increased bucket sizes.
 // The first bucket is [0, m) where m = 1 + GrowthFactor
 // Bucket n (n>=1) contains [m**n, m**(n+1))
 // The type of the values is int64, which is suitable for keeping track
-// of things like RPC latency in milliseconds.
-//New histogram objects should be obtained via the New() function.
+// of things such as RPC latency
+// New histogram objects should be obtained via the New() function.
 type Histogram struct {
 	opts         HistogramOptions
 	buckets      []bucketInternal
@@ -124,14 +125,12 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 		tracker:      newTracker(),
 	}
 	delta := 1.0
-	for i := 0; i < opts.NumBuckets; i++ {
-		if i == 0 {
-			h.buckets[i].lowBound = float64(opts.MinValue)
-		} else {
-			h.buckets[i].lowBound = float64(opts.MinValue) + delta
-		}
-		h.buckets[i].count = newCounter()
+	h.buckets[0].lowBound = float64(opts.MinValue)
+	h.buckets[0].count = newCounter()
+	for i := 1; i < opts.NumBuckets; i++ {
 		delta = delta * (1.0 + opts.GrowthFactor)
+		h.buckets[i].lowBound = float64(opts.MinValue) + delta
+		h.buckets[i].count = newCounter()
 	}
 	return &h
 }
