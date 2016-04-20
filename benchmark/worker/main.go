@@ -18,6 +18,22 @@ var (
 	// ports = []string{":10010"}
 )
 
+type byteBufCodec struct {
+}
+
+func (byteBufCodec) Marshal(v interface{}) ([]byte, error) {
+	return v.([]byte), nil
+}
+
+func (byteBufCodec) Unmarshal(data []byte, v interface{}) error {
+	v = data
+	return nil
+}
+
+func (byteBufCodec) String() string {
+	return "byteBufCodec"
+}
+
 type workerServer struct {
 	bs *benchmarkServer
 }

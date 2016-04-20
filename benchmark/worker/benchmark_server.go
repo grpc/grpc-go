@@ -52,18 +52,11 @@ func startBenchmarkServerWithSetup(setup *testpb.ServerConfig) (*benchmarkServer
 	// Ignore async server threads.
 
 	grpclog.Printf(" - core limit: %v", setup.CoreLimit)
-
-	grpclog.Printf(" - payload config: %v", setup.PayloadConfig)
-	if setup.PayloadConfig != nil {
-		// TODO payload config
-		grpclog.Printf("payload config: %v", setup.PayloadConfig)
-		switch setup.PayloadConfig.Payload.(type) {
-		case *testpb.PayloadConfig_BytebufParams:
-		case *testpb.PayloadConfig_SimpleParams:
-		case *testpb.PayloadConfig_ComplexParams:
-		default:
-			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", setup.PayloadConfig)
-		}
+	if setup.CoreLimit > 0 {
+		runtime.GOMAXPROCS(int(setup.CoreLimit))
+	} else {
+		// runtime.GOMAXPROCS(runtime.NumCPU())
+		runtime.GOMAXPROCS(1)
 	}
 
 	grpclog.Printf(" - core list: %v", setup.CoreList)
@@ -72,15 +65,28 @@ func startBenchmarkServerWithSetup(setup *testpb.ServerConfig) (*benchmarkServer
 		grpclog.Printf("specifying cores to run server on: %v", setup.CoreList)
 	}
 
-	if setup.CoreLimit > 0 {
-		runtime.GOMAXPROCS(int(setup.CoreLimit))
+	grpclog.Printf(" - port: %v", setup.Port)
+	grpclog.Printf(" - payload config: %v", setup.PayloadConfig)
+	var p int
+	var close func()
+	if setup.PayloadConfig != nil {
+		// TODO payload config
+		grpclog.Printf("payload config: %v", setup.PayloadConfig)
+		switch payload := setup.PayloadConfig.Payload.(type) {
+		case *testpb.PayloadConfig_BytebufParams:
+			opts = append(opts, grpc.CustomCodec(byteBufCodec{}))
+			p, close = benchmark.StartGenericServer(":"+strconv.Itoa(int(setup.Port)), payload.BytebufParams.ReqSize, payload.BytebufParams.RespSize, opts...)
+		case *testpb.PayloadConfig_SimpleParams:
+			p, close = benchmark.StartServer(":"+strconv.Itoa(int(setup.Port)), opts...)
+		case *testpb.PayloadConfig_ComplexParams:
+		default:
+			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", setup.PayloadConfig)
+		}
 	} else {
-		// runtime.GOMAXPROCS(runtime.NumCPU())
-		runtime.GOMAXPROCS(1)
+		// Start protobuf server is payload config is nil
+		p, close = benchmark.StartServer(":"+strconv.Itoa(int(setup.Port)), opts...)
 	}
 
-	grpclog.Printf(" - port: %v", setup.Port)
-	p, close := benchmark.StartServer(":"+strconv.Itoa(int(setup.Port)), opts...)
 	grpclog.Printf("benchmark server listening at port %v", p)
 
 	// temp := strings.Split(addr, ":")

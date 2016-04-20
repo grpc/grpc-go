@@ -93,7 +93,7 @@ func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallS
 
 // StartServer starts a gRPC server serving a benchmark service on the given
 // address, which may be something like "localhost:0". It returns its listen
-// address and a function to stop the server.
+// port number and a function to stop the server.
 func StartServer(addr string, opts ...grpc.ServerOption) (int, func()) {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -101,6 +101,47 @@ func StartServer(addr string, opts ...grpc.ServerOption) (int, func()) {
 	}
 	s := grpc.NewServer(opts...)
 	testpb.RegisterBenchmarkServiceServer(s, &testServer{})
+	go s.Serve(lis)
+	return lis.Addr().(*net.TCPAddr).Port, func() {
+		s.Stop()
+	}
+}
+
+type genericTestServer struct {
+	reqSize  int32
+	respSize int32
+}
+
+func (s *genericTestServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	return &testpb.SimpleResponse{}, nil
+}
+
+func (s *genericTestServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
+	for {
+		m := make([]byte, s.reqSize)
+		err := stream.(grpc.ServerStream).RecvMsg(m)
+		if err == io.EOF {
+			// read done.
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := stream.(grpc.ServerStream).SendMsg(make([]byte, s.respSize)); err != nil {
+			return err
+		}
+	}
+}
+
+// StartGenericServer starts a gRPC a benchmark service server, which supports custom codec.
+// It returns its listen port number and a function to stop the server.
+func StartGenericServer(addr string, reqSize, respSize int32, opts ...grpc.ServerOption) (int, func()) {
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		grpclog.Fatalf("Failed to listen: %v", err)
+	}
+	s := grpc.NewServer(opts...)
+	testpb.RegisterBenchmarkServiceServer(s, &genericTestServer{reqSize: reqSize, respSize: respSize})
 	go s.Serve(lis)
 	return lis.Addr().(*net.TCPAddr).Port, func() {
 		s.Stop()
