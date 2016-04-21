@@ -349,7 +349,8 @@ public abstract class AbstractInteropTest {
     requestObserver.onError(new RuntimeException());
     responseObserver.awaitCompletion();
     assertEquals(Arrays.<StreamingInputCallResponse>asList(), responseObserver.getValues());
-    assertEquals(Status.CANCELLED, Status.fromThrowable(responseObserver.getError()));
+    assertEquals(Status.Code.CANCELLED,
+        Status.fromThrowable(responseObserver.getError()).getCode());
   }
 
   @Test(timeout = 10000)
@@ -377,7 +378,7 @@ public abstract class AbstractInteropTest {
     requestObserver.onError(new RuntimeException());
     ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
     verify(responseObserver, timeout(OPERATION_TIMEOUT)).onError(captor.capture());
-    assertEquals(Status.CANCELLED, Status.fromThrowable(captor.getValue()));
+    assertEquals(Status.Code.CANCELLED, Status.fromThrowable(captor.getValue()).getCode());
     verifyNoMoreInteractions(responseObserver);
   }
 
