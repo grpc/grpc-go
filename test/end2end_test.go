@@ -421,6 +421,7 @@ type test struct {
 	clientCompression bool
 	serverCompression bool
 	unaryInt          grpc.UnaryServerInterceptor
+	streamInt         grpc.StreamServerInterceptor
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -471,6 +472,9 @@ func (te *test) startServer() {
 	}
 	if te.unaryInt != nil {
 		sopts = append(sopts, grpc.UnaryInterceptor(te.unaryInt))
+	}
+	if te.streamInt != nil {
+		sopts = append(sopts, grpc.StreamInterceptor(te.streamInt))
 	}
 	la := "localhost:0"
 	switch e.network {
@@ -1725,7 +1729,62 @@ func testUnaryServerInterceptor(t *testing.T, e env) {
 
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.PermissionDenied {
-		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, error code %d", err, codes.PermissionDenied)
+		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, error code %d", tc, err, codes.PermissionDenied)
+	}
+}
+
+func TestStreamServerInterceptor(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testStreamServerInterceptor(t, e)
+	}
+}
+
+func fullDuplexOnly(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	if info.FullMethod == "/grpc.testing.TestService/FullDuplexCall" {
+		return handler(srv, ss)
+	}
+	// Reject the other methods.
+	return grpc.Errorf(codes.PermissionDenied, "")
+}
+
+func testStreamServerInterceptor(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.streamInt = fullDuplexOnly
+	te.startServer()
+	defer te.tearDown()
+
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: proto.Int32(int32(1)),
+		},
+	}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParam,
+		Payload:            payload,
+	}
+	s1, err := tc.StreamingOutputCall(context.Background(), req)
+	if err != nil {
+		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, <nil>", tc, err)
+	}
+	if _, err := s1.Recv(); grpc.Code(err) != codes.PermissionDenied {
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, error code %d", tc, err, codes.PermissionDenied)
+	}
+	s2, err := tc.FullDuplexCall(context.Background())
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err := s2.Send(req); err != nil {
+		t.Fatalf("%v.Send(_) = %v, want <nil>", s2, err)
+	}
+	if _, err := s2.Recv(); err != nil {
+		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", s2, err)
 	}
 }
 

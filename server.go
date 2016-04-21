@@ -100,6 +100,7 @@ type options struct {
 	cp                   Compressor
 	dc                   Decompressor
 	unaryInt             UnaryServerInterceptor
+	streamInt            StreamServerInterceptor
 	maxConcurrentStreams uint32
 	useHandlerImpl       bool // use http.Handler-based server
 }
@@ -142,14 +143,25 @@ func Creds(c credentials.Credentials) ServerOption {
 }
 
 // UnaryInterceptor returns a ServerOption that sets the UnaryServerInterceptor for the
-// server. Only one interceptor can be installed. The construction of multiple interceptors
-// (e.g., chaining) can be implemented at the caller.
+// server. Only one unary interceptor can be installed. The construction of multiple
+// interceptors (e.g., chaining) can be implemented at the caller.
 func UnaryInterceptor(i UnaryServerInterceptor) ServerOption {
 	return func(o *options) {
 		if o.unaryInt != nil {
 			panic("The unary server interceptor has been set.")
 		}
 		o.unaryInt = i
+	}
+}
+
+// StreamInterceptor returns a ServerOption that sets the StreamServerInterceptor for the
+// server. Only one stream interceptor can be installed.
+func StreamInterceptor(i StreamServerInterceptor) ServerOption {
+	return func(o *options) {
+		if o.streamInt != nil {
+			panic("The stream server interceptor has been set.")
+		}
+		o.streamInt = i
 	}
 }
 
@@ -585,7 +597,18 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			ss.mu.Unlock()
 		}()
 	}
-	if appErr := sd.Handler(srv.server, ss); appErr != nil {
+	var appErr error
+	if s.opts.streamInt == nil {
+		appErr = sd.Handler(srv.server, ss)
+	} else {
+		info := &StreamServerInfo{
+			FullMethod:     stream.Method(),
+			IsClientStream: sd.ClientStreams,
+			IsServerStream: sd.ServerStreams,
+		}
+		appErr = s.opts.streamInt(srv.server, ss, info, sd.Handler)
+	}
+	if appErr != nil {
 		if err, ok := appErr.(rpcError); ok {
 			ss.statusCode = err.code
 			ss.statusDesc = err.desc
