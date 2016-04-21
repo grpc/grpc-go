@@ -746,6 +746,24 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 
 }
 
+func TestErrorChanNoIO(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testErrorChanNoIO(t, e)
+	}
+}
+
+func testErrorChanNoIO(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer()
+	defer te.tearDown()
+
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	if _, err := tc.FullDuplexCall(context.Background()); err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+}
+
 func TestEmptyUnaryWithUserAgent(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
