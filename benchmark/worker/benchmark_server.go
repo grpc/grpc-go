@@ -27,7 +27,7 @@ type benchmarkServer struct {
 	lastResetTime time.Time
 }
 
-func startBenchmarkServerWithSetup(setup *testpb.ServerConfig) (*benchmarkServer, error) {
+func startBenchmarkServerWithSetup(setup *testpb.ServerConfig, serverPort int) (*benchmarkServer, error) {
 	var opts []grpc.ServerOption
 
 	grpclog.Printf(" - server type: %v", setup.ServerType)
@@ -55,48 +55,42 @@ func startBenchmarkServerWithSetup(setup *testpb.ServerConfig) (*benchmarkServer
 	if setup.CoreLimit > 0 {
 		runtime.GOMAXPROCS(int(setup.CoreLimit))
 	} else {
-		// runtime.GOMAXPROCS(runtime.NumCPU())
 		runtime.GOMAXPROCS(1)
 	}
 
 	grpclog.Printf(" - core list: %v", setup.CoreList)
 	if len(setup.CoreList) > 0 {
-		// TODO core list
-		grpclog.Printf("specifying cores to run server on: %v", setup.CoreList)
+		return nil, grpc.Errorf(codes.InvalidArgument, "specifying core list is not supported")
 	}
 
 	grpclog.Printf(" - port: %v", setup.Port)
+	var port int
+	if setup.Port != 0 {
+		port = int(setup.Port)
+	} else if serverPort != 0 {
+		port = serverPort
+	}
 	grpclog.Printf(" - payload config: %v", setup.PayloadConfig)
 	var p int
 	var close func()
 	if setup.PayloadConfig != nil {
-		// TODO payload config
-		grpclog.Printf("payload config: %v", setup.PayloadConfig)
 		switch payload := setup.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:
 			opts = append(opts, grpc.CustomCodec(byteBufCodec{}))
-			p, close = benchmark.StartGenericServer(":"+strconv.Itoa(int(setup.Port)), payload.BytebufParams.ReqSize, payload.BytebufParams.RespSize, opts...)
+			p, close = benchmark.StartGenericServer(":"+strconv.Itoa(port), payload.BytebufParams.ReqSize, payload.BytebufParams.RespSize, opts...)
 		case *testpb.PayloadConfig_SimpleParams:
-			p, close = benchmark.StartServer(":"+strconv.Itoa(int(setup.Port)), opts...)
+			p, close = benchmark.StartServer(":"+strconv.Itoa(port), opts...)
 		case *testpb.PayloadConfig_ComplexParams:
+			return nil, grpc.Errorf(codes.InvalidArgument, "unsupported payload config: %v", setup.PayloadConfig)
 		default:
 			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", setup.PayloadConfig)
 		}
 	} else {
 		// Start protobuf server is payload config is nil
-		p, close = benchmark.StartServer(":"+strconv.Itoa(int(setup.Port)), opts...)
+		p, close = benchmark.StartServer(":"+strconv.Itoa(port), opts...)
 	}
 
 	grpclog.Printf("benchmark server listening at port %v", p)
-
-	// temp := strings.Split(addr, ":")
-	// if len(temp) <= 0 {
-	// 	return nil, grpc.Errorf(codes.Internal, "benchmark test address not valid: %v", addr)
-	// }
-	// p, err := strconv.Atoi(temp[len(temp)-1])
-	// if err != nil {
-	// 	return nil, grpc.Errorf(codes.Internal, "%v", err)
-	// }
 
 	bs := &benchmarkServer{port: p, close: close, lastResetTime: time.Now()}
 	return bs, nil
@@ -109,6 +103,7 @@ func (bs *benchmarkServer) getStats() *testpb.ServerStats {
 }
 
 func (bs *benchmarkServer) reset() {
+	// TODO wall time, sys time, user time
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 	bs.lastResetTime = time.Now()

@@ -1,10 +1,11 @@
 package main
 
 import (
+	"flag"
 	"io"
 	"net"
 	"runtime"
-	"sync"
+	"strconv"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -14,8 +15,8 @@ import (
 )
 
 var (
-	ports = []string{":10000"}
-	// ports = []string{":10010"}
+	driverPort = flag.Int("driver_port", 10000, "port for communication with driver")
+	serverPort = flag.Int("server_port", 0, "port for operation as a server")
 )
 
 type byteBufCodec struct {
@@ -35,7 +36,9 @@ func (byteBufCodec) String() string {
 }
 
 type workerServer struct {
-	bs *benchmarkServer
+	bs         *benchmarkServer
+	stop       chan<- bool
+	serverPort int
 }
 
 func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) error {
@@ -57,7 +60,7 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 		case *testpb.ServerArgs_Setup:
 			grpclog.Printf("server setup received:")
 
-			bs, err := startBenchmarkServerWithSetup(t.Setup)
+			bs, err := startBenchmarkServerWithSetup(t.Setup, s.serverPort)
 			if err != nil {
 				return err
 			}
@@ -100,25 +103,25 @@ func (s *workerServer) QuitWorker(ctx context.Context, in *testpb.Void) (*testpb
 	if s.bs != nil {
 		s.bs.close()
 	}
+	s.stop <- true
 	return &testpb.Void{}, nil
 }
 
 func main() {
-	var wg sync.WaitGroup
-	wg.Add(len(ports))
-	for i := 0; i < len(ports); i++ {
-		lis, err := net.Listen("tcp", ports[i])
-		if err != nil {
-			grpclog.Fatalf("failed to listen: %v", err)
-		}
-		grpclog.Printf("worker %d listening at port %v", i, ports[i])
-
-		s := grpc.NewServer()
-		testpb.RegisterWorkerServiceServer(s, &workerServer{})
-		go func() {
-			defer wg.Done()
-			s.Serve(lis)
-		}()
+	flag.Parse()
+	lis, err := net.Listen("tcp", ":"+strconv.Itoa(*driverPort))
+	if err != nil {
+		grpclog.Fatalf("failed to listen: %v", err)
 	}
-	wg.Wait()
+	grpclog.Printf("worker listening at port %v", *driverPort)
+
+	s := grpc.NewServer()
+	stop := make(chan bool)
+	testpb.RegisterWorkerServiceServer(s, &workerServer{
+		stop:       stop,
+		serverPort: *serverPort,
+	})
+	go s.Serve(lis)
+	<-stop
+	s.Stop()
 }
