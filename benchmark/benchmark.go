@@ -176,6 +176,17 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 	}
 }
 
+// DoGenericStreamingRoundTrip performs a round trip for a single streaming rpc, using custom codec.
+func DoGenericStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
+	if err := stream.(grpc.ClientStream).SendMsg(make([]byte, reqSize)); err != nil {
+		grpclog.Fatalf("StreamingCall(_).Send: %v", err)
+	}
+	m := make([]byte, respSize)
+	if err := stream.(grpc.ClientStream).RecvMsg(m); err != nil {
+		grpclog.Fatalf("StreamingCall(_).Recv: %v", err)
+	}
+}
+
 // NewClientConn creates a gRPC client connection to addr.
 func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 	if len(opts) <= 0 {
