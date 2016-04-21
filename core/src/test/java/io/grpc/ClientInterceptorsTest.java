@@ -399,7 +399,7 @@ public class ClientInterceptorsTest {
     // Make sure nothing bad happens after the exception.
     ClientCall<?, ?> noop = ((CheckedForwardingClientCall<?, ?>)interceptedCall).delegate();
     // Should not throw, even on bad input
-    noop.cancel();
+    noop.cancel("Cancel for test", null);
     noop.start(null, null);
     noop.request(-1);
     noop.halfClose();

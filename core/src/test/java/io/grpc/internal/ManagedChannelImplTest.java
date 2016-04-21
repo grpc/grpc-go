@@ -289,7 +289,7 @@ public class ManagedChannelImplTest {
     ClientStream mockStream = mock(ClientStream.class);
     when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
     call.start(mockCallListener, headers);
-    call.cancel();
+    call.cancel("Cancel for test", null);
 
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     final ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();

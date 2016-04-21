@@ -101,7 +101,7 @@ public class ClientCallsTest {
     verify(call).start(listenerCaptor.capture(), any(Metadata.class));
     ClientCall.Listener<String> listener = listenerCaptor.getValue();
     future.cancel(true);
-    verify(call).cancel();
+    verify(call).cancel("GrpcFuture was cancelled", null);
     listener.onMessage("bar");
     listener.onClose(Status.OK, new Metadata());
     try {

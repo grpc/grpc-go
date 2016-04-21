@@ -113,7 +113,7 @@ public class ClientCalls {
     try {
       return getUnchecked(futureUnaryCall(call, param));
     } catch (Throwable t) {
-      call.cancel();
+      call.cancel(null, t);
       throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
     }
   }
@@ -139,7 +139,7 @@ public class ClientCalls {
       }
       return getUnchecked(responseFuture);
     } catch (Throwable t) {
-      call.cancel();
+      call.cancel(null, t);
       throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
     }
   }
@@ -226,7 +226,7 @@ public class ClientCalls {
       call.sendMessage(param);
       call.halfClose();
     } catch (Throwable t) {
-      call.cancel();
+      call.cancel(null, t);
       throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
     }
   }
@@ -265,8 +265,7 @@ public class ClientCalls {
 
     @Override
     public void onError(Throwable t) {
-      // TODO(ejona86): log?
-      call.cancel();
+      call.cancel("Cancelled by client with StreamObserver.onError()", t);
     }
 
     @Override
@@ -368,7 +367,7 @@ public class ClientCalls {
 
     @Override
     protected void interruptTask() {
-      call.cancel();
+      call.cancel("GrpcFuture was cancelled", null);
     }
 
     @Override

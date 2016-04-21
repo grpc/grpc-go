@@ -182,12 +182,12 @@ public class ClientAuthInterceptorTests {
     interceptedCall = interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
     interceptedCall.start(listener, new Metadata());
     verify(credentials).getRequestMetadata(URI.create("https://example.com/a.service"));
-    interceptedCall.cancel();
+    interceptedCall.cancel("Cancel for test", null);
 
     doReturn("example.com:123").when(channel).authority();
     interceptedCall = interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
     interceptedCall.start(listener, new Metadata());
     verify(credentials).getRequestMetadata(URI.create("https://example.com:123/a.service"));
-    interceptedCall.cancel();
+    interceptedCall.cancel("Cancel for test", null);
   }
 }

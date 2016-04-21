@@ -134,7 +134,7 @@ public class ClientInterceptors {
     public void request(int numMessages) {}
 
     @Override
-    public void cancel() {}
+    public void cancel(String message, Throwable cause) {}
 
     @Override
     public void halfClose() {}

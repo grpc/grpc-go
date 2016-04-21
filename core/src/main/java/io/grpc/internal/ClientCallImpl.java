@@ -304,7 +304,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   }
 
   @Override
-  public void cancel() {
+  public void cancel(@Nullable String message, @Nullable Throwable cause) {
     if (cancelCalled) {
       return;
     }
@@ -313,8 +313,20 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       // Cancel is called in exception handling cases, so it may be the case that the
       // stream was never successfully created.
       if (stream != null) {
-        stream.cancel(Status.CANCELLED.withCause(
-            new CancellationException("Client requested cancellation")));
+        Status status = Status.CANCELLED;
+        if (message != null) {
+          status = status.withDescription(message);
+        }
+        if (cause != null) {
+          status = status.withCause(cause);
+        }
+        if (message == null && cause == null) {
+          // TODO(zhangkun83): log a warning with this exception once cancel() has been deleted from
+          // ClientCall.
+          status = status.withCause(
+              new CancellationException("Client called cancel() without any detail"));
+        }
+        stream.cancel(status);
       }
     } finally {
       if (context != null) {

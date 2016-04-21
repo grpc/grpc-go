@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import javax.annotation.Nullable;
+
 /**
  * A {@link ClientCall} which forwards all of it's methods to another {@link ClientCall}.
  */
@@ -50,9 +52,15 @@ public abstract class ForwardingClientCall<ReqT, RespT> extends ClientCall<ReqT,
     delegate().request(numMessages);
   }
 
+  @Deprecated
   @Override
   public void cancel() {
     delegate().cancel();
+  }
+
+  @Override
+  public void cancel(@Nullable String message, @Nullable Throwable cause) {
+    delegate().cancel(message, cause);
   }
 
   @Override

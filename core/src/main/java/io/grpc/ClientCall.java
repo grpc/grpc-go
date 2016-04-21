@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import javax.annotation.Nullable;
+
 /**
  * An instance of a call to to a remote method. A call will send zero or more
  * request messages to the server and receive zero or more response messages back.
@@ -157,15 +159,34 @@ public abstract class ClientCall<ReqT, RespT> {
   public abstract void request(int numMessages);
 
   /**
+   * Equivalent as {@link #cancel(String, Throwable)} without passing any useful information.
+   *
+   * @deprecated Use or override {@link #cancel(String, Throwable)} instead. See
+   *             https://github.com/grpc/grpc-java/issues/1221
+   */
+  @Deprecated
+  public void cancel() {
+    cancel("Cancelled by ClientCall.cancel()", null);
+  }
+
+  /**
    * Prevent any further processing for this {@code ClientCall}. No further messages may be sent or
    * will be received. The server is informed of cancellations, but may not stop processing the
    * call. Cancellation is permitted if previously {@link #halfClose}d. Cancelling an already {@code
    * cancel()}ed {@code ClientCall} has no effect.
    *
-   *
    * <p>No other methods on this class can be called after this method has been called.
+   *
+   * <p>It is recommended that at least one of the arguments to be non-{@code null}, to provide
+   * useful debug information. Both argument being null may log warnings and result in suboptimal
+   * performance. Also note that the provided information will not be sent to the server.
+   *
+   * @param message if not {@code null}, will appear as the description of the CANCELLED status
+   * @param cause if not {@code null}, will appear as the cause of the CANCELLED status
    */
-  public abstract void cancel();
+  public void cancel(@Nullable String message, @Nullable Throwable cause) {
+    throw new UnsupportedOperationException(getClass() + " should implement this method");
+  }
 
   /**
    * Close the call for request message sending. Incoming response messages are unaffected.  This
