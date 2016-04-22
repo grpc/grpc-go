@@ -1,3 +1,36 @@
+/*
+ *
+ * Copyright 2016, Google Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ * copyright notice, this list of conditions and the following disclaimer
+ * in the documentation and/or other materials provided with the
+ * distribution.
+ *     * Neither the name of Google Inc. nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
 package main
 
 import (
@@ -16,7 +49,7 @@ import (
 
 var (
 	driverPort = flag.Int("driver_port", 10000, "port for communication with driver")
-	serverPort = flag.Int("server_port", 0, "port for operation as a server")
+	serverPort = flag.Int("server_port", 0, "default port for benchmark server")
 )
 
 type byteBufCodec struct {
@@ -36,19 +69,20 @@ func (byteBufCodec) String() string {
 }
 
 type workerServer struct {
-	bs         *benchmarkServer
 	stop       chan<- bool
 	serverPort int
 }
 
 func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) error {
+	var bs *benchmarkServer
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
+			// Close benchmark server when stream ends.
 			grpclog.Printf("closing benchmark server")
-			if s.bs != nil {
-				s.bs.close()
-				s.bs = nil
+			if bs != nil {
+				bs.close()
+				bs = nil
 			}
 			return nil
 		}
@@ -56,30 +90,34 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 			return err
 		}
 
-		switch t := in.Argtype.(type) {
+		switch argtype := in.Argtype.(type) {
 		case *testpb.ServerArgs_Setup:
 			grpclog.Printf("server setup received:")
-
-			bs, err := startBenchmarkServerWithSetup(t.Setup, s.serverPort)
+			newbs, err := startBenchmarkServerWithSetup(argtype.Setup, s.serverPort)
 			if err != nil {
 				return err
 			}
-			s.bs = bs
+			if bs != nil {
+				grpclog.Printf("server setup received when server already exists, closing the existing server")
+				bs.close()
+			}
+			bs = newbs
+
 		case *testpb.ServerArgs_Mark:
 			grpclog.Printf("server mark received:")
-			grpclog.Printf(" - %v", t)
-			if s.bs == nil {
+			grpclog.Printf(" - %v", argtype)
+			if bs == nil {
 				return grpc.Errorf(codes.InvalidArgument, "server does not exist when mark received")
 			}
-			if t.Mark.Reset_ {
-				s.bs.reset()
+			if argtype.Mark.Reset_ {
+				bs.reset()
 			}
 		}
 
 		out := &testpb.ServerStatus{
-			Stats: s.bs.getStats(),
-			Port:  int32(s.bs.port),
-			Cores: 1,
+			Stats: bs.getStats(),
+			Port:  int32(bs.port),
+			Cores: int32(bs.cores),
 		}
 		if err := stream.Send(out); err != nil {
 			return err
@@ -90,7 +128,7 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 }
 
 func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) error {
-	return nil
+	return grpc.Errorf(codes.Unimplemented, "RunClient not implemented")
 }
 
 func (s *workerServer) CoreCount(ctx context.Context, in *testpb.CoreRequest) (*testpb.CoreResponse, error) {
@@ -100,10 +138,7 @@ func (s *workerServer) CoreCount(ctx context.Context, in *testpb.CoreRequest) (*
 
 func (s *workerServer) QuitWorker(ctx context.Context, in *testpb.Void) (*testpb.Void, error) {
 	grpclog.Printf("quiting worker")
-	if s.bs != nil {
-		s.bs.close()
-	}
-	s.stop <- true
+	defer func() { s.stop <- true }()
 	return &testpb.Void{}, nil
 }
 
@@ -121,7 +156,14 @@ func main() {
 		stop:       stop,
 		serverPort: *serverPort,
 	})
-	go s.Serve(lis)
+
+	stopped := make(chan bool)
+	go func() {
+		s.Serve(lis)
+		stopped <- true
+	}()
+
 	<-stop
 	s.Stop()
+	<-stopped
 }

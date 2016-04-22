@@ -121,7 +121,6 @@ func (s *genericTestServer) StreamingCall(stream testpb.BenchmarkService_Streami
 		m := make([]byte, s.reqSize)
 		err := stream.(grpc.ServerStream).RecvMsg(m)
 		if err == io.EOF {
-			// read done.
 			return nil
 		}
 		if err != nil {
@@ -133,7 +132,7 @@ func (s *genericTestServer) StreamingCall(stream testpb.BenchmarkService_Streami
 	}
 }
 
-// StartGenericServer starts a gRPC a benchmark service server, which supports custom codec.
+// StartGenericServer starts a benchmark service server that supports custom codec.
 // It returns its listen port number and a function to stop the server.
 func StartGenericServer(addr string, reqSize, respSize int32, opts ...grpc.ServerOption) (int, func()) {
 	lis, err := net.Listen("tcp", addr)
