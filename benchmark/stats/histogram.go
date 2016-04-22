@@ -78,11 +78,9 @@ func (v HistogramValue) String() string {
 
 // Histogram accumulates values in the form of a histogram with
 // exponentially increased bucket sizes.
-// The first bucket (with index 0) is [0, n) where n = baseBucketSize
-// Bucket i (i>=1) contains [n * m^(i-1), n * m^i), where m = 1 + GrowthFactor
-// The type of the values is int64, which is suitable for keeping track
-// of things such as RPC latency
-// New histogram objects should be obtained via the New() function.
+// The first bucket (with index 0) is [0, n) where n = baseBucketSize.
+// Bucket i (i>=1) contains [n * m^(i-1), n * m^i), where m = 1 + GrowthFactor.
+// The type of the values is int64.
 type Histogram struct {
 	opts         HistogramOptions
 	buckets      []bucketInternal
@@ -255,14 +253,14 @@ func (h *Histogram) Delta1m() HistogramValue {
 	return v
 }
 
-// findBucket does a binary search to find in which bucket the value goes.
 func (h *Histogram) findBucket(value int64) (int, error) {
-	deltaValue := float64(value - h.opts.MinValue)
+	delta := float64(value - h.opts.MinValue)
 	var b int
-	if deltaValue < h.opts.BaseBucketSize {
-		b = 0
-	} else {
-		b = int((math.Log(deltaValue)-h.logBaseBucketSize)*h.oneOverLogOnePlusGrowthFactor + 1)
+	if delta >= h.opts.BaseBucketSize {
+		// b = log_{1+growthFactor} (delta / baseBucketSize) + 1
+		//   = log(delta / baseBucketSize) / log(1+growthFactor) + 1
+		//   = (log(delta) - log(baseBucketSize)) * (1 / log(1+growthFactor)) + 1
+		b = int((math.Log(delta)-h.logBaseBucketSize)*h.oneOverLogOnePlusGrowthFactor + 1)
 	}
 	if b >= len(h.buckets) {
 		return 0, fmt.Errorf("no bucket for value: %d", value)
