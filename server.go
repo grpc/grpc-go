@@ -87,11 +87,13 @@ type service struct {
 type Server struct {
 	opts options
 
-	mu     sync.Mutex // guards following
-	lis    map[net.Listener]bool
-	conns  map[io.Closer]bool
-	m      map[string]*service // service name -> service info
-	events trace.EventLog
+	mu        sync.Mutex // guards following
+	lis       map[net.Listener]bool
+	conns     map[io.Closer]bool
+	m         map[string]*service // service name -> service info
+	events    trace.EventLog
+	unaryInt  UnaryServerInterceptor
+	streamInt StreamServerInterceptor
 }
 
 type options struct {
@@ -99,8 +101,8 @@ type options struct {
 	codec                Codec
 	cp                   Compressor
 	dc                   Decompressor
-	unaryInt             UnaryServerInterceptor
-	streamInt            StreamServerInterceptor
+	unaryInts            []UnaryServerInterceptor
+	streamInts           []StreamServerInterceptor
 	maxConcurrentStreams uint32
 	useHandlerImpl       bool // use http.Handler-based server
 }
@@ -147,10 +149,7 @@ func Creds(c credentials.Credentials) ServerOption {
 // interceptors (e.g., chaining) can be implemented at the caller.
 func UnaryInterceptor(i UnaryServerInterceptor) ServerOption {
 	return func(o *options) {
-		if o.unaryInt != nil {
-			panic("The unary server interceptor has been set.")
-		}
-		o.unaryInt = i
+		o.unaryInts = append(o.unaryInts, i)
 	}
 }
 
@@ -158,10 +157,7 @@ func UnaryInterceptor(i UnaryServerInterceptor) ServerOption {
 // server. Only one stream interceptor can be installed.
 func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 	return func(o *options) {
-		if o.streamInt != nil {
-			panic("The stream server interceptor has been set.")
-		}
-		o.streamInt = i
+		o.streamInts = append(o.streamInts, i)
 	}
 }
 
@@ -176,11 +172,25 @@ func NewServer(opt ...ServerOption) *Server {
 		// Set the default codec.
 		opts.codec = protoCodec{}
 	}
+	var unaryInt UnaryServerInterceptor
+	if len(opts.unaryInts) == 1 {
+		unaryInt = opts.unaryInts[0]
+	} else if len(opts.unaryInts) > 1 {
+		unaryInt = newMultiUnaryServerInterceptor(opts.unaryInts...)
+	}
+	var streamInt StreamServerInterceptor
+	if len(opts.streamInts) == 1 {
+		streamInt = opts.streamInts[0]
+	} else if len(opts.streamInts) > 1 {
+		streamInt = newMultiStreamServerInterceptor(opts.streamInts...)
+	}
 	s := &Server{
-		lis:   make(map[net.Listener]bool),
-		opts:  opts,
-		conns: make(map[io.Closer]bool),
-		m:     make(map[string]*service),
+		lis:       make(map[net.Listener]bool),
+		opts:      opts,
+		conns:     make(map[io.Closer]bool),
+		m:         make(map[string]*service),
+		unaryInt:  unaryInt,
+		streamInt: streamInt,
 	}
 	if EnableTracing {
 		_, file, line, _ := runtime.Caller(1)
@@ -519,7 +529,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 			return nil
 		}
-		reply, appErr := md.Handler(srv.server, stream.Context(), df, s.opts.unaryInt)
+		reply, appErr := md.Handler(srv.server, stream.Context(), df, s.unaryInt)
 		if appErr != nil {
 			if err, ok := appErr.(rpcError); ok {
 				statusCode = err.code
@@ -598,7 +608,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		}()
 	}
 	var appErr error
-	if s.opts.streamInt == nil {
+	if s.streamInt == nil {
 		appErr = sd.Handler(srv.server, ss)
 	} else {
 		info := &StreamServerInfo{
@@ -606,7 +616,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			IsClientStream: sd.ClientStreams,
 			IsServerStream: sd.ServerStreams,
 		}
-		appErr = s.opts.streamInt(srv.server, ss, info, sd.Handler)
+		appErr = s.streamInt(srv.server, ss, info, sd.Handler)
 	}
 	if appErr != nil {
 		if err, ok := appErr.(rpcError); ok {
