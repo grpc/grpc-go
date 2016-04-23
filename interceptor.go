@@ -72,3 +72,45 @@ type StreamServerInfo struct {
 // service method implementation. It is the responsibility of the interceptor to invoke handler to
 // complete the RPC.
 type StreamServerInterceptor func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error
+
+type multiUnaryServerInterceptor struct {
+	interceptors []UnaryServerInterceptor
+}
+
+func newMultiUnaryServerInterceptor(interceptors ...UnaryServerInterceptor) UnaryServerInterceptor {
+	return (&multiUnaryServerInterceptor{interceptors}).do
+}
+
+func (m *multiUnaryServerInterceptor) do(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (interface{}, error) {
+	return m.doRec(0, ctx, req, info, handler)
+}
+
+func (m *multiUnaryServerInterceptor) doRec(i int, ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (interface{}, error) {
+	if i == len(m.interceptors) {
+		return handler(ctx, req)
+	}
+	return m.interceptors[i](ctx, req, info, func(c context.Context, r interface{}) (interface{}, error) {
+		return m.doRec(i+1, c, r, info, handler)
+	})
+}
+
+type multiStreamServerInterceptor struct {
+	interceptors []StreamServerInterceptor
+}
+
+func newMultiStreamServerInterceptor(interceptors ...StreamServerInterceptor) StreamServerInterceptor {
+	return (&multiStreamServerInterceptor{interceptors}).do
+}
+
+func (m *multiStreamServerInterceptor) do(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error {
+	return m.doRec(0, srv, ss, info, handler)
+}
+
+func (m *multiStreamServerInterceptor) doRec(i int, srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error {
+	if i == len(m.interceptors) {
+		return handler(srv, ss)
+	}
+	return m.interceptors[i](srv, ss, info, func(s interface{}, s2 ServerStream) error {
+		return m.doRec(i+1, s, s2, info, handler)
+	})
+}
