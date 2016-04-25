@@ -148,7 +148,7 @@ func StartGenericServer(addr string, reqSize, respSize int32, opts ...grpc.Serve
 }
 
 // DoUnaryCall performs an unary RPC with given stub and request and response sizes.
-func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) {
+func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) error {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -156,12 +156,14 @@ func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) {
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
-		grpclog.Fatal("/BenchmarkService/UnaryCall RPC failed: ", err)
+		// grpclog.Print("/BenchmarkService/UnaryCall RPC failed: ", err)
+		return grpc.Errorf(grpc.Code(err), "/BenchmarkService/UnaryCall RPC failed: %v", grpc.ErrorDesc(err))
 	}
+	return nil
 }
 
 // DoStreamingRoundTrip performs a round trip for a single streaming rpc.
-func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
+func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -169,22 +171,28 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("StreamingCall(_).Send: %v", err)
+		// grpclog.Printf("StreamingCall(_).Send: %v", err)
+		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).Send: %v", grpc.ErrorDesc(err))
 	}
 	if _, err := stream.Recv(); err != nil {
-		grpclog.Fatalf("StreamingCall(_).Recv: %v", err)
+		// grpclog.Printf("StreamingCall(_).Recv: %v", err)
+		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).Recv: %v", grpc.ErrorDesc(err))
 	}
+	return nil
 }
 
 // DoGenericStreamingRoundTrip performs a round trip for a single streaming rpc, using custom codec.
-func DoGenericStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
+func DoGenericStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	if err := stream.(grpc.ClientStream).SendMsg(make([]byte, reqSize)); err != nil {
-		grpclog.Fatalf("StreamingCall(_).Send: %v", err)
+		// grpclog.Printf("StreamingCall(_).(ClientStream).SendMsg: %v", err)
+		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).(ClientStream).SendMsg: %v", grpc.ErrorDesc(err))
 	}
 	m := make([]byte, respSize)
 	if err := stream.(grpc.ClientStream).RecvMsg(m); err != nil {
-		grpclog.Fatalf("StreamingCall(_).Recv: %v", err)
+		// grpclog.Printf("StreamingCall(_).(ClientStream).RecvMsg: %v", err)
+		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).(ClientStream).RecvMsg: %v", grpc.ErrorDesc(err))
 	}
+	return nil
 }
 
 // NewClientConn creates a gRPC client connection to addr.

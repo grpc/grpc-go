@@ -97,22 +97,6 @@ func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient
 
 	rpcCount, connCount := int(setup.OutstandingRpcsPerChannel), int(setup.ClientChannels)
 
-	bc := &benchmarkClient{
-		conns:                make([]*grpc.ClientConn, connCount),
-		histogramGrowFactor:  setup.HistogramParams.Resolution,
-		histogramMaxPossible: setup.HistogramParams.MaxPossible,
-	}
-
-	for connIndex := 0; connIndex < connCount; connIndex++ {
-		bc.conns[connIndex] = benchmark.NewClientConn(setup.ServerTargets[connIndex%len(setup.ServerTargets)], opts...)
-	}
-
-	bc.histogram = stats.NewHistogram(stats.HistogramOptions{
-		NumBuckets:   int(math.Log(bc.histogramMaxPossible)/math.Log(1+bc.histogramGrowFactor)) + 1,
-		GrowthFactor: bc.histogramGrowFactor,
-		MinValue:     0,
-	})
-
 	grpclog.Printf(" - load params: %v", setup.LoadParams)
 	// TODO distribution
 	var dist *int
@@ -137,20 +121,44 @@ func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient
 	}
 
 	grpclog.Printf(" - rpc type: %v", setup.RpcType)
-	bc.stop = make(chan bool)
+	var rpcType string
 	switch setup.RpcType {
 	case testpb.RpcType_UNARY:
+		rpcType = "unary"
+	case testpb.RpcType_STREAMING:
+		rpcType = "streaming"
+	default:
+		return nil, grpc.Errorf(codes.InvalidArgument, "unknown rpc type: %v", setup.RpcType)
+	}
+
+	bc := &benchmarkClient{
+		conns:                make([]*grpc.ClientConn, connCount),
+		histogramGrowFactor:  setup.HistogramParams.Resolution,
+		histogramMaxPossible: setup.HistogramParams.MaxPossible,
+	}
+
+	for connIndex := 0; connIndex < connCount; connIndex++ {
+		bc.conns[connIndex] = benchmark.NewClientConn(setup.ServerTargets[connIndex%len(setup.ServerTargets)], opts...)
+	}
+
+	bc.histogram = stats.NewHistogram(stats.HistogramOptions{
+		NumBuckets:   int(math.Log(bc.histogramMaxPossible)/math.Log(1+bc.histogramGrowFactor)) + 1,
+		GrowthFactor: bc.histogramGrowFactor,
+		MinValue:     0,
+	})
+
+	bc.stop = make(chan bool)
+	switch rpcType {
+	case "unary":
 		if dist == nil {
 			doCloseLoopUnaryBenchmark(bc.histogram, bc.conns, rpcCount, payloadReqSize, payloadRespSize, bc.stop)
 		}
 		// TODO else do open loop
-	case testpb.RpcType_STREAMING:
+	case "streaming":
 		if dist == nil {
 			doCloseLoopStreamingBenchmark(bc.histogram, bc.conns, rpcCount, payloadReqSize, payloadRespSize, payloadType, bc.stop)
 		}
 		// TODO else do open loop
-	default:
-		return nil, grpc.Errorf(codes.InvalidArgument, "unknown rpc type: %v", setup.RpcType)
 	}
 
 	bc.mu.Lock()
@@ -168,15 +176,21 @@ func doCloseLoopUnaryBenchmark(h *stats.Histogram, conns []*grpc.ClientConn, rpc
 			benchmark.DoUnaryCall(clients[ic], reqSize, respSize)
 		}
 	}
+	var wg sync.WaitGroup
+	wg.Add(len(conns) * rpcCount)
 	var mu sync.Mutex
 	for ic, _ := range conns {
 		for j := 0; j < rpcCount; j++ {
 			go func() {
+				defer wg.Done()
 				for {
 					done := make(chan bool)
 					go func() {
 						start := time.Now()
-						benchmark.DoUnaryCall(clients[ic], reqSize, respSize)
+						if err := benchmark.DoUnaryCall(clients[ic], reqSize, respSize); err != nil {
+							done <- false
+							return
+						}
 						elapse := time.Since(start)
 						mu.Lock()
 						h.Add(int64(elapse / time.Nanosecond))
@@ -194,10 +208,17 @@ func doCloseLoopUnaryBenchmark(h *stats.Histogram, conns []*grpc.ClientConn, rpc
 		}
 	}
 	grpclog.Printf("close loop done, count: %v", rpcCount)
+	go func() {
+		wg.Wait()
+		for _, c := range conns {
+			c.Close()
+		}
+		grpclog.Printf("conns closed")
+	}()
 }
 
 func doCloseLoopStreamingBenchmark(h *stats.Histogram, conns []*grpc.ClientConn, rpcCount int, reqSize int, respSize int, payloadType string, stop <-chan bool) {
-	var doRPC func(testpb.BenchmarkService_StreamingCallClient, int, int)
+	var doRPC func(testpb.BenchmarkService_StreamingCallClient, int, int) error
 	if payloadType == "bytebuf" {
 		doRPC = benchmark.DoGenericStreamingRoundTrip
 	} else {
@@ -208,22 +229,28 @@ func doCloseLoopStreamingBenchmark(h *stats.Histogram, conns []*grpc.ClientConn,
 		c := testpb.NewBenchmarkServiceClient(conn)
 		s, err := c.StreamingCall(context.Background())
 		if err != nil {
-			grpclog.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
+			grpclog.Printf("%v.StreamingCall(_) = _, %v", c, err)
 		}
 		streams[ic] = s
 		for j := 0; j < 100/len(conns); j++ {
 			doRPC(streams[ic], reqSize, respSize)
 		}
 	}
+	var wg sync.WaitGroup
+	wg.Add(len(conns) * rpcCount)
 	var mu sync.Mutex
 	for ic, _ := range conns {
 		for j := 0; j < rpcCount; j++ {
 			go func() {
+				defer wg.Done()
 				for {
 					done := make(chan bool)
 					go func() {
 						start := time.Now()
-						doRPC(streams[ic], reqSize, respSize)
+						if err := doRPC(streams[ic], reqSize, respSize); err != nil {
+							done <- false
+							return
+						}
 						elapse := time.Since(start)
 						mu.Lock()
 						h.Add(int64(elapse / time.Nanosecond))
@@ -241,6 +268,13 @@ func doCloseLoopStreamingBenchmark(h *stats.Histogram, conns []*grpc.ClientConn,
 		}
 	}
 	grpclog.Printf("close loop done, count: %v", rpcCount)
+	go func() {
+		wg.Wait()
+		for _, c := range conns {
+			c.Close()
+		}
+		grpclog.Printf("conns closed")
+	}()
 }
 
 func (bc *benchmarkClient) getStats() *testpb.ClientStats {
@@ -276,4 +310,8 @@ func (bc *benchmarkClient) reset() {
 	defer bc.mu.Unlock()
 	bc.lastResetTime = time.Now()
 	bc.histogram.Clear()
+}
+
+func (bc *benchmarkClient) shutdown() {
+	close(bc.stop)
 }

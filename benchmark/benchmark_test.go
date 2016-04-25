@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/stats"
+	"google.golang.org/grpc/grpclog"
 )
 
 func runUnary(b *testing.B, maxConcurrentCalls int) {
@@ -108,11 +109,15 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	conn.Close()
 }
 func unaryCaller(client testpb.BenchmarkServiceClient) {
-	DoUnaryCall(client, 1, 1)
+	if err := DoUnaryCall(client, 1, 1); err != nil {
+		grpclog.Fatalf("DoUnaryCall failed: %v", err)
+	}
 }
 
 func streamCaller(stream testpb.BenchmarkService_StreamingCallClient) {
-	DoStreamingRoundTrip(stream, 1, 1)
+	if err := DoStreamingRoundTrip(stream, 1, 1); err != nil {
+		grpclog.Fatalf("DoStreamingRoundTrip failed: %v", err)
+	}
 }
 
 func BenchmarkClientStreamc1(b *testing.B) {

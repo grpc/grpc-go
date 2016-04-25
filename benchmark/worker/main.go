@@ -71,7 +71,8 @@ func (byteBufCodec) String() string {
 type workerServer struct {
 	stop       chan<- bool
 	serverPort int
-	bc         *benchmarkClient
+	// TODO move bc out of workerServer
+	bc *benchmarkClient
 }
 
 func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) error {
@@ -133,6 +134,7 @@ func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) er
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
+			s.bc.shutdown()
 			return nil
 		}
 		if err != nil {
@@ -181,9 +183,6 @@ func (s *workerServer) CoreCount(ctx context.Context, in *testpb.CoreRequest) (*
 func (s *workerServer) QuitWorker(ctx context.Context, in *testpb.Void) (*testpb.Void, error) {
 	grpclog.Printf("quiting worker")
 	defer func() { s.stop <- true }()
-	if s.bc != nil {
-		close(s.bc.stop)
-	}
 	return &testpb.Void{}, nil
 }
 
