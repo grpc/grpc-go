@@ -38,7 +38,6 @@ package benchmark
 
 import (
 	"io"
-	"math"
 	"net"
 
 	"golang.org/x/net/context"
@@ -74,7 +73,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	}, nil
 }
 
-func (s *testServer) StreamingCall(stream testpb.TestService_StreamingCallServer) error {
+func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -94,22 +93,62 @@ func (s *testServer) StreamingCall(stream testpb.TestService_StreamingCallServer
 
 // StartServer starts a gRPC server serving a benchmark service on the given
 // address, which may be something like "localhost:0". It returns its listen
-// address and a function to stop the server.
-func StartServer(addr string) (string, func()) {
+// port number and a function to stop the server.
+func StartServer(addr string, opts ...grpc.ServerOption) (int, func()) {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
-	s := grpc.NewServer(grpc.MaxConcurrentStreams(math.MaxUint32))
-	testpb.RegisterTestServiceServer(s, &testServer{})
+	s := grpc.NewServer(opts...)
+	testpb.RegisterBenchmarkServiceServer(s, &testServer{})
 	go s.Serve(lis)
-	return lis.Addr().String(), func() {
+	return lis.Addr().(*net.TCPAddr).Port, func() {
+		s.Stop()
+	}
+}
+
+type genericTestServer struct {
+	reqSize  int32
+	respSize int32
+}
+
+func (s *genericTestServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	return &testpb.SimpleResponse{}, nil
+}
+
+func (s *genericTestServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
+	for {
+		m := make([]byte, s.reqSize)
+		err := stream.(grpc.ServerStream).RecvMsg(m)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := stream.(grpc.ServerStream).SendMsg(make([]byte, s.respSize)); err != nil {
+			return err
+		}
+	}
+}
+
+// StartGenericServer starts a benchmark service server that supports custom codec.
+// It returns its listen port number and a function to stop the server.
+func StartGenericServer(addr string, reqSize, respSize int32, opts ...grpc.ServerOption) (int, func()) {
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		grpclog.Fatalf("Failed to listen: %v", err)
+	}
+	s := grpc.NewServer(opts...)
+	testpb.RegisterBenchmarkServiceServer(s, &genericTestServer{reqSize: reqSize, respSize: respSize})
+	go s.Serve(lis)
+	return lis.Addr().(*net.TCPAddr).Port, func() {
 		s.Stop()
 	}
 }
 
 // DoUnaryCall performs an unary RPC with given stub and request and response sizes.
-func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
+func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -117,12 +156,12 @@ func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
-		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		grpclog.Fatal("/BenchmarkService/UnaryCall RPC failed: ", err)
 	}
 }
 
 // DoStreamingRoundTrip performs a round trip for a single streaming rpc.
-func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService_StreamingCallClient, reqSize, respSize int) {
+func DoStreamingRoundTrip(tc testpb.BenchmarkServiceClient, stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
