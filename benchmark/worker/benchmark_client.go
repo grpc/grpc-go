@@ -224,30 +224,32 @@ func doCloseLoopStreamingBenchmark(h *stats.Histogram, conns []*grpc.ClientConn,
 	} else {
 		doRPC = benchmark.DoStreamingRoundTrip
 	}
-	streams := make([]testpb.BenchmarkService_StreamingCallClient, len(conns))
+	streams := make([]testpb.BenchmarkService_StreamingCallClient, len(conns)*rpcCount)
 	for ic, conn := range conns {
-		c := testpb.NewBenchmarkServiceClient(conn)
-		s, err := c.StreamingCall(context.Background())
-		if err != nil {
-			grpclog.Printf("%v.StreamingCall(_) = _, %v", c, err)
-		}
-		streams[ic] = s
-		for j := 0; j < 100/len(conns); j++ {
-			doRPC(streams[ic], reqSize, respSize)
+		for is := 0; is < rpcCount; is++ {
+			c := testpb.NewBenchmarkServiceClient(conn)
+			s, err := c.StreamingCall(context.Background())
+			if err != nil {
+				grpclog.Printf("%v.StreamingCall(_) = _, %v", c, err)
+			}
+			streams[ic*rpcCount+is] = s
+			for j := 0; j < 100/len(conns); j++ {
+				doRPC(streams[ic], reqSize, respSize)
+			}
 		}
 	}
 	var wg sync.WaitGroup
 	wg.Add(len(conns) * rpcCount)
 	var mu sync.Mutex
 	for ic, _ := range conns {
-		for j := 0; j < rpcCount; j++ {
-			go func() {
+		for is := 0; is < rpcCount; is++ {
+			go func(ic, is int) {
 				defer wg.Done()
 				for {
 					done := make(chan bool)
 					go func() {
 						start := time.Now()
-						if err := doRPC(streams[ic], reqSize, respSize); err != nil {
+						if err := doRPC(streams[ic*rpcCount+is], reqSize, respSize); err != nil {
 							done <- false
 							return
 						}
@@ -264,7 +266,7 @@ func doCloseLoopStreamingBenchmark(h *stats.Histogram, conns []*grpc.ClientConn,
 					case <-done:
 					}
 				}
-			}()
+			}(ic, is)
 		}
 	}
 	grpclog.Printf("close loop done, count: %v", rpcCount)
