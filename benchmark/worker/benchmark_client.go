@@ -142,9 +142,10 @@ func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient
 	}
 
 	bc.histogram = stats.NewHistogram(stats.HistogramOptions{
-		NumBuckets:   int(math.Log(bc.histogramMaxPossible)/math.Log(1+bc.histogramGrowFactor)) + 1,
-		GrowthFactor: bc.histogramGrowFactor,
-		MinValue:     0,
+		NumBuckets:     int(math.Log(bc.histogramMaxPossible)/math.Log(1+bc.histogramGrowFactor)) + 1,
+		GrowthFactor:   bc.histogramGrowFactor,
+		BaseBucketSize: (1 + bc.histogramGrowFactor),
+		MinValue:       0,
 	})
 
 	bc.stop = make(chan bool)
