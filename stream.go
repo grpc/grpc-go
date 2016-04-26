@@ -332,6 +332,9 @@ type ServerStream interface {
 	// SetTrailer sets the trailer metadata which will be sent with the
 	// RPC status.
 	SetTrailer(metadata.MD)
+	// SetContextMetadata sets the stream context metadata that will be
+	// available on server side.
+	SetContextMetadata(metadata.MD)
 	Stream
 }
 
@@ -353,6 +356,10 @@ type serverStream struct {
 
 func (ss *serverStream) Context() context.Context {
 	return ss.s.Context()
+}
+
+func (ss *serverStream) SetContextMetadata(md metadata.MD) {
+	ss.s.SetContextMetadata(md)
 }
 
 func (ss *serverStream) SendHeader(md metadata.MD) error {
