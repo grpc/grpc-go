@@ -156,7 +156,6 @@ func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) error 
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
-		// grpclog.Print("/BenchmarkService/UnaryCall RPC failed: ", err)
 		return grpc.Errorf(grpc.Code(err), "/BenchmarkService/UnaryCall RPC failed: %v", grpc.ErrorDesc(err))
 	}
 	return nil
@@ -171,11 +170,9 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		// grpclog.Printf("StreamingCall(_).Send: %v", err)
 		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).Send: %v", grpc.ErrorDesc(err))
 	}
 	if _, err := stream.Recv(); err != nil {
-		// grpclog.Printf("StreamingCall(_).Recv: %v", err)
 		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).Recv: %v", grpc.ErrorDesc(err))
 	}
 	return nil
@@ -184,12 +181,10 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 // DoGenericStreamingRoundTrip performs a round trip for a single streaming rpc, using custom codec.
 func DoGenericStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	if err := stream.(grpc.ClientStream).SendMsg(make([]byte, reqSize)); err != nil {
-		// grpclog.Printf("StreamingCall(_).(ClientStream).SendMsg: %v", err)
 		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).(ClientStream).SendMsg: %v", grpc.ErrorDesc(err))
 	}
 	m := make([]byte, respSize)
 	if err := stream.(grpc.ClientStream).RecvMsg(m); err != nil {
-		// grpclog.Printf("StreamingCall(_).(ClientStream).RecvMsg: %v", err)
 		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).(ClientStream).RecvMsg: %v", grpc.ErrorDesc(err))
 	}
 	return nil

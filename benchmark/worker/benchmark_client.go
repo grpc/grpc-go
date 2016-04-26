@@ -1,3 +1,36 @@
+/*
+ *
+ * Copyright 2016, Google Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ * copyright notice, this list of conditions and the following disclaimer
+ * in the documentation and/or other materials provided with the
+ * distribution.
+ *     * Neither the name of Google Inc. nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
 package main
 
 import (
@@ -17,59 +50,57 @@ import (
 )
 
 var (
-	caFile = "/usr/local/google/home/menghanl/go/src/google.golang.org/grpc/benchmark/server/testdata/ca.pem"
+	caFile = "benchmark/server/testdata/ca.pem"
 )
 
 type benchmarkClient struct {
-	conns                []*grpc.ClientConn
-	histogramGrowFactor  float64
-	histogramMaxPossible float64
-	stop                 chan bool
-	mu                   sync.RWMutex
-	lastResetTime        time.Time
-	histogram            *stats.Histogram
+	stop          chan bool
+	mu            sync.RWMutex
+	lastResetTime time.Time
+	histogram     *stats.Histogram
 }
 
 func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient, error) {
 	var opts []grpc.DialOption
 
-	grpclog.Printf(" - client type: %v", setup.ClientType)
+	// Some setup options are ignored:
+	// - client type:
+	//     will always create sync client
+	// - async client threads.
+	// - core list
+	grpclog.Printf(" * client type: %v (ignored, always creates sync client)", setup.ClientType)
 	switch setup.ClientType {
-	// Ignore client type
 	case testpb.ClientType_SYNC_CLIENT:
 	case testpb.ClientType_ASYNC_CLIENT:
 	default:
 		return nil, grpc.Errorf(codes.InvalidArgument, "unknow client type: %v", setup.ClientType)
 	}
+	grpclog.Printf(" * async client threads: %v (ignored)", setup.AsyncClientThreads)
+	grpclog.Printf(" * core list: %v (ignored)", setup.CoreList)
 
 	grpclog.Printf(" - security params: %v", setup.SecurityParams)
 	if setup.SecurityParams != nil {
-		creds, err := credentials.NewClientTLSFromFile(caFile, setup.SecurityParams.ServerHostOverride)
+		creds, err := credentials.NewClientTLSFromFile(Abs(caFile), setup.SecurityParams.ServerHostOverride)
 		if err != nil {
-			grpclog.Fatalf("failed to create TLS credentials %v", err)
+			return nil, grpc.Errorf(codes.InvalidArgument, "failed to create TLS credentials %v", err)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	} else {
 		opts = append(opts, grpc.WithInsecure())
 	}
 
-	// Ignore async client threads.
-
 	grpclog.Printf(" - core limit: %v", setup.CoreLimit)
+	// Use one cpu core by default
+	numOfCores := 1
 	if setup.CoreLimit > 0 {
-		runtime.GOMAXPROCS(int(setup.CoreLimit))
-	} else {
-		// runtime.GOMAXPROCS(runtime.NumCPU())
-		runtime.GOMAXPROCS(1)
+		numOfCores = int(setup.CoreLimit)
 	}
+	runtime.GOMAXPROCS(numOfCores)
 
-	// TODO payload config
 	grpclog.Printf(" - payload config: %v", setup.PayloadConfig)
 	var payloadReqSize, payloadRespSize int
 	var payloadType string
 	if setup.PayloadConfig != nil {
-		// TODO payload config
-		grpclog.Printf("payload config: %v", setup.PayloadConfig)
 		switch c := setup.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:
 			opts = append(opts, grpc.WithCodec(byteBufCodec{}))
@@ -81,41 +112,31 @@ func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient
 			payloadRespSize = int(c.SimpleParams.RespSize)
 			payloadType = "protobuf"
 		case *testpb.PayloadConfig_ComplexParams:
-			return nil, grpc.Errorf(codes.InvalidArgument, "unsupported payload config: %v", setup.PayloadConfig)
+			return nil, grpc.Errorf(codes.Unimplemented, "unsupported payload config: %v", setup.PayloadConfig)
 		default:
 			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", setup.PayloadConfig)
 		}
 	}
 
-	// TODO core list
-	grpclog.Printf(" - core list: %v", setup.CoreList)
-
-	grpclog.Printf(" - histogram params: %v", setup.HistogramParams)
-	grpclog.Printf(" - server targets: %v", setup.ServerTargets)
 	grpclog.Printf(" - rpcs per chann: %v", setup.OutstandingRpcsPerChannel)
 	grpclog.Printf(" - channel number: %v", setup.ClientChannels)
 
-	rpcCount, connCount := int(setup.OutstandingRpcsPerChannel), int(setup.ClientChannels)
+	rpcCountPerConn, connCount := int(setup.OutstandingRpcsPerChannel), int(setup.ClientChannels)
 
 	grpclog.Printf(" - load params: %v", setup.LoadParams)
-	// TODO distribution
 	var dist *int
 	switch lp := setup.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
-		grpclog.Printf("   - %v", lp.ClosedLoop)
 	case *testpb.LoadParams_Poisson:
 		grpclog.Printf("   - %v", lp.Poisson)
-		return nil, grpc.Errorf(codes.InvalidArgument, "unsupported load params: %v", setup.LoadParams)
+		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", setup.LoadParams)
 		// TODO poisson
 	case *testpb.LoadParams_Uniform:
-		grpclog.Printf("   - %v", lp.Uniform)
-		return nil, grpc.Errorf(codes.InvalidArgument, "unsupported load params: %v", setup.LoadParams)
+		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", setup.LoadParams)
 	case *testpb.LoadParams_Determ:
-		grpclog.Printf("   - %v", lp.Determ)
-		return nil, grpc.Errorf(codes.InvalidArgument, "unsupported load params: %v", setup.LoadParams)
+		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", setup.LoadParams)
 	case *testpb.LoadParams_Pareto:
-		grpclog.Printf("   - %v", lp.Pareto)
-		return nil, grpc.Errorf(codes.InvalidArgument, "unsupported load params: %v", setup.LoadParams)
+		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", setup.LoadParams)
 	default:
 		return nil, grpc.Errorf(codes.InvalidArgument, "unknown load params: %v", setup.LoadParams)
 	}
@@ -131,64 +152,67 @@ func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient
 		return nil, grpc.Errorf(codes.InvalidArgument, "unknown rpc type: %v", setup.RpcType)
 	}
 
-	bc := &benchmarkClient{
-		conns:                make([]*grpc.ClientConn, connCount),
-		histogramGrowFactor:  setup.HistogramParams.Resolution,
-		histogramMaxPossible: setup.HistogramParams.MaxPossible,
-	}
+	grpclog.Printf(" - histogram params: %v", setup.HistogramParams)
+	grpclog.Printf(" - server targets: %v", setup.ServerTargets)
+
+	conns := make([]*grpc.ClientConn, connCount)
 
 	for connIndex := 0; connIndex < connCount; connIndex++ {
-		bc.conns[connIndex] = benchmark.NewClientConn(setup.ServerTargets[connIndex%len(setup.ServerTargets)], opts...)
+		conns[connIndex] = benchmark.NewClientConn(setup.ServerTargets[connIndex%len(setup.ServerTargets)], opts...)
 	}
 
-	bc.histogram = stats.NewHistogram(stats.HistogramOptions{
-		NumBuckets:     int(math.Log(bc.histogramMaxPossible)/math.Log(1+bc.histogramGrowFactor)) + 1,
-		GrowthFactor:   bc.histogramGrowFactor,
-		BaseBucketSize: (1 + bc.histogramGrowFactor),
+	hist := stats.NewHistogram(stats.HistogramOptions{
+		NumBuckets:     int(math.Log(setup.HistogramParams.MaxPossible)/math.Log(1+setup.HistogramParams.Resolution)) + 1,
+		GrowthFactor:   setup.HistogramParams.Resolution,
+		BaseBucketSize: (1 + setup.HistogramParams.Resolution),
 		MinValue:       0,
 	})
+	stop := make(chan bool)
+	var mu sync.RWMutex
 
-	bc.stop = make(chan bool)
 	switch rpcType {
 	case "unary":
 		if dist == nil {
-			doCloseLoopUnaryBenchmark(bc.histogram, bc.conns, rpcCount, payloadReqSize, payloadRespSize, bc.stop)
+			doCloseLoopUnaryBenchmark(hist, mu, conns, rpcCountPerConn, payloadReqSize, payloadRespSize, stop)
 		}
 		// TODO else do open loop
 	case "streaming":
 		if dist == nil {
-			doCloseLoopStreamingBenchmark(bc.histogram, bc.conns, rpcCount, payloadReqSize, payloadRespSize, payloadType, bc.stop)
+			doCloseLoopStreamingBenchmark(hist, mu, conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType, stop)
 		}
 		// TODO else do open loop
 	}
 
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
-	bc.lastResetTime = time.Now()
-	return bc, nil
+	return &benchmarkClient{
+		stop:          stop,
+		mu:            mu,
+		lastResetTime: time.Now(),
+		histogram:     hist,
+	}, nil
 }
 
-func doCloseLoopUnaryBenchmark(h *stats.Histogram, conns []*grpc.ClientConn, rpcCount int, reqSize int, respSize int, stop <-chan bool) {
-
+func doCloseLoopUnaryBenchmark(h *stats.Histogram, mu sync.RWMutex, conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, stop <-chan bool) {
 	clients := make([]testpb.BenchmarkServiceClient, len(conns))
 	for ic, conn := range conns {
 		clients[ic] = testpb.NewBenchmarkServiceClient(conn)
-		for j := 0; j < 100/len(conns); j++ {
-			benchmark.DoUnaryCall(clients[ic], reqSize, respSize)
+		// Do some warm up.
+		for j := 0; j < 10; j++ {
+			benchmark.DoUnaryCall(clients[ic], 1, 1)
 		}
 	}
-	var wg sync.WaitGroup
-	wg.Add(len(conns) * rpcCount)
-	var mu sync.Mutex
-	for ic, _ := range conns {
-		for j := 0; j < rpcCount; j++ {
-			go func() {
+	for ic, conn := range conns {
+		// For each connection, create rpcCountPerConn goroutines to do rpc.
+		// Close this connection after all go routines finish.
+		var wg sync.WaitGroup
+		wg.Add(rpcCountPerConn)
+		for j := 0; j < rpcCountPerConn; j++ {
+			go func(client testpb.BenchmarkServiceClient) {
 				defer wg.Done()
 				for {
 					done := make(chan bool)
 					go func() {
 						start := time.Now()
-						if err := benchmark.DoUnaryCall(clients[ic], reqSize, respSize); err != nil {
+						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
 							done <- false
 							return
 						}
@@ -200,57 +224,54 @@ func doCloseLoopUnaryBenchmark(h *stats.Histogram, conns []*grpc.ClientConn, rpc
 					}()
 					select {
 					case <-stop:
-						grpclog.Printf("stopped")
 						return
 					case <-done:
 					}
 				}
-			}()
+			}(clients[ic])
 		}
+		go func(conn *grpc.ClientConn) {
+			wg.Wait()
+			conn.Close()
+		}(conn)
 	}
-	grpclog.Printf("close loop done, count: %v", rpcCount)
-	go func() {
-		wg.Wait()
-		for _, c := range conns {
-			c.Close()
-		}
-		grpclog.Printf("conns closed")
-	}()
 }
 
-func doCloseLoopStreamingBenchmark(h *stats.Histogram, conns []*grpc.ClientConn, rpcCount int, reqSize int, respSize int, payloadType string, stop <-chan bool) {
+func doCloseLoopStreamingBenchmark(h *stats.Histogram, mu sync.RWMutex, conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string, stop <-chan bool) {
 	var doRPC func(testpb.BenchmarkService_StreamingCallClient, int, int) error
 	if payloadType == "bytebuf" {
 		doRPC = benchmark.DoGenericStreamingRoundTrip
 	} else {
 		doRPC = benchmark.DoStreamingRoundTrip
 	}
-	streams := make([]testpb.BenchmarkService_StreamingCallClient, len(conns)*rpcCount)
+	streams := make([]testpb.BenchmarkService_StreamingCallClient, len(conns)*rpcCountPerConn)
 	for ic, conn := range conns {
-		for is := 0; is < rpcCount; is++ {
+		for j := 0; j < rpcCountPerConn; j++ {
 			c := testpb.NewBenchmarkServiceClient(conn)
 			s, err := c.StreamingCall(context.Background())
 			if err != nil {
-				grpclog.Printf("%v.StreamingCall(_) = _, %v", c, err)
+				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
 			}
-			streams[ic*rpcCount+is] = s
-			for j := 0; j < 100/len(conns); j++ {
-				doRPC(streams[ic], reqSize, respSize)
+			streams[ic*rpcCountPerConn+j] = s
+			// Do some warm up.
+			for j := 0; j < 10; j++ {
+				doRPC(streams[ic], 1, 1)
 			}
 		}
 	}
-	var wg sync.WaitGroup
-	wg.Add(len(conns) * rpcCount)
-	var mu sync.Mutex
-	for ic, _ := range conns {
-		for is := 0; is < rpcCount; is++ {
-			go func(ic, is int) {
+	for ic, conn := range conns {
+		// For each connection, create rpcCountPerConn goroutines to do rpc.
+		// Close this connection after all go routines finish.
+		var wg sync.WaitGroup
+		wg.Add(rpcCountPerConn)
+		for j := 0; j < rpcCountPerConn; j++ {
+			go func(stream testpb.BenchmarkService_StreamingCallClient) {
 				defer wg.Done()
 				for {
 					done := make(chan bool)
 					go func() {
 						start := time.Now()
-						if err := doRPC(streams[ic*rpcCount+is], reqSize, respSize); err != nil {
+						if err := doRPC(stream, reqSize, respSize); err != nil {
 							done <- false
 							return
 						}
@@ -262,47 +283,39 @@ func doCloseLoopStreamingBenchmark(h *stats.Histogram, conns []*grpc.ClientConn,
 					}()
 					select {
 					case <-stop:
-						grpclog.Printf("stopped")
 						return
 					case <-done:
 					}
 				}
-			}(ic, is)
+			}(streams[ic*rpcCountPerConn+j])
 		}
+		go func(conn *grpc.ClientConn) {
+			wg.Wait()
+			conn.Close()
+		}(conn)
 	}
-	grpclog.Printf("close loop done, count: %v", rpcCount)
-	go func() {
-		wg.Wait()
-		for _, c := range conns {
-			c.Close()
-		}
-		grpclog.Printf("conns closed")
-	}()
 }
 
 func (bc *benchmarkClient) getStats() *testpb.ClientStats {
 	bc.mu.RLock()
-	// time.Sleep(1 * time.Second)
 	defer bc.mu.RUnlock()
+	timeElapsed := time.Since(bc.lastResetTime).Seconds()
+
 	histogramValue := bc.histogram.Value()
 	b := make([]uint32, len(histogramValue.Buckets))
-	tempCount := make(map[int64]int)
 	for i, v := range histogramValue.Buckets {
 		b[i] = uint32(v.Count)
-		tempCount[v.Count] += 1
 	}
-	grpclog.Printf("+++++\n%v count: %v\n+++++", tempCount, histogramValue.Count)
 	return &testpb.ClientStats{
 		Latencies: &testpb.HistogramData{
-			Bucket:  b,
-			MinSeen: float64(histogramValue.Min),
-			MaxSeen: float64(histogramValue.Max),
-			Sum:     float64(histogramValue.Sum),
-			// TODO change to squares
-			SumOfSquares: float64(histogramValue.Sum),
+			Bucket:       b,
+			MinSeen:      float64(histogramValue.Min),
+			MaxSeen:      float64(histogramValue.Max),
+			Sum:          float64(histogramValue.Sum),
+			SumOfSquares: float64(histogramValue.SumOfSquares),
 			Count:        float64(histogramValue.Count),
 		},
-		TimeElapsed: time.Since(bc.lastResetTime).Seconds(),
+		TimeElapsed: timeElapsed,
 		TimeUser:    0,
 		TimeSystem:  0,
 	}

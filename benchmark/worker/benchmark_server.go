@@ -117,7 +117,7 @@ func startBenchmarkServerWithSetup(setup *testpb.ServerConfig, serverPort int) (
 		case *testpb.PayloadConfig_SimpleParams:
 			p, close = benchmark.StartServer(":"+strconv.Itoa(port), opts...)
 		case *testpb.PayloadConfig_ComplexParams:
-			return nil, grpc.Errorf(codes.InvalidArgument, "unsupported payload config: %v", setup.PayloadConfig)
+			return nil, grpc.Errorf(codes.Unimplemented, "unsupported payload config: %v", setup.PayloadConfig)
 		default:
 			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", setup.PayloadConfig)
 		}
@@ -128,8 +128,7 @@ func startBenchmarkServerWithSetup(setup *testpb.ServerConfig, serverPort int) (
 
 	grpclog.Printf("benchmark server listening at port %v", p)
 
-	bs := &benchmarkServer{port: p, cores: numOfCores, close: close, lastResetTime: time.Now()}
-	return bs, nil
+	return &benchmarkServer{port: p, cores: numOfCores, close: close, lastResetTime: time.Now()}, nil
 }
 
 func (bs *benchmarkServer) getStats() *testpb.ServerStats {

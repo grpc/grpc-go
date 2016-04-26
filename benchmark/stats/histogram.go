@@ -148,6 +148,7 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 func (h *Histogram) Clear() {
 	h.count = newCounter()
 	h.sum = newCounter()
+	h.sumOfSquares = newCounter()
 	h.tracker = newTracker()
 	for _, v := range h.buckets {
 		v.count = newCounter()

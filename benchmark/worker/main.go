@@ -75,15 +75,16 @@ type workerServer struct {
 
 func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) error {
 	var bs *benchmarkServer
+	defer func() {
+		// Close benchmark server when stream ends.
+		grpclog.Printf("closing benchmark server")
+		if bs != nil {
+			bs.close()
+		}
+	}()
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
-			// Close benchmark server when stream ends.
-			grpclog.Printf("closing benchmark server")
-			if bs != nil {
-				bs.close()
-				bs = nil
-			}
 			return nil
 		}
 		if err != nil {
@@ -135,12 +136,16 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 
 func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) error {
 	var bc *benchmarkClient
+	defer func() {
+		// Shut down benchmark client when stream ends.
+		grpclog.Printf("shuting down benchmark client")
+		if bc != nil {
+			bc.shutdown()
+		}
+	}()
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
-			if bc != nil {
-				bc.shutdown()
-			}
 			return nil
 		}
 		if err != nil {
@@ -212,13 +217,10 @@ func main() {
 		serverPort: *serverPort,
 	})
 
-	stopped := make(chan bool)
 	go func() {
-		s.Serve(lis)
-		stopped <- true
+		<-stop
+		s.Stop()
 	}()
 
-	<-stop
-	s.Stop()
-	<-stopped
+	s.Serve(lis)
 }
