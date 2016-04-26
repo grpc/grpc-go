@@ -211,15 +211,15 @@ public class StressTestClient {
     int numChannels = addresses.size() * channelsPerServer;
     int numThreads = numChannels * stubsPerChannel;
     threadpool = MoreExecutors.listeningDecorator(newFixedThreadPool(numThreads));
-    int server_idx = -1;
+    int serverIdx = -1;
     for (InetSocketAddress address : addresses) {
-      server_idx++;
+      serverIdx++;
       for (int i = 0; i < channelsPerServer; i++) {
         ManagedChannel channel = createChannel(address);
         channels.add(channel);
         for (int j = 0; j < stubsPerChannel; j++) {
           String gaugeName =
-              String.format("/stress_test/server_%d/channel_%d/stub_%d/qps", server_idx, i, j);
+              String.format("/stress_test/server_%d/channel_%d/stub_%d/qps", serverIdx, i, j);
           Worker worker =
               new Worker(channel, testCaseWeightPairs, durationSecs, gaugeName);
 

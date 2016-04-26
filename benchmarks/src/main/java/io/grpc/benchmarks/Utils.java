@@ -82,7 +82,8 @@ public final class Utils {
   // Value quantization will be no larger than 1/10^3 = 0.1%.
   public static final int HISTOGRAM_PRECISION = 3;
 
-  public static int DEFAULT_FLOW_CONTROL_WINDOW = NettyChannelBuilder.DEFAULT_FLOW_CONTROL_WINDOW;
+  public static final int DEFAULT_FLOW_CONTROL_WINDOW =
+      NettyChannelBuilder.DEFAULT_FLOW_CONTROL_WINDOW;
 
   private Utils() {
   }

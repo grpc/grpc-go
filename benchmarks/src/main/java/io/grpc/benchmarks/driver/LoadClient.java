@@ -60,7 +60,6 @@ import org.HdrHistogram.Recorder;
 import org.apache.commons.math3.distribution.ExponentialDistribution;
 
 import java.lang.management.ManagementFactory;
-
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -106,8 +105,8 @@ class LoadClient {
               config.hasSecurityParams(),
               config.hasSecurityParams() && config.getSecurityParams().getUseTestCa(),
               config.hasSecurityParams()
-                  ? config.getSecurityParams().getServerHostOverride() :
-                  null,
+                  ? config.getSecurityParams().getServerHostOverride()
+                  : null,
               true,
               Utils.DEFAULT_FLOW_CONTROL_WINDOW,
               false);
@@ -144,7 +143,7 @@ class LoadClient {
     } else if (config.getLoadParams().getPoisson() != null) {
       // Mean of exp distribution per thread is <no threads> / <offered load per second>
       distribution = new ExponentialDistribution(
-          (double) threadCount / config.getLoadParams().getPoisson().getOfferedLoad());
+          threadCount / config.getLoadParams().getPoisson().getOfferedLoad());
     } else  {
       throw new UnsupportedOperationException();
     }
@@ -260,15 +259,15 @@ class LoadClient {
       latenciesBuilder.addBucket(0);
       base = base * resolution;
     }
-    latenciesBuilder.setMaxSeen((double) intervalHistogram.getMaxValue());
-    latenciesBuilder.setMinSeen((double) intervalHistogram.getMinNonZeroValue());
+    latenciesBuilder.setMaxSeen(intervalHistogram.getMaxValue());
+    latenciesBuilder.setMinSeen(intervalHistogram.getMinNonZeroValue());
     latenciesBuilder.setCount(intervalHistogram.getTotalCount());
     latenciesBuilder.setSum(intervalHistogram.getMean()
         * intervalHistogram.getTotalCount());
     // TODO: No support for sum of squares
 
-    statsBuilder.setTimeElapsed(((double)(intervalHistogram.getEndTimeStamp()
-        - intervalHistogram.getStartTimeStamp())) / 1000.0);
+    statsBuilder.setTimeElapsed((intervalHistogram.getEndTimeStamp()
+        - intervalHistogram.getStartTimeStamp()) / 1000.0);
     if (osBean != null) {
       // Report all the CPU time as user-time  (which is intentionally incorrect)
       long nowCpu = osBean.getProcessCpuTime();
@@ -323,6 +322,7 @@ class LoadClient {
       this.stub = stub;
     }
 
+    @Override
     public void run() {
       while (!shutdown) {
         long now = System.nanoTime();
@@ -432,6 +432,7 @@ class LoadClient {
       this.channel = channel;
     }
 
+    @Override
     public void run() {
       long now;
       while (!shutdown) {
@@ -456,6 +457,7 @@ class LoadClient {
       this.channel = channel;
     }
 
+    @Override
     public void run() {
       while (!shutdown) {
         maxOutstanding.acquireUninterruptibly();

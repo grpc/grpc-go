@@ -104,7 +104,7 @@ class NettyServer implements InternalServer {
     if (!(localAddr instanceof InetSocketAddress)) {
       return -1;
     }
-    return ((InetSocketAddress)localAddr).getPort();
+    return ((InetSocketAddress) localAddr).getPort();
   }
 
   @Override

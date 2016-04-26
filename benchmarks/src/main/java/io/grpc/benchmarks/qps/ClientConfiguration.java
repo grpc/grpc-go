@@ -94,11 +94,11 @@ public class ClientConfiguration implements Configuration {
    * Constructs a builder for configuring a client application with supported parameters. If no
    * parameters are provided, all parameters are assumed to be supported.
    */
-  public static Builder newBuilder(ClientParam... supportedParams) {
+  static Builder newBuilder(ClientParam... supportedParams) {
     return new Builder(supportedParams);
   }
 
-  public static class Builder extends AbstractConfigurationBuilder<ClientConfiguration> {
+  static final class Builder extends AbstractConfigurationBuilder<ClientConfiguration> {
     private final Collection<Param> supportedParams;
 
     private Builder(ClientParam... supportedParams) {
