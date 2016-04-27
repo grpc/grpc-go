@@ -36,19 +36,21 @@ import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.collect.ImmutableList;
+
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.testing.TestUtils;
 import io.grpc.testing.integration.Metrics.EmptyMessage;
 import io.grpc.testing.integration.Metrics.GaugeResponse;
 import io.grpc.testing.integration.StressTestClient.TestCaseWeightPair;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.net.InetSocketAddress;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -132,27 +134,27 @@ public class StressTestClientTest {
     MetricsServiceGrpc.MetricsServiceBlockingStub stub = MetricsServiceGrpc.newBlockingStub(ch);
 
     // Wait until gauges have been exported
-    Iterator<GaugeResponse> responseIt = stub.getAllGauges(EmptyMessage.getDefaultInstance());
-    while (!responseIt.hasNext()) {
-      LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
-      responseIt = stub.getAllGauges(EmptyMessage.getDefaultInstance());
-    }
-
     Set<String> gaugeNames = newHashSet("/stress_test/server_0/channel_0/stub_0/qps",
         "/stress_test/server_0/channel_0/stub_1/qps");
 
-    while (responseIt.hasNext()) {
-      GaugeResponse response = responseIt.next();
-      String gaugeName = response.getName();
+    List<GaugeResponse> allGauges =
+        ImmutableList.copyOf(stub.getAllGauges(EmptyMessage.getDefaultInstance()));
+    while (allGauges.size() < gaugeNames.size()) {
+      LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+      allGauges = ImmutableList.copyOf(stub.getAllGauges(EmptyMessage.getDefaultInstance()));
+    }
+
+    for (GaugeResponse gauge : allGauges) {
+      String gaugeName = gauge.getName();
 
       assertTrue("gaugeName: " + gaugeName, gaugeNames.contains(gaugeName));
-      assertTrue("qps: " + response.getLongValue(), response.getLongValue() > 0);
-      gaugeNames.remove(response.getName());
+      assertTrue("qps: " + gauge.getLongValue(), gauge.getLongValue() > 0);
+      gaugeNames.remove(gauge.getName());
 
-      GaugeResponse response1 =
+      GaugeResponse gauge1 =
           stub.getGauge(Metrics.GaugeRequest.newBuilder().setName(gaugeName).build());
-      assertEquals(gaugeName, response1.getName());
-      assertTrue("qps: " + response1.getLongValue(), response1.getLongValue() > 0);
+      assertEquals(gaugeName, gauge1.getName());
+      assertTrue("qps: " + gauge1.getLongValue(), gauge1.getLongValue() > 0);
     }
 
     assertTrue("gauges: " + gaugeNames, gaugeNames.isEmpty());
