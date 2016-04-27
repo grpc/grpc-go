@@ -138,14 +138,20 @@ class LoadClient {
         new DefaultThreadFactory("client-worker", true));
 
     // Create the load distribution
-    if (config.getLoadParams().getClosedLoop() != null) {
-      distribution = null;
-    } else if (config.getLoadParams().getPoisson() != null) {
-      // Mean of exp distribution per thread is <no threads> / <offered load per second>
-      distribution = new ExponentialDistribution(
-          threadCount / config.getLoadParams().getPoisson().getOfferedLoad());
-    } else  {
-      throw new UnsupportedOperationException();
+    switch (config.getLoadParams().getLoadCase()) {
+      case CLOSED_LOOP:
+        distribution = null;
+        break;
+      case LOAD_NOT_SET:
+        distribution = null;
+        break;
+      case POISSON:
+        // Mean of exp distribution per thread is <no threads> / <offered load per second>
+        distribution = new ExponentialDistribution(
+            threadCount / config.getLoadParams().getPoisson().getOfferedLoad());
+        break;
+      default:
+        throw new IllegalArgumentException("Scenario not implemented");
     }
 
     // Create payloads
