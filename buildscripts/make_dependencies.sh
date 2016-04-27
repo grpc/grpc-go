@@ -4,7 +4,7 @@
 set -ev
 
 DOWNLOAD_DIR=/tmp/source
-INSTALL_DIR=/tmp/protobuf-${PROTOBUF_VERSION}
+INSTALL_DIR="/tmp/protobuf-$PROTOBUF_VERSION/$(uname -s)-$(uname -p)"
 mkdir -p $DOWNLOAD_DIR
 
 # Make protoc
@@ -17,7 +17,7 @@ else
   pushd $DOWNLOAD_DIR/protobuf-${PROTOBUF_VERSION}
   ./autogen.sh
   # install here so we don't need sudo
-  ./configure --prefix=${INSTALL_DIR}
+  ./configure --prefix="$INSTALL_DIR"
   make -j$(nproc)
   make install
   popd
