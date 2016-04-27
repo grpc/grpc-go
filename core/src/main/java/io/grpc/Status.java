@@ -392,6 +392,8 @@ public final class Status {
 
   /**
    * Extract an error {@link Status} from the causal chain of a {@link Throwable}.
+   *
+   * @return non-{@code null} status
    */
   public static Status fromThrowable(Throwable t) {
     for (Throwable cause : Throwables.getCausalChain(t)) {
