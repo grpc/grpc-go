@@ -40,7 +40,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Simple {@link MethodDescriptor#Marshaller} for Netty's {@link ByteBuf}.
+ * Simple {@link io.grpc.MethodDescriptor.Marshaller} for Netty's {@link ByteBuf}.
  */
 public class ByteBufOutputMarshaller implements MethodDescriptor.Marshaller<ByteBuf> {
 
