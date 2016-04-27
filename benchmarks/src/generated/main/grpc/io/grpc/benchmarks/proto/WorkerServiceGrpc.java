@@ -24,7 +24,7 @@ public class WorkerServiceGrpc {
 
   private WorkerServiceGrpc() {}
 
-  public static final String SERVICE_NAME = "grpc.testing.WorkerService";
+  public static final String SERVICE_NAME = "grpc.benchmarks.WorkerService";
 
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi
@@ -33,7 +33,7 @@ public class WorkerServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
           generateFullMethodName(
-              "grpc.testing.WorkerService", "RunServer"),
+              "grpc.benchmarks.WorkerService", "RunServer"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.ServerArgs.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.ServerStatus.getDefaultInstance()));
   @io.grpc.ExperimentalApi
@@ -42,7 +42,7 @@ public class WorkerServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
           generateFullMethodName(
-              "grpc.testing.WorkerService", "RunClient"),
+              "grpc.benchmarks.WorkerService", "RunClient"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.ClientArgs.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.ClientStatus.getDefaultInstance()));
   @io.grpc.ExperimentalApi
@@ -51,7 +51,7 @@ public class WorkerServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
-              "grpc.testing.WorkerService", "CoreCount"),
+              "grpc.benchmarks.WorkerService", "CoreCount"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.CoreRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.CoreResponse.getDefaultInstance()));
   @io.grpc.ExperimentalApi
@@ -60,7 +60,7 @@ public class WorkerServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
-              "grpc.testing.WorkerService", "QuitWorker"),
+              "grpc.benchmarks.WorkerService", "QuitWorker"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.Void.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.Void.getDefaultInstance()));
 

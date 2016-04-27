@@ -24,7 +24,7 @@ public class BenchmarkServiceGrpc {
 
   private BenchmarkServiceGrpc() {}
 
-  public static final String SERVICE_NAME = "grpc.testing.BenchmarkService";
+  public static final String SERVICE_NAME = "grpc.benchmarks.BenchmarkService";
 
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi
@@ -33,7 +33,7 @@ public class BenchmarkServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
-              "grpc.testing.BenchmarkService", "UnaryCall"),
+              "grpc.benchmarks.BenchmarkService", "UnaryCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Messages.SimpleResponse.getDefaultInstance()));
   @io.grpc.ExperimentalApi
@@ -42,7 +42,7 @@ public class BenchmarkServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
           generateFullMethodName(
-              "grpc.testing.BenchmarkService", "StreamingCall"),
+              "grpc.benchmarks.BenchmarkService", "StreamingCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Messages.SimpleResponse.getDefaultInstance()));
 

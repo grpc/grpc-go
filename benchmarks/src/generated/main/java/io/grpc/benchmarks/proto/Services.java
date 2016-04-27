@@ -17,21 +17,22 @@ public final class Services {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\016services.proto\022\014grpc.testing\032\016messages" +
-      ".proto\032\rcontrol.proto2\252\001\n\020BenchmarkServi" +
-      "ce\022F\n\tUnaryCall\022\033.grpc.testing.SimpleReq" +
-      "uest\032\034.grpc.testing.SimpleResponse\022N\n\rSt" +
-      "reamingCall\022\033.grpc.testing.SimpleRequest" +
-      "\032\034.grpc.testing.SimpleResponse(\0010\0012\227\002\n\rW" +
-      "orkerService\022E\n\tRunServer\022\030.grpc.testing" +
-      ".ServerArgs\032\032.grpc.testing.ServerStatus(" +
-      "\0010\001\022E\n\tRunClient\022\030.grpc.testing.ClientAr" +
-      "gs\032\032.grpc.testing.ClientStatus(\0010\001\022B\n\tCo",
-      "reCount\022\031.grpc.testing.CoreRequest\032\032.grp" +
-      "c.testing.CoreResponse\0224\n\nQuitWorker\022\022.g" +
-      "rpc.testing.Void\032\022.grpc.testing.VoidB$\n\030" +
-      "io.grpc.benchmarks.protoB\010Servicesb\006prot" +
-      "o3"
+      "\n\016services.proto\022\017grpc.benchmarks\032\016messa" +
+      "ges.proto\032\rcontrol.proto2\266\001\n\020BenchmarkSe" +
+      "rvice\022L\n\tUnaryCall\022\036.grpc.benchmarks.Sim" +
+      "pleRequest\032\037.grpc.benchmarks.SimpleRespo" +
+      "nse\022T\n\rStreamingCall\022\036.grpc.benchmarks.S" +
+      "impleRequest\032\037.grpc.benchmarks.SimpleRes" +
+      "ponse(\0010\0012\257\002\n\rWorkerService\022K\n\tRunServer" +
+      "\022\033.grpc.benchmarks.ServerArgs\032\035.grpc.ben" +
+      "chmarks.ServerStatus(\0010\001\022K\n\tRunClient\022\033." +
+      "grpc.benchmarks.ClientArgs\032\035.grpc.benchm",
+      "arks.ClientStatus(\0010\001\022H\n\tCoreCount\022\034.grp" +
+      "c.benchmarks.CoreRequest\032\035.grpc.benchmar" +
+      "ks.CoreResponse\022:\n\nQuitWorker\022\025.grpc.ben" +
+      "chmarks.Void\032\025.grpc.benchmarks.VoidB$\n\030i" +
+      "o.grpc.benchmarks.protoB\010Servicesb\006proto" +
+      "3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {

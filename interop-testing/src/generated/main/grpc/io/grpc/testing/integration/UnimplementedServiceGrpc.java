@@ -28,7 +28,7 @@ public class UnimplementedServiceGrpc {
 
   private UnimplementedServiceGrpc() {}
 
-  public static final String SERVICE_NAME = "grpc.testing.UnimplementedService";
+  public static final String SERVICE_NAME = "grpc.testing.integration.UnimplementedService";
 
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi
@@ -37,7 +37,7 @@ public class UnimplementedServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
-              "grpc.testing.UnimplementedService", "UnimplementedCall"),
+              "grpc.testing.integration.UnimplementedService", "UnimplementedCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()));
 

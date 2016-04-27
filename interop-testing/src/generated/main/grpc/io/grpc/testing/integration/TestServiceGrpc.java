@@ -28,7 +28,7 @@ public class TestServiceGrpc {
 
   private TestServiceGrpc() {}
 
-  public static final String SERVICE_NAME = "grpc.testing.TestService";
+  public static final String SERVICE_NAME = "grpc.testing.integration.TestService";
 
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi
@@ -37,7 +37,7 @@ public class TestServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
-              "grpc.testing.TestService", "EmptyCall"),
+              "grpc.testing.integration.TestService", "EmptyCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()));
   @io.grpc.ExperimentalApi
@@ -46,7 +46,7 @@ public class TestServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
-              "grpc.testing.TestService", "UnaryCall"),
+              "grpc.testing.integration.TestService", "UnaryCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.SimpleRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.SimpleResponse.getDefaultInstance()));
   @io.grpc.ExperimentalApi
@@ -55,7 +55,7 @@ public class TestServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING,
           generateFullMethodName(
-              "grpc.testing.TestService", "StreamingOutputCall"),
+              "grpc.testing.integration.TestService", "StreamingOutputCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.getDefaultInstance()));
   @io.grpc.ExperimentalApi
@@ -64,7 +64,7 @@ public class TestServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING,
           generateFullMethodName(
-              "grpc.testing.TestService", "StreamingInputCall"),
+              "grpc.testing.integration.TestService", "StreamingInputCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingInputCallRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingInputCallResponse.getDefaultInstance()));
   @io.grpc.ExperimentalApi
@@ -73,7 +73,7 @@ public class TestServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
           generateFullMethodName(
-              "grpc.testing.TestService", "FullDuplexCall"),
+              "grpc.testing.integration.TestService", "FullDuplexCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.getDefaultInstance()));
   @io.grpc.ExperimentalApi
@@ -82,7 +82,7 @@ public class TestServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
           generateFullMethodName(
-              "grpc.testing.TestService", "HalfDuplexCall"),
+              "grpc.testing.integration.TestService", "HalfDuplexCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.getDefaultInstance()));
 

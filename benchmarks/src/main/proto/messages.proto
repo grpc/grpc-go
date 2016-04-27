@@ -31,7 +31,7 @@
 
 syntax = "proto3";
 
-package grpc.testing;
+package grpc.benchmarks;
 
 option java_package = "io.grpc.benchmarks.proto";
 option java_outer_classname = "Messages";

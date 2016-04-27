@@ -9,7 +9,7 @@ public final class Stats {
       com.google.protobuf.ExtensionRegistry registry) {
   }
   public interface ServerStatsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.ServerStats)
+      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ServerStats)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -41,11 +41,11 @@ public final class Stats {
     double getTimeSystem();
   }
   /**
-   * Protobuf type {@code grpc.testing.ServerStats}
+   * Protobuf type {@code grpc.benchmarks.ServerStats}
    */
   public  static final class ServerStats extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.ServerStats)
+      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ServerStats)
       ServerStatsOrBuilder {
     // Use ServerStats.newBuilder() to construct.
     private ServerStats(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -110,12 +110,12 @@ public final class Stats {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_ServerStats_descriptor;
+      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_ServerStats_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_ServerStats_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_ServerStats_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Stats.ServerStats.class, io.grpc.benchmarks.proto.Stats.ServerStats.Builder.class);
     }
@@ -277,20 +277,20 @@ public final class Stats {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.ServerStats}
+     * Protobuf type {@code grpc.benchmarks.ServerStats}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.ServerStats)
+        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ServerStats)
         io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_ServerStats_descriptor;
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_ServerStats_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_ServerStats_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_ServerStats_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Stats.ServerStats.class, io.grpc.benchmarks.proto.Stats.ServerStats.Builder.class);
       }
@@ -322,7 +322,7 @@ public final class Stats {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_ServerStats_descriptor;
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_ServerStats_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Stats.ServerStats getDefaultInstanceForType() {
@@ -519,10 +519,10 @@ public final class Stats {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.testing.ServerStats)
+      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ServerStats)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.testing.ServerStats)
+    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ServerStats)
     private static final io.grpc.benchmarks.proto.Stats.ServerStats DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Stats.ServerStats();
@@ -567,7 +567,7 @@ public final class Stats {
   }
 
   public interface HistogramParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.HistogramParams)
+      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.HistogramParams)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -589,7 +589,7 @@ public final class Stats {
     double getMaxPossible();
   }
   /**
-   * Protobuf type {@code grpc.testing.HistogramParams}
+   * Protobuf type {@code grpc.benchmarks.HistogramParams}
    *
    * <pre>
    * Histogram params based on grpc/support/histogram.c
@@ -597,7 +597,7 @@ public final class Stats {
    */
   public  static final class HistogramParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.HistogramParams)
+      // @@protoc_insertion_point(message_implements:grpc.benchmarks.HistogramParams)
       HistogramParamsOrBuilder {
     // Use HistogramParams.newBuilder() to construct.
     private HistogramParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -656,12 +656,12 @@ public final class Stats {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_HistogramParams_descriptor;
+      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_HistogramParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_HistogramParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_HistogramParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Stats.HistogramParams.class, io.grpc.benchmarks.proto.Stats.HistogramParams.Builder.class);
     }
@@ -802,7 +802,7 @@ public final class Stats {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.HistogramParams}
+     * Protobuf type {@code grpc.benchmarks.HistogramParams}
      *
      * <pre>
      * Histogram params based on grpc/support/histogram.c
@@ -810,16 +810,16 @@ public final class Stats {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.HistogramParams)
+        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.HistogramParams)
         io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_HistogramParams_descriptor;
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_HistogramParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_HistogramParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_HistogramParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Stats.HistogramParams.class, io.grpc.benchmarks.proto.Stats.HistogramParams.Builder.class);
       }
@@ -849,7 +849,7 @@ public final class Stats {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_HistogramParams_descriptor;
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_HistogramParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Stats.HistogramParams getDefaultInstanceForType() {
@@ -1001,10 +1001,10 @@ public final class Stats {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.testing.HistogramParams)
+      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.HistogramParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.testing.HistogramParams)
+    // @@protoc_insertion_point(class_scope:grpc.benchmarks.HistogramParams)
     private static final io.grpc.benchmarks.proto.Stats.HistogramParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Stats.HistogramParams();
@@ -1049,7 +1049,7 @@ public final class Stats {
   }
 
   public interface HistogramDataOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.HistogramData)
+      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.HistogramData)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -1091,7 +1091,7 @@ public final class Stats {
     double getCount();
   }
   /**
-   * Protobuf type {@code grpc.testing.HistogramData}
+   * Protobuf type {@code grpc.benchmarks.HistogramData}
    *
    * <pre>
    * Histogram data based on grpc/support/histogram.c
@@ -1099,7 +1099,7 @@ public final class Stats {
    */
   public  static final class HistogramData extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.HistogramData)
+      // @@protoc_insertion_point(message_implements:grpc.benchmarks.HistogramData)
       HistogramDataOrBuilder {
     // Use HistogramData.newBuilder() to construct.
     private HistogramData(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -1201,12 +1201,12 @@ public final class Stats {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_HistogramData_descriptor;
+      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_HistogramData_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_HistogramData_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_HistogramData_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Stats.HistogramData.class, io.grpc.benchmarks.proto.Stats.HistogramData.Builder.class);
     }
@@ -1433,7 +1433,7 @@ public final class Stats {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.HistogramData}
+     * Protobuf type {@code grpc.benchmarks.HistogramData}
      *
      * <pre>
      * Histogram data based on grpc/support/histogram.c
@@ -1441,16 +1441,16 @@ public final class Stats {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.HistogramData)
+        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.HistogramData)
         io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_HistogramData_descriptor;
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_HistogramData_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_HistogramData_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_HistogramData_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Stats.HistogramData.class, io.grpc.benchmarks.proto.Stats.HistogramData.Builder.class);
       }
@@ -1488,7 +1488,7 @@ public final class Stats {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_HistogramData_descriptor;
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_HistogramData_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Stats.HistogramData getDefaultInstanceForType() {
@@ -1791,10 +1791,10 @@ public final class Stats {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.testing.HistogramData)
+      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.HistogramData)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.testing.HistogramData)
+    // @@protoc_insertion_point(class_scope:grpc.benchmarks.HistogramData)
     private static final io.grpc.benchmarks.proto.Stats.HistogramData DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Stats.HistogramData();
@@ -1839,11 +1839,11 @@ public final class Stats {
   }
 
   public interface ClientStatsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.ClientStats)
+      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ClientStats)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
      *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
@@ -1851,7 +1851,7 @@ public final class Stats {
      */
     boolean hasLatencies();
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
      *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
@@ -1859,7 +1859,7 @@ public final class Stats {
      */
     io.grpc.benchmarks.proto.Stats.HistogramData getLatencies();
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
      *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
@@ -1887,11 +1887,11 @@ public final class Stats {
     double getTimeSystem();
   }
   /**
-   * Protobuf type {@code grpc.testing.ClientStats}
+   * Protobuf type {@code grpc.benchmarks.ClientStats}
    */
   public  static final class ClientStats extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.ClientStats)
+      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ClientStats)
       ClientStatsOrBuilder {
     // Use ClientStats.newBuilder() to construct.
     private ClientStats(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -1969,12 +1969,12 @@ public final class Stats {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_ClientStats_descriptor;
+      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_ClientStats_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_ClientStats_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_ClientStats_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Stats.ClientStats.class, io.grpc.benchmarks.proto.Stats.ClientStats.Builder.class);
     }
@@ -1982,7 +1982,7 @@ public final class Stats {
     public static final int LATENCIES_FIELD_NUMBER = 1;
     private io.grpc.benchmarks.proto.Stats.HistogramData latencies_;
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
      *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
@@ -1992,7 +1992,7 @@ public final class Stats {
       return latencies_ != null;
     }
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
      *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
@@ -2002,7 +2002,7 @@ public final class Stats {
       return latencies_ == null ? io.grpc.benchmarks.proto.Stats.HistogramData.getDefaultInstance() : latencies_;
     }
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
      *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
@@ -2167,20 +2167,20 @@ public final class Stats {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.ClientStats}
+     * Protobuf type {@code grpc.benchmarks.ClientStats}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.ClientStats)
+        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ClientStats)
         io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_ClientStats_descriptor;
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_ClientStats_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_ClientStats_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_ClientStats_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Stats.ClientStats.class, io.grpc.benchmarks.proto.Stats.ClientStats.Builder.class);
       }
@@ -2218,7 +2218,7 @@ public final class Stats {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_testing_ClientStats_descriptor;
+        return io.grpc.benchmarks.proto.Stats.internal_static_grpc_benchmarks_ClientStats_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Stats.ClientStats getDefaultInstanceForType() {
@@ -2300,7 +2300,7 @@ public final class Stats {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Stats.HistogramData, io.grpc.benchmarks.proto.Stats.HistogramData.Builder, io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder> latenciesBuilder_;
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
        *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
@@ -2310,7 +2310,7 @@ public final class Stats {
         return latenciesBuilder_ != null || latencies_ != null;
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
        *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
@@ -2324,7 +2324,7 @@ public final class Stats {
         }
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
        *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
@@ -2344,7 +2344,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
        *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
@@ -2362,7 +2362,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
        *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
@@ -2384,7 +2384,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
        *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
@@ -2402,7 +2402,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
        *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
@@ -2414,7 +2414,7 @@ public final class Stats {
         return getLatenciesFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
        *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
@@ -2429,7 +2429,7 @@ public final class Stats {
         }
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>optional .grpc.benchmarks.HistogramData latencies = 1;</code>
        *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
@@ -2549,10 +2549,10 @@ public final class Stats {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.testing.ClientStats)
+      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ClientStats)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.testing.ClientStats)
+    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ClientStats)
     private static final io.grpc.benchmarks.proto.Stats.ClientStats DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Stats.ClientStats();
@@ -2597,25 +2597,25 @@ public final class Stats {
   }
 
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_ServerStats_descriptor;
+    internal_static_grpc_benchmarks_ServerStats_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_testing_ServerStats_fieldAccessorTable;
+      internal_static_grpc_benchmarks_ServerStats_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_HistogramParams_descriptor;
+    internal_static_grpc_benchmarks_HistogramParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_testing_HistogramParams_fieldAccessorTable;
+      internal_static_grpc_benchmarks_HistogramParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_HistogramData_descriptor;
+    internal_static_grpc_benchmarks_HistogramData_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_testing_HistogramData_fieldAccessorTable;
+      internal_static_grpc_benchmarks_HistogramData_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_ClientStats_descriptor;
+    internal_static_grpc_benchmarks_ClientStats_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_testing_ClientStats_fieldAccessorTable;
+      internal_static_grpc_benchmarks_ClientStats_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -2625,18 +2625,18 @@ public final class Stats {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\013stats.proto\022\014grpc.testing\"K\n\013ServerSta" +
-      "ts\022\024\n\014time_elapsed\030\001 \001(\001\022\021\n\ttime_user\030\002 " +
-      "\001(\001\022\023\n\013time_system\030\003 \001(\001\";\n\017HistogramPar" +
-      "ams\022\022\n\nresolution\030\001 \001(\001\022\024\n\014max_possible\030" +
-      "\002 \001(\001\"w\n\rHistogramData\022\016\n\006bucket\030\001 \003(\r\022\020" +
-      "\n\010min_seen\030\002 \001(\001\022\020\n\010max_seen\030\003 \001(\001\022\013\n\003su" +
-      "m\030\004 \001(\001\022\026\n\016sum_of_squares\030\005 \001(\001\022\r\n\005count" +
-      "\030\006 \001(\001\"{\n\013ClientStats\022.\n\tlatencies\030\001 \001(\013" +
-      "2\033.grpc.testing.HistogramData\022\024\n\014time_el" +
-      "apsed\030\002 \001(\001\022\021\n\ttime_user\030\003 \001(\001\022\023\n\013time_s",
-      "ystem\030\004 \001(\001B!\n\030io.grpc.benchmarks.protoB" +
-      "\005Statsb\006proto3"
+      "\n\013stats.proto\022\017grpc.benchmarks\"K\n\013Server" +
+      "Stats\022\024\n\014time_elapsed\030\001 \001(\001\022\021\n\ttime_user" +
+      "\030\002 \001(\001\022\023\n\013time_system\030\003 \001(\001\";\n\017Histogram" +
+      "Params\022\022\n\nresolution\030\001 \001(\001\022\024\n\014max_possib" +
+      "le\030\002 \001(\001\"w\n\rHistogramData\022\016\n\006bucket\030\001 \003(" +
+      "\r\022\020\n\010min_seen\030\002 \001(\001\022\020\n\010max_seen\030\003 \001(\001\022\013\n" +
+      "\003sum\030\004 \001(\001\022\026\n\016sum_of_squares\030\005 \001(\001\022\r\n\005co" +
+      "unt\030\006 \001(\001\"~\n\013ClientStats\0221\n\tlatencies\030\001 " +
+      "\001(\0132\036.grpc.benchmarks.HistogramData\022\024\n\014t" +
+      "ime_elapsed\030\002 \001(\001\022\021\n\ttime_user\030\003 \001(\001\022\023\n\013",
+      "time_system\030\004 \001(\001B!\n\030io.grpc.benchmarks." +
+      "protoB\005Statsb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -2650,29 +2650,29 @@ public final class Stats {
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         }, assigner);
-    internal_static_grpc_testing_ServerStats_descriptor =
+    internal_static_grpc_benchmarks_ServerStats_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_grpc_testing_ServerStats_fieldAccessorTable = new
+    internal_static_grpc_benchmarks_ServerStats_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_testing_ServerStats_descriptor,
+        internal_static_grpc_benchmarks_ServerStats_descriptor,
         new java.lang.String[] { "TimeElapsed", "TimeUser", "TimeSystem", });
-    internal_static_grpc_testing_HistogramParams_descriptor =
+    internal_static_grpc_benchmarks_HistogramParams_descriptor =
       getDescriptor().getMessageTypes().get(1);
-    internal_static_grpc_testing_HistogramParams_fieldAccessorTable = new
+    internal_static_grpc_benchmarks_HistogramParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_testing_HistogramParams_descriptor,
+        internal_static_grpc_benchmarks_HistogramParams_descriptor,
         new java.lang.String[] { "Resolution", "MaxPossible", });
-    internal_static_grpc_testing_HistogramData_descriptor =
+    internal_static_grpc_benchmarks_HistogramData_descriptor =
       getDescriptor().getMessageTypes().get(2);
-    internal_static_grpc_testing_HistogramData_fieldAccessorTable = new
+    internal_static_grpc_benchmarks_HistogramData_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_testing_HistogramData_descriptor,
+        internal_static_grpc_benchmarks_HistogramData_descriptor,
         new java.lang.String[] { "Bucket", "MinSeen", "MaxSeen", "Sum", "SumOfSquares", "Count", });
-    internal_static_grpc_testing_ClientStats_descriptor =
+    internal_static_grpc_benchmarks_ClientStats_descriptor =
       getDescriptor().getMessageTypes().get(3);
-    internal_static_grpc_testing_ClientStats_fieldAccessorTable = new
+    internal_static_grpc_benchmarks_ClientStats_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_testing_ClientStats_descriptor,
+        internal_static_grpc_benchmarks_ClientStats_descriptor,
         new java.lang.String[] { "Latencies", "TimeElapsed", "TimeUser", "TimeSystem", });
   }
 

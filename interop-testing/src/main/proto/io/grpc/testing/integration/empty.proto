@@ -30,7 +30,7 @@
 
 syntax = "proto2";
 
-package grpc.testing;
+package grpc.testing.integration;
 
 option java_package = "com.google.protobuf";
 option java_outer_classname = "EmptyProtos";
@@ -40,7 +40,7 @@ option java_outer_classname = "EmptyProtos";
 // return value of a service API. For instance:
 //
 //   service Foo {
-//     rpc Bar (grpc.testing.Empty) returns (grpc.testing.Empty) { };
+//     rpc Bar (grpc.testing.integration.Empty) returns (grpc.testing.integration.Empty) { };
 //   };
 //
 message Empty {}
