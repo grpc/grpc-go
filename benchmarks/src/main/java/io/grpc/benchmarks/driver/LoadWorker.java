@@ -35,6 +35,9 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.grpc.Status;
 import io.grpc.benchmarks.proto.Control;
+import io.grpc.benchmarks.proto.Control.ClientArgs;
+import io.grpc.benchmarks.proto.Control.ServerArgs;
+import io.grpc.benchmarks.proto.Control.ServerArgs.ArgtypeCase;
 import io.grpc.benchmarks.proto.WorkerServiceGrpc;
 import io.grpc.internal.ServerImpl;
 import io.grpc.netty.NettyServerBuilder;
@@ -137,13 +140,14 @@ public class LoadWorker {
     private LoadClient workerClient;
 
     @Override
-    public StreamObserver<Control.ServerArgs> runServer(
+    public StreamObserver<ServerArgs> runServer(
         final StreamObserver<Control.ServerStatus> responseObserver) {
-      return new StreamObserver<Control.ServerArgs>() {
+      return new StreamObserver<ServerArgs>() {
         @Override
-        public void onNext(Control.ServerArgs value) {
+        public void onNext(ServerArgs value) {
           try {
-            if (value.getSetup() != null && workerServer == null) {
+            ArgtypeCase argTypeCase = value.getArgtypeCase();
+            if (argTypeCase == ServerArgs.ArgtypeCase.SETUP && workerServer == null) {
               if (serverPort != 0 && value.getSetup().getPort() == 0) {
                 Control.ServerArgs.Builder builder = value.toBuilder();
                 builder.getSetupBuilder().setPort(serverPort);
@@ -155,7 +159,7 @@ public class LoadWorker {
                   .setPort(workerServer.getPort())
                   .setCores(workerServer.getCores())
                   .build());
-            } else if (value.getMark() != null && workerServer != null) {
+            } else if (argTypeCase == ArgtypeCase.MARK && workerServer != null) {
               responseObserver.onNext(Control.ServerStatus.newBuilder()
                   .setStats(workerServer.getStats())
                   .build());
@@ -196,17 +200,18 @@ public class LoadWorker {
     }
 
     @Override
-    public StreamObserver<Control.ClientArgs> runClient(
+    public StreamObserver<ClientArgs> runClient(
         final StreamObserver<Control.ClientStatus> responseObserver) {
-      return new StreamObserver<Control.ClientArgs>() {
+      return new StreamObserver<ClientArgs>() {
         @Override
-        public void onNext(Control.ClientArgs value) {
+        public void onNext(ClientArgs value) {
           try {
-            if (value.getSetup() != null && workerClient == null) {
+            ClientArgs.ArgtypeCase argTypeCase = value.getArgtypeCase();
+            if (argTypeCase == ClientArgs.ArgtypeCase.SETUP && workerClient == null) {
               workerClient = new LoadClient(value.getSetup());
               workerClient.start();
               responseObserver.onNext(Control.ClientStatus.newBuilder().build());
-            } else if (value.getMark() != null && workerClient != null) {
+            } else if (argTypeCase == ClientArgs.ArgtypeCase.MARK && workerClient != null) {
               responseObserver.onNext(Control.ClientStatus.newBuilder()
                   .setStats(workerClient.getStats())
                   .build());
