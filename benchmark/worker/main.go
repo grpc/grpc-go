@@ -35,6 +35,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"net"
 	"runtime"
@@ -56,11 +57,19 @@ type byteBufCodec struct {
 }
 
 func (byteBufCodec) Marshal(v interface{}) ([]byte, error) {
-	return v.([]byte), nil
+	b, ok := v.(*[]byte)
+	if !ok {
+		return nil, fmt.Errorf("Failed to marshal: %v is not type of *[]byte")
+	}
+	return *b, nil
 }
 
 func (byteBufCodec) Unmarshal(data []byte, v interface{}) error {
-	v = data
+	b, ok := v.(*[]byte)
+	if !ok {
+		return fmt.Errorf("Failed to marshal: %v is not type of *[]byte")
+	}
+	*b = data
 	return nil
 }
 

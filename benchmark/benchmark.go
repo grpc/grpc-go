@@ -108,7 +108,6 @@ func StartServer(addr string, opts ...grpc.ServerOption) (string, func()) {
 }
 
 type byteBufServer struct {
-	reqSize  int32
 	respSize int32
 }
 
@@ -118,15 +117,16 @@ func (s *byteBufServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest)
 
 func (s *byteBufServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
 	for {
-		m := make([]byte, s.reqSize)
-		err := stream.(grpc.ServerStream).RecvMsg(m)
+		var in []byte
+		err := stream.(grpc.ServerStream).RecvMsg(&in)
 		if err == io.EOF {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		if err := stream.(grpc.ServerStream).SendMsg(make([]byte, s.respSize)); err != nil {
+		out := make([]byte, s.respSize)
+		if err := stream.(grpc.ServerStream).SendMsg(&out); err != nil {
 			return err
 		}
 	}
@@ -134,13 +134,13 @@ func (s *byteBufServer) StreamingCall(stream testpb.BenchmarkService_StreamingCa
 
 // StartbyteBufServer starts a benchmark service server that supports custom codec.
 // It returns its listen address and a function to stop the server.
-func StartByteBufServer(addr string, reqSize, respSize int32, opts ...grpc.ServerOption) (string, func()) {
+func StartByteBufServer(addr string, respSize int32, opts ...grpc.ServerOption) (string, func()) {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
 	s := grpc.NewServer(opts...)
-	testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{reqSize: reqSize, respSize: respSize})
+	testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{respSize: respSize})
 	go s.Serve(lis)
 	return lis.Addr().String(), func() {
 		s.Stop()
@@ -180,11 +180,12 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 
 // DoByteBufStreamingRoundTrip performs a round trip for a single streaming rpc, using custom codec.
 func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
-	if err := stream.(grpc.ClientStream).SendMsg(make([]byte, reqSize)); err != nil {
+	out := make([]byte, reqSize)
+	if err := stream.(grpc.ClientStream).SendMsg(&out); err != nil {
 		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).(ClientStream).SendMsg: %v", grpc.ErrorDesc(err))
 	}
-	m := make([]byte, respSize)
-	if err := stream.(grpc.ClientStream).RecvMsg(m); err != nil {
+	var in []byte
+	if err := stream.(grpc.ClientStream).RecvMsg(&in); err != nil {
 		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).(ClientStream).RecvMsg: %v", grpc.ErrorDesc(err))
 	}
 	return nil
