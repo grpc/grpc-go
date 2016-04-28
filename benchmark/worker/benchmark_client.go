@@ -60,27 +60,27 @@ type benchmarkClient struct {
 	histogram     *stats.Histogram
 }
 
-func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient, error) {
+func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error) {
 	var opts []grpc.DialOption
 
-	// Some setup options are ignored:
+	// Some config options are ignored:
 	// - client type:
 	//     will always create sync client
 	// - async client threads.
 	// - core list
-	grpclog.Printf(" * client type: %v (ignored, always creates sync client)", setup.ClientType)
-	switch setup.ClientType {
+	grpclog.Printf(" * client type: %v (ignored, always creates sync client)", config.ClientType)
+	switch config.ClientType {
 	case testpb.ClientType_SYNC_CLIENT:
 	case testpb.ClientType_ASYNC_CLIENT:
 	default:
-		return nil, grpc.Errorf(codes.InvalidArgument, "unknow client type: %v", setup.ClientType)
+		return nil, grpc.Errorf(codes.InvalidArgument, "unknow client type: %v", config.ClientType)
 	}
-	grpclog.Printf(" * async client threads: %v (ignored)", setup.AsyncClientThreads)
-	grpclog.Printf(" * core list: %v (ignored)", setup.CoreList)
+	grpclog.Printf(" * async client threads: %v (ignored)", config.AsyncClientThreads)
+	grpclog.Printf(" * core list: %v (ignored)", config.CoreList)
 
-	grpclog.Printf(" - security params: %v", setup.SecurityParams)
-	if setup.SecurityParams != nil {
-		creds, err := credentials.NewClientTLSFromFile(Abs(caFile), setup.SecurityParams.ServerHostOverride)
+	grpclog.Printf(" - security params: %v", config.SecurityParams)
+	if config.SecurityParams != nil {
+		creds, err := credentials.NewClientTLSFromFile(Abs(caFile), config.SecurityParams.ServerHostOverride)
 		if err != nil {
 			return nil, grpc.Errorf(codes.InvalidArgument, "failed to create TLS credentials %v", err)
 		}
@@ -89,19 +89,19 @@ func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient
 		opts = append(opts, grpc.WithInsecure())
 	}
 
-	grpclog.Printf(" - core limit: %v", setup.CoreLimit)
+	grpclog.Printf(" - core limit: %v", config.CoreLimit)
 	// Use one cpu core by default
 	numOfCores := 1
-	if setup.CoreLimit > 0 {
-		numOfCores = int(setup.CoreLimit)
+	if config.CoreLimit > 0 {
+		numOfCores = int(config.CoreLimit)
 	}
 	runtime.GOMAXPROCS(numOfCores)
 
-	grpclog.Printf(" - payload config: %v", setup.PayloadConfig)
+	grpclog.Printf(" - payload config: %v", config.PayloadConfig)
 	var payloadReqSize, payloadRespSize int
 	var payloadType string
-	if setup.PayloadConfig != nil {
-		switch c := setup.PayloadConfig.Payload.(type) {
+	if config.PayloadConfig != nil {
+		switch c := config.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:
 			opts = append(opts, grpc.WithCodec(byteBufCodec{}))
 			payloadReqSize = int(c.BytebufParams.ReqSize)
@@ -112,60 +112,60 @@ func startBenchmarkClientWithSetup(setup *testpb.ClientConfig) (*benchmarkClient
 			payloadRespSize = int(c.SimpleParams.RespSize)
 			payloadType = "protobuf"
 		case *testpb.PayloadConfig_ComplexParams:
-			return nil, grpc.Errorf(codes.Unimplemented, "unsupported payload config: %v", setup.PayloadConfig)
+			return nil, grpc.Errorf(codes.Unimplemented, "unsupported payload config: %v", config.PayloadConfig)
 		default:
-			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", setup.PayloadConfig)
+			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", config.PayloadConfig)
 		}
 	}
 
-	grpclog.Printf(" - rpcs per chann: %v", setup.OutstandingRpcsPerChannel)
-	grpclog.Printf(" - channel number: %v", setup.ClientChannels)
+	grpclog.Printf(" - rpcs per chann: %v", config.OutstandingRpcsPerChannel)
+	grpclog.Printf(" - channel number: %v", config.ClientChannels)
 
-	rpcCountPerConn, connCount := int(setup.OutstandingRpcsPerChannel), int(setup.ClientChannels)
+	rpcCountPerConn, connCount := int(config.OutstandingRpcsPerChannel), int(config.ClientChannels)
 
-	grpclog.Printf(" - load params: %v", setup.LoadParams)
+	grpclog.Printf(" - load params: %v", config.LoadParams)
 	var dist *int
-	switch lp := setup.LoadParams.Load.(type) {
+	switch lp := config.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
 	case *testpb.LoadParams_Poisson:
 		grpclog.Printf("   - %v", lp.Poisson)
-		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", setup.LoadParams)
+		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
 		// TODO poisson
 	case *testpb.LoadParams_Uniform:
-		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", setup.LoadParams)
+		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
 	case *testpb.LoadParams_Determ:
-		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", setup.LoadParams)
+		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
 	case *testpb.LoadParams_Pareto:
-		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", setup.LoadParams)
+		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
 	default:
-		return nil, grpc.Errorf(codes.InvalidArgument, "unknown load params: %v", setup.LoadParams)
+		return nil, grpc.Errorf(codes.InvalidArgument, "unknown load params: %v", config.LoadParams)
 	}
 
-	grpclog.Printf(" - rpc type: %v", setup.RpcType)
+	grpclog.Printf(" - rpc type: %v", config.RpcType)
 	var rpcType string
-	switch setup.RpcType {
+	switch config.RpcType {
 	case testpb.RpcType_UNARY:
 		rpcType = "unary"
 	case testpb.RpcType_STREAMING:
 		rpcType = "streaming"
 	default:
-		return nil, grpc.Errorf(codes.InvalidArgument, "unknown rpc type: %v", setup.RpcType)
+		return nil, grpc.Errorf(codes.InvalidArgument, "unknown rpc type: %v", config.RpcType)
 	}
 
-	grpclog.Printf(" - histogram params: %v", setup.HistogramParams)
-	grpclog.Printf(" - server targets: %v", setup.ServerTargets)
+	grpclog.Printf(" - histogram params: %v", config.HistogramParams)
+	grpclog.Printf(" - server targets: %v", config.ServerTargets)
 
 	conns := make([]*grpc.ClientConn, connCount)
 
 	for connIndex := 0; connIndex < connCount; connIndex++ {
-		conns[connIndex] = benchmark.NewClientConn(setup.ServerTargets[connIndex%len(setup.ServerTargets)], opts...)
+		conns[connIndex] = benchmark.NewClientConn(config.ServerTargets[connIndex%len(config.ServerTargets)], opts...)
 	}
 
 	bc := benchmarkClient{
 		histogram: stats.NewHistogram(stats.HistogramOptions{
-			NumBuckets:     int(math.Log(setup.HistogramParams.MaxPossible)/math.Log(1+setup.HistogramParams.Resolution)) + 1,
-			GrowthFactor:   setup.HistogramParams.Resolution,
-			BaseBucketSize: (1 + setup.HistogramParams.Resolution),
+			NumBuckets:     int(math.Log(config.HistogramParams.MaxPossible)/math.Log(1+config.HistogramParams.Resolution)) + 1,
+			GrowthFactor:   config.HistogramParams.Resolution,
+			BaseBucketSize: (1 + config.HistogramParams.Resolution),
 			MinValue:       0,
 		}),
 		stop:          make(chan bool),

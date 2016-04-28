@@ -50,7 +50,7 @@ import (
 
 var (
 	driverPort = flag.Int("driver_port", 10000, "port for communication with driver")
-	serverPort = flag.Int("server_port", 0, "default port for benchmark server")
+	serverPort = flag.Int("server_port", 0, "port for benchmark server if not specified by server config message")
 )
 
 type byteBufCodec struct {
@@ -104,7 +104,7 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 		switch argtype := in.Argtype.(type) {
 		case *testpb.ServerArgs_Setup:
 			grpclog.Printf("server setup received:")
-			newbs, err := startBenchmarkServerWithSetup(argtype.Setup, s.serverPort)
+			newbs, err := startBenchmarkServer(argtype.Setup, s.serverPort)
 			if err != nil {
 				return err
 			}
@@ -165,7 +165,7 @@ func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) er
 		switch t := in.Argtype.(type) {
 		case *testpb.ClientArgs_Setup:
 			grpclog.Printf("client setup received:")
-			newbc, err := startBenchmarkClientWithSetup(t.Setup)
+			newbc, err := startBenchmarkClient(t.Setup)
 			if err != nil {
 				return err
 			}

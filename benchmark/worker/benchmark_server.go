@@ -62,27 +62,27 @@ type benchmarkServer struct {
 	lastResetTime time.Time
 }
 
-func startBenchmarkServerWithSetup(setup *testpb.ServerConfig, serverPort int) (*benchmarkServer, error) {
+func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchmarkServer, error) {
 	var opts []grpc.ServerOption
 
-	// Some setup options are ignored:
+	// Some config options are ignored:
 	// - server type:
 	//     will always start sync server
 	// - async server threads
 	// - core list
-	grpclog.Printf(" * server type: %v (ignored, always starts sync server)", setup.ServerType)
-	switch setup.ServerType {
+	grpclog.Printf(" * server type: %v (ignored, always starts sync server)", config.ServerType)
+	switch config.ServerType {
 	case testpb.ServerType_SYNC_SERVER:
 	case testpb.ServerType_ASYNC_SERVER:
 	case testpb.ServerType_ASYNC_GENERIC_SERVER:
 	default:
-		return nil, grpc.Errorf(codes.InvalidArgument, "unknow server type: %v", setup.ServerType)
+		return nil, grpc.Errorf(codes.InvalidArgument, "unknow server type: %v", config.ServerType)
 	}
-	grpclog.Printf(" * async server threads: %v (ignored)", setup.AsyncServerThreads)
-	grpclog.Printf(" * core list: %v (ignored)", setup.CoreList)
+	grpclog.Printf(" * async server threads: %v (ignored)", config.AsyncServerThreads)
+	grpclog.Printf(" * core list: %v (ignored)", config.CoreList)
 
-	grpclog.Printf(" - security params: %v", setup.SecurityParams)
-	if setup.SecurityParams != nil {
+	grpclog.Printf(" - security params: %v", config.SecurityParams)
+	if config.SecurityParams != nil {
 		creds, err := credentials.NewServerTLSFromFile(Abs(certFile), Abs(keyFile))
 		if err != nil {
 			grpclog.Fatalf("failed to generate credentials %v", err)
@@ -90,37 +90,37 @@ func startBenchmarkServerWithSetup(setup *testpb.ServerConfig, serverPort int) (
 		opts = append(opts, grpc.Creds(creds))
 	}
 
-	grpclog.Printf(" - core limit: %v", setup.CoreLimit)
+	grpclog.Printf(" - core limit: %v", config.CoreLimit)
 	// Use one cpu core by default.
 	numOfCores := 1
-	if setup.CoreLimit > 0 {
-		numOfCores = int(setup.CoreLimit)
+	if config.CoreLimit > 0 {
+		numOfCores = int(config.CoreLimit)
 	}
 	runtime.GOMAXPROCS(numOfCores)
 
-	grpclog.Printf(" - port: %v", setup.Port)
+	grpclog.Printf(" - port: %v", config.Port)
 	var port int
-	// Priority: setup.Port > serverPort > default (0).
-	if setup.Port != 0 {
-		port = int(setup.Port)
+	// Priority: config.Port > serverPort > default (0).
+	if config.Port != 0 {
+		port = int(config.Port)
 	} else if serverPort != 0 {
 		port = serverPort
 	}
 
-	grpclog.Printf(" - payload config: %v", setup.PayloadConfig)
+	grpclog.Printf(" - payload config: %v", config.PayloadConfig)
 	var addr string
 	var close func()
-	if setup.PayloadConfig != nil {
-		switch payload := setup.PayloadConfig.Payload.(type) {
+	if config.PayloadConfig != nil {
+		switch payload := config.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:
 			opts = append(opts, grpc.CustomCodec(byteBufCodec{}))
 			addr, close = benchmark.StartByteBufServer(":"+strconv.Itoa(port), payload.BytebufParams.RespSize, opts...)
 		case *testpb.PayloadConfig_SimpleParams:
 			addr, close = benchmark.StartServer(":"+strconv.Itoa(port), opts...)
 		case *testpb.PayloadConfig_ComplexParams:
-			return nil, grpc.Errorf(codes.Unimplemented, "unsupported payload config: %v", setup.PayloadConfig)
+			return nil, grpc.Errorf(codes.Unimplemented, "unsupported payload config: %v", config.PayloadConfig)
 		default:
-			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", setup.PayloadConfig)
+			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", config.PayloadConfig)
 		}
 	} else {
 		// Start protobuf server is payload config is nil.
