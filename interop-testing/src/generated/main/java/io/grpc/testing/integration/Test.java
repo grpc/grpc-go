@@ -18,36 +18,30 @@ public final class Test {
   static {
     java.lang.String[] descriptorData = {
       "\n&io/grpc/testing/integration/test.proto" +
-      "\022\030grpc.testing.integration\032\'io/grpc/test" +
-      "ing/integration/empty.proto\032*io/grpc/tes" +
-      "ting/integration/messages.proto2\317\005\n\013Test" +
-      "Service\022M\n\tEmptyCall\022\037.grpc.testing.inte" +
-      "gration.Empty\032\037.grpc.testing.integration" +
-      ".Empty\022^\n\tUnaryCall\022\'.grpc.testing.integ" +
-      "ration.SimpleRequest\032(.grpc.testing.inte" +
-      "gration.SimpleResponse\022\204\001\n\023StreamingOutp" +
-      "utCall\0224.grpc.testing.integration.Stream",
-      "ingOutputCallRequest\0325.grpc.testing.inte" +
-      "gration.StreamingOutputCallResponse0\001\022\201\001" +
-      "\n\022StreamingInputCall\0223.grpc.testing.inte" +
-      "gration.StreamingInputCallRequest\0324.grpc" +
-      ".testing.integration.StreamingInputCallR" +
-      "esponse(\001\022\201\001\n\016FullDuplexCall\0224.grpc.test" +
-      "ing.integration.StreamingOutputCallReque" +
-      "st\0325.grpc.testing.integration.StreamingO" +
-      "utputCallResponse(\0010\001\022\201\001\n\016HalfDuplexCall" +
-      "\0224.grpc.testing.integration.StreamingOut",
-      "putCallRequest\0325.grpc.testing.integratio" +
-      "n.StreamingOutputCallResponse(\0010\0012m\n\024Uni" +
-      "mplementedService\022U\n\021UnimplementedCall\022\037" +
-      ".grpc.testing.integration.Empty\032\037.grpc.t" +
-      "esting.integration.Empty2\257\001\n\020ReconnectSe" +
-      "rvice\022I\n\005Start\022\037.grpc.testing.integratio" +
-      "n.Empty\032\037.grpc.testing.integration.Empty" +
-      "\022P\n\004Stop\022\037.grpc.testing.integration.Empt" +
-      "y\032\'.grpc.testing.integration.ReconnectIn" +
-      "foB\035\n\033io.grpc.testing.integrationb\006proto",
-      "3"
+      "\022\014grpc.testing\032\'io/grpc/testing/integrat" +
+      "ion/empty.proto\032*io/grpc/testing/integra" +
+      "tion/messages.proto2\273\004\n\013TestService\0225\n\tE" +
+      "mptyCall\022\023.grpc.testing.Empty\032\023.grpc.tes" +
+      "ting.Empty\022F\n\tUnaryCall\022\033.grpc.testing.S" +
+      "impleRequest\032\034.grpc.testing.SimpleRespon" +
+      "se\022l\n\023StreamingOutputCall\022(.grpc.testing" +
+      ".StreamingOutputCallRequest\032).grpc.testi" +
+      "ng.StreamingOutputCallResponse0\001\022i\n\022Stre",
+      "amingInputCall\022\'.grpc.testing.StreamingI" +
+      "nputCallRequest\032(.grpc.testing.Streaming" +
+      "InputCallResponse(\001\022i\n\016FullDuplexCall\022(." +
+      "grpc.testing.StreamingOutputCallRequest\032" +
+      ").grpc.testing.StreamingOutputCallRespon" +
+      "se(\0010\001\022i\n\016HalfDuplexCall\022(.grpc.testing." +
+      "StreamingOutputCallRequest\032).grpc.testin" +
+      "g.StreamingOutputCallResponse(\0010\0012U\n\024Uni" +
+      "mplementedService\022=\n\021UnimplementedCall\022\023" +
+      ".grpc.testing.Empty\032\023.grpc.testing.Empty",
+      "2\177\n\020ReconnectService\0221\n\005Start\022\023.grpc.tes" +
+      "ting.Empty\032\023.grpc.testing.Empty\0228\n\004Stop\022" +
+      "\023.grpc.testing.Empty\032\033.grpc.testing.Reco" +
+      "nnectInfoB\035\n\033io.grpc.testing.integration" +
+      "b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {

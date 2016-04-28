@@ -34,7 +34,7 @@ syntax = "proto3";
 import "messages.proto";
 import "control.proto";
 
-package grpc.benchmarks;
+package grpc.testing;
 
 option java_package = "io.grpc.benchmarks.proto";
 option java_outer_classname = "Services";

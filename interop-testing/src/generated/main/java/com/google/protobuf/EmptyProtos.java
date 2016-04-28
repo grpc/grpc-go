@@ -9,24 +9,24 @@ public final class EmptyProtos {
       com.google.protobuf.ExtensionRegistry registry) {
   }
   public interface EmptyOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.integration.Empty)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.Empty)
       com.google.protobuf.MessageOrBuilder {
   }
   /**
-   * Protobuf type {@code grpc.testing.integration.Empty}
+   * Protobuf type {@code grpc.testing.Empty}
    *
    * <pre>
    * An empty message that you can re-use to avoid defining duplicated empty
    * messages in your project. A typical example is to use it as argument or the
    * return value of a service API. For instance:
    *   service Foo {
-   *     rpc Bar (grpc.testing.integration.Empty) returns (grpc.testing.integration.Empty) { };
+   *     rpc Bar (grpc.testing.Empty) returns (grpc.testing.Empty) { };
    *   };
    * </pre>
    */
   public  static final class Empty extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.integration.Empty)
+      // @@protoc_insertion_point(message_implements:grpc.testing.Empty)
       EmptyOrBuilder {
     // Use Empty.newBuilder() to construct.
     private Empty(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -76,12 +76,12 @@ public final class EmptyProtos {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return com.google.protobuf.EmptyProtos.internal_static_grpc_testing_integration_Empty_descriptor;
+      return com.google.protobuf.EmptyProtos.internal_static_grpc_testing_Empty_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return com.google.protobuf.EmptyProtos.internal_static_grpc_testing_integration_Empty_fieldAccessorTable
+      return com.google.protobuf.EmptyProtos.internal_static_grpc_testing_Empty_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               com.google.protobuf.EmptyProtos.Empty.class, com.google.protobuf.EmptyProtos.Empty.Builder.class);
     }
@@ -184,29 +184,29 @@ public final class EmptyProtos {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.integration.Empty}
+     * Protobuf type {@code grpc.testing.Empty}
      *
      * <pre>
      * An empty message that you can re-use to avoid defining duplicated empty
      * messages in your project. A typical example is to use it as argument or the
      * return value of a service API. For instance:
      *   service Foo {
-     *     rpc Bar (grpc.testing.integration.Empty) returns (grpc.testing.integration.Empty) { };
+     *     rpc Bar (grpc.testing.Empty) returns (grpc.testing.Empty) { };
      *   };
      * </pre>
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.integration.Empty)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.Empty)
         com.google.protobuf.EmptyProtos.EmptyOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return com.google.protobuf.EmptyProtos.internal_static_grpc_testing_integration_Empty_descriptor;
+        return com.google.protobuf.EmptyProtos.internal_static_grpc_testing_Empty_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return com.google.protobuf.EmptyProtos.internal_static_grpc_testing_integration_Empty_fieldAccessorTable
+        return com.google.protobuf.EmptyProtos.internal_static_grpc_testing_Empty_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 com.google.protobuf.EmptyProtos.Empty.class, com.google.protobuf.EmptyProtos.Empty.Builder.class);
       }
@@ -232,7 +232,7 @@ public final class EmptyProtos {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return com.google.protobuf.EmptyProtos.internal_static_grpc_testing_integration_Empty_descriptor;
+        return com.google.protobuf.EmptyProtos.internal_static_grpc_testing_Empty_descriptor;
       }
 
       public com.google.protobuf.EmptyProtos.Empty getDefaultInstanceForType() {
@@ -291,10 +291,10 @@ public final class EmptyProtos {
         return this;
       }
 
-      // @@protoc_insertion_point(builder_scope:grpc.testing.integration.Empty)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.Empty)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.testing.integration.Empty)
+    // @@protoc_insertion_point(class_scope:grpc.testing.Empty)
     private static final com.google.protobuf.EmptyProtos.Empty DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new com.google.protobuf.EmptyProtos.Empty();
@@ -339,10 +339,10 @@ public final class EmptyProtos {
   }
 
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_integration_Empty_descriptor;
+    internal_static_grpc_testing_Empty_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_testing_integration_Empty_fieldAccessorTable;
+      internal_static_grpc_testing_Empty_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -353,8 +353,8 @@ public final class EmptyProtos {
   static {
     java.lang.String[] descriptorData = {
       "\n\'io/grpc/testing/integration/empty.prot" +
-      "o\022\030grpc.testing.integration\"\007\n\005EmptyB\"\n\023" +
-      "com.google.protobufB\013EmptyProtos"
+      "o\022\014grpc.testing\"\007\n\005EmptyB\"\n\023com.google.p" +
+      "rotobufB\013EmptyProtos"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -368,11 +368,11 @@ public final class EmptyProtos {
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         }, assigner);
-    internal_static_grpc_testing_integration_Empty_descriptor =
+    internal_static_grpc_testing_Empty_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_grpc_testing_integration_Empty_fieldAccessorTable = new
+    internal_static_grpc_testing_Empty_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_testing_integration_Empty_descriptor,
+        internal_static_grpc_testing_Empty_descriptor,
         new java.lang.String[] { });
   }
 

@@ -9,7 +9,7 @@ public final class Control {
       com.google.protobuf.ExtensionRegistry registry) {
   }
   /**
-   * Protobuf enum {@code grpc.benchmarks.ClientType}
+   * Protobuf enum {@code grpc.testing.ClientType}
    */
   public enum ClientType
       implements com.google.protobuf.ProtocolMessageEnum {
@@ -97,11 +97,11 @@ public final class Control {
       this.value = value;
     }
 
-    // @@protoc_insertion_point(enum_scope:grpc.benchmarks.ClientType)
+    // @@protoc_insertion_point(enum_scope:grpc.testing.ClientType)
   }
 
   /**
-   * Protobuf enum {@code grpc.benchmarks.ServerType}
+   * Protobuf enum {@code grpc.testing.ServerType}
    */
   public enum ServerType
       implements com.google.protobuf.ProtocolMessageEnum {
@@ -198,11 +198,11 @@ public final class Control {
       this.value = value;
     }
 
-    // @@protoc_insertion_point(enum_scope:grpc.benchmarks.ServerType)
+    // @@protoc_insertion_point(enum_scope:grpc.testing.ServerType)
   }
 
   /**
-   * Protobuf enum {@code grpc.benchmarks.RpcType}
+   * Protobuf enum {@code grpc.testing.RpcType}
    */
   public enum RpcType
       implements com.google.protobuf.ProtocolMessageEnum {
@@ -290,11 +290,11 @@ public final class Control {
       this.value = value;
     }
 
-    // @@protoc_insertion_point(enum_scope:grpc.benchmarks.RpcType)
+    // @@protoc_insertion_point(enum_scope:grpc.testing.RpcType)
   }
 
   public interface PoissonParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.PoissonParams)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.PoissonParams)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -307,7 +307,7 @@ public final class Control {
     double getOfferedLoad();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.PoissonParams}
+   * Protobuf type {@code grpc.testing.PoissonParams}
    *
    * <pre>
    * Parameters of poisson process distribution, which is a good representation
@@ -316,7 +316,7 @@ public final class Control {
    */
   public  static final class PoissonParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.PoissonParams)
+      // @@protoc_insertion_point(message_implements:grpc.testing.PoissonParams)
       PoissonParamsOrBuilder {
     // Use PoissonParams.newBuilder() to construct.
     private PoissonParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -369,12 +369,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_PoissonParams_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_PoissonParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_PoissonParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_PoissonParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.PoissonParams.class, io.grpc.benchmarks.proto.Control.PoissonParams.Builder.class);
     }
@@ -495,7 +495,7 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.PoissonParams}
+     * Protobuf type {@code grpc.testing.PoissonParams}
      *
      * <pre>
      * Parameters of poisson process distribution, which is a good representation
@@ -504,16 +504,16 @@ public final class Control {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.PoissonParams)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.PoissonParams)
         io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_PoissonParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_PoissonParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_PoissonParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_PoissonParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.PoissonParams.class, io.grpc.benchmarks.proto.Control.PoissonParams.Builder.class);
       }
@@ -541,7 +541,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_PoissonParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_PoissonParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.PoissonParams getDefaultInstanceForType() {
@@ -651,10 +651,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.PoissonParams)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.PoissonParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.PoissonParams)
+    // @@protoc_insertion_point(class_scope:grpc.testing.PoissonParams)
     private static final io.grpc.benchmarks.proto.Control.PoissonParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.PoissonParams();
@@ -699,7 +699,7 @@ public final class Control {
   }
 
   public interface UniformParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.UniformParams)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.UniformParams)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -713,11 +713,11 @@ public final class Control {
     double getInterarrivalHi();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.UniformParams}
+   * Protobuf type {@code grpc.testing.UniformParams}
    */
   public  static final class UniformParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.UniformParams)
+      // @@protoc_insertion_point(message_implements:grpc.testing.UniformParams)
       UniformParamsOrBuilder {
     // Use UniformParams.newBuilder() to construct.
     private UniformParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -776,12 +776,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_UniformParams_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_UniformParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.UniformParams.class, io.grpc.benchmarks.proto.Control.UniformParams.Builder.class);
     }
@@ -914,20 +914,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.UniformParams}
+     * Protobuf type {@code grpc.testing.UniformParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.UniformParams)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.UniformParams)
         io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_UniformParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_UniformParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.UniformParams.class, io.grpc.benchmarks.proto.Control.UniformParams.Builder.class);
       }
@@ -957,7 +957,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_UniformParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.UniformParams getDefaultInstanceForType() {
@@ -1085,10 +1085,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.UniformParams)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.UniformParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.UniformParams)
+    // @@protoc_insertion_point(class_scope:grpc.testing.UniformParams)
     private static final io.grpc.benchmarks.proto.Control.UniformParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.UniformParams();
@@ -1133,7 +1133,7 @@ public final class Control {
   }
 
   public interface DeterministicParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.DeterministicParams)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.DeterministicParams)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -1142,11 +1142,11 @@ public final class Control {
     double getOfferedLoad();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.DeterministicParams}
+   * Protobuf type {@code grpc.testing.DeterministicParams}
    */
   public  static final class DeterministicParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.DeterministicParams)
+      // @@protoc_insertion_point(message_implements:grpc.testing.DeterministicParams)
       DeterministicParamsOrBuilder {
     // Use DeterministicParams.newBuilder() to construct.
     private DeterministicParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -1199,12 +1199,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_DeterministicParams_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_DeterministicParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.DeterministicParams.class, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder.class);
     }
@@ -1321,20 +1321,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.DeterministicParams}
+     * Protobuf type {@code grpc.testing.DeterministicParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.DeterministicParams)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.DeterministicParams)
         io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_DeterministicParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_DeterministicParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.DeterministicParams.class, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder.class);
       }
@@ -1362,7 +1362,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_DeterministicParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.DeterministicParams getDefaultInstanceForType() {
@@ -1460,10 +1460,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.DeterministicParams)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.DeterministicParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.DeterministicParams)
+    // @@protoc_insertion_point(class_scope:grpc.testing.DeterministicParams)
     private static final io.grpc.benchmarks.proto.Control.DeterministicParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.DeterministicParams();
@@ -1508,7 +1508,7 @@ public final class Control {
   }
 
   public interface ParetoParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ParetoParams)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ParetoParams)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -1522,11 +1522,11 @@ public final class Control {
     double getAlpha();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ParetoParams}
+   * Protobuf type {@code grpc.testing.ParetoParams}
    */
   public  static final class ParetoParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ParetoParams)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ParetoParams)
       ParetoParamsOrBuilder {
     // Use ParetoParams.newBuilder() to construct.
     private ParetoParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -1585,12 +1585,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ParetoParams_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ParetoParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.ParetoParams.class, io.grpc.benchmarks.proto.Control.ParetoParams.Builder.class);
     }
@@ -1723,20 +1723,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ParetoParams}
+     * Protobuf type {@code grpc.testing.ParetoParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ParetoParams)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ParetoParams)
         io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ParetoParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ParetoParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.ParetoParams.class, io.grpc.benchmarks.proto.Control.ParetoParams.Builder.class);
       }
@@ -1766,7 +1766,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ParetoParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.ParetoParams getDefaultInstanceForType() {
@@ -1894,10 +1894,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ParetoParams)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ParetoParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ParetoParams)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ParetoParams)
     private static final io.grpc.benchmarks.proto.Control.ParetoParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ParetoParams();
@@ -1942,11 +1942,11 @@ public final class Control {
   }
 
   public interface ClosedLoopParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ClosedLoopParams)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ClosedLoopParams)
       com.google.protobuf.MessageOrBuilder {
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ClosedLoopParams}
+   * Protobuf type {@code grpc.testing.ClosedLoopParams}
    *
    * <pre>
    * Once an RPC finishes, immediately start a new one.
@@ -1955,7 +1955,7 @@ public final class Control {
    */
   public  static final class ClosedLoopParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ClosedLoopParams)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ClosedLoopParams)
       ClosedLoopParamsOrBuilder {
     // Use ClosedLoopParams.newBuilder() to construct.
     private ClosedLoopParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -2001,12 +2001,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClosedLoopParams_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClosedLoopParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClosedLoopParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClosedLoopParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.ClosedLoopParams.class, io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder.class);
     }
@@ -2107,7 +2107,7 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ClosedLoopParams}
+     * Protobuf type {@code grpc.testing.ClosedLoopParams}
      *
      * <pre>
      * Once an RPC finishes, immediately start a new one.
@@ -2116,16 +2116,16 @@ public final class Control {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ClosedLoopParams)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ClosedLoopParams)
         io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClosedLoopParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClosedLoopParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClosedLoopParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClosedLoopParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.ClosedLoopParams.class, io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder.class);
       }
@@ -2151,7 +2151,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClosedLoopParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClosedLoopParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.ClosedLoopParams getDefaultInstanceForType() {
@@ -2219,10 +2219,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ClosedLoopParams)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ClosedLoopParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ClosedLoopParams)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ClosedLoopParams)
     private static final io.grpc.benchmarks.proto.Control.ClosedLoopParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ClosedLoopParams();
@@ -2267,62 +2267,62 @@ public final class Control {
   }
 
   public interface LoadParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.LoadParams)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.LoadParams)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+     * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ClosedLoopParams getClosedLoop();
     /**
-     * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+     * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder getClosedLoopOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+     * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.PoissonParams getPoisson();
     /**
-     * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+     * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder getPoissonOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+     * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
      */
     io.grpc.benchmarks.proto.Control.UniformParams getUniform();
     /**
-     * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+     * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
      */
     io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder getUniformOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+     * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
      */
     io.grpc.benchmarks.proto.Control.DeterministicParams getDeterm();
     /**
-     * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+     * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
      */
     io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder getDetermOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+     * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
      */
     io.grpc.benchmarks.proto.Control.ParetoParams getPareto();
     /**
-     * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+     * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
      */
     io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder getParetoOrBuilder();
 
     public io.grpc.benchmarks.proto.Control.LoadParams.LoadCase getLoadCase();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.LoadParams}
+   * Protobuf type {@code grpc.testing.LoadParams}
    */
   public  static final class LoadParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.LoadParams)
+      // @@protoc_insertion_point(message_implements:grpc.testing.LoadParams)
       LoadParamsOrBuilder {
     // Use LoadParams.newBuilder() to construct.
     private LoadParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -2439,12 +2439,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_LoadParams_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_LoadParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_LoadParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_LoadParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.LoadParams.class, io.grpc.benchmarks.proto.Control.LoadParams.Builder.class);
     }
@@ -2488,7 +2488,7 @@ public final class Control {
 
     public static final int CLOSED_LOOP_FIELD_NUMBER = 1;
     /**
-     * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+     * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClosedLoopParams getClosedLoop() {
       if (loadCase_ == 1) {
@@ -2497,7 +2497,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.ClosedLoopParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+     * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder getClosedLoopOrBuilder() {
       if (loadCase_ == 1) {
@@ -2508,7 +2508,7 @@ public final class Control {
 
     public static final int POISSON_FIELD_NUMBER = 2;
     /**
-     * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+     * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.PoissonParams getPoisson() {
       if (loadCase_ == 2) {
@@ -2517,7 +2517,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.PoissonParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+     * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder getPoissonOrBuilder() {
       if (loadCase_ == 2) {
@@ -2528,7 +2528,7 @@ public final class Control {
 
     public static final int UNIFORM_FIELD_NUMBER = 3;
     /**
-     * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+     * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
      */
     public io.grpc.benchmarks.proto.Control.UniformParams getUniform() {
       if (loadCase_ == 3) {
@@ -2537,7 +2537,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+     * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
      */
     public io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder getUniformOrBuilder() {
       if (loadCase_ == 3) {
@@ -2548,7 +2548,7 @@ public final class Control {
 
     public static final int DETERM_FIELD_NUMBER = 4;
     /**
-     * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+     * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
      */
     public io.grpc.benchmarks.proto.Control.DeterministicParams getDeterm() {
       if (loadCase_ == 4) {
@@ -2557,7 +2557,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+     * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
      */
     public io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder getDetermOrBuilder() {
       if (loadCase_ == 4) {
@@ -2568,7 +2568,7 @@ public final class Control {
 
     public static final int PARETO_FIELD_NUMBER = 5;
     /**
-     * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+     * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
      */
     public io.grpc.benchmarks.proto.Control.ParetoParams getPareto() {
       if (loadCase_ == 5) {
@@ -2577,7 +2577,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+     * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
      */
     public io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder getParetoOrBuilder() {
       if (loadCase_ == 5) {
@@ -2717,20 +2717,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.LoadParams}
+     * Protobuf type {@code grpc.testing.LoadParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.LoadParams)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.LoadParams)
         io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_LoadParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_LoadParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_LoadParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_LoadParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.LoadParams.class, io.grpc.benchmarks.proto.Control.LoadParams.Builder.class);
       }
@@ -2758,7 +2758,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_LoadParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_LoadParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.LoadParams getDefaultInstanceForType() {
@@ -2895,7 +2895,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.ClosedLoopParams, io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder, io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder> closedLoopBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClosedLoopParams getClosedLoop() {
         if (closedLoopBuilder_ == null) {
@@ -2911,7 +2911,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public Builder setClosedLoop(io.grpc.benchmarks.proto.Control.ClosedLoopParams value) {
         if (closedLoopBuilder_ == null) {
@@ -2927,7 +2927,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public Builder setClosedLoop(
           io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder builderForValue) {
@@ -2941,7 +2941,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public Builder mergeClosedLoop(io.grpc.benchmarks.proto.Control.ClosedLoopParams value) {
         if (closedLoopBuilder_ == null) {
@@ -2963,7 +2963,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public Builder clearClosedLoop() {
         if (closedLoopBuilder_ == null) {
@@ -2982,13 +2982,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder getClosedLoopBuilder() {
         return getClosedLoopFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder getClosedLoopOrBuilder() {
         if ((loadCase_ == 1) && (closedLoopBuilder_ != null)) {
@@ -3001,7 +3001,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ClosedLoopParams closed_loop = 1;</code>
+       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.ClosedLoopParams, io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder, io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder> 
@@ -3025,7 +3025,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.PoissonParams, io.grpc.benchmarks.proto.Control.PoissonParams.Builder, io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder> poissonBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.PoissonParams getPoisson() {
         if (poissonBuilder_ == null) {
@@ -3041,7 +3041,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
        */
       public Builder setPoisson(io.grpc.benchmarks.proto.Control.PoissonParams value) {
         if (poissonBuilder_ == null) {
@@ -3057,7 +3057,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
        */
       public Builder setPoisson(
           io.grpc.benchmarks.proto.Control.PoissonParams.Builder builderForValue) {
@@ -3071,7 +3071,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
        */
       public Builder mergePoisson(io.grpc.benchmarks.proto.Control.PoissonParams value) {
         if (poissonBuilder_ == null) {
@@ -3093,7 +3093,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
        */
       public Builder clearPoisson() {
         if (poissonBuilder_ == null) {
@@ -3112,13 +3112,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.PoissonParams.Builder getPoissonBuilder() {
         return getPoissonFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder getPoissonOrBuilder() {
         if ((loadCase_ == 2) && (poissonBuilder_ != null)) {
@@ -3131,7 +3131,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.PoissonParams poisson = 2;</code>
+       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.PoissonParams, io.grpc.benchmarks.proto.Control.PoissonParams.Builder, io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder> 
@@ -3155,7 +3155,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.UniformParams, io.grpc.benchmarks.proto.Control.UniformParams.Builder, io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder> uniformBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.UniformParams getUniform() {
         if (uniformBuilder_ == null) {
@@ -3171,7 +3171,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
        */
       public Builder setUniform(io.grpc.benchmarks.proto.Control.UniformParams value) {
         if (uniformBuilder_ == null) {
@@ -3187,7 +3187,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
        */
       public Builder setUniform(
           io.grpc.benchmarks.proto.Control.UniformParams.Builder builderForValue) {
@@ -3201,7 +3201,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
        */
       public Builder mergeUniform(io.grpc.benchmarks.proto.Control.UniformParams value) {
         if (uniformBuilder_ == null) {
@@ -3223,7 +3223,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
        */
       public Builder clearUniform() {
         if (uniformBuilder_ == null) {
@@ -3242,13 +3242,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.UniformParams.Builder getUniformBuilder() {
         return getUniformFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder getUniformOrBuilder() {
         if ((loadCase_ == 3) && (uniformBuilder_ != null)) {
@@ -3261,7 +3261,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.UniformParams uniform = 3;</code>
+       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.UniformParams, io.grpc.benchmarks.proto.Control.UniformParams.Builder, io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder> 
@@ -3285,7 +3285,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.DeterministicParams, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder, io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder> determBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
        */
       public io.grpc.benchmarks.proto.Control.DeterministicParams getDeterm() {
         if (determBuilder_ == null) {
@@ -3301,7 +3301,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
        */
       public Builder setDeterm(io.grpc.benchmarks.proto.Control.DeterministicParams value) {
         if (determBuilder_ == null) {
@@ -3317,7 +3317,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
        */
       public Builder setDeterm(
           io.grpc.benchmarks.proto.Control.DeterministicParams.Builder builderForValue) {
@@ -3331,7 +3331,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
        */
       public Builder mergeDeterm(io.grpc.benchmarks.proto.Control.DeterministicParams value) {
         if (determBuilder_ == null) {
@@ -3353,7 +3353,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
        */
       public Builder clearDeterm() {
         if (determBuilder_ == null) {
@@ -3372,13 +3372,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
        */
       public io.grpc.benchmarks.proto.Control.DeterministicParams.Builder getDetermBuilder() {
         return getDetermFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
        */
       public io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder getDetermOrBuilder() {
         if ((loadCase_ == 4) && (determBuilder_ != null)) {
@@ -3391,7 +3391,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.DeterministicParams determ = 4;</code>
+       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.DeterministicParams, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder, io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder> 
@@ -3415,7 +3415,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.ParetoParams, io.grpc.benchmarks.proto.Control.ParetoParams.Builder, io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder> paretoBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
        */
       public io.grpc.benchmarks.proto.Control.ParetoParams getPareto() {
         if (paretoBuilder_ == null) {
@@ -3431,7 +3431,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
        */
       public Builder setPareto(io.grpc.benchmarks.proto.Control.ParetoParams value) {
         if (paretoBuilder_ == null) {
@@ -3447,7 +3447,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
        */
       public Builder setPareto(
           io.grpc.benchmarks.proto.Control.ParetoParams.Builder builderForValue) {
@@ -3461,7 +3461,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
        */
       public Builder mergePareto(io.grpc.benchmarks.proto.Control.ParetoParams value) {
         if (paretoBuilder_ == null) {
@@ -3483,7 +3483,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
        */
       public Builder clearPareto() {
         if (paretoBuilder_ == null) {
@@ -3502,13 +3502,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
        */
       public io.grpc.benchmarks.proto.Control.ParetoParams.Builder getParetoBuilder() {
         return getParetoFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
        */
       public io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder getParetoOrBuilder() {
         if ((loadCase_ == 5) && (paretoBuilder_ != null)) {
@@ -3521,7 +3521,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ParetoParams pareto = 5;</code>
+       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.ParetoParams, io.grpc.benchmarks.proto.Control.ParetoParams.Builder, io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder> 
@@ -3552,10 +3552,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.LoadParams)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.LoadParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.LoadParams)
+    // @@protoc_insertion_point(class_scope:grpc.testing.LoadParams)
     private static final io.grpc.benchmarks.proto.Control.LoadParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.LoadParams();
@@ -3600,7 +3600,7 @@ public final class Control {
   }
 
   public interface SecurityParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.SecurityParams)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.SecurityParams)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -3619,7 +3619,7 @@ public final class Control {
         getServerHostOverrideBytes();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.SecurityParams}
+   * Protobuf type {@code grpc.testing.SecurityParams}
    *
    * <pre>
    * presence of SecurityParams implies use of TLS
@@ -3627,7 +3627,7 @@ public final class Control {
    */
   public  static final class SecurityParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.SecurityParams)
+      // @@protoc_insertion_point(message_implements:grpc.testing.SecurityParams)
       SecurityParamsOrBuilder {
     // Use SecurityParams.newBuilder() to construct.
     private SecurityParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -3687,12 +3687,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_SecurityParams_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_SecurityParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_SecurityParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_SecurityParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.SecurityParams.class, io.grpc.benchmarks.proto.Control.SecurityParams.Builder.class);
     }
@@ -3849,7 +3849,7 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.SecurityParams}
+     * Protobuf type {@code grpc.testing.SecurityParams}
      *
      * <pre>
      * presence of SecurityParams implies use of TLS
@@ -3857,16 +3857,16 @@ public final class Control {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.SecurityParams)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.SecurityParams)
         io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_SecurityParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_SecurityParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_SecurityParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_SecurityParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.SecurityParams.class, io.grpc.benchmarks.proto.Control.SecurityParams.Builder.class);
       }
@@ -3896,7 +3896,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_SecurityParams_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_SecurityParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.SecurityParams getDefaultInstanceForType() {
@@ -4068,10 +4068,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.SecurityParams)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.SecurityParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.SecurityParams)
+    // @@protoc_insertion_point(class_scope:grpc.testing.SecurityParams)
     private static final io.grpc.benchmarks.proto.Control.SecurityParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.SecurityParams();
@@ -4116,7 +4116,7 @@ public final class Control {
   }
 
   public interface ClientConfigOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ClientConfig)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ClientConfig)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -4155,24 +4155,24 @@ public final class Control {
         getServerTargetsBytes(int index);
 
     /**
-     * <code>optional .grpc.benchmarks.ClientType client_type = 2;</code>
+     * <code>optional .grpc.testing.ClientType client_type = 2;</code>
      */
     int getClientTypeValue();
     /**
-     * <code>optional .grpc.benchmarks.ClientType client_type = 2;</code>
+     * <code>optional .grpc.testing.ClientType client_type = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.ClientType getClientType();
 
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
      */
     boolean hasSecurityParams();
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
      */
     io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams();
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
      */
     io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder();
 
@@ -4206,16 +4206,16 @@ public final class Control {
     int getAsyncClientThreads();
 
     /**
-     * <code>optional .grpc.benchmarks.RpcType rpc_type = 8;</code>
+     * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
      */
     int getRpcTypeValue();
     /**
-     * <code>optional .grpc.benchmarks.RpcType rpc_type = 8;</code>
+     * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
      */
     io.grpc.benchmarks.proto.Control.RpcType getRpcType();
 
     /**
-     * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
@@ -4223,7 +4223,7 @@ public final class Control {
      */
     boolean hasLoadParams();
     /**
-     * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
@@ -4231,7 +4231,7 @@ public final class Control {
      */
     io.grpc.benchmarks.proto.Control.LoadParams getLoadParams();
     /**
-     * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
@@ -4240,28 +4240,28 @@ public final class Control {
     io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder getLoadParamsOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     boolean hasPayloadConfig();
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig();
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     boolean hasHistogramParams();
     /**
-     * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     io.grpc.benchmarks.proto.Stats.HistogramParams getHistogramParams();
     /**
-     * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder getHistogramParamsOrBuilder();
 
@@ -4296,11 +4296,11 @@ public final class Control {
     int getCoreLimit();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ClientConfig}
+   * Protobuf type {@code grpc.testing.ClientConfig}
    */
   public  static final class ClientConfig extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ClientConfig)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ClientConfig)
       ClientConfigOrBuilder {
     // Use ClientConfig.newBuilder() to construct.
     private ClientConfig(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -4475,12 +4475,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientConfig_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientConfig_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientConfig_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientConfig_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.ClientConfig.class, io.grpc.benchmarks.proto.Control.ClientConfig.Builder.class);
     }
@@ -4534,13 +4534,13 @@ public final class Control {
     public static final int CLIENT_TYPE_FIELD_NUMBER = 2;
     private int clientType_;
     /**
-     * <code>optional .grpc.benchmarks.ClientType client_type = 2;</code>
+     * <code>optional .grpc.testing.ClientType client_type = 2;</code>
      */
     public int getClientTypeValue() {
       return clientType_;
     }
     /**
-     * <code>optional .grpc.benchmarks.ClientType client_type = 2;</code>
+     * <code>optional .grpc.testing.ClientType client_type = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClientType getClientType() {
       io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.valueOf(clientType_);
@@ -4550,19 +4550,19 @@ public final class Control {
     public static final int SECURITY_PARAMS_FIELD_NUMBER = 3;
     private io.grpc.benchmarks.proto.Control.SecurityParams securityParams_;
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
      */
     public boolean hasSecurityParams() {
       return securityParams_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
      */
     public io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams() {
       return securityParams_ == null ? io.grpc.benchmarks.proto.Control.SecurityParams.getDefaultInstance() : securityParams_;
     }
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
      */
     public io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder() {
       return getSecurityParams();
@@ -4612,13 +4612,13 @@ public final class Control {
     public static final int RPC_TYPE_FIELD_NUMBER = 8;
     private int rpcType_;
     /**
-     * <code>optional .grpc.benchmarks.RpcType rpc_type = 8;</code>
+     * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
      */
     public int getRpcTypeValue() {
       return rpcType_;
     }
     /**
-     * <code>optional .grpc.benchmarks.RpcType rpc_type = 8;</code>
+     * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
      */
     public io.grpc.benchmarks.proto.Control.RpcType getRpcType() {
       io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.valueOf(rpcType_);
@@ -4628,7 +4628,7 @@ public final class Control {
     public static final int LOAD_PARAMS_FIELD_NUMBER = 10;
     private io.grpc.benchmarks.proto.Control.LoadParams loadParams_;
     /**
-     * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
@@ -4638,7 +4638,7 @@ public final class Control {
       return loadParams_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
@@ -4648,7 +4648,7 @@ public final class Control {
       return loadParams_ == null ? io.grpc.benchmarks.proto.Control.LoadParams.getDefaultInstance() : loadParams_;
     }
     /**
-     * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
@@ -4661,19 +4661,19 @@ public final class Control {
     public static final int PAYLOAD_CONFIG_FIELD_NUMBER = 11;
     private io.grpc.benchmarks.proto.Payloads.PayloadConfig payloadConfig_;
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     public boolean hasPayloadConfig() {
       return payloadConfig_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig() {
       return payloadConfig_ == null ? io.grpc.benchmarks.proto.Payloads.PayloadConfig.getDefaultInstance() : payloadConfig_;
     }
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder() {
       return getPayloadConfig();
@@ -4682,19 +4682,19 @@ public final class Control {
     public static final int HISTOGRAM_PARAMS_FIELD_NUMBER = 12;
     private io.grpc.benchmarks.proto.Stats.HistogramParams histogramParams_;
     /**
-     * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     public boolean hasHistogramParams() {
       return histogramParams_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     public io.grpc.benchmarks.proto.Stats.HistogramParams getHistogramParams() {
       return histogramParams_ == null ? io.grpc.benchmarks.proto.Stats.HistogramParams.getDefaultInstance() : histogramParams_;
     }
     /**
-     * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     public io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder getHistogramParamsOrBuilder() {
       return getHistogramParams();
@@ -4943,20 +4943,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ClientConfig}
+     * Protobuf type {@code grpc.testing.ClientConfig}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ClientConfig)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ClientConfig)
         io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientConfig_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientConfig_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientConfig_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientConfig_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.ClientConfig.class, io.grpc.benchmarks.proto.Control.ClientConfig.Builder.class);
       }
@@ -5022,7 +5022,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientConfig_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientConfig_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.ClientConfig getDefaultInstanceForType() {
@@ -5302,13 +5302,13 @@ public final class Control {
 
       private int clientType_ = 0;
       /**
-       * <code>optional .grpc.benchmarks.ClientType client_type = 2;</code>
+       * <code>optional .grpc.testing.ClientType client_type = 2;</code>
        */
       public int getClientTypeValue() {
         return clientType_;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientType client_type = 2;</code>
+       * <code>optional .grpc.testing.ClientType client_type = 2;</code>
        */
       public Builder setClientTypeValue(int value) {
         clientType_ = value;
@@ -5316,14 +5316,14 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientType client_type = 2;</code>
+       * <code>optional .grpc.testing.ClientType client_type = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClientType getClientType() {
         io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.valueOf(clientType_);
         return result == null ? io.grpc.benchmarks.proto.Control.ClientType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientType client_type = 2;</code>
+       * <code>optional .grpc.testing.ClientType client_type = 2;</code>
        */
       public Builder setClientType(io.grpc.benchmarks.proto.Control.ClientType value) {
         if (value == null) {
@@ -5335,7 +5335,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientType client_type = 2;</code>
+       * <code>optional .grpc.testing.ClientType client_type = 2;</code>
        */
       public Builder clearClientType() {
         
@@ -5348,13 +5348,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> securityParamsBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
        */
       public boolean hasSecurityParams() {
         return securityParamsBuilder_ != null || securityParams_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams() {
         if (securityParamsBuilder_ == null) {
@@ -5364,7 +5364,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
        */
       public Builder setSecurityParams(io.grpc.benchmarks.proto.Control.SecurityParams value) {
         if (securityParamsBuilder_ == null) {
@@ -5380,7 +5380,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
        */
       public Builder setSecurityParams(
           io.grpc.benchmarks.proto.Control.SecurityParams.Builder builderForValue) {
@@ -5394,7 +5394,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
        */
       public Builder mergeSecurityParams(io.grpc.benchmarks.proto.Control.SecurityParams value) {
         if (securityParamsBuilder_ == null) {
@@ -5412,7 +5412,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
        */
       public Builder clearSecurityParams() {
         if (securityParamsBuilder_ == null) {
@@ -5426,7 +5426,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParams.Builder getSecurityParamsBuilder() {
         
@@ -5434,7 +5434,7 @@ public final class Control {
         return getSecurityParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder() {
         if (securityParamsBuilder_ != null) {
@@ -5445,7 +5445,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 3;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> 
@@ -5583,13 +5583,13 @@ public final class Control {
 
       private int rpcType_ = 0;
       /**
-       * <code>optional .grpc.benchmarks.RpcType rpc_type = 8;</code>
+       * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
        */
       public int getRpcTypeValue() {
         return rpcType_;
       }
       /**
-       * <code>optional .grpc.benchmarks.RpcType rpc_type = 8;</code>
+       * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
        */
       public Builder setRpcTypeValue(int value) {
         rpcType_ = value;
@@ -5597,14 +5597,14 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.RpcType rpc_type = 8;</code>
+       * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
        */
       public io.grpc.benchmarks.proto.Control.RpcType getRpcType() {
         io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.valueOf(rpcType_);
         return result == null ? io.grpc.benchmarks.proto.Control.RpcType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.benchmarks.RpcType rpc_type = 8;</code>
+       * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
        */
       public Builder setRpcType(io.grpc.benchmarks.proto.Control.RpcType value) {
         if (value == null) {
@@ -5616,7 +5616,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.RpcType rpc_type = 8;</code>
+       * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
        */
       public Builder clearRpcType() {
         
@@ -5629,7 +5629,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.LoadParams, io.grpc.benchmarks.proto.Control.LoadParams.Builder, io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder> loadParamsBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
@@ -5639,7 +5639,7 @@ public final class Control {
         return loadParamsBuilder_ != null || loadParams_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
@@ -5653,7 +5653,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
@@ -5673,7 +5673,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
@@ -5691,7 +5691,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
@@ -5713,7 +5713,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
@@ -5731,7 +5731,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
@@ -5743,7 +5743,7 @@ public final class Control {
         return getLoadParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
@@ -5758,7 +5758,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.LoadParams load_params = 10;</code>
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
@@ -5782,13 +5782,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> payloadConfigBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public boolean hasPayloadConfig() {
         return payloadConfigBuilder_ != null || payloadConfig_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig() {
         if (payloadConfigBuilder_ == null) {
@@ -5798,7 +5798,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public Builder setPayloadConfig(io.grpc.benchmarks.proto.Payloads.PayloadConfig value) {
         if (payloadConfigBuilder_ == null) {
@@ -5814,7 +5814,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public Builder setPayloadConfig(
           io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder builderForValue) {
@@ -5828,7 +5828,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public Builder mergePayloadConfig(io.grpc.benchmarks.proto.Payloads.PayloadConfig value) {
         if (payloadConfigBuilder_ == null) {
@@ -5846,7 +5846,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public Builder clearPayloadConfig() {
         if (payloadConfigBuilder_ == null) {
@@ -5860,7 +5860,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder getPayloadConfigBuilder() {
         
@@ -5868,7 +5868,7 @@ public final class Control {
         return getPayloadConfigFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder() {
         if (payloadConfigBuilder_ != null) {
@@ -5879,7 +5879,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 11;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> 
@@ -5899,13 +5899,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Stats.HistogramParams, io.grpc.benchmarks.proto.Stats.HistogramParams.Builder, io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder> histogramParamsBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public boolean hasHistogramParams() {
         return histogramParamsBuilder_ != null || histogramParams_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramParams getHistogramParams() {
         if (histogramParamsBuilder_ == null) {
@@ -5915,7 +5915,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public Builder setHistogramParams(io.grpc.benchmarks.proto.Stats.HistogramParams value) {
         if (histogramParamsBuilder_ == null) {
@@ -5931,7 +5931,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public Builder setHistogramParams(
           io.grpc.benchmarks.proto.Stats.HistogramParams.Builder builderForValue) {
@@ -5945,7 +5945,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public Builder mergeHistogramParams(io.grpc.benchmarks.proto.Stats.HistogramParams value) {
         if (histogramParamsBuilder_ == null) {
@@ -5963,7 +5963,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public Builder clearHistogramParams() {
         if (histogramParamsBuilder_ == null) {
@@ -5977,7 +5977,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramParams.Builder getHistogramParamsBuilder() {
         
@@ -5985,7 +5985,7 @@ public final class Control {
         return getHistogramParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder getHistogramParamsOrBuilder() {
         if (histogramParamsBuilder_ != null) {
@@ -5996,7 +5996,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.HistogramParams histogram_params = 12;</code>
+       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Stats.HistogramParams, io.grpc.benchmarks.proto.Stats.HistogramParams.Builder, io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder> 
@@ -6142,10 +6142,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ClientConfig)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ClientConfig)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ClientConfig)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ClientConfig)
     private static final io.grpc.benchmarks.proto.Control.ClientConfig DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ClientConfig();
@@ -6190,28 +6190,28 @@ public final class Control {
   }
 
   public interface ClientStatusOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ClientStatus)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ClientStatus)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
      */
     boolean hasStats();
     /**
-     * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.ClientStats getStats();
     /**
-     * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder getStatsOrBuilder();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ClientStatus}
+   * Protobuf type {@code grpc.testing.ClientStatus}
    */
   public  static final class ClientStatus extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ClientStatus)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ClientStatus)
       ClientStatusOrBuilder {
     // Use ClientStatus.newBuilder() to construct.
     private ClientStatus(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -6271,12 +6271,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientStatus_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientStatus_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientStatus_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientStatus_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.ClientStatus.class, io.grpc.benchmarks.proto.Control.ClientStatus.Builder.class);
     }
@@ -6284,19 +6284,19 @@ public final class Control {
     public static final int STATS_FIELD_NUMBER = 1;
     private io.grpc.benchmarks.proto.Stats.ClientStats stats_;
     /**
-     * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
      */
     public boolean hasStats() {
       return stats_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.ClientStats getStats() {
       return stats_ == null ? io.grpc.benchmarks.proto.Stats.ClientStats.getDefaultInstance() : stats_;
     }
     /**
-     * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder getStatsOrBuilder() {
       return getStats();
@@ -6405,20 +6405,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ClientStatus}
+     * Protobuf type {@code grpc.testing.ClientStatus}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ClientStatus)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ClientStatus)
         io.grpc.benchmarks.proto.Control.ClientStatusOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientStatus_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientStatus_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientStatus_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientStatus_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.ClientStatus.class, io.grpc.benchmarks.proto.Control.ClientStatus.Builder.class);
       }
@@ -6450,7 +6450,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientStatus_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientStatus_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.ClientStatus getDefaultInstanceForType() {
@@ -6520,13 +6520,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Stats.ClientStats, io.grpc.benchmarks.proto.Stats.ClientStats.Builder, io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> statsBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
        */
       public boolean hasStats() {
         return statsBuilder_ != null || stats_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ClientStats getStats() {
         if (statsBuilder_ == null) {
@@ -6536,7 +6536,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
        */
       public Builder setStats(io.grpc.benchmarks.proto.Stats.ClientStats value) {
         if (statsBuilder_ == null) {
@@ -6552,7 +6552,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
        */
       public Builder setStats(
           io.grpc.benchmarks.proto.Stats.ClientStats.Builder builderForValue) {
@@ -6566,7 +6566,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
        */
       public Builder mergeStats(io.grpc.benchmarks.proto.Stats.ClientStats value) {
         if (statsBuilder_ == null) {
@@ -6584,7 +6584,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
        */
       public Builder clearStats() {
         if (statsBuilder_ == null) {
@@ -6598,7 +6598,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ClientStats.Builder getStatsBuilder() {
         
@@ -6606,7 +6606,7 @@ public final class Control {
         return getStatsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder getStatsOrBuilder() {
         if (statsBuilder_ != null) {
@@ -6617,7 +6617,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientStats stats = 1;</code>
+       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Stats.ClientStats, io.grpc.benchmarks.proto.Stats.ClientStats.Builder, io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> 
@@ -6643,10 +6643,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ClientStatus)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ClientStatus)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ClientStatus)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ClientStatus)
     private static final io.grpc.benchmarks.proto.Control.ClientStatus DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ClientStatus();
@@ -6691,7 +6691,7 @@ public final class Control {
   }
 
   public interface MarkOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.Mark)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.Mark)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -6704,7 +6704,7 @@ public final class Control {
     boolean getReset();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.Mark}
+   * Protobuf type {@code grpc.testing.Mark}
    *
    * <pre>
    * Request current stats
@@ -6712,7 +6712,7 @@ public final class Control {
    */
   public  static final class Mark extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.Mark)
+      // @@protoc_insertion_point(message_implements:grpc.testing.Mark)
       MarkOrBuilder {
     // Use Mark.newBuilder() to construct.
     private Mark(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -6765,12 +6765,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_Mark_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Mark_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_Mark_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Mark_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.Mark.class, io.grpc.benchmarks.proto.Control.Mark.Builder.class);
     }
@@ -6891,7 +6891,7 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.Mark}
+     * Protobuf type {@code grpc.testing.Mark}
      *
      * <pre>
      * Request current stats
@@ -6899,16 +6899,16 @@ public final class Control {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.Mark)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.Mark)
         io.grpc.benchmarks.proto.Control.MarkOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_Mark_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Mark_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_Mark_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Mark_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.Mark.class, io.grpc.benchmarks.proto.Control.Mark.Builder.class);
       }
@@ -6936,7 +6936,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_Mark_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Mark_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.Mark getDefaultInstanceForType() {
@@ -7046,10 +7046,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.Mark)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.Mark)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.Mark)
+    // @@protoc_insertion_point(class_scope:grpc.testing.Mark)
     private static final io.grpc.benchmarks.proto.Control.Mark DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.Mark();
@@ -7094,35 +7094,35 @@ public final class Control {
   }
 
   public interface ClientArgsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ClientArgs)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ClientArgs)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+     * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ClientConfig getSetup();
     /**
-     * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+     * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder getSetupOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+     * <code>optional .grpc.testing.Mark mark = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.Mark getMark();
     /**
-     * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+     * <code>optional .grpc.testing.Mark mark = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder();
 
     public io.grpc.benchmarks.proto.Control.ClientArgs.ArgtypeCase getArgtypeCase();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ClientArgs}
+   * Protobuf type {@code grpc.testing.ClientArgs}
    */
   public  static final class ClientArgs extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ClientArgs)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ClientArgs)
       ClientArgsOrBuilder {
     // Use ClientArgs.newBuilder() to construct.
     private ClientArgs(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -7197,12 +7197,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientArgs_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientArgs_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientArgs_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientArgs_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.ClientArgs.class, io.grpc.benchmarks.proto.Control.ClientArgs.Builder.class);
     }
@@ -7240,7 +7240,7 @@ public final class Control {
 
     public static final int SETUP_FIELD_NUMBER = 1;
     /**
-     * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+     * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClientConfig getSetup() {
       if (argtypeCase_ == 1) {
@@ -7249,7 +7249,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.ClientConfig.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+     * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder getSetupOrBuilder() {
       if (argtypeCase_ == 1) {
@@ -7260,7 +7260,7 @@ public final class Control {
 
     public static final int MARK_FIELD_NUMBER = 2;
     /**
-     * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+     * <code>optional .grpc.testing.Mark mark = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.Mark getMark() {
       if (argtypeCase_ == 2) {
@@ -7269,7 +7269,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.Mark.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+     * <code>optional .grpc.testing.Mark mark = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder() {
       if (argtypeCase_ == 2) {
@@ -7388,20 +7388,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ClientArgs}
+     * Protobuf type {@code grpc.testing.ClientArgs}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ClientArgs)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ClientArgs)
         io.grpc.benchmarks.proto.Control.ClientArgsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientArgs_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientArgs_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientArgs_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientArgs_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.ClientArgs.class, io.grpc.benchmarks.proto.Control.ClientArgs.Builder.class);
       }
@@ -7429,7 +7429,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ClientArgs_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientArgs_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.ClientArgs getDefaultInstanceForType() {
@@ -7533,7 +7533,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.ClientConfig, io.grpc.benchmarks.proto.Control.ClientConfig.Builder, io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder> setupBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClientConfig getSetup() {
         if (setupBuilder_ == null) {
@@ -7549,7 +7549,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
        */
       public Builder setSetup(io.grpc.benchmarks.proto.Control.ClientConfig value) {
         if (setupBuilder_ == null) {
@@ -7565,7 +7565,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
        */
       public Builder setSetup(
           io.grpc.benchmarks.proto.Control.ClientConfig.Builder builderForValue) {
@@ -7579,7 +7579,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
        */
       public Builder mergeSetup(io.grpc.benchmarks.proto.Control.ClientConfig value) {
         if (setupBuilder_ == null) {
@@ -7601,7 +7601,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
        */
       public Builder clearSetup() {
         if (setupBuilder_ == null) {
@@ -7620,13 +7620,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClientConfig.Builder getSetupBuilder() {
         return getSetupFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder getSetupOrBuilder() {
         if ((argtypeCase_ == 1) && (setupBuilder_ != null)) {
@@ -7639,7 +7639,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ClientConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.ClientConfig, io.grpc.benchmarks.proto.Control.ClientConfig.Builder, io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder> 
@@ -7663,7 +7663,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> markBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.Mark getMark() {
         if (markBuilder_ == null) {
@@ -7679,7 +7679,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public Builder setMark(io.grpc.benchmarks.proto.Control.Mark value) {
         if (markBuilder_ == null) {
@@ -7695,7 +7695,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public Builder setMark(
           io.grpc.benchmarks.proto.Control.Mark.Builder builderForValue) {
@@ -7709,7 +7709,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public Builder mergeMark(io.grpc.benchmarks.proto.Control.Mark value) {
         if (markBuilder_ == null) {
@@ -7731,7 +7731,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public Builder clearMark() {
         if (markBuilder_ == null) {
@@ -7750,13 +7750,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.Mark.Builder getMarkBuilder() {
         return getMarkFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder() {
         if ((argtypeCase_ == 2) && (markBuilder_ != null)) {
@@ -7769,7 +7769,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> 
@@ -7800,10 +7800,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ClientArgs)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ClientArgs)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ClientArgs)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ClientArgs)
     private static final io.grpc.benchmarks.proto.Control.ClientArgs DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ClientArgs();
@@ -7848,28 +7848,28 @@ public final class Control {
   }
 
   public interface ServerConfigOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ServerConfig)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ServerConfig)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.ServerType server_type = 1;</code>
+     * <code>optional .grpc.testing.ServerType server_type = 1;</code>
      */
     int getServerTypeValue();
     /**
-     * <code>optional .grpc.benchmarks.ServerType server_type = 1;</code>
+     * <code>optional .grpc.testing.ServerType server_type = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ServerType getServerType();
 
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
      */
     boolean hasSecurityParams();
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams();
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder();
 
@@ -7901,7 +7901,7 @@ public final class Control {
     int getCoreLimit();
 
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      *
      * <pre>
      * payload config, used in generic server
@@ -7909,7 +7909,7 @@ public final class Control {
      */
     boolean hasPayloadConfig();
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      *
      * <pre>
      * payload config, used in generic server
@@ -7917,7 +7917,7 @@ public final class Control {
      */
     io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig();
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      *
      * <pre>
      * payload config, used in generic server
@@ -7951,11 +7951,11 @@ public final class Control {
     int getCoreList(int index);
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ServerConfig}
+   * Protobuf type {@code grpc.testing.ServerConfig}
    */
   public  static final class ServerConfig extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ServerConfig)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ServerConfig)
       ServerConfigOrBuilder {
     // Use ServerConfig.newBuilder() to construct.
     private ServerConfig(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -8078,12 +8078,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerConfig_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerConfig_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerConfig_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerConfig_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.ServerConfig.class, io.grpc.benchmarks.proto.Control.ServerConfig.Builder.class);
     }
@@ -8092,13 +8092,13 @@ public final class Control {
     public static final int SERVER_TYPE_FIELD_NUMBER = 1;
     private int serverType_;
     /**
-     * <code>optional .grpc.benchmarks.ServerType server_type = 1;</code>
+     * <code>optional .grpc.testing.ServerType server_type = 1;</code>
      */
     public int getServerTypeValue() {
       return serverType_;
     }
     /**
-     * <code>optional .grpc.benchmarks.ServerType server_type = 1;</code>
+     * <code>optional .grpc.testing.ServerType server_type = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ServerType getServerType() {
       io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.valueOf(serverType_);
@@ -8108,19 +8108,19 @@ public final class Control {
     public static final int SECURITY_PARAMS_FIELD_NUMBER = 2;
     private io.grpc.benchmarks.proto.Control.SecurityParams securityParams_;
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
      */
     public boolean hasSecurityParams() {
       return securityParams_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams() {
       return securityParams_ == null ? io.grpc.benchmarks.proto.Control.SecurityParams.getDefaultInstance() : securityParams_;
     }
     /**
-     * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder() {
       return getSecurityParams();
@@ -8168,7 +8168,7 @@ public final class Control {
     public static final int PAYLOAD_CONFIG_FIELD_NUMBER = 9;
     private io.grpc.benchmarks.proto.Payloads.PayloadConfig payloadConfig_;
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      *
      * <pre>
      * payload config, used in generic server
@@ -8178,7 +8178,7 @@ public final class Control {
       return payloadConfig_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      *
      * <pre>
      * payload config, used in generic server
@@ -8188,7 +8188,7 @@ public final class Control {
       return payloadConfig_ == null ? io.grpc.benchmarks.proto.Payloads.PayloadConfig.getDefaultInstance() : payloadConfig_;
     }
     /**
-     * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      *
      * <pre>
      * payload config, used in generic server
@@ -8393,20 +8393,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ServerConfig}
+     * Protobuf type {@code grpc.testing.ServerConfig}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ServerConfig)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ServerConfig)
         io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerConfig_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerConfig_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerConfig_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerConfig_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.ServerConfig.class, io.grpc.benchmarks.proto.Control.ServerConfig.Builder.class);
       }
@@ -8454,7 +8454,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerConfig_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerConfig_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.ServerConfig getDefaultInstanceForType() {
@@ -8565,13 +8565,13 @@ public final class Control {
 
       private int serverType_ = 0;
       /**
-       * <code>optional .grpc.benchmarks.ServerType server_type = 1;</code>
+       * <code>optional .grpc.testing.ServerType server_type = 1;</code>
        */
       public int getServerTypeValue() {
         return serverType_;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerType server_type = 1;</code>
+       * <code>optional .grpc.testing.ServerType server_type = 1;</code>
        */
       public Builder setServerTypeValue(int value) {
         serverType_ = value;
@@ -8579,14 +8579,14 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerType server_type = 1;</code>
+       * <code>optional .grpc.testing.ServerType server_type = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ServerType getServerType() {
         io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.valueOf(serverType_);
         return result == null ? io.grpc.benchmarks.proto.Control.ServerType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerType server_type = 1;</code>
+       * <code>optional .grpc.testing.ServerType server_type = 1;</code>
        */
       public Builder setServerType(io.grpc.benchmarks.proto.Control.ServerType value) {
         if (value == null) {
@@ -8598,7 +8598,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerType server_type = 1;</code>
+       * <code>optional .grpc.testing.ServerType server_type = 1;</code>
        */
       public Builder clearServerType() {
         
@@ -8611,13 +8611,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> securityParamsBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
        */
       public boolean hasSecurityParams() {
         return securityParamsBuilder_ != null || securityParams_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams() {
         if (securityParamsBuilder_ == null) {
@@ -8627,7 +8627,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
        */
       public Builder setSecurityParams(io.grpc.benchmarks.proto.Control.SecurityParams value) {
         if (securityParamsBuilder_ == null) {
@@ -8643,7 +8643,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
        */
       public Builder setSecurityParams(
           io.grpc.benchmarks.proto.Control.SecurityParams.Builder builderForValue) {
@@ -8657,7 +8657,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
        */
       public Builder mergeSecurityParams(io.grpc.benchmarks.proto.Control.SecurityParams value) {
         if (securityParamsBuilder_ == null) {
@@ -8675,7 +8675,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
        */
       public Builder clearSecurityParams() {
         if (securityParamsBuilder_ == null) {
@@ -8689,7 +8689,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParams.Builder getSecurityParamsBuilder() {
         
@@ -8697,7 +8697,7 @@ public final class Control {
         return getSecurityParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder() {
         if (securityParamsBuilder_ != null) {
@@ -8708,7 +8708,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.SecurityParams security_params = 2;</code>
+       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> 
@@ -8842,7 +8842,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> payloadConfigBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        *
        * <pre>
        * payload config, used in generic server
@@ -8852,7 +8852,7 @@ public final class Control {
         return payloadConfigBuilder_ != null || payloadConfig_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        *
        * <pre>
        * payload config, used in generic server
@@ -8866,7 +8866,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        *
        * <pre>
        * payload config, used in generic server
@@ -8886,7 +8886,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        *
        * <pre>
        * payload config, used in generic server
@@ -8904,7 +8904,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        *
        * <pre>
        * payload config, used in generic server
@@ -8926,7 +8926,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        *
        * <pre>
        * payload config, used in generic server
@@ -8944,7 +8944,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        *
        * <pre>
        * payload config, used in generic server
@@ -8956,7 +8956,7 @@ public final class Control {
         return getPayloadConfigFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        *
        * <pre>
        * payload config, used in generic server
@@ -8971,7 +8971,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadConfig payload_config = 9;</code>
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        *
        * <pre>
        * payload config, used in generic server
@@ -9095,10 +9095,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ServerConfig)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ServerConfig)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ServerConfig)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ServerConfig)
     private static final io.grpc.benchmarks.proto.Control.ServerConfig DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ServerConfig();
@@ -9143,35 +9143,35 @@ public final class Control {
   }
 
   public interface ServerArgsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ServerArgs)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ServerArgs)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+     * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ServerConfig getSetup();
     /**
-     * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+     * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder getSetupOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+     * <code>optional .grpc.testing.Mark mark = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.Mark getMark();
     /**
-     * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+     * <code>optional .grpc.testing.Mark mark = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder();
 
     public io.grpc.benchmarks.proto.Control.ServerArgs.ArgtypeCase getArgtypeCase();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ServerArgs}
+   * Protobuf type {@code grpc.testing.ServerArgs}
    */
   public  static final class ServerArgs extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ServerArgs)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ServerArgs)
       ServerArgsOrBuilder {
     // Use ServerArgs.newBuilder() to construct.
     private ServerArgs(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -9246,12 +9246,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerArgs_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerArgs_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerArgs_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerArgs_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.ServerArgs.class, io.grpc.benchmarks.proto.Control.ServerArgs.Builder.class);
     }
@@ -9289,7 +9289,7 @@ public final class Control {
 
     public static final int SETUP_FIELD_NUMBER = 1;
     /**
-     * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+     * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ServerConfig getSetup() {
       if (argtypeCase_ == 1) {
@@ -9298,7 +9298,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.ServerConfig.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+     * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder getSetupOrBuilder() {
       if (argtypeCase_ == 1) {
@@ -9309,7 +9309,7 @@ public final class Control {
 
     public static final int MARK_FIELD_NUMBER = 2;
     /**
-     * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+     * <code>optional .grpc.testing.Mark mark = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.Mark getMark() {
       if (argtypeCase_ == 2) {
@@ -9318,7 +9318,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.Mark.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+     * <code>optional .grpc.testing.Mark mark = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder() {
       if (argtypeCase_ == 2) {
@@ -9437,20 +9437,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ServerArgs}
+     * Protobuf type {@code grpc.testing.ServerArgs}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ServerArgs)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ServerArgs)
         io.grpc.benchmarks.proto.Control.ServerArgsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerArgs_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerArgs_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerArgs_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerArgs_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.ServerArgs.class, io.grpc.benchmarks.proto.Control.ServerArgs.Builder.class);
       }
@@ -9478,7 +9478,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerArgs_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerArgs_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.ServerArgs getDefaultInstanceForType() {
@@ -9582,7 +9582,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.ServerConfig, io.grpc.benchmarks.proto.Control.ServerConfig.Builder, io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder> setupBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ServerConfig getSetup() {
         if (setupBuilder_ == null) {
@@ -9598,7 +9598,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
        */
       public Builder setSetup(io.grpc.benchmarks.proto.Control.ServerConfig value) {
         if (setupBuilder_ == null) {
@@ -9614,7 +9614,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
        */
       public Builder setSetup(
           io.grpc.benchmarks.proto.Control.ServerConfig.Builder builderForValue) {
@@ -9628,7 +9628,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
        */
       public Builder mergeSetup(io.grpc.benchmarks.proto.Control.ServerConfig value) {
         if (setupBuilder_ == null) {
@@ -9650,7 +9650,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
        */
       public Builder clearSetup() {
         if (setupBuilder_ == null) {
@@ -9669,13 +9669,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ServerConfig.Builder getSetupBuilder() {
         return getSetupFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder getSetupOrBuilder() {
         if ((argtypeCase_ == 1) && (setupBuilder_ != null)) {
@@ -9688,7 +9688,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerConfig setup = 1;</code>
+       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.ServerConfig, io.grpc.benchmarks.proto.Control.ServerConfig.Builder, io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder> 
@@ -9712,7 +9712,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> markBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.Mark getMark() {
         if (markBuilder_ == null) {
@@ -9728,7 +9728,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public Builder setMark(io.grpc.benchmarks.proto.Control.Mark value) {
         if (markBuilder_ == null) {
@@ -9744,7 +9744,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public Builder setMark(
           io.grpc.benchmarks.proto.Control.Mark.Builder builderForValue) {
@@ -9758,7 +9758,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public Builder mergeMark(io.grpc.benchmarks.proto.Control.Mark value) {
         if (markBuilder_ == null) {
@@ -9780,7 +9780,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public Builder clearMark() {
         if (markBuilder_ == null) {
@@ -9799,13 +9799,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.Mark.Builder getMarkBuilder() {
         return getMarkFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder() {
         if ((argtypeCase_ == 2) && (markBuilder_ != null)) {
@@ -9818,7 +9818,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Mark mark = 2;</code>
+       * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> 
@@ -9849,10 +9849,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ServerArgs)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ServerArgs)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ServerArgs)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ServerArgs)
     private static final io.grpc.benchmarks.proto.Control.ServerArgs DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ServerArgs();
@@ -9897,19 +9897,19 @@ public final class Control {
   }
 
   public interface ServerStatusOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ServerStatus)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ServerStatus)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
      */
     boolean hasStats();
     /**
-     * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.ServerStats getStats();
     /**
-     * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder getStatsOrBuilder();
 
@@ -9932,11 +9932,11 @@ public final class Control {
     int getCores();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ServerStatus}
+   * Protobuf type {@code grpc.testing.ServerStatus}
    */
   public  static final class ServerStatus extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ServerStatus)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ServerStatus)
       ServerStatusOrBuilder {
     // Use ServerStatus.newBuilder() to construct.
     private ServerStatus(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -10008,12 +10008,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerStatus_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerStatus_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerStatus_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerStatus_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.ServerStatus.class, io.grpc.benchmarks.proto.Control.ServerStatus.Builder.class);
     }
@@ -10021,19 +10021,19 @@ public final class Control {
     public static final int STATS_FIELD_NUMBER = 1;
     private io.grpc.benchmarks.proto.Stats.ServerStats stats_;
     /**
-     * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
      */
     public boolean hasStats() {
       return stats_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.ServerStats getStats() {
       return stats_ == null ? io.grpc.benchmarks.proto.Stats.ServerStats.getDefaultInstance() : stats_;
     }
     /**
-     * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder getStatsOrBuilder() {
       return getStats();
@@ -10182,20 +10182,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ServerStatus}
+     * Protobuf type {@code grpc.testing.ServerStatus}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ServerStatus)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ServerStatus)
         io.grpc.benchmarks.proto.Control.ServerStatusOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerStatus_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerStatus_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerStatus_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerStatus_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.ServerStatus.class, io.grpc.benchmarks.proto.Control.ServerStatus.Builder.class);
       }
@@ -10231,7 +10231,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_ServerStatus_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerStatus_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.ServerStatus getDefaultInstanceForType() {
@@ -10309,13 +10309,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Stats.ServerStats, io.grpc.benchmarks.proto.Stats.ServerStats.Builder, io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> statsBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
        */
       public boolean hasStats() {
         return statsBuilder_ != null || stats_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ServerStats getStats() {
         if (statsBuilder_ == null) {
@@ -10325,7 +10325,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
        */
       public Builder setStats(io.grpc.benchmarks.proto.Stats.ServerStats value) {
         if (statsBuilder_ == null) {
@@ -10341,7 +10341,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
        */
       public Builder setStats(
           io.grpc.benchmarks.proto.Stats.ServerStats.Builder builderForValue) {
@@ -10355,7 +10355,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
        */
       public Builder mergeStats(io.grpc.benchmarks.proto.Stats.ServerStats value) {
         if (statsBuilder_ == null) {
@@ -10373,7 +10373,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
        */
       public Builder clearStats() {
         if (statsBuilder_ == null) {
@@ -10387,7 +10387,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ServerStats.Builder getStatsBuilder() {
         
@@ -10395,7 +10395,7 @@ public final class Control {
         return getStatsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder getStatsOrBuilder() {
         if (statsBuilder_ != null) {
@@ -10406,7 +10406,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ServerStats stats = 1;</code>
+       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Stats.ServerStats, io.grpc.benchmarks.proto.Stats.ServerStats.Builder, io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> 
@@ -10508,10 +10508,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ServerStatus)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ServerStatus)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ServerStatus)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ServerStatus)
     private static final io.grpc.benchmarks.proto.Control.ServerStatus DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ServerStatus();
@@ -10556,15 +10556,15 @@ public final class Control {
   }
 
   public interface CoreRequestOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.CoreRequest)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.CoreRequest)
       com.google.protobuf.MessageOrBuilder {
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.CoreRequest}
+   * Protobuf type {@code grpc.testing.CoreRequest}
    */
   public  static final class CoreRequest extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.CoreRequest)
+      // @@protoc_insertion_point(message_implements:grpc.testing.CoreRequest)
       CoreRequestOrBuilder {
     // Use CoreRequest.newBuilder() to construct.
     private CoreRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -10610,12 +10610,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_CoreRequest_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreRequest_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_CoreRequest_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.CoreRequest.class, io.grpc.benchmarks.proto.Control.CoreRequest.Builder.class);
     }
@@ -10716,20 +10716,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.CoreRequest}
+     * Protobuf type {@code grpc.testing.CoreRequest}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.CoreRequest)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.CoreRequest)
         io.grpc.benchmarks.proto.Control.CoreRequestOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_CoreRequest_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreRequest_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_CoreRequest_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreRequest_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.CoreRequest.class, io.grpc.benchmarks.proto.Control.CoreRequest.Builder.class);
       }
@@ -10755,7 +10755,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_CoreRequest_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreRequest_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.CoreRequest getDefaultInstanceForType() {
@@ -10823,10 +10823,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.CoreRequest)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.CoreRequest)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.CoreRequest)
+    // @@protoc_insertion_point(class_scope:grpc.testing.CoreRequest)
     private static final io.grpc.benchmarks.proto.Control.CoreRequest DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.CoreRequest();
@@ -10871,7 +10871,7 @@ public final class Control {
   }
 
   public interface CoreResponseOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.CoreResponse)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.CoreResponse)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -10884,11 +10884,11 @@ public final class Control {
     int getCores();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.CoreResponse}
+   * Protobuf type {@code grpc.testing.CoreResponse}
    */
   public  static final class CoreResponse extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.CoreResponse)
+      // @@protoc_insertion_point(message_implements:grpc.testing.CoreResponse)
       CoreResponseOrBuilder {
     // Use CoreResponse.newBuilder() to construct.
     private CoreResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -10941,12 +10941,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_CoreResponse_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreResponse_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_CoreResponse_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.CoreResponse.class, io.grpc.benchmarks.proto.Control.CoreResponse.Builder.class);
     }
@@ -11067,20 +11067,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.CoreResponse}
+     * Protobuf type {@code grpc.testing.CoreResponse}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.CoreResponse)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.CoreResponse)
         io.grpc.benchmarks.proto.Control.CoreResponseOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_CoreResponse_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreResponse_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_CoreResponse_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreResponse_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.CoreResponse.class, io.grpc.benchmarks.proto.Control.CoreResponse.Builder.class);
       }
@@ -11108,7 +11108,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_CoreResponse_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreResponse_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.CoreResponse getDefaultInstanceForType() {
@@ -11218,10 +11218,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.CoreResponse)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.CoreResponse)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.CoreResponse)
+    // @@protoc_insertion_point(class_scope:grpc.testing.CoreResponse)
     private static final io.grpc.benchmarks.proto.Control.CoreResponse DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.CoreResponse();
@@ -11266,15 +11266,15 @@ public final class Control {
   }
 
   public interface VoidOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.Void)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.Void)
       com.google.protobuf.MessageOrBuilder {
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.Void}
+   * Protobuf type {@code grpc.testing.Void}
    */
   public  static final class Void extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.Void)
+      // @@protoc_insertion_point(message_implements:grpc.testing.Void)
       VoidOrBuilder {
     // Use Void.newBuilder() to construct.
     private Void(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -11320,12 +11320,12 @@ public final class Control {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_Void_descriptor;
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Void_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_Void_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Void_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Control.Void.class, io.grpc.benchmarks.proto.Control.Void.Builder.class);
     }
@@ -11426,20 +11426,20 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.Void}
+     * Protobuf type {@code grpc.testing.Void}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.Void)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.Void)
         io.grpc.benchmarks.proto.Control.VoidOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_Void_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Void_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_Void_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Void_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Control.Void.class, io.grpc.benchmarks.proto.Control.Void.Builder.class);
       }
@@ -11465,7 +11465,7 @@ public final class Control {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_benchmarks_Void_descriptor;
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Void_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Control.Void getDefaultInstanceForType() {
@@ -11533,10 +11533,10 @@ public final class Control {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.Void)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.Void)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.Void)
+    // @@protoc_insertion_point(class_scope:grpc.testing.Void)
     private static final io.grpc.benchmarks.proto.Control.Void DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.Void();
@@ -11581,90 +11581,90 @@ public final class Control {
   }
 
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_PoissonParams_descriptor;
+    internal_static_grpc_testing_PoissonParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_PoissonParams_fieldAccessorTable;
+      internal_static_grpc_testing_PoissonParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_UniformParams_descriptor;
+    internal_static_grpc_testing_UniformParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_UniformParams_fieldAccessorTable;
+      internal_static_grpc_testing_UniformParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_DeterministicParams_descriptor;
+    internal_static_grpc_testing_DeterministicParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_DeterministicParams_fieldAccessorTable;
+      internal_static_grpc_testing_DeterministicParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ParetoParams_descriptor;
+    internal_static_grpc_testing_ParetoParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ParetoParams_fieldAccessorTable;
+      internal_static_grpc_testing_ParetoParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ClosedLoopParams_descriptor;
+    internal_static_grpc_testing_ClosedLoopParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ClosedLoopParams_fieldAccessorTable;
+      internal_static_grpc_testing_ClosedLoopParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_LoadParams_descriptor;
+    internal_static_grpc_testing_LoadParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_LoadParams_fieldAccessorTable;
+      internal_static_grpc_testing_LoadParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_SecurityParams_descriptor;
+    internal_static_grpc_testing_SecurityParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_SecurityParams_fieldAccessorTable;
+      internal_static_grpc_testing_SecurityParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ClientConfig_descriptor;
+    internal_static_grpc_testing_ClientConfig_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ClientConfig_fieldAccessorTable;
+      internal_static_grpc_testing_ClientConfig_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ClientStatus_descriptor;
+    internal_static_grpc_testing_ClientStatus_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ClientStatus_fieldAccessorTable;
+      internal_static_grpc_testing_ClientStatus_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_Mark_descriptor;
+    internal_static_grpc_testing_Mark_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_Mark_fieldAccessorTable;
+      internal_static_grpc_testing_Mark_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ClientArgs_descriptor;
+    internal_static_grpc_testing_ClientArgs_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ClientArgs_fieldAccessorTable;
+      internal_static_grpc_testing_ClientArgs_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ServerConfig_descriptor;
+    internal_static_grpc_testing_ServerConfig_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ServerConfig_fieldAccessorTable;
+      internal_static_grpc_testing_ServerConfig_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ServerArgs_descriptor;
+    internal_static_grpc_testing_ServerArgs_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ServerArgs_fieldAccessorTable;
+      internal_static_grpc_testing_ServerArgs_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ServerStatus_descriptor;
+    internal_static_grpc_testing_ServerStatus_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ServerStatus_fieldAccessorTable;
+      internal_static_grpc_testing_ServerStatus_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_CoreRequest_descriptor;
+    internal_static_grpc_testing_CoreRequest_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_CoreRequest_fieldAccessorTable;
+      internal_static_grpc_testing_CoreRequest_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_CoreResponse_descriptor;
+    internal_static_grpc_testing_CoreResponse_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_CoreResponse_fieldAccessorTable;
+      internal_static_grpc_testing_CoreResponse_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_Void_descriptor;
+    internal_static_grpc_testing_Void_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_Void_fieldAccessorTable;
+      internal_static_grpc_testing_Void_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -11674,58 +11674,56 @@ public final class Control {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\rcontrol.proto\022\017grpc.benchmarks\032\016payloa" +
-      "ds.proto\032\013stats.proto\"%\n\rPoissonParams\022\024" +
-      "\n\014offered_load\030\001 \001(\001\"A\n\rUniformParams\022\027\n" +
-      "\017interarrival_lo\030\001 \001(\001\022\027\n\017interarrival_h" +
-      "i\030\002 \001(\001\"+\n\023DeterministicParams\022\024\n\014offere" +
-      "d_load\030\001 \001(\001\"8\n\014ParetoParams\022\031\n\021interarr" +
-      "ival_base\030\001 \001(\001\022\r\n\005alpha\030\002 \001(\001\"\022\n\020Closed" +
-      "LoopParams\"\235\002\n\nLoadParams\0228\n\013closed_loop" +
-      "\030\001 \001(\0132!.grpc.benchmarks.ClosedLoopParam" +
-      "sH\000\0221\n\007poisson\030\002 \001(\0132\036.grpc.benchmarks.P",
-      "oissonParamsH\000\0221\n\007uniform\030\003 \001(\0132\036.grpc.b" +
-      "enchmarks.UniformParamsH\000\0226\n\006determ\030\004 \001(" +
-      "\0132$.grpc.benchmarks.DeterministicParamsH" +
-      "\000\022/\n\006pareto\030\005 \001(\0132\035.grpc.benchmarks.Pare" +
-      "toParamsH\000B\006\n\004load\"C\n\016SecurityParams\022\023\n\013" +
-      "use_test_ca\030\001 \001(\010\022\034\n\024server_host_overrid" +
-      "e\030\002 \001(\t\"\350\003\n\014ClientConfig\022\026\n\016server_targe" +
-      "ts\030\001 \003(\t\0220\n\013client_type\030\002 \001(\0162\033.grpc.ben" +
-      "chmarks.ClientType\0228\n\017security_params\030\003 " +
-      "\001(\0132\037.grpc.benchmarks.SecurityParams\022$\n\034",
-      "outstanding_rpcs_per_channel\030\004 \001(\005\022\027\n\017cl" +
-      "ient_channels\030\005 \001(\005\022\034\n\024async_client_thre" +
-      "ads\030\007 \001(\005\022*\n\010rpc_type\030\010 \001(\0162\030.grpc.bench" +
-      "marks.RpcType\0220\n\013load_params\030\n \001(\0132\033.grp" +
-      "c.benchmarks.LoadParams\0226\n\016payload_confi" +
-      "g\030\013 \001(\0132\036.grpc.benchmarks.PayloadConfig\022" +
-      ":\n\020histogram_params\030\014 \001(\0132 .grpc.benchma" +
-      "rks.HistogramParams\022\021\n\tcore_list\030\r \003(\005\022\022" +
-      "\n\ncore_limit\030\016 \001(\005\";\n\014ClientStatus\022+\n\005st" +
-      "ats\030\001 \001(\0132\034.grpc.benchmarks.ClientStats\"",
-      "\025\n\004Mark\022\r\n\005reset\030\001 \001(\010\"n\n\nClientArgs\022.\n\005" +
-      "setup\030\001 \001(\0132\035.grpc.benchmarks.ClientConf" +
-      "igH\000\022%\n\004mark\030\002 \001(\0132\025.grpc.benchmarks.Mar" +
-      "kH\000B\t\n\007argtype\"\205\002\n\014ServerConfig\0220\n\013serve" +
-      "r_type\030\001 \001(\0162\033.grpc.benchmarks.ServerTyp" +
-      "e\0228\n\017security_params\030\002 \001(\0132\037.grpc.benchm" +
-      "arks.SecurityParams\022\014\n\004port\030\004 \001(\005\022\034\n\024asy" +
-      "nc_server_threads\030\007 \001(\005\022\022\n\ncore_limit\030\010 " +
-      "\001(\005\0226\n\016payload_config\030\t \001(\0132\036.grpc.bench" +
-      "marks.PayloadConfig\022\021\n\tcore_list\030\n \003(\005\"n",
-      "\n\nServerArgs\022.\n\005setup\030\001 \001(\0132\035.grpc.bench" +
-      "marks.ServerConfigH\000\022%\n\004mark\030\002 \001(\0132\025.grp" +
-      "c.benchmarks.MarkH\000B\t\n\007argtype\"X\n\014Server" +
-      "Status\022+\n\005stats\030\001 \001(\0132\034.grpc.benchmarks." +
-      "ServerStats\022\014\n\004port\030\002 \001(\005\022\r\n\005cores\030\003 \001(\005" +
-      "\"\r\n\013CoreRequest\"\035\n\014CoreResponse\022\r\n\005cores" +
-      "\030\001 \001(\005\"\006\n\004Void*/\n\nClientType\022\017\n\013SYNC_CLI" +
-      "ENT\020\000\022\020\n\014ASYNC_CLIENT\020\001*I\n\nServerType\022\017\n" +
-      "\013SYNC_SERVER\020\000\022\020\n\014ASYNC_SERVER\020\001\022\030\n\024ASYN" +
-      "C_GENERIC_SERVER\020\002*#\n\007RpcType\022\t\n\005UNARY\020\000",
-      "\022\r\n\tSTREAMING\020\001B#\n\030io.grpc.benchmarks.pr" +
-      "otoB\007Controlb\006proto3"
+      "\n\rcontrol.proto\022\014grpc.testing\032\016payloads." +
+      "proto\032\013stats.proto\"%\n\rPoissonParams\022\024\n\014o" +
+      "ffered_load\030\001 \001(\001\"A\n\rUniformParams\022\027\n\017in" +
+      "terarrival_lo\030\001 \001(\001\022\027\n\017interarrival_hi\030\002" +
+      " \001(\001\"+\n\023DeterministicParams\022\024\n\014offered_l" +
+      "oad\030\001 \001(\001\"8\n\014ParetoParams\022\031\n\021interarriva" +
+      "l_base\030\001 \001(\001\022\r\n\005alpha\030\002 \001(\001\"\022\n\020ClosedLoo" +
+      "pParams\"\216\002\n\nLoadParams\0225\n\013closed_loop\030\001 " +
+      "\001(\0132\036.grpc.testing.ClosedLoopParamsH\000\022.\n" +
+      "\007poisson\030\002 \001(\0132\033.grpc.testing.PoissonPar",
+      "amsH\000\022.\n\007uniform\030\003 \001(\0132\033.grpc.testing.Un" +
+      "iformParamsH\000\0223\n\006determ\030\004 \001(\0132!.grpc.tes" +
+      "ting.DeterministicParamsH\000\022,\n\006pareto\030\005 \001" +
+      "(\0132\032.grpc.testing.ParetoParamsH\000B\006\n\004load" +
+      "\"C\n\016SecurityParams\022\023\n\013use_test_ca\030\001 \001(\010\022" +
+      "\034\n\024server_host_override\030\002 \001(\t\"\326\003\n\014Client" +
+      "Config\022\026\n\016server_targets\030\001 \003(\t\022-\n\013client" +
+      "_type\030\002 \001(\0162\030.grpc.testing.ClientType\0225\n" +
+      "\017security_params\030\003 \001(\0132\034.grpc.testing.Se" +
+      "curityParams\022$\n\034outstanding_rpcs_per_cha",
+      "nnel\030\004 \001(\005\022\027\n\017client_channels\030\005 \001(\005\022\034\n\024a" +
+      "sync_client_threads\030\007 \001(\005\022\'\n\010rpc_type\030\010 " +
+      "\001(\0162\025.grpc.testing.RpcType\022-\n\013load_param" +
+      "s\030\n \001(\0132\030.grpc.testing.LoadParams\0223\n\016pay" +
+      "load_config\030\013 \001(\0132\033.grpc.testing.Payload" +
+      "Config\0227\n\020histogram_params\030\014 \001(\0132\035.grpc." +
+      "testing.HistogramParams\022\021\n\tcore_list\030\r \003" +
+      "(\005\022\022\n\ncore_limit\030\016 \001(\005\"8\n\014ClientStatus\022(" +
+      "\n\005stats\030\001 \001(\0132\031.grpc.testing.ClientStats" +
+      "\"\025\n\004Mark\022\r\n\005reset\030\001 \001(\010\"h\n\nClientArgs\022+\n",
+      "\005setup\030\001 \001(\0132\032.grpc.testing.ClientConfig" +
+      "H\000\022\"\n\004mark\030\002 \001(\0132\022.grpc.testing.MarkH\000B\t" +
+      "\n\007argtype\"\374\001\n\014ServerConfig\022-\n\013server_typ" +
+      "e\030\001 \001(\0162\030.grpc.testing.ServerType\0225\n\017sec" +
+      "urity_params\030\002 \001(\0132\034.grpc.testing.Securi" +
+      "tyParams\022\014\n\004port\030\004 \001(\005\022\034\n\024async_server_t" +
+      "hreads\030\007 \001(\005\022\022\n\ncore_limit\030\010 \001(\005\0223\n\016payl" +
+      "oad_config\030\t \001(\0132\033.grpc.testing.PayloadC" +
+      "onfig\022\021\n\tcore_list\030\n \003(\005\"h\n\nServerArgs\022+" +
+      "\n\005setup\030\001 \001(\0132\032.grpc.testing.ServerConfi",
+      "gH\000\022\"\n\004mark\030\002 \001(\0132\022.grpc.testing.MarkH\000B" +
+      "\t\n\007argtype\"U\n\014ServerStatus\022(\n\005stats\030\001 \001(" +
+      "\0132\031.grpc.testing.ServerStats\022\014\n\004port\030\002 \001" +
+      "(\005\022\r\n\005cores\030\003 \001(\005\"\r\n\013CoreRequest\"\035\n\014Core" +
+      "Response\022\r\n\005cores\030\001 \001(\005\"\006\n\004Void*/\n\nClien" +
+      "tType\022\017\n\013SYNC_CLIENT\020\000\022\020\n\014ASYNC_CLIENT\020\001" +
+      "*I\n\nServerType\022\017\n\013SYNC_SERVER\020\000\022\020\n\014ASYNC" +
+      "_SERVER\020\001\022\030\n\024ASYNC_GENERIC_SERVER\020\002*#\n\007R" +
+      "pcType\022\t\n\005UNARY\020\000\022\r\n\tSTREAMING\020\001B#\n\030io.g" +
+      "rpc.benchmarks.protoB\007Controlb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -11741,107 +11739,107 @@ public final class Control {
           io.grpc.benchmarks.proto.Payloads.getDescriptor(),
           io.grpc.benchmarks.proto.Stats.getDescriptor(),
         }, assigner);
-    internal_static_grpc_benchmarks_PoissonParams_descriptor =
+    internal_static_grpc_testing_PoissonParams_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_grpc_benchmarks_PoissonParams_fieldAccessorTable = new
+    internal_static_grpc_testing_PoissonParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_PoissonParams_descriptor,
+        internal_static_grpc_testing_PoissonParams_descriptor,
         new java.lang.String[] { "OfferedLoad", });
-    internal_static_grpc_benchmarks_UniformParams_descriptor =
+    internal_static_grpc_testing_UniformParams_descriptor =
       getDescriptor().getMessageTypes().get(1);
-    internal_static_grpc_benchmarks_UniformParams_fieldAccessorTable = new
+    internal_static_grpc_testing_UniformParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_UniformParams_descriptor,
+        internal_static_grpc_testing_UniformParams_descriptor,
         new java.lang.String[] { "InterarrivalLo", "InterarrivalHi", });
-    internal_static_grpc_benchmarks_DeterministicParams_descriptor =
+    internal_static_grpc_testing_DeterministicParams_descriptor =
       getDescriptor().getMessageTypes().get(2);
-    internal_static_grpc_benchmarks_DeterministicParams_fieldAccessorTable = new
+    internal_static_grpc_testing_DeterministicParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_DeterministicParams_descriptor,
+        internal_static_grpc_testing_DeterministicParams_descriptor,
         new java.lang.String[] { "OfferedLoad", });
-    internal_static_grpc_benchmarks_ParetoParams_descriptor =
+    internal_static_grpc_testing_ParetoParams_descriptor =
       getDescriptor().getMessageTypes().get(3);
-    internal_static_grpc_benchmarks_ParetoParams_fieldAccessorTable = new
+    internal_static_grpc_testing_ParetoParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ParetoParams_descriptor,
+        internal_static_grpc_testing_ParetoParams_descriptor,
         new java.lang.String[] { "InterarrivalBase", "Alpha", });
-    internal_static_grpc_benchmarks_ClosedLoopParams_descriptor =
+    internal_static_grpc_testing_ClosedLoopParams_descriptor =
       getDescriptor().getMessageTypes().get(4);
-    internal_static_grpc_benchmarks_ClosedLoopParams_fieldAccessorTable = new
+    internal_static_grpc_testing_ClosedLoopParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ClosedLoopParams_descriptor,
+        internal_static_grpc_testing_ClosedLoopParams_descriptor,
         new java.lang.String[] { });
-    internal_static_grpc_benchmarks_LoadParams_descriptor =
+    internal_static_grpc_testing_LoadParams_descriptor =
       getDescriptor().getMessageTypes().get(5);
-    internal_static_grpc_benchmarks_LoadParams_fieldAccessorTable = new
+    internal_static_grpc_testing_LoadParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_LoadParams_descriptor,
+        internal_static_grpc_testing_LoadParams_descriptor,
         new java.lang.String[] { "ClosedLoop", "Poisson", "Uniform", "Determ", "Pareto", "Load", });
-    internal_static_grpc_benchmarks_SecurityParams_descriptor =
+    internal_static_grpc_testing_SecurityParams_descriptor =
       getDescriptor().getMessageTypes().get(6);
-    internal_static_grpc_benchmarks_SecurityParams_fieldAccessorTable = new
+    internal_static_grpc_testing_SecurityParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_SecurityParams_descriptor,
+        internal_static_grpc_testing_SecurityParams_descriptor,
         new java.lang.String[] { "UseTestCa", "ServerHostOverride", });
-    internal_static_grpc_benchmarks_ClientConfig_descriptor =
+    internal_static_grpc_testing_ClientConfig_descriptor =
       getDescriptor().getMessageTypes().get(7);
-    internal_static_grpc_benchmarks_ClientConfig_fieldAccessorTable = new
+    internal_static_grpc_testing_ClientConfig_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ClientConfig_descriptor,
+        internal_static_grpc_testing_ClientConfig_descriptor,
         new java.lang.String[] { "ServerTargets", "ClientType", "SecurityParams", "OutstandingRpcsPerChannel", "ClientChannels", "AsyncClientThreads", "RpcType", "LoadParams", "PayloadConfig", "HistogramParams", "CoreList", "CoreLimit", });
-    internal_static_grpc_benchmarks_ClientStatus_descriptor =
+    internal_static_grpc_testing_ClientStatus_descriptor =
       getDescriptor().getMessageTypes().get(8);
-    internal_static_grpc_benchmarks_ClientStatus_fieldAccessorTable = new
+    internal_static_grpc_testing_ClientStatus_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ClientStatus_descriptor,
+        internal_static_grpc_testing_ClientStatus_descriptor,
         new java.lang.String[] { "Stats", });
-    internal_static_grpc_benchmarks_Mark_descriptor =
+    internal_static_grpc_testing_Mark_descriptor =
       getDescriptor().getMessageTypes().get(9);
-    internal_static_grpc_benchmarks_Mark_fieldAccessorTable = new
+    internal_static_grpc_testing_Mark_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_Mark_descriptor,
+        internal_static_grpc_testing_Mark_descriptor,
         new java.lang.String[] { "Reset", });
-    internal_static_grpc_benchmarks_ClientArgs_descriptor =
+    internal_static_grpc_testing_ClientArgs_descriptor =
       getDescriptor().getMessageTypes().get(10);
-    internal_static_grpc_benchmarks_ClientArgs_fieldAccessorTable = new
+    internal_static_grpc_testing_ClientArgs_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ClientArgs_descriptor,
+        internal_static_grpc_testing_ClientArgs_descriptor,
         new java.lang.String[] { "Setup", "Mark", "Argtype", });
-    internal_static_grpc_benchmarks_ServerConfig_descriptor =
+    internal_static_grpc_testing_ServerConfig_descriptor =
       getDescriptor().getMessageTypes().get(11);
-    internal_static_grpc_benchmarks_ServerConfig_fieldAccessorTable = new
+    internal_static_grpc_testing_ServerConfig_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ServerConfig_descriptor,
+        internal_static_grpc_testing_ServerConfig_descriptor,
         new java.lang.String[] { "ServerType", "SecurityParams", "Port", "AsyncServerThreads", "CoreLimit", "PayloadConfig", "CoreList", });
-    internal_static_grpc_benchmarks_ServerArgs_descriptor =
+    internal_static_grpc_testing_ServerArgs_descriptor =
       getDescriptor().getMessageTypes().get(12);
-    internal_static_grpc_benchmarks_ServerArgs_fieldAccessorTable = new
+    internal_static_grpc_testing_ServerArgs_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ServerArgs_descriptor,
+        internal_static_grpc_testing_ServerArgs_descriptor,
         new java.lang.String[] { "Setup", "Mark", "Argtype", });
-    internal_static_grpc_benchmarks_ServerStatus_descriptor =
+    internal_static_grpc_testing_ServerStatus_descriptor =
       getDescriptor().getMessageTypes().get(13);
-    internal_static_grpc_benchmarks_ServerStatus_fieldAccessorTable = new
+    internal_static_grpc_testing_ServerStatus_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ServerStatus_descriptor,
+        internal_static_grpc_testing_ServerStatus_descriptor,
         new java.lang.String[] { "Stats", "Port", "Cores", });
-    internal_static_grpc_benchmarks_CoreRequest_descriptor =
+    internal_static_grpc_testing_CoreRequest_descriptor =
       getDescriptor().getMessageTypes().get(14);
-    internal_static_grpc_benchmarks_CoreRequest_fieldAccessorTable = new
+    internal_static_grpc_testing_CoreRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_CoreRequest_descriptor,
+        internal_static_grpc_testing_CoreRequest_descriptor,
         new java.lang.String[] { });
-    internal_static_grpc_benchmarks_CoreResponse_descriptor =
+    internal_static_grpc_testing_CoreResponse_descriptor =
       getDescriptor().getMessageTypes().get(15);
-    internal_static_grpc_benchmarks_CoreResponse_fieldAccessorTable = new
+    internal_static_grpc_testing_CoreResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_CoreResponse_descriptor,
+        internal_static_grpc_testing_CoreResponse_descriptor,
         new java.lang.String[] { "Cores", });
-    internal_static_grpc_benchmarks_Void_descriptor =
+    internal_static_grpc_testing_Void_descriptor =
       getDescriptor().getMessageTypes().get(16);
-    internal_static_grpc_benchmarks_Void_fieldAccessorTable = new
+    internal_static_grpc_testing_Void_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_Void_descriptor,
+        internal_static_grpc_testing_Void_descriptor,
         new java.lang.String[] { });
     io.grpc.benchmarks.proto.Payloads.getDescriptor();
     io.grpc.benchmarks.proto.Stats.getDescriptor();

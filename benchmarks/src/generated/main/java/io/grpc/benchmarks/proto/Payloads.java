@@ -9,7 +9,7 @@ public final class Payloads {
       com.google.protobuf.ExtensionRegistry registry) {
   }
   public interface ByteBufferParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ByteBufferParams)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ByteBufferParams)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -23,11 +23,11 @@ public final class Payloads {
     int getRespSize();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ByteBufferParams}
+   * Protobuf type {@code grpc.testing.ByteBufferParams}
    */
   public  static final class ByteBufferParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ByteBufferParams)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ByteBufferParams)
       ByteBufferParamsOrBuilder {
     // Use ByteBufferParams.newBuilder() to construct.
     private ByteBufferParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -86,12 +86,12 @@ public final class Payloads {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_ByteBufferParams_descriptor;
+      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_ByteBufferParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_ByteBufferParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_ByteBufferParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Payloads.ByteBufferParams.class, io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder.class);
     }
@@ -224,20 +224,20 @@ public final class Payloads {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ByteBufferParams}
+     * Protobuf type {@code grpc.testing.ByteBufferParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ByteBufferParams)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ByteBufferParams)
         io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_ByteBufferParams_descriptor;
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_ByteBufferParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_ByteBufferParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_ByteBufferParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Payloads.ByteBufferParams.class, io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder.class);
       }
@@ -267,7 +267,7 @@ public final class Payloads {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_ByteBufferParams_descriptor;
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_ByteBufferParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Payloads.ByteBufferParams getDefaultInstanceForType() {
@@ -395,10 +395,10 @@ public final class Payloads {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ByteBufferParams)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ByteBufferParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ByteBufferParams)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ByteBufferParams)
     private static final io.grpc.benchmarks.proto.Payloads.ByteBufferParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Payloads.ByteBufferParams();
@@ -443,7 +443,7 @@ public final class Payloads {
   }
 
   public interface SimpleProtoParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.SimpleProtoParams)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.SimpleProtoParams)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -457,11 +457,11 @@ public final class Payloads {
     int getRespSize();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.SimpleProtoParams}
+   * Protobuf type {@code grpc.testing.SimpleProtoParams}
    */
   public  static final class SimpleProtoParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.SimpleProtoParams)
+      // @@protoc_insertion_point(message_implements:grpc.testing.SimpleProtoParams)
       SimpleProtoParamsOrBuilder {
     // Use SimpleProtoParams.newBuilder() to construct.
     private SimpleProtoParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -520,12 +520,12 @@ public final class Payloads {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_SimpleProtoParams_descriptor;
+      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_SimpleProtoParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_SimpleProtoParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_SimpleProtoParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.class, io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.Builder.class);
     }
@@ -658,20 +658,20 @@ public final class Payloads {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.SimpleProtoParams}
+     * Protobuf type {@code grpc.testing.SimpleProtoParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.SimpleProtoParams)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.SimpleProtoParams)
         io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_SimpleProtoParams_descriptor;
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_SimpleProtoParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_SimpleProtoParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_SimpleProtoParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.class, io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.Builder.class);
       }
@@ -701,7 +701,7 @@ public final class Payloads {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_SimpleProtoParams_descriptor;
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_SimpleProtoParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Payloads.SimpleProtoParams getDefaultInstanceForType() {
@@ -829,10 +829,10 @@ public final class Payloads {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.SimpleProtoParams)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.SimpleProtoParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.SimpleProtoParams)
+    // @@protoc_insertion_point(class_scope:grpc.testing.SimpleProtoParams)
     private static final io.grpc.benchmarks.proto.Payloads.SimpleProtoParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Payloads.SimpleProtoParams();
@@ -877,11 +877,11 @@ public final class Payloads {
   }
 
   public interface ComplexProtoParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ComplexProtoParams)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ComplexProtoParams)
       com.google.protobuf.MessageOrBuilder {
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ComplexProtoParams}
+   * Protobuf type {@code grpc.testing.ComplexProtoParams}
    *
    * <pre>
    * TODO (vpai): Fill this in once the details of complex, representative
@@ -890,7 +890,7 @@ public final class Payloads {
    */
   public  static final class ComplexProtoParams extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ComplexProtoParams)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ComplexProtoParams)
       ComplexProtoParamsOrBuilder {
     // Use ComplexProtoParams.newBuilder() to construct.
     private ComplexProtoParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -936,12 +936,12 @@ public final class Payloads {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_ComplexProtoParams_descriptor;
+      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_ComplexProtoParams_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_ComplexProtoParams_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_ComplexProtoParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.class, io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.Builder.class);
     }
@@ -1042,7 +1042,7 @@ public final class Payloads {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ComplexProtoParams}
+     * Protobuf type {@code grpc.testing.ComplexProtoParams}
      *
      * <pre>
      * TODO (vpai): Fill this in once the details of complex, representative
@@ -1051,16 +1051,16 @@ public final class Payloads {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ComplexProtoParams)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ComplexProtoParams)
         io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_ComplexProtoParams_descriptor;
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_ComplexProtoParams_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_ComplexProtoParams_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_ComplexProtoParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.class, io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.Builder.class);
       }
@@ -1086,7 +1086,7 @@ public final class Payloads {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_ComplexProtoParams_descriptor;
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_ComplexProtoParams_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Payloads.ComplexProtoParams getDefaultInstanceForType() {
@@ -1154,10 +1154,10 @@ public final class Payloads {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ComplexProtoParams)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ComplexProtoParams)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ComplexProtoParams)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ComplexProtoParams)
     private static final io.grpc.benchmarks.proto.Payloads.ComplexProtoParams DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Payloads.ComplexProtoParams();
@@ -1202,44 +1202,44 @@ public final class Payloads {
   }
 
   public interface PayloadConfigOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.PayloadConfig)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.PayloadConfig)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+     * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
      */
     io.grpc.benchmarks.proto.Payloads.ByteBufferParams getBytebufParams();
     /**
-     * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+     * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
      */
     io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder getBytebufParamsOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+     * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
     io.grpc.benchmarks.proto.Payloads.SimpleProtoParams getSimpleParams();
     /**
-     * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+     * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
     io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder getSimpleParamsOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+     * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
      */
     io.grpc.benchmarks.proto.Payloads.ComplexProtoParams getComplexParams();
     /**
-     * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+     * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
      */
     io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder getComplexParamsOrBuilder();
 
     public io.grpc.benchmarks.proto.Payloads.PayloadConfig.PayloadCase getPayloadCase();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.PayloadConfig}
+   * Protobuf type {@code grpc.testing.PayloadConfig}
    */
   public  static final class PayloadConfig extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.PayloadConfig)
+      // @@protoc_insertion_point(message_implements:grpc.testing.PayloadConfig)
       PayloadConfigOrBuilder {
     // Use PayloadConfig.newBuilder() to construct.
     private PayloadConfig(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -1328,12 +1328,12 @@ public final class Payloads {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_PayloadConfig_descriptor;
+      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_PayloadConfig_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_PayloadConfig_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_PayloadConfig_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Payloads.PayloadConfig.class, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder.class);
     }
@@ -1373,7 +1373,7 @@ public final class Payloads {
 
     public static final int BYTEBUF_PARAMS_FIELD_NUMBER = 1;
     /**
-     * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+     * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.ByteBufferParams getBytebufParams() {
       if (payloadCase_ == 1) {
@@ -1382,7 +1382,7 @@ public final class Payloads {
       return io.grpc.benchmarks.proto.Payloads.ByteBufferParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+     * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder getBytebufParamsOrBuilder() {
       if (payloadCase_ == 1) {
@@ -1393,7 +1393,7 @@ public final class Payloads {
 
     public static final int SIMPLE_PARAMS_FIELD_NUMBER = 2;
     /**
-     * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+     * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.SimpleProtoParams getSimpleParams() {
       if (payloadCase_ == 2) {
@@ -1402,7 +1402,7 @@ public final class Payloads {
       return io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+     * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder getSimpleParamsOrBuilder() {
       if (payloadCase_ == 2) {
@@ -1413,7 +1413,7 @@ public final class Payloads {
 
     public static final int COMPLEX_PARAMS_FIELD_NUMBER = 3;
     /**
-     * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+     * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.ComplexProtoParams getComplexParams() {
       if (payloadCase_ == 3) {
@@ -1422,7 +1422,7 @@ public final class Payloads {
       return io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+     * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder getComplexParamsOrBuilder() {
       if (payloadCase_ == 3) {
@@ -1548,20 +1548,20 @@ public final class Payloads {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.PayloadConfig}
+     * Protobuf type {@code grpc.testing.PayloadConfig}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.PayloadConfig)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.PayloadConfig)
         io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_PayloadConfig_descriptor;
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_PayloadConfig_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_PayloadConfig_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_PayloadConfig_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Payloads.PayloadConfig.class, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder.class);
       }
@@ -1589,7 +1589,7 @@ public final class Payloads {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_benchmarks_PayloadConfig_descriptor;
+        return io.grpc.benchmarks.proto.Payloads.internal_static_grpc_testing_PayloadConfig_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Payloads.PayloadConfig getDefaultInstanceForType() {
@@ -1704,7 +1704,7 @@ public final class Payloads {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.ByteBufferParams, io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder, io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder> bytebufParamsBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ByteBufferParams getBytebufParams() {
         if (bytebufParamsBuilder_ == null) {
@@ -1720,7 +1720,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public Builder setBytebufParams(io.grpc.benchmarks.proto.Payloads.ByteBufferParams value) {
         if (bytebufParamsBuilder_ == null) {
@@ -1736,7 +1736,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public Builder setBytebufParams(
           io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder builderForValue) {
@@ -1750,7 +1750,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public Builder mergeBytebufParams(io.grpc.benchmarks.proto.Payloads.ByteBufferParams value) {
         if (bytebufParamsBuilder_ == null) {
@@ -1772,7 +1772,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public Builder clearBytebufParams() {
         if (bytebufParamsBuilder_ == null) {
@@ -1791,13 +1791,13 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder getBytebufParamsBuilder() {
         return getBytebufParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder getBytebufParamsOrBuilder() {
         if ((payloadCase_ == 1) && (bytebufParamsBuilder_ != null)) {
@@ -1810,7 +1810,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.ByteBufferParams, io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder, io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder> 
@@ -1834,7 +1834,7 @@ public final class Payloads {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.SimpleProtoParams, io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.Builder, io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder> simpleParamsBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.SimpleProtoParams getSimpleParams() {
         if (simpleParamsBuilder_ == null) {
@@ -1850,7 +1850,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public Builder setSimpleParams(io.grpc.benchmarks.proto.Payloads.SimpleProtoParams value) {
         if (simpleParamsBuilder_ == null) {
@@ -1866,7 +1866,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public Builder setSimpleParams(
           io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.Builder builderForValue) {
@@ -1880,7 +1880,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public Builder mergeSimpleParams(io.grpc.benchmarks.proto.Payloads.SimpleProtoParams value) {
         if (simpleParamsBuilder_ == null) {
@@ -1902,7 +1902,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public Builder clearSimpleParams() {
         if (simpleParamsBuilder_ == null) {
@@ -1921,13 +1921,13 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.Builder getSimpleParamsBuilder() {
         return getSimpleParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder getSimpleParamsOrBuilder() {
         if ((payloadCase_ == 2) && (simpleParamsBuilder_ != null)) {
@@ -1940,7 +1940,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.SimpleProtoParams simple_params = 2;</code>
+       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.SimpleProtoParams, io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.Builder, io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder> 
@@ -1964,7 +1964,7 @@ public final class Payloads {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.ComplexProtoParams, io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.Builder, io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder> complexParamsBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ComplexProtoParams getComplexParams() {
         if (complexParamsBuilder_ == null) {
@@ -1980,7 +1980,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public Builder setComplexParams(io.grpc.benchmarks.proto.Payloads.ComplexProtoParams value) {
         if (complexParamsBuilder_ == null) {
@@ -1996,7 +1996,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public Builder setComplexParams(
           io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.Builder builderForValue) {
@@ -2010,7 +2010,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public Builder mergeComplexParams(io.grpc.benchmarks.proto.Payloads.ComplexProtoParams value) {
         if (complexParamsBuilder_ == null) {
@@ -2032,7 +2032,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public Builder clearComplexParams() {
         if (complexParamsBuilder_ == null) {
@@ -2051,13 +2051,13 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.Builder getComplexParamsBuilder() {
         return getComplexParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder getComplexParamsOrBuilder() {
         if ((payloadCase_ == 3) && (complexParamsBuilder_ != null)) {
@@ -2070,7 +2070,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.ComplexProtoParams complex_params = 3;</code>
+       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.ComplexProtoParams, io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.Builder, io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder> 
@@ -2101,10 +2101,10 @@ public final class Payloads {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.PayloadConfig)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.PayloadConfig)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.PayloadConfig)
+    // @@protoc_insertion_point(class_scope:grpc.testing.PayloadConfig)
     private static final io.grpc.benchmarks.proto.Payloads.PayloadConfig DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Payloads.PayloadConfig();
@@ -2149,25 +2149,25 @@ public final class Payloads {
   }
 
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ByteBufferParams_descriptor;
+    internal_static_grpc_testing_ByteBufferParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ByteBufferParams_fieldAccessorTable;
+      internal_static_grpc_testing_ByteBufferParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_SimpleProtoParams_descriptor;
+    internal_static_grpc_testing_SimpleProtoParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_SimpleProtoParams_fieldAccessorTable;
+      internal_static_grpc_testing_SimpleProtoParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ComplexProtoParams_descriptor;
+    internal_static_grpc_testing_ComplexProtoParams_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ComplexProtoParams_fieldAccessorTable;
+      internal_static_grpc_testing_ComplexProtoParams_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_PayloadConfig_descriptor;
+    internal_static_grpc_testing_PayloadConfig_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_PayloadConfig_fieldAccessorTable;
+      internal_static_grpc_testing_PayloadConfig_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -2177,17 +2177,17 @@ public final class Payloads {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\016payloads.proto\022\017grpc.benchmarks\"7\n\020Byt" +
-      "eBufferParams\022\020\n\010req_size\030\001 \001(\005\022\021\n\tresp_" +
-      "size\030\002 \001(\005\"8\n\021SimpleProtoParams\022\020\n\010req_s" +
-      "ize\030\001 \001(\005\022\021\n\tresp_size\030\002 \001(\005\"\024\n\022ComplexP" +
-      "rotoParams\"\323\001\n\rPayloadConfig\022;\n\016bytebuf_" +
-      "params\030\001 \001(\0132!.grpc.benchmarks.ByteBuffe" +
-      "rParamsH\000\022;\n\rsimple_params\030\002 \001(\0132\".grpc." +
-      "benchmarks.SimpleProtoParamsH\000\022=\n\016comple" +
-      "x_params\030\003 \001(\0132#.grpc.benchmarks.Complex" +
-      "ProtoParamsH\000B\t\n\007payloadB$\n\030io.grpc.benc",
-      "hmarks.protoB\010Payloadsb\006proto3"
+      "\n\016payloads.proto\022\014grpc.testing\"7\n\020ByteBu" +
+      "fferParams\022\020\n\010req_size\030\001 \001(\005\022\021\n\tresp_siz" +
+      "e\030\002 \001(\005\"8\n\021SimpleProtoParams\022\020\n\010req_size" +
+      "\030\001 \001(\005\022\021\n\tresp_size\030\002 \001(\005\"\024\n\022ComplexProt" +
+      "oParams\"\312\001\n\rPayloadConfig\0228\n\016bytebuf_par" +
+      "ams\030\001 \001(\0132\036.grpc.testing.ByteBufferParam" +
+      "sH\000\0228\n\rsimple_params\030\002 \001(\0132\037.grpc.testin" +
+      "g.SimpleProtoParamsH\000\022:\n\016complex_params\030" +
+      "\003 \001(\0132 .grpc.testing.ComplexProtoParamsH" +
+      "\000B\t\n\007payloadB$\n\030io.grpc.benchmarks.proto",
+      "B\010Payloadsb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -2201,29 +2201,29 @@ public final class Payloads {
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         }, assigner);
-    internal_static_grpc_benchmarks_ByteBufferParams_descriptor =
+    internal_static_grpc_testing_ByteBufferParams_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_grpc_benchmarks_ByteBufferParams_fieldAccessorTable = new
+    internal_static_grpc_testing_ByteBufferParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ByteBufferParams_descriptor,
+        internal_static_grpc_testing_ByteBufferParams_descriptor,
         new java.lang.String[] { "ReqSize", "RespSize", });
-    internal_static_grpc_benchmarks_SimpleProtoParams_descriptor =
+    internal_static_grpc_testing_SimpleProtoParams_descriptor =
       getDescriptor().getMessageTypes().get(1);
-    internal_static_grpc_benchmarks_SimpleProtoParams_fieldAccessorTable = new
+    internal_static_grpc_testing_SimpleProtoParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_SimpleProtoParams_descriptor,
+        internal_static_grpc_testing_SimpleProtoParams_descriptor,
         new java.lang.String[] { "ReqSize", "RespSize", });
-    internal_static_grpc_benchmarks_ComplexProtoParams_descriptor =
+    internal_static_grpc_testing_ComplexProtoParams_descriptor =
       getDescriptor().getMessageTypes().get(2);
-    internal_static_grpc_benchmarks_ComplexProtoParams_fieldAccessorTable = new
+    internal_static_grpc_testing_ComplexProtoParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ComplexProtoParams_descriptor,
+        internal_static_grpc_testing_ComplexProtoParams_descriptor,
         new java.lang.String[] { });
-    internal_static_grpc_benchmarks_PayloadConfig_descriptor =
+    internal_static_grpc_testing_PayloadConfig_descriptor =
       getDescriptor().getMessageTypes().get(3);
-    internal_static_grpc_benchmarks_PayloadConfig_fieldAccessorTable = new
+    internal_static_grpc_testing_PayloadConfig_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_PayloadConfig_descriptor,
+        internal_static_grpc_testing_PayloadConfig_descriptor,
         new java.lang.String[] { "BytebufParams", "SimpleParams", "ComplexParams", "Payload", });
   }
 

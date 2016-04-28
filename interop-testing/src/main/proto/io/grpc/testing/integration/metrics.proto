@@ -35,7 +35,7 @@
 // service.
 syntax = "proto3";
 
-package grpc.testing.integration;
+package grpc.testing;
 
 option java_package = "io.grpc.testing.integration";
 

@@ -27,7 +27,7 @@ public class ReconnectServiceGrpc {
 
   private ReconnectServiceGrpc() {}
 
-  public static final String SERVICE_NAME = "grpc.testing.integration.ReconnectService";
+  public static final String SERVICE_NAME = "grpc.testing.ReconnectService";
 
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi
@@ -36,7 +36,7 @@ public class ReconnectServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
-              "grpc.testing.integration.ReconnectService", "Start"),
+              "grpc.testing.ReconnectService", "Start"),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()));
   @io.grpc.ExperimentalApi
@@ -45,7 +45,7 @@ public class ReconnectServiceGrpc {
       io.grpc.MethodDescriptor.create(
           io.grpc.MethodDescriptor.MethodType.UNARY,
           generateFullMethodName(
-              "grpc.testing.integration.ReconnectService", "Stop"),
+              "grpc.testing.ReconnectService", "Stop"),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.ReconnectInfo.getDefaultInstance()));
 

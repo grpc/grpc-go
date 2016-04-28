@@ -9,7 +9,7 @@ public final class Metrics {
       com.google.protobuf.ExtensionRegistry registry) {
   }
   public interface GaugeResponseOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.integration.GaugeResponse)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.GaugeResponse)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -45,7 +45,7 @@ public final class Metrics {
     public io.grpc.testing.integration.Metrics.GaugeResponse.ValueCase getValueCase();
   }
   /**
-   * Protobuf type {@code grpc.testing.integration.GaugeResponse}
+   * Protobuf type {@code grpc.testing.GaugeResponse}
    *
    * <pre>
    * Reponse message containing the gauge name and value
@@ -53,7 +53,7 @@ public final class Metrics {
    */
   public  static final class GaugeResponse extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.integration.GaugeResponse)
+      // @@protoc_insertion_point(message_implements:grpc.testing.GaugeResponse)
       GaugeResponseOrBuilder {
     // Use GaugeResponse.newBuilder() to construct.
     private GaugeResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -123,12 +123,12 @@ public final class Metrics {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_GaugeResponse_descriptor;
+      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeResponse_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_GaugeResponse_fieldAccessorTable
+      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Metrics.GaugeResponse.class, io.grpc.testing.integration.Metrics.GaugeResponse.Builder.class);
     }
@@ -391,7 +391,7 @@ public final class Metrics {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.integration.GaugeResponse}
+     * Protobuf type {@code grpc.testing.GaugeResponse}
      *
      * <pre>
      * Reponse message containing the gauge name and value
@@ -399,16 +399,16 @@ public final class Metrics {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.integration.GaugeResponse)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.GaugeResponse)
         io.grpc.testing.integration.Metrics.GaugeResponseOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_GaugeResponse_descriptor;
+        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeResponse_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_GaugeResponse_fieldAccessorTable
+        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeResponse_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.testing.integration.Metrics.GaugeResponse.class, io.grpc.testing.integration.Metrics.GaugeResponse.Builder.class);
       }
@@ -438,7 +438,7 @@ public final class Metrics {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_GaugeResponse_descriptor;
+        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeResponse_descriptor;
       }
 
       public io.grpc.testing.integration.Metrics.GaugeResponse getDefaultInstanceForType() {
@@ -764,10 +764,10 @@ public final class Metrics {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.testing.integration.GaugeResponse)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.GaugeResponse)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.testing.integration.GaugeResponse)
+    // @@protoc_insertion_point(class_scope:grpc.testing.GaugeResponse)
     private static final io.grpc.testing.integration.Metrics.GaugeResponse DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.testing.integration.Metrics.GaugeResponse();
@@ -812,7 +812,7 @@ public final class Metrics {
   }
 
   public interface GaugeRequestOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.integration.GaugeRequest)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.GaugeRequest)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -826,7 +826,7 @@ public final class Metrics {
         getNameBytes();
   }
   /**
-   * Protobuf type {@code grpc.testing.integration.GaugeRequest}
+   * Protobuf type {@code grpc.testing.GaugeRequest}
    *
    * <pre>
    * Request message containing the gauge name
@@ -834,7 +834,7 @@ public final class Metrics {
    */
   public  static final class GaugeRequest extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.integration.GaugeRequest)
+      // @@protoc_insertion_point(message_implements:grpc.testing.GaugeRequest)
       GaugeRequestOrBuilder {
     // Use GaugeRequest.newBuilder() to construct.
     private GaugeRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -888,12 +888,12 @@ public final class Metrics {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_GaugeRequest_descriptor;
+      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeRequest_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_GaugeRequest_fieldAccessorTable
+      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Metrics.GaugeRequest.class, io.grpc.testing.integration.Metrics.GaugeRequest.Builder.class);
     }
@@ -1034,7 +1034,7 @@ public final class Metrics {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.integration.GaugeRequest}
+     * Protobuf type {@code grpc.testing.GaugeRequest}
      *
      * <pre>
      * Request message containing the gauge name
@@ -1042,16 +1042,16 @@ public final class Metrics {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.integration.GaugeRequest)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.GaugeRequest)
         io.grpc.testing.integration.Metrics.GaugeRequestOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_GaugeRequest_descriptor;
+        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeRequest_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_GaugeRequest_fieldAccessorTable
+        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeRequest_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.testing.integration.Metrics.GaugeRequest.class, io.grpc.testing.integration.Metrics.GaugeRequest.Builder.class);
       }
@@ -1079,7 +1079,7 @@ public final class Metrics {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_GaugeRequest_descriptor;
+        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_GaugeRequest_descriptor;
       }
 
       public io.grpc.testing.integration.Metrics.GaugeRequest getDefaultInstanceForType() {
@@ -1221,10 +1221,10 @@ public final class Metrics {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.testing.integration.GaugeRequest)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.GaugeRequest)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.testing.integration.GaugeRequest)
+    // @@protoc_insertion_point(class_scope:grpc.testing.GaugeRequest)
     private static final io.grpc.testing.integration.Metrics.GaugeRequest DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.testing.integration.Metrics.GaugeRequest();
@@ -1269,15 +1269,15 @@ public final class Metrics {
   }
 
   public interface EmptyMessageOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.integration.EmptyMessage)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.EmptyMessage)
       com.google.protobuf.MessageOrBuilder {
   }
   /**
-   * Protobuf type {@code grpc.testing.integration.EmptyMessage}
+   * Protobuf type {@code grpc.testing.EmptyMessage}
    */
   public  static final class EmptyMessage extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.integration.EmptyMessage)
+      // @@protoc_insertion_point(message_implements:grpc.testing.EmptyMessage)
       EmptyMessageOrBuilder {
     // Use EmptyMessage.newBuilder() to construct.
     private EmptyMessage(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -1323,12 +1323,12 @@ public final class Metrics {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_EmptyMessage_descriptor;
+      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_EmptyMessage_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_EmptyMessage_fieldAccessorTable
+      return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_EmptyMessage_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.testing.integration.Metrics.EmptyMessage.class, io.grpc.testing.integration.Metrics.EmptyMessage.Builder.class);
     }
@@ -1429,20 +1429,20 @@ public final class Metrics {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.integration.EmptyMessage}
+     * Protobuf type {@code grpc.testing.EmptyMessage}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.integration.EmptyMessage)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.EmptyMessage)
         io.grpc.testing.integration.Metrics.EmptyMessageOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_EmptyMessage_descriptor;
+        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_EmptyMessage_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_EmptyMessage_fieldAccessorTable
+        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_EmptyMessage_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.testing.integration.Metrics.EmptyMessage.class, io.grpc.testing.integration.Metrics.EmptyMessage.Builder.class);
       }
@@ -1468,7 +1468,7 @@ public final class Metrics {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_integration_EmptyMessage_descriptor;
+        return io.grpc.testing.integration.Metrics.internal_static_grpc_testing_EmptyMessage_descriptor;
       }
 
       public io.grpc.testing.integration.Metrics.EmptyMessage getDefaultInstanceForType() {
@@ -1536,10 +1536,10 @@ public final class Metrics {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.testing.integration.EmptyMessage)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.EmptyMessage)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.testing.integration.EmptyMessage)
+    // @@protoc_insertion_point(class_scope:grpc.testing.EmptyMessage)
     private static final io.grpc.testing.integration.Metrics.EmptyMessage DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.testing.integration.Metrics.EmptyMessage();
@@ -1584,20 +1584,20 @@ public final class Metrics {
   }
 
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_integration_GaugeResponse_descriptor;
+    internal_static_grpc_testing_GaugeResponse_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_testing_integration_GaugeResponse_fieldAccessorTable;
+      internal_static_grpc_testing_GaugeResponse_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_integration_GaugeRequest_descriptor;
+    internal_static_grpc_testing_GaugeRequest_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_testing_integration_GaugeRequest_fieldAccessorTable;
+      internal_static_grpc_testing_GaugeRequest_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_integration_EmptyMessage_descriptor;
+    internal_static_grpc_testing_EmptyMessage_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_testing_integration_EmptyMessage_fieldAccessorTable;
+      internal_static_grpc_testing_EmptyMessage_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -1608,17 +1608,16 @@ public final class Metrics {
   static {
     java.lang.String[] descriptorData = {
       "\n)io/grpc/testing/integration/metrics.pr" +
-      "oto\022\030grpc.testing.integration\"l\n\rGaugeRe" +
-      "sponse\022\014\n\004name\030\001 \001(\t\022\024\n\nlong_value\030\002 \001(\003" +
-      "H\000\022\026\n\014double_value\030\003 \001(\001H\000\022\026\n\014string_val" +
-      "ue\030\004 \001(\tH\000B\007\n\005value\"\034\n\014GaugeRequest\022\014\n\004n" +
-      "ame\030\001 \001(\t\"\016\n\014EmptyMessage2\320\001\n\016MetricsSer" +
-      "vice\022a\n\014GetAllGauges\022&.grpc.testing.inte" +
-      "gration.EmptyMessage\032\'.grpc.testing.inte" +
-      "gration.GaugeResponse0\001\022[\n\010GetGauge\022&.gr" +
-      "pc.testing.integration.GaugeRequest\032\'.gr",
-      "pc.testing.integration.GaugeResponseB\035\n\033" +
-      "io.grpc.testing.integrationb\006proto3"
+      "oto\022\014grpc.testing\"l\n\rGaugeResponse\022\014\n\004na" +
+      "me\030\001 \001(\t\022\024\n\nlong_value\030\002 \001(\003H\000\022\026\n\014double" +
+      "_value\030\003 \001(\001H\000\022\026\n\014string_value\030\004 \001(\tH\000B\007" +
+      "\n\005value\"\034\n\014GaugeRequest\022\014\n\004name\030\001 \001(\t\"\016\n" +
+      "\014EmptyMessage2\240\001\n\016MetricsService\022I\n\014GetA" +
+      "llGauges\022\032.grpc.testing.EmptyMessage\032\033.g" +
+      "rpc.testing.GaugeResponse0\001\022C\n\010GetGauge\022" +
+      "\032.grpc.testing.GaugeRequest\032\033.grpc.testi" +
+      "ng.GaugeResponseB\035\n\033io.grpc.testing.inte",
+      "grationb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -1632,23 +1631,23 @@ public final class Metrics {
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         }, assigner);
-    internal_static_grpc_testing_integration_GaugeResponse_descriptor =
+    internal_static_grpc_testing_GaugeResponse_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_grpc_testing_integration_GaugeResponse_fieldAccessorTable = new
+    internal_static_grpc_testing_GaugeResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_testing_integration_GaugeResponse_descriptor,
+        internal_static_grpc_testing_GaugeResponse_descriptor,
         new java.lang.String[] { "Name", "LongValue", "DoubleValue", "StringValue", "Value", });
-    internal_static_grpc_testing_integration_GaugeRequest_descriptor =
+    internal_static_grpc_testing_GaugeRequest_descriptor =
       getDescriptor().getMessageTypes().get(1);
-    internal_static_grpc_testing_integration_GaugeRequest_fieldAccessorTable = new
+    internal_static_grpc_testing_GaugeRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_testing_integration_GaugeRequest_descriptor,
+        internal_static_grpc_testing_GaugeRequest_descriptor,
         new java.lang.String[] { "Name", });
-    internal_static_grpc_testing_integration_EmptyMessage_descriptor =
+    internal_static_grpc_testing_EmptyMessage_descriptor =
       getDescriptor().getMessageTypes().get(2);
-    internal_static_grpc_testing_integration_EmptyMessage_fieldAccessorTable = new
+    internal_static_grpc_testing_EmptyMessage_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_testing_integration_EmptyMessage_descriptor,
+        internal_static_grpc_testing_EmptyMessage_descriptor,
         new java.lang.String[] { });
   }
 

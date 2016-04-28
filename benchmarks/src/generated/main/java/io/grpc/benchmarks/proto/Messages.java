@@ -9,7 +9,7 @@ public final class Messages {
       com.google.protobuf.ExtensionRegistry registry) {
   }
   /**
-   * Protobuf enum {@code grpc.benchmarks.PayloadType}
+   * Protobuf enum {@code grpc.testing.PayloadType}
    *
    * <pre>
    * The type of payload that should be returned.
@@ -134,11 +134,11 @@ public final class Messages {
       this.value = value;
     }
 
-    // @@protoc_insertion_point(enum_scope:grpc.benchmarks.PayloadType)
+    // @@protoc_insertion_point(enum_scope:grpc.testing.PayloadType)
   }
 
   /**
-   * Protobuf enum {@code grpc.benchmarks.CompressionType}
+   * Protobuf enum {@code grpc.testing.CompressionType}
    *
    * <pre>
    * Compression algorithms
@@ -247,15 +247,15 @@ public final class Messages {
       this.value = value;
     }
 
-    // @@protoc_insertion_point(enum_scope:grpc.benchmarks.CompressionType)
+    // @@protoc_insertion_point(enum_scope:grpc.testing.CompressionType)
   }
 
   public interface PayloadOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.Payload)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.Payload)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.PayloadType type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType type = 1;</code>
      *
      * <pre>
      * The type of data in body.
@@ -263,7 +263,7 @@ public final class Messages {
      */
     int getTypeValue();
     /**
-     * <code>optional .grpc.benchmarks.PayloadType type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType type = 1;</code>
      *
      * <pre>
      * The type of data in body.
@@ -281,7 +281,7 @@ public final class Messages {
     com.google.protobuf.ByteString getBody();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.Payload}
+   * Protobuf type {@code grpc.testing.Payload}
    *
    * <pre>
    * A block of data, to simply increase gRPC message size.
@@ -289,7 +289,7 @@ public final class Messages {
    */
   public  static final class Payload extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.Payload)
+      // @@protoc_insertion_point(message_implements:grpc.testing.Payload)
       PayloadOrBuilder {
     // Use Payload.newBuilder() to construct.
     private Payload(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -349,12 +349,12 @@ public final class Messages {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_Payload_descriptor;
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_Payload_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_Payload_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_Payload_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Messages.Payload.class, io.grpc.benchmarks.proto.Messages.Payload.Builder.class);
     }
@@ -362,7 +362,7 @@ public final class Messages {
     public static final int TYPE_FIELD_NUMBER = 1;
     private int type_;
     /**
-     * <code>optional .grpc.benchmarks.PayloadType type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType type = 1;</code>
      *
      * <pre>
      * The type of data in body.
@@ -372,7 +372,7 @@ public final class Messages {
       return type_;
     }
     /**
-     * <code>optional .grpc.benchmarks.PayloadType type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType type = 1;</code>
      *
      * <pre>
      * The type of data in body.
@@ -506,7 +506,7 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.Payload}
+     * Protobuf type {@code grpc.testing.Payload}
      *
      * <pre>
      * A block of data, to simply increase gRPC message size.
@@ -514,16 +514,16 @@ public final class Messages {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.Payload)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.Payload)
         io.grpc.benchmarks.proto.Messages.PayloadOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_Payload_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_Payload_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_Payload_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_Payload_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Messages.Payload.class, io.grpc.benchmarks.proto.Messages.Payload.Builder.class);
       }
@@ -553,7 +553,7 @@ public final class Messages {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_Payload_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_Payload_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Messages.Payload getDefaultInstanceForType() {
@@ -621,7 +621,7 @@ public final class Messages {
 
       private int type_ = 0;
       /**
-       * <code>optional .grpc.benchmarks.PayloadType type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType type = 1;</code>
        *
        * <pre>
        * The type of data in body.
@@ -631,7 +631,7 @@ public final class Messages {
         return type_;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType type = 1;</code>
        *
        * <pre>
        * The type of data in body.
@@ -643,7 +643,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType type = 1;</code>
        *
        * <pre>
        * The type of data in body.
@@ -654,7 +654,7 @@ public final class Messages {
         return result == null ? io.grpc.benchmarks.proto.Messages.PayloadType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType type = 1;</code>
        *
        * <pre>
        * The type of data in body.
@@ -670,7 +670,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType type = 1;</code>
        *
        * <pre>
        * The type of data in body.
@@ -734,10 +734,10 @@ public final class Messages {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.Payload)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.Payload)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.Payload)
+    // @@protoc_insertion_point(class_scope:grpc.testing.Payload)
     private static final io.grpc.benchmarks.proto.Messages.Payload DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.Payload();
@@ -782,7 +782,7 @@ public final class Messages {
   }
 
   public interface EchoStatusOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.EchoStatus)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.EchoStatus)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -801,7 +801,7 @@ public final class Messages {
         getMessageBytes();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.EchoStatus}
+   * Protobuf type {@code grpc.testing.EchoStatus}
    *
    * <pre>
    * A protobuf representation for grpc status. This is used by test
@@ -810,7 +810,7 @@ public final class Messages {
    */
   public  static final class EchoStatus extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.EchoStatus)
+      // @@protoc_insertion_point(message_implements:grpc.testing.EchoStatus)
       EchoStatusOrBuilder {
     // Use EchoStatus.newBuilder() to construct.
     private EchoStatus(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -870,12 +870,12 @@ public final class Messages {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_EchoStatus_descriptor;
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_EchoStatus_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_EchoStatus_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_EchoStatus_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Messages.EchoStatus.class, io.grpc.benchmarks.proto.Messages.EchoStatus.Builder.class);
     }
@@ -1032,7 +1032,7 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.EchoStatus}
+     * Protobuf type {@code grpc.testing.EchoStatus}
      *
      * <pre>
      * A protobuf representation for grpc status. This is used by test
@@ -1041,16 +1041,16 @@ public final class Messages {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.EchoStatus)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.EchoStatus)
         io.grpc.benchmarks.proto.Messages.EchoStatusOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_EchoStatus_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_EchoStatus_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_EchoStatus_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_EchoStatus_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Messages.EchoStatus.class, io.grpc.benchmarks.proto.Messages.EchoStatus.Builder.class);
       }
@@ -1080,7 +1080,7 @@ public final class Messages {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_EchoStatus_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_EchoStatus_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Messages.EchoStatus getDefaultInstanceForType() {
@@ -1252,10 +1252,10 @@ public final class Messages {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.EchoStatus)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.EchoStatus)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.EchoStatus)
+    // @@protoc_insertion_point(class_scope:grpc.testing.EchoStatus)
     private static final io.grpc.benchmarks.proto.Messages.EchoStatus DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.EchoStatus();
@@ -1300,11 +1300,11 @@ public final class Messages {
   }
 
   public interface SimpleRequestOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.SimpleRequest)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.SimpleRequest)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      *
      * <pre>
      * Desired payload type in the response from the server.
@@ -1313,7 +1313,7 @@ public final class Messages {
      */
     int getResponseTypeValue();
     /**
-     * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      *
      * <pre>
      * Desired payload type in the response from the server.
@@ -1333,7 +1333,7 @@ public final class Messages {
     int getResponseSize();
 
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -1341,7 +1341,7 @@ public final class Messages {
      */
     boolean hasPayload();
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -1349,7 +1349,7 @@ public final class Messages {
      */
     io.grpc.benchmarks.proto.Messages.Payload getPayload();
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -1376,7 +1376,7 @@ public final class Messages {
     boolean getFillOauthScope();
 
     /**
-     * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
@@ -1384,7 +1384,7 @@ public final class Messages {
      */
     int getResponseCompressionValue();
     /**
-     * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
@@ -1393,7 +1393,7 @@ public final class Messages {
     io.grpc.benchmarks.proto.Messages.CompressionType getResponseCompression();
 
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -1401,7 +1401,7 @@ public final class Messages {
      */
     boolean hasResponseStatus();
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -1409,7 +1409,7 @@ public final class Messages {
      */
     io.grpc.benchmarks.proto.Messages.EchoStatus getResponseStatus();
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -1418,7 +1418,7 @@ public final class Messages {
     io.grpc.benchmarks.proto.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.SimpleRequest}
+   * Protobuf type {@code grpc.testing.SimpleRequest}
    *
    * <pre>
    * Unary request.
@@ -1426,7 +1426,7 @@ public final class Messages {
    */
   public  static final class SimpleRequest extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.SimpleRequest)
+      // @@protoc_insertion_point(message_implements:grpc.testing.SimpleRequest)
       SimpleRequestOrBuilder {
     // Use SimpleRequest.newBuilder() to construct.
     private SimpleRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -1531,12 +1531,12 @@ public final class Messages {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_SimpleRequest_descriptor;
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_SimpleRequest_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_SimpleRequest_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_SimpleRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Messages.SimpleRequest.class, io.grpc.benchmarks.proto.Messages.SimpleRequest.Builder.class);
     }
@@ -1544,7 +1544,7 @@ public final class Messages {
     public static final int RESPONSE_TYPE_FIELD_NUMBER = 1;
     private int responseType_;
     /**
-     * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      *
      * <pre>
      * Desired payload type in the response from the server.
@@ -1555,7 +1555,7 @@ public final class Messages {
       return responseType_;
     }
     /**
-     * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      *
      * <pre>
      * Desired payload type in the response from the server.
@@ -1584,7 +1584,7 @@ public final class Messages {
     public static final int PAYLOAD_FIELD_NUMBER = 3;
     private io.grpc.benchmarks.proto.Messages.Payload payload_;
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -1594,7 +1594,7 @@ public final class Messages {
       return payload_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -1604,7 +1604,7 @@ public final class Messages {
       return payload_ == null ? io.grpc.benchmarks.proto.Messages.Payload.getDefaultInstance() : payload_;
     }
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -1643,7 +1643,7 @@ public final class Messages {
     public static final int RESPONSE_COMPRESSION_FIELD_NUMBER = 6;
     private int responseCompression_;
     /**
-     * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
@@ -1653,7 +1653,7 @@ public final class Messages {
       return responseCompression_;
     }
     /**
-     * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
@@ -1667,7 +1667,7 @@ public final class Messages {
     public static final int RESPONSE_STATUS_FIELD_NUMBER = 7;
     private io.grpc.benchmarks.proto.Messages.EchoStatus responseStatus_;
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -1677,7 +1677,7 @@ public final class Messages {
       return responseStatus_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -1687,7 +1687,7 @@ public final class Messages {
       return responseStatus_ == null ? io.grpc.benchmarks.proto.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
     }
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -1842,7 +1842,7 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.SimpleRequest}
+     * Protobuf type {@code grpc.testing.SimpleRequest}
      *
      * <pre>
      * Unary request.
@@ -1850,16 +1850,16 @@ public final class Messages {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.SimpleRequest)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.SimpleRequest)
         io.grpc.benchmarks.proto.Messages.SimpleRequestOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_SimpleRequest_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_SimpleRequest_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_SimpleRequest_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_SimpleRequest_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Messages.SimpleRequest.class, io.grpc.benchmarks.proto.Messages.SimpleRequest.Builder.class);
       }
@@ -1907,7 +1907,7 @@ public final class Messages {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_SimpleRequest_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_SimpleRequest_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Messages.SimpleRequest getDefaultInstanceForType() {
@@ -2003,7 +2003,7 @@ public final class Messages {
 
       private int responseType_ = 0;
       /**
-       * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        *
        * <pre>
        * Desired payload type in the response from the server.
@@ -2014,7 +2014,7 @@ public final class Messages {
         return responseType_;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        *
        * <pre>
        * Desired payload type in the response from the server.
@@ -2027,7 +2027,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        *
        * <pre>
        * Desired payload type in the response from the server.
@@ -2039,7 +2039,7 @@ public final class Messages {
         return result == null ? io.grpc.benchmarks.proto.Messages.PayloadType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        *
        * <pre>
        * Desired payload type in the response from the server.
@@ -2056,7 +2056,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        *
        * <pre>
        * Desired payload type in the response from the server.
@@ -2115,7 +2115,7 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Messages.Payload, io.grpc.benchmarks.proto.Messages.Payload.Builder, io.grpc.benchmarks.proto.Messages.PayloadOrBuilder> payloadBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -2125,7 +2125,7 @@ public final class Messages {
         return payloadBuilder_ != null || payload_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -2139,7 +2139,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -2159,7 +2159,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -2177,7 +2177,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -2199,7 +2199,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -2217,7 +2217,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -2229,7 +2229,7 @@ public final class Messages {
         return getPayloadFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -2244,7 +2244,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -2342,7 +2342,7 @@ public final class Messages {
 
       private int responseCompression_ = 0;
       /**
-       * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
@@ -2352,7 +2352,7 @@ public final class Messages {
         return responseCompression_;
       }
       /**
-       * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
@@ -2364,7 +2364,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
@@ -2375,7 +2375,7 @@ public final class Messages {
         return result == null ? io.grpc.benchmarks.proto.Messages.CompressionType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
@@ -2391,7 +2391,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
@@ -2408,7 +2408,7 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Messages.EchoStatus, io.grpc.benchmarks.proto.Messages.EchoStatus.Builder, io.grpc.benchmarks.proto.Messages.EchoStatusOrBuilder> responseStatusBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -2418,7 +2418,7 @@ public final class Messages {
         return responseStatusBuilder_ != null || responseStatus_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -2432,7 +2432,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -2452,7 +2452,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -2470,7 +2470,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -2492,7 +2492,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -2510,7 +2510,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -2522,7 +2522,7 @@ public final class Messages {
         return getResponseStatusFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -2537,7 +2537,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -2567,10 +2567,10 @@ public final class Messages {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.SimpleRequest)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.SimpleRequest)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.SimpleRequest)
+    // @@protoc_insertion_point(class_scope:grpc.testing.SimpleRequest)
     private static final io.grpc.benchmarks.proto.Messages.SimpleRequest DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.SimpleRequest();
@@ -2615,11 +2615,11 @@ public final class Messages {
   }
 
   public interface SimpleResponseOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.SimpleResponse)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.SimpleResponse)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase message size.
@@ -2627,7 +2627,7 @@ public final class Messages {
      */
     boolean hasPayload();
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase message size.
@@ -2635,7 +2635,7 @@ public final class Messages {
      */
     io.grpc.benchmarks.proto.Messages.Payload getPayload();
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase message size.
@@ -2682,7 +2682,7 @@ public final class Messages {
         getOauthScopeBytes();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.SimpleResponse}
+   * Protobuf type {@code grpc.testing.SimpleResponse}
    *
    * <pre>
    * Unary response, as configured by the request.
@@ -2690,7 +2690,7 @@ public final class Messages {
    */
   public  static final class SimpleResponse extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.SimpleResponse)
+      // @@protoc_insertion_point(message_implements:grpc.testing.SimpleResponse)
       SimpleResponseOrBuilder {
     // Use SimpleResponse.newBuilder() to construct.
     private SimpleResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -2764,12 +2764,12 @@ public final class Messages {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_SimpleResponse_descriptor;
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_SimpleResponse_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_SimpleResponse_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_SimpleResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Messages.SimpleResponse.class, io.grpc.benchmarks.proto.Messages.SimpleResponse.Builder.class);
     }
@@ -2777,7 +2777,7 @@ public final class Messages {
     public static final int PAYLOAD_FIELD_NUMBER = 1;
     private io.grpc.benchmarks.proto.Messages.Payload payload_;
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase message size.
@@ -2787,7 +2787,7 @@ public final class Messages {
       return payload_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase message size.
@@ -2797,7 +2797,7 @@ public final class Messages {
       return payload_ == null ? io.grpc.benchmarks.proto.Messages.Payload.getDefaultInstance() : payload_;
     }
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase message size.
@@ -3008,7 +3008,7 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.SimpleResponse}
+     * Protobuf type {@code grpc.testing.SimpleResponse}
      *
      * <pre>
      * Unary response, as configured by the request.
@@ -3016,16 +3016,16 @@ public final class Messages {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.SimpleResponse)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.SimpleResponse)
         io.grpc.benchmarks.proto.Messages.SimpleResponseOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_SimpleResponse_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_SimpleResponse_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_SimpleResponse_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_SimpleResponse_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Messages.SimpleResponse.class, io.grpc.benchmarks.proto.Messages.SimpleResponse.Builder.class);
       }
@@ -3061,7 +3061,7 @@ public final class Messages {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_SimpleResponse_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_SimpleResponse_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Messages.SimpleResponse getDefaultInstanceForType() {
@@ -3141,7 +3141,7 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Messages.Payload, io.grpc.benchmarks.proto.Messages.Payload.Builder, io.grpc.benchmarks.proto.Messages.PayloadOrBuilder> payloadBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase message size.
@@ -3151,7 +3151,7 @@ public final class Messages {
         return payloadBuilder_ != null || payload_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase message size.
@@ -3165,7 +3165,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase message size.
@@ -3185,7 +3185,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase message size.
@@ -3203,7 +3203,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase message size.
@@ -3225,7 +3225,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase message size.
@@ -3243,7 +3243,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase message size.
@@ -3255,7 +3255,7 @@ public final class Messages {
         return getPayloadFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase message size.
@@ -3270,7 +3270,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase message size.
@@ -3483,10 +3483,10 @@ public final class Messages {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.SimpleResponse)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.SimpleResponse)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.SimpleResponse)
+    // @@protoc_insertion_point(class_scope:grpc.testing.SimpleResponse)
     private static final io.grpc.benchmarks.proto.Messages.SimpleResponse DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.SimpleResponse();
@@ -3531,11 +3531,11 @@ public final class Messages {
   }
 
   public interface StreamingInputCallRequestOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.StreamingInputCallRequest)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.StreamingInputCallRequest)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -3543,7 +3543,7 @@ public final class Messages {
      */
     boolean hasPayload();
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -3551,7 +3551,7 @@ public final class Messages {
      */
     io.grpc.benchmarks.proto.Messages.Payload getPayload();
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -3560,7 +3560,7 @@ public final class Messages {
     io.grpc.benchmarks.proto.Messages.PayloadOrBuilder getPayloadOrBuilder();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.StreamingInputCallRequest}
+   * Protobuf type {@code grpc.testing.StreamingInputCallRequest}
    *
    * <pre>
    * Client-streaming request.
@@ -3568,7 +3568,7 @@ public final class Messages {
    */
   public  static final class StreamingInputCallRequest extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.StreamingInputCallRequest)
+      // @@protoc_insertion_point(message_implements:grpc.testing.StreamingInputCallRequest)
       StreamingInputCallRequestOrBuilder {
     // Use StreamingInputCallRequest.newBuilder() to construct.
     private StreamingInputCallRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -3628,12 +3628,12 @@ public final class Messages {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingInputCallRequest_descriptor;
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingInputCallRequest_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingInputCallRequest_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingInputCallRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Messages.StreamingInputCallRequest.class, io.grpc.benchmarks.proto.Messages.StreamingInputCallRequest.Builder.class);
     }
@@ -3641,7 +3641,7 @@ public final class Messages {
     public static final int PAYLOAD_FIELD_NUMBER = 1;
     private io.grpc.benchmarks.proto.Messages.Payload payload_;
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -3651,7 +3651,7 @@ public final class Messages {
       return payload_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -3661,7 +3661,7 @@ public final class Messages {
       return payload_ == null ? io.grpc.benchmarks.proto.Messages.Payload.getDefaultInstance() : payload_;
     }
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -3774,7 +3774,7 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.StreamingInputCallRequest}
+     * Protobuf type {@code grpc.testing.StreamingInputCallRequest}
      *
      * <pre>
      * Client-streaming request.
@@ -3782,16 +3782,16 @@ public final class Messages {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.StreamingInputCallRequest)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.StreamingInputCallRequest)
         io.grpc.benchmarks.proto.Messages.StreamingInputCallRequestOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingInputCallRequest_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingInputCallRequest_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingInputCallRequest_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingInputCallRequest_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Messages.StreamingInputCallRequest.class, io.grpc.benchmarks.proto.Messages.StreamingInputCallRequest.Builder.class);
       }
@@ -3823,7 +3823,7 @@ public final class Messages {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingInputCallRequest_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingInputCallRequest_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Messages.StreamingInputCallRequest getDefaultInstanceForType() {
@@ -3893,7 +3893,7 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Messages.Payload, io.grpc.benchmarks.proto.Messages.Payload.Builder, io.grpc.benchmarks.proto.Messages.PayloadOrBuilder> payloadBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -3903,7 +3903,7 @@ public final class Messages {
         return payloadBuilder_ != null || payload_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -3917,7 +3917,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -3937,7 +3937,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -3955,7 +3955,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -3977,7 +3977,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -3995,7 +3995,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -4007,7 +4007,7 @@ public final class Messages {
         return getPayloadFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -4022,7 +4022,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -4052,10 +4052,10 @@ public final class Messages {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.StreamingInputCallRequest)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.StreamingInputCallRequest)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.StreamingInputCallRequest)
+    // @@protoc_insertion_point(class_scope:grpc.testing.StreamingInputCallRequest)
     private static final io.grpc.benchmarks.proto.Messages.StreamingInputCallRequest DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.StreamingInputCallRequest();
@@ -4100,7 +4100,7 @@ public final class Messages {
   }
 
   public interface StreamingInputCallResponseOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.StreamingInputCallResponse)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.StreamingInputCallResponse)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -4113,7 +4113,7 @@ public final class Messages {
     int getAggregatedPayloadSize();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.StreamingInputCallResponse}
+   * Protobuf type {@code grpc.testing.StreamingInputCallResponse}
    *
    * <pre>
    * Client-streaming response.
@@ -4121,7 +4121,7 @@ public final class Messages {
    */
   public  static final class StreamingInputCallResponse extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.StreamingInputCallResponse)
+      // @@protoc_insertion_point(message_implements:grpc.testing.StreamingInputCallResponse)
       StreamingInputCallResponseOrBuilder {
     // Use StreamingInputCallResponse.newBuilder() to construct.
     private StreamingInputCallResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -4174,12 +4174,12 @@ public final class Messages {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingInputCallResponse_descriptor;
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingInputCallResponse_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingInputCallResponse_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingInputCallResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Messages.StreamingInputCallResponse.class, io.grpc.benchmarks.proto.Messages.StreamingInputCallResponse.Builder.class);
     }
@@ -4300,7 +4300,7 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.StreamingInputCallResponse}
+     * Protobuf type {@code grpc.testing.StreamingInputCallResponse}
      *
      * <pre>
      * Client-streaming response.
@@ -4308,16 +4308,16 @@ public final class Messages {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.StreamingInputCallResponse)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.StreamingInputCallResponse)
         io.grpc.benchmarks.proto.Messages.StreamingInputCallResponseOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingInputCallResponse_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingInputCallResponse_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingInputCallResponse_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingInputCallResponse_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Messages.StreamingInputCallResponse.class, io.grpc.benchmarks.proto.Messages.StreamingInputCallResponse.Builder.class);
       }
@@ -4345,7 +4345,7 @@ public final class Messages {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingInputCallResponse_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingInputCallResponse_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Messages.StreamingInputCallResponse getDefaultInstanceForType() {
@@ -4455,10 +4455,10 @@ public final class Messages {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.StreamingInputCallResponse)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.StreamingInputCallResponse)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.StreamingInputCallResponse)
+    // @@protoc_insertion_point(class_scope:grpc.testing.StreamingInputCallResponse)
     private static final io.grpc.benchmarks.proto.Messages.StreamingInputCallResponse DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.StreamingInputCallResponse();
@@ -4503,7 +4503,7 @@ public final class Messages {
   }
 
   public interface ResponseParametersOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ResponseParameters)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ResponseParameters)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -4527,7 +4527,7 @@ public final class Messages {
     int getIntervalUs();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ResponseParameters}
+   * Protobuf type {@code grpc.testing.ResponseParameters}
    *
    * <pre>
    * Configuration for a particular response.
@@ -4535,7 +4535,7 @@ public final class Messages {
    */
   public  static final class ResponseParameters extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ResponseParameters)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ResponseParameters)
       ResponseParametersOrBuilder {
     // Use ResponseParameters.newBuilder() to construct.
     private ResponseParameters(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -4594,12 +4594,12 @@ public final class Messages {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_ResponseParameters_descriptor;
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ResponseParameters_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_ResponseParameters_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ResponseParameters_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Messages.ResponseParameters.class, io.grpc.benchmarks.proto.Messages.ResponseParameters.Builder.class);
     }
@@ -4742,7 +4742,7 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ResponseParameters}
+     * Protobuf type {@code grpc.testing.ResponseParameters}
      *
      * <pre>
      * Configuration for a particular response.
@@ -4750,16 +4750,16 @@ public final class Messages {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ResponseParameters)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ResponseParameters)
         io.grpc.benchmarks.proto.Messages.ResponseParametersOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_ResponseParameters_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ResponseParameters_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_ResponseParameters_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ResponseParameters_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Messages.ResponseParameters.class, io.grpc.benchmarks.proto.Messages.ResponseParameters.Builder.class);
       }
@@ -4789,7 +4789,7 @@ public final class Messages {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_ResponseParameters_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ResponseParameters_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Messages.ResponseParameters getDefaultInstanceForType() {
@@ -4947,10 +4947,10 @@ public final class Messages {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ResponseParameters)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ResponseParameters)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ResponseParameters)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ResponseParameters)
     private static final io.grpc.benchmarks.proto.Messages.ResponseParameters DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.ResponseParameters();
@@ -4995,11 +4995,11 @@ public final class Messages {
   }
 
   public interface StreamingOutputCallRequestOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.StreamingOutputCallRequest)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.StreamingOutputCallRequest)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      *
      * <pre>
      * Desired payload type in the response from the server.
@@ -5010,7 +5010,7 @@ public final class Messages {
      */
     int getResponseTypeValue();
     /**
-     * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      *
      * <pre>
      * Desired payload type in the response from the server.
@@ -5022,7 +5022,7 @@ public final class Messages {
     io.grpc.benchmarks.proto.Messages.PayloadType getResponseType();
 
     /**
-     * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      *
      * <pre>
      * Configuration for each expected response message.
@@ -5031,7 +5031,7 @@ public final class Messages {
     java.util.List<io.grpc.benchmarks.proto.Messages.ResponseParameters> 
         getResponseParametersList();
     /**
-     * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      *
      * <pre>
      * Configuration for each expected response message.
@@ -5039,7 +5039,7 @@ public final class Messages {
      */
     io.grpc.benchmarks.proto.Messages.ResponseParameters getResponseParameters(int index);
     /**
-     * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      *
      * <pre>
      * Configuration for each expected response message.
@@ -5047,7 +5047,7 @@ public final class Messages {
      */
     int getResponseParametersCount();
     /**
-     * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      *
      * <pre>
      * Configuration for each expected response message.
@@ -5056,7 +5056,7 @@ public final class Messages {
     java.util.List<? extends io.grpc.benchmarks.proto.Messages.ResponseParametersOrBuilder> 
         getResponseParametersOrBuilderList();
     /**
-     * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      *
      * <pre>
      * Configuration for each expected response message.
@@ -5066,7 +5066,7 @@ public final class Messages {
         int index);
 
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -5074,7 +5074,7 @@ public final class Messages {
      */
     boolean hasPayload();
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -5082,7 +5082,7 @@ public final class Messages {
      */
     io.grpc.benchmarks.proto.Messages.Payload getPayload();
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -5091,7 +5091,7 @@ public final class Messages {
     io.grpc.benchmarks.proto.Messages.PayloadOrBuilder getPayloadOrBuilder();
 
     /**
-     * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
@@ -5099,7 +5099,7 @@ public final class Messages {
      */
     int getResponseCompressionValue();
     /**
-     * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
@@ -5108,7 +5108,7 @@ public final class Messages {
     io.grpc.benchmarks.proto.Messages.CompressionType getResponseCompression();
 
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -5116,7 +5116,7 @@ public final class Messages {
      */
     boolean hasResponseStatus();
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -5124,7 +5124,7 @@ public final class Messages {
      */
     io.grpc.benchmarks.proto.Messages.EchoStatus getResponseStatus();
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -5133,7 +5133,7 @@ public final class Messages {
     io.grpc.benchmarks.proto.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.StreamingOutputCallRequest}
+   * Protobuf type {@code grpc.testing.StreamingOutputCallRequest}
    *
    * <pre>
    * Server-streaming request.
@@ -5141,7 +5141,7 @@ public final class Messages {
    */
   public  static final class StreamingOutputCallRequest extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.StreamingOutputCallRequest)
+      // @@protoc_insertion_point(message_implements:grpc.testing.StreamingOutputCallRequest)
       StreamingOutputCallRequestOrBuilder {
     // Use StreamingOutputCallRequest.newBuilder() to construct.
     private StreamingOutputCallRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -5240,12 +5240,12 @@ public final class Messages {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingOutputCallRequest_descriptor;
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingOutputCallRequest_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingOutputCallRequest_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingOutputCallRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Messages.StreamingOutputCallRequest.class, io.grpc.benchmarks.proto.Messages.StreamingOutputCallRequest.Builder.class);
     }
@@ -5254,7 +5254,7 @@ public final class Messages {
     public static final int RESPONSE_TYPE_FIELD_NUMBER = 1;
     private int responseType_;
     /**
-     * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      *
      * <pre>
      * Desired payload type in the response from the server.
@@ -5267,7 +5267,7 @@ public final class Messages {
       return responseType_;
     }
     /**
-     * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      *
      * <pre>
      * Desired payload type in the response from the server.
@@ -5284,7 +5284,7 @@ public final class Messages {
     public static final int RESPONSE_PARAMETERS_FIELD_NUMBER = 2;
     private java.util.List<io.grpc.benchmarks.proto.Messages.ResponseParameters> responseParameters_;
     /**
-     * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      *
      * <pre>
      * Configuration for each expected response message.
@@ -5294,7 +5294,7 @@ public final class Messages {
       return responseParameters_;
     }
     /**
-     * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      *
      * <pre>
      * Configuration for each expected response message.
@@ -5305,7 +5305,7 @@ public final class Messages {
       return responseParameters_;
     }
     /**
-     * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      *
      * <pre>
      * Configuration for each expected response message.
@@ -5315,7 +5315,7 @@ public final class Messages {
       return responseParameters_.size();
     }
     /**
-     * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      *
      * <pre>
      * Configuration for each expected response message.
@@ -5325,7 +5325,7 @@ public final class Messages {
       return responseParameters_.get(index);
     }
     /**
-     * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      *
      * <pre>
      * Configuration for each expected response message.
@@ -5339,7 +5339,7 @@ public final class Messages {
     public static final int PAYLOAD_FIELD_NUMBER = 3;
     private io.grpc.benchmarks.proto.Messages.Payload payload_;
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -5349,7 +5349,7 @@ public final class Messages {
       return payload_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -5359,7 +5359,7 @@ public final class Messages {
       return payload_ == null ? io.grpc.benchmarks.proto.Messages.Payload.getDefaultInstance() : payload_;
     }
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      *
      * <pre>
      * Optional input payload sent along with the request.
@@ -5372,7 +5372,7 @@ public final class Messages {
     public static final int RESPONSE_COMPRESSION_FIELD_NUMBER = 6;
     private int responseCompression_;
     /**
-     * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
@@ -5382,7 +5382,7 @@ public final class Messages {
       return responseCompression_;
     }
     /**
-     * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
@@ -5396,7 +5396,7 @@ public final class Messages {
     public static final int RESPONSE_STATUS_FIELD_NUMBER = 7;
     private io.grpc.benchmarks.proto.Messages.EchoStatus responseStatus_;
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -5406,7 +5406,7 @@ public final class Messages {
       return responseStatus_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -5416,7 +5416,7 @@ public final class Messages {
       return responseStatus_ == null ? io.grpc.benchmarks.proto.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
     }
     /**
-     * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      *
      * <pre>
      * Whether server should return a given status
@@ -5557,7 +5557,7 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.StreamingOutputCallRequest}
+     * Protobuf type {@code grpc.testing.StreamingOutputCallRequest}
      *
      * <pre>
      * Server-streaming request.
@@ -5565,16 +5565,16 @@ public final class Messages {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.StreamingOutputCallRequest)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.StreamingOutputCallRequest)
         io.grpc.benchmarks.proto.Messages.StreamingOutputCallRequestOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingOutputCallRequest_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingOutputCallRequest_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingOutputCallRequest_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingOutputCallRequest_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Messages.StreamingOutputCallRequest.class, io.grpc.benchmarks.proto.Messages.StreamingOutputCallRequest.Builder.class);
       }
@@ -5623,7 +5623,7 @@ public final class Messages {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingOutputCallRequest_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingOutputCallRequest_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Messages.StreamingOutputCallRequest getDefaultInstanceForType() {
@@ -5746,7 +5746,7 @@ public final class Messages {
 
       private int responseType_ = 0;
       /**
-       * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        *
        * <pre>
        * Desired payload type in the response from the server.
@@ -5759,7 +5759,7 @@ public final class Messages {
         return responseType_;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        *
        * <pre>
        * Desired payload type in the response from the server.
@@ -5774,7 +5774,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        *
        * <pre>
        * Desired payload type in the response from the server.
@@ -5788,7 +5788,7 @@ public final class Messages {
         return result == null ? io.grpc.benchmarks.proto.Messages.PayloadType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        *
        * <pre>
        * Desired payload type in the response from the server.
@@ -5807,7 +5807,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.PayloadType response_type = 1;</code>
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        *
        * <pre>
        * Desired payload type in the response from the server.
@@ -5836,7 +5836,7 @@ public final class Messages {
           io.grpc.benchmarks.proto.Messages.ResponseParameters, io.grpc.benchmarks.proto.Messages.ResponseParameters.Builder, io.grpc.benchmarks.proto.Messages.ResponseParametersOrBuilder> responseParametersBuilder_;
 
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -5850,7 +5850,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -5864,7 +5864,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -5878,7 +5878,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -5899,7 +5899,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -5917,7 +5917,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -5937,7 +5937,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -5958,7 +5958,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -5976,7 +5976,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -5994,7 +5994,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -6013,7 +6013,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -6030,7 +6030,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -6047,7 +6047,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -6058,7 +6058,7 @@ public final class Messages {
         return getResponseParametersFieldBuilder().getBuilder(index);
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -6072,7 +6072,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -6087,7 +6087,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -6098,7 +6098,7 @@ public final class Messages {
             io.grpc.benchmarks.proto.Messages.ResponseParameters.getDefaultInstance());
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -6110,7 +6110,7 @@ public final class Messages {
             index, io.grpc.benchmarks.proto.Messages.ResponseParameters.getDefaultInstance());
       }
       /**
-       * <code>repeated .grpc.benchmarks.ResponseParameters response_parameters = 2;</code>
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        *
        * <pre>
        * Configuration for each expected response message.
@@ -6139,7 +6139,7 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Messages.Payload, io.grpc.benchmarks.proto.Messages.Payload.Builder, io.grpc.benchmarks.proto.Messages.PayloadOrBuilder> payloadBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -6149,7 +6149,7 @@ public final class Messages {
         return payloadBuilder_ != null || payload_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -6163,7 +6163,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -6183,7 +6183,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -6201,7 +6201,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -6223,7 +6223,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -6241,7 +6241,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -6253,7 +6253,7 @@ public final class Messages {
         return getPayloadFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -6268,7 +6268,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 3;</code>
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        *
        * <pre>
        * Optional input payload sent along with the request.
@@ -6290,7 +6290,7 @@ public final class Messages {
 
       private int responseCompression_ = 0;
       /**
-       * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
@@ -6300,7 +6300,7 @@ public final class Messages {
         return responseCompression_;
       }
       /**
-       * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
@@ -6312,7 +6312,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
@@ -6323,7 +6323,7 @@ public final class Messages {
         return result == null ? io.grpc.benchmarks.proto.Messages.CompressionType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
@@ -6339,7 +6339,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.CompressionType response_compression = 6;</code>
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
@@ -6356,7 +6356,7 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Messages.EchoStatus, io.grpc.benchmarks.proto.Messages.EchoStatus.Builder, io.grpc.benchmarks.proto.Messages.EchoStatusOrBuilder> responseStatusBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -6366,7 +6366,7 @@ public final class Messages {
         return responseStatusBuilder_ != null || responseStatus_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -6380,7 +6380,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -6400,7 +6400,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -6418,7 +6418,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -6440,7 +6440,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -6458,7 +6458,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -6470,7 +6470,7 @@ public final class Messages {
         return getResponseStatusFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -6485,7 +6485,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.EchoStatus response_status = 7;</code>
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        *
        * <pre>
        * Whether server should return a given status
@@ -6515,10 +6515,10 @@ public final class Messages {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.StreamingOutputCallRequest)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.StreamingOutputCallRequest)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.StreamingOutputCallRequest)
+    // @@protoc_insertion_point(class_scope:grpc.testing.StreamingOutputCallRequest)
     private static final io.grpc.benchmarks.proto.Messages.StreamingOutputCallRequest DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.StreamingOutputCallRequest();
@@ -6563,11 +6563,11 @@ public final class Messages {
   }
 
   public interface StreamingOutputCallResponseOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.StreamingOutputCallResponse)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.StreamingOutputCallResponse)
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase response size.
@@ -6575,7 +6575,7 @@ public final class Messages {
      */
     boolean hasPayload();
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase response size.
@@ -6583,7 +6583,7 @@ public final class Messages {
      */
     io.grpc.benchmarks.proto.Messages.Payload getPayload();
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase response size.
@@ -6592,7 +6592,7 @@ public final class Messages {
     io.grpc.benchmarks.proto.Messages.PayloadOrBuilder getPayloadOrBuilder();
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.StreamingOutputCallResponse}
+   * Protobuf type {@code grpc.testing.StreamingOutputCallResponse}
    *
    * <pre>
    * Server-streaming response, as configured by the request and parameters.
@@ -6600,7 +6600,7 @@ public final class Messages {
    */
   public  static final class StreamingOutputCallResponse extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.StreamingOutputCallResponse)
+      // @@protoc_insertion_point(message_implements:grpc.testing.StreamingOutputCallResponse)
       StreamingOutputCallResponseOrBuilder {
     // Use StreamingOutputCallResponse.newBuilder() to construct.
     private StreamingOutputCallResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -6660,12 +6660,12 @@ public final class Messages {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingOutputCallResponse_descriptor;
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingOutputCallResponse_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingOutputCallResponse_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Messages.StreamingOutputCallResponse.class, io.grpc.benchmarks.proto.Messages.StreamingOutputCallResponse.Builder.class);
     }
@@ -6673,7 +6673,7 @@ public final class Messages {
     public static final int PAYLOAD_FIELD_NUMBER = 1;
     private io.grpc.benchmarks.proto.Messages.Payload payload_;
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase response size.
@@ -6683,7 +6683,7 @@ public final class Messages {
       return payload_ != null;
     }
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase response size.
@@ -6693,7 +6693,7 @@ public final class Messages {
       return payload_ == null ? io.grpc.benchmarks.proto.Messages.Payload.getDefaultInstance() : payload_;
     }
     /**
-     * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      *
      * <pre>
      * Payload to increase response size.
@@ -6806,7 +6806,7 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.StreamingOutputCallResponse}
+     * Protobuf type {@code grpc.testing.StreamingOutputCallResponse}
      *
      * <pre>
      * Server-streaming response, as configured by the request and parameters.
@@ -6814,16 +6814,16 @@ public final class Messages {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.StreamingOutputCallResponse)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.StreamingOutputCallResponse)
         io.grpc.benchmarks.proto.Messages.StreamingOutputCallResponseOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingOutputCallResponse_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingOutputCallResponse_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingOutputCallResponse_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Messages.StreamingOutputCallResponse.class, io.grpc.benchmarks.proto.Messages.StreamingOutputCallResponse.Builder.class);
       }
@@ -6855,7 +6855,7 @@ public final class Messages {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_StreamingOutputCallResponse_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_StreamingOutputCallResponse_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Messages.StreamingOutputCallResponse getDefaultInstanceForType() {
@@ -6925,7 +6925,7 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Messages.Payload, io.grpc.benchmarks.proto.Messages.Payload.Builder, io.grpc.benchmarks.proto.Messages.PayloadOrBuilder> payloadBuilder_;
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase response size.
@@ -6935,7 +6935,7 @@ public final class Messages {
         return payloadBuilder_ != null || payload_ != null;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase response size.
@@ -6949,7 +6949,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase response size.
@@ -6969,7 +6969,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase response size.
@@ -6987,7 +6987,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase response size.
@@ -7009,7 +7009,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase response size.
@@ -7027,7 +7027,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase response size.
@@ -7039,7 +7039,7 @@ public final class Messages {
         return getPayloadFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase response size.
@@ -7054,7 +7054,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.benchmarks.Payload payload = 1;</code>
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        *
        * <pre>
        * Payload to increase response size.
@@ -7084,10 +7084,10 @@ public final class Messages {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.StreamingOutputCallResponse)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.StreamingOutputCallResponse)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.StreamingOutputCallResponse)
+    // @@protoc_insertion_point(class_scope:grpc.testing.StreamingOutputCallResponse)
     private static final io.grpc.benchmarks.proto.Messages.StreamingOutputCallResponse DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.StreamingOutputCallResponse();
@@ -7132,7 +7132,7 @@ public final class Messages {
   }
 
   public interface ReconnectInfoOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.benchmarks.ReconnectInfo)
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ReconnectInfo)
       com.google.protobuf.MessageOrBuilder {
 
     /**
@@ -7154,7 +7154,7 @@ public final class Messages {
     int getBackoffMs(int index);
   }
   /**
-   * Protobuf type {@code grpc.benchmarks.ReconnectInfo}
+   * Protobuf type {@code grpc.testing.ReconnectInfo}
    *
    * <pre>
    * For reconnect interop test only.
@@ -7164,7 +7164,7 @@ public final class Messages {
    */
   public  static final class ReconnectInfo extends
       com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:grpc.benchmarks.ReconnectInfo)
+      // @@protoc_insertion_point(message_implements:grpc.testing.ReconnectInfo)
       ReconnectInfoOrBuilder {
     // Use ReconnectInfo.newBuilder() to construct.
     private ReconnectInfo(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
@@ -7242,12 +7242,12 @@ public final class Messages {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_ReconnectInfo_descriptor;
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ReconnectInfo_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_ReconnectInfo_fieldAccessorTable
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               io.grpc.benchmarks.proto.Messages.ReconnectInfo.class, io.grpc.benchmarks.proto.Messages.ReconnectInfo.Builder.class);
     }
@@ -7410,7 +7410,7 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.benchmarks.ReconnectInfo}
+     * Protobuf type {@code grpc.testing.ReconnectInfo}
      *
      * <pre>
      * For reconnect interop test only.
@@ -7420,16 +7420,16 @@ public final class Messages {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.benchmarks.ReconnectInfo)
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ReconnectInfo)
         io.grpc.benchmarks.proto.Messages.ReconnectInfoOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_ReconnectInfo_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ReconnectInfo_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_ReconnectInfo_fieldAccessorTable
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
                 io.grpc.benchmarks.proto.Messages.ReconnectInfo.class, io.grpc.benchmarks.proto.Messages.ReconnectInfo.Builder.class);
       }
@@ -7459,7 +7459,7 @@ public final class Messages {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_benchmarks_ReconnectInfo_descriptor;
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ReconnectInfo_descriptor;
       }
 
       public io.grpc.benchmarks.proto.Messages.ReconnectInfo getDefaultInstanceForType() {
@@ -7642,10 +7642,10 @@ public final class Messages {
       }
 
 
-      // @@protoc_insertion_point(builder_scope:grpc.benchmarks.ReconnectInfo)
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ReconnectInfo)
     }
 
-    // @@protoc_insertion_point(class_scope:grpc.benchmarks.ReconnectInfo)
+    // @@protoc_insertion_point(class_scope:grpc.testing.ReconnectInfo)
     private static final io.grpc.benchmarks.proto.Messages.ReconnectInfo DEFAULT_INSTANCE;
     static {
       DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.ReconnectInfo();
@@ -7690,55 +7690,55 @@ public final class Messages {
   }
 
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_Payload_descriptor;
+    internal_static_grpc_testing_Payload_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_Payload_fieldAccessorTable;
+      internal_static_grpc_testing_Payload_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_EchoStatus_descriptor;
+    internal_static_grpc_testing_EchoStatus_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_EchoStatus_fieldAccessorTable;
+      internal_static_grpc_testing_EchoStatus_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_SimpleRequest_descriptor;
+    internal_static_grpc_testing_SimpleRequest_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_SimpleRequest_fieldAccessorTable;
+      internal_static_grpc_testing_SimpleRequest_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_SimpleResponse_descriptor;
+    internal_static_grpc_testing_SimpleResponse_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_SimpleResponse_fieldAccessorTable;
+      internal_static_grpc_testing_SimpleResponse_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_StreamingInputCallRequest_descriptor;
+    internal_static_grpc_testing_StreamingInputCallRequest_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_StreamingInputCallRequest_fieldAccessorTable;
+      internal_static_grpc_testing_StreamingInputCallRequest_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_StreamingInputCallResponse_descriptor;
+    internal_static_grpc_testing_StreamingInputCallResponse_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_StreamingInputCallResponse_fieldAccessorTable;
+      internal_static_grpc_testing_StreamingInputCallResponse_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ResponseParameters_descriptor;
+    internal_static_grpc_testing_ResponseParameters_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ResponseParameters_fieldAccessorTable;
+      internal_static_grpc_testing_ResponseParameters_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_StreamingOutputCallRequest_descriptor;
+    internal_static_grpc_testing_StreamingOutputCallRequest_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_StreamingOutputCallRequest_fieldAccessorTable;
+      internal_static_grpc_testing_StreamingOutputCallRequest_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_StreamingOutputCallResponse_descriptor;
+    internal_static_grpc_testing_StreamingOutputCallResponse_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_StreamingOutputCallResponse_fieldAccessorTable;
+      internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_benchmarks_ReconnectInfo_descriptor;
+    internal_static_grpc_testing_ReconnectInfo_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_grpc_benchmarks_ReconnectInfo_fieldAccessorTable;
+      internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -7748,40 +7748,39 @@ public final class Messages {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\016messages.proto\022\017grpc.benchmarks\"C\n\007Pay" +
-      "load\022*\n\004type\030\001 \001(\0162\034.grpc.benchmarks.Pay" +
-      "loadType\022\014\n\004body\030\002 \001(\014\"+\n\nEchoStatus\022\014\n\004" +
-      "code\030\001 \001(\005\022\017\n\007message\030\002 \001(\t\"\255\002\n\rSimpleRe" +
-      "quest\0223\n\rresponse_type\030\001 \001(\0162\034.grpc.benc" +
-      "hmarks.PayloadType\022\025\n\rresponse_size\030\002 \001(" +
-      "\005\022)\n\007payload\030\003 \001(\0132\030.grpc.benchmarks.Pay" +
-      "load\022\025\n\rfill_username\030\004 \001(\010\022\030\n\020fill_oaut" +
-      "h_scope\030\005 \001(\010\022>\n\024response_compression\030\006 " +
-      "\001(\0162 .grpc.benchmarks.CompressionType\0224\n",
-      "\017response_status\030\007 \001(\0132\033.grpc.benchmarks" +
-      ".EchoStatus\"b\n\016SimpleResponse\022)\n\007payload" +
-      "\030\001 \001(\0132\030.grpc.benchmarks.Payload\022\020\n\010user" +
-      "name\030\002 \001(\t\022\023\n\013oauth_scope\030\003 \001(\t\"F\n\031Strea" +
-      "mingInputCallRequest\022)\n\007payload\030\001 \001(\0132\030." +
-      "grpc.benchmarks.Payload\"=\n\032StreamingInpu" +
-      "tCallResponse\022\037\n\027aggregated_payload_size" +
-      "\030\001 \001(\005\"7\n\022ResponseParameters\022\014\n\004size\030\001 \001" +
-      "(\005\022\023\n\013interval_us\030\002 \001(\005\"\264\002\n\032StreamingOut" +
-      "putCallRequest\0223\n\rresponse_type\030\001 \001(\0162\034.",
-      "grpc.benchmarks.PayloadType\022@\n\023response_" +
-      "parameters\030\002 \003(\0132#.grpc.benchmarks.Respo" +
-      "nseParameters\022)\n\007payload\030\003 \001(\0132\030.grpc.be" +
-      "nchmarks.Payload\022>\n\024response_compression" +
-      "\030\006 \001(\0162 .grpc.benchmarks.CompressionType" +
-      "\0224\n\017response_status\030\007 \001(\0132\033.grpc.benchma" +
-      "rks.EchoStatus\"H\n\033StreamingOutputCallRes" +
-      "ponse\022)\n\007payload\030\001 \001(\0132\030.grpc.benchmarks" +
-      ".Payload\"3\n\rReconnectInfo\022\016\n\006passed\030\001 \001(" +
-      "\010\022\022\n\nbackoff_ms\030\002 \003(\005*?\n\013PayloadType\022\020\n\014",
-      "COMPRESSABLE\020\000\022\022\n\016UNCOMPRESSABLE\020\001\022\n\n\006RA" +
-      "NDOM\020\002*2\n\017CompressionType\022\010\n\004NONE\020\000\022\010\n\004G" +
-      "ZIP\020\001\022\013\n\007DEFLATE\020\002B$\n\030io.grpc.benchmarks" +
-      ".protoB\010Messagesb\006proto3"
+      "\n\016messages.proto\022\014grpc.testing\"@\n\007Payloa" +
+      "d\022\'\n\004type\030\001 \001(\0162\031.grpc.testing.PayloadTy" +
+      "pe\022\014\n\004body\030\002 \001(\014\"+\n\nEchoStatus\022\014\n\004code\030\001" +
+      " \001(\005\022\017\n\007message\030\002 \001(\t\"\241\002\n\rSimpleRequest\022" +
+      "0\n\rresponse_type\030\001 \001(\0162\031.grpc.testing.Pa" +
+      "yloadType\022\025\n\rresponse_size\030\002 \001(\005\022&\n\007payl" +
+      "oad\030\003 \001(\0132\025.grpc.testing.Payload\022\025\n\rfill" +
+      "_username\030\004 \001(\010\022\030\n\020fill_oauth_scope\030\005 \001(" +
+      "\010\022;\n\024response_compression\030\006 \001(\0162\035.grpc.t" +
+      "esting.CompressionType\0221\n\017response_statu",
+      "s\030\007 \001(\0132\030.grpc.testing.EchoStatus\"_\n\016Sim" +
+      "pleResponse\022&\n\007payload\030\001 \001(\0132\025.grpc.test" +
+      "ing.Payload\022\020\n\010username\030\002 \001(\t\022\023\n\013oauth_s" +
+      "cope\030\003 \001(\t\"C\n\031StreamingInputCallRequest\022" +
+      "&\n\007payload\030\001 \001(\0132\025.grpc.testing.Payload\"" +
+      "=\n\032StreamingInputCallResponse\022\037\n\027aggrega" +
+      "ted_payload_size\030\001 \001(\005\"7\n\022ResponseParame" +
+      "ters\022\014\n\004size\030\001 \001(\005\022\023\n\013interval_us\030\002 \001(\005\"" +
+      "\245\002\n\032StreamingOutputCallRequest\0220\n\rrespon" +
+      "se_type\030\001 \001(\0162\031.grpc.testing.PayloadType",
+      "\022=\n\023response_parameters\030\002 \003(\0132 .grpc.tes" +
+      "ting.ResponseParameters\022&\n\007payload\030\003 \001(\013" +
+      "2\025.grpc.testing.Payload\022;\n\024response_comp" +
+      "ression\030\006 \001(\0162\035.grpc.testing.Compression" +
+      "Type\0221\n\017response_status\030\007 \001(\0132\030.grpc.tes" +
+      "ting.EchoStatus\"E\n\033StreamingOutputCallRe" +
+      "sponse\022&\n\007payload\030\001 \001(\0132\025.grpc.testing.P" +
+      "ayload\"3\n\rReconnectInfo\022\016\n\006passed\030\001 \001(\010\022" +
+      "\022\n\nbackoff_ms\030\002 \003(\005*?\n\013PayloadType\022\020\n\014CO" +
+      "MPRESSABLE\020\000\022\022\n\016UNCOMPRESSABLE\020\001\022\n\n\006RAND",
+      "OM\020\002*2\n\017CompressionType\022\010\n\004NONE\020\000\022\010\n\004GZI" +
+      "P\020\001\022\013\n\007DEFLATE\020\002B$\n\030io.grpc.benchmarks.p" +
+      "rotoB\010Messagesb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -7795,65 +7794,65 @@ public final class Messages {
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         }, assigner);
-    internal_static_grpc_benchmarks_Payload_descriptor =
+    internal_static_grpc_testing_Payload_descriptor =
       getDescriptor().getMessageTypes().get(0);
-    internal_static_grpc_benchmarks_Payload_fieldAccessorTable = new
+    internal_static_grpc_testing_Payload_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_Payload_descriptor,
+        internal_static_grpc_testing_Payload_descriptor,
         new java.lang.String[] { "Type", "Body", });
-    internal_static_grpc_benchmarks_EchoStatus_descriptor =
+    internal_static_grpc_testing_EchoStatus_descriptor =
       getDescriptor().getMessageTypes().get(1);
-    internal_static_grpc_benchmarks_EchoStatus_fieldAccessorTable = new
+    internal_static_grpc_testing_EchoStatus_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_EchoStatus_descriptor,
+        internal_static_grpc_testing_EchoStatus_descriptor,
         new java.lang.String[] { "Code", "Message", });
-    internal_static_grpc_benchmarks_SimpleRequest_descriptor =
+    internal_static_grpc_testing_SimpleRequest_descriptor =
       getDescriptor().getMessageTypes().get(2);
-    internal_static_grpc_benchmarks_SimpleRequest_fieldAccessorTable = new
+    internal_static_grpc_testing_SimpleRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_SimpleRequest_descriptor,
+        internal_static_grpc_testing_SimpleRequest_descriptor,
         new java.lang.String[] { "ResponseType", "ResponseSize", "Payload", "FillUsername", "FillOauthScope", "ResponseCompression", "ResponseStatus", });
-    internal_static_grpc_benchmarks_SimpleResponse_descriptor =
+    internal_static_grpc_testing_SimpleResponse_descriptor =
       getDescriptor().getMessageTypes().get(3);
-    internal_static_grpc_benchmarks_SimpleResponse_fieldAccessorTable = new
+    internal_static_grpc_testing_SimpleResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_SimpleResponse_descriptor,
+        internal_static_grpc_testing_SimpleResponse_descriptor,
         new java.lang.String[] { "Payload", "Username", "OauthScope", });
-    internal_static_grpc_benchmarks_StreamingInputCallRequest_descriptor =
+    internal_static_grpc_testing_StreamingInputCallRequest_descriptor =
       getDescriptor().getMessageTypes().get(4);
-    internal_static_grpc_benchmarks_StreamingInputCallRequest_fieldAccessorTable = new
+    internal_static_grpc_testing_StreamingInputCallRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_StreamingInputCallRequest_descriptor,
+        internal_static_grpc_testing_StreamingInputCallRequest_descriptor,
         new java.lang.String[] { "Payload", });
-    internal_static_grpc_benchmarks_StreamingInputCallResponse_descriptor =
+    internal_static_grpc_testing_StreamingInputCallResponse_descriptor =
       getDescriptor().getMessageTypes().get(5);
-    internal_static_grpc_benchmarks_StreamingInputCallResponse_fieldAccessorTable = new
+    internal_static_grpc_testing_StreamingInputCallResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_StreamingInputCallResponse_descriptor,
+        internal_static_grpc_testing_StreamingInputCallResponse_descriptor,
         new java.lang.String[] { "AggregatedPayloadSize", });
-    internal_static_grpc_benchmarks_ResponseParameters_descriptor =
+    internal_static_grpc_testing_ResponseParameters_descriptor =
       getDescriptor().getMessageTypes().get(6);
-    internal_static_grpc_benchmarks_ResponseParameters_fieldAccessorTable = new
+    internal_static_grpc_testing_ResponseParameters_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ResponseParameters_descriptor,
+        internal_static_grpc_testing_ResponseParameters_descriptor,
         new java.lang.String[] { "Size", "IntervalUs", });
-    internal_static_grpc_benchmarks_StreamingOutputCallRequest_descriptor =
+    internal_static_grpc_testing_StreamingOutputCallRequest_descriptor =
       getDescriptor().getMessageTypes().get(7);
-    internal_static_grpc_benchmarks_StreamingOutputCallRequest_fieldAccessorTable = new
+    internal_static_grpc_testing_StreamingOutputCallRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_StreamingOutputCallRequest_descriptor,
+        internal_static_grpc_testing_StreamingOutputCallRequest_descriptor,
         new java.lang.String[] { "ResponseType", "ResponseParameters", "Payload", "ResponseCompression", "ResponseStatus", });
-    internal_static_grpc_benchmarks_StreamingOutputCallResponse_descriptor =
+    internal_static_grpc_testing_StreamingOutputCallResponse_descriptor =
       getDescriptor().getMessageTypes().get(8);
-    internal_static_grpc_benchmarks_StreamingOutputCallResponse_fieldAccessorTable = new
+    internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_StreamingOutputCallResponse_descriptor,
+        internal_static_grpc_testing_StreamingOutputCallResponse_descriptor,
         new java.lang.String[] { "Payload", });
-    internal_static_grpc_benchmarks_ReconnectInfo_descriptor =
+    internal_static_grpc_testing_ReconnectInfo_descriptor =
       getDescriptor().getMessageTypes().get(9);
-    internal_static_grpc_benchmarks_ReconnectInfo_fieldAccessorTable = new
+    internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_grpc_benchmarks_ReconnectInfo_descriptor,
+        internal_static_grpc_testing_ReconnectInfo_descriptor,
         new java.lang.String[] { "Passed", "BackoffMs", });
   }
 
