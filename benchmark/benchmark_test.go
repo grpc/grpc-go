@@ -2,7 +2,6 @@ package benchmark
 
 import (
 	"os"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -17,9 +16,9 @@ import (
 func runUnary(b *testing.B, maxConcurrentCalls int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
-	targetPort, stopper := StartServer("localhost:0")
+	target, stopper := StartServer("localhost:0")
 	defer stopper()
-	conn := NewClientConn(":" + strconv.Itoa(targetPort))
+	conn := NewClientConn(target)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 
 	// Warm up connection.
@@ -60,9 +59,9 @@ func runUnary(b *testing.B, maxConcurrentCalls int) {
 func runStream(b *testing.B, maxConcurrentCalls int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
-	targetPort, stopper := StartServer("localhost:0")
+	target, stopper := StartServer("localhost:0")
 	defer stopper()
-	conn := NewClientConn(":" + strconv.Itoa(targetPort))
+	conn := NewClientConn(target)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 
 	// Warm up connection.
