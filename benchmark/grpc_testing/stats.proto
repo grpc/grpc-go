@@ -1,4 +1,4 @@
-// Copyright 2015, Google Inc.
+// Copyright 2016, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -45,8 +45,8 @@ message ServerStats {
 
 // Histogram params based on grpc/support/histogram.c
 message HistogramParams {
-  double resolution = 1;   // first bucket is [0, 1 + resolution)
-  double max_possible = 2; // use enough buckets to allow this value
+  double resolution = 1;    // first bucket is [0, 1 + resolution)
+  double max_possible = 2;  // use enough buckets to allow this value
 }
 
 // Histogram data based on grpc/support/histogram.c

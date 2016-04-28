@@ -145,6 +145,7 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 	return &h
 }
 
+// Clear resets all the content of histogram.
 func (h *Histogram) Clear() {
 	h.count = newCounter()
 	h.sum = newCounter()

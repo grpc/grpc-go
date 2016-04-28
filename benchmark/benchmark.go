@@ -173,6 +173,10 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).Send: %v", grpc.ErrorDesc(err))
 	}
 	if _, err := stream.Recv(); err != nil {
+		// EOF should be a valid error here.
+		if err == io.EOF {
+			return nil
+		}
 		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).Recv: %v", grpc.ErrorDesc(err))
 	}
 	return nil
