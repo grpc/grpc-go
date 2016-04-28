@@ -192,9 +192,6 @@ func DoGenericStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallCli
 
 // NewClientConn creates a gRPC client connection to addr.
 func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
-	if len(opts) <= 0 {
-		opts = append(opts, grpc.WithInsecure())
-	}
 	conn, err := grpc.Dial(addr, opts...)
 	if err != nil {
 		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)

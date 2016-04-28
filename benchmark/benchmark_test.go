@@ -18,7 +18,7 @@ func runUnary(b *testing.B, maxConcurrentCalls int) {
 	b.StopTimer()
 	target, stopper := StartServer("localhost:0")
 	defer stopper()
-	conn := NewClientConn(target)
+	conn := NewClientConn(target, grpc.WithInsecure())
 	tc := testpb.NewBenchmarkServiceClient(conn)
 
 	// Warm up connection.
@@ -61,7 +61,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	b.StopTimer()
 	target, stopper := StartServer("localhost:0")
 	defer stopper()
-	conn := NewClientConn(target)
+	conn := NewClientConn(target, grpc.WithInsecure())
 	tc := testpb.NewBenchmarkServiceClient(conn)
 
 	// Warm up connection.
