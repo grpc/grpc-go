@@ -91,15 +91,16 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 
 	grpclog.Printf(" - core limit: %v", config.CoreLimit)
 	// Use one cpu core by default
-	numOfCores := 1
-	if config.CoreLimit > 0 {
-		numOfCores = int(config.CoreLimit)
+	// TODO: change default number of cores used if 1 is not fastest.
+	if config.CoreLimit > 1 {
+		runtime.GOMAXPROCS(int(config.CoreLimit))
 	}
-	runtime.GOMAXPROCS(numOfCores)
 
 	grpclog.Printf(" - payload config: %v", config.PayloadConfig)
-	var payloadReqSize, payloadRespSize int
-	var payloadType string
+	var (
+		payloadReqSize, payloadRespSize int
+		payloadType                     string
+	)
 	if config.PayloadConfig != nil {
 		switch c := config.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:

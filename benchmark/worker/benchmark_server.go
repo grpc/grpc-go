@@ -93,7 +93,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	grpclog.Printf(" - core limit: %v", config.CoreLimit)
 	// Use one cpu core by default.
 	numOfCores := 1
-	if config.CoreLimit > 0 {
+	if config.CoreLimit > 1 {
 		numOfCores = int(config.CoreLimit)
 	}
 	runtime.GOMAXPROCS(numOfCores)
@@ -108,8 +108,10 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	}
 
 	grpclog.Printf(" - payload config: %v", config.PayloadConfig)
-	var addr string
-	var close func()
+	var (
+		addr  string
+		close func()
+	)
 	if config.PayloadConfig != nil {
 		switch payload := config.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:
