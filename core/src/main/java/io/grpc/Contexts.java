@@ -40,6 +40,9 @@ import java.util.concurrent.TimeoutException;
  */
 public class Contexts {
 
+  private Contexts() {
+  }
+
   /**
    * Make the provided {@link Context} {@link Context#current()} for the creation of a listener
    * to a received call and for all events received by that listener.
@@ -139,6 +142,7 @@ public class Contexts {
    * Returns the {@link Status} of a cancelled context or {@code null} if the context
    * is not cancelled.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1737")
   public static Status statusFromCancelled(Context context) {
     Preconditions.checkNotNull(context, "context must not be null");
     if (!context.isCancelled()) {
