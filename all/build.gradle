@@ -11,9 +11,6 @@ buildscript {
     }
 }
 
-// Make sure that no transitive dependencies are included.
-configurations.compile.transitive = false
-
 def subprojects = [
   project(':grpc-auth'),
   project(':grpc-core'),
@@ -34,21 +31,6 @@ for (subproject in rootProject.subprojects) {
 
 dependencies {
     compile subprojects
-}
-
-// Create a fat jar containing only the direct dependencies
-jar {
-    from {
-        configurations.compile.collect {
-            it.isDirectory() ? it : zipTree(it)
-        }
-    }
-}
-
-sourcesJar {
-    from {
-        subprojects.sourceSets.main.allSource
-    }
 }
 
 javadoc {
