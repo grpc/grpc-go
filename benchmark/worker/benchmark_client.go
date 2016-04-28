@@ -237,7 +237,7 @@ func (bc *benchmarkClient) doCloseLoopUnaryBenchmark(conns []*grpc.ClientConn, r
 func (bc *benchmarkClient) doCloseLoopStreamingBenchmark(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string) {
 	var doRPC func(testpb.BenchmarkService_StreamingCallClient, int, int) error
 	if payloadType == "bytebuf" {
-		doRPC = benchmark.DoGenericStreamingRoundTrip
+		doRPC = benchmark.DoByteBufStreamingRoundTrip
 	} else {
 		doRPC = benchmark.DoStreamingRoundTrip
 	}

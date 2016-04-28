@@ -114,7 +114,7 @@ func startBenchmarkServerWithSetup(setup *testpb.ServerConfig, serverPort int) (
 		switch payload := setup.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:
 			opts = append(opts, grpc.CustomCodec(byteBufCodec{}))
-			addr, close = benchmark.StartGenericServer(":"+strconv.Itoa(port), payload.BytebufParams.ReqSize, payload.BytebufParams.RespSize, opts...)
+			addr, close = benchmark.StartByteBufServer(":"+strconv.Itoa(port), payload.BytebufParams.ReqSize, payload.BytebufParams.RespSize, opts...)
 		case *testpb.PayloadConfig_SimpleParams:
 			addr, close = benchmark.StartServer(":"+strconv.Itoa(port), opts...)
 		case *testpb.PayloadConfig_ComplexParams:

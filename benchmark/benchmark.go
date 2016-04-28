@@ -107,16 +107,16 @@ func StartServer(addr string, opts ...grpc.ServerOption) (string, func()) {
 	}
 }
 
-type genericTestServer struct {
+type byteBufServer struct {
 	reqSize  int32
 	respSize int32
 }
 
-func (s *genericTestServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+func (s *byteBufServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	return &testpb.SimpleResponse{}, nil
 }
 
-func (s *genericTestServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
+func (s *byteBufServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
 	for {
 		m := make([]byte, s.reqSize)
 		err := stream.(grpc.ServerStream).RecvMsg(m)
@@ -132,15 +132,15 @@ func (s *genericTestServer) StreamingCall(stream testpb.BenchmarkService_Streami
 	}
 }
 
-// StartGenericServer starts a benchmark service server that supports custom codec.
+// StartbyteBufServer starts a benchmark service server that supports custom codec.
 // It returns its listen address and a function to stop the server.
-func StartGenericServer(addr string, reqSize, respSize int32, opts ...grpc.ServerOption) (string, func()) {
+func StartByteBufServer(addr string, reqSize, respSize int32, opts ...grpc.ServerOption) (string, func()) {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
 	s := grpc.NewServer(opts...)
-	testpb.RegisterBenchmarkServiceServer(s, &genericTestServer{reqSize: reqSize, respSize: respSize})
+	testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{reqSize: reqSize, respSize: respSize})
 	go s.Serve(lis)
 	return lis.Addr().String(), func() {
 		s.Stop()
@@ -178,8 +178,8 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 	return nil
 }
 
-// DoGenericStreamingRoundTrip performs a round trip for a single streaming rpc, using custom codec.
-func DoGenericStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
+// DoByteBufStreamingRoundTrip performs a round trip for a single streaming rpc, using custom codec.
+func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	if err := stream.(grpc.ClientStream).SendMsg(make([]byte, reqSize)); err != nil {
 		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).(ClientStream).SendMsg: %v", grpc.ErrorDesc(err))
 	}
