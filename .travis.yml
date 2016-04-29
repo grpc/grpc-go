@@ -46,7 +46,6 @@ notifications:
 cache:
   directories:
     - /tmp/protobuf-${PROTOBUF_VERSION}
-    - $HOME/.m2/repository/io/netty
     - $HOME/.gradle/caches/modules-2
     - $HOME/.gradle/wrapper
 
