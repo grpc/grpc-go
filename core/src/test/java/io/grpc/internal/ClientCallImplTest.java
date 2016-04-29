@@ -541,6 +541,39 @@ public class ClientCallImplTest {
     assertFalse(headers.containsKey(GrpcUtil.TIMEOUT_KEY));
   }
 
+  @Test
+  public void cancelInOnMessageShouldInvokeStreamCancel() throws Exception {
+    final ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        MoreExecutors.directExecutor(),
+        CallOptions.DEFAULT,
+        provider,
+        deadlineCancellationExecutor);
+    final Exception cause = new Exception();
+    ClientCall.Listener<Void> callListener =
+        new ClientCall.Listener<Void>() {
+          @Override
+          public void onMessage(Void message) {
+            call.cancel("foo", cause);
+          }
+        };
+
+    call.start(callListener, new Metadata());
+    call.halfClose();
+    call.request(1);
+
+    verify(stream).start(listenerArgumentCaptor.capture());
+    ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
+    streamListener.onReady();
+    streamListener.headersRead(new Metadata());
+    streamListener.messageRead(new ByteArrayInputStream(new byte[0]));
+    verify(stream).cancel(statusCaptor.capture());
+    Status status = statusCaptor.getValue();
+    assertEquals(Status.CANCELLED.getCode(), status.getCode());
+    assertEquals("foo", status.getDescription());
+    assertSame(cause, status.getCause());
+  }
+
   private static class TestMarshaller<T> implements Marshaller<T> {
     @Override
     public InputStream stream(T value) {

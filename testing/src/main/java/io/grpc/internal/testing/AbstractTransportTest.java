@@ -587,6 +587,59 @@ public abstract class AbstractTransportTest {
     verify(mockClientStreamListener, never()).closed(any(Status.class), any(Metadata.class));
   }
 
+  @Test(timeout = 5000)
+  public void clientCancelFromWithinMessageRead() throws Exception {
+    server.start(serverListener);
+    client.start(mockClientTransportListener);
+    MockServerTransportListener serverTransportListener
+        = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    serverTransport = serverTransportListener.transport;
+
+    final SettableFuture<Boolean> closedCalled = SettableFuture.create();
+    final ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    clientStream.start(new ClientStreamListener() {
+      @Override
+      public void headersRead(Metadata headers) {
+      }
+
+      @Override
+      public void closed(Status status, Metadata trailers) {
+        assertEquals(Status.CANCELLED.getCode(), status.getCode());
+        assertEquals("nevermind", status.getDescription());
+        closedCalled.set(true);
+      }
+
+      @Override
+      public void messageRead(InputStream message) {
+        assertEquals("foo", methodDescriptor.parseResponse(message));
+        clientStream.cancel(Status.CANCELLED.withDescription("nevermind"));
+      }
+
+      @Override
+      public void onReady() {
+      }
+    });
+    clientStream.halfClose();
+    clientStream.request(1);
+
+    StreamCreation serverStreamCreation
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    assertEquals(methodDescriptor.getFullMethodName(), serverStreamCreation.method);
+    ServerStream serverStream = serverStreamCreation.stream;
+    ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).onReady();
+
+    assertTrue(serverStream.isReady());
+    serverStream.writeHeaders(new Metadata());
+    serverStream.writeMessage(methodDescriptor.streamRequest("foo"));
+    serverStream.flush();
+
+    // Block until closedCalled was set.
+    closedCalled.get();
+
+    serverStream.close(Status.OK, new Metadata());
+  }
+
   @Test
   public void serverCancel() throws Exception {
     server.start(serverListener);
