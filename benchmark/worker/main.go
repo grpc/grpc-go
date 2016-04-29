@@ -59,7 +59,7 @@ type byteBufCodec struct {
 func (byteBufCodec) Marshal(v interface{}) ([]byte, error) {
 	b, ok := v.(*[]byte)
 	if !ok {
-		return nil, fmt.Errorf("Failed to marshal: %v is not type of *[]byte")
+		return nil, fmt.Errorf("failed to marshal: %v is not type of *[]byte")
 	}
 	return *b, nil
 }
@@ -67,16 +67,18 @@ func (byteBufCodec) Marshal(v interface{}) ([]byte, error) {
 func (byteBufCodec) Unmarshal(data []byte, v interface{}) error {
 	b, ok := v.(*[]byte)
 	if !ok {
-		return fmt.Errorf("Failed to marshal: %v is not type of *[]byte")
+		return fmt.Errorf("failed to marshal: %v is not type of *[]byte")
 	}
 	*b = data
 	return nil
 }
 
 func (byteBufCodec) String() string {
-	return "byteBufCodec"
+	return "bytebuffer"
 }
 
+// workerServer implements WorkerService rpc handlers.
+// It can create benchmarkServer or benchmarkClient on demand.
 type workerServer struct {
 	stop       chan<- bool
 	serverPort int
@@ -88,7 +90,7 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 		// Close benchmark server when stream ends.
 		grpclog.Printf("closing benchmark server")
 		if bs != nil {
-			bs.close()
+			bs.closeFunc()
 		}
 	}()
 	for {
@@ -110,7 +112,7 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 			}
 			if bs != nil {
 				grpclog.Printf("server setup received when server already exists, closing the existing server")
-				bs.close()
+				bs.closeFunc()
 			}
 			bs = newbs
 			out = &testpb.ServerStatus{

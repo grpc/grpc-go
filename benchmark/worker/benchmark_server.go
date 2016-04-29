@@ -57,7 +57,7 @@ var (
 type benchmarkServer struct {
 	port          int
 	cores         int
-	close         func()
+	closeFunc     func()
 	mu            sync.RWMutex
 	lastResetTime time.Time
 }
@@ -83,7 +83,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 
 	grpclog.Printf(" - security params: %v", config.SecurityParams)
 	if config.SecurityParams != nil {
-		creds, err := credentials.NewServerTLSFromFile(Abs(certFile), Abs(keyFile))
+		creds, err := credentials.NewServerTLSFromFile(abs(certFile), abs(keyFile))
 		if err != nil {
 			grpclog.Fatalf("failed to generate credentials %v", err)
 		}
@@ -95,29 +95,27 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	numOfCores := 1
 	if config.CoreLimit > 1 {
 		numOfCores = int(config.CoreLimit)
+		runtime.GOMAXPROCS(numOfCores)
 	}
-	runtime.GOMAXPROCS(numOfCores)
 
 	grpclog.Printf(" - port: %v", config.Port)
-	var port int
 	// Priority: config.Port > serverPort > default (0).
-	if config.Port != 0 {
-		port = int(config.Port)
-	} else if serverPort != 0 {
+	port := int(config.Port)
+	if port == 0 {
 		port = serverPort
 	}
 
 	grpclog.Printf(" - payload config: %v", config.PayloadConfig)
 	var (
-		addr  string
-		close func()
-		err   error
+		addr      string
+		closeFunc func()
+		err       error
 	)
 	if config.PayloadConfig != nil {
 		switch payload := config.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:
 			opts = append(opts, grpc.CustomCodec(byteBufCodec{}))
-			addr, close, err = benchmark.StartServer(benchmark.ServerInfo{
+			addr, closeFunc, err = benchmark.StartServer(benchmark.ServerInfo{
 				Addr:     ":" + strconv.Itoa(port),
 				Type:     "bytebuf",
 				Metadata: payload.BytebufParams.RespSize,
@@ -126,7 +124,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 				grpclog.Fatalf("failed to start server: %v", err)
 			}
 		case *testpb.PayloadConfig_SimpleParams:
-			addr, close, err = benchmark.StartServer(benchmark.ServerInfo{
+			addr, closeFunc, err = benchmark.StartServer(benchmark.ServerInfo{
 				Addr: ":" + strconv.Itoa(port),
 				Type: "protobuf",
 			}, opts...)
@@ -140,7 +138,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		}
 	} else {
 		// Start protobuf server is payload config is nil.
-		addr, close, err = benchmark.StartServer(benchmark.ServerInfo{
+		addr, closeFunc, err = benchmark.StartServer(benchmark.ServerInfo{
 			Addr: ":" + strconv.Itoa(port),
 			Type: "protobuf",
 		}, opts...)
@@ -156,7 +154,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		grpclog.Fatalf("failed to get port number from server address: %v", err)
 	}
 
-	return &benchmarkServer{port: p, cores: numOfCores, close: close, lastResetTime: time.Now()}, nil
+	return &benchmarkServer{port: p, cores: numOfCores, closeFunc: closeFunc, lastResetTime: time.Now()}, nil
 }
 
 func (bs *benchmarkServer) getStats() *testpb.ServerStats {

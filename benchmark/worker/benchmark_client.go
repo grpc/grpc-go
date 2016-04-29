@@ -80,7 +80,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 
 	grpclog.Printf(" - security params: %v", config.SecurityParams)
 	if config.SecurityParams != nil {
-		creds, err := credentials.NewClientTLSFromFile(Abs(caFile), config.SecurityParams.ServerHostOverride)
+		creds, err := credentials.NewClientTLSFromFile(abs(caFile), config.SecurityParams.ServerHostOverride)
 		if err != nil {
 			return nil, grpc.Errorf(codes.InvalidArgument, "failed to create TLS credentials %v", err)
 		}
@@ -90,7 +90,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 	}
 
 	grpclog.Printf(" - core limit: %v", config.CoreLimit)
-	// Use one cpu core by default
+	// Use one cpu core by default.
 	// TODO: change default number of cores used if 1 is not fastest.
 	if config.CoreLimit > 1 {
 		runtime.GOMAXPROCS(int(config.CoreLimit))
@@ -125,13 +125,11 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 	rpcCountPerConn, connCount := int(config.OutstandingRpcsPerChannel), int(config.ClientChannels)
 
 	grpclog.Printf(" - load params: %v", config.LoadParams)
-	var dist *int
-	switch lp := config.LoadParams.Load.(type) {
+	// TODO add open loop distribution.
+	switch config.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
 	case *testpb.LoadParams_Poisson:
-		grpclog.Printf("   - %v", lp.Poisson)
 		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
-		// TODO poisson
 	case *testpb.LoadParams_Uniform:
 		return nil, grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
 	case *testpb.LoadParams_Determ:
@@ -175,21 +173,17 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 
 	switch rpcType {
 	case "unary":
-		if dist == nil {
-			bc.doCloseLoopUnaryBenchmark(conns, rpcCountPerConn, payloadReqSize, payloadRespSize)
-		}
-		// TODO else do open loop
+		bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize)
+		// TODO open loop.
 	case "streaming":
-		if dist == nil {
-			bc.doCloseLoopStreamingBenchmark(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
-		}
-		// TODO else do open loop
+		bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
+		// TODO open loop.
 	}
 
 	return &bc, nil
 }
 
-func (bc *benchmarkClient) doCloseLoopUnaryBenchmark(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int) {
+func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int) {
 	clients := make([]testpb.BenchmarkServiceClient, len(conns))
 	for ic, conn := range conns {
 		clients[ic] = testpb.NewBenchmarkServiceClient(conn)
@@ -235,7 +229,7 @@ func (bc *benchmarkClient) doCloseLoopUnaryBenchmark(conns []*grpc.ClientConn, r
 	}
 }
 
-func (bc *benchmarkClient) doCloseLoopStreamingBenchmark(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string) {
+func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string) {
 	var doRPC func(testpb.BenchmarkService_StreamingCallClient, int, int) error
 	if payloadType == "bytebuf" {
 		doRPC = benchmark.DoByteBufStreamingRoundTrip
@@ -319,6 +313,8 @@ func (bc *benchmarkClient) getStats() *testpb.ClientStats {
 	}
 }
 
+// reset clears the contents for histogram and set lastResetTime to Now().
+// It is often called to get ready for benchmark runs.
 func (bc *benchmarkClient) reset() {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
