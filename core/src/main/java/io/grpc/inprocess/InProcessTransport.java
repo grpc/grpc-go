@@ -319,6 +319,7 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
 
       @Override
       public void close(Status status, Metadata trailers) {
+        status = stripCause(status);
         synchronized (this) {
           if (closed) {
             return;
@@ -461,7 +462,7 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
 
       @Override
       public void cancel(Status reason) {
-        if (!internalCancel(reason)) {
+        if (!internalCancel(stripCause(reason))) {
           return;
         }
         serverStream.clientCancelled(reason);
@@ -524,5 +525,21 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
       @Override
       public void setDecompressor(Decompressor decompressor) {}
     }
+  }
+
+  /**
+   * Returns a new status with the same code and description, but stripped of any other information
+   * (i.e. cause).
+   *
+   * <p>This is, so that the InProcess transport behaves in the same way as the other transports,
+   * when exchanging statuses between client and server and vice versa.
+   */
+  private static Status stripCause(Status status) {
+    if (status == null) {
+      return null;
+    }
+    return Status
+        .fromCodeValue(status.getCode().value())
+        .withDescription(status.getDescription());
   }
 }

@@ -35,6 +35,7 @@ import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
@@ -492,13 +493,15 @@ public abstract class AbstractTransportTest {
     serverStream.writeHeaders(new Metadata());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS)).headersRead(any(Metadata.class));
 
-    Status status = Status.OK.withDescription("Hello. Goodbye.");
+    Status status = Status.OK.withDescription("Hello. Goodbye.").withCause(new Exception());
     serverStream.close(status, new Metadata());
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
     assertCodeEquals(Status.OK, statusCaptor.getValue());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
         .closed(statusCaptor.capture(), any(Metadata.class));
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
+    assertEquals("Hello. Goodbye.", statusCaptor.getValue().getDescription());
+    assertNull(statusCaptor.getValue().getCause());
   }
 
   @Test
@@ -516,7 +519,7 @@ public abstract class AbstractTransportTest {
     ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
 
-    Status status = Status.OK.withDescription("Hellogoodbye");
+    Status status = Status.OK.withDescription("Hellogoodbye").withCause(new Exception());
     Metadata trailers = new Metadata();
     trailers.put(asciiKey, "trailers");
     trailers.put(asciiKey, "dupvalue");
@@ -528,6 +531,9 @@ public abstract class AbstractTransportTest {
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
         .closed(statusCaptor.capture(), metadataCaptor.capture());
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
+    assertEquals("Hellogoodbye", statusCaptor.getValue().getDescription());
+    // Cause should not be transmitted to the client.
+    assertNull(statusCaptor.getValue().getCause());
     assertEquals(Lists.newArrayList(trailers.getAll(asciiKey)),
         Lists.newArrayList(metadataCaptor.getValue().getAll(asciiKey)));
     assertEquals(Lists.newArrayList(trailers.getAll(binaryKey)),
@@ -549,7 +555,8 @@ public abstract class AbstractTransportTest {
     ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
 
-    Status status = Status.INVALID_ARGUMENT.withDescription("I'm not listening");
+    Status status =
+        Status.INVALID_ARGUMENT.withDescription("I'm not listening").withCause(new Exception());
     serverStream.close(status, new Metadata());
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
     assertCodeEquals(Status.OK, statusCaptor.getValue());
@@ -557,6 +564,7 @@ public abstract class AbstractTransportTest {
         .closed(statusCaptor.capture(), any(Metadata.class));
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals(status.getDescription(), statusCaptor.getValue().getDescription());
+    assertNull(statusCaptor.getValue().getCause());
   }
 
   @Test
@@ -573,12 +581,14 @@ public abstract class AbstractTransportTest {
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
 
-    Status status = Status.CANCELLED.withDescription("Nevermind");
+    Status status = Status.CANCELLED.withDescription("Nevermind").withCause(new Exception());
     clientStream.cancel(status);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
         .closed(Matchers.same(status), any(Metadata.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
     assertNotEquals(Status.Code.OK, statusCaptor.getValue().getCode());
+    // Cause should not be transmitted between client and server
+    assertNull(statusCaptor.getValue().getCause());
 
     reset(mockServerStreamListener);
     reset(mockClientStreamListener);
@@ -655,7 +665,8 @@ public abstract class AbstractTransportTest {
     ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
 
-    Status status = Status.DEADLINE_EXCEEDED.withDescription("It was bound to happen");
+    Status status = Status.DEADLINE_EXCEEDED.withDescription("It was bound to happen")
+        .withCause(new Exception());
     serverStream.cancel(status);
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(Matchers.same(status));
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
@@ -663,6 +674,8 @@ public abstract class AbstractTransportTest {
     // Presently we can't sent much back to the client in this case. Verify that is the current
     // behavior for consistency between transports.
     assertCodeEquals(Status.CANCELLED, statusCaptor.getValue());
+    // Cause should not be transmitted between server and client
+    assertNull(statusCaptor.getValue().getCause());
 
     // Second cancellation shouldn't trigger additional callbacks
     reset(mockServerStreamListener);
