@@ -312,7 +312,7 @@ func (bc *benchmarkClient) getStats() *testpb.ClientStats {
 }
 
 // reset clears the contents for histogram and set lastResetTime to Now().
-// It is often called to get ready for benchmark runs.
+// It is called to get ready for benchmark runs.
 func (bc *benchmarkClient) reset() {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()

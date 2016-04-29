@@ -195,6 +195,10 @@ func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallCli
 	}
 	var in []byte
 	if err := stream.(grpc.ClientStream).RecvMsg(&in); err != nil {
+		// EOF should be a valid error here.
+		if err == io.EOF {
+			return nil
+		}
 		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).(ClientStream).RecvMsg: %v", grpc.ErrorDesc(err))
 	}
 	return nil
