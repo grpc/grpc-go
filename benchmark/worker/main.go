@@ -106,15 +106,14 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 		switch argtype := in.Argtype.(type) {
 		case *testpb.ServerArgs_Setup:
 			grpclog.Printf("server setup received:")
-			newbs, err := startBenchmarkServer(argtype.Setup, s.serverPort)
-			if err != nil {
-				return err
-			}
 			if bs != nil {
 				grpclog.Printf("server setup received when server already exists, closing the existing server")
 				bs.closeFunc()
 			}
-			bs = newbs
+			bs, err = startBenchmarkServer(argtype.Setup, s.serverPort)
+			if err != nil {
+				return err
+			}
 			out = &testpb.ServerStatus{
 				Stats: bs.getStats(),
 				Port:  int32(bs.port),
@@ -167,15 +166,14 @@ func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) er
 		switch t := in.Argtype.(type) {
 		case *testpb.ClientArgs_Setup:
 			grpclog.Printf("client setup received:")
-			newbc, err := startBenchmarkClient(t.Setup)
-			if err != nil {
-				return err
-			}
 			if bc != nil {
 				grpclog.Printf("client setup received when client already exists, shuting down the existing client")
 				bc.shutdown()
 			}
-			bc = newbc
+			bc, err = startBenchmarkClient(t.Setup)
+			if err != nil {
+				return err
+			}
 			out = &testpb.ClientStatus{
 				Stats: bc.getStats(),
 			}
