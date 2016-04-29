@@ -301,6 +301,8 @@ class NettyClientHandler extends AbstractNettyHandler {
     NettyClientStream stream = clientStream(connection().stream(http2Ex.streamId()));
     if (stream != null) {
       stream.transportReportStatus(Utils.statusFromThrowable(cause), false, new Metadata());
+    } else {
+      logger.log(Level.FINE, "Stream error for unknown stream " + http2Ex.streamId(), cause);
     }
 
     // Delegate to the base class to send a RST_STREAM.
