@@ -37,6 +37,7 @@ Package benchmark implements the building blocks to setup end-to-end gRPC benchm
 package benchmark
 
 import (
+	"fmt"
 	"io"
 	"net"
 
@@ -91,22 +92,6 @@ func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallS
 	}
 }
 
-// StartServer starts a gRPC server serving a benchmark service on the given
-// address, which may be something like "localhost:0". It returns its listen
-// address and a function to stop the server.
-func StartServer(addr string, opts ...grpc.ServerOption) (string, func()) {
-	lis, err := net.Listen("tcp", addr)
-	if err != nil {
-		grpclog.Fatalf("Failed to listen: %v", err)
-	}
-	s := grpc.NewServer(opts...)
-	testpb.RegisterBenchmarkServiceServer(s, &testServer{})
-	go s.Serve(lis)
-	return lis.Addr().String(), func() {
-		s.Stop()
-	}
-}
-
 type byteBufServer struct {
 	respSize int32
 }
@@ -132,19 +117,39 @@ func (s *byteBufServer) StreamingCall(stream testpb.BenchmarkService_StreamingCa
 	}
 }
 
-// StartbyteBufServer starts a benchmark service server that supports custom codec.
+// ServerInfo is used to create server.
+// It contains the address and type of the server to be created, and optional metadata.
+type ServerInfo struct {
+	Addr     string
+	Type     string
+	Metadata interface{}
+}
+
+// StartServer starts a gRPC server serving a benchmark service on the given ServerInfo.
+// Different types of servers are created according to Type.
 // It returns its listen address and a function to stop the server.
-func StartByteBufServer(addr string, respSize int32, opts ...grpc.ServerOption) (string, func()) {
-	lis, err := net.Listen("tcp", addr)
+func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func(), error) {
+	lis, err := net.Listen("tcp", info.Addr)
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
 	s := grpc.NewServer(opts...)
-	testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{respSize: respSize})
+	switch info.Type {
+	case "protobuf":
+		testpb.RegisterBenchmarkServiceServer(s, &testServer{})
+	case "bytebuf":
+		respSize, ok := info.Metadata.(int32)
+		if !ok {
+			return "", nil, fmt.Errorf("invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
+		}
+		testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{respSize: respSize})
+	default:
+		return "", nil, fmt.Errorf("unknown Type: %v", info.Type)
+	}
 	go s.Serve(lis)
 	return lis.Addr().String(), func() {
 		s.Stop()
-	}
+	}, nil
 }
 
 // DoUnaryCall performs an unary RPC with given stub and request and response sizes.

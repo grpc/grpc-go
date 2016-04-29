@@ -111,14 +111,28 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	var (
 		addr  string
 		close func()
+		err   error
 	)
 	if config.PayloadConfig != nil {
 		switch payload := config.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:
 			opts = append(opts, grpc.CustomCodec(byteBufCodec{}))
-			addr, close = benchmark.StartByteBufServer(":"+strconv.Itoa(port), payload.BytebufParams.RespSize, opts...)
+			addr, close, err = benchmark.StartServer(benchmark.ServerInfo{
+				Addr:     ":" + strconv.Itoa(port),
+				Type:     "bytebuf",
+				Metadata: payload.BytebufParams.RespSize,
+			}, opts...)
+			if err != nil {
+				grpclog.Fatalf("failed to start server: %v", err)
+			}
 		case *testpb.PayloadConfig_SimpleParams:
-			addr, close = benchmark.StartServer(":"+strconv.Itoa(port), opts...)
+			addr, close, err = benchmark.StartServer(benchmark.ServerInfo{
+				Addr: ":" + strconv.Itoa(port),
+				Type: "protobuf",
+			}, opts...)
+			if err != nil {
+				grpclog.Fatalf("failed to start server: %v", err)
+			}
 		case *testpb.PayloadConfig_ComplexParams:
 			return nil, grpc.Errorf(codes.Unimplemented, "unsupported payload config: %v", config.PayloadConfig)
 		default:
@@ -126,7 +140,13 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		}
 	} else {
 		// Start protobuf server is payload config is nil.
-		addr, close = benchmark.StartServer(":"+strconv.Itoa(port), opts...)
+		addr, close, err = benchmark.StartServer(benchmark.ServerInfo{
+			Addr: ":" + strconv.Itoa(port),
+			Type: "protobuf",
+		}, opts...)
+		if err != nil {
+			grpclog.Fatalf("failed to start server: %v", err)
+		}
 	}
 
 	grpclog.Printf("benchmark server listening at %v", addr)
