@@ -317,10 +317,10 @@ public class Context {
 
   /**
    * Create a new context which propagates the values of this context but does not cascade its
-   * cancellation and is its own independent root for cancellation.
+   * cancellation.
    */
-  public CancellableContext fork() {
-    return new Context(this).withCancellation();
+  public Context fork() {
+    return new Context(this);
   }
 
   boolean canBeCancelled() {

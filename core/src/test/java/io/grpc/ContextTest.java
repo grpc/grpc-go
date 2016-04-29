@@ -128,7 +128,7 @@ public class ContextTest {
 
   @Test
   public void rootCanBeAttached() {
-    Context.CancellableContext fork = Context.ROOT.fork();
+    Context fork = Context.ROOT.fork();
     fork.attach();
     Context.ROOT.attach();
     assertTrue(Context.ROOT.isCurrent());
@@ -426,11 +426,12 @@ public class ContextTest {
     Context.CancellableContext base = Context.current().withCancellation();
     Context fork = base.fork();
     fork.addListener(cancellationListener, MoreExecutors.directExecutor());
+    assertEquals(0, base.listenerCount());
+    assertEquals(0, fork.listenerCount());
     assertTrue(base.cancel(new Throwable()));
     assertNull(listenerNotifedContext);
     assertFalse(fork.isCancelled());
     assertNull(fork.cancellationCause());
-    assertEquals(1, fork.listenerCount());
   }
 
   @Test

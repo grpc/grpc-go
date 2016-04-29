@@ -65,7 +65,7 @@ public class ContextsTest {
 
   @Test
   public void statusFromCancelled_returnStatusAsSetOnCtx() {
-    Context.CancellableContext cancellableContext = Context.current().fork();
+    Context.CancellableContext cancellableContext = Context.current().withCancellation();
     cancellableContext.cancel(Status.DEADLINE_EXCEEDED.withDescription("foo bar").asException());
     Status status = statusFromCancelled(cancellableContext);
     assertNotNull(status);
@@ -75,7 +75,7 @@ public class ContextsTest {
 
   @Test
   public void statusFromCancelled_shouldReturnStatusWithCauseAttached() {
-    Context.CancellableContext cancellableContext = Context.current().fork();
+    Context.CancellableContext cancellableContext = Context.current().withCancellation();
     Throwable t = new Throwable();
     cancellableContext.cancel(t);
     Status status = statusFromCancelled(cancellableContext);
@@ -103,7 +103,7 @@ public class ContextsTest {
 
   @Test
   public void statusFromCancelled_returnCancelledIfCauseIsNull() {
-    Context.CancellableContext cancellableContext = Context.current().fork();
+    Context.CancellableContext cancellableContext = Context.current().withCancellation();
     cancellableContext.cancel(null);
     assertTrue(cancellableContext.isCancelled());
     Status status = statusFromCancelled(cancellableContext);
@@ -114,7 +114,7 @@ public class ContextsTest {
   /** This is a whitebox test, to verify a special case of the implementation. */
   @Test
   public void statusFromCancelled_StatusUnknownShouldWork() {
-    Context.CancellableContext cancellableContext = Context.current().fork();
+    Context.CancellableContext cancellableContext = Context.current().withCancellation();
     Exception e = Status.UNKNOWN.asException();
     cancellableContext.cancel(e);
     assertTrue(cancellableContext.isCancelled());
