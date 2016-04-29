@@ -11,6 +11,10 @@ env:
     - LD_LIBRARY_PATH=/tmp/protobuf/lib
 
 before_install:
+  - mkdir -p $HOME/.gradle/caches &&
+    ln -s /tmp/gradle-caches-modules-2 $HOME/.gradle/caches/modules-2
+  - mkdir -p $HOME/.gradle &&
+    ln -s /tmp/gradle-wrapper $HOME/.gradle/wrapper
     # Work around https://github.com/travis-ci/travis-ci/issues/2317
   - if \[ "$TRAVIS_OS_NAME" = linux \]; then jdk_switcher use oraclejdk8; fi
   - buildscripts/make_dependencies.sh # build protoc into /tmp/protobuf-${PROTOBUF_VERSION}
@@ -46,9 +50,10 @@ notifications:
 cache:
   directories:
     - /tmp/protobuf-${PROTOBUF_VERSION}
-    - $HOME/.gradle/caches/modules-2
-    - $HOME/.gradle/wrapper
+    - /tmp/gradle-caches-modules-2
+    - /tmp/gradle-wrapper
 
 before_cache:
-  - rm $HOME/.gradle/caches/modules-2/modules-2.lock
+  # The lock changes based on folder name; normally $HOME/.gradle/caches/modules-2/modules-2.lock
+  - rm /tmp/gradle-caches-modules-2/gradle-caches-modules-2.lock
   - find $HOME/.gradle/wrapper -not -name "*-all.zip" -and -not -name "*-bin.zip" -delete
