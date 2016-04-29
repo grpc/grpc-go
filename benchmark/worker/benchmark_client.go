@@ -200,8 +200,8 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 		for j := 0; j < rpcCountPerConn; j++ {
 			go func(client testpb.BenchmarkServiceClient) {
 				defer wg.Done()
+				done := make(chan bool)
 				for {
-					done := make(chan bool)
 					go func() {
 						start := time.Now()
 						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
@@ -212,7 +212,10 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 						bc.mu.Lock()
 						bc.histogram.Add(int64(elapse / time.Nanosecond))
 						bc.mu.Unlock()
-						done <- true
+						select {
+						case <-bc.stop:
+						case done <- true:
+						}
 					}()
 					select {
 					case <-bc.stop:
@@ -259,8 +262,8 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 		for j := 0; j < rpcCountPerConn; j++ {
 			go func(stream testpb.BenchmarkService_StreamingCallClient) {
 				defer wg.Done()
+				done := make(chan bool)
 				for {
-					done := make(chan bool)
 					go func() {
 						start := time.Now()
 						if err := doRPC(stream, reqSize, respSize); err != nil {
@@ -271,7 +274,10 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 						bc.mu.Lock()
 						bc.histogram.Add(int64(elapse / time.Nanosecond))
 						bc.mu.Unlock()
-						done <- true
+						select {
+						case <-bc.stop:
+						case done <- true:
+						}
 					}()
 					select {
 					case <-bc.stop:
