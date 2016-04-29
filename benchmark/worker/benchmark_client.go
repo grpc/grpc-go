@@ -202,7 +202,10 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 					go func() {
 						start := time.Now()
 						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
-							done <- false
+							select {
+							case <-bc.stop:
+							case done <- false:
+							}
 							return
 						}
 						elapse := time.Since(start)
@@ -259,7 +262,10 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 					go func() {
 						start := time.Now()
 						if err := doRPC(stream, reqSize, respSize); err != nil {
-							done <- false
+							select {
+							case <-bc.stop:
+							case done <- false:
+							}
 							return
 						}
 						elapse := time.Since(start)
