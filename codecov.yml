@@ -1,0 +1,14 @@
+coverage:
+  status:
+    patch:
+      default:
+        target: '80'
+    project:
+      default:
+        target: auto
+        threshold: 1
+    changes:
+      default:
+        branches:
+          - nonExistantBranchToDisableTheFeature
+comment: off
