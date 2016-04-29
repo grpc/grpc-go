@@ -391,7 +391,10 @@ public final class GrpcUtil {
       new Resource<ScheduledExecutorService>() {
         @Override
         public ScheduledExecutorService create() {
-          ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor(
+          // We don't use newSingleThreadScheduledExecutor because it doesn't return a
+          // ScheduledThreadPoolExecutor.
+          ScheduledExecutorService service = Executors.newScheduledThreadPool(
+              1,
               new ThreadFactoryBuilder()
                   .setDaemon(true)
                   .setNameFormat("grpc-timer-%d")
