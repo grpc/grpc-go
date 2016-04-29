@@ -261,7 +261,7 @@ the grpc-java source directory._**
 
 As stated above, this only needs to be done once for one of the selected OS/architectures.
 The following command will build the whole project and upload it to Maven
-Central.
+Central.  Make sure you have `org.gradle.parallel` disabled for upload.
 ```bash
 grpc-java$ ./gradlew clean build && ./gradlew uploadArchives
 ```
