@@ -261,9 +261,10 @@ the grpc-java source directory._**
 
 As stated above, this only needs to be done once for one of the selected OS/architectures.
 The following command will build the whole project and upload it to Maven
-Central.  Make sure you have `org.gradle.parallel` disabled for upload.
+Central. Parallel building [is not safe during
+uploadArchives](https://issues.gradle.org/browse/GRADLE-3420).
 ```bash
-grpc-java$ ./gradlew clean build && ./gradlew uploadArchives
+grpc-java$ ./gradlew clean build && ./gradlew -Dorg.gradle.parallel=false uploadArchives
 ```
 
 If the version has the `-SNAPSHOT` suffix, the artifacts will automatically
@@ -281,7 +282,8 @@ commands on that OS and specify the architecture by the flag `-PtargetArch=<arch
 If you are doing a snapshot deployment:
 
 ```bash
-grpc-java$ ./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives -PtargetArch=<arch>
+grpc-java$ ./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives \
+    -PtargetArch=<arch> -Dorg.gradle.parallel=false
 ```
 
 When deploying a Release, the first deployment will create
@@ -292,7 +294,7 @@ ensure that the artifacts are pushed to the same staging repository.
 
 ```bash
 grpc-java$ ./gradlew clean grpc-compiler:build grpc-compiler:uploadArchives -PtargetArch=<arch> \
-    -PrepositoryId=<repository-id>
+    -PrepositoryId=<repository-id> -Dorg.gradle.parallel=false
 ```
 
 Releasing on Maven Central
