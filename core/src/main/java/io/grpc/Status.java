@@ -31,10 +31,10 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 
 import io.grpc.Metadata.AsciiMarshaller;
 
@@ -47,6 +47,7 @@ import java.util.TreeMap;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
+
 
 /**
  * Defines the status of an operation by providing a standard {@link Code} in conjunction with an
@@ -392,16 +393,20 @@ public final class Status {
 
   /**
    * Extract an error {@link Status} from the causal chain of a {@link Throwable}.
+   * If no status can be found, a status is created with {@link Code#UNKNOWN} as its code and
+   * {@code t} as its cause.
    *
    * @return non-{@code null} status
    */
   public static Status fromThrowable(Throwable t) {
-    for (Throwable cause : Throwables.getCausalChain(t)) {
+    Throwable cause = checkNotNull(t);
+    while (cause != null) {
       if (cause instanceof StatusException) {
         return ((StatusException) cause).getStatus();
       } else if (cause instanceof StatusRuntimeException) {
         return ((StatusRuntimeException) cause).getStatus();
       }
+      cause = cause.getCause();
     }
     // Couldn't find a cause with a Status
     return UNKNOWN.withCause(t);
@@ -424,7 +429,7 @@ public final class Status {
   }
 
   private Status(Code code, @Nullable String description, @Nullable Throwable cause) {
-    this.code = Preconditions.checkNotNull(code);
+    this.code = checkNotNull(code);
     this.description = description;
     this.cause = cause;
   }
