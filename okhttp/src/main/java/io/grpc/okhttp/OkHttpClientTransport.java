@@ -785,11 +785,11 @@ class OkHttpClientTransport implements ManagedClientTransport {
 
     @Override
     public void goAway(int lastGoodStreamId, ErrorCode errorCode, ByteString debugData) {
-      Status status = GrpcUtil.Http2Error.statusForCode(errorCode.httpCode);
-      status.augmentDescription("Received Goaway");
+      Status status = GrpcUtil.Http2Error.statusForCode(errorCode.httpCode)
+          .augmentDescription("Received Goaway");
       if (debugData != null && debugData.size() > 0) {
         // If a debug message was provided, use it.
-        status.augmentDescription(debugData.utf8());
+        status = status.augmentDescription(debugData.utf8());
       }
       startGoAway(lastGoodStreamId, status);
     }

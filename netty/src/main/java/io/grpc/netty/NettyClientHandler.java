@@ -499,8 +499,8 @@ class NettyClientHandler extends AbstractNettyHandler {
   }
 
   private Status statusFromGoAway(long errorCode, byte[] debugData) {
-    Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode);
-    status.augmentDescription("Received Goaway");
+    Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode)
+        .augmentDescription("Received Goaway");
     if (debugData != null && debugData.length > 0) {
       // If a debug message was provided, use it.
       String msg = new String(debugData, UTF_8);

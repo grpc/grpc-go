@@ -61,7 +61,6 @@ import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
-import io.grpc.internal.GrpcUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -271,7 +270,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     assertTrue(future.isDone());
     assertFalse(future.isSuccess());
     Status status = Status.fromThrowable(future.cause());
-    assertEquals(GrpcUtil.Http2Error.NO_ERROR.status(), status);
+    assertEquals(Status.Code.UNAVAILABLE, status.getCode());
+    assertEquals("HTTP/2 error code: NO_ERROR\nReceived Goaway", status.getDescription());
   }
 
   @Test
@@ -284,7 +284,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     verify(stream).transportReportStatus(captor.capture(), eq(false),
         notNull(Metadata.class));
     assertEquals(Status.CANCELLED.getCode(), captor.getValue().getCode());
-    assertEquals("HTTP/2 error code: CANCEL\nthis is a test",
+    assertEquals("HTTP/2 error code: CANCEL\nReceived Goaway\nthis is a test",
         captor.getValue().getDescription());
   }
 
@@ -300,7 +300,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     assertFalse(future.isSuccess());
     Status status = Status.fromThrowable(future.cause());
     assertEquals(Status.CANCELLED.getCode(), status.getCode());
-    assertEquals("HTTP/2 error code: CANCEL\nthis is a test", status.getDescription());
+    assertEquals("HTTP/2 error code: CANCEL\nReceived Goaway\nthis is a test",
+        status.getDescription());
   }
 
   @Test
@@ -314,7 +315,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     assertFalse(future.isSuccess());
     Status status = Status.fromThrowable(future.cause());
     assertEquals(Status.CANCELLED.getCode(), status.getCode());
-    assertEquals("HTTP/2 error code: CANCEL\nthis is a test", status.getDescription());
+    assertEquals("HTTP/2 error code: CANCEL\nReceived Goaway\nthis is a test",
+        status.getDescription());
   }
 
   @Test
