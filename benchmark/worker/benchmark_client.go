@@ -35,6 +35,7 @@ package main
 
 import (
 	"math"
+	"math/rand"
 	"runtime"
 	"sync"
 	"time"
@@ -190,21 +191,30 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 		}
 	}
 
+	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
+
 	// TODO add open loop distribution.
-	switch config.LoadParams.Load.(type) {
+	var nextRpcDelay func() time.Duration
+	switch lp := config.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
 	case *testpb.LoadParams_Poisson:
-		return grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
+		nextRpcDelay = func(qps float64) func() time.Duration {
+			targetQps := qps
+			return func() time.Duration {
+				return time.Duration(rand.ExpFloat64() * float64(time.Second) / targetQps)
+			}
+		}(lp.Poisson.OfferedLoad / float64(rpcCountPerConn*len(conns)))
 	default:
 		return grpc.Errorf(codes.InvalidArgument, "unknown load params: %v", config.LoadParams)
 	}
 
-	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
-
 	switch config.RpcType {
 	case testpb.RpcType_UNARY:
-		bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize)
-		// TODO open loop.
+		if nextRpcDelay == nil {
+			bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize)
+		} else {
+			bc.doOpenLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, nextRpcDelay)
+		}
 	case testpb.RpcType_STREAMING:
 		bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
 		// TODO open loop.
@@ -290,6 +300,69 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 				}
 			}(idx)
 		}
+	}
+}
+
+func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, nextRpcDelay func() time.Duration) {
+	for _, conn := range conns {
+		client := testpb.NewBenchmarkServiceClient(conn)
+		// For each connection, create rpcCountPerConn goroutines to do rpc.
+		// Close this connection after all goroutines finish.
+		var wg sync.WaitGroup
+		wg.Add(rpcCountPerConn)
+		for j := 0; j < rpcCountPerConn; j++ {
+			var delay time.Duration
+			next := make(chan bool)
+			go func() {
+				// TODO: do warm up if necessary.
+				// Now relying on worker client to reserve time to do warm up.
+				// The worker client needs to wait for some time after client is created,
+				// before starting benchmark.
+				defer wg.Done()
+				done := make(chan bool)
+				for range next {
+					go func() {
+						start := time.Now()
+						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
+							select {
+							case <-bc.stop:
+							case done <- false:
+							}
+							return
+						}
+						elapse := time.Since(start)
+						bc.mu.Lock()
+						bc.histogram.Add(int64(elapse / time.Nanosecond))
+						bc.mu.Unlock()
+						select {
+						case <-bc.stop:
+						case done <- true:
+						}
+					}()
+					select {
+					case <-bc.stop:
+						return
+					case <-done:
+					}
+				}
+			}()
+			go func() {
+				for {
+					select {
+					case <-bc.stop:
+						close(next)
+						return
+					case <-time.After(delay):
+						next <- true
+						delay = nextRpcDelay()
+					}
+				}
+			}()
+		}
+		go func(conn *grpc.ClientConn) {
+			wg.Wait()
+			conn.Close()
+		}(conn)
 	}
 }
 
