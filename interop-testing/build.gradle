@@ -29,7 +29,7 @@ dependencies {
 
 test {
     // For the automated tests, use Jetty ALPN.
-    jvmArgs "-Xbootclasspath/p:" + configurations.alpnboot.asPath
+    jvmArgs "-javaagent:" + configurations.alpnagent.asPath
 }
 
 // The application plugin uses the distribution plugin and configures the jars to be

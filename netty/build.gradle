@@ -9,7 +9,7 @@ dependencies {
 }
 
 test {
-    jvmArgs "-Xbootclasspath/p:" + configurations.alpnboot.asPath
+    jvmArgs "-javaagent:" + configurations.alpnagent.asPath
 }
 
 javadoc.options.links 'http://netty.io/4.1/api/'
