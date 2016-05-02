@@ -38,13 +38,12 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net"
+	"os"
 	"time"
 
 	"golang.org/x/net/context"
@@ -53,6 +52,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
@@ -157,13 +157,15 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 
 // loadFeatures loads features from a JSON file.
 func (s *routeGuideServer) loadFeatures(filePath string) {
-	file, err := ioutil.ReadFile(filePath)
+	file, err := os.Open(filePath)
 	if err != nil {
 		grpclog.Fatalf("Failed to load default features: %v", err)
 	}
-	if err := json.Unmarshal(file, &s.savedFeatures); err != nil {
+	var db pb.FeatureDatabase
+	if err := jsonpb.Unmarshal(file, &db); err != nil {
 		grpclog.Fatalf("Failed to load default features: %v", err)
 	}
+	s.savedFeatures = db.Feature
 }
 
 func toRadians(num float64) float64 {
