@@ -185,14 +185,14 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		return fmt.Errorf("StreamingCall(_).Send(_) = %v, want <nil>", err)
+		return fmt.Errorf("/BenchmarkService/StreamingCall.Send(_) = %v, want <nil>", err)
 	}
 	if _, err := stream.Recv(); err != nil {
 		// EOF should be a valid error here.
 		if err == io.EOF {
 			return nil
 		}
-		return fmt.Errorf("StreamingCall(_).Recv(_) = %v, want <nil>", err)
+		return fmt.Errorf("/BenchmarkService/StreamingCall.Recv(_) = %v, want <nil>", err)
 	}
 	return nil
 }
@@ -201,7 +201,7 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	out := make([]byte, reqSize)
 	if err := stream.(grpc.ClientStream).SendMsg(&out); err != nil {
-		return fmt.Errorf("StreamingCall(_).(ClientStream).SendMsg(_) = %v, want <nil>", err)
+		return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).SendMsg(_) = %v, want <nil>", err)
 	}
 	var in []byte
 	if err := stream.(grpc.ClientStream).RecvMsg(&in); err != nil {
@@ -209,7 +209,7 @@ func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallCli
 		if err == io.EOF {
 			return nil
 		}
-		return fmt.Errorf("StreamingCall(_).(ClientStream).RecvMsg(_) = %v, want <nil>", err)
+		return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).RecvMsg(_) = %v, want <nil>", err)
 	}
 	return nil
 }
