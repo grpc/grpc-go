@@ -187,14 +187,14 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 	for _, conn := range conns {
 		client := testpb.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
-		// Close this connection after all go routines finish.
+		// Close this connection after all goroutines finish.
 		var wg sync.WaitGroup
 		wg.Add(rpcCountPerConn)
 		for j := 0; j < rpcCountPerConn; j++ {
 			go func() {
 				// TODO: do warm up if necessary.
-				// Now relying on driver client to reserve time to do warm up.
-				// The driver client needs to wait for some time after client is created,
+				// Now relying on worker client to reserve time to do warm up.
+				// The worker client needs to wait for some time after client is created,
 				// before starting benchmark.
 				defer wg.Done()
 				done := make(chan bool)
@@ -241,7 +241,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 	}
 	for _, conn := range conns {
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
-		// Close this connection after all go routines finish.
+		// Close this connection after all goroutines finish.
 		var wg sync.WaitGroup
 		wg.Add(rpcCountPerConn)
 		for j := 0; j < rpcCountPerConn; j++ {
@@ -253,8 +253,8 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			// Create benchmark rpc goroutine.
 			go func() {
 				// TODO: do warm up if necessary.
-				// Now relying on driver client to reserve time to do warm up.
-				// The driver client needs to wait for some time after client is created,
+				// Now relying on worker client to reserve time to do warm up.
+				// The worker client needs to wait for some time after client is created,
 				// before starting benchmark.
 				defer wg.Done()
 				done := make(chan bool)
