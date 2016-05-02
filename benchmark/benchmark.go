@@ -92,6 +92,9 @@ func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallS
 	}
 }
 
+// byteBufServer is a gRPC server that sends and receives byte buffer.
+// The purpose is to remove the protobuf overhead from benchmark tests.
+// Now only StreamingCall() is tested.
 type byteBufServer struct {
 	respSize int32
 }
@@ -118,14 +121,21 @@ func (s *byteBufServer) StreamingCall(stream testpb.BenchmarkService_StreamingCa
 }
 
 // ServerInfo is used to create server.
-// It contains the address and type of the server to be created, and optional metadata.
 type ServerInfo struct {
-	Addr     string
-	Type     string
+	// Addr is the address of the server.
+	Addr string
+
+	// Type is the type of the server.
+	// It should be "protobuf" or "bytebuf".
+	Type string
+
+	// Metadata is an optional configuration.
+	// For "protobuf", it's ignored.
+	// For "bytebuf", it should be an int representing response size.
 	Metadata interface{}
 }
 
-// StartServer starts a gRPC server serving a benchmark service on the given ServerInfo.
+// StartServer starts a gRPC server serving a benchmark service according to info.
 // Different types of servers are created according to Type.
 // It returns its listen address and a function to stop the server.
 func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func(), error) {
@@ -161,7 +171,7 @@ func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) error 
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
-		return grpc.Errorf(grpc.Code(err), "/BenchmarkService/UnaryCall RPC failed: %v", grpc.ErrorDesc(err))
+		return fmt.Errorf("/BenchmarkService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	return nil
 }
@@ -175,14 +185,14 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).Send: %v", grpc.ErrorDesc(err))
+		return fmt.Errorf("StreamingCall(_).Send(_) = %v, want <nil>", err)
 	}
 	if _, err := stream.Recv(); err != nil {
 		// EOF should be a valid error here.
 		if err == io.EOF {
 			return nil
 		}
-		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).Recv: %v", grpc.ErrorDesc(err))
+		return fmt.Errorf("StreamingCall(_).Recv(_) = %v, want <nil>", err)
 	}
 	return nil
 }
@@ -191,7 +201,7 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	out := make([]byte, reqSize)
 	if err := stream.(grpc.ClientStream).SendMsg(&out); err != nil {
-		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).(ClientStream).SendMsg: %v", grpc.ErrorDesc(err))
+		return fmt.Errorf("StreamingCall(_).(ClientStream).SendMsg(_) = %v, want <nil>", err)
 	}
 	var in []byte
 	if err := stream.(grpc.ClientStream).RecvMsg(&in); err != nil {
@@ -199,7 +209,7 @@ func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallCli
 		if err == io.EOF {
 			return nil
 		}
-		return grpc.Errorf(grpc.Code(err), "StreamingCall(_).(ClientStream).RecvMsg: %v", grpc.ErrorDesc(err))
+		return fmt.Errorf("StreamingCall(_).(ClientStream).RecvMsg(_) = %v, want <nil>", err)
 	}
 	return nil
 }
