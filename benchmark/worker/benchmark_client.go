@@ -194,14 +194,14 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
 
 	// TODO add open loop distribution.
-	var nextRpcDelay func() time.Duration
+	var nextRPCDelay func() time.Duration
 	switch lp := config.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
 	case *testpb.LoadParams_Poisson:
-		nextRpcDelay = func(qps float64) func() time.Duration {
-			targetQps := qps
+		nextRPCDelay = func(qps float64) func() time.Duration {
+			targetQPS := qps
 			return func() time.Duration {
-				return time.Duration(rand.ExpFloat64() * float64(time.Second) / targetQps)
+				return time.Duration(rand.ExpFloat64() * float64(time.Second) / targetQPS)
 			}
 		}(lp.Poisson.OfferedLoad / float64(rpcCountPerConn*len(conns)))
 	default:
@@ -210,14 +210,17 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 
 	switch config.RpcType {
 	case testpb.RpcType_UNARY:
-		if nextRpcDelay == nil {
+		if nextRPCDelay == nil {
 			bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize)
 		} else {
-			bc.doOpenLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, nextRpcDelay)
+			bc.doOpenLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, nextRPCDelay)
 		}
 	case testpb.RpcType_STREAMING:
-		bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
-		// TODO open loop.
+		if nextRPCDelay == nil {
+			bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
+		} else {
+			bc.doOpenLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType, nextRPCDelay)
+		}
 	default:
 		return grpc.Errorf(codes.InvalidArgument, "unknown rpc type: %v", config.RpcType)
 	}
@@ -303,7 +306,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 	}
 }
 
-func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, nextRpcDelay func() time.Duration) {
+func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, nextRPCDelay func() time.Duration) {
 	for _, conn := range conns {
 		client := testpb.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
@@ -354,7 +357,7 @@ func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPer
 						return
 					case <-time.After(delay):
 						next <- true
-						delay = nextRpcDelay()
+						delay = nextRPCDelay()
 					}
 				}
 			}()
@@ -417,6 +420,9 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			}(idx)
 		}
 	}
+}
+
+func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string, nextRPCDelay func() time.Duration) {
 }
 
 // getStats returns the stats for benchmark client.
