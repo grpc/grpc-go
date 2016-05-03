@@ -423,11 +423,16 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 }
 
 func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string, nextRPCDelay func() time.Duration) {
-	var doRPC func(testpb.BenchmarkService_StreamingCallClient, int, int) error
+	var (
+		doRPCSend func(testpb.BenchmarkService_StreamingCallClient, int, int) error
+		doRPCRecv func(testpb.BenchmarkService_StreamingCallClient) error
+	)
 	if payloadType == "bytebuf" {
-		doRPC = benchmark.DoByteBufStreamingRoundTrip
+		doRPCSend = benchmark.DoByteBufStreamingSendMsg
+		doRPCRecv = benchmark.DoByteBufStreamingRecvMsg
 	} else {
-		doRPC = benchmark.DoStreamingRoundTrip
+		doRPCSend = benchmark.DoStreamingSend
+		doRPCRecv = benchmark.DoStreamingRecv
 	}
 	for _, conn := range conns {
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
@@ -454,7 +459,14 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 				for range next {
 					go func() {
 						start := time.Now()
-						if err := doRPC(stream, reqSize, respSize); err != nil {
+						if err := doRPCSend(stream, reqSize, respSize); err != nil {
+							select {
+							case <-bc.stop:
+							case done <- false:
+							}
+							return
+						}
+						if err := doRPCRecv(stream); err != nil {
 							select {
 							case <-bc.stop:
 							case done <- false:
