@@ -423,6 +423,78 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 }
 
 func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string, nextRPCDelay func() time.Duration) {
+	var doRPC func(testpb.BenchmarkService_StreamingCallClient, int, int) error
+	if payloadType == "bytebuf" {
+		doRPC = benchmark.DoByteBufStreamingRoundTrip
+	} else {
+		doRPC = benchmark.DoStreamingRoundTrip
+	}
+	for _, conn := range conns {
+		// For each connection, create rpcCountPerConn goroutines to do rpc.
+		// Close this connection after all goroutines finish.
+		var wg sync.WaitGroup
+		wg.Add(rpcCountPerConn)
+		for j := 0; j < rpcCountPerConn; j++ {
+			var delay time.Duration
+			next := make(chan bool)
+
+			c := testpb.NewBenchmarkServiceClient(conn)
+			stream, err := c.StreamingCall(context.Background())
+			if err != nil {
+				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
+			}
+			// Create benchmark rpc goroutine.
+			go func() {
+				// TODO: do warm up if necessary.
+				// Now relying on worker client to reserve time to do warm up.
+				// The worker client needs to wait for some time after client is created,
+				// before starting benchmark.
+				defer wg.Done()
+				done := make(chan bool)
+				for range next {
+					go func() {
+						start := time.Now()
+						if err := doRPC(stream, reqSize, respSize); err != nil {
+							select {
+							case <-bc.stop:
+							case done <- false:
+							}
+							return
+						}
+						elapse := time.Since(start)
+						bc.mu.Lock()
+						bc.histogram.Add(int64(elapse / time.Nanosecond))
+						bc.mu.Unlock()
+						select {
+						case <-bc.stop:
+						case done <- true:
+						}
+					}()
+					select {
+					case <-bc.stop:
+						return
+					case <-done:
+					}
+				}
+			}()
+			go func() {
+				for {
+					select {
+					case <-bc.stop:
+						close(next)
+						return
+					case <-time.After(delay):
+						next <- true
+						delay = nextRPCDelay()
+					}
+				}
+			}()
+		}
+		go func(conn *grpc.ClientConn) {
+			wg.Wait()
+			conn.Close()
+		}(conn)
+	}
 }
 
 // getStats returns the stats for benchmark client.
