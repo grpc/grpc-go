@@ -438,7 +438,7 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
 		// Close this connection after all goroutines finish.
 		var wg sync.WaitGroup
-		wg.Add(rpcCountPerConn)
+		wg.Add(rpcCountPerConn * 2)
 		for j := 0; j < rpcCountPerConn; j++ {
 			var delay time.Duration
 			next := make(chan bool)
@@ -448,7 +448,43 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 			if err != nil {
 				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
 			}
-			// Create benchmark rpc goroutine.
+			// The buffer size should be bigger enough to store all the startTimes
+			// between a request is sent and its response is received.
+			// TODO: change buffer size if 10000 is not appropriate.
+			startTimeChan := make(chan time.Time, 10000)
+			// Create benchmark rpc goroutine to recv on stream.
+			go func() {
+				defer wg.Done()
+				done := make(chan bool)
+				for {
+					go func() {
+						if err := doRPCRecv(stream); err != nil {
+							select {
+							case <-bc.stop:
+							case done <- false:
+							}
+							return
+						}
+						// This receive from channel should never block.
+						// There should be at least one start time available in the channel.
+						start := <-startTimeChan
+						elapse := time.Since(start)
+						bc.mu.Lock()
+						bc.histogram.Add(int64(elapse / time.Nanosecond))
+						bc.mu.Unlock()
+						select {
+						case <-bc.stop:
+						case done <- true:
+						}
+					}()
+					select {
+					case <-bc.stop:
+						return
+					case <-done:
+					}
+				}
+			}()
+			// Create benchmark rpc goroutine to send on stream.
 			go func() {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
@@ -460,23 +496,16 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 					go func() {
 						start := time.Now()
 						if err := doRPCSend(stream, reqSize, respSize); err != nil {
+							// On error, don't send start to startTimeChan.
 							select {
 							case <-bc.stop:
 							case done <- false:
 							}
 							return
 						}
-						if err := doRPCRecv(stream); err != nil {
-							select {
-							case <-bc.stop:
-							case done <- false:
-							}
-							return
-						}
-						elapse := time.Since(start)
-						bc.mu.Lock()
-						bc.histogram.Add(int64(elapse / time.Nanosecond))
-						bc.mu.Unlock()
+						// This send to channel should never block.
+						// Space should always be available for a new startTime.
+						startTimeChan <- start
 						select {
 						case <-bc.stop:
 						case done <- true:
