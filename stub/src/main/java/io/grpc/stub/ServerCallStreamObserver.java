@@ -37,7 +37,7 @@ import io.grpc.ExperimentalApi;
  * A refinement of {@link CallStreamObserver} to allows for interaction with call
  * cancellation events on the server side.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1788")
 public abstract class ServerCallStreamObserver<V> extends CallStreamObserver<V> {
 
   /**

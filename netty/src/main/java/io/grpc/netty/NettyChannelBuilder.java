@@ -60,7 +60,7 @@ import javax.net.ssl.SSLException;
 /**
  * A builder to help simplify construction of channels using the Netty transport.
  */
-@ExperimentalApi("There is no plan to make this API stable, given transport API instability")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1784")
 public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<NettyChannelBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 

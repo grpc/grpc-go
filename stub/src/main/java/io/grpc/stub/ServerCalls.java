@@ -44,7 +44,7 @@ import io.grpc.Status;
  * Utility functions for adapting {@link ServerCallHandler}s to application service implementation,
  * meant to be used by the generated code.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1790")
 public class ServerCalls {
 
   private ServerCalls() {

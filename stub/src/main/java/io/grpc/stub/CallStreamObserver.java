@@ -50,7 +50,7 @@ import io.grpc.ExperimentalApi;
  * <p>Implementations of this class represent the 'outbound' message stream.
  *
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1788")
 public abstract class CallStreamObserver<V> implements StreamObserver<V> {
 
   /**

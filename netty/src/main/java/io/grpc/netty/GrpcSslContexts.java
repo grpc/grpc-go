@@ -50,7 +50,7 @@ import java.util.Set;
 /**
  * Utility for configuring SslContext for gRPC.
  */
-@ExperimentalApi("Only needed with experimental builders")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1784")
 public class GrpcSslContexts {
   private GrpcSslContexts() {}
 
@@ -121,7 +121,7 @@ public class GrpcSslContexts {
    * Set ciphers and APN appropriate for gRPC. Precisely what is set is permitted to change, so if
    * an application requires particular settings it should override the options set here.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1784")
   public static SslContextBuilder configure(SslContextBuilder builder, SslProvider provider) {
     return builder.sslProvider(provider)
                   .ciphers(Http2SecurityUtil.CIPHERS, SupportedCipherSuiteFilter.INSTANCE)

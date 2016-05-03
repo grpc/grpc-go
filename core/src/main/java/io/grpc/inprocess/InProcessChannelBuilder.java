@@ -47,7 +47,7 @@ import java.net.SocketAddress;
  *
  * <p>The channel is intended to be fully-featured, high performance, and useful in testing.
  */
-@ExperimentalApi("There is no plan to make this API stable.")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1783")
 public class InProcessChannelBuilder extends
         AbstractManagedChannelImplBuilder<InProcessChannelBuilder> {
   /**

@@ -46,7 +46,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * </ul>
  */
 @ThreadSafe
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1711")
 public interface ServerInterceptor {
   /**
    * Intercept {@link ServerCall} dispatch by the {@code next} {@link ServerCallHandler}. General

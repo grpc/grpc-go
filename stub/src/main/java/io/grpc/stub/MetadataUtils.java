@@ -58,7 +58,7 @@ public class MetadataUtils {
    * @param extraHeaders the headers to be passed by each call on the returned stub.
    * @return an implementation of the stub with {@code extraHeaders} bound to each call.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1789")
   public static <T extends AbstractStub<T>> T attachHeaders(
       T stub,
       final Metadata extraHeaders) {
@@ -98,7 +98,7 @@ public class MetadataUtils {
    * @return an implementation of the stub that allows to access the last received call's
    *         headers and trailers via {@code headersCapture} and {@code trailersCapture}.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1789")
   public static <T extends AbstractStub<T>> T captureMetadata(
       T stub,
       AtomicReference<Metadata> headersCapture,

@@ -72,7 +72,7 @@ import javax.security.auth.x500.X500Principal;
 /**
  * Common utility functions useful for writing tests.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1791")
 public class TestUtils {
   public static final String TEST_SERVER_HOST = "foo.test.google.fr";
 

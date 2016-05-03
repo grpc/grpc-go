@@ -43,7 +43,7 @@ import io.grpc.TransportManager;
  * so before using it, make sure you have read all the {@code TODO} comments in {@link
  * GrpclbLoadBalancer}.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1782")
 public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
 
   private static final GrpclbLoadBalancerFactory instance = new GrpclbLoadBalancerFactory();

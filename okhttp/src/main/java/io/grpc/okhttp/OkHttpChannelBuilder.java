@@ -62,7 +62,7 @@ import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocketFactory;
 
 /** Convenience class for building channels with the OkHttp transport. */
-@ExperimentalApi("There is no plan to make this API stable, given transport API instability")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1785")
 public class OkHttpChannelBuilder extends
         AbstractManagedChannelImplBuilder<OkHttpChannelBuilder> {
 

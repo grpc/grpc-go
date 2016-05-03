@@ -76,7 +76,7 @@ public class ProtoUtils {
    *
    * <p>This is an unstable API and has not been optimized yet for performance.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1786")
   public static <T extends Message> Marshaller<T> jsonMarshaller(final T defaultInstance) {
     final Printer printer = JsonFormat.printer();
     // TODO(carl-mastrangelo): Add support for ExtensionRegistry (TypeRegistry?)

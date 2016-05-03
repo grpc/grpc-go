@@ -61,7 +61,7 @@ public class ServerInterceptors {
     return interceptForward(serviceDef, Arrays.asList(interceptors));
   }
 
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1701")
   public static ServerServiceDefinition interceptForward(BindableService bindableService,
       ServerInterceptor... interceptors) {
     return interceptForward(bindableService.bindService(), Arrays.asList(interceptors));
@@ -98,7 +98,7 @@ public class ServerInterceptors {
     return intercept(serviceDef, Arrays.asList(interceptors));
   }
 
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1701")
   public static ServerServiceDefinition intercept(BindableService bindableService,
       ServerInterceptor... interceptors) {
     return intercept(bindableService.bindService(), Arrays.asList(interceptors));
@@ -139,7 +139,7 @@ public class ServerInterceptors {
    * @param serviceDef the service definition to convert messages to InputStream
    * @return a wrapped version of {@code serviceDef} with the InputStream conversion applied.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1712")
   public static ServerServiceDefinition useInputStreamMessages(
       final ServerServiceDefinition serviceDef) {
     final MethodDescriptor.Marshaller<InputStream> marshaller =
@@ -175,7 +175,7 @@ public class ServerInterceptors {
    * @param serviceDef the service definition to convert messages to T
    * @return a wrapped version of {@code serviceDef} with the T conversion applied.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1712")
   public static <T> ServerServiceDefinition useMarshalledMessages(
       final ServerServiceDefinition serviceDef,
       final MethodDescriptor.Marshaller<T> marshaller) {

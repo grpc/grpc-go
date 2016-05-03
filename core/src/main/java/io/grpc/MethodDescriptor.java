@@ -113,7 +113,7 @@ public class MethodDescriptor<ReqT, RespT> {
    *
    * @param <T> type of serializable message
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1777")
   public interface Marshaller<T> {
     /**
      * Given a message, produce an {@link InputStream} for it so that it can be written to the wire.

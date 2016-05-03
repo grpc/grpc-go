@@ -38,7 +38,7 @@ import java.util.Collection;
 /**
  * Manages transport life-cycles and provide ready-to-use transports.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1781")
 public abstract class TransportManager<T> {
   /**
    * Advises this {@code TransportManager} to retain transports only to these servers, for warming

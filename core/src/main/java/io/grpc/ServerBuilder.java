@@ -87,7 +87,7 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * @throws UnsupportedOperationException if this builder does not support dynamically adding
    *     services.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1701")
   public abstract T addService(BindableService bindableService);
 
   /**

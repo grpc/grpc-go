@@ -56,14 +56,14 @@ public abstract class ServerCall<RespT> {
    * {@link Attributes.Key} for the remote address of server call attributes
    * {@link ServerCall#attributes()}
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
   public static final Attributes.Key<SocketAddress> REMOTE_ADDR_KEY =
           Attributes.Key.of("remote-addr");
   /**
    * {@link Attributes.Key} for the SSL session of server call attributes
    * {@link ServerCall#attributes()}
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
   public static final Attributes.Key<SSLSession> SSL_SESSION_KEY =
           Attributes.Key.of("ssl-session");
 
@@ -221,7 +221,7 @@ public abstract class ServerCall<RespT> {
    *
    * @return Attributes container
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1779")
   public Attributes attributes() {
     return Attributes.EMPTY;
   }

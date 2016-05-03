@@ -36,7 +36,7 @@ import io.grpc.ExperimentalApi;
 /**
  * Identifies the negotiation used for starting up HTTP/2.
  */
-@ExperimentalApi("Only used by experimental builders")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1784")
 public enum NegotiationType {
   /**
    * Uses TLS ALPN/NPN negotiation, assumes an SSL connection.
