@@ -42,6 +42,7 @@ import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.isNotNull;
 import static org.mockito.Matchers.notNull;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -54,17 +55,17 @@ import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
+import io.grpc.HandlerRegistry;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
-import io.grpc.MutableHandlerRegistry;
-import io.grpc.MutableHandlerRegistryImpl;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.util.MutableHandlerRegistry;
 
 import org.junit.After;
 import org.junit.Before;
@@ -75,6 +76,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -112,16 +114,20 @@ public class ServerImplTest {
   }
 
   private ExecutorService executor = Executors.newSingleThreadExecutor();
-  private MutableHandlerRegistry registry = new MutableHandlerRegistryImpl();
+  private InternalHandlerRegistry registry = new InternalHandlerRegistry.Builder().build();
+  private MutableHandlerRegistry fallbackRegistry = new MutableHandlerRegistry();
   private SimpleServer transportServer = new SimpleServer();
-  private ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
-      decompressorRegistry, compressorRegistry);
+  private ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+      SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
 
   @Mock
   private ServerStream stream;
 
   @Mock
   private ServerCall.Listener<String> callListener;
+
+  @Mock
+  private ServerCallHandler<String, Integer> callHandler;
 
   /** Set up for test. */
   @Before
@@ -143,8 +149,8 @@ public class ServerImplTest {
       @Override
       public void shutdown() {}
     };
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
-        decompressorRegistry, compressorRegistry);
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
     server.start();
     server.shutdown();
     assertTrue(server.isShutdown());
@@ -161,8 +167,8 @@ public class ServerImplTest {
         throw new AssertionError("Should not be called, because wasn't started");
       }
     };
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
-        decompressorRegistry, compressorRegistry);
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
     server.shutdown();
     assertTrue(server.isShutdown());
     assertTrue(server.isTerminated());
@@ -170,8 +176,8 @@ public class ServerImplTest {
 
   @Test
   public void startStopImmediateWithChildTransport() throws IOException {
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
-        decompressorRegistry, compressorRegistry);
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
       boolean shutdown;
@@ -202,8 +208,8 @@ public class ServerImplTest {
       }
     }
 
-    ServerImpl server = new ServerImpl(executor, registry, new FailingStartupServer(),
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry,
+        new FailingStartupServer(), SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
     try {
       server.start();
       fail("expected exception");
@@ -218,7 +224,7 @@ public class ServerImplTest {
         = Metadata.Key.of("inception", Metadata.ASCII_STRING_MARSHALLER);
     final AtomicReference<ServerCall<Integer>> callReference
         = new AtomicReference<ServerCall<Integer>>();
-    registry.addService(ServerServiceDefinition.builder("Waiter")
+    fallbackRegistry.addService(ServerServiceDefinition.builder("Waiter")
         .addMethod(
             MethodDescriptor.create(
                 MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
@@ -292,7 +298,7 @@ public class ServerImplTest {
   public void exceptionInStartCallPropagatesToStream() throws Exception {
     CyclicBarrier barrier = executeBarrier(executor);
     final Status status = Status.ABORTED.withDescription("Oh, no!");
-    registry.addService(ServerServiceDefinition.builder("Waiter")
+    fallbackRegistry.addService(ServerServiceDefinition.builder("Waiter")
         .addMethod(
             MethodDescriptor.create(MethodType.UNKNOWN, "Waiter/serve",
               STRING_MARSHALLER, INTEGER_MARSHALLER),
@@ -340,8 +346,8 @@ public class ServerImplTest {
     }
 
     transportServer = new MaybeDeadlockingServer();
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
-        decompressorRegistry, compressorRegistry);
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
     server.start();
     new Thread() {
       @Override
@@ -402,7 +408,7 @@ public class ServerImplTest {
 
   @Test
   public void testCallContextIsBoundInListenerCallbacks() throws Exception {
-    registry.addService(ServerServiceDefinition.builder("Waiter")
+    fallbackRegistry.addService(ServerServiceDefinition.builder("Waiter")
         .addMethod(
             MethodDescriptor.create(
                 MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
@@ -489,7 +495,7 @@ public class ServerImplTest {
 
     final AtomicReference<ServerCall<Integer>> callReference
         = new AtomicReference<ServerCall<Integer>>();
-    registry.addService(ServerServiceDefinition.builder("Waiter")
+    fallbackRegistry.addService(ServerServiceDefinition.builder("Waiter")
         .addMethod(
             MethodDescriptor.create(
                 MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
@@ -524,8 +530,8 @@ public class ServerImplTest {
         return 65535;
       }
     };
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
-        decompressorRegistry, compressorRegistry);
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
     server.start();
 
     Truth.assertThat(server.getPort()).isEqualTo(65535);
@@ -534,8 +540,8 @@ public class ServerImplTest {
   @Test
   public void getPortBeforeStartedFails() {
     transportServer = new SimpleServer();
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
-        decompressorRegistry, compressorRegistry);
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
     thrown.expect(IllegalStateException.class);
     thrown.expectMessage("started");
     server.getPort();
@@ -544,14 +550,43 @@ public class ServerImplTest {
   @Test
   public void getPortAfterTerminationFails() throws Exception {
     transportServer = new SimpleServer();
-    ServerImpl server = new ServerImpl(executor, registry, transportServer, SERVER_CONTEXT,
-        decompressorRegistry, compressorRegistry);
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
     server.start();
     server.shutdown();
     server.awaitTermination();
     thrown.expect(IllegalStateException.class);
     thrown.expectMessage("terminated");
     server.getPort();
+  }
+
+  @Test
+  public void handlerRegistryPriorities() throws Exception {
+    HandlerRegistry fallbackRegistry = mock(HandlerRegistry.class);
+    MethodDescriptor<String, Integer> method1 = MethodDescriptor.create(
+        MethodType.UNKNOWN, "Service1/Method1", STRING_MARSHALLER, INTEGER_MARSHALLER);
+    registry = new InternalHandlerRegistry.Builder()
+        .addService(ServerServiceDefinition.builder("Service1")
+            .addMethod(method1, callHandler).build())
+        .build();
+    transportServer = new SimpleServer();
+    ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+    server.start();
+
+    ServerTransportListener transportListener
+        = transportServer.registerNewServerTransport(new SimpleServerTransport());
+    // This call will be handled by callHandler from the internal registry
+    transportListener.streamCreated(stream, "Service1/Method1", new Metadata());
+    // This call will be handled by the fallbackRegistry because it's not registred in the internal
+    // registry.
+    transportListener.streamCreated(stream, "Service1/Method2", new Metadata());
+
+    verify(callHandler, timeout(2000)).startCall(same(method1),
+        Matchers.<ServerCall<Integer>>anyObject(), Matchers.<Metadata>anyObject());
+    verify(fallbackRegistry, timeout(2000)).lookupMethod("Service1/Method2", null);
+    verifyNoMoreInteractions(callHandler);
+    verifyNoMoreInteractions(fallbackRegistry);
   }
 
   /**

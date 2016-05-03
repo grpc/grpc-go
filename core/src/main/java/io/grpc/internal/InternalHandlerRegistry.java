@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,28 +29,47 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
+import com.google.common.collect.ImmutableMap;
+
+import io.grpc.ServerMethodDefinition;
+import io.grpc.ServerServiceDefinition;
+
+import java.util.HashMap;
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.ThreadSafe;
 
-/**
- * Mutable base class of {@link HandlerRegistry}. Used by server implementations
- * that need to bind and unbind services that are exposed to remote clients.
- *
- * @see MutableHandlerRegistryImpl
- */
-@ThreadSafe
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/933")
-public abstract class MutableHandlerRegistry extends HandlerRegistry {
-  /**
-   * Returns {@code null}, or previous service if {@code service} replaced an existing service.
-   */
+final class InternalHandlerRegistry {
+  private final ImmutableMap<String, ServerMethodDefinition<?, ?>> methods;
+
+  private InternalHandlerRegistry(ImmutableMap<String, ServerMethodDefinition<?, ?>> methods) {
+    this.methods = methods;
+  }
+
   @Nullable
-  public abstract ServerServiceDefinition addService(ServerServiceDefinition service);
+  ServerMethodDefinition<?, ?> lookupMethod(String methodName) {
+    return methods.get(methodName);
+  }
 
-  /**
-   * Returns {@code false} if {@code service} was not registered.
-   */
-  public abstract boolean removeService(ServerServiceDefinition service);
+  static class Builder {
+    // Store per-service first, to make sure services are added/replaced atomically.
+    private final HashMap<String, ServerServiceDefinition> services =
+        new HashMap<String, ServerServiceDefinition>();
+
+    Builder addService(ServerServiceDefinition service) {
+      services.put(service.getName(), service);
+      return this;
+    }
+
+    InternalHandlerRegistry build() {
+      ImmutableMap.Builder<String, ServerMethodDefinition<?, ?>> mapBuilder =
+          ImmutableMap.builder();
+      for (ServerServiceDefinition service : services.values()) {
+        for (ServerMethodDefinition<?, ?> method : service.getMethods()) {
+          mapBuilder.put(method.getMethodDescriptor().getFullMethodName(), method);
+        }
+      }
+      return new InternalHandlerRegistry(mapBuilder.build());
+    }
+  }
 }

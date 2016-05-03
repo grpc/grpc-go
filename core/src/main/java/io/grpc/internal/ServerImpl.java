@@ -80,7 +80,8 @@ public final class ServerImpl extends io.grpc.Server {
   /** Executor for application processing. */
   private Executor executor;
   private boolean usingSharedExecutor;
-  private final HandlerRegistry registry;
+  private final InternalHandlerRegistry registry;
+  private final HandlerRegistry fallbackRegistry;
   private boolean started;
   private boolean shutdown;
   private boolean terminated;
@@ -100,14 +101,17 @@ public final class ServerImpl extends io.grpc.Server {
   /**
    * Construct a server.
    *
+   * @param registry the primary method registry
+   * @param fallbackRegistry the secondary method registry, used only if the primary registry
+   *        doesn't have the method
    * @param executor to call methods on behalf of remote clients
-   * @param registry of methods to expose to remote clients.
    */
-  ServerImpl(Executor executor, HandlerRegistry registry, InternalServer transportServer,
-      Context rootContext, DecompressorRegistry decompressorRegistry,
-      CompressorRegistry compressorRegistry) {
+  ServerImpl(Executor executor, InternalHandlerRegistry registry, HandlerRegistry fallbackRegistry,
+      InternalServer transportServer, Context rootContext,
+      DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry) {
     this.executor = executor;
     this.registry = Preconditions.checkNotNull(registry, "registry");
+    this.fallbackRegistry = Preconditions.checkNotNull(fallbackRegistry, "fallbackRegistry");
     this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");
     // Fork from the passed in context so that it does not propagate cancellation, it only
     // inherits values.
@@ -312,6 +316,9 @@ public final class ServerImpl extends io.grpc.Server {
             ServerStreamListener listener = NOOP_LISTENER;
             try {
               ServerMethodDefinition<?, ?> method = registry.lookupMethod(methodName);
+              if (method == null) {
+                method = fallbackRegistry.lookupMethod(methodName);
+              }
               if (method == null) {
                 stream.close(
                     Status.UNIMPLEMENTED.withDescription("Method not found: " + methodName),

@@ -75,8 +75,6 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * Adds a service implementation to the handler registry.
    *
    * @param service ServerServiceDefinition object
-   * @throws UnsupportedOperationException if this builder does not support dynamically adding
-   *                                       services.
    */
   public abstract T addService(ServerServiceDefinition service);
 
@@ -84,11 +82,16 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * Adds a service implementation to the handler registry.
    *
    * @param bindableService BindableService object
-   * @throws UnsupportedOperationException if this builder does not support dynamically adding
-   *     services.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1701")
   public abstract T addService(BindableService bindableService);
+
+  /**
+   * Sets a fallback handler registry that will be looked up in if a method is not found in the
+   * primary registry.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/933")
+  public abstract T fallbackHandlerRegistry(@Nullable HandlerRegistry fallbackRegistry);
 
   /**
    * Makes the server use TLS.
@@ -104,7 +107,7 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * decompressors are in {@code DecompressorRegistry.getDefaultInstance}.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
-  public abstract T decompressorRegistry(DecompressorRegistry registry);
+  public abstract T decompressorRegistry(@Nullable DecompressorRegistry registry);
 
   /**
    * Set the compression registry for use in the channel.  This is an advanced API call and
@@ -112,7 +115,7 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * compressors are in {@code CompressorRegistry.getDefaultInstance}.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
-  public abstract T compressorRegistry(CompressorRegistry registry);
+  public abstract T compressorRegistry(@Nullable CompressorRegistry registry);
 
   /**
    * Builds a server using the given parameters.

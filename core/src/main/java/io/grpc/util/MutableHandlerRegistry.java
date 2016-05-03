@@ -29,7 +29,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.util;
+
+import io.grpc.ExperimentalApi;
+import io.grpc.HandlerRegistry;
+import io.grpc.MethodDescriptor;
+import io.grpc.ServerMethodDefinition;
+import io.grpc.ServerServiceDefinition;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -45,17 +51,15 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/933")
-public final class MutableHandlerRegistryImpl extends MutableHandlerRegistry {
+public final class MutableHandlerRegistry extends HandlerRegistry {
   private final ConcurrentMap<String, ServerServiceDefinition> services
       = new ConcurrentHashMap<String, ServerServiceDefinition>();
 
-  @Override
   @Nullable
   public ServerServiceDefinition addService(ServerServiceDefinition service) {
     return services.put(service.getName(), service);
   }
 
-  @Override
   public boolean removeService(ServerServiceDefinition service) {
     return services.remove(service.getName(), service);
   }

@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.util;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Iterables.getOnlyElement;
@@ -42,6 +42,10 @@ import static org.mockito.Mockito.mock;
 
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
+import io.grpc.MethodDescriptor;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerMethodDefinition;
+import io.grpc.ServerServiceDefinition;
 
 import org.junit.After;
 import org.junit.Test;
@@ -49,10 +53,10 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
-/** Unit tests for {@link MutableHandlerRegistryImpl}. */
+/** Unit tests for {@link MutableHandlerRegistry}. */
 @RunWith(JUnit4.class)
-public class MutableHandlerRegistryImplTest {
-  private MutableHandlerRegistry registry = new MutableHandlerRegistryImpl();
+public class MutableHandlerRegistryTest {
+  private MutableHandlerRegistry registry = new MutableHandlerRegistry();
   @SuppressWarnings("unchecked")
   private Marshaller<String> requestMarshaller = mock(Marshaller.class);
   @SuppressWarnings("unchecked")

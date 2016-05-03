@@ -34,7 +34,6 @@ package io.grpc.inprocess;
 import com.google.common.base.Preconditions;
 
 import io.grpc.ExperimentalApi;
-import io.grpc.HandlerRegistry;
 import io.grpc.internal.AbstractServerImplBuilder;
 
 import java.io.File;
@@ -52,17 +51,6 @@ public final class InProcessServerBuilder
    * Create a server builder that will bind with the given name.
    *
    * @param name the identity of the server for clients to connect to
-   * @param registry the registry of handlers used for dispatching incoming calls
-   * @return a new builder
-   */
-  public static InProcessServerBuilder forName(String name, HandlerRegistry registry) {
-    return new InProcessServerBuilder(name, registry);
-  }
-
-  /**
-   * Create a server builder that will bind with the given name.
-   *
-   * @param name the identity of the server for clients to connect to
    * @return a new builder
    */
   public static InProcessServerBuilder forName(String name) {
@@ -70,11 +58,6 @@ public final class InProcessServerBuilder
   }
 
   private final String name;
-
-  private InProcessServerBuilder(String name, HandlerRegistry registry) {
-    super(registry);
-    this.name = Preconditions.checkNotNull(name, "name");
-  }
 
   private InProcessServerBuilder(String name) {
     this.name = Preconditions.checkNotNull(name, "name");

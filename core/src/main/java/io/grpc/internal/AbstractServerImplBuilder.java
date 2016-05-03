@@ -33,7 +33,6 @@ package io.grpc.internal;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 
-import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.BindableService;
@@ -42,9 +41,8 @@ import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
-import io.grpc.MutableHandlerRegistry;
-import io.grpc.MutableHandlerRegistryImpl;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 
 import java.util.concurrent.Executor;
@@ -59,7 +57,18 @@ import javax.annotation.Nullable;
 public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuilder<T>>
         extends ServerBuilder<T> {
 
-  private final HandlerRegistry registry;
+  private static final HandlerRegistry EMPTY_FALLBACK_REGISTRY = new HandlerRegistry() {
+      @Override public ServerMethodDefinition<?, ?> lookupMethod(String method, String authority) {
+        return null;
+      }
+    };
+
+  private final InternalHandlerRegistry.Builder registryBuilder =
+      new InternalHandlerRegistry.Builder();
+
+  @Nullable
+  private HandlerRegistry fallbackRegistry;
+
   @Nullable
   private Executor executor;
 
@@ -68,20 +77,6 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   @Nullable
   private CompressorRegistry compressorRegistry;
-
-  /**
-   * Constructs using a given handler registry.
-   */
-  protected AbstractServerImplBuilder(HandlerRegistry registry) {
-    this.registry = Preconditions.checkNotNull(registry);
-  }
-
-  /**
-   * Constructs with a MutableHandlerRegistry created internally.
-   */
-  protected AbstractServerImplBuilder() {
-    this.registry = new MutableHandlerRegistryImpl();
-  }
 
   @Override
   public final T directExecutor() {
@@ -94,34 +89,21 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
     return thisT();
   }
 
-  /**
-   * Adds a service implementation to the handler registry.
-   *
-   * <p>This is supported only if the user didn't provide a handler registry, or the provided one is
-   * a {@link MutableHandlerRegistry}. Otherwise it throws an UnsupportedOperationException.
-   *
-   * @param service ServerServiceDefinition object.
-   */
   @Override
   public final T addService(ServerServiceDefinition service) {
-    if (registry instanceof MutableHandlerRegistry) {
-      ((MutableHandlerRegistry) registry).addService(service);
-      return thisT();
-    }
-    throw new UnsupportedOperationException("Underlying HandlerRegistry is not mutable");
+    registryBuilder.addService(service);
+    return thisT();
   }
 
-  /**
-   * Adds a service implementation to the handler registry.
-   *
-   * <p>This is supported only if the user didn't provide a handler registry, or the provided one is
-   * a {@link MutableHandlerRegistry}. Otherwise it throws an UnsupportedOperationException.
-   *
-   * @param bindableService BindableService object.
-   */
   @Override
   public final T addService(BindableService bindableService) {
     return addService(bindableService.bindService());
+  }
+
+  @Override
+  public final T fallbackHandlerRegistry(HandlerRegistry registry) {
+    this.fallbackRegistry = registry;
+    return thisT();
   }
 
   @Override
@@ -139,8 +121,9 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   @Override
   public ServerImpl build() {
     io.grpc.internal.InternalServer transportServer = buildTransportServer();
-    return new ServerImpl(executor, registry, transportServer, Context.ROOT,
-        firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
+    return new ServerImpl(executor, registryBuilder.build(),
+        firstNonNull(fallbackRegistry, EMPTY_FALLBACK_REGISTRY), transportServer,
+        Context.ROOT, firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()));
   }
 

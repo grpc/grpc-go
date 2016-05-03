@@ -37,7 +37,6 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import com.google.common.base.Preconditions;
 
 import io.grpc.ExperimentalApi;
-import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
 import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
@@ -84,18 +83,6 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   }
 
   /**
-   * Creates a server builder that will bind to the given port and use the {@link HandlerRegistry}
-   * for call dispatching.
-   *
-   * @param registry the registry of handlers used for dispatching incoming calls.
-   * @param port the port on which to the server is to be bound.
-   * @return the server builder.
-   */
-  public static NettyServerBuilder forRegistryAndPort(HandlerRegistry registry, int port) {
-    return new NettyServerBuilder(registry, port);
-  }
-
-  /**
    * Creates a server builder configured with the given {@link SocketAddress}.
    *
    * @param address the socket address on which the server is to be bound.
@@ -106,11 +93,6 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   }
 
   private NettyServerBuilder(int port) {
-    this.address = new InetSocketAddress(port);
-  }
-
-  private NettyServerBuilder(HandlerRegistry registry, int port) {
-    super(registry);
     this.address = new InetSocketAddress(port);
   }
 
