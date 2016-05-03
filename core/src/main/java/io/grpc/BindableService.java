@@ -46,7 +46,7 @@ package io.grpc;
  * Server server = ServerBuilder.forPort(1234).addService(new RouteGuideService()).build();
  * </code></pre></p>
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1701")
 public interface BindableService {
   /**
    * Creates {@link ServerServiceDefinition} object for current instance of service implementation.

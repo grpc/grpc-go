@@ -46,7 +46,7 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 // TODO(zhangkun83): since it's also used for non-loadbalancing cases like pick-first,
 // "RequestRouter" might be a better name.
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
 @ThreadSafe
 public abstract class LoadBalancer<T> {
   /**
@@ -57,6 +57,7 @@ public abstract class LoadBalancer<T> {
    *
    * @param affinity for affinity-based routing
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1766")
   public abstract T pickTransport(Attributes affinity);
 
   /**

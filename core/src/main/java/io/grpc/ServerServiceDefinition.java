@@ -46,7 +46,7 @@ import java.util.Map;
 // consider removing ServerServiceDefinition to and let the registry to have a big map of
 // handlers.
 public final class ServerServiceDefinition {
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1774")
   public static Builder builder(String serviceName) {
     return new Builder(serviceName);
   }
@@ -65,7 +65,7 @@ public final class ServerServiceDefinition {
     return name;
   }
 
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1774")
   public Collection<ServerMethodDefinition<?, ?>> getMethods() {
     return methods.values();
   }
@@ -82,7 +82,7 @@ public final class ServerServiceDefinition {
   /** Builder for constructing Service instances. */
   public static final class Builder {
     private final String serviceName;
-    private final Map<String, ServerMethodDefinition<?, ?>> methods = 
+    private final Map<String, ServerMethodDefinition<?, ?>> methods =
         new HashMap<String, ServerMethodDefinition<?, ?>>();
 
     private Builder(String serviceName) {
@@ -95,7 +95,7 @@ public final class ServerServiceDefinition {
      * @param method the {@link MethodDescriptor} of this method.
      * @param handler handler for incoming calls
      */
-    @ExperimentalApi
+    @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1774")
     public <ReqT, RespT> Builder addMethod(
         MethodDescriptor<ReqT, RespT> method, ServerCallHandler<ReqT, RespT> handler) {
       return addMethod(ServerMethodDefinition.create(
@@ -104,7 +104,7 @@ public final class ServerServiceDefinition {
     }
 
     /** Add a method to be supported by the service. */
-    @ExperimentalApi
+    @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1774")
     public <ReqT, RespT> Builder addMethod(ServerMethodDefinition<ReqT, RespT> def) {
       MethodDescriptor<ReqT, RespT> method = def.getMethodDescriptor();
       checkArgument(

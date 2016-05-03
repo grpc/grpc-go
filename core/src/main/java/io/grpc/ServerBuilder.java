@@ -103,7 +103,7 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * shouldn't be used unless you are using custom message encoding.   The default supported
    * decompressors are in {@code DecompressorRegistry.getDefaultInstance}.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public abstract T decompressorRegistry(DecompressorRegistry registry);
 
   /**
@@ -111,7 +111,7 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * shouldn't be used unless you are using custom message encoding.   The default supported
    * compressors are in {@code CompressorRegistry.getDefaultInstance}.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public abstract T compressorRegistry(CompressorRegistry registry);
 
   /**

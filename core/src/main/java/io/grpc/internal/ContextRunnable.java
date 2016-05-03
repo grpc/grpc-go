@@ -32,13 +32,11 @@
 package io.grpc.internal;
 
 import io.grpc.Context;
-import io.grpc.ExperimentalApi;
 
 /**
  * Utility base implementation of {@link Runnable} that performs the same function as
  * {@link Context#wrap(Runnable)} without requiring the construction of an additional object.
  */
-@ExperimentalApi
 abstract class ContextRunnable implements Runnable {
 
   private final Context context;

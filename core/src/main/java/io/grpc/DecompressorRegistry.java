@@ -49,7 +49,7 @@ import javax.annotation.concurrent.ThreadSafe;
 /**
  * Encloses classes related to the compression and decompression of messages.
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
 @ThreadSafe
 public final class DecompressorRegistry {
 
@@ -93,7 +93,7 @@ public final class DecompressorRegistry {
    * <p>The specification doesn't say anything about ordering, or preference, so the returned codes
    * can be arbitrary.
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public Set<String> getAdvertisedMessageEncodings() {
     Set<String> advertisedDecompressors = new HashSet<String>(decompressors.size());
     for (Entry<String, DecompressorInfo> entry : decompressors.entrySet()) {

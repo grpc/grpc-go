@@ -42,7 +42,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * A registry that holds various {@link NameResolver.Factory}s and dispatches target URI to the
  * first one that can handle it.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
 @ThreadSafe
 public final class NameResolverRegistry extends NameResolver.Factory {
   private static final NameResolverRegistry defaultRegistry =

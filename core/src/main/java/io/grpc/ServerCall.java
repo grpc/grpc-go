@@ -196,7 +196,7 @@ public abstract class ServerCall<RespT> {
    * Enables per-message compression, if an encoding type has been negotiated.  If no message
    * encoding has been negotiated, this is a no-op.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public void setMessageCompression(boolean enabled) {
     // noop
   }
@@ -210,7 +210,7 @@ public abstract class ServerCall<RespT> {
    * @param compressor the name of the compressor to use.
    * @throws IllegalArgumentException if the compressor name can not be found.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public void setCompression(String compressor) {
     // noop
   }

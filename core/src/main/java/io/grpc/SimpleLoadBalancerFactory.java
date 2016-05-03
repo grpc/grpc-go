@@ -46,7 +46,7 @@ import javax.annotation.concurrent.GuardedBy;
  * addresses from the {@link NameResolver}.
  */
 // TODO(zhangkun83): Only pick-first is implemented. We need to implement round-robin.
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
 public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
 
   private static final SimpleLoadBalancerFactory instance = new SimpleLoadBalancerFactory();

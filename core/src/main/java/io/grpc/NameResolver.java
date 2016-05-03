@@ -46,7 +46,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * <p>The addresses and attributes of a target may be changed over time, thus the caller registers a
  * {@link Listener} to receive continuous updates.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
 @ThreadSafe
 public abstract class NameResolver {
   /**

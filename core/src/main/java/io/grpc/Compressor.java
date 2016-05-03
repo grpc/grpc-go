@@ -37,7 +37,7 @@ import java.io.OutputStream;
 /**
  * Represents a message compressor.
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
 public interface Compressor {
   /**
    * Returns the message encoding that this compressor uses.

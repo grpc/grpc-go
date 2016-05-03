@@ -52,7 +52,7 @@ import java.net.URI;
  *   <li>{@code "dns:///foo.googleapis.com"} (without port)</li>
  * </ul>
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1769")
 public final class DnsNameResolverFactory extends NameResolver.Factory {
 
   private static final String SCHEME = "dns";

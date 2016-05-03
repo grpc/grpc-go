@@ -75,7 +75,7 @@ public final class CallOptions {
    * verification of the overridden value, such as making sure the authority matches the server's
    * TLS certificate.</em>
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/67")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1767")
   public CallOptions withAuthority(@Nullable String authority) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.authority = authority;
@@ -86,7 +86,7 @@ public final class CallOptions {
    * Sets the compression to use for the call.  The compressor must be a valid name known in the
    * {@link CompressorRegistry}.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public CallOptions withCompression(@Nullable String compressorName) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.compressorName = compressorName;
@@ -101,7 +101,7 @@ public final class CallOptions {
    *
    * @param deadline the deadline or {@code null} for unsetting the deadline.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1706")
   public CallOptions withDeadline(@Nullable Deadline deadline) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.deadline = deadline;
@@ -152,7 +152,7 @@ public final class CallOptions {
   /**
    * Returns the deadline or {@code null} if the deadline is not set.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1706")
   @Nullable
   public Deadline getDeadline() {
     return deadline;
@@ -161,7 +161,7 @@ public final class CallOptions {
   /**
    * Returns a new {@code CallOptions} with attributes for affinity-based routing.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1766")
   public CallOptions withAffinity(Attributes affinity) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.affinity = Preconditions.checkNotNull(affinity);
@@ -171,16 +171,15 @@ public final class CallOptions {
   /**
    * Returns the attributes for affinity-based routing.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1766")
   public Attributes getAffinity() {
     return affinity;
   }
 
-
   /**
    * Returns the compressor's name.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   @Nullable
   public String getCompressor() {
     return compressorName;
@@ -196,7 +195,7 @@ public final class CallOptions {
    * TLS certificate.</em>
    */
   @Nullable
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/67")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1767")
   public String getAuthority() {
     return authority;
   }

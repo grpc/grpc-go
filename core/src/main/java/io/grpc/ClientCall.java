@@ -221,7 +221,7 @@ public abstract class ClientCall<ReqT, RespT> {
    * Enables per-message compression, if an encoding type has been negotiated.  If no message
    * encoding has been negotiated, this is a no-op.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1703")
   public void setMessageCompression(boolean enabled) {
     // noop
   }

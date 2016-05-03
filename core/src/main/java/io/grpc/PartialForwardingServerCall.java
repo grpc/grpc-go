@@ -67,13 +67,13 @@ abstract class PartialForwardingServerCall<RespT> extends ServerCall<RespT> {
   }
 
   @Override
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1703")
   public void setMessageCompression(boolean enabled) {
     delegate().setMessageCompression(enabled);
   }
 
   @Override
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public void setCompression(String compressor) {
     delegate().setCompression(compressor);
   }

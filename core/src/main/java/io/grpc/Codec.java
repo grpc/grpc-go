@@ -41,7 +41,7 @@ import java.util.zip.GZIPOutputStream;
  * Encloses classes related to the compression and decompression of messages.
  *
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
 public interface Codec extends Compressor, Decompressor {
   /**
    * A gzip compressor and decompressor.  In the future this will likely support other

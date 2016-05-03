@@ -72,7 +72,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *   <li>{@code "[2001:db8:85a3:8d3:1319:8a2e:370:7348]:443"}</li>
    * </ul>
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1773")
   public static ManagedChannelBuilder<?> forTarget(String target) {
     return ManagedChannelProvider.provider().builderForTarget(target);
   }
@@ -129,7 +129,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *
    * <p>Should only used by tests.
    */
-  @ExperimentalApi("primarily for testing")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1767")
   public abstract T overrideAuthority(String authority);
 
   /*
@@ -142,7 +142,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * @param skipNegotiation @{code true} if there is a priori knowledge that the endpoint supports
    *                        plaintext, {@code false} if plaintext use must be negotiated.
    */
-  @ExperimentalApi("primarily for testing")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1772")
   public abstract T usePlaintext(boolean skipNegotiation);
 
   /*
@@ -151,7 +151,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * <p>If this method is not called, the builder will look up in the global resolver registry for
    * a factory for the provided target.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
   public abstract T nameResolverFactory(NameResolver.Factory resolverFactory);
 
   /**
@@ -160,7 +160,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * <p>If this method is not called, the builder will use {@link SimpleLoadBalancerFactory} for the
    * channel.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
 
   /**
@@ -168,7 +168,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * shouldn't be used unless you are using custom message encoding.   The default supported
    * decompressors are in {@code DecompressorRegistry.getDefaultInstance}.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public abstract T decompressorRegistry(DecompressorRegistry registry);
 
   /**
@@ -176,7 +176,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * shouldn't be used unless you are using custom message encoding.   The default supported
    * compressors are in {@code CompressorRegistry.getDefaultInstance}.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public abstract T compressorRegistry(CompressorRegistry registry);
 
   /**

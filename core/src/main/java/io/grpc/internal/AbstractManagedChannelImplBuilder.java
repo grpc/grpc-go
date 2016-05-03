@@ -40,7 +40,6 @@ import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
-import io.grpc.ExperimentalApi;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
@@ -146,14 +145,12 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   @Override
-  @ExperimentalApi
   public final T decompressorRegistry(DecompressorRegistry registry) {
     this.decompressorRegistry = registry;
     return thisT();
   }
 
   @Override
-  @ExperimentalApi
   public final T compressorRegistry(CompressorRegistry registry) {
     this.compressorRegistry = registry;
     return thisT();

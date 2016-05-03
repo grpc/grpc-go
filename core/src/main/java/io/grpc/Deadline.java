@@ -41,7 +41,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * An absolute deadline in system time.
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/262")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1706")
 public final class Deadline implements Comparable<Deadline> {
   private static final SystemTicker SYSTEM_TICKER = new SystemTicker();
   // nanoTime has a range of just under 300 years. Only allow up to 100 years in the past or future

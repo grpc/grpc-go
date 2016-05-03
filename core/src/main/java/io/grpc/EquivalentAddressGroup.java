@@ -45,7 +45,7 @@ import java.util.List;
  * them is equally sufficient. They do have order. An address appears earlier on the list is likely
  * to be tried earlier.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
 public final class EquivalentAddressGroup {
 
   private final List<SocketAddress> addrs;

@@ -43,7 +43,7 @@ import javax.annotation.concurrent.Immutable;
 /**
  * An immutable type-safe container of attributes.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1764")
 @Immutable
 public final class Attributes {
 

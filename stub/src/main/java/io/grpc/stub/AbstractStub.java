@@ -106,7 +106,7 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    *
    * @param deadline the deadline or {@code null} for unsetting the deadline.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1706")
   public final S withDeadline(@Nullable Deadline deadline) {
     return build(channel, callOptions.withDeadline(deadline));
   }
@@ -144,7 +144,7 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    *
    * @param compressorName the name (e.g. "gzip") of the compressor to use.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public final S withCompression(String compressorName) {
     return build(channel, callOptions.withCompression(compressorName));
   }

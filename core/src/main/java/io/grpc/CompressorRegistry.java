@@ -45,7 +45,7 @@ import javax.annotation.concurrent.ThreadSafe;
 /**
  * Encloses classes related to the compression and decompression of messages.
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/492")
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
 @ThreadSafe
 public final class CompressorRegistry {
   private static final CompressorRegistry DEFAULT_INSTANCE = new CompressorRegistry(

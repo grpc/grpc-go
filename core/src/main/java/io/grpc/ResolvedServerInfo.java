@@ -38,7 +38,7 @@ import javax.annotation.concurrent.Immutable;
 /**
  * The information about a server from a {@link NameResolver}.
  */
-@ExperimentalApi
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
 @Immutable
 public final class ResolvedServerInfo {
   private final SocketAddress address;
