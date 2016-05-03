@@ -16,10 +16,7 @@ import (
 func runUnary(b *testing.B, maxConcurrentCalls int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
-	target, stopper, err := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"})
-	if err != nil {
-		grpclog.Fatalf("failed to start server: %v", err)
-	}
+	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"})
 	defer stopper()
 	conn := NewClientConn(target, grpc.WithInsecure())
 	tc := testpb.NewBenchmarkServiceClient(conn)
@@ -62,10 +59,7 @@ func runUnary(b *testing.B, maxConcurrentCalls int) {
 func runStream(b *testing.B, maxConcurrentCalls int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
-	target, stopper, err := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"})
-	if err != nil {
-		grpclog.Fatalf("failed to start server: %v", err)
-	}
+	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"})
 	defer stopper()
 	conn := NewClientConn(target, grpc.WithInsecure())
 	tc := testpb.NewBenchmarkServiceClient(conn)

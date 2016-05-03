@@ -93,12 +93,13 @@ func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallS
 }
 
 // byteBufServer is a gRPC server that sends and receives byte buffer.
-// The purpose is to remove the protobuf overhead from benchmark tests.
-// Now only StreamingCall() is tested.
+// The purpose is to benchmark the gRPC performance without protobuf serialization/deserialization overhead.
 type byteBufServer struct {
 	respSize int32
 }
 
+// UnaryCall is an empty function and is not used for benchmark.
+// If bytebuf UnaryCall benchmark is needed later, the function body needs to be updated.
 func (s *byteBufServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	return &testpb.SimpleResponse{}, nil
 }
@@ -120,7 +121,7 @@ func (s *byteBufServer) StreamingCall(stream testpb.BenchmarkService_StreamingCa
 	}
 }
 
-// ServerInfo is used to create server.
+// ServerInfo contains the information to create a gRPC benchmark server.
 type ServerInfo struct {
 	// Addr is the address of the server.
 	Addr string
@@ -136,9 +137,8 @@ type ServerInfo struct {
 }
 
 // StartServer starts a gRPC server serving a benchmark service according to info.
-// Different types of servers are created according to Type.
 // It returns its listen address and a function to stop the server.
-func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func(), error) {
+func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	lis, err := net.Listen("tcp", info.Addr)
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
@@ -150,16 +150,16 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func(), er
 	case "bytebuf":
 		respSize, ok := info.Metadata.(int32)
 		if !ok {
-			return "", nil, fmt.Errorf("invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
+			grpclog.Fatalf("failed to StartServer, invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
 		}
 		testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{respSize: respSize})
 	default:
-		return "", nil, fmt.Errorf("unknown Type: %v", info.Type)
+		grpclog.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
 	}
 	go s.Serve(lis)
 	return lis.Addr().String(), func() {
 		s.Stop()
-	}, nil
+	}
 }
 
 // DoUnaryCall performs an unary RPC with given stub and request and response sizes.

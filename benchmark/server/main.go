@@ -28,10 +28,7 @@ func main() {
 			grpclog.Fatalf("Failed to serve: %v", err)
 		}
 	}()
-	addr, stopper, err := benchmark.StartServer(benchmark.ServerInfo{Addr: ":0", Type: "protobuf"}) // listen on all interfaces
-	if err != nil {
-		grpclog.Fatalf("failed to start server: %v", err)
-	}
+	addr, stopper := benchmark.StartServer(benchmark.ServerInfo{Addr: ":0", Type: "protobuf"}) // listen on all interfaces
 	grpclog.Println("Server Address: ", addr)
 	<-time.After(time.Duration(*duration) * time.Second)
 	stopper()
