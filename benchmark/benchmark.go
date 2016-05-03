@@ -188,7 +188,7 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 		return fmt.Errorf("/BenchmarkService/StreamingCall.Send(_) = %v, want <nil>", err)
 	}
 	if _, err := stream.Recv(); err != nil {
-		// EOF should be a valid error here.
+		// EOF is a valid error here.
 		if err == io.EOF {
 			return nil
 		}
@@ -197,7 +197,7 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 	return nil
 }
 
-// DoByteBufStreamingRoundTrip performs a round trip for a single streaming rpc, using custom codec.
+// DoByteBufStreamingRoundTrip performs a round trip for a single streaming rpc, using a custom codec for byte buffer.
 func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	out := make([]byte, reqSize)
 	if err := stream.(grpc.ClientStream).SendMsg(&out); err != nil {
@@ -205,7 +205,7 @@ func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallCli
 	}
 	var in []byte
 	if err := stream.(grpc.ClientStream).RecvMsg(&in); err != nil {
-		// EOF should be a valid error here.
+		// EOF is a valid error here.
 		if err == io.EOF {
 			return nil
 		}
