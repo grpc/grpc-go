@@ -84,7 +84,7 @@ func printClientConfig(config *testpb.ClientConfig) {
 
 func setupClientEnv(config *testpb.ClientConfig) {
 	// Use one cpu core by default.
-	// TODO: change default number of cores used if 1 is not fastest.
+	// TODO: Revisit this for the optimal default setup.
 	if config.CoreLimit > 1 {
 		runtime.GOMAXPROCS(int(config.CoreLimit))
 	} else {
@@ -199,7 +199,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		return nil, err
 	}
 
-	bc := benchmarkClient{
+	bc := &benchmarkClient{
 		histogram: stats.NewHistogram(stats.HistogramOptions{
 			NumBuckets:     int(math.Log(config.HistogramParams.MaxPossible)/math.Log(1+config.HistogramParams.Resolution)) + 1,
 			GrowthFactor:   config.HistogramParams.Resolution,
@@ -211,14 +211,13 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		closeConns:    closeConns,
 	}
 
-	err = performRPCs(config, conns, &bc)
-	if err != nil {
+	if err = performRPCs(config, conns, bc); err != nil {
 		// Close all connections if performRPCs failed.
 		closeConns()
 		return nil, err
 	}
 
-	return &bc, nil
+	return bc, nil
 }
 
 func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int) {
@@ -244,7 +243,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 						}
 						elapse := time.Since(start)
 						bc.mu.Lock()
-						bc.histogram.Add(int64(elapse / time.Nanosecond))
+						bc.histogram.Add(int64(elapse))
 						bc.mu.Unlock()
 						select {
 						case <-bc.stop:
@@ -296,7 +295,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 						}
 						elapse := time.Since(start)
 						bc.mu.Lock()
-						bc.histogram.Add(int64(elapse / time.Nanosecond))
+						bc.histogram.Add(int64(elapse))
 						bc.mu.Unlock()
 						select {
 						case <-bc.stop:

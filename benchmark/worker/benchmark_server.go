@@ -82,6 +82,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	printServerConfig(config)
 
 	// Use one cpu core by default.
+	// TODO: Revisit this for the optimal default setup.
 	numOfCores := 1
 	if config.CoreLimit > 1 {
 		numOfCores = int(config.CoreLimit)
