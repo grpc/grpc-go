@@ -87,6 +87,8 @@ func setupClientEnv(config *testpb.ClientConfig) {
 	// TODO: change default number of cores used if 1 is not fastest.
 	if config.CoreLimit > 1 {
 		runtime.GOMAXPROCS(int(config.CoreLimit))
+	} else {
+		runtime.GOMAXPROCS(1)
 	}
 }
 

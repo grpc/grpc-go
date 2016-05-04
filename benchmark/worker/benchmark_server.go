@@ -85,8 +85,8 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	numOfCores := 1
 	if config.CoreLimit > 1 {
 		numOfCores = int(config.CoreLimit)
-		runtime.GOMAXPROCS(numOfCores)
 	}
+	runtime.GOMAXPROCS(numOfCores)
 
 	var opts []grpc.ServerOption
 
