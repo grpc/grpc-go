@@ -37,8 +37,8 @@ Package benchmark implements the building blocks to setup end-to-end gRPC benchm
 package benchmark
 
 import (
+	"fmt"
 	"io"
-	"math"
 	"net"
 
 	"golang.org/x/net/context"
@@ -74,7 +74,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	}, nil
 }
 
-func (s *testServer) StreamingCall(stream testpb.TestService_StreamingCallServer) error {
+func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -92,16 +92,70 @@ func (s *testServer) StreamingCall(stream testpb.TestService_StreamingCallServer
 	}
 }
 
-// StartServer starts a gRPC server serving a benchmark service on the given
-// address, which may be something like "localhost:0". It returns its listen
-// address and a function to stop the server.
-func StartServer(addr string) (string, func()) {
-	lis, err := net.Listen("tcp", addr)
+// byteBufServer is a gRPC server that sends and receives byte buffer.
+// The purpose is to benchmark the gRPC performance without protobuf serialization/deserialization overhead.
+type byteBufServer struct {
+	respSize int32
+}
+
+// UnaryCall is an empty function and is not used for benchmark.
+// If bytebuf UnaryCall benchmark is needed later, the function body needs to be updated.
+func (s *byteBufServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	return &testpb.SimpleResponse{}, nil
+}
+
+func (s *byteBufServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
+	for {
+		var in []byte
+		err := stream.(grpc.ServerStream).RecvMsg(&in)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		out := make([]byte, s.respSize)
+		if err := stream.(grpc.ServerStream).SendMsg(&out); err != nil {
+			return err
+		}
+	}
+}
+
+// ServerInfo contains the information to create a gRPC benchmark server.
+type ServerInfo struct {
+	// Addr is the address of the server.
+	Addr string
+
+	// Type is the type of the server.
+	// It should be "protobuf" or "bytebuf".
+	Type string
+
+	// Metadata is an optional configuration.
+	// For "protobuf", it's ignored.
+	// For "bytebuf", it should be an int representing response size.
+	Metadata interface{}
+}
+
+// StartServer starts a gRPC server serving a benchmark service according to info.
+// It returns its listen address and a function to stop the server.
+func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
+	lis, err := net.Listen("tcp", info.Addr)
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
-	s := grpc.NewServer(grpc.MaxConcurrentStreams(math.MaxUint32))
-	testpb.RegisterTestServiceServer(s, &testServer{})
+	s := grpc.NewServer(opts...)
+	switch info.Type {
+	case "protobuf":
+		testpb.RegisterBenchmarkServiceServer(s, &testServer{})
+	case "bytebuf":
+		respSize, ok := info.Metadata.(int32)
+		if !ok {
+			grpclog.Fatalf("failed to StartServer, invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
+		}
+		testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{respSize: respSize})
+	default:
+		grpclog.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
+	}
 	go s.Serve(lis)
 	return lis.Addr().String(), func() {
 		s.Stop()
@@ -109,7 +163,7 @@ func StartServer(addr string) (string, func()) {
 }
 
 // DoUnaryCall performs an unary RPC with given stub and request and response sizes.
-func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
+func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) error {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -117,12 +171,13 @@ func DoUnaryCall(tc testpb.TestServiceClient, reqSize, respSize int) {
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
-		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+		return fmt.Errorf("/BenchmarkService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
+	return nil
 }
 
 // DoStreamingRoundTrip performs a round trip for a single streaming rpc.
-func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService_StreamingCallClient, reqSize, respSize int) {
+func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -130,16 +185,38 @@ func DoStreamingRoundTrip(tc testpb.TestServiceClient, stream testpb.TestService
 		Payload:      pl,
 	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("StreamingCall(_).Send: %v", err)
+		return fmt.Errorf("/BenchmarkService/StreamingCall.Send(_) = %v, want <nil>", err)
 	}
 	if _, err := stream.Recv(); err != nil {
-		grpclog.Fatalf("StreamingCall(_).Recv: %v", err)
+		// EOF is a valid error here.
+		if err == io.EOF {
+			return nil
+		}
+		return fmt.Errorf("/BenchmarkService/StreamingCall.Recv(_) = %v, want <nil>", err)
 	}
+	return nil
+}
+
+// DoByteBufStreamingRoundTrip performs a round trip for a single streaming rpc, using a custom codec for byte buffer.
+func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
+	out := make([]byte, reqSize)
+	if err := stream.(grpc.ClientStream).SendMsg(&out); err != nil {
+		return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).SendMsg(_) = %v, want <nil>", err)
+	}
+	var in []byte
+	if err := stream.(grpc.ClientStream).RecvMsg(&in); err != nil {
+		// EOF is a valid error here.
+		if err == io.EOF {
+			return nil
+		}
+		return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).RecvMsg(_) = %v, want <nil>", err)
+	}
+	return nil
 }
 
 // NewClientConn creates a gRPC client connection to addr.
-func NewClientConn(addr string) *grpc.ClientConn {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
+	conn, err := grpc.Dial(addr, opts...)
 	if err != nil {
 		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
 	}
