@@ -693,17 +693,6 @@ public class ContextTest {
     }
   }
 
-  @Test
-  public void testKeyEqualsHashCode() {
-    assertTrue(PET.equals(PET));
-    assertFalse(PET.equals(Context.key("pet")));
-    assertFalse(PET.equals(FOOD));
-    assertFalse(PET.equals("pet"));
-    assertFalse(PET.equals(null));
-
-    assertEquals(PET.hashCode(), PET.hashCode());
-  }
-
   private static class QueuedExecutor implements Executor {
     private final Queue<Runnable> runnables = new ArrayDeque<Runnable>();
 
