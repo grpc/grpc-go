@@ -54,6 +54,7 @@ var (
 )
 
 type benchmarkClient struct {
+	closeConns    func()
 	stop          chan bool
 	mu            sync.RWMutex
 	lastResetTime time.Time
@@ -202,6 +203,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		}),
 		stop:          make(chan bool),
 		lastResetTime: time.Now(),
+		closeConns:    closeConns,
 	}
 
 	err = performRPCs(config, conns, &bc)
@@ -256,10 +258,6 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 				}
 			}()
 		}
-		go func(conn *grpc.ClientConn) {
-			wg.Wait()
-			conn.Close()
-		}(conn)
 	}
 }
 
@@ -316,10 +314,6 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 				}
 			}()
 		}
-		go func(conn *grpc.ClientConn) {
-			wg.Wait()
-			conn.Close()
-		}(conn)
 	}
 }
 
@@ -359,4 +353,5 @@ func (bc *benchmarkClient) reset() {
 
 func (bc *benchmarkClient) shutdown() {
 	close(bc.stop)
+	bc.closeConns()
 }
