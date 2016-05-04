@@ -90,6 +90,8 @@ func setupClientEnv(config *testpb.ClientConfig) {
 	}
 }
 
+// createConns creates connections according to given config.
+// It returns a slice of connections created, the function to close all connections, and errors if any.
 func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error) {
 	var opts []grpc.DialOption
 
@@ -112,7 +114,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 		opts = append(opts, grpc.WithInsecure())
 	}
 
-	// Use byteBufCodec is required.
+	// Use byteBufCodec if it is required.
 	if config.PayloadConfig != nil {
 		switch config.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:
@@ -123,7 +125,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 		}
 	}
 
-	// Create connestions.
+	// Create connections.
 	connCount := int(config.ClientChannels)
 	conns := make([]*grpc.ClientConn, connCount)
 	for connIndex := 0; connIndex < connCount; connIndex++ {
@@ -208,7 +210,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 
 	err = performRPCs(config, conns, &bc)
 	if err != nil {
-		// Close all conns if failed to performRPCs.
+		// Close all connections if performRPCs failed.
 		closeConns()
 		return nil, err
 	}
@@ -221,15 +223,12 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 		client := testpb.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
 		// Close this connection after all goroutines finish.
-		var wg sync.WaitGroup
-		wg.Add(rpcCountPerConn)
 		for j := 0; j < rpcCountPerConn; j++ {
 			go func() {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
 				// before starting benchmark.
-				defer wg.Done()
 				done := make(chan bool)
 				for {
 					go func() {
@@ -271,8 +270,6 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 	for _, conn := range conns {
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
 		// Close this connection after all goroutines finish.
-		var wg sync.WaitGroup
-		wg.Add(rpcCountPerConn)
 		for j := 0; j < rpcCountPerConn; j++ {
 			c := testpb.NewBenchmarkServiceClient(conn)
 			stream, err := c.StreamingCall(context.Background())
@@ -285,7 +282,6 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
 				// before starting benchmark.
-				defer wg.Done()
 				done := make(chan bool)
 				for {
 					go func() {

@@ -40,6 +40,7 @@ import (
 	"net"
 	"runtime"
 	"strconv"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -207,7 +208,7 @@ func (s *workerServer) CoreCount(ctx context.Context, in *testpb.CoreRequest) (*
 
 func (s *workerServer) QuitWorker(ctx context.Context, in *testpb.Void) (*testpb.Void, error) {
 	grpclog.Printf("quiting worker")
-	defer func() { s.stop <- true }()
+	s.stop <- true
 	return &testpb.Void{}, nil
 }
 
@@ -228,6 +229,7 @@ func main() {
 
 	go func() {
 		<-stop
+		time.Sleep(time.Second)
 		s.Stop()
 	}()
 
