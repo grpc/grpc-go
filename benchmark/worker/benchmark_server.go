@@ -62,15 +62,35 @@ type benchmarkServer struct {
 	lastResetTime time.Time
 }
 
-func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchmarkServer, error) {
-	var opts []grpc.ServerOption
-
+func printServerConfig(config *testpb.ServerConfig) {
 	// Some config options are ignored:
 	// - server type:
 	//     will always start sync server
 	// - async server threads
 	// - core list
 	grpclog.Printf(" * server type: %v (ignored, always starts sync server)", config.ServerType)
+	grpclog.Printf(" * async server threads: %v (ignored)", config.AsyncServerThreads)
+	grpclog.Printf(" * core list: %v (ignored)", config.CoreList)
+
+	grpclog.Printf(" - security params: %v", config.SecurityParams)
+	grpclog.Printf(" - core limit: %v", config.CoreLimit)
+	grpclog.Printf(" - port: %v", config.Port)
+	grpclog.Printf(" - payload config: %v", config.PayloadConfig)
+}
+
+func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchmarkServer, error) {
+	printServerConfig(config)
+
+	// Use one cpu core by default.
+	numOfCores := 1
+	if config.CoreLimit > 1 {
+		numOfCores = int(config.CoreLimit)
+		runtime.GOMAXPROCS(numOfCores)
+	}
+
+	var opts []grpc.ServerOption
+
+	// Sanity check for server type.
 	switch config.ServerType {
 	case testpb.ServerType_SYNC_SERVER:
 	case testpb.ServerType_ASYNC_SERVER:
@@ -78,10 +98,8 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	default:
 		return nil, grpc.Errorf(codes.InvalidArgument, "unknow server type: %v", config.ServerType)
 	}
-	grpclog.Printf(" * async server threads: %v (ignored)", config.AsyncServerThreads)
-	grpclog.Printf(" * core list: %v (ignored)", config.CoreList)
 
-	grpclog.Printf(" - security params: %v", config.SecurityParams)
+	// Set security options.
 	if config.SecurityParams != nil {
 		creds, err := credentials.NewServerTLSFromFile(abs(certFile), abs(keyFile))
 		if err != nil {
@@ -90,22 +108,13 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		opts = append(opts, grpc.Creds(creds))
 	}
 
-	grpclog.Printf(" - core limit: %v", config.CoreLimit)
-	// Use one cpu core by default.
-	numOfCores := 1
-	if config.CoreLimit > 1 {
-		numOfCores = int(config.CoreLimit)
-		runtime.GOMAXPROCS(numOfCores)
-	}
-
-	grpclog.Printf(" - port: %v", config.Port)
 	// Priority: config.Port > serverPort > default (0).
 	port := int(config.Port)
 	if port == 0 {
 		port = serverPort
 	}
 
-	grpclog.Printf(" - payload config: %v", config.PayloadConfig)
+	// Create different benchmark server according to config.
 	var (
 		addr      string
 		closeFunc func()
