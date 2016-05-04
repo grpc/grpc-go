@@ -310,7 +310,6 @@ func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPer
 	for _, conn := range conns {
 		client := testpb.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
-		// Close this connection after all goroutines finish.
 		var wg sync.WaitGroup
 		wg.Add(rpcCountPerConn)
 		for j := 0; j < rpcCountPerConn; j++ {
@@ -362,10 +361,6 @@ func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPer
 				}
 			}()
 		}
-		go func(conn *grpc.ClientConn) {
-			wg.Wait()
-			conn.Close()
-		}(conn)
 	}
 }
 
@@ -436,7 +431,6 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 	}
 	for _, conn := range conns {
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
-		// Close this connection after all goroutines finish.
 		var wg sync.WaitGroup
 		wg.Add(rpcCountPerConn * 2)
 		for j := 0; j < rpcCountPerConn; j++ {
@@ -531,10 +525,6 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 				}
 			}()
 		}
-		go func(conn *grpc.ClientConn) {
-			wg.Wait()
-			conn.Close()
-		}(conn)
 	}
 }
 
