@@ -229,6 +229,8 @@ func main() {
 
 	go func() {
 		<-stop
+		// Wait for 1 second before stopping the server to make sure the return value of QuitWorker is sent to client.
+		// TODO revise this once server graceful stop is supported in gRPC.
 		time.Sleep(time.Second)
 		s.Stop()
 	}()

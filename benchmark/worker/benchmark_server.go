@@ -140,7 +140,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", config.PayloadConfig)
 		}
 	} else {
-		// Start protobuf server is payload config is nil.
+		// Start protobuf server if payload config is nil.
 		addr, closeFunc = benchmark.StartServer(benchmark.ServerInfo{
 			Addr: ":" + strconv.Itoa(port),
 			Type: "protobuf",

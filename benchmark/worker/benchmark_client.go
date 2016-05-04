@@ -91,7 +91,8 @@ func setupClientEnv(config *testpb.ClientConfig) {
 }
 
 // createConns creates connections according to given config.
-// It returns a slice of connections created, the function to close all connections, and errors if any.
+// It returns the connections and corresponding function to close them.
+// It returns non-nil error if there is anything wrong.
 func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error) {
 	var opts []grpc.DialOption
 
@@ -222,7 +223,6 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 	for _, conn := range conns {
 		client := testpb.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
-		// Close this connection after all goroutines finish.
 		for j := 0; j < rpcCountPerConn; j++ {
 			go func() {
 				// TODO: do warm up if necessary.
@@ -269,7 +269,6 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 	}
 	for _, conn := range conns {
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
-		// Close this connection after all goroutines finish.
 		for j := 0; j < rpcCountPerConn; j++ {
 			c := testpb.NewBenchmarkServiceClient(conn)
 			stream, err := c.StreamingCall(context.Background())
