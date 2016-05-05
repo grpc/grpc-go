@@ -170,6 +170,15 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 	}, nil
 }
 
+// poissonNextDelay creates a closure on qps.
+// It returns a function, which generates a random exponential distributed delay every time based on the enclosed qps.
+func poissonNextDelay(qps float64) func() time.Duration {
+	targetQPS := qps
+	return func() time.Duration {
+		return time.Duration(rand.ExpFloat64() * float64(time.Second) / targetQPS)
+	}
+}
+
 func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benchmarkClient) error {
 	// Read payload size and type from config.
 	var (
@@ -193,17 +202,12 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 
 	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
 
-	// TODO add open loop distribution.
 	var nextRPCDelay func() time.Duration
 	switch lp := config.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
 	case *testpb.LoadParams_Poisson:
-		nextRPCDelay = func(qps float64) func() time.Duration {
-			targetQPS := qps
-			return func() time.Duration {
-				return time.Duration(rand.ExpFloat64() * float64(time.Second) / targetQPS)
-			}
-		}(lp.Poisson.OfferedLoad / float64(rpcCountPerConn*len(conns)))
+		// The qps used by poisson should be qps for each goroutine.
+		nextRPCDelay = poissonNextDelay(lp.Poisson.OfferedLoad / float64(rpcCountPerConn*len(conns)))
 	default:
 		return grpc.Errorf(codes.InvalidArgument, "unknown load params: %v", config.LoadParams)
 	}
