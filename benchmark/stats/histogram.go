@@ -7,7 +7,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // HistogramValue is the value of Histogram objects.
@@ -84,10 +83,11 @@ func (v HistogramValue) String() string {
 type Histogram struct {
 	opts         HistogramOptions
 	buckets      []bucketInternal
-	count        *Counter
-	sum          *Counter
-	sumOfSquares *Counter
-	tracker      *Tracker
+	count        int64
+	sum          int64
+	sumOfSquares int64
+	min          int64
+	max          int64
 
 	logBaseBucketSize             float64
 	oneOverLogOnePlusGrowthFactor float64
@@ -110,7 +110,7 @@ type HistogramOptions struct {
 // rate counter.
 type bucketInternal struct {
 	lowBound float64
-	count    *Counter
+	count    int64
 }
 
 // NewHistogram returns a pointer to a new Histogram object that was created
@@ -123,12 +123,10 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 		opts.BaseBucketSize = 1.0
 	}
 	h := Histogram{
-		opts:         opts,
-		buckets:      make([]bucketInternal, opts.NumBuckets),
-		count:        newCounter(),
-		sum:          newCounter(),
-		sumOfSquares: newCounter(),
-		tracker:      newTracker(),
+		opts:    opts,
+		buckets: make([]bucketInternal, opts.NumBuckets),
+		min:     math.MaxInt64,
+		max:     math.MinInt64,
 
 		logBaseBucketSize:             math.Log(opts.BaseBucketSize),
 		oneOverLogOnePlusGrowthFactor: 1 / math.Log(1+opts.GrowthFactor),
@@ -136,10 +134,8 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 	m := 1.0 + opts.GrowthFactor
 	delta := opts.BaseBucketSize
 	h.buckets[0].lowBound = float64(opts.MinValue)
-	h.buckets[0].count = newCounter()
 	for i := 1; i < opts.NumBuckets; i++ {
 		h.buckets[i].lowBound = float64(opts.MinValue) + delta
-		h.buckets[i].count = newCounter()
 		delta = delta * m
 	}
 	return &h
@@ -147,12 +143,14 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 
 // Clear resets all the content of histogram.
 func (h *Histogram) Clear() {
-	h.count = newCounter()
-	h.sum = newCounter()
-	h.sumOfSquares = newCounter()
-	h.tracker = newTracker()
+	h.count = 0
+	h.sum = 0
+	h.sumOfSquares = 0
+	h.max = 0
+	h.min = math.MaxInt64
+	h.max = math.MinInt64
 	for _, v := range h.buckets {
-		v.count = newCounter()
+		v.count = 0
 	}
 }
 
@@ -167,17 +165,17 @@ func (h *Histogram) Add(value int64) error {
 	if err != nil {
 		return err
 	}
-	h.buckets[bucket].count.Incr(1)
-	h.count.Incr(1)
-	h.sum.Incr(value)
-	h.sumOfSquares.Incr(value * value)
-	h.tracker.Push(value)
+	h.buckets[bucket].count++
+	h.count++
+	h.sum += value
+	h.sumOfSquares += value * value
+	if value < h.min {
+		h.min = value
+	}
+	if value > h.max {
+		h.max = value
+	}
 	return nil
-}
-
-// LastUpdate returns the time at which the object was last updated.
-func (h *Histogram) LastUpdate() time.Time {
-	return h.count.LastUpdate()
 }
 
 // Value returns the accumulated state of the histogram since it was created.
@@ -186,79 +184,16 @@ func (h *Histogram) Value() HistogramValue {
 	for i, v := range h.buckets {
 		b[i] = HistogramBucket{
 			LowBound: v.lowBound,
-			Count:    v.count.Value(),
+			Count:    v.count,
 		}
 	}
 
 	v := HistogramValue{
-		Count:        h.count.Value(),
-		Sum:          h.sum.Value(),
-		SumOfSquares: h.sumOfSquares.Value(),
-		Min:          h.tracker.Min(),
-		Max:          h.tracker.Max(),
-		Buckets:      b,
-	}
-	return v
-}
-
-// Delta1h returns the change in the last hour.
-func (h *Histogram) Delta1h() HistogramValue {
-	b := make([]HistogramBucket, len(h.buckets))
-	for i, v := range h.buckets {
-		b[i] = HistogramBucket{
-			LowBound: v.lowBound,
-			Count:    v.count.Delta1h(),
-		}
-	}
-
-	v := HistogramValue{
-		Count:        h.count.Delta1h(),
-		Sum:          h.sum.Delta1h(),
-		SumOfSquares: h.sumOfSquares.Delta1h(),
-		Min:          h.tracker.Min1h(),
-		Max:          h.tracker.Max1h(),
-		Buckets:      b,
-	}
-	return v
-}
-
-// Delta10m returns the change in the last 10 minutes.
-func (h *Histogram) Delta10m() HistogramValue {
-	b := make([]HistogramBucket, len(h.buckets))
-	for i, v := range h.buckets {
-		b[i] = HistogramBucket{
-			LowBound: v.lowBound,
-			Count:    v.count.Delta10m(),
-		}
-	}
-
-	v := HistogramValue{
-		Count:        h.count.Delta10m(),
-		Sum:          h.sum.Delta10m(),
-		SumOfSquares: h.sumOfSquares.Delta10m(),
-		Min:          h.tracker.Min10m(),
-		Max:          h.tracker.Max10m(),
-		Buckets:      b,
-	}
-	return v
-}
-
-// Delta1m returns the change in the last 10 minutes.
-func (h *Histogram) Delta1m() HistogramValue {
-	b := make([]HistogramBucket, len(h.buckets))
-	for i, v := range h.buckets {
-		b[i] = HistogramBucket{
-			LowBound: v.lowBound,
-			Count:    v.count.Delta1m(),
-		}
-	}
-
-	v := HistogramValue{
-		Count:        h.count.Delta1m(),
-		Sum:          h.sum.Delta1m(),
-		SumOfSquares: h.sumOfSquares.Delta1m(),
-		Min:          h.tracker.Min1m(),
-		Max:          h.tracker.Max1m(),
+		Count:        h.count,
+		Sum:          h.sum,
+		SumOfSquares: h.sumOfSquares,
+		Min:          h.min,
+		Max:          h.max,
 		Buckets:      b,
 	}
 	return v
