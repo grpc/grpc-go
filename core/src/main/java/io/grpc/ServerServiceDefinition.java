@@ -42,9 +42,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 /** Definition of a service to be exposed via a Server. */
-// TODO(zhangkun83): since the handler map uses fully qualified names as keys, we should
-// consider removing ServerServiceDefinition to and let the registry to have a big map of
-// handlers.
 public final class ServerServiceDefinition {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1774")
   public static Builder builder(String serviceName) {
