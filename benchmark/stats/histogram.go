@@ -15,14 +15,20 @@ import (
 // Bucket i (i>=1) contains [n * m^(i-1), n * m^i), where m = 1 + GrowthFactor.
 // The type of the values is int64.
 type Histogram struct {
-	opts         HistogramOptions
-	Buckets      []HistogramBucket
-	Count        int64
-	Sum          int64
+	// Count is the total number of values added to the histogram.
+	Count int64
+	// Sum is the sum of all the values added to the histogram.
+	Sum int64
+	// SumOfSquares is the sum of squares of all values.
 	SumOfSquares int64
-	Min          int64
-	Max          int64
+	// Min is the minimum of all the values added to the histogram.
+	Min int64
+	// Max is the maximum of all the values added to the histogram.
+	Max int64
+	// Buckets contains all the buckets of the histogram.
+	Buckets []HistogramBucket
 
+	opts                          HistogramOptions
 	logBaseBucketSize             float64
 	oneOverLogOnePlusGrowthFactor float64
 }
@@ -100,11 +106,11 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 		opts.BaseBucketSize = 1.0
 	}
 	h := Histogram{
-		opts:    opts,
 		Buckets: make([]HistogramBucket, opts.NumBuckets),
 		Min:     math.MaxInt64,
 		Max:     math.MinInt64,
 
+		opts:                          opts,
 		logBaseBucketSize:             math.Log(opts.BaseBucketSize),
 		oneOverLogOnePlusGrowthFactor: 1 / math.Log(1+opts.GrowthFactor),
 	}
