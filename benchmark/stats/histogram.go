@@ -9,20 +9,35 @@ import (
 	"strings"
 )
 
-// HistogramValue is the value of Histogram objects.
-type HistogramValue struct {
-	// Count is the total number of values added to the histogram.
-	Count int64
-	// Sum is the sum of all the values added to the histogram.
-	Sum int64
-	// SumOfSquares is the sum of squares of all values.
+// Histogram accumulates values in the form of a histogram with
+// exponentially increased bucket sizes.
+// The first bucket (with index 0) is [0, n) where n = baseBucketSize.
+// Bucket i (i>=1) contains [n * m^(i-1), n * m^i), where m = 1 + GrowthFactor.
+// The type of the values is int64.
+type Histogram struct {
+	opts         HistogramOptions
+	Buckets      []HistogramBucket
+	Count        int64
+	Sum          int64
 	SumOfSquares int64
-	// Min is the minimum of all the values added to the histogram.
-	Min int64
-	// Max is the maximum of all the values added to the histogram.
-	Max int64
-	// Buckets contains all the buckets of the histogram.
-	Buckets []HistogramBucket
+	Min          int64
+	Max          int64
+
+	logBaseBucketSize             float64
+	oneOverLogOnePlusGrowthFactor float64
+}
+
+// HistogramOptions contains the parameters that define the histogram's buckets.
+type HistogramOptions struct {
+	// NumBuckets is the number of buckets.
+	NumBuckets int
+	// GrowthFactor is the growth factor of the buckets. A value of 0.1
+	// indicates that bucket N+1 will be 10% larger than bucket N.
+	GrowthFactor float64
+	// BaseBucketSize is the size of the first bucket.
+	BaseBucketSize float64
+	// MinValue is the lower bound of the first bucket.
+	MinValue int64
 }
 
 // HistogramBucket is one histogram bucket.
@@ -34,7 +49,7 @@ type HistogramBucket struct {
 }
 
 // Print writes textual output of the histogram values.
-func (v HistogramValue) Print(w io.Writer) {
+func (v Histogram) Print(w io.Writer) {
 	avg := float64(v.Sum) / float64(v.Count)
 	fmt.Fprintf(w, "Count: %d  Min: %d  Max: %d  Avg: %.2f\n", v.Count, v.Min, v.Max, avg)
 	fmt.Fprintf(w, "%s\n", strings.Repeat("-", 60))
@@ -69,48 +84,10 @@ func (v HistogramValue) Print(w io.Writer) {
 }
 
 // String returns the textual output of the histogram values as string.
-func (v HistogramValue) String() string {
+func (v Histogram) String() string {
 	var b bytes.Buffer
 	v.Print(&b)
 	return b.String()
-}
-
-// Histogram accumulates values in the form of a histogram with
-// exponentially increased bucket sizes.
-// The first bucket (with index 0) is [0, n) where n = baseBucketSize.
-// Bucket i (i>=1) contains [n * m^(i-1), n * m^i), where m = 1 + GrowthFactor.
-// The type of the values is int64.
-type Histogram struct {
-	opts         HistogramOptions
-	buckets      []bucketInternal
-	count        int64
-	sum          int64
-	sumOfSquares int64
-	min          int64
-	max          int64
-
-	logBaseBucketSize             float64
-	oneOverLogOnePlusGrowthFactor float64
-}
-
-// HistogramOptions contains the parameters that define the histogram's buckets.
-type HistogramOptions struct {
-	// NumBuckets is the number of buckets.
-	NumBuckets int
-	// GrowthFactor is the growth factor of the buckets. A value of 0.1
-	// indicates that bucket N+1 will be 10% larger than bucket N.
-	GrowthFactor float64
-	// BaseBucketSize is the size of the first bucket.
-	BaseBucketSize float64
-	// MinValue is the lower bound of the first bucket.
-	MinValue int64
-}
-
-// bucketInternal is the internal representation of a bucket, which includes a
-// rate counter.
-type bucketInternal struct {
-	lowBound float64
-	count    int64
 }
 
 // NewHistogram returns a pointer to a new Histogram object that was created
@@ -124,18 +101,18 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 	}
 	h := Histogram{
 		opts:    opts,
-		buckets: make([]bucketInternal, opts.NumBuckets),
-		min:     math.MaxInt64,
-		max:     math.MinInt64,
+		Buckets: make([]HistogramBucket, opts.NumBuckets),
+		Min:     math.MaxInt64,
+		Max:     math.MinInt64,
 
 		logBaseBucketSize:             math.Log(opts.BaseBucketSize),
 		oneOverLogOnePlusGrowthFactor: 1 / math.Log(1+opts.GrowthFactor),
 	}
 	m := 1.0 + opts.GrowthFactor
 	delta := opts.BaseBucketSize
-	h.buckets[0].lowBound = float64(opts.MinValue)
+	h.Buckets[0].LowBound = float64(opts.MinValue)
 	for i := 1; i < opts.NumBuckets; i++ {
-		h.buckets[i].lowBound = float64(opts.MinValue) + delta
+		h.Buckets[i].LowBound = float64(opts.MinValue) + delta
 		delta = delta * m
 	}
 	return &h
@@ -143,14 +120,14 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 
 // Clear resets all the content of histogram.
 func (h *Histogram) Clear() {
-	h.count = 0
-	h.sum = 0
-	h.sumOfSquares = 0
-	h.max = 0
-	h.min = math.MaxInt64
-	h.max = math.MinInt64
-	for _, v := range h.buckets {
-		v.count = 0
+	h.Count = 0
+	h.Sum = 0
+	h.SumOfSquares = 0
+	h.Max = 0
+	h.Min = math.MaxInt64
+	h.Max = math.MinInt64
+	for _, v := range h.Buckets {
+		v.Count = 0
 	}
 }
 
@@ -165,38 +142,17 @@ func (h *Histogram) Add(value int64) error {
 	if err != nil {
 		return err
 	}
-	h.buckets[bucket].count++
-	h.count++
-	h.sum += value
-	h.sumOfSquares += value * value
-	if value < h.min {
-		h.min = value
+	h.Buckets[bucket].Count++
+	h.Count++
+	h.Sum += value
+	h.SumOfSquares += value * value
+	if value < h.Min {
+		h.Min = value
 	}
-	if value > h.max {
-		h.max = value
+	if value > h.Max {
+		h.Max = value
 	}
 	return nil
-}
-
-// Value returns the accumulated state of the histogram since it was created.
-func (h *Histogram) Value() HistogramValue {
-	b := make([]HistogramBucket, len(h.buckets))
-	for i, v := range h.buckets {
-		b[i] = HistogramBucket{
-			LowBound: v.lowBound,
-			Count:    v.count,
-		}
-	}
-
-	v := HistogramValue{
-		Count:        h.count,
-		Sum:          h.sum,
-		SumOfSquares: h.sumOfSquares,
-		Min:          h.min,
-		Max:          h.max,
-		Buckets:      b,
-	}
-	return v
 }
 
 func (h *Histogram) findBucket(value int64) (int, error) {
@@ -208,7 +164,7 @@ func (h *Histogram) findBucket(value int64) (int, error) {
 		//   = (log(delta) - log(baseBucketSize)) * (1 / log(1+growthFactor)) + 1
 		b = int((math.Log(delta)-h.logBaseBucketSize)*h.oneOverLogOnePlusGrowthFactor + 1)
 	}
-	if b >= len(h.buckets) {
+	if b >= len(h.Buckets) {
 		return 0, fmt.Errorf("no bucket for value: %d", value)
 	}
 	return b, nil
