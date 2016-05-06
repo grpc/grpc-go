@@ -54,11 +54,12 @@ var (
 )
 
 type benchmarkClient struct {
-	closeConns    func()
-	stop          chan bool
-	mu            sync.RWMutex
-	lastResetTime time.Time
-	histogram     *stats.Histogram
+	closeConns       func()
+	stop             chan bool
+	lastResetTime    time.Time
+	histogramOptions stats.HistogramOptions
+	mutexes          []*sync.RWMutex
+	histograms       []*stats.Histogram
 }
 
 func printClientConfig(config *testpb.ClientConfig) {
@@ -199,13 +200,17 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		return nil, err
 	}
 
+	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
 	bc := &benchmarkClient{
-		histogram: stats.NewHistogram(stats.HistogramOptions{
+		histogramOptions: stats.HistogramOptions{
 			NumBuckets:     int(math.Log(config.HistogramParams.MaxPossible)/math.Log(1+config.HistogramParams.Resolution)) + 1,
 			GrowthFactor:   config.HistogramParams.Resolution,
 			BaseBucketSize: (1 + config.HistogramParams.Resolution),
 			MinValue:       0,
-		}),
+		},
+		mutexes:    make([]*sync.RWMutex, rpcCountPerConn*len(conns)),
+		histograms: make([]*stats.Histogram, rpcCountPerConn*len(conns)),
+
 		stop:          make(chan bool),
 		lastResetTime: time.Now(),
 		closeConns:    closeConns,
@@ -221,11 +226,16 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 }
 
 func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int) {
-	for _, conn := range conns {
+	for ic, conn := range conns {
 		client := testpb.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
 		for j := 0; j < rpcCountPerConn; j++ {
-			go func() {
+			// Create mutex and histogram for each goroutine.
+			idx := ic*rpcCountPerConn + j
+			bc.mutexes[idx] = new(sync.RWMutex)
+			bc.histograms[idx] = stats.NewHistogram(bc.histogramOptions)
+			// Start goroutine on the created mutex and histogram.
+			go func(mu *sync.RWMutex, histogram *stats.Histogram) {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
@@ -242,9 +252,9 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 							return
 						}
 						elapse := time.Since(start)
-						bc.mu.Lock()
-						bc.histogram.Add(int64(elapse))
-						bc.mu.Unlock()
+						mu.Lock()
+						histogram.Add(int64(elapse))
+						mu.Unlock()
 						select {
 						case <-bc.stop:
 						case done <- true:
@@ -256,7 +266,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 					case <-done:
 					}
 				}
-			}()
+			}(bc.mutexes[idx], bc.histograms[idx])
 		}
 	}
 }
@@ -268,7 +278,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 	} else {
 		doRPC = benchmark.DoStreamingRoundTrip
 	}
-	for _, conn := range conns {
+	for ic, conn := range conns {
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
 		for j := 0; j < rpcCountPerConn; j++ {
 			c := testpb.NewBenchmarkServiceClient(conn)
@@ -276,8 +286,12 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			if err != nil {
 				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
 			}
-			// Create benchmark rpc goroutine.
-			go func() {
+			// Create mutex and histogram for each goroutine.
+			idx := ic*rpcCountPerConn + j
+			bc.mutexes[idx] = new(sync.RWMutex)
+			bc.histograms[idx] = stats.NewHistogram(bc.histogramOptions)
+			// Start goroutine on the created mutex and histogram.
+			go func(mu *sync.RWMutex, histogram *stats.Histogram) {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
@@ -294,9 +308,9 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 							return
 						}
 						elapse := time.Since(start)
-						bc.mu.Lock()
-						bc.histogram.Add(int64(elapse))
-						bc.mu.Unlock()
+						mu.Lock()
+						histogram.Add(int64(elapse))
+						mu.Unlock()
 						select {
 						case <-bc.stop:
 						case done <- true:
@@ -308,28 +322,28 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 					case <-done:
 					}
 				}
-			}()
+			}(bc.mutexes[idx], bc.histograms[idx])
 		}
 	}
 }
 
 func (bc *benchmarkClient) getStats() *testpb.ClientStats {
-	bc.mu.RLock()
-	defer bc.mu.RUnlock()
 	timeElapsed := time.Since(bc.lastResetTime).Seconds()
 
-	b := make([]uint32, len(bc.histogram.Buckets))
-	for i, v := range bc.histogram.Buckets {
-		b[i] = uint32(v.Count)
+	// TODO merge histograms.
+	b := make([]uint32, len(bc.histograms[0].Buckets))
+	var totalcount int64
+	for _, h := range bc.histograms {
+		totalcount += h.Count
 	}
 	return &testpb.ClientStats{
 		Latencies: &testpb.HistogramData{
 			Bucket:       b,
-			MinSeen:      float64(bc.histogram.Min),
-			MaxSeen:      float64(bc.histogram.Max),
-			Sum:          float64(bc.histogram.Sum),
-			SumOfSquares: float64(bc.histogram.SumOfSquares),
-			Count:        float64(bc.histogram.Count),
+			MinSeen:      float64(bc.histograms[0].Min),
+			MaxSeen:      float64(bc.histograms[0].Max),
+			Sum:          float64(bc.histograms[0].Sum),
+			SumOfSquares: float64(bc.histograms[0].SumOfSquares),
+			Count:        float64(totalcount),
 		},
 		TimeElapsed: timeElapsed,
 		TimeUser:    0,
@@ -340,10 +354,8 @@ func (bc *benchmarkClient) getStats() *testpb.ClientStats {
 // reset clears the contents for histogram and set lastResetTime to Now().
 // It is called to get ready for benchmark runs.
 func (bc *benchmarkClient) reset() {
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
 	bc.lastResetTime = time.Now()
-	bc.histogram.Clear()
+	bc.histograms[0].Clear()
 }
 
 func (bc *benchmarkClient) shutdown() {
