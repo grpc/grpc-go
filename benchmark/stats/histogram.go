@@ -54,6 +54,34 @@ type HistogramBucket struct {
 	Count int64
 }
 
+// NewHistogram returns a pointer to a new Histogram object that was created
+// with the provided options.
+func NewHistogram(opts HistogramOptions) *Histogram {
+	if opts.NumBuckets == 0 {
+		opts.NumBuckets = 32
+	}
+	if opts.BaseBucketSize == 0.0 {
+		opts.BaseBucketSize = 1.0
+	}
+	h := Histogram{
+		Buckets: make([]HistogramBucket, opts.NumBuckets),
+		Min:     math.MaxInt64,
+		Max:     math.MinInt64,
+
+		opts:                          opts,
+		logBaseBucketSize:             math.Log(opts.BaseBucketSize),
+		oneOverLogOnePlusGrowthFactor: 1 / math.Log(1+opts.GrowthFactor),
+	}
+	m := 1.0 + opts.GrowthFactor
+	delta := opts.BaseBucketSize
+	h.Buckets[0].LowBound = float64(opts.MinValue)
+	for i := 1; i < opts.NumBuckets; i++ {
+		h.Buckets[i].LowBound = float64(opts.MinValue) + delta
+		delta = delta * m
+	}
+	return &h
+}
+
 // Print writes textual output of the histogram values.
 func (v Histogram) Print(w io.Writer) {
 	avg := float64(v.Sum) / float64(v.Count)
@@ -96,40 +124,11 @@ func (v Histogram) String() string {
 	return b.String()
 }
 
-// NewHistogram returns a pointer to a new Histogram object that was created
-// with the provided options.
-func NewHistogram(opts HistogramOptions) *Histogram {
-	if opts.NumBuckets == 0 {
-		opts.NumBuckets = 32
-	}
-	if opts.BaseBucketSize == 0.0 {
-		opts.BaseBucketSize = 1.0
-	}
-	h := Histogram{
-		Buckets: make([]HistogramBucket, opts.NumBuckets),
-		Min:     math.MaxInt64,
-		Max:     math.MinInt64,
-
-		opts:                          opts,
-		logBaseBucketSize:             math.Log(opts.BaseBucketSize),
-		oneOverLogOnePlusGrowthFactor: 1 / math.Log(1+opts.GrowthFactor),
-	}
-	m := 1.0 + opts.GrowthFactor
-	delta := opts.BaseBucketSize
-	h.Buckets[0].LowBound = float64(opts.MinValue)
-	for i := 1; i < opts.NumBuckets; i++ {
-		h.Buckets[i].LowBound = float64(opts.MinValue) + delta
-		delta = delta * m
-	}
-	return &h
-}
-
 // Clear resets all the content of histogram.
 func (h *Histogram) Clear() {
 	h.Count = 0
 	h.Sum = 0
 	h.SumOfSquares = 0
-	h.Max = 0
 	h.Min = math.MaxInt64
 	h.Max = math.MinInt64
 	for _, v := range h.Buckets {
