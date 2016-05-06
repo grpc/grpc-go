@@ -107,11 +107,13 @@ public class StubConfigTest {
     // Create a default stub
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel);
     assertNull(stub.getCallOptions().getDeadlineNanoTime());
+    // Warm up JVM
+    stub.withDeadlineNanoTime(deadline);
     // Reconfigure it
     TestServiceGrpc.TestServiceBlockingStub reconfiguredStub = stub.withDeadlineNanoTime(deadline);
     // New altered config
     assertNotNull(reconfiguredStub.getCallOptions().getDeadlineNanoTime());
-    long maxDelta = MILLISECONDS.toNanos(30);
+    long maxDelta = MILLISECONDS.toNanos(10);
     long actualDelta = Math.abs(reconfiguredStub.getCallOptions().getDeadlineNanoTime() - deadline);
     assertTrue(maxDelta + " < " + actualDelta, maxDelta >= actualDelta);
     // Default config unchanged
