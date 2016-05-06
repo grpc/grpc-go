@@ -272,6 +272,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 	}
 	t.mu.Lock()
+	if t.activeStreams == nil {
+		t.mu.Unlock()
+		return nil, ErrConnClosing
+	}
 	if t.state != reachable {
 		t.mu.Unlock()
 		return nil, ErrConnClosing
@@ -390,6 +394,11 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 func (t *http2Client) CloseStream(s *Stream, err error) {
 	var updateStreams bool
 	t.mu.Lock()
+	if t.activeStreams == nil {
+		t.mu.Unlock()
+		t.Close()
+		return
+	}
 	if t.streamsQuota != nil {
 		updateStreams = true
 	}
@@ -455,6 +464,17 @@ func (t *http2Client) Close() (err error) {
 		s.write(recvMsg{err: ErrConnClosing})
 	}
 	return
+}
+
+func (t *http2Client) GracefulClose() error {
+	t.mu.Lock()
+	active := len(t.activeStreams)
+	t.activeStreams = nil
+	t.mu.Unlock()
+	if active == 0 {
+		return t.Close()
+	}
+	return nil
 }
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller

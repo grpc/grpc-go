@@ -134,6 +134,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	}
 	var (
 		lastErr error // record the error that happened
+		put     func()
 	)
 	for {
 		var (
@@ -152,7 +153,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()
 		}
-		t, err = cc.dopts.picker.Pick(ctx)
+		t, put, err = cc.getTransport(ctx)
 		if err != nil {
 			if lastErr != nil {
 				// This was a retry; return the error from the last attempt.
@@ -165,6 +166,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		stream, err = sendRequest(ctx, cc.dopts.codec, cc.dopts.cp, callHdr, t, args, topts)
 		if err != nil {
+			put()
 			if _, ok := err.(transport.ConnectionError); ok {
 				lastErr = err
 				continue
@@ -177,12 +179,14 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		// Receive the response
 		lastErr = recvResponse(cc.dopts, t, &c, stream, reply)
 		if _, ok := lastErr.(transport.ConnectionError); ok {
+			put()
 			continue
 		}
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: false, msg: reply}, true)
 		}
 		t.CloseStream(stream, lastErr)
+		put()
 		if lastErr != nil {
 			return toRPCErr(lastErr)
 		}
