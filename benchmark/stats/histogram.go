@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"strconv"
 	"strings"
@@ -173,4 +174,22 @@ func (h *Histogram) findBucket(value int64) (int, error) {
 		return 0, fmt.Errorf("no bucket for value: %d", value)
 	}
 	return b, nil
+}
+
+func (h *Histogram) Merge(h2 *Histogram) {
+	if len(h.Buckets) != len(h2.Buckets) {
+		log.Fatalf("failed to merge histograms, inequivalent buckets length")
+	}
+	h.Count += h2.Count
+	h.Sum += h2.Sum
+	h.SumOfSquares += h2.SumOfSquares
+	if h2.Min < h.Min {
+		h.Min = h2.Min
+	}
+	if h2.Max > h.Max {
+		h.Max = h2.Max
+	}
+	for i, b := range h2.Buckets {
+		h.Buckets[i].Count += b.Count
+	}
 }
