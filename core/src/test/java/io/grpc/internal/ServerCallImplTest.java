@@ -276,7 +276,7 @@ public class ServerCallImplTest {
     verify(callListener).onMessage(1234L);
 
     verify(stream).close(statusCaptor.capture(), Mockito.isA(Metadata.class));
-    assertEquals(Status.Code.INVALID_ARGUMENT, statusCaptor.getValue().getCode());
+    assertEquals(Status.Code.INTERNAL, statusCaptor.getValue().getCode());
   }
 
   @Test

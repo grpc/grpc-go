@@ -556,7 +556,7 @@ public abstract class AbstractTransportTest {
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
 
     Status status =
-        Status.INVALID_ARGUMENT.withDescription("I'm not listening").withCause(new Exception());
+        Status.INTERNAL.withDescription("I'm not listening").withCause(new Exception());
     serverStream.close(status, new Metadata());
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
     assertCodeEquals(Status.OK, statusCaptor.getValue());

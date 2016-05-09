@@ -84,13 +84,13 @@ public class ClientCallsTest {
     ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.class));
     ClientCall.Listener<String> listener = listenerCaptor.getValue();
-    listener.onClose(Status.INVALID_ARGUMENT, new Metadata());
+    listener.onClose(Status.INTERNAL, new Metadata());
     try {
       future.get();
       fail("Should fail");
     } catch (ExecutionException e) {
       Status status = Status.fromThrowable(e.getCause());
-      assertEquals(Status.INVALID_ARGUMENT, status);
+      assertEquals(Status.INTERNAL, status);
     }
   }
 

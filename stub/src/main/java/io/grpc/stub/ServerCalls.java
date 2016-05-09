@@ -156,7 +156,7 @@ public class ServerCalls {
                 onReady();
               }
             } else {
-              call.close(Status.INVALID_ARGUMENT.withDescription("Half-closed without a request"),
+              call.close(Status.INTERNAL.withDescription("Half-closed without a request"),
                   new Metadata());
             }
           }

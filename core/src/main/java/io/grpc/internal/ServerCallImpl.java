@@ -87,7 +87,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
       String encoding = inboundHeaders.get(MESSAGE_ENCODING_KEY);
       Decompressor decompressor = decompressorRegistry.lookupDecompressor(encoding);
       if (decompressor == null) {
-        throw Status.INTERNAL
+        throw Status.UNIMPLEMENTED
             .withDescription(String.format("Can't find decompressor for %s", encoding))
             .asRuntimeException();
       }
@@ -233,7 +233,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
         }
         // Special case for unary calls.
         if (messageReceived && call.method.getType() == MethodType.UNARY) {
-          call.stream.close(Status.INVALID_ARGUMENT.withDescription(
+          call.stream.close(Status.INTERNAL.withDescription(
                   "More than one request messages for unary call or server streaming call"),
               new Metadata());
           return;

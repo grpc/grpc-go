@@ -89,7 +89,7 @@ public class ProtoUtils {
         try {
           return new ByteArrayInputStream(printer.print(value).getBytes(charset));
         } catch (InvalidProtocolBufferException e) {
-          throw Status.INVALID_ARGUMENT
+          throw Status.INTERNAL
               .withCause(e)
               .withDescription("Unable to print json proto")
               .asRuntimeException();
