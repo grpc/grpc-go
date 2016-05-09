@@ -281,7 +281,11 @@ public class ServerCalls {
 
     @Override
     public void onError(Throwable t) {
-      call.close(Status.fromThrowable(t), new Metadata());
+      Metadata metadata = Status.trailersFromThrowable(t);
+      if (metadata == null) {
+        metadata = new Metadata();
+      }
+      call.close(Status.fromThrowable(t), metadata);
     }
 
     @Override

@@ -412,6 +412,25 @@ public final class Status {
     return UNKNOWN.withCause(t);
   }
 
+  /**
+   * Extract an error trailers from the causal chain of a {@link Throwable}.
+   *
+   * @return the trailers or {@code null} if not found.
+   */
+  @ExperimentalApi
+  public static Metadata trailersFromThrowable(Throwable t) {
+    Throwable cause = checkNotNull(t);
+    while (cause != null) {
+      if (cause instanceof StatusException) {
+        return ((StatusException) cause).getTrailers();
+      } else if (cause instanceof StatusRuntimeException) {
+        return ((StatusRuntimeException) cause).getTrailers();
+      }
+      cause = cause.getCause();
+    }
+    return null;
+  }
+
   static String formatThrowableMessage(Status status) {
     if (status.description == null) {
       return status.code.toString();
@@ -509,11 +528,28 @@ public final class Status {
   }
 
   /**
+   * Same as {@link #asRuntimeException()} but includes the provided trailers in the returned
+   * exception.
+   */
+  @ExperimentalApi
+  public StatusRuntimeException asRuntimeException(Metadata trailers) {
+    return new StatusRuntimeException(this, trailers);
+  }
+
+  /**
    * Convert this {@link Status} to an {@link Exception}. Use {@link #fromThrowable}
    * to recover this {@link Status} instance when the returned exception is in the causal chain.
    */
   public StatusException asException() {
     return new StatusException(this);
+  }
+
+  /**
+   * Same as {@link #asException()} but includes the provided trailers in the returned exception.
+   */
+  @ExperimentalApi
+  public StatusException asException(Metadata trailers) {
+    return new StatusException(this, trailers);
   }
 
   /** A string representation of the status useful for debugging. */

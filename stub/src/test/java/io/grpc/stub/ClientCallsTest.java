@@ -32,6 +32,7 @@
 package io.grpc.stub;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.verify;
@@ -84,13 +85,16 @@ public class ClientCallsTest {
     ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     verify(call).start(listenerCaptor.capture(), any(Metadata.class));
     ClientCall.Listener<String> listener = listenerCaptor.getValue();
-    listener.onClose(Status.INTERNAL, new Metadata());
+    Metadata trailers = new Metadata();
+    listener.onClose(Status.INTERNAL, trailers);
     try {
       future.get();
       fail("Should fail");
     } catch (ExecutionException e) {
-      Status status = Status.fromThrowable(e.getCause());
+      Status status = Status.fromThrowable(e);
       assertEquals(Status.INTERNAL, status);
+      Metadata metadata = Status.trailersFromThrowable(e);
+      assertSame(trailers, metadata);
     }
   }
 

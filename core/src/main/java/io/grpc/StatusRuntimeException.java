@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import javax.annotation.Nullable;
+
 /**
  * {@link Status} in RuntimeException form, for propagating Status information via exceptions.
  *
@@ -40,13 +42,28 @@ public class StatusRuntimeException extends RuntimeException {
 
   private static final long serialVersionUID = 1950934672280720624L;
   private final Status status;
+  private final Metadata trailers;
 
   public StatusRuntimeException(Status status) {
+    this(status, null);
+  }
+
+  /**
+   * Constructs the exception with both a status and trailers.
+   */
+  @ExperimentalApi
+  public StatusRuntimeException(Status status, @Nullable Metadata trailers) {
     super(Status.formatThrowableMessage(status), status.getCause());
     this.status = status;
+    this.trailers = trailers;
   }
 
   public final Status getStatus() {
     return status;
+  }
+
+  @ExperimentalApi
+  public final Metadata getTrailers() {
+    return trailers;
   }
 }

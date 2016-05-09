@@ -313,7 +313,7 @@ public class ClientCalls {
       if (status.isOk()) {
         observer.onCompleted();
       } else {
-        observer.onError(status.asRuntimeException());
+        observer.onError(status.asRuntimeException(trailers));
       }
     }
   }
@@ -349,11 +349,11 @@ public class ClientCalls {
           // No value received so mark the future as an error
           responseFuture.setException(
               Status.INTERNAL.withDescription("No value received for unary call")
-                  .asRuntimeException());
+                  .asRuntimeException(trailers));
         }
         responseFuture.set(value);
       } else {
-        responseFuture.setException(status.asRuntimeException());
+        responseFuture.setException(status.asRuntimeException(trailers));
       }
     }
   }
