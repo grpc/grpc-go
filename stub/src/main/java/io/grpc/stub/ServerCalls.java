@@ -249,7 +249,7 @@ public class ServerCalls {
     StreamObserver<ReqT> invoke(StreamObserver<RespT> responseObserver);
   }
 
-  private static class ServerCallStreamObserverImpl<RespT>
+  private static final class ServerCallStreamObserverImpl<RespT>
       extends ServerCallStreamObserver<RespT> {
     final ServerCall<RespT> call;
     volatile boolean cancelled;
@@ -263,8 +263,18 @@ public class ServerCalls {
       this.call = call;
     }
 
-    private final void freeze() {
+    private void freeze() {
       this.frozen = true;
+    }
+
+    @Override
+    public void setMessageCompression(boolean enable) {
+      call.setMessageCompression(enable);
+    }
+
+    @Override
+    public void setCompression(String compression) {
+      call.setCompression(compression);
     }
 
     @Override

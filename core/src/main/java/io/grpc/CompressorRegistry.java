@@ -49,7 +49,8 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 public final class CompressorRegistry {
   private static final CompressorRegistry DEFAULT_INSTANCE = new CompressorRegistry(
-      new Codec.Gzip());
+      new Codec.Gzip(),
+      Codec.Identity.NONE);
 
   public static CompressorRegistry getDefaultInstance() {
     return DEFAULT_INSTANCE;

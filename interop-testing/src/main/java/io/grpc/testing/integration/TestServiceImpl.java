@@ -36,6 +36,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos;
 
 import io.grpc.Status;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.integration.Messages.PayloadType;
 import io.grpc.testing.integration.Messages.ResponseParameters;
@@ -87,9 +88,38 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
    * Immediately responds with a payload of the type and size specified in the request.
    */
   @Override
-  public void unaryCall(SimpleRequest req,
-        StreamObserver<SimpleResponse> responseObserver) {
+  public void unaryCall(SimpleRequest req, StreamObserver<SimpleResponse> responseObserver) {
+    ServerCallStreamObserver<SimpleResponse> obs =
+        (ServerCallStreamObserver<SimpleResponse>) responseObserver;
     SimpleResponse.Builder responseBuilder = SimpleResponse.newBuilder();
+    try {
+      switch (req.getResponseCompression()) {
+        case DEFLATE:
+          // fallthrough, just use gzip
+        case GZIP:
+          obs.setCompression("gzip");
+          obs.setMessageCompression(true);
+          break;
+        case NONE:
+          obs.setCompression("identity");
+          obs.setMessageCompression(false);
+          break;
+        case UNRECOGNIZED:
+          // fallthrough
+        default:
+          obs.onError(Status.INVALID_ARGUMENT
+              .withDescription("Unknown: " + req.getResponseCompression())
+              .asRuntimeException());
+          return;
+      }
+    } catch (IllegalArgumentException e) {
+      obs.onError(Status.UNIMPLEMENTED
+          .withDescription("compression not supported.")
+          .withCause(e)
+          .asRuntimeException());
+      return;
+    }
+
     if (req.getResponseSize() != 0) {
       boolean compressable = compressableResponse(req.getResponseType());
       ByteString dataBuffer = compressable ? compressableBuffer : uncompressableBuffer;

@@ -132,9 +132,10 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
       }
     }
     inboundHeaders = null;
-    if (compressor != Codec.Identity.NONE) {
-      headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
-    }
+
+    // Always put compressor, even if it's identity.
+    headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
+
     stream.setCompressor(compressor);
 
     headers.removeAll(MESSAGE_ACCEPT_ENCODING_KEY);

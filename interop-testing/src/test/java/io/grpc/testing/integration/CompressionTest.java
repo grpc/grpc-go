@@ -31,6 +31,7 @@
 
 package io.grpc.testing.integration;
 
+import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static org.junit.Assert.assertEquals;
@@ -38,11 +39,14 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import com.google.protobuf.ByteString;
+
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientCall.Listener;
 import io.grpc.ClientInterceptor;
+import io.grpc.Codec;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
@@ -57,8 +61,11 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
+import io.grpc.stub.StreamObserver;
 import io.grpc.testing.TestUtils;
+import io.grpc.testing.integration.Messages.Payload;
 import io.grpc.testing.integration.Messages.SimpleRequest;
+import io.grpc.testing.integration.Messages.SimpleResponse;
 import io.grpc.testing.integration.TestServiceGrpc.TestServiceBlockingStub;
 import io.grpc.testing.integration.TransportCompressionTest.Fzip;
 
@@ -97,8 +104,8 @@ public class CompressionTest {
       .setResponseSize(1)
       .build();
 
-  private Fzip clientCodec = new Fzip();
-  private Fzip serverCodec = new Fzip();
+  private Fzip clientCodec = new Fzip("fzip", Codec.Identity.NONE);
+  private Fzip serverCodec = new Fzip("fzip", Codec.Identity.NONE);
   private DecompressorRegistry clientDecompressors = DecompressorRegistry.newEmptyInstance();
   private DecompressorRegistry serverDecompressors = DecompressorRegistry.newEmptyInstance();
   private CompressorRegistry clientCompressors = CompressorRegistry.newEmptyInstance();
@@ -141,11 +148,12 @@ public class CompressionTest {
 
   @Before
   public void setUp() throws Exception {
+    clientDecompressors.register(Codec.Identity.NONE, false);
+    serverDecompressors.register(Codec.Identity.NONE, false);
     int serverPort = TestUtils.pickUnusedPort();
     server = ServerBuilder.forPort(serverPort)
-        .addService(ServerInterceptors.intercept(
-            TestServiceGrpc.bindService(new TestServiceImpl(executor)),
-            new ServerCompressorInterceptor()))
+        .addService(
+            ServerInterceptors.intercept(new LocalServer(), new ServerCompressorInterceptor()))
         .compressorRegistry(serverCompressors)
         .decompressorRegistry(serverDecompressors)
         .build()
@@ -172,7 +180,7 @@ public class CompressionTest {
    */
   @Parameters
   public static Collection<Object[]> params() {
-    Boolean[] bools = new Boolean[]{false, true};
+    boolean[] bools = new boolean[]{false, true};
     List<Object[]> combos = new ArrayList<Object[]>(64);
     for (boolean enableClientMessageCompression : bools) {
       for (boolean clientAcceptEncoding : bools) {
@@ -219,7 +227,9 @@ public class CompressionTest {
         assertFalse(serverCodec.anyWritten);
       }
     } else {
-      assertNull(clientResponseHeaders.get(MESSAGE_ENCODING_KEY));
+      // Either identity or null is accepted.
+      assertThat(clientResponseHeaders.get(MESSAGE_ENCODING_KEY))
+          .isAnyOf(Codec.Identity.NONE.getMessageEncoding(), null);
       assertFalse(clientCodec.anyRead);
       assertFalse(serverCodec.anyWritten);
     }
@@ -250,6 +260,17 @@ public class CompressionTest {
       assertNull(serverResponseHeaders.get(MESSAGE_ENCODING_KEY));
       assertFalse(clientCodec.anyWritten);
       assertFalse(serverCodec.anyRead);
+    }
+  }
+
+  private static final class LocalServer extends TestServiceGrpc.AbstractTestService {
+    @Override
+    public void unaryCall(SimpleRequest request, StreamObserver<SimpleResponse> responseObserver) {
+      responseObserver.onNext(SimpleResponse.newBuilder()
+          .setPayload(Payload.newBuilder()
+              .setBody(ByteString.copyFrom(new byte[]{127})))
+          .build());
+      responseObserver.onCompleted();
     }
   }
 
@@ -301,4 +322,3 @@ public class CompressionTest {
     }
   }
 }
-
