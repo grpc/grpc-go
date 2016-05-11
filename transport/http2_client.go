@@ -290,6 +290,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	if _, err := wait(ctx, t.shutdownChan, t.writableChan); err != nil {
 		// t.streamsQuota will be updated when t.CloseStream is invoked.
+
+		if checkStreamsQuota {
+			// HACK see https://github.com/grpc/grpc-go/issues/674 for more details, but not all callers will
+			// call CloseStream yet we can reach here with picked up quota.  Need to release it.
+			t.streamsQuota.add(1)
+		}
 		return nil, err
 	}
 	t.mu.Lock()
