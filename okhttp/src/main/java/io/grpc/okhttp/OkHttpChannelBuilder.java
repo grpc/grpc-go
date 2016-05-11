@@ -38,7 +38,6 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import com.squareup.okhttp.CipherSuite;
 import com.squareup.okhttp.ConnectionSpec;
@@ -54,15 +53,18 @@ import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
+import io.grpc.okhttp.internal.Platform;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.security.GeneralSecurityException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 
 /** Convenience class for building channels with the OkHttp transport. */
@@ -90,10 +92,7 @@ public class OkHttpChannelBuilder extends
       new Resource<ExecutorService>() {
         @Override
         public ExecutorService create() {
-          return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
-              .setDaemon(true)
-              .setNameFormat("grpc-okhttp-%d")
-              .build());
+          return Executors.newCachedThreadPool(GrpcUtil.getThreadFactory("grpc-okhttp-%d", true));
         }
 
         @Override
@@ -147,6 +146,11 @@ public class OkHttpChannelBuilder extends
   /**
    * Sets the negotiation type for the HTTP/2 connection.
    *
+   * <p>If TLS is enabled a default {@link SSLSocketFactory} is created using the best
+   * {@link java.security.Provider} available and is NOT based on
+   * {@link SSLSocketFactory#getDefault}. To more precisely control the TLS configuration call
+   * {@link #sslSocketFactory} to override the socket factory used.
+   *
    * <p>Default: <code>TLS</code>
    */
   public final OkHttpChannelBuilder negotiationType(NegotiationType type) {
@@ -180,7 +184,8 @@ public class OkHttpChannelBuilder extends
   }
 
   /**
-   * Provides a SSLSocketFactory to replace the default SSLSocketFactory used for TLS.
+   * Override the default {@link SSLSocketFactory} and enable {@link NegotiationType#TLS}
+   * negotiation.
    *
    * <p>By default, when TLS is enabled, <code>SSLSocketFactory.getDefault()</code> will be used.
    *
@@ -264,8 +269,16 @@ public class OkHttpChannelBuilder extends
   SSLSocketFactory createSocketFactory() {
     switch (negotiationType) {
       case TLS:
-        return sslSocketFactory == null
-            ? (SSLSocketFactory) SSLSocketFactory.getDefault() : sslSocketFactory;
+        try {
+          if (sslSocketFactory == null) {
+            SSLContext sslContext = SSLContext.getInstance("TLS", Platform.get().getProvider());
+            sslContext.init(null, null, null);
+            sslSocketFactory = sslContext.getSocketFactory();
+          }
+          return sslSocketFactory;
+        } catch (GeneralSecurityException gse) {
+          throw new RuntimeException("TLS Provider failure", gse);
+        }
       case PLAINTEXT:
         return null;
       default:

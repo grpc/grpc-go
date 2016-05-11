@@ -28,10 +28,14 @@ import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketException;
+import java.security.NoSuchAlgorithmException;
+import java.security.Provider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import okio.Buffer;
 
@@ -62,6 +66,12 @@ public class Platform {
     return PLATFORM;
   }
 
+  private final Provider sslProvider;
+
+  public Platform(Provider sslProvider) {
+    this.sslProvider = sslProvider;
+  }
+
   /** Prefix used on custom headers. */
   public String getPrefix() {
     return "OkHttp";
@@ -75,6 +85,10 @@ public class Platform {
   }
 
   public void untagSocket(Socket socket) throws SocketException {
+  }
+
+  public Provider getProvider() {
+    return sslProvider;
   }
 
   /**
@@ -106,46 +120,72 @@ public class Platform {
 
   /** Attempt to match the host runtime to a capable Platform implementation. */
   private static Platform findPlatform() {
-    // Attempt to find Android 2.3+ APIs.
+    // Find the conscrypt security provider if we can
+    Class<?> rawProviderClass = null;
     try {
+      rawProviderClass = Class.forName("org.conscrypt.OpenSSLProvider");
+    } catch (ClassNotFoundException cnfe1) {
       try {
-        Class.forName("com.android.org.conscrypt.OpenSSLSocketImpl");
-      } catch (ClassNotFoundException e) {
-        // Older platform before being unbundled.
-        Class.forName("org.apache.harmony.xnet.provider.jsse.OpenSSLSocketImpl");
+        rawProviderClass = Class.forName("com.android.org.conscrypt.OpenSSLProvider");
+      } catch (ClassNotFoundException cnfe2) {
+        try {
+          rawProviderClass = Class.forName("org.apache.harmony.xnet.provider.jsse.OpenSSLProvider");
+        } catch (ClassNotFoundException cnfe3) {
+          // Stick with what we have
+        }
       }
+    }
+    boolean haveConscrypt = false;
+    Provider sslProvider = null;
+    try {
+      sslProvider = SSLContext.getDefault().getProvider();
+    } catch (NoSuchAlgorithmException nsae) {
+      // Ignore
+    }
+    if (rawProviderClass != null) {
+      if (sslProvider != null && sslProvider.getClass().equals(rawProviderClass)) {
+        haveConscrypt = true;
+      } else {
+        try {
+          Class<? extends Provider> providerClass = rawProviderClass.asSubclass(Provider.class);
+          sslProvider = providerClass.newInstance();
+          haveConscrypt = true;
+        } catch (InstantiationException iae) {
+          // Unable to use conscrypt, fall through to Jetty
+          logger.log(Level.WARNING,
+              "Unable to create conscrypt provider " + rawProviderClass.getName(), iae);
+        } catch (IllegalAccessException iaxe) {
+          // Unable to use conscrypt, fall through to Jetty
+          logger.log(Level.WARNING,
+              "Unable to create conscrypt provider " + rawProviderClass.getName(), iaxe);
+        }
 
+      }
+    }
+
+    if (haveConscrypt) {
+      // Attempt to find Android 2.3+ APIs.
       OptionalMethod<Socket> setUseSessionTickets
           = new OptionalMethod<Socket>(null, "setUseSessionTickets", boolean.class);
       OptionalMethod<Socket> setHostname
           = new OptionalMethod<Socket>(null, "setHostname", String.class);
       Method trafficStatsTagSocket = null;
       Method trafficStatsUntagSocket = null;
-      OptionalMethod<Socket> getAlpnSelectedProtocol = null;
-      OptionalMethod<Socket> setAlpnProtocols = null;
+      OptionalMethod<Socket> getAlpnSelectedProtocol =
+          new OptionalMethod<Socket>(byte[].class, "getAlpnSelectedProtocol");
+      OptionalMethod<Socket> setAlpnProtocols =
+          new OptionalMethod<Socket>(null, "setAlpnProtocols", byte[].class);
 
       // Attempt to find Android 4.0+ APIs.
       try {
         Class<?> trafficStats = Class.forName("android.net.TrafficStats");
         trafficStatsTagSocket = trafficStats.getMethod("tagSocket", Socket.class);
         trafficStatsUntagSocket = trafficStats.getMethod("untagSocket", Socket.class);
-
-        // Attempt to find Android 5.0+ APIs.
-        try {
-          Class.forName("android.net.Network"); // Arbitrary class added in Android 5.0.
-          getAlpnSelectedProtocol =
-              new OptionalMethod<Socket>(byte[].class, "getAlpnSelectedProtocol");
-          setAlpnProtocols = new OptionalMethod<Socket>(null, "setAlpnProtocols", byte[].class);
-        } catch (ClassNotFoundException ignored) {
-        }
       } catch (ClassNotFoundException ignored) {
       } catch (NoSuchMethodException ignored) {
       }
-
       return new Android(setUseSessionTickets, setHostname, trafficStatsTagSocket,
-          trafficStatsUntagSocket, getAlpnSelectedProtocol, setAlpnProtocols);
-    } catch (ClassNotFoundException ignored) {
-      // This isn't an Android runtime.
+          trafficStatsUntagSocket, getAlpnSelectedProtocol, setAlpnProtocols, sslProvider);
     }
 
     // Find Jetty's ALPN extension for OpenJDK.
@@ -159,16 +199,17 @@ public class Platform {
       Method getMethod = negoClass.getMethod("get", SSLSocket.class);
       Method removeMethod = negoClass.getMethod("remove", SSLSocket.class);
       return new JdkWithJettyBootPlatform(
-          putMethod, getMethod, removeMethod, clientProviderClass, serverProviderClass);
+          putMethod, getMethod, removeMethod, clientProviderClass, serverProviderClass, sslProvider);
     } catch (ClassNotFoundException ignored) {
     } catch (NoSuchMethodException ignored) {
     }
 
-    return new Platform();
+    return new Platform(sslProvider);
   }
 
   /** Android 2.3 or better. */
   private static class Android extends Platform {
+
     private final OptionalMethod<Socket> setUseSessionTickets;
     private final OptionalMethod<Socket> setHostname;
 
@@ -182,7 +223,9 @@ public class Platform {
 
     public Android(OptionalMethod<Socket> setUseSessionTickets, OptionalMethod<Socket> setHostname,
         Method trafficStatsTagSocket, Method trafficStatsUntagSocket,
-        OptionalMethod<Socket> getAlpnSelectedProtocol, OptionalMethod<Socket> setAlpnProtocols) {
+        OptionalMethod<Socket> getAlpnSelectedProtocol, OptionalMethod<Socket> setAlpnProtocols,
+        Provider provider) {
+      super(provider);
       this.setUseSessionTickets = setUseSessionTickets;
       this.setHostname = setHostname;
       this.trafficStatsTagSocket = trafficStatsTagSocket;
@@ -213,14 +256,13 @@ public class Platform {
       }
 
       // Enable ALPN.
-      if (setAlpnProtocols != null && setAlpnProtocols.isSupported(sslSocket)) {
+      if (setAlpnProtocols.isSupported(sslSocket)) {
         Object[] parameters = { concatLengthPrefixed(protocols) };
         setAlpnProtocols.invokeWithoutCheckedException(sslSocket, parameters);
       }
     }
 
     @Override public String getSelectedProtocol(SSLSocket socket) {
-      if (getAlpnSelectedProtocol == null) return null;
       if (!getAlpnSelectedProtocol.isSupported(socket)) return null;
 
       byte[] alpnResult = (byte[]) getAlpnSelectedProtocol.invokeWithoutCheckedException(socket);
@@ -263,7 +305,8 @@ public class Platform {
     private final Class<?> serverProviderClass;
 
     public JdkWithJettyBootPlatform(Method putMethod, Method getMethod, Method removeMethod,
-        Class<?> clientProviderClass, Class<?> serverProviderClass) {
+        Class<?> clientProviderClass, Class<?> serverProviderClass, Provider provider) {
+      super(provider);
       this.putMethod = putMethod;
       this.getMethod = getMethod;
       this.removeMethod = removeMethod;

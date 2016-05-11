@@ -735,7 +735,9 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     @Override
     public void run() {
       String threadName = Thread.currentThread().getName();
-      Thread.currentThread().setName("OkHttpClientTransport");
+      if (!GrpcUtil.IS_RESTRICTED_APPENGINE) {
+        Thread.currentThread().setName("OkHttpClientTransport");
+      }
       try {
         // Read until the underlying socket closes.
         while (frameReader.nextFrame(this)) {
@@ -758,8 +760,10 @@ class OkHttpClientTransport implements ConnectionClientTransport {
           log.log(Level.INFO, "Exception closing frame reader", ex);
         }
         listener.transportTerminated();
-        // Restore the original thread name.
-        Thread.currentThread().setName(threadName);
+        if (!GrpcUtil.IS_RESTRICTED_APPENGINE) {
+          // Restore the original thread name.
+          Thread.currentThread().setName(threadName);
+        }
       }
     }
 

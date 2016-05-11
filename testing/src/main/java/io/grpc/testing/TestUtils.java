@@ -51,6 +51,8 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
+import java.security.Provider;
+import java.security.Security;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -246,7 +248,16 @@ public class TestUtils {
   /**
    * Creates an SSLSocketFactory which contains {@code certChainFile} as its only root certificate.
    */
-  public static SSLSocketFactory newSslSocketFactoryForCa(InputStream certChain) throws Exception {
+  public static SSLSocketFactory newSslSocketFactoryForCa(
+      InputStream certChain) throws Exception {
+    return newSslSocketFactoryForCa(Security.getProviders()[0], certChain);
+  }
+
+  /**
+   * Creates an SSLSocketFactory which contains {@code certChainFile} as its only root certificate.
+   */
+  public static SSLSocketFactory newSslSocketFactoryForCa(Provider provider,
+      InputStream certChain) throws Exception {
     KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
     ks.load(null, null);
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -259,7 +270,7 @@ public class TestUtils {
     TrustManagerFactory trustManagerFactory =
         TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
     trustManagerFactory.init(ks);
-    SSLContext context = SSLContext.getInstance("TLS");
+    SSLContext context = SSLContext.getInstance("TLS", provider);
     context.init(null, trustManagerFactory.getTrustManagers(), null);
     return context.getSocketFactory();
   }

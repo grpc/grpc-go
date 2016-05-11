@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import java.util.IdentityHashMap;
 import java.util.concurrent.Executors;
@@ -65,10 +64,8 @@ public final class SharedResourceHolder {
       new ScheduledExecutorFactory() {
         @Override
         public ScheduledExecutorService createScheduledExecutor() {
-          return Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder()
-              .setDaemon(true)
-              .setNameFormat("grpc-shared-destroyer-%d")
-              .build());
+          return Executors.newSingleThreadScheduledExecutor(
+              GrpcUtil.getThreadFactory("grpc-shared-destroyer-%d", true));
         }
       });
 
