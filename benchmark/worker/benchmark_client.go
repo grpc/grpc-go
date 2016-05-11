@@ -58,7 +58,7 @@ type benchmarkClient struct {
 	stop             chan bool
 	lastResetTime    time.Time
 	histogramOptions stats.HistogramOptions
-	mutexes          []*sync.RWMutex
+	mutexes          []*sync.Mutex
 	histograms       []*stats.Histogram
 }
 
@@ -208,7 +208,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 			BaseBucketSize: (1 + config.HistogramParams.Resolution),
 			MinValue:       0,
 		},
-		mutexes:    make([]*sync.RWMutex, rpcCountPerConn*len(conns)),
+		mutexes:    make([]*sync.Mutex, rpcCountPerConn*len(conns)),
 		histograms: make([]*stats.Histogram, rpcCountPerConn*len(conns)),
 
 		stop:          make(chan bool),
@@ -232,7 +232,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 		for j := 0; j < rpcCountPerConn; j++ {
 			// Create mutex and histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
-			bc.mutexes[idx] = new(sync.RWMutex)
+			bc.mutexes[idx] = new(sync.Mutex)
 			bc.histograms[idx] = stats.NewHistogram(bc.histogramOptions)
 			// Start goroutine on the created mutex and histogram.
 			go func(idx int) {
@@ -288,7 +288,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			}
 			// Create mutex and histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
-			bc.mutexes[idx] = new(sync.RWMutex)
+			bc.mutexes[idx] = new(sync.Mutex)
 			bc.histograms[idx] = stats.NewHistogram(bc.histogramOptions)
 			// Start goroutine on the created mutex and histogram.
 			go func(idx int) {
