@@ -44,7 +44,7 @@ type roundRobin struct {
 	pending int
 }
 
-func (rr *roundRobin) Up(addr Address) func() {
+func (rr *roundRobin) Up(addr Address) func(error) {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	for _, a := range rr.addrs {
@@ -59,12 +59,12 @@ func (rr *roundRobin) Up(addr Address) func() {
 			rr.waitCh = nil
 		}
 	}
-	return func() {
-		rr.down(addr)
+	return func(err error) {
+		rr.down(addr, err)
 	}
 }
 
-func (rr *roundRobin) down(addr Address) {
+func (rr *roundRobin) down(addr Address, err error) {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	for i, a := range rr.addrs {

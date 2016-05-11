@@ -321,6 +321,7 @@ const (
 	reachable transportState = iota
 	unreachable
 	closing
+	draining
 )
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error

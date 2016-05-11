@@ -403,6 +403,11 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 		updateStreams = true
 	}
 	delete(t.activeStreams, s.id)
+	if t.state == draining && len(t.activeStreams) == 0 {
+		t.mu.Unlock()
+		t.Close()
+		return
+	}
 	t.mu.Unlock()
 	if updateStreams {
 		t.streamsQuota.add(1)
@@ -468,8 +473,16 @@ func (t *http2Client) Close() (err error) {
 
 func (t *http2Client) GracefulClose() error {
 	t.mu.Lock()
+	if t.state == closing {
+		t.mu.Unlock()
+		return errors.New("transport: Graceful close on a closed transport")
+	}
+	if t.state == draining {
+		t.mu.Unlock()
+		return nil
+	}
+	t.state = draining
 	active := len(t.activeStreams)
-	t.activeStreams = nil
 	t.mu.Unlock()
 	if active == 0 {
 		return t.Close()
