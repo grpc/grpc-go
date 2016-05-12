@@ -318,19 +318,18 @@ func (bc *benchmarkClient) getStats() *testpb.ClientStats {
 	defer bc.mu.RUnlock()
 	timeElapsed := time.Since(bc.lastResetTime).Seconds()
 
-	histogramValue := bc.histogram.Value()
-	b := make([]uint32, len(histogramValue.Buckets))
-	for i, v := range histogramValue.Buckets {
+	b := make([]uint32, len(bc.histogram.Buckets))
+	for i, v := range bc.histogram.Buckets {
 		b[i] = uint32(v.Count)
 	}
 	return &testpb.ClientStats{
 		Latencies: &testpb.HistogramData{
 			Bucket:       b,
-			MinSeen:      float64(histogramValue.Min),
-			MaxSeen:      float64(histogramValue.Max),
-			Sum:          float64(histogramValue.Sum),
-			SumOfSquares: float64(histogramValue.SumOfSquares),
-			Count:        float64(histogramValue.Count),
+			MinSeen:      float64(bc.histogram.Min),
+			MaxSeen:      float64(bc.histogram.Max),
+			Sum:          float64(bc.histogram.Sum),
+			SumOfSquares: float64(bc.histogram.SumOfSquares),
+			Count:        float64(bc.histogram.Count),
 		},
 		TimeElapsed: timeElapsed,
 		TimeUser:    0,

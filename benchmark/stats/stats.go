@@ -104,7 +104,7 @@ func (stats *Stats) Print(w io.Writer) {
 		fmt.Fprint(w, "Histogram (empty)\n")
 	} else {
 		fmt.Fprintf(w, "Histogram (unit: %s)\n", fmt.Sprintf("%v", stats.unit)[1:])
-		stats.histogram.Value().Print(w)
+		stats.histogram.Print(w)
 	}
 }
 
