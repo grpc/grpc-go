@@ -70,6 +70,7 @@ func printServerConfig(config *testpb.ServerConfig) {
 	// - core list
 	grpclog.Printf(" * server type: %v (ignored, always starts sync server)", config.ServerType)
 	grpclog.Printf(" * async server threads: %v (ignored)", config.AsyncServerThreads)
+	// TODO: use cores specified by CoreList when setting list of cores is supported in go.
 	grpclog.Printf(" * core list: %v (ignored)", config.CoreList)
 
 	grpclog.Printf(" - security params: %v", config.SecurityParams)
@@ -86,8 +87,8 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	numOfCores := runtime.NumCPU()
 	if config.CoreLimit > 0 {
 		numOfCores = int(config.CoreLimit)
-		runtime.GOMAXPROCS(numOfCores)
 	}
+	runtime.GOMAXPROCS(numOfCores)
 
 	var opts []grpc.ServerOption
 
