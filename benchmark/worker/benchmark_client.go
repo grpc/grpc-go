@@ -330,12 +330,10 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 // getStats returns the stats for benchmark client.
 // It resets lastResetTime and all histograms if argument reset is true.
 func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
-	timeElapsed := time.Since(bc.lastResetTime).Seconds()
+	var timeElapsed float64
 	mergedHistogram := stats.NewHistogram(bc.histogramOptions)
 
 	if reset {
-		bc.lastResetTime = time.Now()
-
 		// Merging histogram may take some time.
 		// Put all histograms aside and merge later.
 		toMerge := make([]*stats.Histogram, len(bc.histograms))
@@ -349,6 +347,9 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		for i := 0; i < len(toMerge); i++ {
 			mergedHistogram.Merge(toMerge[i])
 		}
+
+		timeElapsed = time.Since(bc.lastResetTime).Seconds()
+		bc.lastResetTime = time.Now()
 	} else {
 		// Merge only, not reset.
 		for i := range bc.histograms {
@@ -356,6 +357,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 			mergedHistogram.Merge(bc.histograms[i])
 			bc.mutexes[i].Unlock()
 		}
+		timeElapsed = time.Since(bc.lastResetTime).Seconds()
 	}
 
 	b := make([]uint32, len(mergedHistogram.Buckets))
