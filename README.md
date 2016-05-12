@@ -22,7 +22,7 @@ Readme](SECURITY.md).
 Download
 --------
 
-Download [the JAR][]. Or for Maven, add to your `pom.xml`:
+Download [the JARs][]. Or for Maven, add to your `pom.xml`:
 ```xml
 <dependency>
   <groupId>io.grpc</groupId>
@@ -43,7 +43,8 @@ compile 'io.grpc:grpc-protobuf-nano:0.14.0'
 compile 'io.grpc:grpc-stub:0.14.0'
 ```
 
-[the JAR]: https://search.maven.org/remote_content?g=io.grpc&a=grpc-all&v=0.14.0
+[the JARs]:
+http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.grpc%22%20AND%20v%3A%220.14.0%22
 
 Development snapshots are available in [Sonatypes's snapshot
 repository](https://oss.sonatype.org/content/repositories/snapshots/).
