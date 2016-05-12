@@ -70,7 +70,8 @@ Metadata can be retrieved from context using `FromContext`:
 
 ```go
 func (s *server) SomeRPC(ctx context.Context, in *pb.SomeRequest) (*pb.SomeResponse, err) {
-    md := metadata.FromContext(ctx)
+    md, ok := metadata.FromContext(ctx)
+    // do something with metadata
 }
 ```
 
