@@ -327,47 +327,54 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 	}
 }
 
-func (bc *benchmarkClient) getStats() *testpb.ClientStats {
+// getStats return the stats for benchmark client.
+// It resets lastResetTime and all histograms if argument reset is true.
+func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 	timeElapsed := time.Since(bc.lastResetTime).Seconds()
+	mergedHistogram := stats.NewHistogram(bc.histogramOptions)
 
-	// Merging histogram may take some time.
-	// Put all histograms aside and merge later.
-	toMerge := make([]*stats.Histogram, len(bc.histograms))
-	for i := range bc.histograms {
-		bc.mutexes[i].Lock()
-		toMerge[i] = bc.histograms[i]
-		bc.histograms[i] = stats.NewHistogram(bc.histogramOptions)
-		bc.mutexes[i].Unlock()
+	if reset {
+		bc.lastResetTime = time.Now()
+
+		// Merging histogram may take some time.
+		// Put all histograms aside and merge later.
+		toMerge := make([]*stats.Histogram, len(bc.histograms))
+		for i := range bc.histograms {
+			bc.mutexes[i].Lock()
+			toMerge[i] = bc.histograms[i]
+			bc.histograms[i] = stats.NewHistogram(bc.histogramOptions)
+			bc.mutexes[i].Unlock()
+		}
+
+		for i := 0; i < len(toMerge); i++ {
+			mergedHistogram.Merge(toMerge[i])
+		}
+	} else {
+		// Only merging histograms, not resetting.
+		for i := range bc.histograms {
+			bc.mutexes[i].Lock()
+			mergedHistogram.Merge(bc.histograms[i])
+			bc.mutexes[i].Unlock()
+		}
 	}
 
-	for i := 1; i < len(toMerge); i++ {
-		toMerge[0].Merge(toMerge[i])
-	}
-
-	b := make([]uint32, len(toMerge[0].Buckets))
-	for i, v := range toMerge[0].Buckets {
+	b := make([]uint32, len(mergedHistogram.Buckets))
+	for i, v := range mergedHistogram.Buckets {
 		b[i] = uint32(v.Count)
 	}
 	return &testpb.ClientStats{
 		Latencies: &testpb.HistogramData{
 			Bucket:       b,
-			MinSeen:      float64(toMerge[0].Min),
-			MaxSeen:      float64(toMerge[0].Max),
-			Sum:          float64(toMerge[0].Sum),
-			SumOfSquares: float64(toMerge[0].SumOfSquares),
-			Count:        float64(toMerge[0].Count),
+			MinSeen:      float64(mergedHistogram.Min),
+			MaxSeen:      float64(mergedHistogram.Max),
+			Sum:          float64(mergedHistogram.Sum),
+			SumOfSquares: float64(mergedHistogram.SumOfSquares),
+			Count:        float64(mergedHistogram.Count),
 		},
 		TimeElapsed: timeElapsed,
 		TimeUser:    0,
 		TimeSystem:  0,
 	}
-}
-
-// reset clears the contents for histogram and set lastResetTime to Now().
-// It is called to get ready for benchmark runs.
-func (bc *benchmarkClient) reset() {
-	bc.lastResetTime = time.Now()
-	bc.histograms[0].Clear()
 }
 
 func (bc *benchmarkClient) shutdown() {
