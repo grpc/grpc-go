@@ -83,12 +83,10 @@ func printClientConfig(config *testpb.ClientConfig) {
 }
 
 func setupClientEnv(config *testpb.ClientConfig) {
-	// Use one cpu core by default.
+	// Use all cpu cores available on machine by default.
 	// TODO: Revisit this for the optimal default setup.
-	if config.CoreLimit > 1 {
+	if config.CoreLimit > 0 {
 		runtime.GOMAXPROCS(int(config.CoreLimit))
-	} else {
-		runtime.GOMAXPROCS(1)
 	}
 }
 

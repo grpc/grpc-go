@@ -81,13 +81,13 @@ func printServerConfig(config *testpb.ServerConfig) {
 func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchmarkServer, error) {
 	printServerConfig(config)
 
-	// Use one cpu core by default.
+	// Use all cpu cores available on machine by default.
 	// TODO: Revisit this for the optimal default setup.
-	numOfCores := 1
-	if config.CoreLimit > 1 {
+	numOfCores := runtime.NumCPU()
+	if config.CoreLimit > 0 {
 		numOfCores = int(config.CoreLimit)
+		runtime.GOMAXPROCS(numOfCores)
 	}
-	runtime.GOMAXPROCS(numOfCores)
 
 	var opts []grpc.ServerOption
 
