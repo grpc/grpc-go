@@ -1624,8 +1624,8 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 		ResponseSize: proto.Int32(respSize),
 		Payload:      payload,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code %d", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.Unimplemented {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code %d", err, codes.Unimplemented)
 	}
 	// Streaming RPC
 	stream, err := tc.FullDuplexCall(context.Background())
@@ -1649,8 +1649,8 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = %v, want error code %d", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.Unimplemented {
+		t.Fatalf("%v.Recv() = %v, want error code %d", stream, err, codes.Unimplemented)
 	}
 }
 
