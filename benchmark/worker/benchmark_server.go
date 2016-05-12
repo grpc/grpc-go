@@ -158,7 +158,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	return &benchmarkServer{port: p, cores: numOfCores, closeFunc: closeFunc, lastResetTime: time.Now()}, nil
 }
 
-// getStats return the stats for benchmark server.
+// getStats returns the stats for benchmark server.
 // It resets lastResetTime if argument reset is true.
 func (bs *benchmarkServer) getStats(reset bool) *testpb.ServerStats {
 	// TODO wall time, sys time, user time.

@@ -327,7 +327,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 	}
 }
 
-// getStats return the stats for benchmark client.
+// getStats returns the stats for benchmark client.
 // It resets lastResetTime and all histograms if argument reset is true.
 func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 	timeElapsed := time.Since(bc.lastResetTime).Seconds()
@@ -350,7 +350,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 			mergedHistogram.Merge(toMerge[i])
 		}
 	} else {
-		// Only merging histograms, not resetting.
+		// Merge only, not reset.
 		for i := range bc.histograms {
 			bc.mutexes[i].Lock()
 			mergedHistogram.Merge(bc.histograms[i])

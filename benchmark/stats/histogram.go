@@ -84,27 +84,27 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 }
 
 // Print writes textual output of the histogram values.
-func (v Histogram) Print(w io.Writer) {
-	avg := float64(v.Sum) / float64(v.Count)
-	fmt.Fprintf(w, "Count: %d  Min: %d  Max: %d  Avg: %.2f\n", v.Count, v.Min, v.Max, avg)
+func (h Histogram) Print(w io.Writer) {
+	avg := float64(h.Sum) / float64(h.Count)
+	fmt.Fprintf(w, "Count: %d  Min: %d  Max: %d  Avg: %.2f\n", h.Count, h.Min, h.Max, avg)
 	fmt.Fprintf(w, "%s\n", strings.Repeat("-", 60))
-	if v.Count <= 0 {
+	if h.Count <= 0 {
 		return
 	}
 
-	maxBucketDigitLen := len(strconv.FormatFloat(v.Buckets[len(v.Buckets)-1].LowBound, 'f', 6, 64))
+	maxBucketDigitLen := len(strconv.FormatFloat(h.Buckets[len(h.Buckets)-1].LowBound, 'f', 6, 64))
 	if maxBucketDigitLen < 3 {
 		// For "inf".
 		maxBucketDigitLen = 3
 	}
-	maxCountDigitLen := len(strconv.FormatInt(v.Count, 10))
-	percentMulti := 100 / float64(v.Count)
+	maxCountDigitLen := len(strconv.FormatInt(h.Count, 10))
+	percentMulti := 100 / float64(h.Count)
 
 	accCount := int64(0)
-	for i, b := range v.Buckets {
+	for i, b := range h.Buckets {
 		fmt.Fprintf(w, "[%*f, ", maxBucketDigitLen, b.LowBound)
-		if i+1 < len(v.Buckets) {
-			fmt.Fprintf(w, "%*f)", maxBucketDigitLen, v.Buckets[i+1].LowBound)
+		if i+1 < len(h.Buckets) {
+			fmt.Fprintf(w, "%*f)", maxBucketDigitLen, h.Buckets[i+1].LowBound)
 		} else {
 			fmt.Fprintf(w, "%*s)", maxBucketDigitLen, "inf")
 		}
@@ -119,9 +119,9 @@ func (v Histogram) Print(w io.Writer) {
 }
 
 // String returns the textual output of the histogram values as string.
-func (v Histogram) String() string {
+func (h Histogram) String() string {
 	var b bytes.Buffer
-	v.Print(&b)
+	h.Print(&b)
 	return b.String()
 }
 
@@ -176,9 +176,11 @@ func (h *Histogram) findBucket(value int64) (int, error) {
 	return b, nil
 }
 
+// Merge takes another histogram, and merges its content into the receiver.
+// The two histograms must be created by equivalent HistogramOptions.
 func (h *Histogram) Merge(h2 *Histogram) {
-	if len(h.Buckets) != len(h2.Buckets) {
-		log.Fatalf("failed to merge histograms, inequivalent buckets length")
+	if h.opts != h2.opts {
+		log.Fatalf("failed to merge histograms, created by inequivalent options")
 	}
 	h.Count += h2.Count
 	h.Sum += h2.Sum
