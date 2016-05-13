@@ -616,7 +616,10 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 				return ErrClientConnTimeout
 			}
 			closeTransport = false
-			time.Sleep(sleepTime)
+			select {
+			case <-time.After(sleepTime):
+			case <-cc.shutdownChan:
+			}
 			retries++
 			grpclog.Printf("grpc: addrConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, ac.addr)
 			continue
