@@ -43,6 +43,7 @@ import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_PRIORITY_WEIGH
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
@@ -102,6 +103,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   private long nanoTime; // backs a ticker, for testing ping round-trip time measurement
   private int flowControlWindow = DEFAULT_WINDOW_SIZE;
   private int streamId = 3;
+  private ClientTransportLifecycleManager lifecycleManager;
 
   @Mock
   private NettyClientTransport.Listener listener;
@@ -112,6 +114,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
+    lifecycleManager = new ClientTransportLifecycleManager(listener);
 
     initChannel();
 
@@ -384,6 +387,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     streamId = Integer.MAX_VALUE;
     setUp();
 
+    assertNull(lifecycleManager.getShutdownStatus());
     // Create the MAX_INT stream.
     ChannelFuture future = createStream();
     assertTrue(future.isSuccess());
@@ -392,6 +396,10 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     future = createStream();
     assertTrue(future.isDone());
     assertFalse(future.isSuccess());
+    Status status = lifecycleManager.getShutdownStatus();
+    assertNotNull(status);
+    assertTrue("status does not reference 'exhausted': " + status,
+        status.getDescription().contains("exhausted"));
   }
 
   @Test
@@ -498,7 +506,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     };
 
     return NettyClientHandler.newHandler(connection, frameReader(), frameWriter(),
-        new ClientTransportLifecycleManager(listener), flowControlWindow, ticker);
+        lifecycleManager, flowControlWindow, ticker);
   }
 
   @Override
