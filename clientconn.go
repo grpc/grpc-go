@@ -114,7 +114,8 @@ func WithDecompressor(dc Decompressor) DialOption {
 	}
 }
 
-func WithResolver(r naming.Resolver) DialOption {
+// WithNameResolver returns a DialOption which sets a name resolver for service discovery.
+func WithNameResolver(r naming.Resolver) DialOption {
 	return func(o *dialOptions) {
 		o.resolver = r
 	}
