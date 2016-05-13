@@ -69,6 +69,7 @@ func printClientConfig(config *testpb.ClientConfig) {
 	// - core list
 	grpclog.Printf(" * client type: %v (ignored, always creates sync client)", config.ClientType)
 	grpclog.Printf(" * async client threads: %v (ignored)", config.AsyncClientThreads)
+	// TODO: use cores specified by CoreList when setting list of cores is supported in go.
 	grpclog.Printf(" * core list: %v (ignored)", config.CoreList)
 
 	grpclog.Printf(" - security params: %v", config.SecurityParams)
@@ -83,12 +84,12 @@ func printClientConfig(config *testpb.ClientConfig) {
 }
 
 func setupClientEnv(config *testpb.ClientConfig) {
-	// Use one cpu core by default.
+	// Use all cpu cores available on machine by default.
 	// TODO: Revisit this for the optimal default setup.
-	if config.CoreLimit > 1 {
+	if config.CoreLimit > 0 {
 		runtime.GOMAXPROCS(int(config.CoreLimit))
 	} else {
-		runtime.GOMAXPROCS(1)
+		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 }
 
