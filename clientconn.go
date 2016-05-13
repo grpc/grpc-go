@@ -68,7 +68,7 @@ var (
 	// ErrNetworkIP indicates that the connection is down due to some network I/O error.
 	ErrNetworkIO = errors.New("grpc: failed with network I/O error")
 	// ErrConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
-	ErrConnDrain   = errors.New("grpc: ")
+	ErrConnDrain   = errors.New("grpc: the connection is drained")
 	errConnClosing = errors.New("grpc: the addrConn is closing")
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
@@ -118,6 +118,13 @@ func WithDecompressor(dc Decompressor) DialOption {
 func WithNameResolver(r naming.Resolver) DialOption {
 	return func(o *dialOptions) {
 		o.resolver = r
+	}
+}
+
+// WithBalancer returns a DialOption which sets a load balancer.
+func WithBalancer(b Balancer) DialOption {
+	return func(o *dialOptions) {
+		o.balancer = b
 	}
 }
 
@@ -470,20 +477,6 @@ type addrConn struct {
 	ready     chan struct{}
 	transport transport.ClientTransport
 }
-
-/*
-func (ac *addrConn) startDrain() {
-	ac.mu.Lock()
-	t := ac.transport
-	ac.drain = true
-	if ac.down != nil {
-		ac.down(ErrConnDrain)
-		ac.down = nil
-	}
-	ac.mu.Unlock()
-	ac.tearDown(ErrConnDrain)
-}
-*/
 
 // printf records an event in ac's event log, unless ac has been closed.
 // REQUIRES ac.mu is held.
