@@ -41,8 +41,8 @@ func RoundRobin() Balancer {
 type roundRobin struct {
 	mu     sync.Mutex
 	addrs  []Address
-	next   int // index of the next address to return for Get()
-	waitCh chan struct{}
+	next   int           // index of the next address to return for Get()
+	waitCh chan struct{} // channel to block when there is no address available
 }
 
 // Up appends addr to the end of rr.addrs and sends notification if there
