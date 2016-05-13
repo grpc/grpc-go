@@ -325,13 +325,13 @@ func (cc *ClientConn) watchAddrUpdates() error {
 	for _, update := range updates {
 		switch update.Op {
 		case naming.Add:
-			cc.mu.Lock()
+			cc.mu.RLock()
 			addr := Address{
 				Addr:     update.Addr,
 				Metadata: update.Metadata,
 			}
 			if _, ok := cc.conns[addr]; ok {
-				cc.mu.Unlock()
+				cc.mu.RUnlock()
 				grpclog.Println("grpc: The name resolver wanted to add an existing address: ", addr)
 				continue
 			}
@@ -539,12 +539,6 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			ac.mu.Unlock()
 			return errConnClosing
 		}
-		/*
-			if ac.drain {
-				ac.mu.Unlock()
-				return nil
-			}
-		*/
 		if ac.down != nil {
 			ac.down(ErrNetworkIO)
 			ac.down = nil
