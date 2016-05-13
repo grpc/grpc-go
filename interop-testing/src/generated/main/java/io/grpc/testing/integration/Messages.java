@@ -137,6 +137,119 @@ public final class Messages {
     // @@protoc_insertion_point(enum_scope:grpc.testing.PayloadType)
   }
 
+  /**
+   * Protobuf enum {@code grpc.testing.CompressionType}
+   *
+   * <pre>
+   * Compression algorithms
+   * </pre>
+   */
+  public enum CompressionType
+      implements com.google.protobuf.ProtocolMessageEnum {
+    /**
+     * <code>NONE = 0;</code>
+     *
+     * <pre>
+     * No compression
+     * </pre>
+     */
+    NONE(0, 0),
+    /**
+     * <code>GZIP = 1;</code>
+     */
+    GZIP(1, 1),
+    /**
+     * <code>DEFLATE = 2;</code>
+     */
+    DEFLATE(2, 2),
+    UNRECOGNIZED(-1, -1),
+    ;
+
+    /**
+     * <code>NONE = 0;</code>
+     *
+     * <pre>
+     * No compression
+     * </pre>
+     */
+    public static final int NONE_VALUE = 0;
+    /**
+     * <code>GZIP = 1;</code>
+     */
+    public static final int GZIP_VALUE = 1;
+    /**
+     * <code>DEFLATE = 2;</code>
+     */
+    public static final int DEFLATE_VALUE = 2;
+
+
+    public final int getNumber() {
+      if (index == -1) {
+        throw new java.lang.IllegalArgumentException(
+            "Can't get the number of an unknown enum value.");
+      }
+      return value;
+    }
+
+    public static CompressionType valueOf(int value) {
+      switch (value) {
+        case 0: return NONE;
+        case 1: return GZIP;
+        case 2: return DEFLATE;
+        default: return null;
+      }
+    }
+
+    public static com.google.protobuf.Internal.EnumLiteMap<CompressionType>
+        internalGetValueMap() {
+      return internalValueMap;
+    }
+    private static final com.google.protobuf.Internal.EnumLiteMap<
+        CompressionType> internalValueMap =
+          new com.google.protobuf.Internal.EnumLiteMap<CompressionType>() {
+            public CompressionType findValueByNumber(int number) {
+              return CompressionType.valueOf(number);
+            }
+          };
+
+    public final com.google.protobuf.Descriptors.EnumValueDescriptor
+        getValueDescriptor() {
+      return getDescriptor().getValues().get(index);
+    }
+    public final com.google.protobuf.Descriptors.EnumDescriptor
+        getDescriptorForType() {
+      return getDescriptor();
+    }
+    public static final com.google.protobuf.Descriptors.EnumDescriptor
+        getDescriptor() {
+      return io.grpc.testing.integration.Messages.getDescriptor().getEnumTypes().get(1);
+    }
+
+    private static final CompressionType[] VALUES = values();
+
+    public static CompressionType valueOf(
+        com.google.protobuf.Descriptors.EnumValueDescriptor desc) {
+      if (desc.getType() != getDescriptor()) {
+        throw new java.lang.IllegalArgumentException(
+          "EnumValueDescriptor is not for this type.");
+      }
+      if (desc.getIndex() == -1) {
+        return UNRECOGNIZED;
+      }
+      return VALUES[desc.getIndex()];
+    }
+
+    private final int index;
+    private final int value;
+
+    private CompressionType(int index, int value) {
+      this.index = index;
+      this.value = value;
+    }
+
+    // @@protoc_insertion_point(enum_scope:grpc.testing.CompressionType)
+  }
+
   public interface PayloadOrBuilder extends
       // @@protoc_insertion_point(interface_extends:grpc.testing.Payload)
       com.google.protobuf.MessageOrBuilder {
@@ -668,6 +781,524 @@ public final class Messages {
 
   }
 
+  public interface EchoStatusOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:grpc.testing.EchoStatus)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>optional int32 code = 1;</code>
+     */
+    int getCode();
+
+    /**
+     * <code>optional string message = 2;</code>
+     */
+    java.lang.String getMessage();
+    /**
+     * <code>optional string message = 2;</code>
+     */
+    com.google.protobuf.ByteString
+        getMessageBytes();
+  }
+  /**
+   * Protobuf type {@code grpc.testing.EchoStatus}
+   *
+   * <pre>
+   * A protobuf representation for grpc status. This is used by test
+   * clients to specify a status that the server should attempt to return.
+   * </pre>
+   */
+  public  static final class EchoStatus extends
+      com.google.protobuf.GeneratedMessage implements
+      // @@protoc_insertion_point(message_implements:grpc.testing.EchoStatus)
+      EchoStatusOrBuilder {
+    // Use EchoStatus.newBuilder() to construct.
+    private EchoStatus(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+      super(builder);
+    }
+    private EchoStatus() {
+      code_ = 0;
+      message_ = "";
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    }
+    private EchoStatus(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 8: {
+
+              code_ = input.readInt32();
+              break;
+            }
+            case 18: {
+              java.lang.String s = input.readStringRequireUtf8();
+
+              message_ = s;
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw new RuntimeException(e.setUnfinishedMessage(this));
+      } catch (java.io.IOException e) {
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
+      } finally {
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.grpc.testing.integration.Messages.internal_static_grpc_testing_EchoStatus_descriptor;
+    }
+
+    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.grpc.testing.integration.Messages.internal_static_grpc_testing_EchoStatus_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.grpc.testing.integration.Messages.EchoStatus.class, io.grpc.testing.integration.Messages.EchoStatus.Builder.class);
+    }
+
+    public static final int CODE_FIELD_NUMBER = 1;
+    private int code_;
+    /**
+     * <code>optional int32 code = 1;</code>
+     */
+    public int getCode() {
+      return code_;
+    }
+
+    public static final int MESSAGE_FIELD_NUMBER = 2;
+    private volatile java.lang.Object message_;
+    /**
+     * <code>optional string message = 2;</code>
+     */
+    public java.lang.String getMessage() {
+      java.lang.Object ref = message_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        message_ = s;
+        return s;
+      }
+    }
+    /**
+     * <code>optional string message = 2;</code>
+     */
+    public com.google.protobuf.ByteString
+        getMessageBytes() {
+      java.lang.Object ref = message_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        message_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (code_ != 0) {
+        output.writeInt32(1, code_);
+      }
+      if (!getMessageBytes().isEmpty()) {
+        com.google.protobuf.GeneratedMessage.writeString(output, 2, message_);
+      }
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (code_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(1, code_);
+      }
+      if (!getMessageBytes().isEmpty()) {
+        size += com.google.protobuf.GeneratedMessage.computeStringSize(2, message_);
+      }
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input);
+    }
+    public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.EchoStatus parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return PARSER.parseDelimitedFrom(input);
+    }
+    public static io.grpc.testing.integration.Messages.EchoStatus parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input);
+    }
+    public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.EchoStatus prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code grpc.testing.EchoStatus}
+     *
+     * <pre>
+     * A protobuf representation for grpc status. This is used by test
+     * clients to specify a status that the server should attempt to return.
+     * </pre>
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:grpc.testing.EchoStatus)
+        io.grpc.testing.integration.Messages.EchoStatusOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.grpc.testing.integration.Messages.internal_static_grpc_testing_EchoStatus_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.grpc.testing.integration.Messages.internal_static_grpc_testing_EchoStatus_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.grpc.testing.integration.Messages.EchoStatus.class, io.grpc.testing.integration.Messages.EchoStatus.Builder.class);
+      }
+
+      // Construct using io.grpc.testing.integration.Messages.EchoStatus.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        code_ = 0;
+
+        message_ = "";
+
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.grpc.testing.integration.Messages.internal_static_grpc_testing_EchoStatus_descriptor;
+      }
+
+      public io.grpc.testing.integration.Messages.EchoStatus getDefaultInstanceForType() {
+        return io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance();
+      }
+
+      public io.grpc.testing.integration.Messages.EchoStatus build() {
+        io.grpc.testing.integration.Messages.EchoStatus result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public io.grpc.testing.integration.Messages.EchoStatus buildPartial() {
+        io.grpc.testing.integration.Messages.EchoStatus result = new io.grpc.testing.integration.Messages.EchoStatus(this);
+        result.code_ = code_;
+        result.message_ = message_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.grpc.testing.integration.Messages.EchoStatus) {
+          return mergeFrom((io.grpc.testing.integration.Messages.EchoStatus)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.grpc.testing.integration.Messages.EchoStatus other) {
+        if (other == io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance()) return this;
+        if (other.getCode() != 0) {
+          setCode(other.getCode());
+        }
+        if (!other.getMessage().isEmpty()) {
+          message_ = other.message_;
+          onChanged();
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.grpc.testing.integration.Messages.EchoStatus parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.grpc.testing.integration.Messages.EchoStatus) e.getUnfinishedMessage();
+          throw e;
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+
+      private int code_ ;
+      /**
+       * <code>optional int32 code = 1;</code>
+       */
+      public int getCode() {
+        return code_;
+      }
+      /**
+       * <code>optional int32 code = 1;</code>
+       */
+      public Builder setCode(int value) {
+        
+        code_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional int32 code = 1;</code>
+       */
+      public Builder clearCode() {
+        
+        code_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private java.lang.Object message_ = "";
+      /**
+       * <code>optional string message = 2;</code>
+       */
+      public java.lang.String getMessage() {
+        java.lang.Object ref = message_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          message_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <code>optional string message = 2;</code>
+       */
+      public com.google.protobuf.ByteString
+          getMessageBytes() {
+        java.lang.Object ref = message_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          message_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <code>optional string message = 2;</code>
+       */
+      public Builder setMessage(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        message_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional string message = 2;</code>
+       */
+      public Builder clearMessage() {
+        
+        message_ = getDefaultInstance().getMessage();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional string message = 2;</code>
+       */
+      public Builder setMessageBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        
+        message_ = value;
+        onChanged();
+        return this;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:grpc.testing.EchoStatus)
+    }
+
+    // @@protoc_insertion_point(class_scope:grpc.testing.EchoStatus)
+    private static final io.grpc.testing.integration.Messages.EchoStatus DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.EchoStatus();
+    }
+
+    public static io.grpc.testing.integration.Messages.EchoStatus getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<EchoStatus>
+        PARSER = new com.google.protobuf.AbstractParser<EchoStatus>() {
+      public EchoStatus parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new EchoStatus(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    public static com.google.protobuf.Parser<EchoStatus> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<EchoStatus> getParserForType() {
+      return PARSER;
+    }
+
+    public io.grpc.testing.integration.Messages.EchoStatus getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   public interface SimpleRequestOrBuilder extends
       // @@protoc_insertion_point(interface_extends:grpc.testing.SimpleRequest)
       com.google.protobuf.MessageOrBuilder {
@@ -743,6 +1374,48 @@ public final class Messages {
      * </pre>
      */
     boolean getFillOauthScope();
+
+    /**
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     *
+     * <pre>
+     * Compression algorithm to be used by the server for the response (stream)
+     * </pre>
+     */
+    int getResponseCompressionValue();
+    /**
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     *
+     * <pre>
+     * Compression algorithm to be used by the server for the response (stream)
+     * </pre>
+     */
+    io.grpc.testing.integration.Messages.CompressionType getResponseCompression();
+
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    boolean hasResponseStatus();
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    io.grpc.testing.integration.Messages.EchoStatus getResponseStatus();
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder();
   }
   /**
    * Protobuf type {@code grpc.testing.SimpleRequest}
@@ -764,6 +1437,7 @@ public final class Messages {
       responseSize_ = 0;
       fillUsername_ = false;
       fillOauthScope_ = false;
+      responseCompression_ = 0;
     }
 
     @java.lang.Override
@@ -822,6 +1496,25 @@ public final class Messages {
             case 40: {
 
               fillOauthScope_ = input.readBool();
+              break;
+            }
+            case 48: {
+              int rawValue = input.readEnum();
+
+              responseCompression_ = rawValue;
+              break;
+            }
+            case 58: {
+              io.grpc.testing.integration.Messages.EchoStatus.Builder subBuilder = null;
+              if (responseStatus_ != null) {
+                subBuilder = responseStatus_.toBuilder();
+              }
+              responseStatus_ = input.readMessage(io.grpc.testing.integration.Messages.EchoStatus.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(responseStatus_);
+                responseStatus_ = subBuilder.buildPartial();
+              }
+
               break;
             }
           }
@@ -947,6 +1640,63 @@ public final class Messages {
       return fillOauthScope_;
     }
 
+    public static final int RESPONSE_COMPRESSION_FIELD_NUMBER = 6;
+    private int responseCompression_;
+    /**
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     *
+     * <pre>
+     * Compression algorithm to be used by the server for the response (stream)
+     * </pre>
+     */
+    public int getResponseCompressionValue() {
+      return responseCompression_;
+    }
+    /**
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     *
+     * <pre>
+     * Compression algorithm to be used by the server for the response (stream)
+     * </pre>
+     */
+    public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
+      io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
+      return result == null ? io.grpc.testing.integration.Messages.CompressionType.UNRECOGNIZED : result;
+    }
+
+    public static final int RESPONSE_STATUS_FIELD_NUMBER = 7;
+    private io.grpc.testing.integration.Messages.EchoStatus responseStatus_;
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    public boolean hasResponseStatus() {
+      return responseStatus_ != null;
+    }
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
+      return responseStatus_ == null ? io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
+    }
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
+      return getResponseStatus();
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -974,6 +1724,12 @@ public final class Messages {
       if (fillOauthScope_ != false) {
         output.writeBool(5, fillOauthScope_);
       }
+      if (responseCompression_ != io.grpc.testing.integration.Messages.CompressionType.NONE.getNumber()) {
+        output.writeEnum(6, responseCompression_);
+      }
+      if (responseStatus_ != null) {
+        output.writeMessage(7, getResponseStatus());
+      }
     }
 
     public int getSerializedSize() {
@@ -1000,6 +1756,14 @@ public final class Messages {
       if (fillOauthScope_ != false) {
         size += com.google.protobuf.CodedOutputStream
           .computeBoolSize(5, fillOauthScope_);
+      }
+      if (responseCompression_ != io.grpc.testing.integration.Messages.CompressionType.NONE.getNumber()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeEnumSize(6, responseCompression_);
+      }
+      if (responseStatus_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(7, getResponseStatus());
       }
       memoizedSize = size;
       return size;
@@ -1130,6 +1894,14 @@ public final class Messages {
 
         fillOauthScope_ = false;
 
+        responseCompression_ = 0;
+
+        if (responseStatusBuilder_ == null) {
+          responseStatus_ = null;
+        } else {
+          responseStatus_ = null;
+          responseStatusBuilder_ = null;
+        }
         return this;
       }
 
@@ -1161,6 +1933,12 @@ public final class Messages {
         }
         result.fillUsername_ = fillUsername_;
         result.fillOauthScope_ = fillOauthScope_;
+        result.responseCompression_ = responseCompression_;
+        if (responseStatusBuilder_ == null) {
+          result.responseStatus_ = responseStatus_;
+        } else {
+          result.responseStatus_ = responseStatusBuilder_.build();
+        }
         onBuilt();
         return result;
       }
@@ -1190,6 +1968,12 @@ public final class Messages {
         }
         if (other.getFillOauthScope() != false) {
           setFillOauthScope(other.getFillOauthScope());
+        }
+        if (other.responseCompression_ != 0) {
+          setResponseCompressionValue(other.getResponseCompressionValue());
+        }
+        if (other.hasResponseStatus()) {
+          mergeResponseStatus(other.getResponseStatus());
         }
         onChanged();
         return this;
@@ -1554,6 +2338,223 @@ public final class Messages {
         fillOauthScope_ = false;
         onChanged();
         return this;
+      }
+
+      private int responseCompression_ = 0;
+      /**
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       *
+       * <pre>
+       * Compression algorithm to be used by the server for the response (stream)
+       * </pre>
+       */
+      public int getResponseCompressionValue() {
+        return responseCompression_;
+      }
+      /**
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       *
+       * <pre>
+       * Compression algorithm to be used by the server for the response (stream)
+       * </pre>
+       */
+      public Builder setResponseCompressionValue(int value) {
+        responseCompression_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       *
+       * <pre>
+       * Compression algorithm to be used by the server for the response (stream)
+       * </pre>
+       */
+      public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
+        io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
+        return result == null ? io.grpc.testing.integration.Messages.CompressionType.UNRECOGNIZED : result;
+      }
+      /**
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       *
+       * <pre>
+       * Compression algorithm to be used by the server for the response (stream)
+       * </pre>
+       */
+      public Builder setResponseCompression(io.grpc.testing.integration.Messages.CompressionType value) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        
+        responseCompression_ = value.getNumber();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       *
+       * <pre>
+       * Compression algorithm to be used by the server for the response (stream)
+       * </pre>
+       */
+      public Builder clearResponseCompression() {
+        
+        responseCompression_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private io.grpc.testing.integration.Messages.EchoStatus responseStatus_ = null;
+      private com.google.protobuf.SingleFieldBuilder<
+          io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder> responseStatusBuilder_;
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public boolean hasResponseStatus() {
+        return responseStatusBuilder_ != null || responseStatus_ != null;
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
+        if (responseStatusBuilder_ == null) {
+          return responseStatus_ == null ? io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
+        } else {
+          return responseStatusBuilder_.getMessage();
+        }
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public Builder setResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
+        if (responseStatusBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          responseStatus_ = value;
+          onChanged();
+        } else {
+          responseStatusBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public Builder setResponseStatus(
+          io.grpc.testing.integration.Messages.EchoStatus.Builder builderForValue) {
+        if (responseStatusBuilder_ == null) {
+          responseStatus_ = builderForValue.build();
+          onChanged();
+        } else {
+          responseStatusBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public Builder mergeResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
+        if (responseStatusBuilder_ == null) {
+          if (responseStatus_ != null) {
+            responseStatus_ =
+              io.grpc.testing.integration.Messages.EchoStatus.newBuilder(responseStatus_).mergeFrom(value).buildPartial();
+          } else {
+            responseStatus_ = value;
+          }
+          onChanged();
+        } else {
+          responseStatusBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public Builder clearResponseStatus() {
+        if (responseStatusBuilder_ == null) {
+          responseStatus_ = null;
+          onChanged();
+        } else {
+          responseStatus_ = null;
+          responseStatusBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public io.grpc.testing.integration.Messages.EchoStatus.Builder getResponseStatusBuilder() {
+        
+        onChanged();
+        return getResponseStatusFieldBuilder().getBuilder();
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
+        if (responseStatusBuilder_ != null) {
+          return responseStatusBuilder_.getMessageOrBuilder();
+        } else {
+          return responseStatus_ == null ?
+              io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
+        }
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      private com.google.protobuf.SingleFieldBuilder<
+          io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder> 
+          getResponseStatusFieldBuilder() {
+        if (responseStatusBuilder_ == null) {
+          responseStatusBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+              io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder>(
+                  getResponseStatus(),
+                  getParentForChildren(),
+                  isClean());
+          responseStatus_ = null;
+        }
+        return responseStatusBuilder_;
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -4537,6 +5538,48 @@ public final class Messages {
      * </pre>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
+
+    /**
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     *
+     * <pre>
+     * Compression algorithm to be used by the server for the response (stream)
+     * </pre>
+     */
+    int getResponseCompressionValue();
+    /**
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     *
+     * <pre>
+     * Compression algorithm to be used by the server for the response (stream)
+     * </pre>
+     */
+    io.grpc.testing.integration.Messages.CompressionType getResponseCompression();
+
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    boolean hasResponseStatus();
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    io.grpc.testing.integration.Messages.EchoStatus getResponseStatus();
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder();
   }
   /**
    * Protobuf type {@code grpc.testing.StreamingOutputCallRequest}
@@ -4556,6 +5599,7 @@ public final class Messages {
     private StreamingOutputCallRequest() {
       responseType_ = 0;
       responseParameters_ = java.util.Collections.emptyList();
+      responseCompression_ = 0;
     }
 
     @java.lang.Override
@@ -4605,6 +5649,25 @@ public final class Messages {
               if (subBuilder != null) {
                 subBuilder.mergeFrom(payload_);
                 payload_ = subBuilder.buildPartial();
+              }
+
+              break;
+            }
+            case 48: {
+              int rawValue = input.readEnum();
+
+              responseCompression_ = rawValue;
+              break;
+            }
+            case 58: {
+              io.grpc.testing.integration.Messages.EchoStatus.Builder subBuilder = null;
+              if (responseStatus_ != null) {
+                subBuilder = responseStatus_.toBuilder();
+              }
+              responseStatus_ = input.readMessage(io.grpc.testing.integration.Messages.EchoStatus.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(responseStatus_);
+                responseStatus_ = subBuilder.buildPartial();
               }
 
               break;
@@ -4755,6 +5818,63 @@ public final class Messages {
       return getPayload();
     }
 
+    public static final int RESPONSE_COMPRESSION_FIELD_NUMBER = 6;
+    private int responseCompression_;
+    /**
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     *
+     * <pre>
+     * Compression algorithm to be used by the server for the response (stream)
+     * </pre>
+     */
+    public int getResponseCompressionValue() {
+      return responseCompression_;
+    }
+    /**
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     *
+     * <pre>
+     * Compression algorithm to be used by the server for the response (stream)
+     * </pre>
+     */
+    public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
+      io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
+      return result == null ? io.grpc.testing.integration.Messages.CompressionType.UNRECOGNIZED : result;
+    }
+
+    public static final int RESPONSE_STATUS_FIELD_NUMBER = 7;
+    private io.grpc.testing.integration.Messages.EchoStatus responseStatus_;
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    public boolean hasResponseStatus() {
+      return responseStatus_ != null;
+    }
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
+      return responseStatus_ == null ? io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
+    }
+    /**
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     *
+     * <pre>
+     * Whether server should return a given status
+     * </pre>
+     */
+    public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
+      return getResponseStatus();
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -4776,6 +5896,12 @@ public final class Messages {
       if (payload_ != null) {
         output.writeMessage(3, getPayload());
       }
+      if (responseCompression_ != io.grpc.testing.integration.Messages.CompressionType.NONE.getNumber()) {
+        output.writeEnum(6, responseCompression_);
+      }
+      if (responseStatus_ != null) {
+        output.writeMessage(7, getResponseStatus());
+      }
     }
 
     public int getSerializedSize() {
@@ -4794,6 +5920,14 @@ public final class Messages {
       if (payload_ != null) {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, getPayload());
+      }
+      if (responseCompression_ != io.grpc.testing.integration.Messages.CompressionType.NONE.getNumber()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeEnumSize(6, responseCompression_);
+      }
+      if (responseStatus_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(7, getResponseStatus());
       }
       memoizedSize = size;
       return size;
@@ -4925,6 +6059,14 @@ public final class Messages {
           payload_ = null;
           payloadBuilder_ = null;
         }
+        responseCompression_ = 0;
+
+        if (responseStatusBuilder_ == null) {
+          responseStatus_ = null;
+        } else {
+          responseStatus_ = null;
+          responseStatusBuilder_ = null;
+        }
         return this;
       }
 
@@ -4963,6 +6105,12 @@ public final class Messages {
           result.payload_ = payload_;
         } else {
           result.payload_ = payloadBuilder_.build();
+        }
+        result.responseCompression_ = responseCompression_;
+        if (responseStatusBuilder_ == null) {
+          result.responseStatus_ = responseStatus_;
+        } else {
+          result.responseStatus_ = responseStatusBuilder_.build();
         }
         result.bitField0_ = to_bitField0_;
         onBuilt();
@@ -5011,6 +6159,12 @@ public final class Messages {
         }
         if (other.hasPayload()) {
           mergePayload(other.getPayload());
+        }
+        if (other.responseCompression_ != 0) {
+          setResponseCompressionValue(other.getResponseCompressionValue());
+        }
+        if (other.hasResponseStatus()) {
+          mergeResponseStatus(other.getResponseStatus());
         }
         onChanged();
         return this;
@@ -5581,6 +6735,223 @@ public final class Messages {
           payload_ = null;
         }
         return payloadBuilder_;
+      }
+
+      private int responseCompression_ = 0;
+      /**
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       *
+       * <pre>
+       * Compression algorithm to be used by the server for the response (stream)
+       * </pre>
+       */
+      public int getResponseCompressionValue() {
+        return responseCompression_;
+      }
+      /**
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       *
+       * <pre>
+       * Compression algorithm to be used by the server for the response (stream)
+       * </pre>
+       */
+      public Builder setResponseCompressionValue(int value) {
+        responseCompression_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       *
+       * <pre>
+       * Compression algorithm to be used by the server for the response (stream)
+       * </pre>
+       */
+      public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
+        io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
+        return result == null ? io.grpc.testing.integration.Messages.CompressionType.UNRECOGNIZED : result;
+      }
+      /**
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       *
+       * <pre>
+       * Compression algorithm to be used by the server for the response (stream)
+       * </pre>
+       */
+      public Builder setResponseCompression(io.grpc.testing.integration.Messages.CompressionType value) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        
+        responseCompression_ = value.getNumber();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       *
+       * <pre>
+       * Compression algorithm to be used by the server for the response (stream)
+       * </pre>
+       */
+      public Builder clearResponseCompression() {
+        
+        responseCompression_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private io.grpc.testing.integration.Messages.EchoStatus responseStatus_ = null;
+      private com.google.protobuf.SingleFieldBuilder<
+          io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder> responseStatusBuilder_;
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public boolean hasResponseStatus() {
+        return responseStatusBuilder_ != null || responseStatus_ != null;
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
+        if (responseStatusBuilder_ == null) {
+          return responseStatus_ == null ? io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
+        } else {
+          return responseStatusBuilder_.getMessage();
+        }
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public Builder setResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
+        if (responseStatusBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          responseStatus_ = value;
+          onChanged();
+        } else {
+          responseStatusBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public Builder setResponseStatus(
+          io.grpc.testing.integration.Messages.EchoStatus.Builder builderForValue) {
+        if (responseStatusBuilder_ == null) {
+          responseStatus_ = builderForValue.build();
+          onChanged();
+        } else {
+          responseStatusBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public Builder mergeResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
+        if (responseStatusBuilder_ == null) {
+          if (responseStatus_ != null) {
+            responseStatus_ =
+              io.grpc.testing.integration.Messages.EchoStatus.newBuilder(responseStatus_).mergeFrom(value).buildPartial();
+          } else {
+            responseStatus_ = value;
+          }
+          onChanged();
+        } else {
+          responseStatusBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public Builder clearResponseStatus() {
+        if (responseStatusBuilder_ == null) {
+          responseStatus_ = null;
+          onChanged();
+        } else {
+          responseStatus_ = null;
+          responseStatusBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public io.grpc.testing.integration.Messages.EchoStatus.Builder getResponseStatusBuilder() {
+        
+        onChanged();
+        return getResponseStatusFieldBuilder().getBuilder();
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
+        if (responseStatusBuilder_ != null) {
+          return responseStatusBuilder_.getMessageOrBuilder();
+        } else {
+          return responseStatus_ == null ?
+              io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
+        }
+      }
+      /**
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       *
+       * <pre>
+       * Whether server should return a given status
+       * </pre>
+       */
+      private com.google.protobuf.SingleFieldBuilder<
+          io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder> 
+          getResponseStatusFieldBuilder() {
+        if (responseStatusBuilder_ == null) {
+          responseStatusBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+              io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder>(
+                  getResponseStatus(),
+                  getParentForChildren(),
+                  isClean());
+          responseStatus_ = null;
+        }
+        return responseStatusBuilder_;
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -6209,6 +7580,391 @@ public final class Messages {
 
   }
 
+  public interface ReconnectParamsOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ReconnectParams)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>optional int32 max_reconnect_backoff_ms = 1;</code>
+     */
+    int getMaxReconnectBackoffMs();
+  }
+  /**
+   * Protobuf type {@code grpc.testing.ReconnectParams}
+   *
+   * <pre>
+   * For reconnect interop test only.
+   * Client tells server what reconnection parameters it used.
+   * </pre>
+   */
+  public  static final class ReconnectParams extends
+      com.google.protobuf.GeneratedMessage implements
+      // @@protoc_insertion_point(message_implements:grpc.testing.ReconnectParams)
+      ReconnectParamsOrBuilder {
+    // Use ReconnectParams.newBuilder() to construct.
+    private ReconnectParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+      super(builder);
+    }
+    private ReconnectParams() {
+      maxReconnectBackoffMs_ = 0;
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    }
+    private ReconnectParams(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 8: {
+
+              maxReconnectBackoffMs_ = input.readInt32();
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw new RuntimeException(e.setUnfinishedMessage(this));
+      } catch (java.io.IOException e) {
+        throw new RuntimeException(
+            new com.google.protobuf.InvalidProtocolBufferException(
+                e.getMessage()).setUnfinishedMessage(this));
+      } finally {
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ReconnectParams_descriptor;
+    }
+
+    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ReconnectParams_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.grpc.testing.integration.Messages.ReconnectParams.class, io.grpc.testing.integration.Messages.ReconnectParams.Builder.class);
+    }
+
+    public static final int MAX_RECONNECT_BACKOFF_MS_FIELD_NUMBER = 1;
+    private int maxReconnectBackoffMs_;
+    /**
+     * <code>optional int32 max_reconnect_backoff_ms = 1;</code>
+     */
+    public int getMaxReconnectBackoffMs() {
+      return maxReconnectBackoffMs_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (maxReconnectBackoffMs_ != 0) {
+        output.writeInt32(1, maxReconnectBackoffMs_);
+      }
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (maxReconnectBackoffMs_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(1, maxReconnectBackoffMs_);
+      }
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectParams parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return PARSER.parseDelimitedFrom(input);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectParams parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input);
+    }
+    public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return PARSER.parseFrom(input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.grpc.testing.integration.Messages.ReconnectParams prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code grpc.testing.ReconnectParams}
+     *
+     * <pre>
+     * For reconnect interop test only.
+     * Client tells server what reconnection parameters it used.
+     * </pre>
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ReconnectParams)
+        io.grpc.testing.integration.Messages.ReconnectParamsOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ReconnectParams_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ReconnectParams_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.grpc.testing.integration.Messages.ReconnectParams.class, io.grpc.testing.integration.Messages.ReconnectParams.Builder.class);
+      }
+
+      // Construct using io.grpc.testing.integration.Messages.ReconnectParams.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        maxReconnectBackoffMs_ = 0;
+
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.grpc.testing.integration.Messages.internal_static_grpc_testing_ReconnectParams_descriptor;
+      }
+
+      public io.grpc.testing.integration.Messages.ReconnectParams getDefaultInstanceForType() {
+        return io.grpc.testing.integration.Messages.ReconnectParams.getDefaultInstance();
+      }
+
+      public io.grpc.testing.integration.Messages.ReconnectParams build() {
+        io.grpc.testing.integration.Messages.ReconnectParams result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public io.grpc.testing.integration.Messages.ReconnectParams buildPartial() {
+        io.grpc.testing.integration.Messages.ReconnectParams result = new io.grpc.testing.integration.Messages.ReconnectParams(this);
+        result.maxReconnectBackoffMs_ = maxReconnectBackoffMs_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.grpc.testing.integration.Messages.ReconnectParams) {
+          return mergeFrom((io.grpc.testing.integration.Messages.ReconnectParams)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.grpc.testing.integration.Messages.ReconnectParams other) {
+        if (other == io.grpc.testing.integration.Messages.ReconnectParams.getDefaultInstance()) return this;
+        if (other.getMaxReconnectBackoffMs() != 0) {
+          setMaxReconnectBackoffMs(other.getMaxReconnectBackoffMs());
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.grpc.testing.integration.Messages.ReconnectParams parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.grpc.testing.integration.Messages.ReconnectParams) e.getUnfinishedMessage();
+          throw e;
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+
+      private int maxReconnectBackoffMs_ ;
+      /**
+       * <code>optional int32 max_reconnect_backoff_ms = 1;</code>
+       */
+      public int getMaxReconnectBackoffMs() {
+        return maxReconnectBackoffMs_;
+      }
+      /**
+       * <code>optional int32 max_reconnect_backoff_ms = 1;</code>
+       */
+      public Builder setMaxReconnectBackoffMs(int value) {
+        
+        maxReconnectBackoffMs_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional int32 max_reconnect_backoff_ms = 1;</code>
+       */
+      public Builder clearMaxReconnectBackoffMs() {
+        
+        maxReconnectBackoffMs_ = 0;
+        onChanged();
+        return this;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ReconnectParams)
+    }
+
+    // @@protoc_insertion_point(class_scope:grpc.testing.ReconnectParams)
+    private static final io.grpc.testing.integration.Messages.ReconnectParams DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.testing.integration.Messages.ReconnectParams();
+    }
+
+    public static io.grpc.testing.integration.Messages.ReconnectParams getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<ReconnectParams>
+        PARSER = new com.google.protobuf.AbstractParser<ReconnectParams>() {
+      public ReconnectParams parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        try {
+          return new ReconnectParams(input, extensionRegistry);
+        } catch (RuntimeException e) {
+          if (e.getCause() instanceof
+              com.google.protobuf.InvalidProtocolBufferException) {
+            throw (com.google.protobuf.InvalidProtocolBufferException)
+                e.getCause();
+          }
+          throw e;
+        }
+      }
+    };
+
+    public static com.google.protobuf.Parser<ReconnectParams> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<ReconnectParams> getParserForType() {
+      return PARSER;
+    }
+
+    public io.grpc.testing.integration.Messages.ReconnectParams getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   public interface ReconnectInfoOrBuilder extends
       // @@protoc_insertion_point(interface_extends:grpc.testing.ReconnectInfo)
       com.google.protobuf.MessageOrBuilder {
@@ -6773,6 +8529,11 @@ public final class Messages {
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_Payload_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_testing_EchoStatus_descriptor;
+  private static
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_grpc_testing_EchoStatus_fieldAccessorTable;
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_SimpleRequest_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -6813,6 +8574,11 @@ public final class Messages {
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable;
   private static com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_testing_ReconnectParams_descriptor;
+  private static
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_grpc_testing_ReconnectParams_fieldAccessorTable;
+  private static com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ReconnectInfo_descriptor;
   private static
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -6829,29 +8595,39 @@ public final class Messages {
       "\n*io/grpc/testing/integration/messages.p" +
       "roto\022\014grpc.testing\"@\n\007Payload\022\'\n\004type\030\001 " +
       "\001(\0162\031.grpc.testing.PayloadType\022\014\n\004body\030\002" +
-      " \001(\014\"\261\001\n\rSimpleRequest\0220\n\rresponse_type\030" +
-      "\001 \001(\0162\031.grpc.testing.PayloadType\022\025\n\rresp" +
-      "onse_size\030\002 \001(\005\022&\n\007payload\030\003 \001(\0132\025.grpc." +
-      "testing.Payload\022\025\n\rfill_username\030\004 \001(\010\022\030" +
-      "\n\020fill_oauth_scope\030\005 \001(\010\"_\n\016SimpleRespon" +
-      "se\022&\n\007payload\030\001 \001(\0132\025.grpc.testing.Paylo" +
-      "ad\022\020\n\010username\030\002 \001(\t\022\023\n\013oauth_scope\030\003 \001(",
-      "\t\"\036\n\rSimpleContext\022\r\n\005value\030\001 \001(\t\"C\n\031Str" +
-      "eamingInputCallRequest\022&\n\007payload\030\001 \001(\0132" +
-      "\025.grpc.testing.Payload\"=\n\032StreamingInput" +
-      "CallResponse\022\037\n\027aggregated_payload_size\030" +
-      "\001 \001(\005\"7\n\022ResponseParameters\022\014\n\004size\030\001 \001(" +
-      "\005\022\023\n\013interval_us\030\002 \001(\005\"\265\001\n\032StreamingOutp" +
-      "utCallRequest\0220\n\rresponse_type\030\001 \001(\0162\031.g" +
-      "rpc.testing.PayloadType\022=\n\023response_para" +
-      "meters\030\002 \003(\0132 .grpc.testing.ResponsePara" +
-      "meters\022&\n\007payload\030\003 \001(\0132\025.grpc.testing.P",
-      "ayload\"E\n\033StreamingOutputCallResponse\022&\n" +
-      "\007payload\030\001 \001(\0132\025.grpc.testing.Payload\"3\n" +
-      "\rReconnectInfo\022\016\n\006passed\030\001 \001(\010\022\022\n\nbackof" +
-      "f_ms\030\002 \003(\005*?\n\013PayloadType\022\020\n\014COMPRESSABL" +
-      "E\020\000\022\022\n\016UNCOMPRESSABLE\020\001\022\n\n\006RANDOM\020\002B\035\n\033i" +
-      "o.grpc.testing.integrationb\006proto3"
+      " \001(\014\"+\n\nEchoStatus\022\014\n\004code\030\001 \001(\005\022\017\n\007mess" +
+      "age\030\002 \001(\t\"\241\002\n\rSimpleRequest\0220\n\rresponse_" +
+      "type\030\001 \001(\0162\031.grpc.testing.PayloadType\022\025\n" +
+      "\rresponse_size\030\002 \001(\005\022&\n\007payload\030\003 \001(\0132\025." +
+      "grpc.testing.Payload\022\025\n\rfill_username\030\004 " +
+      "\001(\010\022\030\n\020fill_oauth_scope\030\005 \001(\010\022;\n\024respons" +
+      "e_compression\030\006 \001(\0162\035.grpc.testing.Compr",
+      "essionType\0221\n\017response_status\030\007 \001(\0132\030.gr" +
+      "pc.testing.EchoStatus\"_\n\016SimpleResponse\022" +
+      "&\n\007payload\030\001 \001(\0132\025.grpc.testing.Payload\022" +
+      "\020\n\010username\030\002 \001(\t\022\023\n\013oauth_scope\030\003 \001(\t\"\036" +
+      "\n\rSimpleContext\022\r\n\005value\030\001 \001(\t\"C\n\031Stream" +
+      "ingInputCallRequest\022&\n\007payload\030\001 \001(\0132\025.g" +
+      "rpc.testing.Payload\"=\n\032StreamingInputCal" +
+      "lResponse\022\037\n\027aggregated_payload_size\030\001 \001" +
+      "(\005\"7\n\022ResponseParameters\022\014\n\004size\030\001 \001(\005\022\023" +
+      "\n\013interval_us\030\002 \001(\005\"\245\002\n\032StreamingOutputC",
+      "allRequest\0220\n\rresponse_type\030\001 \001(\0162\031.grpc" +
+      ".testing.PayloadType\022=\n\023response_paramet" +
+      "ers\030\002 \003(\0132 .grpc.testing.ResponseParamet" +
+      "ers\022&\n\007payload\030\003 \001(\0132\025.grpc.testing.Payl" +
+      "oad\022;\n\024response_compression\030\006 \001(\0162\035.grpc" +
+      ".testing.CompressionType\0221\n\017response_sta" +
+      "tus\030\007 \001(\0132\030.grpc.testing.EchoStatus\"E\n\033S" +
+      "treamingOutputCallResponse\022&\n\007payload\030\001 " +
+      "\001(\0132\025.grpc.testing.Payload\"3\n\017ReconnectP" +
+      "arams\022 \n\030max_reconnect_backoff_ms\030\001 \001(\005\"",
+      "3\n\rReconnectInfo\022\016\n\006passed\030\001 \001(\010\022\022\n\nback" +
+      "off_ms\030\002 \003(\005*?\n\013PayloadType\022\020\n\014COMPRESSA" +
+      "BLE\020\000\022\022\n\016UNCOMPRESSABLE\020\001\022\n\n\006RANDOM\020\002*2\n" +
+      "\017CompressionType\022\010\n\004NONE\020\000\022\010\n\004GZIP\020\001\022\013\n\007" +
+      "DEFLATE\020\002B\035\n\033io.grpc.testing.integration" +
+      "b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -6871,56 +8647,68 @@ public final class Messages {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_Payload_descriptor,
         new java.lang.String[] { "Type", "Body", });
-    internal_static_grpc_testing_SimpleRequest_descriptor =
+    internal_static_grpc_testing_EchoStatus_descriptor =
       getDescriptor().getMessageTypes().get(1);
+    internal_static_grpc_testing_EchoStatus_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_grpc_testing_EchoStatus_descriptor,
+        new java.lang.String[] { "Code", "Message", });
+    internal_static_grpc_testing_SimpleRequest_descriptor =
+      getDescriptor().getMessageTypes().get(2);
     internal_static_grpc_testing_SimpleRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_SimpleRequest_descriptor,
-        new java.lang.String[] { "ResponseType", "ResponseSize", "Payload", "FillUsername", "FillOauthScope", });
+        new java.lang.String[] { "ResponseType", "ResponseSize", "Payload", "FillUsername", "FillOauthScope", "ResponseCompression", "ResponseStatus", });
     internal_static_grpc_testing_SimpleResponse_descriptor =
-      getDescriptor().getMessageTypes().get(2);
+      getDescriptor().getMessageTypes().get(3);
     internal_static_grpc_testing_SimpleResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_SimpleResponse_descriptor,
         new java.lang.String[] { "Payload", "Username", "OauthScope", });
     internal_static_grpc_testing_SimpleContext_descriptor =
-      getDescriptor().getMessageTypes().get(3);
+      getDescriptor().getMessageTypes().get(4);
     internal_static_grpc_testing_SimpleContext_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_SimpleContext_descriptor,
         new java.lang.String[] { "Value", });
     internal_static_grpc_testing_StreamingInputCallRequest_descriptor =
-      getDescriptor().getMessageTypes().get(4);
+      getDescriptor().getMessageTypes().get(5);
     internal_static_grpc_testing_StreamingInputCallRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_StreamingInputCallRequest_descriptor,
         new java.lang.String[] { "Payload", });
     internal_static_grpc_testing_StreamingInputCallResponse_descriptor =
-      getDescriptor().getMessageTypes().get(5);
+      getDescriptor().getMessageTypes().get(6);
     internal_static_grpc_testing_StreamingInputCallResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_StreamingInputCallResponse_descriptor,
         new java.lang.String[] { "AggregatedPayloadSize", });
     internal_static_grpc_testing_ResponseParameters_descriptor =
-      getDescriptor().getMessageTypes().get(6);
+      getDescriptor().getMessageTypes().get(7);
     internal_static_grpc_testing_ResponseParameters_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_ResponseParameters_descriptor,
         new java.lang.String[] { "Size", "IntervalUs", });
     internal_static_grpc_testing_StreamingOutputCallRequest_descriptor =
-      getDescriptor().getMessageTypes().get(7);
+      getDescriptor().getMessageTypes().get(8);
     internal_static_grpc_testing_StreamingOutputCallRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_StreamingOutputCallRequest_descriptor,
-        new java.lang.String[] { "ResponseType", "ResponseParameters", "Payload", });
+        new java.lang.String[] { "ResponseType", "ResponseParameters", "Payload", "ResponseCompression", "ResponseStatus", });
     internal_static_grpc_testing_StreamingOutputCallResponse_descriptor =
-      getDescriptor().getMessageTypes().get(8);
+      getDescriptor().getMessageTypes().get(9);
     internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_StreamingOutputCallResponse_descriptor,
         new java.lang.String[] { "Payload", });
+    internal_static_grpc_testing_ReconnectParams_descriptor =
+      getDescriptor().getMessageTypes().get(10);
+    internal_static_grpc_testing_ReconnectParams_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_grpc_testing_ReconnectParams_descriptor,
+        new java.lang.String[] { "MaxReconnectBackoffMs", });
     internal_static_grpc_testing_ReconnectInfo_descriptor =
-      getDescriptor().getMessageTypes().get(9);
+      getDescriptor().getMessageTypes().get(11);
     internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_grpc_testing_ReconnectInfo_descriptor,
