@@ -117,7 +117,6 @@ public abstract class AbstractInteropTest {
       new AtomicReference<Metadata>();
   private static ScheduledExecutorService testServiceExecutor;
   private static Server server;
-  private static int OPERATION_TIMEOUT = 5000;
 
   protected static void startStaticServer(
       ServerBuilder<?> builder, ServerInterceptor ... interceptors) {
@@ -322,11 +321,11 @@ public abstract class AbstractInteropTest {
         = asyncStub.fullDuplexCall(responseObserver);
     for (int i = 0; i < requests.size(); i++) {
       requestObserver.onNext(requests.get(i));
-      verify(responseObserver, timeout(OPERATION_TIMEOUT)).onNext(goldenResponses.get(i));
+      verify(responseObserver, timeout(operationTimeoutMillis())).onNext(goldenResponses.get(i));
       verifyNoMoreInteractions(responseObserver);
     }
     requestObserver.onCompleted();
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onCompleted();
+    verify(responseObserver, timeout(operationTimeoutMillis())).onCompleted();
     verifyNoMoreInteractions(responseObserver);
   }
 
@@ -337,7 +336,7 @@ public abstract class AbstractInteropTest {
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onCompleted();
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onCompleted();
+    verify(responseObserver, timeout(operationTimeoutMillis())).onCompleted();
     verifyNoMoreInteractions(responseObserver);
   }
 
@@ -372,12 +371,12 @@ public abstract class AbstractInteropTest {
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onNext(request);
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onNext(goldenResponse);
+    verify(responseObserver, timeout(operationTimeoutMillis())).onNext(goldenResponse);
     verifyNoMoreInteractions(responseObserver);
 
     requestObserver.onError(new RuntimeException());
     ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onError(captor.capture());
+    verify(responseObserver, timeout(operationTimeoutMillis())).onError(captor.capture());
     assertEquals(Status.Code.CANCELLED, Status.fromThrowable(captor.getValue()).getCode());
     verifyNoMoreInteractions(responseObserver);
   }
@@ -488,7 +487,8 @@ public abstract class AbstractInteropTest {
 
     // Time how long it takes to get the first response.
     call.request(1);
-    assertEquals(goldenResponses.get(0), queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
+    assertEquals(goldenResponses.get(0),
+        queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
     long firstCallDuration = System.nanoTime() - start;
 
     // Without giving additional flow control, make sure that we don't get another response. We wait
@@ -500,8 +500,9 @@ public abstract class AbstractInteropTest {
 
     // Make sure that everything still completes.
     call.request(1);
-    assertEquals(goldenResponses.get(1), queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
-    assertEquals(Status.OK, queue.poll(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS));
+    assertEquals(goldenResponses.get(1),
+        queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
+    assertEquals(Status.OK, queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
   }
 
   @Test(timeout = 30000)
@@ -741,16 +742,16 @@ public abstract class AbstractInteropTest {
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onNext(requests.get(0));
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onNext(goldenResponses.get(0));
+    verify(responseObserver, timeout(operationTimeoutMillis())).onNext(goldenResponses.get(0));
     // Initiate graceful shutdown.
     channel.shutdown();
     requestObserver.onNext(requests.get(1));
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onNext(goldenResponses.get(1));
+    verify(responseObserver, timeout(operationTimeoutMillis())).onNext(goldenResponses.get(1));
     // The previous ping-pong could have raced with the shutdown, but this one certainly shouldn't.
     requestObserver.onNext(requests.get(2));
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onNext(goldenResponses.get(2));
+    verify(responseObserver, timeout(operationTimeoutMillis())).onNext(goldenResponses.get(2));
     requestObserver.onCompleted();
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onCompleted();
+    verify(responseObserver, timeout(operationTimeoutMillis())).onCompleted();
     verifyNoMoreInteractions(responseObserver);
   }
 
@@ -787,7 +788,7 @@ public abstract class AbstractInteropTest {
     }
 
     ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
-    verify(responseObserver, timeout(OPERATION_TIMEOUT)).onError(captor.capture());
+    verify(responseObserver, timeout(operationTimeoutMillis())).onError(captor.capture());
     assertEquals(Status.DEADLINE_EXCEEDED.getCode(),
         Status.fromThrowable(captor.getValue()).getCode());
     verifyNoMoreInteractions(responseObserver);
@@ -966,5 +967,9 @@ public abstract class AbstractInteropTest {
 
     assertEquals(1, certificates.size());
     assertEquals(tlsInfo, x509cert.getSubjectDN().toString());
+  }
+
+  protected int operationTimeoutMillis() {
+    return 5000;
   }
 }

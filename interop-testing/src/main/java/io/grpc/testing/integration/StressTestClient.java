@@ -471,6 +471,13 @@ public class StressTestClient {
       protected ManagedChannel createChannel() {
         return Worker.this.channel;
       }
+
+      @Override
+      protected int operationTimeoutMillis() {
+        // Don't enforce a timeout when using the interop tests for the stress test client.
+        // Fixes https://github.com/grpc/grpc-java/issues/1812
+        return Integer.MAX_VALUE;
+      }
     }
 
     class WeightedTestCaseSelector {
