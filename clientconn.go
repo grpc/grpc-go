@@ -233,7 +233,6 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		cc.balancer = RoundRobin()
 	}
 
-	// Start the first connection
 	if cc.dopts.resolver == nil {
 		addr := Address{
 			Addr: cc.target,
@@ -251,10 +250,11 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 			return nil, err
 		}
 		cc.watcher = w
-		// Get the initial name resolution which starts dialing.
+		// Get the initial name resolution and dial the first connection.
 		if err := cc.watchAddrUpdates(); err != nil {
 			return nil, err
 		}
+		// Start a goroutine to watch for the future name resolution changes.
 		go func() {
 			for {
 				if err := cc.watchAddrUpdates(); err != nil {
@@ -338,7 +338,6 @@ func (cc *ClientConn) watchAddrUpdates() error {
 			cc.mu.Unlock()
 			ac, err := cc.newAddrConn(addr)
 			if err != nil {
-				cc.mu.Unlock()
 				return err
 			}
 			cc.mu.Lock()
@@ -359,7 +358,6 @@ func (cc *ClientConn) watchAddrUpdates() error {
 			delete(cc.conns, addr)
 			cc.mu.Unlock()
 			ac.tearDown(ErrConnDrain)
-			//ac.startDrain()
 		default:
 			grpclog.Println("Unknown update.Op ", update.Op)
 		}
