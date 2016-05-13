@@ -12,9 +12,6 @@ import (
 
 // Histogram accumulates values in the form of a histogram with
 // exponentially increased bucket sizes.
-// The first bucket (with index 0) is [0, n) where n = baseBucketSize.
-// Bucket i (i>=1) contains [n * m^(i-1), n * m^i), where m = 1 + GrowthFactor.
-// The type of the values is int64.
 type Histogram struct {
 	// Count is the total number of values added to the histogram.
 	Count int64
@@ -35,6 +32,10 @@ type Histogram struct {
 }
 
 // HistogramOptions contains the parameters that define the histogram's buckets.
+// The first bucket of the created histogram (with index 0) contains [min, min+n)
+// where n = BaseBucketSize, min = MinValue.
+// Bucket i (i>=1) contains [min + n * m^(i-1), min + n * m^i), where m = 1+GrowthFactor.
+// The type of the values is int64.
 type HistogramOptions struct {
 	// NumBuckets is the number of buckets.
 	NumBuckets int
@@ -47,7 +48,7 @@ type HistogramOptions struct {
 	MinValue int64
 }
 
-// HistogramBucket is one histogram bucket.
+// HistogramBucket represents one histogram bucket.
 type HistogramBucket struct {
 	// LowBound is the lower bound of the bucket.
 	LowBound float64
