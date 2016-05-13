@@ -311,7 +311,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     cancelCalled = true;
     try {
       // Cancel is called in exception handling cases, so it may be the case that the
-      // stream was never successfully created.
+      // stream was never successfully created or start has never been called.
       if (stream != null) {
         Status status = Status.CANCELLED;
         if (message != null) {

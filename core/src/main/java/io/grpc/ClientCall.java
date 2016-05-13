@@ -34,7 +34,7 @@ package io.grpc;
 import javax.annotation.Nullable;
 
 /**
- * An instance of a call to to a remote method. A call will send zero or more
+ * An instance of a call to a remote method. A call will send zero or more
  * request messages to the server and receive zero or more response messages back.
  *
  * <p>Instances are created
@@ -44,9 +44,9 @@ import javax.annotation.Nullable;
  * reasons for doing so would be the need to interact with flow-control or when acting as a generic
  * proxy for arbitrary operations.
  *
- * <p>{@link #start start()} must be called prior to calling any other methods. {@link #cancel} must
- * not be followed by any other methods, but can be called more than once, while only the first one
- * has effect.
+ * <p>{@link #start} must be called prior to calling any other methods, with the exception of
+ * {@link #cancel}. Whereas {@link #cancel} must not be followed by any other methods,
+ * but can be called more than once, while only the first one has effect.
  *
  * <p>No generic method for determining message receipt or providing acknowledgement is provided.
  * Applications are expected to utilize normal payload messages for such signals, as a response
@@ -126,8 +126,9 @@ public abstract class ClientCall<ReqT, RespT> {
   /**
    * Start a call, using {@code responseListener} for processing response messages.
    *
-   * <p>It must be called prior to any other method on this class. Since {@link Metadata} is not
-   * thread-safe, the caller must not access {@code headers} after this point.
+   * <p>It must be called prior to any other method on this class, except for {@link #cancel} which
+   * may be called at any time. Since {@link Metadata} is not thread-safe, the caller must not
+   * access {@code headers} after this point.
    *
    * @param responseListener receives response messages
    * @param headers which can contain extra call metadata, e.g. authentication credentials.
