@@ -123,13 +123,16 @@ public class DelayedClientTransportTest {
   }
 
   @Test public void streamStartThenSetTransport() {
+    assertFalse(delayedTransport.hasPendingStreams());
     ClientStream stream = delayedTransport.newStream(method, headers);
     stream.start(streamListener);
     assertEquals(1, delayedTransport.getPendingStreamsCount());
+    assertTrue(delayedTransport.hasPendingStreams());
     assertTrue(stream instanceof DelayedStream);
     assertEquals(0, fakeExecutor.numPendingTasks());
     delayedTransport.setTransport(mockRealTransport);
     assertEquals(0, delayedTransport.getPendingStreamsCount());
+    assertFalse(delayedTransport.hasPendingStreams());
     assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockRealTransport).newStream(same(method), same(headers));
     verify(mockRealStream).start(same(streamListener));

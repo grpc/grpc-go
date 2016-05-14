@@ -158,7 +158,7 @@ public class ManagedChannelImplTransportManagerTest {
     assertTrue(t1 instanceof DelayedClientTransport);
     assertFalse(t2 instanceof DelayedClientTransport);
     assertSame(transportInfo.transport, t2);
-    verify(mockBackoffPolicyProvider).get();
+    verify(mockBackoffPolicyProvider, times(0)).get();
     verify(mockBackoffPolicy, times(0)).nextBackoffMillis();
     verifyNoMoreInteractions(mockTransportFactory);
   }
@@ -176,7 +176,7 @@ public class ManagedChannelImplTransportManagerTest {
     ClientTransport t1 = tm.getTransport(addressGroup);
     assertNotNull(t1);
     verify(mockTransportFactory, timeout(1000)).newClientTransport(addr1, authority);
-    verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
+    verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     // Fail the first transport, without setting it to ready
     MockClientTransportInfo transportInfo = transports.poll(1, TimeUnit.SECONDS);
     ClientTransport rt1 = transportInfo.transport;
@@ -200,13 +200,12 @@ public class ManagedChannelImplTransportManagerTest {
     // Will trigger NameResolver refresh
     verify(mockNameResolver).refresh();
 
-    // Subsequent getTransport() will use the next address, which is the first one since we have run
-    // out of addresses.
+    // Subsequent getTransport() will use the first address, since last attempt was successful.
     ClientTransport t3 = tm.getTransport(addressGroup);
     t3.newStream(method2, new Metadata());
     verify(mockTransportFactory, timeout(1000).times(2)).newClientTransport(addr1, authority);
-    // This time back-off policy was reset, because previous transport was succesfully connected.
-    verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
+    // Still no back-off policy creation, because an address succeeded.
+    verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     transportInfo = transports.poll(1, TimeUnit.SECONDS);
     ClientTransport rt3 = transportInfo.transport;
     transportInfo.listener.transportReady();
@@ -238,8 +237,8 @@ public class ManagedChannelImplTransportManagerTest {
     assertNotNull(t1);
     verify(mockTransportFactory, timeout(1000).times(++transportsAddr1))
         .newClientTransport(addr1, authority);
-    // Back-off policy was set initially.
-    verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
+    // Back-off policy was unset initially.
+    verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     MockClientTransportInfo transportInfo = transports.poll(1, TimeUnit.SECONDS);
     verify(mockNameResolver, times(nameResolverRefresh)).refresh();
     transportInfo.listener.transportReady();
@@ -252,8 +251,8 @@ public class ManagedChannelImplTransportManagerTest {
     assertNotNull(t2);
     verify(mockTransportFactory, timeout(1000).times(++transportsAddr1))
         .newClientTransport(addr1, authority);
-    // Back-off policy was reset.
-    verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
+    // Back-off policy was not reset.
+    verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     transports.poll(1, TimeUnit.SECONDS).listener.transportShutdown(Status.UNAVAILABLE);
     verify(mockNameResolver, times(nameResolverRefresh)).refresh();
 
@@ -270,10 +269,12 @@ public class ManagedChannelImplTransportManagerTest {
     // Forth pick is on the first address, back-off policy kicks in.
     ClientTransport t4 = tm.getTransport(addressGroup);
     assertNotNull(t4);
+    // If backoff's DelayedTransport is still active, this is necessary. Otherwise it would be racy.
+    t4.newStream(method, new Metadata());
     verify(mockTransportFactory, timeout(1000).times(++transportsAddr1))
         .newClientTransport(addr1, authority);
-    // Back-off policy was not reset, but was consulted.
-    verify(mockBackoffPolicyProvider, times(backoffReset)).get();
+    // Back-off policy was reset and consulted.
+    verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
     verify(mockBackoffPolicy, times(++backoffConsulted)).nextBackoffMillis();
     verify(mockNameResolver, times(nameResolverRefresh)).refresh();
   }

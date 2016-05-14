@@ -229,6 +229,12 @@ class DelayedClientTransport implements ManagedClientTransport {
     }
   }
 
+  public boolean hasPendingStreams() {
+    synchronized (lock) {
+      return pendingStreams != null && !pendingStreams.isEmpty();
+    }
+  }
+
   @VisibleForTesting
   int getPendingStreamsCount() {
     synchronized (lock) {
