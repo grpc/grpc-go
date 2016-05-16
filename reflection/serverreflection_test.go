@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 
 	pb "google.golang.org/grpc/reflection/grpc_testing"
@@ -89,3 +90,26 @@ func TestFilenameForType(t *testing.T) {
 }
 
 // TODO TestFileDescContainingExtension
+
+// intArray is used to sort []int32
+type intArray []int32
+
+func (s intArray) Len() int           { return len(s) }
+func (s intArray) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s intArray) Less(i, j int) bool { return s[i] < s[j] }
+
+func TestAllExtensionNumbersForType(t *testing.T) {
+	for _, test := range []struct {
+		st   reflect.Type
+		want []int32
+	}{
+		{reflect.TypeOf(pb.ToBeExtened{}), []int32{13, 17}},
+	} {
+		r, err := s.allExtensionNumbersForType(test.st)
+		sort.Sort(intArray(r))
+		t.Logf("allExtensionNumbersForType(%q) = %v, %v", test.st, r, err)
+		if err != nil || !reflect.DeepEqual(r, test.want) {
+			t.Fatalf("allExtensionNumbersForType(%q) = %v, %v, want %v, <nil>", test.st, r, err, test.want)
+		}
+	}
+}

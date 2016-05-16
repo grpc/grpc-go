@@ -171,3 +171,16 @@ func (s *serverReflectionServer) fileDescContainingExtension(st reflect.Type, ex
 // TODO filenameContainingExtension
 // fd := fileDescContainingExtension()
 // return fd.GetName()
+
+func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]int32, error) {
+	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(proto.Message)
+	if !ok {
+		return nil, fmt.Errorf("failed to create message from type: %v", st)
+	}
+
+	var out []int32
+	for id := range proto.RegisteredExtensions(m) {
+		out = append(out, id)
+	}
+	return out, nil
+}
