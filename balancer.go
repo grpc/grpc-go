@@ -53,8 +53,9 @@ type Address struct {
 // Balancer chooses network addresses for RPCs.
 type Balancer interface {
 	// Up informs the balancer that gRPC has a connection to the server at
-	// addr. It returns down which will be called once the connection gets
-	// lost. Once down is called, addr may no longer be returned by Get.
+	// addr. It returns down which is called once the connection to addr gets
+	// lost or closed. Once down is called, addr may no longer be returned
+	// by Get.
 	Up(addr Address) (down func(error))
 	// Get gets the address of a server for the rpc corresponding to ctx.
 	// It may block if there is no server available. It respects the
@@ -91,6 +92,7 @@ func (rr *roundRobin) Up(addr Address) func(error) {
 	}
 	rr.addrs = append(rr.addrs, addr)
 	if len(rr.addrs) == 1 {
+		// addr is only one available. Notify the Get() callers who are blocking.
 		if rr.waitCh != nil {
 			close(rr.waitCh)
 			rr.waitCh = nil
