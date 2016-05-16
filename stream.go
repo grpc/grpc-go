@@ -105,7 +105,6 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		err error
 		put func()
 	)
-	//t, err = cc.dopts.picker.Pick(ctx)
 	t, put, err = cc.getTransport(ctx)
 	if err != nil {
 		return nil, toRPCErr(err)

@@ -237,13 +237,9 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		addr := Address{
 			Addr: cc.target,
 		}
-		ac, err := cc.newAddrConn(addr)
-		if err != nil {
+		if err := cc.newAddrConn(addr); err != nil {
 			return nil, err
 		}
-		cc.mu.Lock()
-		cc.conns[addr] = ac
-		cc.mu.Unlock()
 	} else {
 		w, err := cc.dopts.resolver.Resolve(cc.target)
 		if err != nil {
@@ -335,14 +331,15 @@ func (cc *ClientConn) watchAddrUpdates() error {
 				grpclog.Println("grpc: The name resolver wanted to add an existing address: ", addr)
 				continue
 			}
-			cc.mu.Unlock()
-			ac, err := cc.newAddrConn(addr)
-			if err != nil {
+			cc.mu.RUnlock()
+			if err := cc.newAddrConn(addr); err != nil {
 				return err
 			}
-			cc.mu.Lock()
-			cc.conns[addr] = ac
-			cc.mu.Unlock()
+			/*
+				cc.mu.Lock()
+				cc.conns[addr] = ac
+				cc.mu.Unlock()
+			*/
 		case naming.Delete:
 			cc.mu.Lock()
 			addr := Address{
@@ -355,7 +352,6 @@ func (cc *ClientConn) watchAddrUpdates() error {
 				grpclog.Println("grpc: The name resolver wanted to delete a non-exist address: ", addr)
 				continue
 			}
-			delete(cc.conns, addr)
 			cc.mu.Unlock()
 			ac.tearDown(ErrConnDrain)
 		default:
@@ -365,7 +361,7 @@ func (cc *ClientConn) watchAddrUpdates() error {
 	return nil
 }
 
-func (cc *ClientConn) newAddrConn(addr Address) (*addrConn, error) {
+func (cc *ClientConn) newAddrConn(addr Address) error {
 	c := &addrConn{
 		cc:           cc,
 		addr:         addr,
@@ -383,12 +379,12 @@ func (cc *ClientConn) newAddrConn(addr Address) (*addrConn, error) {
 			}
 		}
 		if !ok {
-			return nil, ErrNoTransportSecurity
+			return ErrNoTransportSecurity
 		}
 	} else {
 		for _, cd := range c.dopts.copts.AuthOptions {
 			if cd.RequireTransportSecurity() {
-				return nil, ErrCredentialsMisuse
+				return ErrCredentialsMisuse
 			}
 		}
 	}
@@ -396,7 +392,7 @@ func (cc *ClientConn) newAddrConn(addr Address) (*addrConn, error) {
 	if c.dopts.block {
 		if err := c.resetTransport(false); err != nil {
 			c.tearDown(err)
-			return nil, err
+			return err
 		}
 		// Start to monitor the error status of transport.
 		go c.transportMonitor()
@@ -411,7 +407,7 @@ func (cc *ClientConn) newAddrConn(addr Address) (*addrConn, error) {
 			c.transportMonitor()
 		}()
 	}
-	return c, nil
+	return nil
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context) (transport.ClientTransport, func(), error) {
@@ -529,6 +525,13 @@ func (ac *addrConn) waitForStateChange(ctx context.Context, sourceState Connecti
 }
 
 func (ac *addrConn) resetTransport(closeTransport bool) error {
+	ac.cc.mu.Lock()
+	if ac.cc.conns == nil {
+		ac.cc.mu.Unlock()
+		return ErrClientConnClosing
+	}
+	ac.cc.conns[ac.addr] = ac
+	ac.cc.mu.Unlock()
 	var retries int
 	start := time.Now()
 	for {
@@ -692,13 +695,20 @@ func (ac *addrConn) wait(ctx context.Context) (transport.ClientTransport, error)
 	}
 }
 
-// tearDown starts to tear down the Conn.
+// tearDown starts to tear down the addrConn.
 // TODO(zhaoq): Make this synchronous to avoid unbounded memory consumption in
 // some edge cases (e.g., the caller opens and closes many addrConn's in a
 // tight loop.
 func (ac *addrConn) tearDown(err error) {
 	ac.mu.Lock()
-	defer ac.mu.Unlock()
+	defer func() {
+		ac.mu.Unlock()
+		ac.cc.mu.Lock()
+		if ac.cc.conns != nil {
+			delete(ac.cc.conns, ac.addr)
+		}
+		ac.cc.mu.Unlock()
+	}()
 	if ac.down != nil {
 		ac.down(err)
 		ac.down = nil

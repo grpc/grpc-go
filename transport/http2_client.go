@@ -405,12 +405,13 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	if t.streamsQuota != nil {
 		updateStreams = true
 	}
-	delete(t.activeStreams, s.id)
-	if t.state == draining && len(t.activeStreams) == 0 {
+	if t.state == draining && len(t.activeStreams) == 1 {
+		// The transport is draining and s is the last live stream on t.
 		t.mu.Unlock()
 		t.Close()
 		return
 	}
+	delete(t.activeStreams, s.id)
 	t.mu.Unlock()
 	if updateStreams {
 		t.streamsQuota.add(1)

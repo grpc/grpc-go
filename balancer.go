@@ -43,6 +43,7 @@ type roundRobin struct {
 	addrs  []Address
 	next   int           // index of the next address to return for Get()
 	waitCh chan struct{} // channel to block when there is no address available
+	done   bool          // The Balancer is closed.
 }
 
 // Up appends addr to the end of rr.addrs and sends notification if there
@@ -84,6 +85,11 @@ func (rr *roundRobin) down(addr Address, err error) {
 func (rr *roundRobin) Get(ctx context.Context) (addr Address, put func(), err error) {
 	var ch chan struct{}
 	rr.mu.Lock()
+	if rr.done {
+		rr.mu.Unlock()
+		err = ErrClientConnClosing
+		return
+	}
 	if rr.next >= len(rr.addrs) {
 		rr.next = 0
 	}
@@ -111,6 +117,11 @@ func (rr *roundRobin) Get(ctx context.Context) (addr Address, put func(), err er
 			return
 		case <-ch:
 			rr.mu.Lock()
+			if rr.done {
+				rr.mu.Unlock()
+				err = ErrClientConnClosing
+				return
+			}
 			if len(rr.addrs) == 0 {
 				// The newly added addr got removed by Down() again.
 				rr.mu.Unlock()
@@ -134,5 +145,12 @@ func (rr *roundRobin) put(ctx context.Context, addr Address) {
 }
 
 func (rr *roundRobin) Close() error {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	rr.done = true
+	if rr.waitCh != nil {
+		close(rr.waitCh)
+		rr.waitCh = nil
+	}
 	return nil
 }

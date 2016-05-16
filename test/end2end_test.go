@@ -435,14 +435,17 @@ type test struct {
 func (te *test) tearDown() {
 	if te.cancel != nil {
 		te.cancel()
+		te.cancel = nil
 	}
-	te.srv.Stop()
 	if te.cc != nil {
 		te.cc.Close()
+		te.cc = nil
 	}
 	if te.restoreLogs != nil {
 		te.restoreLogs()
+		te.restoreLogs = nil
 	}
+	te.srv.Stop()
 }
 
 // newTest returns a new test using the provided testing.T and
@@ -625,8 +628,8 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	//if state, err := cc.State(); err != nil || (state != grpc.Connecting && state != grpc.TransientFailure) {
 	//	t.Fatalf("cc.State() = %s, %v, want %s or %s, <nil>", state, err, grpc.Connecting, grpc.TransientFailure)
 	//}
-	cc.Close()
-	awaitNewConnLogOutput()
+	//cc.Close()
+	//awaitNewConnLogOutput()
 }
 
 func healthCheck(d time.Duration, cc *grpc.ClientConn, serviceName string) (*healthpb.HealthCheckResponse, error) {
@@ -1076,7 +1079,7 @@ func testRPCTimeout(t *testing.T, e env) {
 	}
 }
 
-func TestCancel(t *testing.T) {
+func TestCancelX(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
 		testCancel(t, e)
@@ -1111,8 +1114,6 @@ func testCancel(t *testing.T, e env) {
 	if grpc.Code(err) != codes.Canceled {
 		t.Fatalf(`TestService/UnaryCall(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.Canceled)
 	}
-	cc.Close()
-
 	awaitNewConnLogOutput()
 }
 

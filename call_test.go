@@ -166,7 +166,7 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 		}
 		st, err := transport.NewServerTransport("http2", conn, maxStreams, nil)
 		if err != nil {
-			return
+			continue
 		}
 		s.mu.Lock()
 		if s.conns == nil {

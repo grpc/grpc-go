@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2014, Google Inc.
+ * Copyright 2016, Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,10 +36,12 @@ package grpc
 import (
 	"fmt"
 	"math"
+	"sync"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/naming"
 )
 
@@ -100,12 +102,12 @@ func (r *testNameResolver) Resolve(target string) (naming.Watcher, error) {
 	return r.w, nil
 }
 
-func startServers(t *testing.T, numServers, port int, maxStreams uint32) ([]*server, *testNameResolver) {
+func startServers(t *testing.T, numServers int, maxStreams uint32) ([]*server, *testNameResolver) {
 	var servers []*server
 	for i := 0; i < numServers; i++ {
 		s := newTestServer()
 		servers = append(servers, s)
-		go s.start(t, port, maxStreams)
+		go s.start(t, 0, maxStreams)
 		s.wait(t, 2*time.Second)
 	}
 	// Point to server[0]
@@ -118,7 +120,7 @@ func startServers(t *testing.T, numServers, port int, maxStreams uint32) ([]*ser
 func TestNameDiscovery(t *testing.T) {
 	// Start 2 servers on 2 ports.
 	numServers := 2
-	servers, r := startServers(t, numServers, 0, math.MaxUint32)
+	servers, r := startServers(t, numServers, math.MaxUint32)
 	cc, err := Dial("foo.bar.com", WithNameResolver(r), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
@@ -152,7 +154,7 @@ func TestNameDiscovery(t *testing.T) {
 }
 
 func TestEmptyAddrs(t *testing.T) {
-	servers, r := startServers(t, 1, 0, math.MaxUint32)
+	servers, r := startServers(t, 1, math.MaxUint32)
 	cc, err := Dial("foo.bar.com", WithNameResolver(r), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
@@ -184,7 +186,7 @@ func TestEmptyAddrs(t *testing.T) {
 func TestRoundRobin(t *testing.T) {
 	// Start 3 servers on 3 ports.
 	numServers := 3
-	servers, r := startServers(t, numServers, 0, math.MaxUint32)
+	servers, r := startServers(t, numServers, math.MaxUint32)
 	cc, err := Dial("foo.bar.com", WithNameResolver(r), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
@@ -219,4 +221,90 @@ func TestRoundRobin(t *testing.T) {
 	for i := 0; i < numServers; i++ {
 		servers[i].stop()
 	}
+}
+
+func TestCloseWithPendingRPC(t *testing.T) {
+	servers, r := startServers(t, 1, math.MaxUint32)
+	cc, err := Dial("foo.bar.com", WithNameResolver(r), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	if err != nil {
+		t.Fatalf("Failed to create ClientConn: %v", err)
+	}
+	var reply string
+	if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil {
+		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want %s", err, servers[0].port)
+	}
+	// Remove the server.
+	updates := []*naming.Update{&naming.Update{
+		Op:   naming.Delete,
+		Addr: "127.0.0.1:" + servers[0].port,
+	}}
+	r.w.inject(updates)
+	for {
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); Code(err) == codes.DeadlineExceeded {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		var reply string
+		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err == nil {
+			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		var reply string
+		time.Sleep(5 * time.Millisecond)
+		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err == nil {
+			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
+		}
+	}()
+	time.Sleep(5 * time.Millisecond)
+	cc.Close()
+	wg.Wait()
+	servers[0].stop()
+}
+
+func TestGetOnWaitChannel(t *testing.T) {
+	servers, r := startServers(t, 1, math.MaxUint32)
+	cc, err := Dial("foo.bar.com", WithNameResolver(r), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	if err != nil {
+		t.Fatalf("Failed to create ClientConn: %v", err)
+	}
+	// Remove all servers so that all upcoming RPCs will block on waitCh.
+	updates := []*naming.Update{&naming.Update{
+		Op:   naming.Delete,
+		Addr: "127.0.0.1:" + servers[0].port,
+	}}
+	r.w.inject(updates)
+	for {
+		var reply string
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); Code(err) == codes.DeadlineExceeded {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var reply string
+		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil {
+			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
+		}
+	}()
+	// Add a connected server.
+	updates = []*naming.Update{&naming.Update{
+		Op:   naming.Add,
+		Addr: "127.0.0.1:" + servers[0].port,
+	}}
+	r.w.inject(updates)
+	wg.Wait()
+	cc.Close()
+	servers[0].stop()
 }
