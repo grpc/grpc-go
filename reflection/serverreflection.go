@@ -139,3 +139,35 @@ func (s *serverReflectionServer) filenameForType(st reflect.Type) (string, error
 }
 
 // TODO filenameForMethod and Service
+
+func (s *serverReflectionServer) fileDescContainingExtension(st reflect.Type, ext int32) (*dpb.FileDescriptorProto, error) {
+	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(proto.Message)
+	if !ok {
+		return nil, fmt.Errorf("failed to create message from type: %v", st)
+	}
+
+	var extDesc *proto.ExtensionDesc
+	for id, desc := range proto.RegisteredExtensions(m) {
+		if id == ext {
+			extDesc = desc
+			break
+		}
+	}
+
+	if extDesc == nil {
+		return nil, fmt.Errorf("failed to find registered extension for extension number %v", ext)
+	}
+
+	extT := reflect.TypeOf(extDesc.ExtensionType).Elem()
+	// TODO doesn't work if extT is simple types, like int32
+	// TODO check cache
+	fd, _, err := s.fileDescForType(extT)
+	if err != nil {
+		return nil, err
+	}
+	return fd, nil
+}
+
+// TODO filenameContainingExtension
+// fd := fileDescContainingExtension()
+// return fd.GetName()
