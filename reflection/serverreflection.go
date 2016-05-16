@@ -87,3 +87,45 @@ func decompress(b []byte) []byte {
 	}
 	return out
 }
+
+func (s *serverReflectionServer) typeForName(name string) (reflect.Type, error) {
+	// TODO cache
+
+	pt := proto.MessageType(name)
+	if pt == nil {
+		return nil, fmt.Errorf("unknown type: %q", name)
+	}
+	st := pt.Elem()
+	// TODO cache
+	// s.typeToNameMap[st] = name
+	// s.nameToTypeMap[name] = st
+	// fd, _, ok := s.fileDescForType(st)
+	// if ok {
+	// 	s.typeToFilenameMap[st] = fd.GetName()
+	// }
+	return st, nil
+}
+
+func (s *serverReflectionServer) nameForType(st reflect.Type) (string, error) {
+	// TODO cache
+
+	var name string
+	fd, idxs, err := s.fileDescForType(st)
+	if err != nil {
+		return "", err
+	}
+	mt := fd.MessageType[idxs[0]]
+	name = mt.GetName()
+	for i := 1; i < len(idxs); i++ {
+		mt = mt.NestedType[idxs[i]]
+		name += "_" + mt.GetName()
+	}
+	if fd.Package != nil {
+		name = *fd.Package + "." + name
+	}
+	return name, nil
+}
+
+func (s *serverReflectionServer) nameForPointer(i interface{}) (string, error) {
+	return s.nameForType(reflect.TypeOf(i).Elem())
+}
