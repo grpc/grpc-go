@@ -12,4 +12,4 @@ animalsniffer {
     signature = "org.codehaus.mojo.signature:java16:+@signature"
 }
 
-javadoc.options.links 'http://docs.guava-libraries.googlecode.com/git-history/release/javadoc/'
+javadoc.options.links "https://google.github.io/guava/releases/${guavaVersion}/api/docs/"

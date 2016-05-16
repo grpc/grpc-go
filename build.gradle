@@ -54,6 +54,7 @@ subprojects {
         protocPluginBaseName = 'protoc-gen-grpc-java'
         javaPluginPath = "$rootDir/compiler/build/exe/java_plugin/$protocPluginBaseName$exeSuffix"
 
+        guavaVersion = '19.0'
         protobufVersion = '3.0.0-beta-2'
         protobufNanoVersion = '3.0.0-alpha-5'
 
@@ -126,7 +127,7 @@ subprojects {
             epoll_suffix = ":" + osdetector.classifier
         }
         libraries = [
-                guava: 'com.google.guava:guava:19.0',
+                guava: "com.google.guava:guava:${guavaVersion}",
                 hpack: 'com.twitter:hpack:0.10.1',
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
                 oauth_client: 'com.google.auth:google-auth-library-oauth2-http:0.3.0',
