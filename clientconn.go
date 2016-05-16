@@ -335,11 +335,6 @@ func (cc *ClientConn) watchAddrUpdates() error {
 			if err := cc.newAddrConn(addr); err != nil {
 				return err
 			}
-			/*
-				cc.mu.Lock()
-				cc.conns[addr] = ac
-				cc.mu.Unlock()
-			*/
 		case naming.Delete:
 			cc.mu.Lock()
 			addr := Address{

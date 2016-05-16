@@ -598,21 +598,6 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-	//ctx, _ := context.WithTimeout(context.Background(), time.Second)
-	//if _, err := cc.WaitForStateChange(ctx, grpc.Idle); err != nil {
-	//	t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Idle, err)
-	//}
-	//ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	//if _, err := cc.WaitForStateChange(ctx, grpc.Connecting); err != nil {
-	//	t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Connecting, err)
-	//}
-	//if state, err := cc.State(); err != nil || state != grpc.Ready {
-	//	t.Fatalf("cc.State() = %s, %v, want %s, <nil>", state, err, grpc.Ready)
-	//}
-	//ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	//if _, err := cc.WaitForStateChange(ctx, grpc.Ready); err != context.DeadlineExceeded {
-	//	t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, %v", grpc.Ready, err, context.DeadlineExceeded)
-	//}
 	te.srv.Stop()
 	// Set -1 as the timeout to make sure if transportMonitor gets error
 	// notification in time the failure path of the 1st invoke of
@@ -621,15 +606,7 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(%v, _) = _, error %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
 	}
-	//ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	//if _, err := cc.WaitForStateChange(ctx, grpc.Ready); err != nil {
-	//	t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Ready, err)
-	//}
-	//if state, err := cc.State(); err != nil || (state != grpc.Connecting && state != grpc.TransientFailure) {
-	//	t.Fatalf("cc.State() = %s, %v, want %s or %s, <nil>", state, err, grpc.Connecting, grpc.TransientFailure)
-	//}
-	//cc.Close()
-	//awaitNewConnLogOutput()
+	awaitNewConnLogOutput()
 }
 
 func healthCheck(d time.Duration, cc *grpc.ClientConn, serviceName string) (*healthpb.HealthCheckResponse, error) {
@@ -786,25 +763,6 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 	defer te.tearDown()
 
 	cc := te.clientConn()
-
-	// Wait until cc is connected.
-	//ctx, _ := context.WithTimeout(context.Background(), time.Second)
-	//if _, err := cc.WaitForStateChange(ctx, grpc.Idle); err != nil {
-	//	t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Idle, err)
-	//}
-	//ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	//if _, err := cc.WaitForStateChange(ctx, grpc.Connecting); err != nil {
-	//	t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Connecting, err)
-	//}
-	//if state, err := cc.State(); err != nil || state != grpc.Ready {
-	//	t.Fatalf("cc.State() = %s, %v, want %s, <nil>", state, err, grpc.Ready)
-	//}
-	/*
-		ctx, _ = context.WithTimeout(context.Background(), time.Second)
-		if _, err := cc.WaitForStateChange(ctx, grpc.Ready); err == nil {
-			t.Fatalf("cc.WaitForStateChange(_, %s) = _, <nil>, want _, %v", grpc.Ready, context.DeadlineExceeded)
-		}
-	*/
 	tc := testpb.NewTestServiceClient(cc)
 	var header metadata.MD
 	reply, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Header(&header))
@@ -816,16 +774,6 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 	}
 
 	te.srv.Stop()
-	cc.Close()
-	/*
-		ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
-		if _, err := cc.WaitForStateChange(ctx, grpc.Ready); err != nil {
-			t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Ready, err)
-		}
-		if state, err := cc.State(); err != nil || state != grpc.Shutdown {
-			t.Fatalf("cc.State() = %s, %v, want %s, <nil>", state, err, grpc.Shutdown)
-		}
-	*/
 }
 
 func TestFailedEmptyUnary(t *testing.T) {
