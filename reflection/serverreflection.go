@@ -13,6 +13,7 @@ import (
 )
 
 type serverReflectionServer struct {
+	// TODO mu is not used. Add lock() and unlock().
 	mu                sync.Mutex
 	typeToNameMap     map[reflect.Type]string
 	nameToTypeMap     map[string]reflect.Type
@@ -33,28 +34,27 @@ type protoMessage interface {
 	Descriptor() ([]byte, []int)
 }
 
-// TODO return an error rather than a bool
 func (s *serverReflectionServer) fileDescForType(st reflect.Type) (*dpb.FileDescriptorProto, []int, error) {
+	// Indexes list is not stored in cache.
+	// So this step is needed to get idxs.
 	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(protoMessage)
 	if !ok {
-		// TODO better print content.
 		return nil, nil, fmt.Errorf("failed to create message from type: %v", st)
 	}
 	enc, idxs := m.Descriptor()
 
-	// TODO Check cache first.
-	// if fn, ok := s.typeToFilenameMap[st]; ok {
-	// 	if fd, ok := s.filenameToDescMap[fn]; ok {
-	// 		return fd, idxs, ok
-	// 	}
-	// }
+	// Check type to fileDesc cache.
+	if fd, ok := s.typeToFileDescMap[st]; ok {
+		return fd, idxs, nil
+	}
 
+	// Cache missed, try to decode.
 	fd, err := s.decodeFileDesc(enc)
 	if err != nil {
 		return nil, nil, err
 	}
-	// TODO Cache missed, add to cache.
-	// s.typeToFilenameMap[st] = fd.GetName()
+	// Add to cache.
+	s.typeToFileDescMap[st] = fd
 	return fd, idxs, nil
 }
 
@@ -68,9 +68,9 @@ func (s *serverReflectionServer) decodeFileDesc(enc []byte) (*dpb.FileDescriptor
 	if err := proto.Unmarshal(raw, fd); err != nil {
 		return nil, fmt.Errorf("bad descriptor: %v", err)
 	}
-	// TODO If decodeFileDesc is called, it's the first time this file is seen.
+	// If decodeFileDesc is called, it's the first time this file is seen.
 	// Add it to cache.
-	// s.filenameToDescMap[fd.GetName()] = fd
+	s.filenameToDescMap[fd.GetName()] = fd
 	return fd, nil
 }
 
@@ -89,25 +89,38 @@ func decompress(b []byte) []byte {
 }
 
 func (s *serverReflectionServer) typeForName(name string) (reflect.Type, error) {
-	// TODO cache
+	// Check cache first.
+	if st, ok := s.nameToTypeMap[name]; ok {
+		return st, nil
+	}
 
 	pt := proto.MessageType(name)
 	if pt == nil {
 		return nil, fmt.Errorf("unknown type: %q", name)
 	}
 	st := pt.Elem()
-	// TODO cache
-	// s.typeToNameMap[st] = name
-	// s.nameToTypeMap[name] = st
-	// fd, _, ok := s.fileDescForType(st)
-	// if ok {
-	// 	s.typeToFilenameMap[st] = fd.GetName()
-	// }
+
+	// Add to cache.
+	s.typeToNameMap[st] = name
+	s.nameToTypeMap[name] = st
+
+	// TODO is this necessary?
+	// In most cases, the returned type will be used to search
+	// for file descriptor.
+	// Add it to cache now.
+	fd, _, err := s.fileDescForType(st)
+	if err == nil {
+		s.typeToFileDescMap[st] = fd
+	}
+
 	return st, nil
 }
 
 func (s *serverReflectionServer) nameForType(st reflect.Type) (string, error) {
-	// TODO cache
+	// Check cache first.
+	if name, ok := s.typeToNameMap[st]; ok {
+		return name, nil
+	}
 
 	var name string
 	fd, idxs, err := s.fileDescForType(st)
@@ -123,6 +136,11 @@ func (s *serverReflectionServer) nameForType(st reflect.Type) (string, error) {
 	if fd.Package != nil {
 		name = *fd.Package + "." + name
 	}
+
+	// Add to cache.
+	s.typeToNameMap[st] = name
+	s.nameToTypeMap[name] = st
+
 	return name, nil
 }
 
@@ -131,6 +149,11 @@ func (s *serverReflectionServer) nameForPointer(i interface{}) (string, error) {
 }
 
 func (s *serverReflectionServer) filenameForType(st reflect.Type) (string, error) {
+	// Check cache first. The value of cache is descriptor, not filename.
+	if fd, ok := s.typeToFileDescMap[st]; ok {
+		return fd.GetName(), nil
+	}
+
 	fd, _, err := s.fileDescForType(st)
 	if err != nil {
 		return "", err
@@ -159,8 +182,12 @@ func (s *serverReflectionServer) fileDescContainingExtension(st reflect.Type, ex
 	}
 
 	extT := reflect.TypeOf(extDesc.ExtensionType).Elem()
-	// TODO doesn't work if extT is simple types, like int32
-	// TODO check cache
+	// TODO this doesn't work if extT is simple types, like int32
+	// Check cache.
+	if fd, ok := s.typeToFileDescMap[extT]; ok {
+		return fd, nil
+	}
+
 	fd, _, err := s.fileDescForType(extT)
 	if err != nil {
 		return nil, err
