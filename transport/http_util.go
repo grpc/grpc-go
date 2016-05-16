@@ -106,6 +106,17 @@ type decodeState struct {
 	mdata map[string][]string
 }
 
+// isWhitelistedHttp2Header checks whether hdr belongs to HTTP2 headers
+// that should be propagated into metadata visible to users.
+func isWhitelistedHttp2Header(hdr string) bool {
+	switch hdr {
+	case ":authority":
+		return true
+	default:
+		return false
+	}
+}
+
 // isReservedHeader checks whether hdr belongs to HTTP2 headers
 // reserved by gRPC protocol. Any other headers are classified as the
 // user-specified metadata.
@@ -162,7 +173,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 	case ":path":
 		d.method = f.Value
 	default:
-		if !isReservedHeader(f.Name) {
+		if !isReservedHeader(f.Name) || isWhitelistedHttp2Header(f.Name) {
 			if f.Name == "user-agent" {
 				i := strings.LastIndex(f.Value, " ")
 				if i == -1 {
