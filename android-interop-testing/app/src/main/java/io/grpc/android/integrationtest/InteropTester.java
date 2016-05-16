@@ -31,21 +31,20 @@
 
 package io.grpc.android.integrationtest;
 
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertNull;
+import static junit.framework.Assert.assertTrue;
+import static junit.framework.Assert.fail;
+
 import com.google.protobuf.nano.EmptyProtos;
 import com.google.protobuf.nano.MessageNano;
 
 import android.os.AsyncTask;
 import android.util.Log;
 
-import static junit.framework.Assert.assertEquals;
-import static junit.framework.Assert.assertNull;
-import static junit.framework.Assert.assertTrue;
-import static junit.framework.Assert.fail;
-
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
 import io.grpc.android.integrationtest.nano.Messages;
@@ -59,8 +58,6 @@ import io.grpc.android.integrationtest.nano.Messages.StreamingOutputCallRequest;
 import io.grpc.android.integrationtest.nano.Messages.StreamingOutputCallResponse;
 import io.grpc.android.integrationtest.nano.TestServiceGrpc;
 import io.grpc.android.integrationtest.nano.UnimplementedServiceGrpc;
-import io.grpc.okhttp.OkHttpChannelBuilder;
-import io.grpc.okhttp.NegotiationType;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.StreamRecorder;
 
@@ -76,9 +73,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Implementation of the integration tests, as an AsyncTask.
  */
-public final class InteropTester extends AsyncTask<Void, Void, String> {
-  final static String SUCCESS_MESSAGE = "Succeed!!!";
-  final static String LOG_TAG = "GrpcTest";
+final class InteropTester extends AsyncTask<Void, Void, String> {
+  static final String SUCCESS_MESSAGE = "Succeed!!!";
+  static final String LOG_TAG = "GrpcTest";
 
   private ManagedChannel channel;
   private TestServiceGrpc.TestServiceBlockingStub blockingStub;
@@ -696,13 +693,6 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
         io.grpc.Status.fromThrowable(recorder.getError()));
   }
 
-  public static void assertMessageEquals(MessageNano expected, MessageNano actual) {
-    if (!MessageNano.messageNanoEquals(expected, actual)) {
-      assertEquals(expected.toString(), actual.toString());
-      fail("Messages not equal, but assertEquals didn't throw");
-    }
-  }
-
   public static void assertMessageSizeEquals(MessageNano expected, MessageNano actual) {
     assertEquals(expected.getSerializedSize(), actual.getSerializedSize());
   }
@@ -711,6 +701,13 @@ public final class InteropTester extends AsyncTask<Void, Void, String> {
   private static void assertSuccess(StreamRecorder<?> recorder) {
     if (recorder.getError() != null) {
       throw new AssertionError(recorder.getError());
+    }
+  }
+
+  public static void assertMessageEquals(MessageNano expected, MessageNano actual) {
+    if (!MessageNano.messageNanoEquals(expected, actual)) {
+      assertEquals(expected.toString(), actual.toString());
+      fail("Messages not equal, but assertEquals didn't throw");
     }
   }
 

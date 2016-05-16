@@ -31,8 +31,6 @@
 
 package io.grpc.android.integrationtest;
 
-import com.google.common.base.Preconditions;
-
 import android.annotation.TargetApi;
 import android.net.SSLCertificateSocketFactory;
 import android.os.Build;
@@ -40,11 +38,10 @@ import android.support.annotation.Nullable;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import io.grpc.okhttp.OkHttpChannelBuilder;
 import io.grpc.okhttp.NegotiationType;
+import io.grpc.okhttp.OkHttpChannelBuilder;
 
 import java.io.InputStream;
-import java.lang.RuntimeException;
 import java.lang.reflect.Method;
 import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
@@ -59,8 +56,8 @@ import javax.security.auth.x500.X500Principal;
 /**
  * A helper class to create a OkHttp based channel.
  */
-public class TesterOkHttpChannelBuilder { 
-  static public ManagedChannel build(String host, int port, @Nullable String serverHostOverride,
+class TesterOkHttpChannelBuilder {
+  public static ManagedChannel build(String host, int port, @Nullable String serverHostOverride,
       boolean useTls, @Nullable InputStream testCa, @Nullable String androidSocketFactoryTls) {
     ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port);
     if (serverHostOverride != null) {
@@ -86,7 +83,8 @@ public class TesterOkHttpChannelBuilder {
     return channelBuilder.build();
   }
 
-  static private SSLSocketFactory getSslSocketFactory(@Nullable InputStream testCa) throws Exception {
+  private static SSLSocketFactory getSslSocketFactory(@Nullable InputStream testCa)
+      throws Exception {
     if (testCa == null) {
       return (SSLSocketFactory) SSLSocketFactory.getDefault();
     }
@@ -97,7 +95,7 @@ public class TesterOkHttpChannelBuilder {
   }
 
   @TargetApi(14)
-  static private SSLCertificateSocketFactory getSslCertificateSocketFactory(
+  private static SSLCertificateSocketFactory getSslCertificateSocketFactory(
       @Nullable InputStream testCa, String androidSocketFatoryTls) throws Exception {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH /* API level 14 */) {
       throw new RuntimeException(
@@ -127,7 +125,7 @@ public class TesterOkHttpChannelBuilder {
     return factory;
   }
 
-  static private TrustManager[] getTrustManagers(InputStream testCa) throws Exception {
+  private static TrustManager[] getTrustManagers(InputStream testCa) throws Exception {
     KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
     ks.load(null);
     CertificateFactory cf = CertificateFactory.getInstance("X.509");

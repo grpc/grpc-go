@@ -114,15 +114,15 @@ public class TesterActivity extends AppCompatActivity
         TesterOkHttpChannelBuilder.build(host, port, "foo.test.google.fr", true,
             getResources().openRawResource(R.raw.ca), null),
         new InteropTester.TestListener() {
-      @Override public void onPreTest() {
-        resultText.setText("Testing...");
-      }
+          @Override public void onPreTest() {
+            resultText.setText("Testing...");
+          }
 
-      @Override public void onPostTest(String result) {
-        resultText.setText(result);
-        enableButtons(true);
-      }
-    }).execute();
+          @Override public void onPostTest(String result) {
+            resultText.setText(result);
+            enableButtons(true);
+          }
+        }).execute();
   }
 
   @Override

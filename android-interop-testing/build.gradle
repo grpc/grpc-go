@@ -19,3 +19,34 @@ allprojects {
         jcenter()
     }
 }
+
+subprojects {
+    apply plugin: "checkstyle"
+
+    checkstyle {
+        configFile = file("$rootDir/../checkstyle.xml")
+        toolVersion = "6.17"
+        ignoreFailures = false
+        if (rootProject.hasProperty("checkstyle.ignoreFailures")) {
+            ignoreFailures = rootProject.properties["checkstyle.ignoreFailures"].toBoolean()
+        }
+        configProperties["rootDir"] = "$rootDir/../"
+    }
+
+    // Checkstyle doesn't run automatically with android
+    task checkStyleMain(type: Checkstyle) {
+        source 'src/main/java'
+        include '**/*.java'
+        classpath = files()
+    }
+
+    task checkStyleTest(type: Checkstyle) {
+        source 'src/test/java'
+        include '**/*.java'
+        classpath = files()
+    }
+
+    afterEvaluate { project ->
+        project.tasks['check'].dependsOn checkStyleMain, checkStyleTest
+    }
+}

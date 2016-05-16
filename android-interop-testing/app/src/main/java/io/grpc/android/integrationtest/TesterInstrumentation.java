@@ -63,10 +63,10 @@ public class TesterInstrumentation extends Instrumentation {
     host = args.getString("server_host");
     port = Integer.parseInt(args.getString("server_port"));
     serverHostOverride = args.getString("server_host_override");
-    useTls = args.getString("use_tls") != null ?
-        Boolean.parseBoolean(args.getString("use_tls")) : true;
-    useTestCa = args.getString("use_test_ca") != null ?
-        Boolean.parseBoolean(args.getString("use_test_ca")) : false;
+    useTls = args.getString("use_tls") != null
+        ? Boolean.parseBoolean(args.getString("use_tls")) : true;
+    useTestCa = args.getString("use_test_ca") != null
+        ? Boolean.parseBoolean(args.getString("use_test_ca")) : false;
     androidSocketFactoryTls = args.getString("android_socket_factory_tls");
 
     InputStream testCa = null;
