@@ -71,3 +71,19 @@ func TestNameForPointer(t *testing.T) {
 		}
 	}
 }
+
+func TestFilenameForType(t *testing.T) {
+	for _, test := range []struct {
+		st   reflect.Type
+		want string
+	}{
+		{reflect.TypeOf(pb.SearchResponse{}), "test.proto"},
+		{reflect.TypeOf(pb.SearchResponse_Result{}), "test.proto"},
+	} {
+		r, err := s.filenameForType(test.st)
+		t.Logf("filenameForType(%q) = %q, %v", test.st, r, err)
+		if err != nil || r != test.want {
+			t.Fatalf("filenameForType(%q) = %q, %v, want %q, <nil>", test.st, r, err, test.want)
+		}
+	}
+}

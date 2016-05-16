@@ -129,3 +129,13 @@ func (s *serverReflectionServer) nameForType(st reflect.Type) (string, error) {
 func (s *serverReflectionServer) nameForPointer(i interface{}) (string, error) {
 	return s.nameForType(reflect.TypeOf(i).Elem())
 }
+
+func (s *serverReflectionServer) filenameForType(st reflect.Type) (string, error) {
+	fd, _, err := s.fileDescForType(st)
+	if err != nil {
+		return "", err
+	}
+	return fd.GetName(), nil
+}
+
+// TODO filenameForMethod and Service
