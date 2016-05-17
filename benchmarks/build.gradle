@@ -50,8 +50,7 @@ configureProtoCompilation()
 def vmArgs = [
         "-server",
         "-Xms2g",
-        "-Xmx2g",
-        "-XX:+UseConcMarkSweepGC"
+        "-Xmx2g"
 ]
 
 task qps_client(type: CreateStartScripts) {
