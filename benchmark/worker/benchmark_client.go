@@ -135,7 +135,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 
 	// Create connections.
 	connCount := int(config.ClientChannels)
-	conns := make([]*grpc.ClientConn, connCount)
+	conns := make([]*grpc.ClientConn, connCount, connCount)
 	for connIndex := 0; connIndex < connCount; connIndex++ {
 		conns[connIndex] = benchmark.NewClientConn(config.ServerTargets[connIndex%len(config.ServerTargets)], opts...)
 	}
@@ -337,7 +337,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 	if reset {
 		// Merging histogram may take some time.
 		// Put all histograms aside and merge later.
-		toMerge := make([]*stats.Histogram, len(bc.lockingHistograms))
+		toMerge := make([]*stats.Histogram, len(bc.lockingHistograms), len(bc.lockingHistograms))
 		for i := range bc.lockingHistograms {
 			bc.lockingHistograms[i].mu.Lock()
 			toMerge[i] = bc.lockingHistograms[i].histogram
@@ -361,7 +361,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		timeElapsed = time.Since(bc.lastResetTime).Seconds()
 	}
 
-	b := make([]uint32, len(mergedHistogram.Buckets))
+	b := make([]uint32, len(mergedHistogram.Buckets), len(mergedHistogram.Buckets))
 	for i, v := range mergedHistogram.Buckets {
 		b[i] = uint32(v.Count)
 	}
