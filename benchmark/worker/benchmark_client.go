@@ -276,7 +276,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
 			// Start goroutine on the lockingHistogram.
-			go func(idx int) {
+			go func() {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
@@ -305,7 +305,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 					case <-done:
 					}
 				}
-			}(idx)
+			}()
 		}
 	}
 }
@@ -321,7 +321,7 @@ func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPer
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
 			// Start goroutine on the lockingHistogram.
-			go func(idx int) {
+			go func() {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
@@ -350,7 +350,7 @@ func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPer
 					case <-done:
 					}
 				}
-			}(idx)
+			}()
 			go func() {
 				for {
 					select {
@@ -386,7 +386,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
 			// Start goroutine on the lockingHistogram.
-			go func(idx int) {
+			go func() {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
@@ -415,7 +415,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 					case <-done:
 					}
 				}
-			}(idx)
+			}()
 		}
 	}
 }
@@ -451,7 +451,7 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 			// TODO: change buffer size if 10000 is not appropriate.
 			startTimeChan := make(chan time.Time, 10000)
 			// Create benchmark rpc goroutine to recv on stream.
-			go func(idx int) {
+			go func() {
 				done := make(chan bool)
 				for {
 					go func() {
@@ -478,7 +478,7 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 					case <-done:
 					}
 				}
-			}(idx)
+			}()
 			// Create benchmark rpc goroutine to send on stream.
 			go func() {
 				// TODO: do warm up if necessary.
