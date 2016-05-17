@@ -51,6 +51,7 @@ type Address struct {
 }
 
 // Balancer chooses network addresses for RPCs.
+// This is the EXPERIMENTAL API and may be changed or extended in the future.
 type Balancer interface {
 	// Up informs the balancer that gRPC has a connection to the server at
 	// addr. It returns down which is called once the connection to addr gets
