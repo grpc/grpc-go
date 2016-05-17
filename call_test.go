@@ -225,7 +225,7 @@ func TestInvokeLargeErr(t *testing.T) {
 	var reply string
 	req := "hello"
 	err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
-	if _, ok := err.(rpcError); !ok {
+	if _, ok := err.(RpcError); !ok {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
 	}
 	if Code(err) != codes.Internal || len(ErrorDesc(err)) != sizeLargeErr {
@@ -241,7 +241,7 @@ func TestInvokeErrorSpecialChars(t *testing.T) {
 	var reply string
 	req := "weird error"
 	err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
-	if _, ok := err.(rpcError); !ok {
+	if _, ok := err.(RpcError); !ok {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
 	}
 	if got, want := ErrorDesc(err), weirdError; got != want {
