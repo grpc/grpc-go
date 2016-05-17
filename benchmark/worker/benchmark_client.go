@@ -275,7 +275,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
-			// Start goroutine on the created mutex and histogram.
+			// Start goroutine on the lockingHistogram.
 			go func(idx int) {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
@@ -311,20 +311,21 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 }
 
 func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, nextRPCDelay func() time.Duration) {
-	for _, conn := range conns {
+	for ic, conn := range conns {
 		client := testpb.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
-		var wg sync.WaitGroup
-		wg.Add(rpcCountPerConn)
 		for j := 0; j < rpcCountPerConn; j++ {
 			var delay time.Duration
 			next := make(chan bool)
-			go func() {
+			// Create histogram for each goroutine.
+			idx := ic*rpcCountPerConn + j
+			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
+			// Start goroutine on the lockingHistogram.
+			go func(idx int) {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
 				// before starting benchmark.
-				defer wg.Done()
 				done := make(chan bool)
 				for range next {
 					go func() {
@@ -337,9 +338,7 @@ func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPer
 							return
 						}
 						elapse := time.Since(start)
-						bc.mu.Lock()
-						bc.histogram.Add(int64(elapse / time.Nanosecond))
-						bc.mu.Unlock()
+						bc.lockingHistograms[idx].add(int64(elapse))
 						select {
 						case <-bc.stop:
 						case done <- true:
@@ -351,7 +350,7 @@ func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPer
 					case <-done:
 					}
 				}
-			}()
+			}(idx)
 			go func() {
 				for {
 					select {
@@ -386,7 +385,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
-			// Start goroutine on the created mutex and histogram.
+			// Start goroutine on the lockingHistogram.
 			go func(idx int) {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
@@ -433,10 +432,8 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 		doRPCSend = benchmark.DoStreamingSend
 		doRPCRecv = benchmark.DoStreamingRecv
 	}
-	for _, conn := range conns {
+	for ic, conn := range conns {
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
-		var wg sync.WaitGroup
-		wg.Add(rpcCountPerConn * 2)
 		for j := 0; j < rpcCountPerConn; j++ {
 			var delay time.Duration
 			next := make(chan bool)
@@ -446,13 +443,15 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 			if err != nil {
 				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
 			}
+			// Create histogram for each goroutine.
+			idx := ic*rpcCountPerConn + j
+			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
 			// The buffer size should be bigger enough to store all the startTimes
 			// between a request is sent and its response is received.
 			// TODO: change buffer size if 10000 is not appropriate.
 			startTimeChan := make(chan time.Time, 10000)
 			// Create benchmark rpc goroutine to recv on stream.
-			go func() {
-				defer wg.Done()
+			go func(idx int) {
 				done := make(chan bool)
 				for {
 					go func() {
@@ -467,9 +466,7 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 						// There should be at least one start time available in the channel.
 						start := <-startTimeChan
 						elapse := time.Since(start)
-						bc.mu.Lock()
-						bc.histogram.Add(int64(elapse / time.Nanosecond))
-						bc.mu.Unlock()
+						bc.lockingHistograms[idx].add(int64(elapse))
 						select {
 						case <-bc.stop:
 						case done <- true:
@@ -481,14 +478,13 @@ func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCoun
 					case <-done:
 					}
 				}
-			}()
+			}(idx)
 			// Create benchmark rpc goroutine to send on stream.
 			go func() {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
 				// before starting benchmark.
-				defer wg.Done()
 				done := make(chan bool)
 				for range next {
 					go func() {
