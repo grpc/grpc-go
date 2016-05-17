@@ -85,7 +85,7 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 }
 
 // Print writes textual output of the histogram values.
-func (h Histogram) Print(w io.Writer) {
+func (h *Histogram) Print(w io.Writer) {
 	avg := float64(h.Sum) / float64(h.Count)
 	fmt.Fprintf(w, "Count: %d  Min: %d  Max: %d  Avg: %.2f\n", h.Count, h.Min, h.Max, avg)
 	fmt.Fprintf(w, "%s\n", strings.Repeat("-", 60))
@@ -120,7 +120,7 @@ func (h Histogram) Print(w io.Writer) {
 }
 
 // String returns the textual output of the histogram values as string.
-func (h Histogram) String() string {
+func (h *Histogram) String() string {
 	var b bytes.Buffer
 	h.Print(&b)
 	return b.String()
@@ -177,7 +177,7 @@ func (h *Histogram) findBucket(value int64) (int, error) {
 	return b, nil
 }
 
-// Merge takes another histogram, and merges its content into the receiver.
+// Merge takes another histogram h2, and merges its content into h.
 // The two histograms must be created by equivalent HistogramOptions.
 func (h *Histogram) Merge(h2 *Histogram) {
 	if h.opts != h2.opts {
