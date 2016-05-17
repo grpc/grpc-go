@@ -146,6 +146,15 @@ var defaultServerOptions = options{
 	maxReceiveMessageSize: defaultServerMaxReceiveMessageSize,
 	maxSendMessageSize:    defaultServerMaxSendMessageSize,
 	connectionTimeout:     120 * time.Second,
+	creds                credentials.TransportCredentials
+	codec                Codec
+	cp                   Compressor
+	dc                   Decompressor
+	unaryInt             UnaryServerInterceptor
+	streamInt            StreamServerInterceptor
+	maxConcurrentStreams uint32
+	useHandlerImpl       bool // use http.Handler-based server
+	unknownHandler       UnknownServiceHandler
 }
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
