@@ -72,6 +72,7 @@ func (w *testWatcher) Next() (updates []*naming.Update, err error) {
 func (w *testWatcher) Close() {
 }
 
+// Inject naming resolution updates to the testWatcher.
 func (w *testWatcher) inject(updates []*naming.Update) {
 	w.side <- len(updates)
 	for _, u := range updates {
@@ -130,7 +131,7 @@ func TestNameDiscovery(t *testing.T) {
 	if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[0].port {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want %s", err, servers[0].port)
 	}
-	// Inject name resolution change to point to the second server now.
+	// Inject the name resolution change to remove servers[0] and add servers[1].
 	var updates []*naming.Update
 	updates = append(updates, &naming.Update{
 		Op:   naming.Delete,
@@ -141,6 +142,7 @@ func TestNameDiscovery(t *testing.T) {
 		Addr: "127.0.0.1:" + servers[1].port,
 	})
 	r.w.inject(updates)
+	// Loop until the rpcs in flight talks to servers[1].
 	for {
 		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[1].port {
 			break
@@ -161,9 +163,9 @@ func TestEmptyAddrs(t *testing.T) {
 	}
 	var reply string
 	if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil || reply != expectedResponse {
-		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
+		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, reply = %q, want %q, <nil>", err, reply, expectedResponse)
 	}
-	// Inject name resolution change to remove the server address so that there is no address
+	// Inject name resolution change to remove the server so that there is no address
 	// available after that.
 	var updates []*naming.Update
 	updates = append(updates, &naming.Update{
@@ -191,7 +193,7 @@ func TestRoundRobin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
-	// Add the other 2 servers as the name updates.
+	// Add servers[1] and servers[2] to the service discovery.
 	var updates []*naming.Update
 	updates = append(updates, &naming.Update{
 		Op:   naming.Add,
@@ -211,7 +213,7 @@ func TestRoundRobin(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	// Check it works in round-robin manner.
+	// Check the incoming RPCs served in a round-robin manner.
 	for i := 0; i < 10; i++ {
 		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[i%numServers].port {
 			t.Fatalf("Invoke(_, _, _, _, _) = %v, want %s", err, servers[i%numServers].port)
@@ -239,6 +241,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 		Addr: "127.0.0.1:" + servers[0].port,
 	}}
 	r.w.inject(updates)
+	// Loop until the above update applies.
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); Code(err) == codes.DeadlineExceeded {
@@ -246,6 +249,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	// Issue 2 RPCs which should be completed with error status once cc is closed.
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
@@ -298,12 +302,13 @@ func TestGetOnWaitChannel(t *testing.T) {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
 		}
 	}()
-	// Add a connected server.
+	// Add a connected server to get the above RPC through.
 	updates = []*naming.Update{&naming.Update{
 		Op:   naming.Add,
 		Addr: "127.0.0.1:" + servers[0].port,
 	}}
 	r.w.inject(updates)
+	// Wait until the above RPC succeeds.
 	wg.Wait()
 	cc.Close()
 	servers[0].stop()
