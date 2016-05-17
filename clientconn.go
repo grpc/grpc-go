@@ -336,18 +336,18 @@ func (cc *ClientConn) watchAddrUpdates() error {
 				return err
 			}
 		case naming.Delete:
-			cc.mu.Lock()
+			cc.mu.RLock()
 			addr := Address{
 				Addr:     update.Addr,
 				Metadata: update.Metadata,
 			}
 			ac, ok := cc.conns[addr]
 			if !ok {
-				cc.mu.Unlock()
+				cc.mu.RUnlock()
 				grpclog.Println("grpc: The name resolver wanted to delete a non-exist address: ", addr)
 				continue
 			}
-			cc.mu.Unlock()
+			cc.mu.RUnlock()
 			ac.tearDown(ErrConnDrain)
 		default:
 			grpclog.Println("Unknown update.Op ", update.Op)
