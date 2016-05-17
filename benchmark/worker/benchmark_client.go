@@ -58,14 +58,14 @@ type lockingHistogram struct {
 	histogram *stats.Histogram
 }
 
-func (h lockingHistogram) add(value int64) {
+func (h *lockingHistogram) add(value int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.histogram.Add(value)
 }
 
-// swap sets h.histogram to new, and return its old value.
-func (h lockingHistogram) swap(new *stats.Histogram) *stats.Histogram {
+// swap sets h.histogram to new, and returns its old value.
+func (h *lockingHistogram) swap(new *stats.Histogram) *stats.Histogram {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	old := h.histogram
@@ -73,7 +73,7 @@ func (h lockingHistogram) swap(new *stats.Histogram) *stats.Histogram {
 	return old
 }
 
-func (h lockingHistogram) mergeInto(merged *stats.Histogram) {
+func (h *lockingHistogram) mergeInto(merged *stats.Histogram) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	merged.Merge(h.histogram)
@@ -254,7 +254,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 		client := testpb.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
 		for j := 0; j < rpcCountPerConn; j++ {
-			// Create mutex and histogram for each goroutine.
+			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
 			// Start goroutine on the created mutex and histogram.
@@ -307,7 +307,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			if err != nil {
 				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
 			}
-			// Create mutex and histogram for each goroutine.
+			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
 			// Start goroutine on the created mutex and histogram.
