@@ -58,6 +58,27 @@ type lockingHistogram struct {
 	histogram *stats.Histogram
 }
 
+func (h lockingHistogram) add(value int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.histogram.Add(value)
+}
+
+// swap sets h.histogram to new, and return its old value.
+func (h lockingHistogram) swap(new *stats.Histogram) *stats.Histogram {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	old := h.histogram
+	h.histogram = new
+	return old
+}
+
+func (h lockingHistogram) mergeInto(merged *stats.Histogram) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	merged.Merge(h.histogram)
+}
+
 type benchmarkClient struct {
 	closeConns        func()
 	stop              chan bool
@@ -254,9 +275,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 							return
 						}
 						elapse := time.Since(start)
-						bc.lockingHistograms[idx].mu.Lock()
-						bc.lockingHistograms[idx].histogram.Add(int64(elapse))
-						bc.lockingHistograms[idx].mu.Unlock()
+						bc.lockingHistograms[idx].add(int64(elapse))
 						select {
 						case <-bc.stop:
 						case done <- true:
@@ -309,9 +328,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 							return
 						}
 						elapse := time.Since(start)
-						bc.lockingHistograms[idx].mu.Lock()
-						bc.lockingHistograms[idx].histogram.Add(int64(elapse))
-						bc.lockingHistograms[idx].mu.Unlock()
+						bc.lockingHistograms[idx].add(int64(elapse))
 						select {
 						case <-bc.stop:
 						case done <- true:
@@ -339,10 +356,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		// Put all histograms aside and merge later.
 		toMerge := make([]*stats.Histogram, len(bc.lockingHistograms), len(bc.lockingHistograms))
 		for i := range bc.lockingHistograms {
-			bc.lockingHistograms[i].mu.Lock()
-			toMerge[i] = bc.lockingHistograms[i].histogram
-			bc.lockingHistograms[i].histogram = stats.NewHistogram(bc.histogramOptions)
-			bc.lockingHistograms[i].mu.Unlock()
+			toMerge[i] = bc.lockingHistograms[i].swap(stats.NewHistogram(bc.histogramOptions))
 		}
 
 		for i := 0; i < len(toMerge); i++ {
@@ -354,9 +368,7 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 	} else {
 		// Merge only, not reset.
 		for i := range bc.lockingHistograms {
-			bc.lockingHistograms[i].mu.Lock()
-			mergedHistogram.Merge(bc.lockingHistograms[i].histogram)
-			bc.lockingHistograms[i].mu.Unlock()
+			bc.lockingHistograms[i].mergeInto(mergedHistogram)
 		}
 		timeElapsed = time.Since(bc.lastResetTime).Seconds()
 	}
