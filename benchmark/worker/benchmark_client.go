@@ -53,13 +53,17 @@ var (
 	caFile = "benchmark/server/testdata/ca.pem"
 )
 
+type lockingHistogram struct {
+	mu        sync.Mutex
+	histogram *stats.Histogram
+}
+
 type benchmarkClient struct {
-	closeConns       func()
-	stop             chan bool
-	lastResetTime    time.Time
-	histogramOptions stats.HistogramOptions
-	mutexes          []*sync.Mutex
-	histograms       []*stats.Histogram
+	closeConns        func()
+	stop              chan bool
+	lastResetTime     time.Time
+	histogramOptions  stats.HistogramOptions
+	lockingHistograms []lockingHistogram
 }
 
 func printClientConfig(config *testpb.ClientConfig) {
@@ -208,8 +212,7 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 			BaseBucketSize: (1 + config.HistogramParams.Resolution),
 			MinValue:       0,
 		},
-		mutexes:    make([]*sync.Mutex, rpcCountPerConn*len(conns)),
-		histograms: make([]*stats.Histogram, rpcCountPerConn*len(conns)),
+		lockingHistograms: make([]lockingHistogram, rpcCountPerConn*len(conns), rpcCountPerConn*len(conns)),
 
 		stop:          make(chan bool),
 		lastResetTime: time.Now(),
@@ -232,8 +235,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 		for j := 0; j < rpcCountPerConn; j++ {
 			// Create mutex and histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
-			bc.mutexes[idx] = new(sync.Mutex)
-			bc.histograms[idx] = stats.NewHistogram(bc.histogramOptions)
+			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
 			// Start goroutine on the created mutex and histogram.
 			go func(idx int) {
 				// TODO: do warm up if necessary.
@@ -252,9 +254,9 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 							return
 						}
 						elapse := time.Since(start)
-						bc.mutexes[idx].Lock()
-						bc.histograms[idx].Add(int64(elapse))
-						bc.mutexes[idx].Unlock()
+						bc.lockingHistograms[idx].mu.Lock()
+						bc.lockingHistograms[idx].histogram.Add(int64(elapse))
+						bc.lockingHistograms[idx].mu.Unlock()
 						select {
 						case <-bc.stop:
 						case done <- true:
@@ -288,8 +290,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			}
 			// Create mutex and histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
-			bc.mutexes[idx] = new(sync.Mutex)
-			bc.histograms[idx] = stats.NewHistogram(bc.histogramOptions)
+			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
 			// Start goroutine on the created mutex and histogram.
 			go func(idx int) {
 				// TODO: do warm up if necessary.
@@ -308,9 +309,9 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 							return
 						}
 						elapse := time.Since(start)
-						bc.mutexes[idx].Lock()
-						bc.histograms[idx].Add(int64(elapse))
-						bc.mutexes[idx].Unlock()
+						bc.lockingHistograms[idx].mu.Lock()
+						bc.lockingHistograms[idx].histogram.Add(int64(elapse))
+						bc.lockingHistograms[idx].mu.Unlock()
 						select {
 						case <-bc.stop:
 						case done <- true:
@@ -336,12 +337,12 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 	if reset {
 		// Merging histogram may take some time.
 		// Put all histograms aside and merge later.
-		toMerge := make([]*stats.Histogram, len(bc.histograms))
-		for i := range bc.histograms {
-			bc.mutexes[i].Lock()
-			toMerge[i] = bc.histograms[i]
-			bc.histograms[i] = stats.NewHistogram(bc.histogramOptions)
-			bc.mutexes[i].Unlock()
+		toMerge := make([]*stats.Histogram, len(bc.lockingHistograms))
+		for i := range bc.lockingHistograms {
+			bc.lockingHistograms[i].mu.Lock()
+			toMerge[i] = bc.lockingHistograms[i].histogram
+			bc.lockingHistograms[i].histogram = stats.NewHistogram(bc.histogramOptions)
+			bc.lockingHistograms[i].mu.Unlock()
 		}
 
 		for i := 0; i < len(toMerge); i++ {
@@ -352,10 +353,10 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 		bc.lastResetTime = time.Now()
 	} else {
 		// Merge only, not reset.
-		for i := range bc.histograms {
-			bc.mutexes[i].Lock()
-			mergedHistogram.Merge(bc.histograms[i])
-			bc.mutexes[i].Unlock()
+		for i := range bc.lockingHistograms {
+			bc.lockingHistograms[i].mu.Lock()
+			mergedHistogram.Merge(bc.lockingHistograms[i].histogram)
+			bc.lockingHistograms[i].mu.Unlock()
 		}
 		timeElapsed = time.Since(bc.lastResetTime).Seconds()
 	}
