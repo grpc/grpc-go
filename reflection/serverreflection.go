@@ -203,6 +203,20 @@ func (s *serverReflectionServer) fileDescContainingExtension(st reflect.Type, ex
 // fd := fileDescContainingExtension()
 // return fd.GetName()
 
+// fileDescWireFormatByFilename returns the file descriptor of file with the given name.
+// TODO exporte and add lock
+func (s *serverReflectionServer) fileDescWireFormatByFilename(name string) ([]byte, error) {
+	fd, ok := s.filenameToDescMap[name]
+	if !ok {
+		return nil, fmt.Errorf("unknown file: %v", name)
+	}
+	b, err := proto.Marshal(fd)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]int32, error) {
 	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(proto.Message)
 	if !ok {
@@ -225,13 +239,16 @@ func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflectio
 		if err != nil {
 			return err
 		}
-		host := in.Host
-		out := &rpb.ServerReflectionResponse{
-			ValidHost:       host,
-			OriginalRequest: in,
-		}
-		switch in.MessageRequest.(type) {
+
+		var response *rpb.FileDescriptorResponse
+		switch req := in.MessageRequest.(type) {
 		case *rpb.ServerReflectionRequest_FileByFilename:
+			b, err := s.fileDescWireFormatByFilename(req.FileByFilename)
+			if err != nil {
+				// TODO grpc error or send message back
+				return err
+			}
+			response = &rpb.FileDescriptorResponse{FileDescriptorProto: [][]byte{b}}
 		case *rpb.ServerReflectionRequest_FileContainingSymbol:
 		case *rpb.ServerReflectionRequest_FileContainingExtension:
 		case *rpb.ServerReflectionRequest_AllExtensionNumbersOfType:
@@ -240,10 +257,15 @@ func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflectio
 			return grpc.Errorf(codes.InvalidArgument, "invalid MessageRequest: %v", in.MessageRequest)
 		}
 
+		out := &rpb.ServerReflectionResponse{
+			ValidHost:       in.Host,
+			OriginalRequest: in,
+			MessageResponse: &rpb.ServerReflectionResponse_FileDescriptorResponse{
+				FileDescriptorResponse: response,
+			},
+		}
 		if err := stream.Send(out); err != nil {
 			return err
 		}
 	}
-
-	return nil
 }

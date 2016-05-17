@@ -5,6 +5,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
 )
 
@@ -111,5 +112,23 @@ func TestAllExtensionNumbersForType(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(r, test.want) {
 			t.Fatalf("allExtensionNumbersForType(%q) = %v, %v, want %v, <nil>", test.st, r, err, test.want)
 		}
+	}
+}
+
+// TODO a better test
+func TestFileDescWireFormatByFilename(t *testing.T) {
+	st := reflect.TypeOf(pb.SearchResponse_Result{})
+	fd, _, err := s.fileDescForType(st)
+	if err != nil {
+		t.Fatalf("failed to do fileDescForType for %q", st)
+	}
+	wanted, err := proto.Marshal(fd)
+	if err != nil {
+		t.Fatalf("failed to do Marshal for %q", fd)
+	}
+	b, err := s.fileDescWireFormatByFilename(fd.GetName())
+	t.Logf("fileDescWireFormatByFilename(%q) = %v, %v", fd.GetName(), b, err)
+	if err != nil || !reflect.DeepEqual(b, wanted) {
+		t.Fatalf("fileDescWireFormatByFilename(%q) = %v, %v, want %v, <nil>", fd.GetName(), b, err, wanted)
 	}
 }
