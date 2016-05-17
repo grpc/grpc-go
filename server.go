@@ -521,9 +521,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		reply, appErr := md.Handler(srv.server, stream.Context(), df, s.opts.unaryInt)
 		if appErr != nil {
-			if err, ok := appErr.(rpcError); ok {
-				statusCode = err.code
-				statusDesc = err.desc
+			if err, ok := appErr.(RpcError); ok {
+				statusCode = err.Code
+				statusDesc = err.Desc
 			} else {
 				statusCode = convertCode(appErr)
 				statusDesc = appErr.Error()
@@ -609,9 +609,9 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		appErr = s.opts.streamInt(srv.server, ss, info, sd.Handler)
 	}
 	if appErr != nil {
-		if err, ok := appErr.(rpcError); ok {
-			ss.statusCode = err.code
-			ss.statusDesc = err.desc
+		if err, ok := appErr.(RpcError); ok {
+			ss.statusCode = err.Code
+			ss.statusDesc = err.Desc
 		} else if err, ok := appErr.(transport.StreamError); ok {
 			ss.statusCode = err.Code
 			ss.statusDesc = err.Desc

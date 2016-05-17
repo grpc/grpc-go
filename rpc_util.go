@@ -313,14 +313,14 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	return nil
 }
 
-// rpcError defines the status from an RPC.
-type rpcError struct {
-	code codes.Code
-	desc string
+// RpcError defines the status from an RPC.
+type RpcError struct {
+	Code codes.Code
+	Desc string
 }
 
-func (e rpcError) Error() string {
-	return fmt.Sprintf("rpc error: code = %d desc = %s", e.code, e.desc)
+func (e RpcError) Error() string {
+	return fmt.Sprintf("rpc error: code = %d desc = %s", e.Code, e.Desc)
 }
 
 // Code returns the error code for err if it was produced by the rpc system.
@@ -329,8 +329,8 @@ func Code(err error) codes.Code {
 	if err == nil {
 		return codes.OK
 	}
-	if e, ok := err.(rpcError); ok {
-		return e.code
+	if e, ok := err.(RpcError); ok {
+		return e.Code
 	}
 	return codes.Unknown
 }
@@ -341,8 +341,8 @@ func ErrorDesc(err error) string {
 	if err == nil {
 		return ""
 	}
-	if e, ok := err.(rpcError); ok {
-		return e.desc
+	if e, ok := err.(RpcError); ok {
+		return e.Desc
 	}
 	return err.Error()
 }
@@ -353,26 +353,26 @@ func Errorf(c codes.Code, format string, a ...interface{}) error {
 	if c == codes.OK {
 		return nil
 	}
-	return rpcError{
-		code: c,
-		desc: fmt.Sprintf(format, a...),
+	return RpcError{
+		Code: c,
+		Desc: fmt.Sprintf(format, a...),
 	}
 }
 
-// toRPCErr converts an error into a rpcError.
+// toRPCErr converts an error into a RpcError.
 func toRPCErr(err error) error {
 	switch e := err.(type) {
-	case rpcError:
+	case RpcError:
 		return err
 	case transport.StreamError:
-		return rpcError{
-			code: e.Code,
-			desc: e.Desc,
+		return RpcError{
+			Code: e.Code,
+			Desc: e.Desc,
 		}
 	case transport.ConnectionError:
-		return rpcError{
-			code: codes.Internal,
-			desc: e.Desc,
+		return RpcError{
+			Code: codes.Internal,
+			Desc: e.Desc,
 		}
 	}
 	return Errorf(codes.Unknown, "%v", err)
