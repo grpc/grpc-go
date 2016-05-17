@@ -116,7 +116,7 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 				return err
 			}
 			out = &testpb.ServerStatus{
-				Stats: bs.getStats(),
+				Stats: bs.getStats(false),
 				Port:  int32(bs.port),
 				Cores: int32(bs.cores),
 			}
@@ -128,12 +128,9 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 				return grpc.Errorf(codes.InvalidArgument, "server does not exist when mark received")
 			}
 			out = &testpb.ServerStatus{
-				Stats: bs.getStats(),
+				Stats: bs.getStats(argtype.Mark.Reset_),
 				Port:  int32(bs.port),
 				Cores: int32(bs.cores),
-			}
-			if argtype.Mark.Reset_ {
-				bs.reset()
 			}
 		}
 
@@ -176,7 +173,7 @@ func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) er
 				return err
 			}
 			out = &testpb.ClientStatus{
-				Stats: bc.getStats(),
+				Stats: bc.getStats(false),
 			}
 
 		case *testpb.ClientArgs_Mark:
@@ -186,10 +183,7 @@ func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) er
 				return grpc.Errorf(codes.InvalidArgument, "client does not exist when mark received")
 			}
 			out = &testpb.ClientStatus{
-				Stats: bc.getStats(),
-			}
-			if t.Mark.Reset_ {
-				bc.reset()
+				Stats: bc.getStats(t.Mark.Reset_),
 			}
 		}
 

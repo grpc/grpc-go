@@ -159,15 +159,15 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	return &benchmarkServer{port: p, cores: numOfCores, closeFunc: closeFunc, lastResetTime: time.Now()}, nil
 }
 
-func (bs *benchmarkServer) getStats() *testpb.ServerStats {
+// getStats returns the stats for benchmark server.
+// It resets lastResetTime if argument reset is true.
+func (bs *benchmarkServer) getStats(reset bool) *testpb.ServerStats {
 	// TODO wall time, sys time, user time.
 	bs.mu.RLock()
 	defer bs.mu.RUnlock()
-	return &testpb.ServerStats{TimeElapsed: time.Since(bs.lastResetTime).Seconds(), TimeUser: 0, TimeSystem: 0}
-}
-
-func (bs *benchmarkServer) reset() {
-	bs.mu.Lock()
-	defer bs.mu.Unlock()
-	bs.lastResetTime = time.Now()
+	timeElapsed := time.Since(bs.lastResetTime).Seconds()
+	if reset {
+		bs.lastResetTime = time.Now()
+	}
+	return &testpb.ServerStats{TimeElapsed: timeElapsed, TimeUser: 0, TimeSystem: 0}
 }
