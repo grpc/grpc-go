@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"reflect"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 )
 
 type serverReflectionServer struct {
@@ -210,4 +214,36 @@ func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]
 		out = append(out, id)
 	}
 	return out, nil
+}
+
+func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflection_ServerReflectionInfoServer) error {
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		host := in.Host
+		out := &rpb.ServerReflectionResponse{
+			ValidHost:       host,
+			OriginalRequest: in,
+		}
+		switch in.MessageRequest.(type) {
+		case *rpb.ServerReflectionRequest_FileByFilename:
+		case *rpb.ServerReflectionRequest_FileContainingSymbol:
+		case *rpb.ServerReflectionRequest_FileContainingExtension:
+		case *rpb.ServerReflectionRequest_AllExtensionNumbersOfType:
+		case *rpb.ServerReflectionRequest_ListServices:
+		default:
+			return grpc.Errorf(codes.InvalidArgument, "invalid MessageRequest: %v", in.MessageRequest)
+		}
+
+		if err := stream.Send(out); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
