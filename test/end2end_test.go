@@ -159,7 +159,6 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 			return nil, fmt.Errorf("Unknown server name %q", serverName)
 		}
 	}
-
 	// Simulate some service delay.
 	time.Sleep(time.Second)
 
@@ -1020,14 +1019,13 @@ func testRPCTimeout(t *testing.T, e env) {
 	}
 	for i := -1; i <= 10; i++ {
 		ctx, _ := context.WithTimeout(context.Background(), time.Duration(i)*time.Millisecond)
-		reply, err := tc.UnaryCall(ctx, req)
-		if grpc.Code(err) != codes.DeadlineExceeded {
-			t.Fatalf(`TestService/UnaryCallv(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.DeadlineExceeded)
+		if _, err := tc.UnaryCall(ctx, req); grpc.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("TestService/UnaryCallv(_, _) = _, %v; want <nil>, error code: %d", err, codes.DeadlineExceeded)
 		}
 	}
 }
 
-func TestCancelX(t *testing.T) {
+func TestCancel(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
 		testCancel(t, e)
@@ -1058,9 +1056,8 @@ func testCancel(t *testing.T, e env) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(1*time.Millisecond, cancel)
-	reply, err := tc.UnaryCall(ctx, req)
-	if grpc.Code(err) != codes.Canceled {
-		t.Fatalf(`TestService/UnaryCall(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.Canceled)
+	if r, err := tc.UnaryCall(ctx, req); grpc.Code(err) != codes.Canceled {
+		t.Fatalf("TestService/UnaryCall(_, _) = %v, %v; want _, error code: %d", r, err, codes.Canceled)
 	}
 	awaitNewConnLogOutput()
 }

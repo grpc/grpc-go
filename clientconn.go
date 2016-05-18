@@ -61,14 +61,15 @@ var (
 	ErrCredentialsMisuse = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportAuthenticator() to set)")
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the ClientConn is closing.
-	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
+	ErrClientConnClosing = Errorf(codes.FailedPrecondition, "grpc: the client connection is closing")
 	// ErrClientConnTimeout indicates that the connection could not be
 	// established or re-established within the specified timeout.
 	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
-	// ErrNetworkIP indicates that the connection is down due to some network I/O error.
-	ErrNetworkIO = errors.New("grpc: failed with network I/O error")
-	// ErrConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
-	ErrConnDrain   = errors.New("grpc: the connection is drained")
+
+	// errNetworkIP indicates that the connection is down due to some network I/O error.
+	errNetworkIO = errors.New("grpc: failed with network I/O error")
+	// errConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
+	errConnDrain   = errors.New("grpc: the connection is drained")
 	errConnClosing = errors.New("grpc: the addrConn is closing")
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
@@ -301,7 +302,7 @@ func (s ConnectivityState) String() string {
 	}
 }
 
-// ClientConn represents a client connection to an RPC service.
+// ClientConn represents a client connection to an RPC server.
 type ClientConn struct {
 	target    string
 	watcher   naming.Watcher
@@ -348,7 +349,7 @@ func (cc *ClientConn) watchAddrUpdates() error {
 				continue
 			}
 			cc.mu.RUnlock()
-			ac.tearDown(ErrConnDrain)
+			ac.tearDown(errConnDrain)
 		default:
 			grpclog.Println("Unknown update.Op ", update.Op)
 		}
@@ -528,15 +529,6 @@ func (ac *addrConn) waitForStateChange(ctx context.Context, sourceState Connecti
 }
 
 func (ac *addrConn) resetTransport(closeTransport bool) error {
-	/*
-		ac.cc.mu.Lock()
-		if ac.cc.conns == nil {
-			ac.cc.mu.Unlock()
-			return ErrClientConnClosing
-		}
-		ac.cc.conns[ac.addr] = ac
-		ac.cc.mu.Unlock()
-	*/
 	var retries int
 	start := time.Now()
 	for {
@@ -548,7 +540,7 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			return errConnClosing
 		}
 		if ac.down != nil {
-			ac.down(ErrNetworkIO)
+			ac.down(errNetworkIO)
 			ac.down = nil
 		}
 		ac.state = Connecting
@@ -732,7 +724,7 @@ func (ac *addrConn) tearDown(err error) {
 		ac.ready = nil
 	}
 	if ac.transport != nil {
-		if err == ErrConnDrain {
+		if err == errConnDrain {
 			ac.transport.GracefulClose()
 		} else {
 			ac.transport.Close()
