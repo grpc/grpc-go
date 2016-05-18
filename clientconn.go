@@ -357,18 +357,18 @@ func (cc *ClientConn) watchAddrUpdates() error {
 }
 
 func (cc *ClientConn) newAddrConn(addr Address) error {
-	c := &addrConn{
+	ac := &addrConn{
 		cc:           cc,
 		addr:         addr,
 		dopts:        cc.dopts,
 		shutdownChan: make(chan struct{}),
 	}
 	if EnableTracing {
-		c.events = trace.NewEventLog("grpc.ClientConn", c.addr.Addr)
+		ac.events = trace.NewEventLog("grpc.ClientConn", ac.addr.Addr)
 	}
-	if !c.dopts.insecure {
+	if !ac.dopts.insecure {
 		var ok bool
-		for _, cd := range c.dopts.copts.AuthOptions {
+		for _, cd := range ac.dopts.copts.AuthOptions {
 			if _, ok = cd.(credentials.TransportAuthenticator); ok {
 				break
 			}
@@ -377,29 +377,37 @@ func (cc *ClientConn) newAddrConn(addr Address) error {
 			return ErrNoTransportSecurity
 		}
 	} else {
-		for _, cd := range c.dopts.copts.AuthOptions {
+		for _, cd := range ac.dopts.copts.AuthOptions {
 			if cd.RequireTransportSecurity() {
 				return ErrCredentialsMisuse
 			}
 		}
 	}
-	c.stateCV = sync.NewCond(&c.mu)
-	if c.dopts.block {
-		if err := c.resetTransport(false); err != nil {
-			c.tearDown(err)
+	ac.cc.mu.Lock()
+	if ac.cc.conns == nil {
+		ac.cc.mu.Unlock()
+		return ErrClientConnClosing
+	}
+	ac.cc.conns[ac.addr] = ac
+	ac.cc.mu.Unlock()
+
+	ac.stateCV = sync.NewCond(&ac.mu)
+	if ac.dopts.block {
+		if err := ac.resetTransport(false); err != nil {
+			ac.tearDown(err)
 			return err
 		}
 		// Start to monitor the error status of transport.
-		go c.transportMonitor()
+		go ac.transportMonitor()
 	} else {
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
-			if err := c.resetTransport(false); err != nil {
-				grpclog.Printf("Failed to dial %s: %v; please retry.", c.addr.Addr, err)
-				c.tearDown(err)
+			if err := ac.resetTransport(false); err != nil {
+				grpclog.Printf("Failed to dial %s: %v; please retry.", ac.addr.Addr, err)
+				ac.tearDown(err)
 				return
 			}
-			c.transportMonitor()
+			ac.transportMonitor()
 		}()
 	}
 	return nil
@@ -429,7 +437,7 @@ func (cc *ClientConn) getTransport(ctx context.Context) (transport.ClientTranspo
 	return t, put, nil
 }
 
-// Close starts to tear down the ClientConn.
+// Close tears down the ClientConn and all underlying connections.
 func (cc *ClientConn) Close() error {
 	cc.mu.Lock()
 	if cc.conns == nil {
@@ -520,13 +528,15 @@ func (ac *addrConn) waitForStateChange(ctx context.Context, sourceState Connecti
 }
 
 func (ac *addrConn) resetTransport(closeTransport bool) error {
-	ac.cc.mu.Lock()
-	if ac.cc.conns == nil {
+	/*
+		ac.cc.mu.Lock()
+		if ac.cc.conns == nil {
+			ac.cc.mu.Unlock()
+			return ErrClientConnClosing
+		}
+		ac.cc.conns[ac.addr] = ac
 		ac.cc.mu.Unlock()
-		return ErrClientConnClosing
-	}
-	ac.cc.conns[ac.addr] = ac
-	ac.cc.mu.Unlock()
+	*/
 	var retries int
 	start := time.Now()
 	for {
