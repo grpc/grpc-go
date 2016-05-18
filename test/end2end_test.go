@@ -340,7 +340,7 @@ func TestReconnectTimeout(t *testing.T) {
 	// Block until reconnect times out.
 	<-waitC
 	if err := conn.Close(); err != nil {
-		t.Fatalf("%v.Close() = %v, want %v", conn, err, grpc.ErrClientConnClosing)
+		t.Fatalf("%v.Close() = %v, want <nil>", conn, err)
 	}
 }
 
@@ -586,6 +586,7 @@ func TestTimeoutOnDeadServer(t *testing.T) {
 
 func testTimeoutOnDeadServer(t *testing.T, e env) {
 	te := newTest(t, e)
+	te.userAgent = testAppUA
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
 		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
@@ -597,13 +598,16 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
 	te.srv.Stop()
 	// Set -1 as the timeout to make sure if transportMonitor gets error
 	// notification in time the failure path of the 1st invoke of
 	// ClientConn.wait hits the deadline exceeded error.
 	ctx, _ := context.WithTimeout(context.Background(), -1)
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("TestService/EmptyCall(%v, _) = _, error %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
+		t.Fatalf("TestService/EmptyCall(%v, _) = _, %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
 	}
 	awaitNewConnLogOutput()
 }

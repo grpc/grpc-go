@@ -132,12 +132,12 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		Last:  true,
 		Delay: false,
 	}
-	var put func()
 	for {
 		var (
 			err    error
 			t      transport.ClientTransport
 			stream *transport.Stream
+			put    func()
 		)
 		// TODO(zhaoq): Need a formal spec of retry strategy for non-failFast rpcs.
 		callHdr := &transport.CallHdr{
@@ -149,6 +149,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		t, put, err = cc.getTransport(ctx)
 		if err != nil {
+			// TODO(zhaoq): Probably revisit the error handling.
 			if err == ErrClientConnClosing {
 				return toRPCErr(err)
 			}

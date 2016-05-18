@@ -384,6 +384,7 @@ func (cc *ClientConn) newAddrConn(addr Address) error {
 			}
 		}
 	}
+	// Insert ac into ac.cc.conns. This needs to be done before any getTransport(...) is called.
 	ac.cc.mu.Lock()
 	if ac.cc.conns == nil {
 		ac.cc.mu.Unlock()
@@ -620,11 +621,11 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 		ac.state = Ready
 		ac.stateCV.Broadcast()
 		ac.transport = newTransport
-		ac.down = ac.cc.balancer.Up(ac.addr)
 		if ac.ready != nil {
 			close(ac.ready)
 			ac.ready = nil
 		}
+		ac.down = ac.cc.balancer.Up(ac.addr)
 		ac.mu.Unlock()
 		return nil
 	}
