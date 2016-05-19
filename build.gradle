@@ -152,7 +152,7 @@ subprojects {
                 math: 'org.apache.commons:commons-math3:3.6',
 
                 // Jetty ALPN dependencies
-                jetty_alpn_agent: 'org.mortbay.jetty.alpn:jetty-alpn-agent:2.0.2'
+                jetty_alpn_agent: 'org.mortbay.jetty.alpn:jetty-alpn-agent:2.0.3'
         ]
     }
 
