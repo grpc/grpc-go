@@ -213,7 +213,9 @@ public class ClientCalls {
       ClientCall<ReqT, RespT> call, ReqT param, StreamObserver<RespT> responseObserver,
       boolean streamingResponse) {
     asyncUnaryRequestCall(call, param,
-        new StreamObserverToCallListenerAdapter<RespT>(call, responseObserver, streamingResponse),
+        new StreamObserverToCallListenerAdapter<ReqT, RespT>(call, responseObserver,
+            new CallToStreamObserverAdapter<ReqT>(call),
+            streamingResponse),
         streamingResponse);
   }
 
@@ -235,9 +237,10 @@ public class ClientCalls {
   private static <ReqT, RespT> StreamObserver<ReqT> asyncStreamingRequestCall(
       ClientCall<ReqT, RespT> call, StreamObserver<RespT> responseObserver,
       boolean streamingResponse) {
-    startCall(call, new StreamObserverToCallListenerAdapter<RespT>(
-        call, responseObserver, streamingResponse), streamingResponse);
-    return new CallToStreamObserverAdapter<ReqT>(call);
+    CallToStreamObserverAdapter<ReqT> adapter = new CallToStreamObserverAdapter<ReqT>(call);
+    startCall(call, new StreamObserverToCallListenerAdapter<ReqT, RespT>(
+        call, responseObserver, adapter, streamingResponse), streamingResponse);
+    return adapter;
   }
 
   private static <ReqT, RespT> void startCall(ClientCall<ReqT, RespT> call,
@@ -252,11 +255,18 @@ public class ClientCalls {
     }
   }
 
-  private static class CallToStreamObserverAdapter<T> implements StreamObserver<T> {
+  private static class CallToStreamObserverAdapter<T> extends ClientCallStreamObserver<T> {
+    private boolean frozen;
     private final ClientCall<T, ?> call;
+    private Runnable onReadyHandler;
+    private boolean autoFlowControlEnabled = true;
 
     public CallToStreamObserverAdapter(ClientCall<T, ?> call) {
       this.call = call;
+    }
+
+    private void freeze() {
+      this.frozen = true;
     }
 
     @Override
@@ -273,20 +283,63 @@ public class ClientCalls {
     public void onCompleted() {
       call.halfClose();
     }
+
+    @Override
+    public boolean isReady() {
+      return call.isReady();
+    }
+
+    @Override
+    public void setOnReadyHandler(Runnable onReadyHandler) {
+      if (frozen) {
+        throw new IllegalStateException("Cannot alter onReadyHandler after call started");
+      }
+      this.onReadyHandler = onReadyHandler;
+    }
+
+    @Override
+    public void disableAutoInboundFlowControl() {
+      if (frozen) {
+        throw new IllegalStateException("Cannot disable auto flow control call started");
+      }
+      autoFlowControlEnabled = false;
+    }
+
+    @Override
+    public void request(int count) {
+      call.request(count);
+    }
+
+    @Override
+    public void setMessageCompression(boolean enable) {
+      call.setMessageCompression(enable);
+    }
   }
 
-  private static class StreamObserverToCallListenerAdapter<RespT>
+  private static class StreamObserverToCallListenerAdapter<ReqT, RespT>
       extends ClientCall.Listener<RespT> {
-    private final ClientCall<?, RespT> call;
+    private final ClientCall<ReqT, RespT> call;
     private final StreamObserver<RespT> observer;
+    private final CallToStreamObserverAdapter<ReqT> adapter;
     private final boolean streamingResponse;
     private boolean firstResponseReceived;
 
-    public StreamObserverToCallListenerAdapter(
-        ClientCall<?, RespT> call, StreamObserver<RespT> observer, boolean streamingResponse) {
+    StreamObserverToCallListenerAdapter(
+        ClientCall<ReqT, RespT> call,
+        StreamObserver<RespT> observer,
+        CallToStreamObserverAdapter<ReqT> adapter,
+        boolean streamingResponse) {
       this.call = call;
       this.observer = observer;
       this.streamingResponse = streamingResponse;
+      this.adapter = adapter;
+      if (observer instanceof ClientResponseObserver) {
+        @SuppressWarnings("unchecked")
+        ClientResponseObserver<ReqT, RespT> clientResponseObserver =
+            (ClientResponseObserver<ReqT, RespT>) observer;
+        clientResponseObserver.beforeStart(adapter);
+      }
+      adapter.freeze();
     }
 
     @Override
@@ -303,7 +356,7 @@ public class ClientCalls {
       firstResponseReceived = true;
       observer.onNext(message);
 
-      if (streamingResponse) {
+      if (streamingResponse && adapter.autoFlowControlEnabled) {
         // Request delivery of the next inbound message.
         call.request(1);
       }
@@ -315,6 +368,13 @@ public class ClientCalls {
         observer.onCompleted();
       } else {
         observer.onError(status.asRuntimeException(trailers));
+      }
+    }
+
+    @Override
+    public void onReady() {
+      if (adapter.onReadyHandler != null) {
+        adapter.onReadyHandler.run();
       }
     }
   }
