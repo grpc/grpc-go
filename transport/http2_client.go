@@ -452,7 +452,7 @@ func (t *http2Client) Close() (err error) {
 	}
 	if t.state == closing {
 		t.mu.Unlock()
-		return errors.New("transport: Close() was already called")
+		return
 	}
 	t.state = closing
 	t.mu.Unlock()
@@ -479,7 +479,7 @@ func (t *http2Client) GracefulClose() error {
 	t.mu.Lock()
 	if t.state == closing {
 		t.mu.Unlock()
-		return errors.New("transport: Graceful close on a closed transport")
+		return nil
 	}
 	if t.state == draining {
 		t.mu.Unlock()
