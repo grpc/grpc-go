@@ -228,7 +228,7 @@ func div(d, r time.Duration) int64 {
 
 // TODO(zhaoq): It is the simplistic and not bandwidth efficient. Improve it.
 func timeoutEncode(t time.Duration) string {
-	if d := div(t, time.Nanosecond); d <= maxTimeoutValue {
+    if d := int64(t); d <= maxTimeoutValue {
 		return strconv.FormatInt(d, 10) + "n"
 	}
 	if d := div(t, time.Microsecond); d <= maxTimeoutValue {
