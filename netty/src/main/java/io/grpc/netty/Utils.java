@@ -35,6 +35,7 @@ import static io.grpc.internal.GrpcUtil.CONTENT_TYPE_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import static io.netty.util.CharsetUtil.UTF_8;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Metadata;
@@ -63,6 +64,7 @@ import javax.net.ssl.SSLSession;
 /**
  * Common utility methods.
  */
+@VisibleForTesting
 class Utils {
 
   public static final AsciiString STATUS_OK = AsciiString.of("200");
@@ -83,6 +85,9 @@ class Utils {
 
   public static final AttributeKey<SSLSession> SSL_SESSION_ATTR_KEY =
       AttributeKey.valueOf(SSLSession.class, "ssl-session");
+
+  @VisibleForTesting
+  static boolean validateHeaders = false;
 
   public static Metadata convertHeaders(Http2Headers http2Headers) {
     return new Metadata(convertHeadersToArray(http2Headers));
@@ -155,8 +160,7 @@ class Utils {
 
   private static Http2Headers convertMetadata(Metadata headers) {
     Preconditions.checkNotNull(headers, "headers");
-    boolean validate = true;
-    Http2Headers http2Headers = new DefaultHttp2Headers(validate, headers.headerCount());
+    Http2Headers http2Headers = new DefaultHttp2Headers(validateHeaders, headers.headerCount());
     byte[][] serializedHeaders = TransportFrameUtil.toHttp2Headers(headers);
     for (int i = 0; i < serializedHeaders.length; i += 2) {
       AsciiString name = new AsciiString(serializedHeaders[i], false);
