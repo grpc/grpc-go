@@ -35,7 +35,6 @@ package transport
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"math"
 	"net"
