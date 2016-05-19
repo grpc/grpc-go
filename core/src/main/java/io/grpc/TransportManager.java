@@ -51,9 +51,6 @@ public abstract class TransportManager<T> {
    *
    * <p>Never returns {@code null}
    */
-  // TODO(zhangkun83): GrpcLoadBalancer will use this to get transport to connect to LB servers,
-  // which would have a different authority than the primary servers. We need to figure out how to
-  // do it.
   public abstract T getTransport(EquivalentAddressGroup addressGroup);
 
   /**
@@ -75,6 +72,12 @@ public abstract class TransportManager<T> {
   public abstract InterimTransport<T> createInterimTransport();
 
   /**
+   * Creates an {@link OobTransportProvider} with a specific authority.
+   */
+  public abstract OobTransportProvider<T> createOobTransportProvider(
+      EquivalentAddressGroup addressGroup, String authority);
+
+  /**
    * Returns a channel that uses {@code transport}; useful for issuing RPCs on a transport.
    */
   public abstract Channel makeChannel(T transport);
@@ -85,7 +88,7 @@ public abstract class TransportManager<T> {
    *
    * @see #createInterimTransport
    */
-  public static interface InterimTransport<T> {
+  public interface InterimTransport<T> {
     /**
      * Returns the transport object.
      *
@@ -105,5 +108,22 @@ public abstract class TransportManager<T> {
      * Closes the interim transport by failing all pending RPCs with the given error.
      */
     void closeWithError(Status error);
+  }
+
+  /**
+   * A provider for out-of-band transports, usually used by a load-balancer that needs to
+   * communicate with an external load-balancing service which is under an authority different from
+   * what the channel is associated with.
+   */
+  public interface OobTransportProvider<T> {
+    /**
+     * Returns an OOB transport.
+     */
+    T get();
+
+    /**
+     * Closes the provider and shuts down all associated transports.
+     */
+    void close();
   }
 }

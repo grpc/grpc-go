@@ -444,21 +444,21 @@ final class TransportSet implements WithLogId {
     }
   }
 
-  interface Callback {
+  abstract static class Callback {
     /**
      * Called when the TransportSet is terminated, which means it's shut down and all transports
      * have been terminated.
      */
-    void onTerminated();
+    public void onTerminated() { }
 
     /**
      * Called when all addresses have failed to connect.
      */
-    void onAllAddressesFailed();
+    public void onAllAddressesFailed() { }
 
     /**
      * Called when a once-live connection is shut down by server-side.
      */
-    void onConnectionClosedByServer(Status status);
+    public void onConnectionClosedByServer(Status status) { }
   }
 }

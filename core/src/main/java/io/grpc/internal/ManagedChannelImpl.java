@@ -54,6 +54,7 @@ import io.grpc.ResolvedServerInfo;
 import io.grpc.Status;
 import io.grpc.TransportManager;
 import io.grpc.TransportManager.InterimTransport;
+import io.grpc.TransportManager.OobTransportProvider;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 
 import java.net.URI;
@@ -125,6 +126,10 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   @GuardedBy("lock")
   private final HashSet<DelayedClientTransport> delayedTransports =
       new HashSet<DelayedClientTransport>();
+
+  @GuardedBy("lock")
+  private final HashSet<OobTransportProvider<ClientTransport>> oobTransports =
+      new HashSet<OobTransportProvider<ClientTransport>>();
 
   @GuardedBy("lock")
   private boolean shutdown;
@@ -271,6 +276,9 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     for (DelayedClientTransport transport : delayedTransportsCopy) {
       transport.shutdown();
     }
+    for (OobTransportProvider<ClientTransport> provider : oobTransports) {
+      provider.close();
+    }
     if (log.isLoggable(Level.FINE)) {
       log.log(Level.FINE, "[{0}] Shutting down", getLogId());
     }
@@ -288,6 +296,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   @Override
   public ManagedChannelImpl shutdownNow() {
     shutdown();
+    // TODO(zhangkun): also call shutdownNow() on oobTransports.
     return this;
   }
 
@@ -364,7 +373,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     if (terminated) {
       return;
     }
-    if (shutdown && transports.isEmpty() && delayedTransports.isEmpty()) {
+    if (shutdown && transports.isEmpty() && delayedTransports.isEmpty()
+        && oobTransports.isEmpty()) {
       if (log.isLoggable(Level.INFO)) {
         log.log(Level.INFO, "[{0}] Terminated", getLogId());
       }
@@ -440,6 +450,12 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     public InterimTransport<ClientTransport> createInterimTransport() {
       return new InterimTransportImpl();
     }
+
+    @Override
+    public OobTransportProvider<ClientTransport> createOobTransportProvider(
+        EquivalentAddressGroup addressGroup, String authority) {
+      return new OobTransportProviderImpl(addressGroup, authority);
+    }
   };
 
   @Override
@@ -491,6 +507,47 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     @Override
     public void closeWithError(Status error) {
       delayedTransport.shutdownNow(error);
+    }
+  }
+
+  private class OobTransportProviderImpl implements OobTransportProvider<ClientTransport> {
+    private final TransportSet transportSet;
+
+    OobTransportProviderImpl(EquivalentAddressGroup addressGroup, String authority) {
+      synchronized (lock) {
+        if (shutdown) {
+          transportSet = null;
+        } else {
+          transportSet = new TransportSet(addressGroup, authority, userAgent, loadBalancer,
+              backoffPolicyProvider, transportFactory, scheduledExecutor, executor,
+              new TransportSet.Callback() {
+                @Override
+                public void onTerminated() {
+                  synchronized (lock) {
+                    oobTransports.remove(OobTransportProviderImpl.this);
+                    maybeTerminateChannel();
+                  }
+                }
+              });
+          oobTransports.add(this);
+        }
+      }
+    }
+
+    @Override
+    public ClientTransport get() {
+      if (transportSet == null) {
+        return SHUTDOWN_TRANSPORT;
+      } else {
+        return transportSet.obtainActiveTransport();
+      }
+    }
+
+    @Override
+    public void close() {
+      if (transportSet != null) {
+        transportSet.shutdown();
+      }
     }
   }
 }

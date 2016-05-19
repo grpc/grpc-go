@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
@@ -57,6 +58,7 @@ import io.grpc.NameResolver;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.TransportManager.InterimTransport;
+import io.grpc.TransportManager.OobTransportProvider;
 import io.grpc.TransportManager;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
 
@@ -320,6 +322,52 @@ public class ManagedChannelImplTransportManagerTest {
     // allows channel to terminate.
     interimTransport.closeWithError(Status.UNAVAILABLE);
     verify(sl1).closed(same(Status.UNAVAILABLE), any(Metadata.class));
+    assertTrue(channel.isTerminated());
+  }
+
+  @Test
+  public void createOobTransportProvider() throws Exception {
+    SocketAddress addr = mock(SocketAddress.class);
+    EquivalentAddressGroup addressGroup = new EquivalentAddressGroup(addr);
+    String oobAuthority = "oobauthority";
+
+    OobTransportProvider<ClientTransport> p1 =
+        tm.createOobTransportProvider(addressGroup, oobAuthority);
+    ClientTransport t1 = p1.get();
+    assertNotNull(t1);
+    assertSame(t1, p1.get());
+    verify(mockTransportFactory, timeout(1000)).newClientTransport(addr, oobAuthority, userAgent);
+    MockClientTransportInfo transportInfo1 = transports.poll(1, TimeUnit.SECONDS);
+
+    // OOB transport providers are not indexed by addresses, thus each time it creates
+    // a new provider.
+    OobTransportProvider<ClientTransport> p2 =
+        tm.createOobTransportProvider(addressGroup, oobAuthority);
+    assertNotSame(p1, p2);
+    ClientTransport t2 = p2.get();
+    verify(mockTransportFactory, timeout(1000).times(2))
+        .newClientTransport(addr, oobAuthority, userAgent);
+    assertNotSame(t1, t2);
+    MockClientTransportInfo transportInfo2 = transports.poll(1, TimeUnit.SECONDS);
+    assertNotSame(transportInfo1.transport, transportInfo2.transport);
+
+    // Closing the OobTransportProvider will shutdown the transport
+    p1.close();
+    verify(transportInfo1.transport).shutdown();
+    transportInfo1.listener.transportTerminated();
+
+    channel.shutdown();
+    verify(transportInfo2.transport).shutdown();
+
+    OobTransportProvider<ClientTransport> p3 =
+        tm.createOobTransportProvider(addressGroup, oobAuthority);
+    assertTrue(p3.get() instanceof FailingClientTransport);
+
+    p2.close();
+
+    // The channel will not be terminated until all OOB transports are terminated.
+    assertFalse(channel.isTerminated());
+    transportInfo2.listener.transportTerminated();
     assertTrue(channel.isTerminated());
   }
 }
