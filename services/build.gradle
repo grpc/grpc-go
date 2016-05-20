@@ -1,0 +1,35 @@
+// Add dependency on the protobuf plugin
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath libraries.protobuf_plugin
+    }
+}
+
+plugins {
+    id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
+}
+
+description = "gRPC: Services"
+
+dependencies {
+    compile project(':grpc-protobuf'),
+            project(':grpc-stub')
+}
+
+configureProtoCompilation()
+
+// Configure the animal sniffer plugin
+animalsniffer {
+    signature = "org.codehaus.mojo.signature:java16:+@signature"
+}
+
+// Let intellij projects refer to generated code
+idea {
+    module {
+        sourceDirs += file("${projectDir}/src/generated/main/java");
+        sourceDirs += file("${projectDir}/src/generated/main/grpc");
+    }
+}
