@@ -87,7 +87,7 @@ public class ProtoLiteUtilsTest {
   public void testInvalidatedMessage() throws Exception {
     InputStream is = marshaller.stream(proto);
     // Invalidates message, and drains all bytes
-    ByteStreams.toByteArray(is);
+    byte[] unused = ByteStreams.toByteArray(is);
     try {
       ((ProtoInputStream) is).message();
       fail("Expected exception");
@@ -190,7 +190,7 @@ public class ProtoLiteUtilsTest {
   public void testDrainTo_none() throws Exception {
     byte[] golden = ByteStreams.toByteArray(marshaller.stream(proto));
     InputStream is = marshaller.stream(proto);
-    ByteStreams.toByteArray(is);
+    byte[] unused = ByteStreams.toByteArray(is);
     Drainable d = (Drainable) is;
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     assertEquals(0, d.drainTo(baos));
