@@ -31,9 +31,13 @@
 
 package io.grpc.benchmarks.netty;
 
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.ServerMethodDefinition;
+import io.grpc.ServerCall;
+import io.grpc.ServerCall.Listener;
+import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.ServiceDescriptor;
 import io.grpc.util.MutableHandlerRegistry;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -80,13 +84,21 @@ public class HandlerRegistryBenchmark {
     fullMethodNames = new ArrayList<String>(serviceCount * methodCountPerService);
     for (int serviceIndex = 0; serviceIndex < serviceCount; ++serviceIndex) {
       String serviceName = randomString();
-      ServerServiceDefinition.Builder serviceBuilder = ServerServiceDefinition.builder(serviceName);
+      ServerServiceDefinition.Builder serviceBuilder = ServerServiceDefinition.builder(
+          new ServiceDescriptor(serviceName));
       for (int methodIndex = 0; methodIndex < methodCountPerService; ++methodIndex) {
         String methodName = randomString();
-        MethodDescriptor<?, ?> methodDescriptor = MethodDescriptor.create(
+        MethodDescriptor<Object, Object> methodDescriptor = MethodDescriptor.create(
             MethodDescriptor.MethodType.UNKNOWN,
             MethodDescriptor.generateFullMethodName(serviceName, methodName), null, null);
-        serviceBuilder.addMethod(ServerMethodDefinition.create(methodDescriptor, null));
+        serviceBuilder.addMethod(methodDescriptor,
+            new ServerCallHandler<Object, Object>() {
+              @Override
+              public Listener<Object> startCall(ServerCall<Object, Object> call,
+                  Metadata headers) {
+                return null;
+              }
+            });
         fullMethodNames.add(methodDescriptor.getFullMethodName());
       }
       registry.addService(serviceBuilder.build());

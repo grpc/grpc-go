@@ -35,11 +35,11 @@ package io.grpc;
  * A {@link ServerCall} which forwards all of it's methods to another {@link ServerCall} which
  * may have a different onMessage() message type.
  */
-abstract class PartialForwardingServerCall<RespT> extends ServerCall<RespT> {
+abstract class PartialForwardingServerCall<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   /**
    * Returns the delegated {@code ServerCall}.
    */
-  protected abstract ServerCall<?> delegate();
+  protected abstract ServerCall<?, ?> delegate();
 
   @Override
   public void request(int numMessages) {

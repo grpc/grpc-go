@@ -277,9 +277,15 @@ public class MetricsServiceGrpc {
     }
   }
 
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
+        METHOD_GET_ALL_GAUGES,
+        METHOD_GET_GAUGE);
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final MetricsService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
+    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(
           METHOD_GET_ALL_GAUGES,
           asyncServerStreamingCall(

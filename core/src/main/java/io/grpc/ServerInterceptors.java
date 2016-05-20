@@ -33,6 +33,8 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 
+import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
+
 import java.io.BufferedInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -120,7 +122,7 @@ public class ServerInterceptors {
       return serviceDef;
     }
     ServerServiceDefinition.Builder serviceDefBuilder
-        = ServerServiceDefinition.builder(serviceDef.getName());
+        = ServerServiceDefinition.builder(serviceDef.getServiceDescriptor());
     for (ServerMethodDefinition<?, ?> method : serviceDef.getMethods()) {
       wrapAndAddMethod(serviceDefBuilder, method, interceptors);
     }
@@ -179,8 +181,11 @@ public class ServerInterceptors {
   public static <T> ServerServiceDefinition useMarshalledMessages(
       final ServerServiceDefinition serviceDef,
       final MethodDescriptor.Marshaller<T> marshaller) {
-    final ServerServiceDefinition.Builder serviceBuilder = ServerServiceDefinition
-        .builder(serviceDef.getName());
+    List<ServerMethodDefinition<?, ?>> wrappedMethods =
+        new ArrayList<ServerMethodDefinition<?, ?>>();
+    List<MethodDescriptor<?, ?>> wrappedDescriptors =
+        new ArrayList<MethodDescriptor<?, ?>>();
+    // Wrap the descriptors
     for (final ServerMethodDefinition<?, ?> definition : serviceDef.getMethods()) {
       final MethodDescriptor<?, ?> originalMethodDescriptor = definition.getMethodDescriptor();
       final MethodDescriptor<T, T> wrappedMethodDescriptor = MethodDescriptor
@@ -188,7 +193,16 @@ public class ServerInterceptors {
               originalMethodDescriptor.getFullMethodName(),
               marshaller,
               marshaller);
-      serviceBuilder.addMethod(wrapMethod(definition, wrappedMethodDescriptor));
+      wrappedDescriptors.add(wrappedMethodDescriptor);
+      wrappedMethods.add(wrapMethod(definition, wrappedMethodDescriptor));
+    }
+    // Build the new service descriptor
+    final ServerServiceDefinition.Builder serviceBuilder = ServerServiceDefinition
+        .builder(new ServiceDescriptor(serviceDef.getServiceDescriptor().getName(),
+            wrappedDescriptors));
+    // Create the new service definiton.
+    for (ServerMethodDefinition<?, ?> definition : wrappedMethods) {
+      serviceBuilder.addMethod(definition);
     }
     return serviceBuilder.build();
   }
@@ -220,10 +234,9 @@ public class ServerInterceptors {
 
     @Override
     public ServerCall.Listener<ReqT> startCall(
-        MethodDescriptor<ReqT, RespT> method,
-        ServerCall<RespT> call,
+        ServerCall<ReqT, RespT> call,
         Metadata headers) {
-      return interceptor.interceptCall(method, call, headers, callHandler);
+      return interceptor.interceptCall(call, headers, callHandler);
     }
   }
 
@@ -244,12 +257,12 @@ public class ServerInterceptors {
     return new ServerCallHandler<WReqT, WRespT>() {
       @Override
       public ServerCall.Listener<WReqT> startCall(
-          final MethodDescriptor<WReqT, WRespT> method,
-          final ServerCall<WRespT> call,
+          final ServerCall<WReqT, WRespT> call,
           final Metadata headers) {
-        final ServerCall<ORespT> unwrappedCall = new PartialForwardingServerCall<ORespT>() {
+        final ServerCall<OReqT, ORespT> unwrappedCall =
+            new PartialForwardingServerCall<OReqT, ORespT>() {
           @Override
-          protected ServerCall<WRespT> delegate() {
+          protected ServerCall<WReqT, WRespT> delegate() {
             return call;
           }
 
@@ -259,10 +272,15 @@ public class ServerInterceptors {
             final WRespT wrappedMessage = wrappedMethod.parseResponse(is);
             delegate().sendMessage(wrappedMessage);
           }
+
+          @Override
+          public MethodDescriptor<OReqT, ORespT> getMethodDescriptor() {
+            return originalMethod;
+          }
         };
 
         final ServerCall.Listener<OReqT> originalListener = originalHandler
-            .startCall(originalMethod, unwrappedCall, headers);
+            .startCall(unwrappedCall, headers);
 
         return new PartialForwardingServerCallListener<WReqT>() {
           @Override

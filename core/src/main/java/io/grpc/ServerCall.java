@@ -49,9 +49,10 @@ import javax.net.ssl.SSLSession;
  *
  * <p>Methods are guaranteed to be non-blocking. Implementations are not required to be thread-safe.
  *
+ * @param <ReqT> parsed type of request message.
  * @param <RespT> parsed type of response message.
  */
-public abstract class ServerCall<RespT> {
+public abstract class ServerCall<ReqT, RespT> {
   /**
    * {@link Attributes.Key} for the remote address of server call attributes
    * {@link ServerCall#attributes()}
@@ -225,4 +226,10 @@ public abstract class ServerCall<RespT> {
   public Attributes attributes() {
     return Attributes.EMPTY;
   }
+
+
+  /**
+   * The {@link MethodDescriptor} for the call.
+   */
+  public abstract MethodDescriptor<ReqT, RespT> getMethodDescriptor();
 }

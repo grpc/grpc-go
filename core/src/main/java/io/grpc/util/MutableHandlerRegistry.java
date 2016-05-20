@@ -34,8 +34,8 @@ package io.grpc.util;
 import io.grpc.ExperimentalApi;
 import io.grpc.HandlerRegistry;
 import io.grpc.MethodDescriptor;
-import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -57,11 +57,11 @@ public final class MutableHandlerRegistry extends HandlerRegistry {
 
   @Nullable
   public ServerServiceDefinition addService(ServerServiceDefinition service) {
-    return services.put(service.getName(), service);
+    return services.put(service.getServiceDescriptor().getName(), service);
   }
 
   public boolean removeService(ServerServiceDefinition service) {
-    return services.remove(service.getName(), service);
+    return services.remove(service.getServiceDescriptor().getName(), service);
   }
 
   /**

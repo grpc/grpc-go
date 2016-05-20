@@ -33,7 +33,6 @@ package io.grpc.examples.header;
 
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
@@ -53,12 +52,11 @@ public class HeaderServerInterceptor implements ServerInterceptor {
 
   @Override
   public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-      MethodDescriptor<ReqT, RespT> method,
-      ServerCall<RespT> call,
+      ServerCall<ReqT, RespT> call,
       final Metadata requestHeaders,
       ServerCallHandler<ReqT, RespT> next) {
     logger.info("header received from client:" + requestHeaders);
-    return next.startCall(method, new SimpleForwardingServerCall<RespT>(call) {
+    return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
       @Override
       public void sendHeaders(Metadata responseHeaders) {
         responseHeaders.put(customHeadKey, "customRespondValue");

@@ -34,13 +34,13 @@ package io.grpc;
 /**
  * A {@link ServerCall} which forwards all of it's methods to another {@link ServerCall}.
  */
-public abstract class ForwardingServerCall<RespT>
-    extends PartialForwardingServerCall<RespT> {
+public abstract class ForwardingServerCall<ReqT, RespT>
+    extends PartialForwardingServerCall<ReqT, RespT> {
   /**
    * Returns the delegated {@code ServerCall}.
    */
   @Override
-  protected abstract ServerCall<RespT> delegate();
+  protected abstract ServerCall<ReqT, RespT> delegate();
 
   @Override
   public void sendMessage(RespT message) {
@@ -51,18 +51,23 @@ public abstract class ForwardingServerCall<RespT>
    * A simplified version of {@link ForwardingServerCall} where subclasses can pass in a {@link
    * ServerCall} as the delegate.
    */
-  public abstract static class SimpleForwardingServerCall<RespT>
-      extends ForwardingServerCall<RespT> {
+  public abstract static class SimpleForwardingServerCall<ReqT, RespT>
+      extends ForwardingServerCall<ReqT, RespT> {
 
-    private final ServerCall<RespT> delegate;
+    private final ServerCall<ReqT, RespT> delegate;
 
-    protected SimpleForwardingServerCall(ServerCall<RespT> delegate) {
+    protected SimpleForwardingServerCall(ServerCall<ReqT, RespT> delegate) {
       this.delegate = delegate;
     }
 
     @Override
-    protected ServerCall<RespT> delegate() {
+    protected ServerCall<ReqT, RespT> delegate() {
       return delegate;
+    }
+
+    @Override
+    public MethodDescriptor<ReqT, RespT> getMethodDescriptor() {
+      return delegate.getMethodDescriptor();
     }
   }
 }

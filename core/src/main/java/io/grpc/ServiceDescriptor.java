@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,38 +31,39 @@
 
 package io.grpc;
 
-import javax.annotation.concurrent.ThreadSafe;
+import com.google.common.base.Preconditions;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
- * Interface for intercepting incoming calls before that are dispatched by
- * {@link ServerCallHandler}.
- *
- * <p>Implementers use this mechanism to add cross-cutting behavior to server-side calls. Common
- * example of such behavior include:
- * <ul>
- * <li>Enforcing valid authentication credentials</li>
- * <li>Logging and monitoring call behavior</li>
- * <li>Delegating calls to other servers</li>
- * </ul>
+ * Descriptor for a service.
  */
-@ThreadSafe
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1711")
-public interface ServerInterceptor {
+public class ServiceDescriptor {
+
+  private final String name;
+  private final List<MethodDescriptor<?, ?>> methods;
+
+  public ServiceDescriptor(String name, MethodDescriptor<?, ?>... methods) {
+    this(name, Arrays.asList(methods));
+  }
+
+  public ServiceDescriptor(String name, List<MethodDescriptor<?, ?>> methods) {
+    this.name = Preconditions.checkNotNull(name);
+    this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
+  }
+
+  /** Simple name of the service. It is not an absolute path. */
+  public String getName() {
+    return name;
+  }
+
   /**
-   * Intercept {@link ServerCall} dispatch by the {@code next} {@link ServerCallHandler}. General
-   * semantics of {@link ServerCallHandler#startCall} apply and the returned
-   * {@link io.grpc.ServerCall.Listener} must not be {@code null}.
-   *
-   * <p>If the implementation throws an exception, {@code call} will be closed with an error.
-   * Implementations must not throw an exception if they started processing that may use {@code
-   * call} on another thread.
-   *
-   * @param call object to receive response messages
-   * @param next next processor in the interceptor chain
-   * @return listener for processing incoming messages for {@code call}, never {@code null}.
+   * A list of {@link MethodDescriptor} instances describing the methods exposed by the service.
    */
-  <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-      ServerCall<ReqT, RespT> call,
-      Metadata headers,
-      ServerCallHandler<ReqT, RespT> next);
+  public List<MethodDescriptor<?, ?>> getMethods() {
+    return methods;
+  }
 }

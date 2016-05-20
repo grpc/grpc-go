@@ -45,6 +45,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
@@ -88,7 +89,7 @@ public class ServerCallsTest {
       new IntegerMarshaller(), new IntegerMarshaller());
 
   @Mock
-  ServerCall<Integer> serverCall;
+  ServerCall<Integer, Integer> serverCall;
 
   @Before
   public void setUp() throws Exception {
@@ -128,7 +129,7 @@ public class ServerCallsTest {
               }
             });
     ServerCall.Listener<Integer> callListener =
-        callHandler.startCall(STREAMING_METHOD, serverCall, new Metadata());
+        callHandler.startCall(serverCall, new Metadata());
     Mockito.when(serverCall.isReady()).thenReturn(true).thenReturn(false);
     Mockito.when(serverCall.isCancelled()).thenReturn(false).thenReturn(true);
     assertTrue(callObserver.get().isReady());
@@ -160,7 +161,7 @@ public class ServerCallsTest {
               }
             });
     ServerCall.Listener<Integer> callListener =
-        callHandler.startCall(STREAMING_METHOD, serverCall, new Metadata());
+        callHandler.startCall(serverCall, new Metadata());
     callListener.onMessage(1);
     try {
       callObserver.get().setOnCancelHandler(new Runnable() {
@@ -188,7 +189,7 @@ public class ServerCallsTest {
               }
             });
     ServerCall.Listener<Integer> callListener =
-        callHandler.startCall(STREAMING_METHOD, serverCall, new Metadata());
+        callHandler.startCall(serverCall, new Metadata());
     callListener.onMessage(1);
     try {
       callObserver.get().setOnReadyHandler(new Runnable() {
@@ -216,7 +217,7 @@ public class ServerCallsTest {
               }
             });
     ServerCall.Listener<Integer> callListener =
-        callHandler.startCall(STREAMING_METHOD, serverCall, new Metadata());
+        callHandler.startCall(serverCall, new Metadata());
     callListener.onMessage(1);
     try {
       callObserver.get().disableAutoInboundFlowControl();
@@ -240,7 +241,7 @@ public class ServerCallsTest {
               }
             });
     ServerCall.Listener<Integer> callListener =
-        callHandler.startCall(STREAMING_METHOD, serverCall, new Metadata());
+        callHandler.startCall(serverCall, new Metadata());
     callListener.onReady();
     // Transport should not call this if nothing has been requested but forcing it here
     // to verify that message delivery does not trigger a call to request(1).
@@ -261,8 +262,7 @@ public class ServerCallsTest {
                 serverCallObserver.disableAutoInboundFlowControl();
               }
             });
-    ServerCall.Listener<Integer> callListener =
-        callHandler.startCall(UNARY_METHOD, serverCall, new Metadata());
+    callHandler.startCall(serverCall, new Metadata());
     // Auto inbound flow-control always requests 2 messages for unary to detect a violation
     // of the unary semantic.
     Mockito.verify(serverCall, times(1)).request(2);
@@ -271,8 +271,6 @@ public class ServerCallsTest {
   @Test
   public void onReadyHandlerCalledForUnaryRequest() throws Exception {
     final AtomicInteger onReadyCalled = new AtomicInteger();
-    final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
-        new AtomicReference<ServerCallStreamObserver<Integer>>();
     ServerCallHandler<Integer, Integer> callHandler =
         ServerCalls.asyncServerStreamingCall(
             new ServerCalls.ServerStreamingMethod<Integer, Integer>() {
@@ -289,7 +287,7 @@ public class ServerCallsTest {
               }
             });
     ServerCall.Listener<Integer> callListener =
-        callHandler.startCall(STREAMING_METHOD, serverCall, new Metadata());
+        callHandler.startCall(serverCall, new Metadata());
     Mockito.when(serverCall.isReady()).thenReturn(true).thenReturn(false);
     Mockito.when(serverCall.isCancelled()).thenReturn(false).thenReturn(true);
     callListener.onReady();
@@ -309,7 +307,8 @@ public class ServerCallsTest {
   @Test
   public void inprocessTransportManualFlow() throws Exception {
     final Semaphore semaphore = new Semaphore(1);
-    ServerServiceDefinition service = ServerServiceDefinition.builder("some")
+    ServerServiceDefinition service = ServerServiceDefinition.builder(
+        new ServiceDescriptor("some", STREAMING_METHOD))
         .addMethod(STREAMING_METHOD, ServerCalls.asyncBidiStreamingCall(
             new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
               int iteration;

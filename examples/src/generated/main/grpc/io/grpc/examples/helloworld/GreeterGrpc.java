@@ -237,9 +237,14 @@ public class GreeterGrpc {
     }
   }
 
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
+        METHOD_SAY_HELLO);
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final Greeter serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
+    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(
           METHOD_SAY_HELLO,
           asyncUnaryCall(

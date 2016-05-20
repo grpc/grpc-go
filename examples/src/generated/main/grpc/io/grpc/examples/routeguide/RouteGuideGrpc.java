@@ -376,9 +376,17 @@ public class RouteGuideGrpc {
     }
   }
 
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
+        METHOD_GET_FEATURE,
+        METHOD_LIST_FEATURES,
+        METHOD_RECORD_ROUTE,
+        METHOD_ROUTE_CHAT);
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final RouteGuide serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
+    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(
           METHOD_GET_FEATURE,
           asyncUnaryCall(
