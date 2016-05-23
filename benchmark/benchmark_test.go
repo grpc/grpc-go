@@ -53,6 +53,7 @@ func runUnary(b *testing.B, connCount, rpcCountPerConn int) {
 			}()
 		}
 	}
+	b.ResetTimer()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		ch <- i
@@ -113,6 +114,7 @@ func runStream(b *testing.B, connCount, rpcCountPerConn int) {
 			}()
 		}
 	}
+	b.ResetTimer()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		ch <- i
