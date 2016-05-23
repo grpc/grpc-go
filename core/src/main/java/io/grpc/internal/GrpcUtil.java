@@ -145,6 +145,8 @@ public final class GrpcUtil {
 
   public static final Joiner ACCEPT_ENCODING_JOINER = Joiner.on(',');
 
+  private static final String IMPLEMENTATION_VERION = getImplementationVersion();
+
   /**
    * Maps HTTP error response status codes to transport codes.
    */
@@ -303,8 +305,8 @@ public final class GrpcUtil {
   /**
    * Gets the User-Agent string for the gRPC transport.
    */
-  public static String getGrpcUserAgent(String transportName,
-                                        @Nullable String applicationUserAgent) {
+  public static String getGrpcUserAgent(
+      String transportName, @Nullable String applicationUserAgent) {
     StringBuilder builder = new StringBuilder();
     if (applicationUserAgent != null) {
       builder.append(applicationUserAgent);
@@ -312,11 +314,7 @@ public final class GrpcUtil {
     }
     builder.append("grpc-java-");
     builder.append(transportName);
-    String version = GrpcUtil.class.getPackage().getImplementationVersion();
-    if (version != null) {
-      builder.append("/");
-      builder.append(version);
-    }
+    builder.append(IMPLEMENTATION_VERION);
     return builder.toString();
   }
 
@@ -491,4 +489,12 @@ public final class GrpcUtil {
   }
 
   private GrpcUtil() {}
+
+  private static String getImplementationVersion() {
+    String version = GrpcUtil.class.getPackage().getImplementationVersion();
+    if (version != null) {
+      return "/" + version;
+    }
+    return "";
+  }
 }

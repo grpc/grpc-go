@@ -76,6 +76,7 @@ public class HeadersBenchmark {
   private AsciiString scheme = new AsciiString("https");
   private AsciiString defaultPath = new AsciiString("/Service.MethodMethodMethod");
   private AsciiString authority = new AsciiString("authority.googleapis.bogus");
+  private AsciiString userAgent = new AsciiString("grpc-java-netty");
 
   @Setup
   public void setUp() throws Exception {
@@ -89,7 +90,7 @@ public class HeadersBenchmark {
   @BenchmarkMode(Mode.SampleTime)
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   public Http2Headers convertHeaders() {
-    return Utils.convertClientHeaders(metadata, scheme, defaultPath, authority);
+    return Utils.convertClientHeaders(metadata, scheme, defaultPath, authority, userAgent);
   }
 }
 

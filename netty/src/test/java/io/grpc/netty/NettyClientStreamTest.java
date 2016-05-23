@@ -358,7 +358,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     listener = mock(ClientStreamListener.class);
 
     stream = new NettyClientStreamImpl(methodDescriptor, new Metadata(), channel, handler,
-        DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"));
+        DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"),
+        AsciiString.of("agent"));
     stream.start(listener);
     stream().id(STREAM_ID);
     verify(listener, never()).onReady();
@@ -382,7 +383,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     }).when(writeQueue).enqueue(any(), any(ChannelPromise.class), anyBoolean());
     when(writeQueue.enqueue(any(), anyBoolean())).thenReturn(future);
     NettyClientStream stream = new NettyClientStreamImpl(methodDescriptor, new Metadata(), channel,
-        handler, DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"));
+        handler, DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"),
+        AsciiString.of("agent"));
     stream.start(listener);
     assertTrue(stream.canSend());
     assertTrue(stream.canReceive());
@@ -422,8 +424,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
 
   class NettyClientStreamImpl extends NettyClientStream {
     NettyClientStreamImpl(MethodDescriptor<?, ?> method, Metadata headers, Channel channel,
-        NettyClientHandler handler, int maxMessageSize, AsciiString authority, AsciiString scheme) {
-      super(method, headers, channel, handler, maxMessageSize, authority, scheme);
+        NettyClientHandler handler, int maxMessageSize, AsciiString authority, AsciiString scheme,
+        AsciiString userAgent) {
+      super(method, headers, channel, handler, maxMessageSize, authority, scheme, userAgent);
     }
 
     @Override

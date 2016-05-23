@@ -60,6 +60,9 @@ import java.util.concurrent.Executor;
  * A Netty-based {@link ManagedClientTransport} implementation.
  */
 class NettyClientTransport implements ManagedClientTransport {
+  private static final AsciiString DEFAULT_AGENT =
+      new AsciiString(GrpcUtil.getGrpcUserAgent("netty", null));
+
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
@@ -68,6 +71,7 @@ class NettyClientTransport implements ManagedClientTransport {
   private final int flowControlWindow;
   private final int maxMessageSize;
   private final int maxHeaderListSize;
+
   private ProtocolNegotiator.Handler negotiationHandler;
   private NettyClientHandler handler;
   // We should not send on the channel until negotiation completes. This is a hard requirement
@@ -110,8 +114,11 @@ class NettyClientTransport implements ManagedClientTransport {
   public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
+    AsciiString userAgent = headers.containsKey(GrpcUtil.USER_AGENT_KEY)
+        ? new AsciiString(GrpcUtil.getGrpcUserAgent("netty", headers.get(GrpcUtil.USER_AGENT_KEY)))
+        : DEFAULT_AGENT;
     return new NettyClientStream(method, headers, channel, handler, maxMessageSize, authority,
-        negotiationHandler.scheme()) {
+        negotiationHandler.scheme(), userAgent) {
       @Override
       protected Status statusFromFailedFuture(ChannelFuture f) {
         return NettyClientTransport.this.statusFromFailedFuture(f);

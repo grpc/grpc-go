@@ -117,7 +117,8 @@ class Utils {
   public static Http2Headers convertClientHeaders(Metadata headers,
       AsciiString scheme,
       AsciiString defaultPath,
-      AsciiString authority) {
+      AsciiString authority,
+      AsciiString userAgent) {
     Preconditions.checkNotNull(defaultPath, "defaultPath");
     Preconditions.checkNotNull(authority, "authority");
     // Add any application-provided headers first.
@@ -132,8 +133,8 @@ class Utils {
         .set(TE_HEADER, TE_TRAILERS);
 
     // Set the User-Agent header.
-    String userAgent = GrpcUtil.getGrpcUserAgent("netty", headers.get(USER_AGENT_KEY));
-    http2Headers.set(USER_AGENT, new AsciiString(userAgent.getBytes(UTF_8)));
+    //String userAgent = GrpcUtil.getGrpcUserAgent("netty", headers.get(USER_AGENT_KEY));
+    http2Headers.set(USER_AGENT, userAgent);
 
     return http2Headers;
   }

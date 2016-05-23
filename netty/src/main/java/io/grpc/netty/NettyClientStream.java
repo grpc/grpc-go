@@ -60,14 +60,17 @@ abstract class NettyClientStream extends Http2ClientStream implements StreamIdHo
   private Metadata headers;
   private final Channel channel;
   private final NettyClientHandler handler;
-  private AsciiString authority;
   private final AsciiString scheme;
+  private final AsciiString userAgent;
+  private AsciiString authority;
+
   private Http2Stream http2Stream;
   private Integer id;
   private WriteQueue writeQueue;
 
   NettyClientStream(MethodDescriptor<?, ?> method, Metadata headers, Channel channel,
-      NettyClientHandler handler, int maxMessageSize, AsciiString authority, AsciiString scheme) {
+      NettyClientHandler handler, int maxMessageSize, AsciiString authority, AsciiString scheme,
+      AsciiString userAgent) {
     super(new NettyWritableBufferAllocator(channel.alloc()), maxMessageSize);
     this.method = checkNotNull(method, "method");
     this.headers = checkNotNull(headers, "headers");
@@ -76,6 +79,7 @@ abstract class NettyClientStream extends Http2ClientStream implements StreamIdHo
     this.handler = checkNotNull(handler, "handler");
     this.authority = checkNotNull(authority, "authority");
     this.scheme = checkNotNull(scheme, "scheme");
+    this.userAgent = userAgent;
   }
 
   @Override
@@ -91,7 +95,7 @@ abstract class NettyClientStream extends Http2ClientStream implements StreamIdHo
     // Convert the headers into Netty HTTP/2 headers.
     AsciiString defaultPath = new AsciiString("/" + method.getFullMethodName());
     Http2Headers http2Headers
-        = Utils.convertClientHeaders(headers, scheme, defaultPath, authority);
+        = Utils.convertClientHeaders(headers, scheme, defaultPath, authority, userAgent);
     headers = null;
 
     ChannelFutureListener failureListener = new ChannelFutureListener() {
