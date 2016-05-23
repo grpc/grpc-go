@@ -73,8 +73,8 @@ import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
-import io.netty.handler.codec.http2.Http2FlowController;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
@@ -363,7 +363,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     setUp();
 
     Http2Stream connectionStream = connection().connectionStream();
-    Http2FlowController localFlowController = connection().local().flowController();
+    Http2LocalFlowController localFlowController = connection().local().flowController();
     int actualInitialWindowSize = localFlowController.initialWindowSize(connectionStream);
     int actualWindowSize = localFlowController.windowSize(connectionStream);
     assertEquals(flowControlWindow, actualWindowSize);
