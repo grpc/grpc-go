@@ -65,47 +65,53 @@ func runUnary(b *testing.B, connCount, rpcCountPerConn int) {
 	}
 }
 
-func runStream(b *testing.B, rpcCountPerConn int) {
+func runStream(b *testing.B, connCount, rpcCountPerConn int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"})
 	defer stopper()
-	conn := NewClientConn(target, grpc.WithInsecure())
-	tc := testpb.NewBenchmarkServiceClient(conn)
 
-	// Warm up connection.
-	stream, err := tc.StreamingCall(context.Background())
-	if err != nil {
-		b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+	conns := make([]*grpc.ClientConn, connCount, connCount)
+	clients := make([]testpb.BenchmarkServiceClient, connCount, connCount)
+	for ic := 0; ic < connCount; ic++ {
+		conns[ic] = NewClientConn(target, grpc.WithInsecure())
+		tc := testpb.NewBenchmarkServiceClient(conns[ic])
+		// Warm up connection.
+		stream, err := tc.StreamingCall(context.Background())
+		if err != nil {
+			b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+		}
+		for i := 0; i < 10; i++ {
+			streamCaller(stream)
+		}
+		clients[ic] = tc
 	}
-	for i := 0; i < 10; i++ {
-		streamCaller(stream)
-	}
-
-	ch := make(chan int, rpcCountPerConn*4)
+	ch := make(chan int, connCount*rpcCountPerConn*4)
 	var (
 		mu sync.Mutex
 		wg sync.WaitGroup
 	)
-	wg.Add(rpcCountPerConn)
+	wg.Add(connCount * rpcCountPerConn)
 
 	// Distribute the b.N calls over rpcCountPerConn workers.
-	for i := 0; i < rpcCountPerConn; i++ {
-		go func() {
-			stream, err := tc.StreamingCall(context.Background())
-			if err != nil {
-				b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
-			}
-			for range ch {
-				start := time.Now()
-				streamCaller(stream)
-				elapse := time.Since(start)
-				mu.Lock()
-				s.Add(elapse)
-				mu.Unlock()
-			}
-			wg.Done()
-		}()
+	for _, tc := range clients {
+		for i := 0; i < rpcCountPerConn; i++ {
+			go func() {
+				stream, err := tc.StreamingCall(context.Background())
+				if err != nil {
+					b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+				}
+				for range ch {
+					start := time.Now()
+					streamCaller(stream)
+					elapse := time.Since(start)
+					mu.Lock()
+					s.Add(elapse)
+					mu.Unlock()
+				}
+				wg.Done()
+			}()
+		}
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -114,8 +120,11 @@ func runStream(b *testing.B, rpcCountPerConn int) {
 	b.StopTimer()
 	close(ch)
 	wg.Wait()
-	conn.Close()
+	for _, conn := range conns {
+		conn.Close()
+	}
 }
+
 func unaryCaller(client testpb.BenchmarkServiceClient) {
 	if err := DoUnaryCall(client, 1, 1); err != nil {
 		grpclog.Fatalf("DoUnaryCall failed: %v", err)
@@ -130,22 +139,22 @@ func streamCaller(stream testpb.BenchmarkService_StreamingCallClient) {
 
 func BenchmarkClientStreamc1(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, 1)
+	runStream(b, 1, 1)
 }
 
 func BenchmarkClientStreamc8(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, 8)
+	runStream(b, 1, 8)
 }
 
 func BenchmarkClientStreamc64(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, 64)
+	runStream(b, 1, 64)
 }
 
 func BenchmarkClientStreamc512(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, 512)
+	runStream(b, 1, 512)
 }
 func BenchmarkClientUnaryc1(b *testing.B) {
 	grpc.EnableTracing = true
@@ -169,22 +178,22 @@ func BenchmarkClientUnaryc512(b *testing.B) {
 
 func BenchmarkClientStreamNoTracec1(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, 1)
+	runStream(b, 1, 1)
 }
 
 func BenchmarkClientStreamNoTracec8(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, 8)
+	runStream(b, 1, 8)
 }
 
 func BenchmarkClientStreamNoTracec64(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, 64)
+	runStream(b, 1, 64)
 }
 
 func BenchmarkClientStreamNoTracec512(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, 512)
+	runStream(b, 1, 512)
 }
 func BenchmarkClientUnaryNoTracec1(b *testing.B) {
 	grpc.EnableTracing = false
