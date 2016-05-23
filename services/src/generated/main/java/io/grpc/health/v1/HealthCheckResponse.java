@@ -25,7 +25,8 @@ public  final class HealthCheckResponse extends
   }
   private HealthCheckResponse(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+      throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -51,11 +52,10 @@ public  final class HealthCheckResponse extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new RuntimeException(e.setUnfinishedMessage(this));
+      throw e.setUnfinishedMessage(this);
     } catch (java.io.IOException e) {
-      throw new RuntimeException(
-          new com.google.protobuf.InvalidProtocolBufferException(
-              e.getMessage()).setUnfinishedMessage(this));
+      throw new com.google.protobuf.InvalidProtocolBufferException(
+          e).setUnfinishedMessage(this);
     } finally {
       makeExtensionsImmutable();
     }
@@ -80,16 +80,16 @@ public  final class HealthCheckResponse extends
     /**
      * <code>UNKNOWN = 0;</code>
      */
-    UNKNOWN(0, 0),
+    UNKNOWN(0),
     /**
      * <code>SERVING = 1;</code>
      */
-    SERVING(1, 1),
+    SERVING(1),
     /**
      * <code>NOT_SERVING = 2;</code>
      */
-    NOT_SERVING(2, 2),
-    UNRECOGNIZED(-1, -1),
+    NOT_SERVING(2),
+    UNRECOGNIZED(-1),
     ;
 
     /**
@@ -107,14 +107,22 @@ public  final class HealthCheckResponse extends
 
 
     public final int getNumber() {
-      if (index == -1) {
+      if (this == UNRECOGNIZED) {
         throw new java.lang.IllegalArgumentException(
             "Can't get the number of an unknown enum value.");
       }
       return value;
     }
 
+    /**
+     * @deprecated Use {@link #forNumber(int)} instead.
+     */
+    @java.lang.Deprecated
     public static ServingStatus valueOf(int value) {
+      return forNumber(value);
+    }
+
+    public static ServingStatus forNumber(int value) {
       switch (value) {
         case 0: return UNKNOWN;
         case 1: return SERVING;
@@ -131,13 +139,13 @@ public  final class HealthCheckResponse extends
         ServingStatus> internalValueMap =
           new com.google.protobuf.Internal.EnumLiteMap<ServingStatus>() {
             public ServingStatus findValueByNumber(int number) {
-              return ServingStatus.valueOf(number);
+              return ServingStatus.forNumber(number);
             }
           };
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      return getDescriptor().getValues().get(index);
+      return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
         getDescriptorForType() {
@@ -162,11 +170,9 @@ public  final class HealthCheckResponse extends
       return VALUES[desc.getIndex()];
     }
 
-    private final int index;
     private final int value;
 
-    private ServingStatus(int index, int value) {
-      this.index = index;
+    private ServingStatus(int value) {
       this.value = value;
     }
 
@@ -185,7 +191,7 @@ public  final class HealthCheckResponse extends
    * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
    */
   public io.grpc.health.v1.HealthCheckResponse.ServingStatus getStatus() {
-    io.grpc.health.v1.HealthCheckResponse.ServingStatus result = io.grpc.health.v1.HealthCheckResponse.ServingStatus.valueOf(status_);
+    io.grpc.health.v1.HealthCheckResponse.ServingStatus result = io.grpc.health.v1.HealthCheckResponse.ServingStatus.forNumber(status_);
     return result == null ? io.grpc.health.v1.HealthCheckResponse.ServingStatus.UNRECOGNIZED : result;
   }
 
@@ -243,34 +249,40 @@ public  final class HealthCheckResponse extends
   }
   public static io.grpc.health.v1.HealthCheckResponse parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.health.v1.HealthCheckResponse parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.health.v1.HealthCheckResponse parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.health.v1.HealthCheckResponse parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.health.v1.HealthCheckResponse parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.health.v1.HealthCheckResponse parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
   public Builder newBuilderForType() { return newBuilder(); }
@@ -386,7 +398,7 @@ public  final class HealthCheckResponse extends
         parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
         parsedMessage = (io.grpc.health.v1.HealthCheckResponse) e.getUnfinishedMessage();
-        throw e;
+        throw e.unwrapIOException();
       } finally {
         if (parsedMessage != null) {
           mergeFrom(parsedMessage);
@@ -414,7 +426,7 @@ public  final class HealthCheckResponse extends
      * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
      */
     public io.grpc.health.v1.HealthCheckResponse.ServingStatus getStatus() {
-      io.grpc.health.v1.HealthCheckResponse.ServingStatus result = io.grpc.health.v1.HealthCheckResponse.ServingStatus.valueOf(status_);
+      io.grpc.health.v1.HealthCheckResponse.ServingStatus result = io.grpc.health.v1.HealthCheckResponse.ServingStatus.forNumber(status_);
       return result == null ? io.grpc.health.v1.HealthCheckResponse.ServingStatus.UNRECOGNIZED : result;
     }
     /**
@@ -468,16 +480,7 @@ public  final class HealthCheckResponse extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      try {
         return new HealthCheckResponse(input, extensionRegistry);
-      } catch (RuntimeException e) {
-        if (e.getCause() instanceof
-            com.google.protobuf.InvalidProtocolBufferException) {
-          throw (com.google.protobuf.InvalidProtocolBufferException)
-              e.getCause();
-        }
-        throw e;
-      }
     }
   };
 

@@ -8,29 +8,29 @@ public interface ClientStatsOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional int64 total_requests = 1;</code>
-   *
    * <pre>
    * The total number of requests sent by the client since the last report.
    * </pre>
+   *
+   * <code>optional int64 total_requests = 1;</code>
    */
   long getTotalRequests();
 
   /**
-   * <code>optional int64 client_rpc_errors = 2;</code>
-   *
    * <pre>
    * The number of client rpc errors since the last report.
    * </pre>
+   *
+   * <code>optional int64 client_rpc_errors = 2;</code>
    */
   long getClientRpcErrors();
 
   /**
-   * <code>optional int64 dropped_requests = 3;</code>
-   *
    * <pre>
    * The number of dropped requests since the last report.
    * </pre>
+   *
+   * <code>optional int64 dropped_requests = 3;</code>
    */
   long getDroppedRequests();
 }

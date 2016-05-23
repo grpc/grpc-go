@@ -8,38 +8,38 @@ public interface LoadBalanceResponseOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
-   *
    * <pre>
    * This message should be sent on the first response to the client.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
    */
   io.grpc.grpclb.InitialLoadBalanceResponse getInitialResponse();
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
-   *
    * <pre>
    * This message should be sent on the first response to the client.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
    */
   io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder getInitialResponseOrBuilder();
 
   /**
-   * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
-   *
    * <pre>
    * Contains the list of servers selected by the load balancer. The client
    * should send requests to these servers in the specified order.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
    */
   io.grpc.grpclb.ServerList getServerList();
   /**
-   * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
-   *
    * <pre>
    * Contains the list of servers selected by the load balancer. The client
    * should send requests to these servers in the specified order.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
    */
   io.grpc.grpclb.ServerListOrBuilder getServerListOrBuilder();
 

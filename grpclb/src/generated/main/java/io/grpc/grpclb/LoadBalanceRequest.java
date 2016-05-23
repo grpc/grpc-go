@@ -24,7 +24,8 @@ public  final class LoadBalanceRequest extends
   }
   private LoadBalanceRequest(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+      throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -72,11 +73,10 @@ public  final class LoadBalanceRequest extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new RuntimeException(e.setUnfinishedMessage(this));
+      throw e.setUnfinishedMessage(this);
     } catch (java.io.IOException e) {
-      throw new RuntimeException(
-          new com.google.protobuf.InvalidProtocolBufferException(
-              e.getMessage()).setUnfinishedMessage(this));
+      throw new com.google.protobuf.InvalidProtocolBufferException(
+          e).setUnfinishedMessage(this);
     } finally {
       makeExtensionsImmutable();
     }
@@ -100,17 +100,24 @@ public  final class LoadBalanceRequest extends
     INITIAL_REQUEST(1),
     CLIENT_STATS(2),
     LOADBALANCEREQUESTTYPE_NOT_SET(0);
-    private int value = 0;
+    private final int value;
     private LoadBalanceRequestTypeCase(int value) {
       this.value = value;
     }
+    /**
+     * @deprecated Use {@link #forNumber(int)} instead.
+     */
+    @java.lang.Deprecated
     public static LoadBalanceRequestTypeCase valueOf(int value) {
+      return forNumber(value);
+    }
+
+    public static LoadBalanceRequestTypeCase forNumber(int value) {
       switch (value) {
         case 1: return INITIAL_REQUEST;
         case 2: return CLIENT_STATS;
         case 0: return LOADBALANCEREQUESTTYPE_NOT_SET;
-        default: throw new java.lang.IllegalArgumentException(
-          "Value is undefined for this oneof enum.");
+        default: return null;
       }
     }
     public int getNumber() {
@@ -120,17 +127,17 @@ public  final class LoadBalanceRequest extends
 
   public LoadBalanceRequestTypeCase
   getLoadBalanceRequestTypeCase() {
-    return LoadBalanceRequestTypeCase.valueOf(
+    return LoadBalanceRequestTypeCase.forNumber(
         loadBalanceRequestTypeCase_);
   }
 
   public static final int INITIAL_REQUEST_FIELD_NUMBER = 1;
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-   *
    * <pre>
    * This message should be sent on the first request to the load balancer.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
    */
   public io.grpc.grpclb.InitialLoadBalanceRequest getInitialRequest() {
     if (loadBalanceRequestTypeCase_ == 1) {
@@ -139,11 +146,11 @@ public  final class LoadBalanceRequest extends
     return io.grpc.grpclb.InitialLoadBalanceRequest.getDefaultInstance();
   }
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-   *
    * <pre>
    * This message should be sent on the first request to the load balancer.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
    */
   public io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder getInitialRequestOrBuilder() {
     if (loadBalanceRequestTypeCase_ == 1) {
@@ -154,12 +161,12 @@ public  final class LoadBalanceRequest extends
 
   public static final int CLIENT_STATS_FIELD_NUMBER = 2;
   /**
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-   *
    * <pre>
    * The client stats should be periodically reported to the load balancer
    * based on the duration defined in the InitialLoadBalanceResponse.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
    */
   public io.grpc.grpclb.ClientStats getClientStats() {
     if (loadBalanceRequestTypeCase_ == 2) {
@@ -168,12 +175,12 @@ public  final class LoadBalanceRequest extends
     return io.grpc.grpclb.ClientStats.getDefaultInstance();
   }
   /**
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-   *
    * <pre>
    * The client stats should be periodically reported to the load balancer
    * based on the duration defined in the InitialLoadBalanceResponse.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
    */
   public io.grpc.grpclb.ClientStatsOrBuilder getClientStatsOrBuilder() {
     if (loadBalanceRequestTypeCase_ == 2) {
@@ -243,34 +250,40 @@ public  final class LoadBalanceRequest extends
   }
   public static io.grpc.grpclb.LoadBalanceRequest parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.LoadBalanceRequest parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.LoadBalanceRequest parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.LoadBalanceRequest parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.LoadBalanceRequest parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.LoadBalanceRequest parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
   public Builder newBuilderForType() { return newBuilder(); }
@@ -410,7 +423,7 @@ public  final class LoadBalanceRequest extends
         parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
         parsedMessage = (io.grpc.grpclb.LoadBalanceRequest) e.getUnfinishedMessage();
-        throw e;
+        throw e.unwrapIOException();
       } finally {
         if (parsedMessage != null) {
           mergeFrom(parsedMessage);
@@ -422,7 +435,7 @@ public  final class LoadBalanceRequest extends
     private java.lang.Object loadBalanceRequestType_;
     public LoadBalanceRequestTypeCase
         getLoadBalanceRequestTypeCase() {
-      return LoadBalanceRequestTypeCase.valueOf(
+      return LoadBalanceRequestTypeCase.forNumber(
           loadBalanceRequestTypeCase_);
     }
 
@@ -437,11 +450,11 @@ public  final class LoadBalanceRequest extends
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.grpclb.InitialLoadBalanceRequest, io.grpc.grpclb.InitialLoadBalanceRequest.Builder, io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder> initialRequestBuilder_;
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-     *
      * <pre>
      * This message should be sent on the first request to the load balancer.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public io.grpc.grpclb.InitialLoadBalanceRequest getInitialRequest() {
       if (initialRequestBuilder_ == null) {
@@ -457,11 +470,11 @@ public  final class LoadBalanceRequest extends
       }
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-     *
      * <pre>
      * This message should be sent on the first request to the load balancer.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public Builder setInitialRequest(io.grpc.grpclb.InitialLoadBalanceRequest value) {
       if (initialRequestBuilder_ == null) {
@@ -477,11 +490,11 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-     *
      * <pre>
      * This message should be sent on the first request to the load balancer.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public Builder setInitialRequest(
         io.grpc.grpclb.InitialLoadBalanceRequest.Builder builderForValue) {
@@ -495,11 +508,11 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-     *
      * <pre>
      * This message should be sent on the first request to the load balancer.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public Builder mergeInitialRequest(io.grpc.grpclb.InitialLoadBalanceRequest value) {
       if (initialRequestBuilder_ == null) {
@@ -521,11 +534,11 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-     *
      * <pre>
      * This message should be sent on the first request to the load balancer.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public Builder clearInitialRequest() {
       if (initialRequestBuilder_ == null) {
@@ -544,21 +557,21 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-     *
      * <pre>
      * This message should be sent on the first request to the load balancer.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public io.grpc.grpclb.InitialLoadBalanceRequest.Builder getInitialRequestBuilder() {
       return getInitialRequestFieldBuilder().getBuilder();
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-     *
      * <pre>
      * This message should be sent on the first request to the load balancer.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder getInitialRequestOrBuilder() {
       if ((loadBalanceRequestTypeCase_ == 1) && (initialRequestBuilder_ != null)) {
@@ -571,11 +584,11 @@ public  final class LoadBalanceRequest extends
       }
     }
     /**
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-     *
      * <pre>
      * This message should be sent on the first request to the load balancer.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.grpclb.InitialLoadBalanceRequest, io.grpc.grpclb.InitialLoadBalanceRequest.Builder, io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder> 
@@ -599,12 +612,12 @@ public  final class LoadBalanceRequest extends
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.grpclb.ClientStats, io.grpc.grpclb.ClientStats.Builder, io.grpc.grpclb.ClientStatsOrBuilder> clientStatsBuilder_;
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-     *
      * <pre>
      * The client stats should be periodically reported to the load balancer
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public io.grpc.grpclb.ClientStats getClientStats() {
       if (clientStatsBuilder_ == null) {
@@ -620,12 +633,12 @@ public  final class LoadBalanceRequest extends
       }
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-     *
      * <pre>
      * The client stats should be periodically reported to the load balancer
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public Builder setClientStats(io.grpc.grpclb.ClientStats value) {
       if (clientStatsBuilder_ == null) {
@@ -641,12 +654,12 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-     *
      * <pre>
      * The client stats should be periodically reported to the load balancer
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public Builder setClientStats(
         io.grpc.grpclb.ClientStats.Builder builderForValue) {
@@ -660,12 +673,12 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-     *
      * <pre>
      * The client stats should be periodically reported to the load balancer
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public Builder mergeClientStats(io.grpc.grpclb.ClientStats value) {
       if (clientStatsBuilder_ == null) {
@@ -687,12 +700,12 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-     *
      * <pre>
      * The client stats should be periodically reported to the load balancer
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public Builder clearClientStats() {
       if (clientStatsBuilder_ == null) {
@@ -711,23 +724,23 @@ public  final class LoadBalanceRequest extends
       return this;
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-     *
      * <pre>
      * The client stats should be periodically reported to the load balancer
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public io.grpc.grpclb.ClientStats.Builder getClientStatsBuilder() {
       return getClientStatsFieldBuilder().getBuilder();
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-     *
      * <pre>
      * The client stats should be periodically reported to the load balancer
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public io.grpc.grpclb.ClientStatsOrBuilder getClientStatsOrBuilder() {
       if ((loadBalanceRequestTypeCase_ == 2) && (clientStatsBuilder_ != null)) {
@@ -740,12 +753,12 @@ public  final class LoadBalanceRequest extends
       }
     }
     /**
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-     *
      * <pre>
      * The client stats should be periodically reported to the load balancer
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
+     *
+     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.grpclb.ClientStats, io.grpc.grpclb.ClientStats.Builder, io.grpc.grpclb.ClientStatsOrBuilder> 
@@ -795,16 +808,7 @@ public  final class LoadBalanceRequest extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      try {
         return new LoadBalanceRequest(input, extensionRegistry);
-      } catch (RuntimeException e) {
-        if (e.getCause() instanceof
-            com.google.protobuf.InvalidProtocolBufferException) {
-          throw (com.google.protobuf.InvalidProtocolBufferException)
-              e.getCause();
-        }
-        throw e;
-      }
     }
   };
 

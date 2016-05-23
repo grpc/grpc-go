@@ -8,57 +8,57 @@ public interface InitialLoadBalanceResponseOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional string load_balancer_delegate = 2;</code>
-   *
    * <pre>
    * This is an application layer redirect that indicates the client should
    * use the specified server for load balancing. When this field is set in
    * the response, the client should open a separate connection to the
    * load_balancer_delegate and call the BalanceLoad method.
    * </pre>
+   *
+   * <code>optional string load_balancer_delegate = 2;</code>
    */
   java.lang.String getLoadBalancerDelegate();
   /**
-   * <code>optional string load_balancer_delegate = 2;</code>
-   *
    * <pre>
    * This is an application layer redirect that indicates the client should
    * use the specified server for load balancing. When this field is set in
    * the response, the client should open a separate connection to the
    * load_balancer_delegate and call the BalanceLoad method.
    * </pre>
+   *
+   * <code>optional string load_balancer_delegate = 2;</code>
    */
   com.google.protobuf.ByteString
       getLoadBalancerDelegateBytes();
 
   /**
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
-   *
    * <pre>
    * This interval defines how often the client should send the client stats
    * to the load balancer. Stats should only be reported when the duration is
    * positive.
    * </pre>
+   *
+   * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
    */
   boolean hasClientStatsReportInterval();
   /**
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
-   *
    * <pre>
    * This interval defines how often the client should send the client stats
    * to the load balancer. Stats should only be reported when the duration is
    * positive.
    * </pre>
+   *
+   * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
    */
   com.google.protobuf.Duration getClientStatsReportInterval();
   /**
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
-   *
    * <pre>
    * This interval defines how often the client should send the client stats
    * to the load balancer. Stats should only be reported when the duration is
    * positive.
    * </pre>
+   *
+   * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
    */
   com.google.protobuf.DurationOrBuilder getClientStatsReportIntervalOrBuilder();
 

@@ -8,95 +8,95 @@ public interface ServerListOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
-   *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
    * be updated when server resolutions change or as needed to balance load
    * across more servers. The client should consume the server list in order
    * unless instructed otherwise via the client_config.
    * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
    */
   java.util.List<io.grpc.grpclb.Server> 
       getServersList();
   /**
-   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
-   *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
    * be updated when server resolutions change or as needed to balance load
    * across more servers. The client should consume the server list in order
    * unless instructed otherwise via the client_config.
    * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
    */
   io.grpc.grpclb.Server getServers(int index);
   /**
-   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
-   *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
    * be updated when server resolutions change or as needed to balance load
    * across more servers. The client should consume the server list in order
    * unless instructed otherwise via the client_config.
    * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
    */
   int getServersCount();
   /**
-   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
-   *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
    * be updated when server resolutions change or as needed to balance load
    * across more servers. The client should consume the server list in order
    * unless instructed otherwise via the client_config.
    * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
    */
   java.util.List<? extends io.grpc.grpclb.ServerOrBuilder> 
       getServersOrBuilderList();
   /**
-   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
-   *
    * <pre>
    * Contains a list of servers selected by the load balancer. The list will
    * be updated when server resolutions change or as needed to balance load
    * across more servers. The client should consume the server list in order
    * unless instructed otherwise via the client_config.
    * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.Server servers = 1;</code>
    */
   io.grpc.grpclb.ServerOrBuilder getServersOrBuilder(
       int index);
 
   /**
-   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
-   *
    * <pre>
    * Indicates the amount of time that the client should consider this server
    * list as valid. It may be considered stale after waiting this interval of
    * time after receiving the list. If the interval is not positive, the
    * client can assume the list is valid until the next list is received.
    * </pre>
+   *
+   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
    */
   boolean hasExpirationInterval();
   /**
-   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
-   *
    * <pre>
    * Indicates the amount of time that the client should consider this server
    * list as valid. It may be considered stale after waiting this interval of
    * time after receiving the list. If the interval is not positive, the
    * client can assume the list is valid until the next list is received.
    * </pre>
+   *
+   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
    */
   com.google.protobuf.Duration getExpirationInterval();
   /**
-   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
-   *
    * <pre>
    * Indicates the amount of time that the client should consider this server
    * list as valid. It may be considered stale after waiting this interval of
    * time after receiving the list. If the interval is not positive, the
    * client can assume the list is valid until the next list is received.
    * </pre>
+   *
+   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
    */
   com.google.protobuf.DurationOrBuilder getExpirationIntervalOrBuilder();
 }

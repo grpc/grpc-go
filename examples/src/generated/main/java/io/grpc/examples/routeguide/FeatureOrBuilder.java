@@ -8,45 +8,45 @@ public interface FeatureOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional string name = 1;</code>
-   *
    * <pre>
    * The name of the feature.
    * </pre>
+   *
+   * <code>optional string name = 1;</code>
    */
   java.lang.String getName();
   /**
-   * <code>optional string name = 1;</code>
-   *
    * <pre>
    * The name of the feature.
    * </pre>
+   *
+   * <code>optional string name = 1;</code>
    */
   com.google.protobuf.ByteString
       getNameBytes();
 
   /**
-   * <code>optional .routeguide.Point location = 2;</code>
-   *
    * <pre>
    * The point where the feature is detected.
    * </pre>
+   *
+   * <code>optional .routeguide.Point location = 2;</code>
    */
   boolean hasLocation();
   /**
-   * <code>optional .routeguide.Point location = 2;</code>
-   *
    * <pre>
    * The point where the feature is detected.
    * </pre>
+   *
+   * <code>optional .routeguide.Point location = 2;</code>
    */
   io.grpc.examples.routeguide.Point getLocation();
   /**
-   * <code>optional .routeguide.Point location = 2;</code>
-   *
    * <pre>
    * The point where the feature is detected.
    * </pre>
+   *
+   * <code>optional .routeguide.Point location = 2;</code>
    */
   io.grpc.examples.routeguide.PointOrBuilder getLocationOrBuilder();
 }

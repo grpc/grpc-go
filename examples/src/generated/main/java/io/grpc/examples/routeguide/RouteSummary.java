@@ -4,14 +4,14 @@
 package io.grpc.examples.routeguide;
 
 /**
- * Protobuf type {@code routeguide.RouteSummary}
- *
  * <pre>
  * A RouteSummary is received in response to a RecordRoute rpc.
  * It contains the number of individual points received, the number of
  * detected features, and the total distance covered as the cumulative sum of
  * the distance between each point.
  * </pre>
+ *
+ * Protobuf type {@code routeguide.RouteSummary}
  */
 public  final class RouteSummary extends
     com.google.protobuf.GeneratedMessage implements
@@ -35,7 +35,8 @@ public  final class RouteSummary extends
   }
   private RouteSummary(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+      throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -75,11 +76,10 @@ public  final class RouteSummary extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new RuntimeException(e.setUnfinishedMessage(this));
+      throw e.setUnfinishedMessage(this);
     } catch (java.io.IOException e) {
-      throw new RuntimeException(
-          new com.google.protobuf.InvalidProtocolBufferException(
-              e.getMessage()).setUnfinishedMessage(this));
+      throw new com.google.protobuf.InvalidProtocolBufferException(
+          e).setUnfinishedMessage(this);
     } finally {
       makeExtensionsImmutable();
     }
@@ -99,11 +99,11 @@ public  final class RouteSummary extends
   public static final int POINT_COUNT_FIELD_NUMBER = 1;
   private int pointCount_;
   /**
-   * <code>optional int32 point_count = 1;</code>
-   *
    * <pre>
    * The number of points received.
    * </pre>
+   *
+   * <code>optional int32 point_count = 1;</code>
    */
   public int getPointCount() {
     return pointCount_;
@@ -112,11 +112,11 @@ public  final class RouteSummary extends
   public static final int FEATURE_COUNT_FIELD_NUMBER = 2;
   private int featureCount_;
   /**
-   * <code>optional int32 feature_count = 2;</code>
-   *
    * <pre>
    * The number of known features passed while traversing the route.
    * </pre>
+   *
+   * <code>optional int32 feature_count = 2;</code>
    */
   public int getFeatureCount() {
     return featureCount_;
@@ -125,11 +125,11 @@ public  final class RouteSummary extends
   public static final int DISTANCE_FIELD_NUMBER = 3;
   private int distance_;
   /**
-   * <code>optional int32 distance = 3;</code>
-   *
    * <pre>
    * The distance covered in metres.
    * </pre>
+   *
+   * <code>optional int32 distance = 3;</code>
    */
   public int getDistance() {
     return distance_;
@@ -138,11 +138,11 @@ public  final class RouteSummary extends
   public static final int ELAPSED_TIME_FIELD_NUMBER = 4;
   private int elapsedTime_;
   /**
-   * <code>optional int32 elapsed_time = 4;</code>
-   *
    * <pre>
    * The duration of the traversal in seconds.
    * </pre>
+   *
+   * <code>optional int32 elapsed_time = 4;</code>
    */
   public int getElapsedTime() {
     return elapsedTime_;
@@ -223,34 +223,40 @@ public  final class RouteSummary extends
   }
   public static io.grpc.examples.routeguide.RouteSummary parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.examples.routeguide.RouteSummary parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.examples.routeguide.RouteSummary parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.examples.routeguide.RouteSummary parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.examples.routeguide.RouteSummary parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.examples.routeguide.RouteSummary parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
   public Builder newBuilderForType() { return newBuilder(); }
@@ -272,14 +278,14 @@ public  final class RouteSummary extends
     return builder;
   }
   /**
-   * Protobuf type {@code routeguide.RouteSummary}
-   *
    * <pre>
    * A RouteSummary is received in response to a RecordRoute rpc.
    * It contains the number of individual points received, the number of
    * detected features, and the total distance covered as the cumulative sum of
    * the distance between each point.
    * </pre>
+   *
+   * Protobuf type {@code routeguide.RouteSummary}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -391,7 +397,7 @@ public  final class RouteSummary extends
         parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
         parsedMessage = (io.grpc.examples.routeguide.RouteSummary) e.getUnfinishedMessage();
-        throw e;
+        throw e.unwrapIOException();
       } finally {
         if (parsedMessage != null) {
           mergeFrom(parsedMessage);
@@ -402,21 +408,21 @@ public  final class RouteSummary extends
 
     private int pointCount_ ;
     /**
-     * <code>optional int32 point_count = 1;</code>
-     *
      * <pre>
      * The number of points received.
      * </pre>
+     *
+     * <code>optional int32 point_count = 1;</code>
      */
     public int getPointCount() {
       return pointCount_;
     }
     /**
-     * <code>optional int32 point_count = 1;</code>
-     *
      * <pre>
      * The number of points received.
      * </pre>
+     *
+     * <code>optional int32 point_count = 1;</code>
      */
     public Builder setPointCount(int value) {
       
@@ -425,11 +431,11 @@ public  final class RouteSummary extends
       return this;
     }
     /**
-     * <code>optional int32 point_count = 1;</code>
-     *
      * <pre>
      * The number of points received.
      * </pre>
+     *
+     * <code>optional int32 point_count = 1;</code>
      */
     public Builder clearPointCount() {
       
@@ -440,21 +446,21 @@ public  final class RouteSummary extends
 
     private int featureCount_ ;
     /**
-     * <code>optional int32 feature_count = 2;</code>
-     *
      * <pre>
      * The number of known features passed while traversing the route.
      * </pre>
+     *
+     * <code>optional int32 feature_count = 2;</code>
      */
     public int getFeatureCount() {
       return featureCount_;
     }
     /**
-     * <code>optional int32 feature_count = 2;</code>
-     *
      * <pre>
      * The number of known features passed while traversing the route.
      * </pre>
+     *
+     * <code>optional int32 feature_count = 2;</code>
      */
     public Builder setFeatureCount(int value) {
       
@@ -463,11 +469,11 @@ public  final class RouteSummary extends
       return this;
     }
     /**
-     * <code>optional int32 feature_count = 2;</code>
-     *
      * <pre>
      * The number of known features passed while traversing the route.
      * </pre>
+     *
+     * <code>optional int32 feature_count = 2;</code>
      */
     public Builder clearFeatureCount() {
       
@@ -478,21 +484,21 @@ public  final class RouteSummary extends
 
     private int distance_ ;
     /**
-     * <code>optional int32 distance = 3;</code>
-     *
      * <pre>
      * The distance covered in metres.
      * </pre>
+     *
+     * <code>optional int32 distance = 3;</code>
      */
     public int getDistance() {
       return distance_;
     }
     /**
-     * <code>optional int32 distance = 3;</code>
-     *
      * <pre>
      * The distance covered in metres.
      * </pre>
+     *
+     * <code>optional int32 distance = 3;</code>
      */
     public Builder setDistance(int value) {
       
@@ -501,11 +507,11 @@ public  final class RouteSummary extends
       return this;
     }
     /**
-     * <code>optional int32 distance = 3;</code>
-     *
      * <pre>
      * The distance covered in metres.
      * </pre>
+     *
+     * <code>optional int32 distance = 3;</code>
      */
     public Builder clearDistance() {
       
@@ -516,21 +522,21 @@ public  final class RouteSummary extends
 
     private int elapsedTime_ ;
     /**
-     * <code>optional int32 elapsed_time = 4;</code>
-     *
      * <pre>
      * The duration of the traversal in seconds.
      * </pre>
+     *
+     * <code>optional int32 elapsed_time = 4;</code>
      */
     public int getElapsedTime() {
       return elapsedTime_;
     }
     /**
-     * <code>optional int32 elapsed_time = 4;</code>
-     *
      * <pre>
      * The duration of the traversal in seconds.
      * </pre>
+     *
+     * <code>optional int32 elapsed_time = 4;</code>
      */
     public Builder setElapsedTime(int value) {
       
@@ -539,11 +545,11 @@ public  final class RouteSummary extends
       return this;
     }
     /**
-     * <code>optional int32 elapsed_time = 4;</code>
-     *
      * <pre>
      * The duration of the traversal in seconds.
      * </pre>
+     *
+     * <code>optional int32 elapsed_time = 4;</code>
      */
     public Builder clearElapsedTime() {
       
@@ -581,16 +587,7 @@ public  final class RouteSummary extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      try {
         return new RouteSummary(input, extensionRegistry);
-      } catch (RuntimeException e) {
-        if (e.getCause() instanceof
-            com.google.protobuf.InvalidProtocolBufferException) {
-          throw (com.google.protobuf.InvalidProtocolBufferException)
-              e.getCause();
-        }
-        throw e;
-      }
     }
   };
 

@@ -4,12 +4,12 @@
 package io.grpc.examples.routeguide;
 
 /**
- * Protobuf type {@code routeguide.Feature}
- *
  * <pre>
  * A feature names something at a given point.
  * If a feature could not be named, the name is empty.
  * </pre>
+ *
+ * Protobuf type {@code routeguide.Feature}
  */
 public  final class Feature extends
     com.google.protobuf.GeneratedMessage implements
@@ -30,7 +30,8 @@ public  final class Feature extends
   }
   private Feature(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+      throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -69,11 +70,10 @@ public  final class Feature extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new RuntimeException(e.setUnfinishedMessage(this));
+      throw e.setUnfinishedMessage(this);
     } catch (java.io.IOException e) {
-      throw new RuntimeException(
-          new com.google.protobuf.InvalidProtocolBufferException(
-              e.getMessage()).setUnfinishedMessage(this));
+      throw new com.google.protobuf.InvalidProtocolBufferException(
+          e).setUnfinishedMessage(this);
     } finally {
       makeExtensionsImmutable();
     }
@@ -93,11 +93,11 @@ public  final class Feature extends
   public static final int NAME_FIELD_NUMBER = 1;
   private volatile java.lang.Object name_;
   /**
-   * <code>optional string name = 1;</code>
-   *
    * <pre>
    * The name of the feature.
    * </pre>
+   *
+   * <code>optional string name = 1;</code>
    */
   public java.lang.String getName() {
     java.lang.Object ref = name_;
@@ -112,11 +112,11 @@ public  final class Feature extends
     }
   }
   /**
-   * <code>optional string name = 1;</code>
-   *
    * <pre>
    * The name of the feature.
    * </pre>
+   *
+   * <code>optional string name = 1;</code>
    */
   public com.google.protobuf.ByteString
       getNameBytes() {
@@ -135,31 +135,31 @@ public  final class Feature extends
   public static final int LOCATION_FIELD_NUMBER = 2;
   private io.grpc.examples.routeguide.Point location_;
   /**
-   * <code>optional .routeguide.Point location = 2;</code>
-   *
    * <pre>
    * The point where the feature is detected.
    * </pre>
+   *
+   * <code>optional .routeguide.Point location = 2;</code>
    */
   public boolean hasLocation() {
     return location_ != null;
   }
   /**
-   * <code>optional .routeguide.Point location = 2;</code>
-   *
    * <pre>
    * The point where the feature is detected.
    * </pre>
+   *
+   * <code>optional .routeguide.Point location = 2;</code>
    */
   public io.grpc.examples.routeguide.Point getLocation() {
     return location_ == null ? io.grpc.examples.routeguide.Point.getDefaultInstance() : location_;
   }
   /**
-   * <code>optional .routeguide.Point location = 2;</code>
-   *
    * <pre>
    * The point where the feature is detected.
    * </pre>
+   *
+   * <code>optional .routeguide.Point location = 2;</code>
    */
   public io.grpc.examples.routeguide.PointOrBuilder getLocationOrBuilder() {
     return getLocation();
@@ -225,34 +225,40 @@ public  final class Feature extends
   }
   public static io.grpc.examples.routeguide.Feature parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.examples.routeguide.Feature parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.examples.routeguide.Feature parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.examples.routeguide.Feature parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.examples.routeguide.Feature parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.examples.routeguide.Feature parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
   public Builder newBuilderForType() { return newBuilder(); }
@@ -274,12 +280,12 @@ public  final class Feature extends
     return builder;
   }
   /**
-   * Protobuf type {@code routeguide.Feature}
-   *
    * <pre>
    * A feature names something at a given point.
    * If a feature could not be named, the name is empty.
    * </pre>
+   *
+   * Protobuf type {@code routeguide.Feature}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -388,7 +394,7 @@ public  final class Feature extends
         parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
         parsedMessage = (io.grpc.examples.routeguide.Feature) e.getUnfinishedMessage();
-        throw e;
+        throw e.unwrapIOException();
       } finally {
         if (parsedMessage != null) {
           mergeFrom(parsedMessage);
@@ -399,11 +405,11 @@ public  final class Feature extends
 
     private java.lang.Object name_ = "";
     /**
-     * <code>optional string name = 1;</code>
-     *
      * <pre>
      * The name of the feature.
      * </pre>
+     *
+     * <code>optional string name = 1;</code>
      */
     public java.lang.String getName() {
       java.lang.Object ref = name_;
@@ -418,11 +424,11 @@ public  final class Feature extends
       }
     }
     /**
-     * <code>optional string name = 1;</code>
-     *
      * <pre>
      * The name of the feature.
      * </pre>
+     *
+     * <code>optional string name = 1;</code>
      */
     public com.google.protobuf.ByteString
         getNameBytes() {
@@ -438,11 +444,11 @@ public  final class Feature extends
       }
     }
     /**
-     * <code>optional string name = 1;</code>
-     *
      * <pre>
      * The name of the feature.
      * </pre>
+     *
+     * <code>optional string name = 1;</code>
      */
     public Builder setName(
         java.lang.String value) {
@@ -455,11 +461,11 @@ public  final class Feature extends
       return this;
     }
     /**
-     * <code>optional string name = 1;</code>
-     *
      * <pre>
      * The name of the feature.
      * </pre>
+     *
+     * <code>optional string name = 1;</code>
      */
     public Builder clearName() {
       
@@ -468,11 +474,11 @@ public  final class Feature extends
       return this;
     }
     /**
-     * <code>optional string name = 1;</code>
-     *
      * <pre>
      * The name of the feature.
      * </pre>
+     *
+     * <code>optional string name = 1;</code>
      */
     public Builder setNameBytes(
         com.google.protobuf.ByteString value) {
@@ -490,21 +496,21 @@ public  final class Feature extends
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.examples.routeguide.Point, io.grpc.examples.routeguide.Point.Builder, io.grpc.examples.routeguide.PointOrBuilder> locationBuilder_;
     /**
-     * <code>optional .routeguide.Point location = 2;</code>
-     *
      * <pre>
      * The point where the feature is detected.
      * </pre>
+     *
+     * <code>optional .routeguide.Point location = 2;</code>
      */
     public boolean hasLocation() {
       return locationBuilder_ != null || location_ != null;
     }
     /**
-     * <code>optional .routeguide.Point location = 2;</code>
-     *
      * <pre>
      * The point where the feature is detected.
      * </pre>
+     *
+     * <code>optional .routeguide.Point location = 2;</code>
      */
     public io.grpc.examples.routeguide.Point getLocation() {
       if (locationBuilder_ == null) {
@@ -514,11 +520,11 @@ public  final class Feature extends
       }
     }
     /**
-     * <code>optional .routeguide.Point location = 2;</code>
-     *
      * <pre>
      * The point where the feature is detected.
      * </pre>
+     *
+     * <code>optional .routeguide.Point location = 2;</code>
      */
     public Builder setLocation(io.grpc.examples.routeguide.Point value) {
       if (locationBuilder_ == null) {
@@ -534,11 +540,11 @@ public  final class Feature extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point location = 2;</code>
-     *
      * <pre>
      * The point where the feature is detected.
      * </pre>
+     *
+     * <code>optional .routeguide.Point location = 2;</code>
      */
     public Builder setLocation(
         io.grpc.examples.routeguide.Point.Builder builderForValue) {
@@ -552,11 +558,11 @@ public  final class Feature extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point location = 2;</code>
-     *
      * <pre>
      * The point where the feature is detected.
      * </pre>
+     *
+     * <code>optional .routeguide.Point location = 2;</code>
      */
     public Builder mergeLocation(io.grpc.examples.routeguide.Point value) {
       if (locationBuilder_ == null) {
@@ -574,11 +580,11 @@ public  final class Feature extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point location = 2;</code>
-     *
      * <pre>
      * The point where the feature is detected.
      * </pre>
+     *
+     * <code>optional .routeguide.Point location = 2;</code>
      */
     public Builder clearLocation() {
       if (locationBuilder_ == null) {
@@ -592,11 +598,11 @@ public  final class Feature extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point location = 2;</code>
-     *
      * <pre>
      * The point where the feature is detected.
      * </pre>
+     *
+     * <code>optional .routeguide.Point location = 2;</code>
      */
     public io.grpc.examples.routeguide.Point.Builder getLocationBuilder() {
       
@@ -604,11 +610,11 @@ public  final class Feature extends
       return getLocationFieldBuilder().getBuilder();
     }
     /**
-     * <code>optional .routeguide.Point location = 2;</code>
-     *
      * <pre>
      * The point where the feature is detected.
      * </pre>
+     *
+     * <code>optional .routeguide.Point location = 2;</code>
      */
     public io.grpc.examples.routeguide.PointOrBuilder getLocationOrBuilder() {
       if (locationBuilder_ != null) {
@@ -619,11 +625,11 @@ public  final class Feature extends
       }
     }
     /**
-     * <code>optional .routeguide.Point location = 2;</code>
-     *
      * <pre>
      * The point where the feature is detected.
      * </pre>
+     *
+     * <code>optional .routeguide.Point location = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.examples.routeguide.Point, io.grpc.examples.routeguide.Point.Builder, io.grpc.examples.routeguide.PointOrBuilder> 
@@ -668,16 +674,7 @@ public  final class Feature extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      try {
         return new Feature(input, extensionRegistry);
-      } catch (RuntimeException e) {
-        if (e.getCause() instanceof
-            com.google.protobuf.InvalidProtocolBufferException) {
-          throw (com.google.protobuf.InvalidProtocolBufferException)
-              e.getCause();
-        }
-        throw e;
-      }
     }
   };
 

@@ -13,7 +13,7 @@ build your own codegen.
 
 * Linux, Mac OS X with Clang, or Windows with MSYS2
 * Java 7 or up
-* [Protobuf](https://github.com/google/protobuf) 3.0.0-beta-2 or up
+* [Protobuf](https://github.com/google/protobuf) 3.0.0-beta-3 or up
 
 ## Compiling and testing the codegen
 Change to the `compiler` directory:
@@ -36,6 +36,11 @@ To compile a proto file and generate Java interfaces out of the service definiti
 ```
 $ protoc --plugin=protoc-gen-grpc-java=build/binaries/java_pluginExecutable/protoc-gen-grpc-java \
   --grpc-java_out="$OUTPUT_FILE" --proto_path="$DIR_OF_PROTO_FILE" "$PROTO_FILE"
+```
+To generate Java interfaces with protobuf lite:
+```
+$ protoc --plugin=protoc-gen-grpc-java=build/binaries/java_pluginExecutable/protoc-gen-grpc-java \
+  --grpc-java_out=lite:"$OUTPUT_FILE" --proto_path="$DIR_OF_PROTO_FILE" "$PROTO_FILE"
 ```
 To generate Java interfaces with protobuf nano:
 ```

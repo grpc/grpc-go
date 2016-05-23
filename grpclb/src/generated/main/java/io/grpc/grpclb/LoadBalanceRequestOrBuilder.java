@@ -8,38 +8,38 @@ public interface LoadBalanceRequestOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-   *
    * <pre>
    * This message should be sent on the first request to the load balancer.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
    */
   io.grpc.grpclb.InitialLoadBalanceRequest getInitialRequest();
   /**
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
-   *
    * <pre>
    * This message should be sent on the first request to the load balancer.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
    */
   io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder getInitialRequestOrBuilder();
 
   /**
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-   *
    * <pre>
    * The client stats should be periodically reported to the load balancer
    * based on the duration defined in the InitialLoadBalanceResponse.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
    */
   io.grpc.grpclb.ClientStats getClientStats();
   /**
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
-   *
    * <pre>
    * The client stats should be periodically reported to the load balancer
    * based on the duration defined in the InitialLoadBalanceResponse.
    * </pre>
+   *
+   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
    */
   io.grpc.grpclb.ClientStatsOrBuilder getClientStatsOrBuilder();
 

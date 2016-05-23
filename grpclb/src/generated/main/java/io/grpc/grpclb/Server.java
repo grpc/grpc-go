@@ -28,7 +28,8 @@ public  final class Server extends
   }
   private Server(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+      throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -69,11 +70,10 @@ public  final class Server extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new RuntimeException(e.setUnfinishedMessage(this));
+      throw e.setUnfinishedMessage(this);
     } catch (java.io.IOException e) {
-      throw new RuntimeException(
-          new com.google.protobuf.InvalidProtocolBufferException(
-              e.getMessage()).setUnfinishedMessage(this));
+      throw new com.google.protobuf.InvalidProtocolBufferException(
+          e).setUnfinishedMessage(this);
     } finally {
       makeExtensionsImmutable();
     }
@@ -93,12 +93,12 @@ public  final class Server extends
   public static final int IP_ADDRESS_FIELD_NUMBER = 1;
   private com.google.protobuf.ByteString ipAddress_;
   /**
-   * <code>optional bytes ip_address = 1;</code>
-   *
    * <pre>
    * A resolved address for the server, serialized in network-byte-order. It may
    * either be an IPv4 or IPv6 address.
    * </pre>
+   *
+   * <code>optional bytes ip_address = 1;</code>
    */
   public com.google.protobuf.ByteString getIpAddress() {
     return ipAddress_;
@@ -107,11 +107,11 @@ public  final class Server extends
   public static final int PORT_FIELD_NUMBER = 2;
   private int port_;
   /**
-   * <code>optional int32 port = 2;</code>
-   *
    * <pre>
    * A resolved port number for the server.
    * </pre>
+   *
+   * <code>optional int32 port = 2;</code>
    */
   public int getPort() {
     return port_;
@@ -120,13 +120,13 @@ public  final class Server extends
   public static final int LOAD_BALANCE_TOKEN_FIELD_NUMBER = 3;
   private volatile java.lang.Object loadBalanceToken_;
   /**
-   * <code>optional string load_balance_token = 3;</code>
-   *
    * <pre>
    * An opaque token that is passed from the client to the server in metadata.
    * The server may expect this token to indicate that the request from the
    * client was load balanced.
    * </pre>
+   *
+   * <code>optional string load_balance_token = 3;</code>
    */
   public java.lang.String getLoadBalanceToken() {
     java.lang.Object ref = loadBalanceToken_;
@@ -141,13 +141,13 @@ public  final class Server extends
     }
   }
   /**
-   * <code>optional string load_balance_token = 3;</code>
-   *
    * <pre>
    * An opaque token that is passed from the client to the server in metadata.
    * The server may expect this token to indicate that the request from the
    * client was load balanced.
    * </pre>
+   *
+   * <code>optional string load_balance_token = 3;</code>
    */
   public com.google.protobuf.ByteString
       getLoadBalanceTokenBytes() {
@@ -166,12 +166,12 @@ public  final class Server extends
   public static final int DROP_REQUEST_FIELD_NUMBER = 4;
   private boolean dropRequest_;
   /**
-   * <code>optional bool drop_request = 4;</code>
-   *
    * <pre>
    * Indicates whether this particular request should be dropped by the client
    * when this server is chosen from the list.
    * </pre>
+   *
+   * <code>optional bool drop_request = 4;</code>
    */
   public boolean getDropRequest() {
     return dropRequest_;
@@ -251,34 +251,40 @@ public  final class Server extends
   }
   public static io.grpc.grpclb.Server parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.Server parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.Server parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.Server parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.Server parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.Server parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
   public Builder newBuilderForType() { return newBuilder(); }
@@ -413,7 +419,7 @@ public  final class Server extends
         parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
         parsedMessage = (io.grpc.grpclb.Server) e.getUnfinishedMessage();
-        throw e;
+        throw e.unwrapIOException();
       } finally {
         if (parsedMessage != null) {
           mergeFrom(parsedMessage);
@@ -424,23 +430,23 @@ public  final class Server extends
 
     private com.google.protobuf.ByteString ipAddress_ = com.google.protobuf.ByteString.EMPTY;
     /**
-     * <code>optional bytes ip_address = 1;</code>
-     *
      * <pre>
      * A resolved address for the server, serialized in network-byte-order. It may
      * either be an IPv4 or IPv6 address.
      * </pre>
+     *
+     * <code>optional bytes ip_address = 1;</code>
      */
     public com.google.protobuf.ByteString getIpAddress() {
       return ipAddress_;
     }
     /**
-     * <code>optional bytes ip_address = 1;</code>
-     *
      * <pre>
      * A resolved address for the server, serialized in network-byte-order. It may
      * either be an IPv4 or IPv6 address.
      * </pre>
+     *
+     * <code>optional bytes ip_address = 1;</code>
      */
     public Builder setIpAddress(com.google.protobuf.ByteString value) {
       if (value == null) {
@@ -452,12 +458,12 @@ public  final class Server extends
       return this;
     }
     /**
-     * <code>optional bytes ip_address = 1;</code>
-     *
      * <pre>
      * A resolved address for the server, serialized in network-byte-order. It may
      * either be an IPv4 or IPv6 address.
      * </pre>
+     *
+     * <code>optional bytes ip_address = 1;</code>
      */
     public Builder clearIpAddress() {
       
@@ -468,21 +474,21 @@ public  final class Server extends
 
     private int port_ ;
     /**
-     * <code>optional int32 port = 2;</code>
-     *
      * <pre>
      * A resolved port number for the server.
      * </pre>
+     *
+     * <code>optional int32 port = 2;</code>
      */
     public int getPort() {
       return port_;
     }
     /**
-     * <code>optional int32 port = 2;</code>
-     *
      * <pre>
      * A resolved port number for the server.
      * </pre>
+     *
+     * <code>optional int32 port = 2;</code>
      */
     public Builder setPort(int value) {
       
@@ -491,11 +497,11 @@ public  final class Server extends
       return this;
     }
     /**
-     * <code>optional int32 port = 2;</code>
-     *
      * <pre>
      * A resolved port number for the server.
      * </pre>
+     *
+     * <code>optional int32 port = 2;</code>
      */
     public Builder clearPort() {
       
@@ -506,13 +512,13 @@ public  final class Server extends
 
     private java.lang.Object loadBalanceToken_ = "";
     /**
-     * <code>optional string load_balance_token = 3;</code>
-     *
      * <pre>
      * An opaque token that is passed from the client to the server in metadata.
      * The server may expect this token to indicate that the request from the
      * client was load balanced.
      * </pre>
+     *
+     * <code>optional string load_balance_token = 3;</code>
      */
     public java.lang.String getLoadBalanceToken() {
       java.lang.Object ref = loadBalanceToken_;
@@ -527,13 +533,13 @@ public  final class Server extends
       }
     }
     /**
-     * <code>optional string load_balance_token = 3;</code>
-     *
      * <pre>
      * An opaque token that is passed from the client to the server in metadata.
      * The server may expect this token to indicate that the request from the
      * client was load balanced.
      * </pre>
+     *
+     * <code>optional string load_balance_token = 3;</code>
      */
     public com.google.protobuf.ByteString
         getLoadBalanceTokenBytes() {
@@ -549,13 +555,13 @@ public  final class Server extends
       }
     }
     /**
-     * <code>optional string load_balance_token = 3;</code>
-     *
      * <pre>
      * An opaque token that is passed from the client to the server in metadata.
      * The server may expect this token to indicate that the request from the
      * client was load balanced.
      * </pre>
+     *
+     * <code>optional string load_balance_token = 3;</code>
      */
     public Builder setLoadBalanceToken(
         java.lang.String value) {
@@ -568,13 +574,13 @@ public  final class Server extends
       return this;
     }
     /**
-     * <code>optional string load_balance_token = 3;</code>
-     *
      * <pre>
      * An opaque token that is passed from the client to the server in metadata.
      * The server may expect this token to indicate that the request from the
      * client was load balanced.
      * </pre>
+     *
+     * <code>optional string load_balance_token = 3;</code>
      */
     public Builder clearLoadBalanceToken() {
       
@@ -583,13 +589,13 @@ public  final class Server extends
       return this;
     }
     /**
-     * <code>optional string load_balance_token = 3;</code>
-     *
      * <pre>
      * An opaque token that is passed from the client to the server in metadata.
      * The server may expect this token to indicate that the request from the
      * client was load balanced.
      * </pre>
+     *
+     * <code>optional string load_balance_token = 3;</code>
      */
     public Builder setLoadBalanceTokenBytes(
         com.google.protobuf.ByteString value) {
@@ -605,23 +611,23 @@ public  final class Server extends
 
     private boolean dropRequest_ ;
     /**
-     * <code>optional bool drop_request = 4;</code>
-     *
      * <pre>
      * Indicates whether this particular request should be dropped by the client
      * when this server is chosen from the list.
      * </pre>
+     *
+     * <code>optional bool drop_request = 4;</code>
      */
     public boolean getDropRequest() {
       return dropRequest_;
     }
     /**
-     * <code>optional bool drop_request = 4;</code>
-     *
      * <pre>
      * Indicates whether this particular request should be dropped by the client
      * when this server is chosen from the list.
      * </pre>
+     *
+     * <code>optional bool drop_request = 4;</code>
      */
     public Builder setDropRequest(boolean value) {
       
@@ -630,12 +636,12 @@ public  final class Server extends
       return this;
     }
     /**
-     * <code>optional bool drop_request = 4;</code>
-     *
      * <pre>
      * Indicates whether this particular request should be dropped by the client
      * when this server is chosen from the list.
      * </pre>
+     *
+     * <code>optional bool drop_request = 4;</code>
      */
     public Builder clearDropRequest() {
       
@@ -673,16 +679,7 @@ public  final class Server extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      try {
         return new Server(input, extensionRegistry);
-      } catch (RuntimeException e) {
-        if (e.getCause() instanceof
-            com.google.protobuf.InvalidProtocolBufferException) {
-          throw (com.google.protobuf.InvalidProtocolBufferException)
-              e.getCause();
-        }
-        throw e;
-      }
     }
   };
 

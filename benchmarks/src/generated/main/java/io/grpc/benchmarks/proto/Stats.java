@@ -13,30 +13,30 @@ public final class Stats {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional double time_elapsed = 1;</code>
-     *
      * <pre>
      * wall clock time change in seconds since last reset
      * </pre>
+     *
+     * <code>optional double time_elapsed = 1;</code>
      */
     double getTimeElapsed();
 
     /**
-     * <code>optional double time_user = 2;</code>
-     *
      * <pre>
      * change in user time (in seconds) used by the server since last reset
      * </pre>
+     *
+     * <code>optional double time_user = 2;</code>
      */
     double getTimeUser();
 
     /**
-     * <code>optional double time_system = 3;</code>
-     *
      * <pre>
      * change in server time (in seconds) used by the server process and all
      * threads since last reset
      * </pre>
+     *
+     * <code>optional double time_system = 3;</code>
      */
     double getTimeSystem();
   }
@@ -64,7 +64,8 @@ public final class Stats {
     }
     private ServerStats(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -99,11 +100,10 @@ public final class Stats {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -123,11 +123,11 @@ public final class Stats {
     public static final int TIME_ELAPSED_FIELD_NUMBER = 1;
     private double timeElapsed_;
     /**
-     * <code>optional double time_elapsed = 1;</code>
-     *
      * <pre>
      * wall clock time change in seconds since last reset
      * </pre>
+     *
+     * <code>optional double time_elapsed = 1;</code>
      */
     public double getTimeElapsed() {
       return timeElapsed_;
@@ -136,11 +136,11 @@ public final class Stats {
     public static final int TIME_USER_FIELD_NUMBER = 2;
     private double timeUser_;
     /**
-     * <code>optional double time_user = 2;</code>
-     *
      * <pre>
      * change in user time (in seconds) used by the server since last reset
      * </pre>
+     *
+     * <code>optional double time_user = 2;</code>
      */
     public double getTimeUser() {
       return timeUser_;
@@ -149,12 +149,12 @@ public final class Stats {
     public static final int TIME_SYSTEM_FIELD_NUMBER = 3;
     private double timeSystem_;
     /**
-     * <code>optional double time_system = 3;</code>
-     *
      * <pre>
      * change in server time (in seconds) used by the server process and all
      * threads since last reset
      * </pre>
+     *
+     * <code>optional double time_system = 3;</code>
      */
     public double getTimeSystem() {
       return timeSystem_;
@@ -228,34 +228,40 @@ public final class Stats {
     }
     public static io.grpc.benchmarks.proto.Stats.ServerStats parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.ServerStats parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Stats.ServerStats parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.ServerStats parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Stats.ServerStats parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.ServerStats parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -383,7 +389,7 @@ public final class Stats {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Stats.ServerStats) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -394,21 +400,21 @@ public final class Stats {
 
       private double timeElapsed_ ;
       /**
-       * <code>optional double time_elapsed = 1;</code>
-       *
        * <pre>
        * wall clock time change in seconds since last reset
        * </pre>
+       *
+       * <code>optional double time_elapsed = 1;</code>
        */
       public double getTimeElapsed() {
         return timeElapsed_;
       }
       /**
-       * <code>optional double time_elapsed = 1;</code>
-       *
        * <pre>
        * wall clock time change in seconds since last reset
        * </pre>
+       *
+       * <code>optional double time_elapsed = 1;</code>
        */
       public Builder setTimeElapsed(double value) {
         
@@ -417,11 +423,11 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double time_elapsed = 1;</code>
-       *
        * <pre>
        * wall clock time change in seconds since last reset
        * </pre>
+       *
+       * <code>optional double time_elapsed = 1;</code>
        */
       public Builder clearTimeElapsed() {
         
@@ -432,21 +438,21 @@ public final class Stats {
 
       private double timeUser_ ;
       /**
-       * <code>optional double time_user = 2;</code>
-       *
        * <pre>
        * change in user time (in seconds) used by the server since last reset
        * </pre>
+       *
+       * <code>optional double time_user = 2;</code>
        */
       public double getTimeUser() {
         return timeUser_;
       }
       /**
-       * <code>optional double time_user = 2;</code>
-       *
        * <pre>
        * change in user time (in seconds) used by the server since last reset
        * </pre>
+       *
+       * <code>optional double time_user = 2;</code>
        */
       public Builder setTimeUser(double value) {
         
@@ -455,11 +461,11 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double time_user = 2;</code>
-       *
        * <pre>
        * change in user time (in seconds) used by the server since last reset
        * </pre>
+       *
+       * <code>optional double time_user = 2;</code>
        */
       public Builder clearTimeUser() {
         
@@ -470,23 +476,23 @@ public final class Stats {
 
       private double timeSystem_ ;
       /**
-       * <code>optional double time_system = 3;</code>
-       *
        * <pre>
        * change in server time (in seconds) used by the server process and all
        * threads since last reset
        * </pre>
+       *
+       * <code>optional double time_system = 3;</code>
        */
       public double getTimeSystem() {
         return timeSystem_;
       }
       /**
-       * <code>optional double time_system = 3;</code>
-       *
        * <pre>
        * change in server time (in seconds) used by the server process and all
        * threads since last reset
        * </pre>
+       *
+       * <code>optional double time_system = 3;</code>
        */
       public Builder setTimeSystem(double value) {
         
@@ -495,12 +501,12 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double time_system = 3;</code>
-       *
        * <pre>
        * change in server time (in seconds) used by the server process and all
        * threads since last reset
        * </pre>
+       *
+       * <code>optional double time_system = 3;</code>
        */
       public Builder clearTimeSystem() {
         
@@ -538,16 +544,7 @@ public final class Stats {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ServerStats(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -571,29 +568,29 @@ public final class Stats {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional double resolution = 1;</code>
-     *
      * <pre>
      * first bucket is [0, 1 + resolution)
      * </pre>
+     *
+     * <code>optional double resolution = 1;</code>
      */
     double getResolution();
 
     /**
-     * <code>optional double max_possible = 2;</code>
-     *
      * <pre>
      * use enough buckets to allow this value
      * </pre>
+     *
+     * <code>optional double max_possible = 2;</code>
      */
     double getMaxPossible();
   }
   /**
-   * Protobuf type {@code grpc.testing.HistogramParams}
-   *
    * <pre>
    * Histogram params based on grpc/support/histogram.c
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.HistogramParams}
    */
   public  static final class HistogramParams extends
       com.google.protobuf.GeneratedMessage implements
@@ -615,7 +612,8 @@ public final class Stats {
     }
     private HistogramParams(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -645,11 +643,10 @@ public final class Stats {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -669,11 +666,11 @@ public final class Stats {
     public static final int RESOLUTION_FIELD_NUMBER = 1;
     private double resolution_;
     /**
-     * <code>optional double resolution = 1;</code>
-     *
      * <pre>
      * first bucket is [0, 1 + resolution)
      * </pre>
+     *
+     * <code>optional double resolution = 1;</code>
      */
     public double getResolution() {
       return resolution_;
@@ -682,11 +679,11 @@ public final class Stats {
     public static final int MAX_POSSIBLE_FIELD_NUMBER = 2;
     private double maxPossible_;
     /**
-     * <code>optional double max_possible = 2;</code>
-     *
      * <pre>
      * use enough buckets to allow this value
      * </pre>
+     *
+     * <code>optional double max_possible = 2;</code>
      */
     public double getMaxPossible() {
       return maxPossible_;
@@ -753,34 +750,40 @@ public final class Stats {
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -802,11 +805,11 @@ public final class Stats {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.HistogramParams}
-     *
      * <pre>
      * Histogram params based on grpc/support/histogram.c
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.HistogramParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -906,7 +909,7 @@ public final class Stats {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Stats.HistogramParams) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -917,21 +920,21 @@ public final class Stats {
 
       private double resolution_ ;
       /**
-       * <code>optional double resolution = 1;</code>
-       *
        * <pre>
        * first bucket is [0, 1 + resolution)
        * </pre>
+       *
+       * <code>optional double resolution = 1;</code>
        */
       public double getResolution() {
         return resolution_;
       }
       /**
-       * <code>optional double resolution = 1;</code>
-       *
        * <pre>
        * first bucket is [0, 1 + resolution)
        * </pre>
+       *
+       * <code>optional double resolution = 1;</code>
        */
       public Builder setResolution(double value) {
         
@@ -940,11 +943,11 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double resolution = 1;</code>
-       *
        * <pre>
        * first bucket is [0, 1 + resolution)
        * </pre>
+       *
+       * <code>optional double resolution = 1;</code>
        */
       public Builder clearResolution() {
         
@@ -955,21 +958,21 @@ public final class Stats {
 
       private double maxPossible_ ;
       /**
-       * <code>optional double max_possible = 2;</code>
-       *
        * <pre>
        * use enough buckets to allow this value
        * </pre>
+       *
+       * <code>optional double max_possible = 2;</code>
        */
       public double getMaxPossible() {
         return maxPossible_;
       }
       /**
-       * <code>optional double max_possible = 2;</code>
-       *
        * <pre>
        * use enough buckets to allow this value
        * </pre>
+       *
+       * <code>optional double max_possible = 2;</code>
        */
       public Builder setMaxPossible(double value) {
         
@@ -978,11 +981,11 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double max_possible = 2;</code>
-       *
        * <pre>
        * use enough buckets to allow this value
        * </pre>
+       *
+       * <code>optional double max_possible = 2;</code>
        */
       public Builder clearMaxPossible() {
         
@@ -1020,16 +1023,7 @@ public final class Stats {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new HistogramParams(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -1091,11 +1085,11 @@ public final class Stats {
     double getCount();
   }
   /**
-   * Protobuf type {@code grpc.testing.HistogramData}
-   *
    * <pre>
    * Histogram data based on grpc/support/histogram.c
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.HistogramData}
    */
   public  static final class HistogramData extends
       com.google.protobuf.GeneratedMessage implements
@@ -1121,7 +1115,8 @@ public final class Stats {
     }
     private HistogramData(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -1187,11 +1182,10 @@ public final class Stats {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
           bucket_ = java.util.Collections.unmodifiableList(bucket_);
@@ -1384,34 +1378,40 @@ public final class Stats {
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramData parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramData parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramData parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramData parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramData parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.HistogramData parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -1433,11 +1433,11 @@ public final class Stats {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.HistogramData}
-     *
      * <pre>
      * Histogram data based on grpc/support/histogram.c
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.HistogramData}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -1575,7 +1575,7 @@ public final class Stats {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Stats.HistogramData) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -1810,16 +1810,7 @@ public final class Stats {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new HistogramData(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -1843,36 +1834,36 @@ public final class Stats {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-     *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
+     *
+     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
      */
     boolean hasLatencies();
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-     *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
+     *
+     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.HistogramData getLatencies();
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-     *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
+     *
+     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder getLatenciesOrBuilder();
 
     /**
-     * <code>optional double time_elapsed = 2;</code>
-     *
      * <pre>
      * See ServerStats for details.
      * </pre>
+     *
+     * <code>optional double time_elapsed = 2;</code>
      */
     double getTimeElapsed();
 
@@ -1910,7 +1901,8 @@ public final class Stats {
     }
     private ClientStats(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -1958,11 +1950,10 @@ public final class Stats {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -1982,31 +1973,31 @@ public final class Stats {
     public static final int LATENCIES_FIELD_NUMBER = 1;
     private io.grpc.benchmarks.proto.Stats.HistogramData latencies_;
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-     *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
+     *
+     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
      */
     public boolean hasLatencies() {
       return latencies_ != null;
     }
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-     *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
+     *
+     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.HistogramData getLatencies() {
       return latencies_ == null ? io.grpc.benchmarks.proto.Stats.HistogramData.getDefaultInstance() : latencies_;
     }
     /**
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-     *
      * <pre>
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
+     *
+     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder getLatenciesOrBuilder() {
       return getLatencies();
@@ -2015,11 +2006,11 @@ public final class Stats {
     public static final int TIME_ELAPSED_FIELD_NUMBER = 2;
     private double timeElapsed_;
     /**
-     * <code>optional double time_elapsed = 2;</code>
-     *
      * <pre>
      * See ServerStats for details.
      * </pre>
+     *
+     * <code>optional double time_elapsed = 2;</code>
      */
     public double getTimeElapsed() {
       return timeElapsed_;
@@ -2118,34 +2109,40 @@ public final class Stats {
     }
     public static io.grpc.benchmarks.proto.Stats.ClientStats parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.ClientStats parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Stats.ClientStats parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.ClientStats parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Stats.ClientStats parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Stats.ClientStats parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -2287,7 +2284,7 @@ public final class Stats {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Stats.ClientStats) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -2300,21 +2297,21 @@ public final class Stats {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Stats.HistogramData, io.grpc.benchmarks.proto.Stats.HistogramData.Builder, io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder> latenciesBuilder_;
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-       *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
+       *
+       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
        */
       public boolean hasLatencies() {
         return latenciesBuilder_ != null || latencies_ != null;
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-       *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
+       *
+       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramData getLatencies() {
         if (latenciesBuilder_ == null) {
@@ -2324,11 +2321,11 @@ public final class Stats {
         }
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-       *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
+       *
+       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
        */
       public Builder setLatencies(io.grpc.benchmarks.proto.Stats.HistogramData value) {
         if (latenciesBuilder_ == null) {
@@ -2344,11 +2341,11 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-       *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
+       *
+       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
        */
       public Builder setLatencies(
           io.grpc.benchmarks.proto.Stats.HistogramData.Builder builderForValue) {
@@ -2362,11 +2359,11 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-       *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
+       *
+       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
        */
       public Builder mergeLatencies(io.grpc.benchmarks.proto.Stats.HistogramData value) {
         if (latenciesBuilder_ == null) {
@@ -2384,11 +2381,11 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-       *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
+       *
+       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
        */
       public Builder clearLatencies() {
         if (latenciesBuilder_ == null) {
@@ -2402,11 +2399,11 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-       *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
+       *
+       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramData.Builder getLatenciesBuilder() {
         
@@ -2414,11 +2411,11 @@ public final class Stats {
         return getLatenciesFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-       *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
+       *
+       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder getLatenciesOrBuilder() {
         if (latenciesBuilder_ != null) {
@@ -2429,11 +2426,11 @@ public final class Stats {
         }
       }
       /**
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
-       *
        * <pre>
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
+       *
+       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Stats.HistogramData, io.grpc.benchmarks.proto.Stats.HistogramData.Builder, io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder> 
@@ -2451,21 +2448,21 @@ public final class Stats {
 
       private double timeElapsed_ ;
       /**
-       * <code>optional double time_elapsed = 2;</code>
-       *
        * <pre>
        * See ServerStats for details.
        * </pre>
+       *
+       * <code>optional double time_elapsed = 2;</code>
        */
       public double getTimeElapsed() {
         return timeElapsed_;
       }
       /**
-       * <code>optional double time_elapsed = 2;</code>
-       *
        * <pre>
        * See ServerStats for details.
        * </pre>
+       *
+       * <code>optional double time_elapsed = 2;</code>
        */
       public Builder setTimeElapsed(double value) {
         
@@ -2474,11 +2471,11 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double time_elapsed = 2;</code>
-       *
        * <pre>
        * See ServerStats for details.
        * </pre>
+       *
+       * <code>optional double time_elapsed = 2;</code>
        */
       public Builder clearTimeElapsed() {
         
@@ -2568,16 +2565,7 @@ public final class Stats {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ClientStats(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -2596,24 +2584,24 @@ public final class Stats {
 
   }
 
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ServerStats_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ServerStats_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_HistogramParams_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_HistogramParams_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_HistogramData_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_HistogramData_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClientStats_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ClientStats_fieldAccessorTable;
 
@@ -2621,7 +2609,7 @@ public final class Stats {
       getDescriptor() {
     return descriptor;
   }
-  private static com.google.protobuf.Descriptors.FileDescriptor
+  private static  com.google.protobuf.Descriptors.FileDescriptor
       descriptor;
   static {
     java.lang.String[] descriptorData = {

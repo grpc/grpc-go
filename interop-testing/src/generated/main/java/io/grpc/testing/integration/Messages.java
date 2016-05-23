@@ -9,76 +9,84 @@ public final class Messages {
       com.google.protobuf.ExtensionRegistry registry) {
   }
   /**
-   * Protobuf enum {@code grpc.testing.PayloadType}
-   *
    * <pre>
    * The type of payload that should be returned.
    * </pre>
+   *
+   * Protobuf enum {@code grpc.testing.PayloadType}
    */
   public enum PayloadType
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
-     * <code>COMPRESSABLE = 0;</code>
-     *
      * <pre>
      * Compressable text format.
      * </pre>
-     */
-    COMPRESSABLE(0, 0),
-    /**
-     * <code>UNCOMPRESSABLE = 1;</code>
      *
+     * <code>COMPRESSABLE = 0;</code>
+     */
+    COMPRESSABLE(0),
+    /**
      * <pre>
      * Uncompressable binary format.
      * </pre>
-     */
-    UNCOMPRESSABLE(1, 1),
-    /**
-     * <code>RANDOM = 2;</code>
      *
+     * <code>UNCOMPRESSABLE = 1;</code>
+     */
+    UNCOMPRESSABLE(1),
+    /**
      * <pre>
      * Randomly chosen from all other formats defined in this enum.
      * </pre>
+     *
+     * <code>RANDOM = 2;</code>
      */
-    RANDOM(2, 2),
-    UNRECOGNIZED(-1, -1),
+    RANDOM(2),
+    UNRECOGNIZED(-1),
     ;
 
     /**
-     * <code>COMPRESSABLE = 0;</code>
-     *
      * <pre>
      * Compressable text format.
      * </pre>
+     *
+     * <code>COMPRESSABLE = 0;</code>
      */
     public static final int COMPRESSABLE_VALUE = 0;
     /**
-     * <code>UNCOMPRESSABLE = 1;</code>
-     *
      * <pre>
      * Uncompressable binary format.
      * </pre>
+     *
+     * <code>UNCOMPRESSABLE = 1;</code>
      */
     public static final int UNCOMPRESSABLE_VALUE = 1;
     /**
-     * <code>RANDOM = 2;</code>
-     *
      * <pre>
      * Randomly chosen from all other formats defined in this enum.
      * </pre>
+     *
+     * <code>RANDOM = 2;</code>
      */
     public static final int RANDOM_VALUE = 2;
 
 
     public final int getNumber() {
-      if (index == -1) {
+      if (this == UNRECOGNIZED) {
         throw new java.lang.IllegalArgumentException(
             "Can't get the number of an unknown enum value.");
       }
       return value;
     }
 
+    /**
+     * @deprecated Use {@link #forNumber(int)} instead.
+     */
+    @java.lang.Deprecated
     public static PayloadType valueOf(int value) {
+      return forNumber(value);
+    }
+
+    public static PayloadType forNumber(int value) {
       switch (value) {
         case 0: return COMPRESSABLE;
         case 1: return UNCOMPRESSABLE;
@@ -95,13 +103,13 @@ public final class Messages {
         PayloadType> internalValueMap =
           new com.google.protobuf.Internal.EnumLiteMap<PayloadType>() {
             public PayloadType findValueByNumber(int number) {
-              return PayloadType.valueOf(number);
+              return PayloadType.forNumber(number);
             }
           };
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      return getDescriptor().getValues().get(index);
+      return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
         getDescriptorForType() {
@@ -126,11 +134,9 @@ public final class Messages {
       return VALUES[desc.getIndex()];
     }
 
-    private final int index;
     private final int value;
 
-    private PayloadType(int index, int value) {
-      this.index = index;
+    private PayloadType(int value) {
       this.value = value;
     }
 
@@ -138,39 +144,39 @@ public final class Messages {
   }
 
   /**
-   * Protobuf enum {@code grpc.testing.CompressionType}
-   *
    * <pre>
    * Compression algorithms
    * </pre>
+   *
+   * Protobuf enum {@code grpc.testing.CompressionType}
    */
   public enum CompressionType
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
-     * <code>NONE = 0;</code>
-     *
      * <pre>
      * No compression
      * </pre>
+     *
+     * <code>NONE = 0;</code>
      */
-    NONE(0, 0),
+    NONE(0),
     /**
      * <code>GZIP = 1;</code>
      */
-    GZIP(1, 1),
+    GZIP(1),
     /**
      * <code>DEFLATE = 2;</code>
      */
-    DEFLATE(2, 2),
-    UNRECOGNIZED(-1, -1),
+    DEFLATE(2),
+    UNRECOGNIZED(-1),
     ;
 
     /**
-     * <code>NONE = 0;</code>
-     *
      * <pre>
      * No compression
      * </pre>
+     *
+     * <code>NONE = 0;</code>
      */
     public static final int NONE_VALUE = 0;
     /**
@@ -184,14 +190,22 @@ public final class Messages {
 
 
     public final int getNumber() {
-      if (index == -1) {
+      if (this == UNRECOGNIZED) {
         throw new java.lang.IllegalArgumentException(
             "Can't get the number of an unknown enum value.");
       }
       return value;
     }
 
+    /**
+     * @deprecated Use {@link #forNumber(int)} instead.
+     */
+    @java.lang.Deprecated
     public static CompressionType valueOf(int value) {
+      return forNumber(value);
+    }
+
+    public static CompressionType forNumber(int value) {
       switch (value) {
         case 0: return NONE;
         case 1: return GZIP;
@@ -208,13 +222,13 @@ public final class Messages {
         CompressionType> internalValueMap =
           new com.google.protobuf.Internal.EnumLiteMap<CompressionType>() {
             public CompressionType findValueByNumber(int number) {
-              return CompressionType.valueOf(number);
+              return CompressionType.forNumber(number);
             }
           };
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      return getDescriptor().getValues().get(index);
+      return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
         getDescriptorForType() {
@@ -239,11 +253,9 @@ public final class Messages {
       return VALUES[desc.getIndex()];
     }
 
-    private final int index;
     private final int value;
 
-    private CompressionType(int index, int value) {
-      this.index = index;
+    private CompressionType(int value) {
       this.value = value;
     }
 
@@ -255,37 +267,37 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.PayloadType type = 1;</code>
-     *
      * <pre>
      * The type of data in body.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType type = 1;</code>
      */
     int getTypeValue();
     /**
-     * <code>optional .grpc.testing.PayloadType type = 1;</code>
-     *
      * <pre>
      * The type of data in body.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType type = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadType getType();
 
     /**
-     * <code>optional bytes body = 2;</code>
-     *
      * <pre>
      * Primary contents of payload.
      * </pre>
+     *
+     * <code>optional bytes body = 2;</code>
      */
     com.google.protobuf.ByteString getBody();
   }
   /**
-   * Protobuf type {@code grpc.testing.Payload}
-   *
    * <pre>
    * A block of data, to simply increase gRPC message size.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.Payload}
    */
   public  static final class Payload extends
       com.google.protobuf.GeneratedMessage implements
@@ -307,7 +319,8 @@ public final class Messages {
     }
     private Payload(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -338,11 +351,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -362,35 +374,35 @@ public final class Messages {
     public static final int TYPE_FIELD_NUMBER = 1;
     private int type_;
     /**
-     * <code>optional .grpc.testing.PayloadType type = 1;</code>
-     *
      * <pre>
      * The type of data in body.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType type = 1;</code>
      */
     public int getTypeValue() {
       return type_;
     }
     /**
-     * <code>optional .grpc.testing.PayloadType type = 1;</code>
-     *
      * <pre>
      * The type of data in body.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType type = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadType getType() {
-      io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(type_);
+      io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.forNumber(type_);
       return result == null ? io.grpc.testing.integration.Messages.PayloadType.UNRECOGNIZED : result;
     }
 
     public static final int BODY_FIELD_NUMBER = 2;
     private com.google.protobuf.ByteString body_;
     /**
-     * <code>optional bytes body = 2;</code>
-     *
      * <pre>
      * Primary contents of payload.
      * </pre>
+     *
+     * <code>optional bytes body = 2;</code>
      */
     public com.google.protobuf.ByteString getBody() {
       return body_;
@@ -457,34 +469,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.Payload parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.Payload parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.Payload parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.Payload parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.Payload parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.Payload parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -506,11 +524,11 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.Payload}
-     *
      * <pre>
      * A block of data, to simply increase gRPC message size.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.Payload}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -610,7 +628,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.Payload) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -621,21 +639,21 @@ public final class Messages {
 
       private int type_ = 0;
       /**
-       * <code>optional .grpc.testing.PayloadType type = 1;</code>
-       *
        * <pre>
        * The type of data in body.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType type = 1;</code>
        */
       public int getTypeValue() {
         return type_;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType type = 1;</code>
-       *
        * <pre>
        * The type of data in body.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType type = 1;</code>
        */
       public Builder setTypeValue(int value) {
         type_ = value;
@@ -643,22 +661,22 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType type = 1;</code>
-       *
        * <pre>
        * The type of data in body.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType type = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadType getType() {
-        io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(type_);
+        io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.forNumber(type_);
         return result == null ? io.grpc.testing.integration.Messages.PayloadType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType type = 1;</code>
-       *
        * <pre>
        * The type of data in body.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType type = 1;</code>
        */
       public Builder setType(io.grpc.testing.integration.Messages.PayloadType value) {
         if (value == null) {
@@ -670,11 +688,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType type = 1;</code>
-       *
        * <pre>
        * The type of data in body.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType type = 1;</code>
        */
       public Builder clearType() {
         
@@ -685,21 +703,21 @@ public final class Messages {
 
       private com.google.protobuf.ByteString body_ = com.google.protobuf.ByteString.EMPTY;
       /**
-       * <code>optional bytes body = 2;</code>
-       *
        * <pre>
        * Primary contents of payload.
        * </pre>
+       *
+       * <code>optional bytes body = 2;</code>
        */
       public com.google.protobuf.ByteString getBody() {
         return body_;
       }
       /**
-       * <code>optional bytes body = 2;</code>
-       *
        * <pre>
        * Primary contents of payload.
        * </pre>
+       *
+       * <code>optional bytes body = 2;</code>
        */
       public Builder setBody(com.google.protobuf.ByteString value) {
         if (value == null) {
@@ -711,11 +729,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional bytes body = 2;</code>
-       *
        * <pre>
        * Primary contents of payload.
        * </pre>
+       *
+       * <code>optional bytes body = 2;</code>
        */
       public Builder clearBody() {
         
@@ -753,16 +771,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new Payload(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -801,12 +810,12 @@ public final class Messages {
         getMessageBytes();
   }
   /**
-   * Protobuf type {@code grpc.testing.EchoStatus}
-   *
    * <pre>
    * A protobuf representation for grpc status. This is used by test
    * clients to specify a status that the server should attempt to return.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.EchoStatus}
    */
   public  static final class EchoStatus extends
       com.google.protobuf.GeneratedMessage implements
@@ -828,7 +837,8 @@ public final class Messages {
     }
     private EchoStatus(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -859,11 +869,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -983,34 +992,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.EchoStatus parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.EchoStatus parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.EchoStatus parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -1032,12 +1047,12 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.EchoStatus}
-     *
      * <pre>
      * A protobuf representation for grpc status. This is used by test
      * clients to specify a status that the server should attempt to return.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.EchoStatus}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -1138,7 +1153,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.EchoStatus) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -1271,16 +1286,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new EchoStatus(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -1304,125 +1310,125 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-     *
      * <pre>
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      */
     int getResponseTypeValue();
     /**
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-     *
      * <pre>
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadType getResponseType();
 
     /**
-     * <code>optional int32 response_size = 2;</code>
-     *
      * <pre>
      * Desired payload size in the response from the server.
      * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
+     *
+     * <code>optional int32 response_size = 2;</code>
      */
     int getResponseSize();
 
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     boolean hasPayload();
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     io.grpc.testing.integration.Messages.Payload getPayload();
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
 
     /**
-     * <code>optional bool fill_username = 4;</code>
-     *
      * <pre>
      * Whether SimpleResponse should include username.
      * </pre>
+     *
+     * <code>optional bool fill_username = 4;</code>
      */
     boolean getFillUsername();
 
     /**
-     * <code>optional bool fill_oauth_scope = 5;</code>
-     *
      * <pre>
      * Whether SimpleResponse should include OAuth scope.
      * </pre>
+     *
+     * <code>optional bool fill_oauth_scope = 5;</code>
      */
     boolean getFillOauthScope();
 
     /**
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-     *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
+     *
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      */
     int getResponseCompressionValue();
     /**
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-     *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
+     *
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      */
     io.grpc.testing.integration.Messages.CompressionType getResponseCompression();
 
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     boolean hasResponseStatus();
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     io.grpc.testing.integration.Messages.EchoStatus getResponseStatus();
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder();
   }
   /**
-   * Protobuf type {@code grpc.testing.SimpleRequest}
-   *
    * <pre>
    * Unary request.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.SimpleRequest}
    */
   public  static final class SimpleRequest extends
       com.google.protobuf.GeneratedMessage implements
@@ -1447,7 +1453,8 @@ public final class Messages {
     }
     private SimpleRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -1520,11 +1527,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -1544,38 +1550,38 @@ public final class Messages {
     public static final int RESPONSE_TYPE_FIELD_NUMBER = 1;
     private int responseType_;
     /**
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-     *
      * <pre>
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      */
     public int getResponseTypeValue() {
       return responseType_;
     }
     /**
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-     *
      * <pre>
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadType getResponseType() {
-      io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(responseType_);
+      io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.forNumber(responseType_);
       return result == null ? io.grpc.testing.integration.Messages.PayloadType.UNRECOGNIZED : result;
     }
 
     public static final int RESPONSE_SIZE_FIELD_NUMBER = 2;
     private int responseSize_;
     /**
-     * <code>optional int32 response_size = 2;</code>
-     *
      * <pre>
      * Desired payload size in the response from the server.
      * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
+     *
+     * <code>optional int32 response_size = 2;</code>
      */
     public int getResponseSize() {
       return responseSize_;
@@ -1584,31 +1590,31 @@ public final class Messages {
     public static final int PAYLOAD_FIELD_NUMBER = 3;
     private io.grpc.testing.integration.Messages.Payload payload_;
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     public boolean hasPayload() {
       return payload_ != null;
     }
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     public io.grpc.testing.integration.Messages.Payload getPayload() {
       return payload_ == null ? io.grpc.testing.integration.Messages.Payload.getDefaultInstance() : payload_;
     }
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
       return getPayload();
@@ -1617,11 +1623,11 @@ public final class Messages {
     public static final int FILL_USERNAME_FIELD_NUMBER = 4;
     private boolean fillUsername_;
     /**
-     * <code>optional bool fill_username = 4;</code>
-     *
      * <pre>
      * Whether SimpleResponse should include username.
      * </pre>
+     *
+     * <code>optional bool fill_username = 4;</code>
      */
     public boolean getFillUsername() {
       return fillUsername_;
@@ -1630,11 +1636,11 @@ public final class Messages {
     public static final int FILL_OAUTH_SCOPE_FIELD_NUMBER = 5;
     private boolean fillOauthScope_;
     /**
-     * <code>optional bool fill_oauth_scope = 5;</code>
-     *
      * <pre>
      * Whether SimpleResponse should include OAuth scope.
      * </pre>
+     *
+     * <code>optional bool fill_oauth_scope = 5;</code>
      */
     public boolean getFillOauthScope() {
       return fillOauthScope_;
@@ -1643,55 +1649,55 @@ public final class Messages {
     public static final int RESPONSE_COMPRESSION_FIELD_NUMBER = 6;
     private int responseCompression_;
     /**
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-     *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
+     *
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      */
     public int getResponseCompressionValue() {
       return responseCompression_;
     }
     /**
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-     *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
+     *
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      */
     public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
-      io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
+      io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.forNumber(responseCompression_);
       return result == null ? io.grpc.testing.integration.Messages.CompressionType.UNRECOGNIZED : result;
     }
 
     public static final int RESPONSE_STATUS_FIELD_NUMBER = 7;
     private io.grpc.testing.integration.Messages.EchoStatus responseStatus_;
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     public boolean hasResponseStatus() {
       return responseStatus_ != null;
     }
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
       return responseStatus_ == null ? io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
     }
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
       return getResponseStatus();
@@ -1793,34 +1799,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.SimpleRequest parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.SimpleRequest parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.SimpleRequest parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.SimpleRequest parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.SimpleRequest parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.SimpleRequest parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -1842,11 +1854,11 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.SimpleRequest}
-     *
      * <pre>
      * Unary request.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.SimpleRequest}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -1992,7 +2004,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.SimpleRequest) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -2003,23 +2015,23 @@ public final class Messages {
 
       private int responseType_ = 0;
       /**
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-       *
        * <pre>
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        */
       public int getResponseTypeValue() {
         return responseType_;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-       *
        * <pre>
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder setResponseTypeValue(int value) {
         responseType_ = value;
@@ -2027,24 +2039,24 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-       *
        * <pre>
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadType getResponseType() {
-        io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(responseType_);
+        io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.forNumber(responseType_);
         return result == null ? io.grpc.testing.integration.Messages.PayloadType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-       *
        * <pre>
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder setResponseType(io.grpc.testing.integration.Messages.PayloadType value) {
         if (value == null) {
@@ -2056,12 +2068,12 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-       *
        * <pre>
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder clearResponseType() {
         
@@ -2072,23 +2084,23 @@ public final class Messages {
 
       private int responseSize_ ;
       /**
-       * <code>optional int32 response_size = 2;</code>
-       *
        * <pre>
        * Desired payload size in the response from the server.
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
+       *
+       * <code>optional int32 response_size = 2;</code>
        */
       public int getResponseSize() {
         return responseSize_;
       }
       /**
-       * <code>optional int32 response_size = 2;</code>
-       *
        * <pre>
        * Desired payload size in the response from the server.
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
+       *
+       * <code>optional int32 response_size = 2;</code>
        */
       public Builder setResponseSize(int value) {
         
@@ -2097,12 +2109,12 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional int32 response_size = 2;</code>
-       *
        * <pre>
        * Desired payload size in the response from the server.
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
+       *
+       * <code>optional int32 response_size = 2;</code>
        */
       public Builder clearResponseSize() {
         
@@ -2115,21 +2127,21 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> payloadBuilder_;
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public boolean hasPayload() {
         return payloadBuilder_ != null || payload_ != null;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.Payload getPayload() {
         if (payloadBuilder_ == null) {
@@ -2139,11 +2151,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public Builder setPayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -2159,11 +2171,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public Builder setPayload(
           io.grpc.testing.integration.Messages.Payload.Builder builderForValue) {
@@ -2177,11 +2189,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public Builder mergePayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -2199,11 +2211,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public Builder clearPayload() {
         if (payloadBuilder_ == null) {
@@ -2217,11 +2229,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.Payload.Builder getPayloadBuilder() {
         
@@ -2229,11 +2241,11 @@ public final class Messages {
         return getPayloadFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
         if (payloadBuilder_ != null) {
@@ -2244,11 +2256,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> 
@@ -2266,21 +2278,21 @@ public final class Messages {
 
       private boolean fillUsername_ ;
       /**
-       * <code>optional bool fill_username = 4;</code>
-       *
        * <pre>
        * Whether SimpleResponse should include username.
        * </pre>
+       *
+       * <code>optional bool fill_username = 4;</code>
        */
       public boolean getFillUsername() {
         return fillUsername_;
       }
       /**
-       * <code>optional bool fill_username = 4;</code>
-       *
        * <pre>
        * Whether SimpleResponse should include username.
        * </pre>
+       *
+       * <code>optional bool fill_username = 4;</code>
        */
       public Builder setFillUsername(boolean value) {
         
@@ -2289,11 +2301,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional bool fill_username = 4;</code>
-       *
        * <pre>
        * Whether SimpleResponse should include username.
        * </pre>
+       *
+       * <code>optional bool fill_username = 4;</code>
        */
       public Builder clearFillUsername() {
         
@@ -2304,21 +2316,21 @@ public final class Messages {
 
       private boolean fillOauthScope_ ;
       /**
-       * <code>optional bool fill_oauth_scope = 5;</code>
-       *
        * <pre>
        * Whether SimpleResponse should include OAuth scope.
        * </pre>
+       *
+       * <code>optional bool fill_oauth_scope = 5;</code>
        */
       public boolean getFillOauthScope() {
         return fillOauthScope_;
       }
       /**
-       * <code>optional bool fill_oauth_scope = 5;</code>
-       *
        * <pre>
        * Whether SimpleResponse should include OAuth scope.
        * </pre>
+       *
+       * <code>optional bool fill_oauth_scope = 5;</code>
        */
       public Builder setFillOauthScope(boolean value) {
         
@@ -2327,11 +2339,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional bool fill_oauth_scope = 5;</code>
-       *
        * <pre>
        * Whether SimpleResponse should include OAuth scope.
        * </pre>
+       *
+       * <code>optional bool fill_oauth_scope = 5;</code>
        */
       public Builder clearFillOauthScope() {
         
@@ -2342,21 +2354,21 @@ public final class Messages {
 
       private int responseCompression_ = 0;
       /**
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-       *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
+       *
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        */
       public int getResponseCompressionValue() {
         return responseCompression_;
       }
       /**
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-       *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
+       *
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder setResponseCompressionValue(int value) {
         responseCompression_ = value;
@@ -2364,22 +2376,22 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-       *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
+       *
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        */
       public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
-        io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
+        io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.forNumber(responseCompression_);
         return result == null ? io.grpc.testing.integration.Messages.CompressionType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-       *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
+       *
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder setResponseCompression(io.grpc.testing.integration.Messages.CompressionType value) {
         if (value == null) {
@@ -2391,11 +2403,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-       *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
+       *
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder clearResponseCompression() {
         
@@ -2408,21 +2420,21 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder> responseStatusBuilder_;
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public boolean hasResponseStatus() {
         return responseStatusBuilder_ != null || responseStatus_ != null;
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
         if (responseStatusBuilder_ == null) {
@@ -2432,11 +2444,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder setResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
         if (responseStatusBuilder_ == null) {
@@ -2452,11 +2464,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder setResponseStatus(
           io.grpc.testing.integration.Messages.EchoStatus.Builder builderForValue) {
@@ -2470,11 +2482,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder mergeResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
         if (responseStatusBuilder_ == null) {
@@ -2492,11 +2504,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder clearResponseStatus() {
         if (responseStatusBuilder_ == null) {
@@ -2510,11 +2522,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatus.Builder getResponseStatusBuilder() {
         
@@ -2522,11 +2534,11 @@ public final class Messages {
         return getResponseStatusFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
         if (responseStatusBuilder_ != null) {
@@ -2537,11 +2549,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder> 
@@ -2586,16 +2598,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new SimpleRequest(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -2619,74 +2622,74 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase message size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     boolean hasPayload();
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase message size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.Payload getPayload();
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase message size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
 
     /**
-     * <code>optional string username = 2;</code>
-     *
      * <pre>
      * The user the request came from, for verifying authentication was
      * successful when the client expected it.
      * </pre>
+     *
+     * <code>optional string username = 2;</code>
      */
     java.lang.String getUsername();
     /**
-     * <code>optional string username = 2;</code>
-     *
      * <pre>
      * The user the request came from, for verifying authentication was
      * successful when the client expected it.
      * </pre>
+     *
+     * <code>optional string username = 2;</code>
      */
     com.google.protobuf.ByteString
         getUsernameBytes();
 
     /**
-     * <code>optional string oauth_scope = 3;</code>
-     *
      * <pre>
      * OAuth scope.
      * </pre>
+     *
+     * <code>optional string oauth_scope = 3;</code>
      */
     java.lang.String getOauthScope();
     /**
-     * <code>optional string oauth_scope = 3;</code>
-     *
      * <pre>
      * OAuth scope.
      * </pre>
+     *
+     * <code>optional string oauth_scope = 3;</code>
      */
     com.google.protobuf.ByteString
         getOauthScopeBytes();
   }
   /**
-   * Protobuf type {@code grpc.testing.SimpleResponse}
-   *
    * <pre>
    * Unary response, as configured by the request.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.SimpleResponse}
    */
   public  static final class SimpleResponse extends
       com.google.protobuf.GeneratedMessage implements
@@ -2708,7 +2711,8 @@ public final class Messages {
     }
     private SimpleResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -2753,11 +2757,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -2777,31 +2780,31 @@ public final class Messages {
     public static final int PAYLOAD_FIELD_NUMBER = 1;
     private io.grpc.testing.integration.Messages.Payload payload_;
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase message size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     public boolean hasPayload() {
       return payload_ != null;
     }
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase message size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.Payload getPayload() {
       return payload_ == null ? io.grpc.testing.integration.Messages.Payload.getDefaultInstance() : payload_;
     }
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase message size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
       return getPayload();
@@ -2810,12 +2813,12 @@ public final class Messages {
     public static final int USERNAME_FIELD_NUMBER = 2;
     private volatile java.lang.Object username_;
     /**
-     * <code>optional string username = 2;</code>
-     *
      * <pre>
      * The user the request came from, for verifying authentication was
      * successful when the client expected it.
      * </pre>
+     *
+     * <code>optional string username = 2;</code>
      */
     public java.lang.String getUsername() {
       java.lang.Object ref = username_;
@@ -2830,12 +2833,12 @@ public final class Messages {
       }
     }
     /**
-     * <code>optional string username = 2;</code>
-     *
      * <pre>
      * The user the request came from, for verifying authentication was
      * successful when the client expected it.
      * </pre>
+     *
+     * <code>optional string username = 2;</code>
      */
     public com.google.protobuf.ByteString
         getUsernameBytes() {
@@ -2854,11 +2857,11 @@ public final class Messages {
     public static final int OAUTH_SCOPE_FIELD_NUMBER = 3;
     private volatile java.lang.Object oauthScope_;
     /**
-     * <code>optional string oauth_scope = 3;</code>
-     *
      * <pre>
      * OAuth scope.
      * </pre>
+     *
+     * <code>optional string oauth_scope = 3;</code>
      */
     public java.lang.String getOauthScope() {
       java.lang.Object ref = oauthScope_;
@@ -2873,11 +2876,11 @@ public final class Messages {
       }
     }
     /**
-     * <code>optional string oauth_scope = 3;</code>
-     *
      * <pre>
      * OAuth scope.
      * </pre>
+     *
+     * <code>optional string oauth_scope = 3;</code>
      */
     public com.google.protobuf.ByteString
         getOauthScopeBytes() {
@@ -2959,34 +2962,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.SimpleResponse parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.SimpleResponse parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.SimpleResponse parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.SimpleResponse parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.SimpleResponse parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.SimpleResponse parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -3008,11 +3017,11 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.SimpleResponse}
-     *
      * <pre>
      * Unary response, as configured by the request.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.SimpleResponse}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -3128,7 +3137,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.SimpleResponse) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -3141,21 +3150,21 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> payloadBuilder_;
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase message size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public boolean hasPayload() {
         return payloadBuilder_ != null || payload_ != null;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase message size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload getPayload() {
         if (payloadBuilder_ == null) {
@@ -3165,11 +3174,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase message size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -3185,11 +3194,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase message size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(
           io.grpc.testing.integration.Messages.Payload.Builder builderForValue) {
@@ -3203,11 +3212,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase message size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder mergePayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -3225,11 +3234,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase message size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder clearPayload() {
         if (payloadBuilder_ == null) {
@@ -3243,11 +3252,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase message size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload.Builder getPayloadBuilder() {
         
@@ -3255,11 +3264,11 @@ public final class Messages {
         return getPayloadFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase message size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
         if (payloadBuilder_ != null) {
@@ -3270,11 +3279,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase message size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> 
@@ -3292,12 +3301,12 @@ public final class Messages {
 
       private java.lang.Object username_ = "";
       /**
-       * <code>optional string username = 2;</code>
-       *
        * <pre>
        * The user the request came from, for verifying authentication was
        * successful when the client expected it.
        * </pre>
+       *
+       * <code>optional string username = 2;</code>
        */
       public java.lang.String getUsername() {
         java.lang.Object ref = username_;
@@ -3312,12 +3321,12 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional string username = 2;</code>
-       *
        * <pre>
        * The user the request came from, for verifying authentication was
        * successful when the client expected it.
        * </pre>
+       *
+       * <code>optional string username = 2;</code>
        */
       public com.google.protobuf.ByteString
           getUsernameBytes() {
@@ -3333,12 +3342,12 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional string username = 2;</code>
-       *
        * <pre>
        * The user the request came from, for verifying authentication was
        * successful when the client expected it.
        * </pre>
+       *
+       * <code>optional string username = 2;</code>
        */
       public Builder setUsername(
           java.lang.String value) {
@@ -3351,12 +3360,12 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional string username = 2;</code>
-       *
        * <pre>
        * The user the request came from, for verifying authentication was
        * successful when the client expected it.
        * </pre>
+       *
+       * <code>optional string username = 2;</code>
        */
       public Builder clearUsername() {
         
@@ -3365,12 +3374,12 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional string username = 2;</code>
-       *
        * <pre>
        * The user the request came from, for verifying authentication was
        * successful when the client expected it.
        * </pre>
+       *
+       * <code>optional string username = 2;</code>
        */
       public Builder setUsernameBytes(
           com.google.protobuf.ByteString value) {
@@ -3386,11 +3395,11 @@ public final class Messages {
 
       private java.lang.Object oauthScope_ = "";
       /**
-       * <code>optional string oauth_scope = 3;</code>
-       *
        * <pre>
        * OAuth scope.
        * </pre>
+       *
+       * <code>optional string oauth_scope = 3;</code>
        */
       public java.lang.String getOauthScope() {
         java.lang.Object ref = oauthScope_;
@@ -3405,11 +3414,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional string oauth_scope = 3;</code>
-       *
        * <pre>
        * OAuth scope.
        * </pre>
+       *
+       * <code>optional string oauth_scope = 3;</code>
        */
       public com.google.protobuf.ByteString
           getOauthScopeBytes() {
@@ -3425,11 +3434,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional string oauth_scope = 3;</code>
-       *
        * <pre>
        * OAuth scope.
        * </pre>
+       *
+       * <code>optional string oauth_scope = 3;</code>
        */
       public Builder setOauthScope(
           java.lang.String value) {
@@ -3442,11 +3451,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional string oauth_scope = 3;</code>
-       *
        * <pre>
        * OAuth scope.
        * </pre>
+       *
+       * <code>optional string oauth_scope = 3;</code>
        */
       public Builder clearOauthScope() {
         
@@ -3455,11 +3464,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional string oauth_scope = 3;</code>
-       *
        * <pre>
        * OAuth scope.
        * </pre>
+       *
+       * <code>optional string oauth_scope = 3;</code>
        */
       public Builder setOauthScopeBytes(
           com.google.protobuf.ByteString value) {
@@ -3502,16 +3511,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new SimpleResponse(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -3566,7 +3566,8 @@ public final class Messages {
     }
     private SimpleContext(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -3592,11 +3593,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -3700,34 +3700,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.SimpleContext parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.SimpleContext parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.SimpleContext parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.SimpleContext parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.SimpleContext parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.SimpleContext parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -3844,7 +3850,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.SimpleContext) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -3951,16 +3957,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new SimpleContext(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -3984,36 +3981,36 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     boolean hasPayload();
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.Payload getPayload();
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
   }
   /**
-   * Protobuf type {@code grpc.testing.StreamingInputCallRequest}
-   *
    * <pre>
    * Client-streaming request.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.StreamingInputCallRequest}
    */
   public  static final class StreamingInputCallRequest extends
       com.google.protobuf.GeneratedMessage implements
@@ -4033,7 +4030,8 @@ public final class Messages {
     }
     private StreamingInputCallRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -4066,11 +4064,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -4090,31 +4087,31 @@ public final class Messages {
     public static final int PAYLOAD_FIELD_NUMBER = 1;
     private io.grpc.testing.integration.Messages.Payload payload_;
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     public boolean hasPayload() {
       return payload_ != null;
     }
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.Payload getPayload() {
       return payload_ == null ? io.grpc.testing.integration.Messages.Payload.getDefaultInstance() : payload_;
     }
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
       return getPayload();
@@ -4174,34 +4171,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallRequest parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallRequest parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallRequest parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallRequest parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallRequest parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallRequest parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -4223,11 +4226,11 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.StreamingInputCallRequest}
-     *
      * <pre>
      * Client-streaming request.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.StreamingInputCallRequest}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -4329,7 +4332,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.StreamingInputCallRequest) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -4342,21 +4345,21 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> payloadBuilder_;
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public boolean hasPayload() {
         return payloadBuilder_ != null || payload_ != null;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload getPayload() {
         if (payloadBuilder_ == null) {
@@ -4366,11 +4369,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -4386,11 +4389,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(
           io.grpc.testing.integration.Messages.Payload.Builder builderForValue) {
@@ -4404,11 +4407,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder mergePayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -4426,11 +4429,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder clearPayload() {
         if (payloadBuilder_ == null) {
@@ -4444,11 +4447,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload.Builder getPayloadBuilder() {
         
@@ -4456,11 +4459,11 @@ public final class Messages {
         return getPayloadFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
         if (payloadBuilder_ != null) {
@@ -4471,11 +4474,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> 
@@ -4520,16 +4523,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new StreamingInputCallRequest(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -4553,20 +4547,20 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional int32 aggregated_payload_size = 1;</code>
-     *
      * <pre>
      * Aggregated size of payloads received from the client.
      * </pre>
+     *
+     * <code>optional int32 aggregated_payload_size = 1;</code>
      */
     int getAggregatedPayloadSize();
   }
   /**
-   * Protobuf type {@code grpc.testing.StreamingInputCallResponse}
-   *
    * <pre>
    * Client-streaming response.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.StreamingInputCallResponse}
    */
   public  static final class StreamingInputCallResponse extends
       com.google.protobuf.GeneratedMessage implements
@@ -4587,7 +4581,8 @@ public final class Messages {
     }
     private StreamingInputCallResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -4612,11 +4607,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -4636,11 +4630,11 @@ public final class Messages {
     public static final int AGGREGATED_PAYLOAD_SIZE_FIELD_NUMBER = 1;
     private int aggregatedPayloadSize_;
     /**
-     * <code>optional int32 aggregated_payload_size = 1;</code>
-     *
      * <pre>
      * Aggregated size of payloads received from the client.
      * </pre>
+     *
+     * <code>optional int32 aggregated_payload_size = 1;</code>
      */
     public int getAggregatedPayloadSize() {
       return aggregatedPayloadSize_;
@@ -4700,34 +4694,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallResponse parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallResponse parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallResponse parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallResponse parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallResponse parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingInputCallResponse parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -4749,11 +4749,11 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.StreamingInputCallResponse}
-     *
      * <pre>
      * Client-streaming response.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.StreamingInputCallResponse}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -4847,7 +4847,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.StreamingInputCallResponse) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -4858,21 +4858,21 @@ public final class Messages {
 
       private int aggregatedPayloadSize_ ;
       /**
-       * <code>optional int32 aggregated_payload_size = 1;</code>
-       *
        * <pre>
        * Aggregated size of payloads received from the client.
        * </pre>
+       *
+       * <code>optional int32 aggregated_payload_size = 1;</code>
        */
       public int getAggregatedPayloadSize() {
         return aggregatedPayloadSize_;
       }
       /**
-       * <code>optional int32 aggregated_payload_size = 1;</code>
-       *
        * <pre>
        * Aggregated size of payloads received from the client.
        * </pre>
+       *
+       * <code>optional int32 aggregated_payload_size = 1;</code>
        */
       public Builder setAggregatedPayloadSize(int value) {
         
@@ -4881,11 +4881,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional int32 aggregated_payload_size = 1;</code>
-       *
        * <pre>
        * Aggregated size of payloads received from the client.
        * </pre>
+       *
+       * <code>optional int32 aggregated_payload_size = 1;</code>
        */
       public Builder clearAggregatedPayloadSize() {
         
@@ -4923,16 +4923,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new StreamingInputCallResponse(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -4956,31 +4947,31 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional int32 size = 1;</code>
-     *
      * <pre>
      * Desired payload sizes in responses from the server.
      * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
+     *
+     * <code>optional int32 size = 1;</code>
      */
     int getSize();
 
     /**
-     * <code>optional int32 interval_us = 2;</code>
-     *
      * <pre>
      * Desired interval between consecutive responses in the response stream in
      * microseconds.
      * </pre>
+     *
+     * <code>optional int32 interval_us = 2;</code>
      */
     int getIntervalUs();
   }
   /**
-   * Protobuf type {@code grpc.testing.ResponseParameters}
-   *
    * <pre>
    * Configuration for a particular response.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.ResponseParameters}
    */
   public  static final class ResponseParameters extends
       com.google.protobuf.GeneratedMessage implements
@@ -5002,7 +4993,8 @@ public final class Messages {
     }
     private ResponseParameters(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -5032,11 +5024,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -5056,12 +5047,12 @@ public final class Messages {
     public static final int SIZE_FIELD_NUMBER = 1;
     private int size_;
     /**
-     * <code>optional int32 size = 1;</code>
-     *
      * <pre>
      * Desired payload sizes in responses from the server.
      * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
+     *
+     * <code>optional int32 size = 1;</code>
      */
     public int getSize() {
       return size_;
@@ -5070,12 +5061,12 @@ public final class Messages {
     public static final int INTERVAL_US_FIELD_NUMBER = 2;
     private int intervalUs_;
     /**
-     * <code>optional int32 interval_us = 2;</code>
-     *
      * <pre>
      * Desired interval between consecutive responses in the response stream in
      * microseconds.
      * </pre>
+     *
+     * <code>optional int32 interval_us = 2;</code>
      */
     public int getIntervalUs() {
       return intervalUs_;
@@ -5142,34 +5133,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.ResponseParameters parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.ResponseParameters parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.ResponseParameters parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.ResponseParameters parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.ResponseParameters parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.ResponseParameters parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -5191,11 +5188,11 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.ResponseParameters}
-     *
      * <pre>
      * Configuration for a particular response.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.ResponseParameters}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -5295,7 +5292,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.ResponseParameters) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -5306,23 +5303,23 @@ public final class Messages {
 
       private int size_ ;
       /**
-       * <code>optional int32 size = 1;</code>
-       *
        * <pre>
        * Desired payload sizes in responses from the server.
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
+       *
+       * <code>optional int32 size = 1;</code>
        */
       public int getSize() {
         return size_;
       }
       /**
-       * <code>optional int32 size = 1;</code>
-       *
        * <pre>
        * Desired payload sizes in responses from the server.
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
+       *
+       * <code>optional int32 size = 1;</code>
        */
       public Builder setSize(int value) {
         
@@ -5331,12 +5328,12 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional int32 size = 1;</code>
-       *
        * <pre>
        * Desired payload sizes in responses from the server.
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
+       *
+       * <code>optional int32 size = 1;</code>
        */
       public Builder clearSize() {
         
@@ -5347,23 +5344,23 @@ public final class Messages {
 
       private int intervalUs_ ;
       /**
-       * <code>optional int32 interval_us = 2;</code>
-       *
        * <pre>
        * Desired interval between consecutive responses in the response stream in
        * microseconds.
        * </pre>
+       *
+       * <code>optional int32 interval_us = 2;</code>
        */
       public int getIntervalUs() {
         return intervalUs_;
       }
       /**
-       * <code>optional int32 interval_us = 2;</code>
-       *
        * <pre>
        * Desired interval between consecutive responses in the response stream in
        * microseconds.
        * </pre>
+       *
+       * <code>optional int32 interval_us = 2;</code>
        */
       public Builder setIntervalUs(int value) {
         
@@ -5372,12 +5369,12 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional int32 interval_us = 2;</code>
-       *
        * <pre>
        * Desired interval between consecutive responses in the response stream in
        * microseconds.
        * </pre>
+       *
+       * <code>optional int32 interval_us = 2;</code>
        */
       public Builder clearIntervalUs() {
         
@@ -5415,16 +5412,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ResponseParameters(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -5448,145 +5436,145 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-     *
      * <pre>
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, the payload from each response in the stream
      * might be of different types. This is to simulate a mixed type of payload
      * stream.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      */
     int getResponseTypeValue();
     /**
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-     *
      * <pre>
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, the payload from each response in the stream
      * might be of different types. This is to simulate a mixed type of payload
      * stream.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadType getResponseType();
 
     /**
-     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-     *
      * <pre>
      * Configuration for each expected response message.
      * </pre>
+     *
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      */
     java.util.List<io.grpc.testing.integration.Messages.ResponseParameters> 
         getResponseParametersList();
     /**
-     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-     *
      * <pre>
      * Configuration for each expected response message.
      * </pre>
+     *
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      */
     io.grpc.testing.integration.Messages.ResponseParameters getResponseParameters(int index);
     /**
-     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-     *
      * <pre>
      * Configuration for each expected response message.
      * </pre>
+     *
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      */
     int getResponseParametersCount();
     /**
-     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-     *
      * <pre>
      * Configuration for each expected response message.
      * </pre>
+     *
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      */
     java.util.List<? extends io.grpc.testing.integration.Messages.ResponseParametersOrBuilder> 
         getResponseParametersOrBuilderList();
     /**
-     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-     *
      * <pre>
      * Configuration for each expected response message.
      * </pre>
+     *
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      */
     io.grpc.testing.integration.Messages.ResponseParametersOrBuilder getResponseParametersOrBuilder(
         int index);
 
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     boolean hasPayload();
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     io.grpc.testing.integration.Messages.Payload getPayload();
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-     *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
+     *
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      */
     int getResponseCompressionValue();
     /**
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-     *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
+     *
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      */
     io.grpc.testing.integration.Messages.CompressionType getResponseCompression();
 
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     boolean hasResponseStatus();
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     io.grpc.testing.integration.Messages.EchoStatus getResponseStatus();
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder();
   }
   /**
-   * Protobuf type {@code grpc.testing.StreamingOutputCallRequest}
-   *
    * <pre>
    * Server-streaming request.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.StreamingOutputCallRequest}
    */
   public  static final class StreamingOutputCallRequest extends
       com.google.protobuf.GeneratedMessage implements
@@ -5609,7 +5597,8 @@ public final class Messages {
     }
     private StreamingOutputCallRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -5675,11 +5664,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
           responseParameters_ = java.util.Collections.unmodifiableList(responseParameters_);
@@ -5703,82 +5691,82 @@ public final class Messages {
     public static final int RESPONSE_TYPE_FIELD_NUMBER = 1;
     private int responseType_;
     /**
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-     *
      * <pre>
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, the payload from each response in the stream
      * might be of different types. This is to simulate a mixed type of payload
      * stream.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      */
     public int getResponseTypeValue() {
       return responseType_;
     }
     /**
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-     *
      * <pre>
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, the payload from each response in the stream
      * might be of different types. This is to simulate a mixed type of payload
      * stream.
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadType getResponseType() {
-      io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(responseType_);
+      io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.forNumber(responseType_);
       return result == null ? io.grpc.testing.integration.Messages.PayloadType.UNRECOGNIZED : result;
     }
 
     public static final int RESPONSE_PARAMETERS_FIELD_NUMBER = 2;
     private java.util.List<io.grpc.testing.integration.Messages.ResponseParameters> responseParameters_;
     /**
-     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-     *
      * <pre>
      * Configuration for each expected response message.
      * </pre>
+     *
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      */
     public java.util.List<io.grpc.testing.integration.Messages.ResponseParameters> getResponseParametersList() {
       return responseParameters_;
     }
     /**
-     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-     *
      * <pre>
      * Configuration for each expected response message.
      * </pre>
+     *
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      */
     public java.util.List<? extends io.grpc.testing.integration.Messages.ResponseParametersOrBuilder> 
         getResponseParametersOrBuilderList() {
       return responseParameters_;
     }
     /**
-     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-     *
      * <pre>
      * Configuration for each expected response message.
      * </pre>
+     *
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      */
     public int getResponseParametersCount() {
       return responseParameters_.size();
     }
     /**
-     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-     *
      * <pre>
      * Configuration for each expected response message.
      * </pre>
+     *
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      */
     public io.grpc.testing.integration.Messages.ResponseParameters getResponseParameters(int index) {
       return responseParameters_.get(index);
     }
     /**
-     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-     *
      * <pre>
      * Configuration for each expected response message.
      * </pre>
+     *
+     * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
      */
     public io.grpc.testing.integration.Messages.ResponseParametersOrBuilder getResponseParametersOrBuilder(
         int index) {
@@ -5788,31 +5776,31 @@ public final class Messages {
     public static final int PAYLOAD_FIELD_NUMBER = 3;
     private io.grpc.testing.integration.Messages.Payload payload_;
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     public boolean hasPayload() {
       return payload_ != null;
     }
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     public io.grpc.testing.integration.Messages.Payload getPayload() {
       return payload_ == null ? io.grpc.testing.integration.Messages.Payload.getDefaultInstance() : payload_;
     }
     /**
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
-     *
      * <pre>
      * Optional input payload sent along with the request.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 3;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
       return getPayload();
@@ -5821,55 +5809,55 @@ public final class Messages {
     public static final int RESPONSE_COMPRESSION_FIELD_NUMBER = 6;
     private int responseCompression_;
     /**
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-     *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
+     *
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      */
     public int getResponseCompressionValue() {
       return responseCompression_;
     }
     /**
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-     *
      * <pre>
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
+     *
+     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
      */
     public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
-      io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
+      io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.forNumber(responseCompression_);
       return result == null ? io.grpc.testing.integration.Messages.CompressionType.UNRECOGNIZED : result;
     }
 
     public static final int RESPONSE_STATUS_FIELD_NUMBER = 7;
     private io.grpc.testing.integration.Messages.EchoStatus responseStatus_;
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     public boolean hasResponseStatus() {
       return responseStatus_ != null;
     }
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
       return responseStatus_ == null ? io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
     }
     /**
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-     *
      * <pre>
      * Whether server should return a given status
      * </pre>
+     *
+     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
      */
     public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
       return getResponseStatus();
@@ -5957,34 +5945,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallRequest parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallRequest parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallRequest parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallRequest parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallRequest parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallRequest parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -6006,11 +6000,11 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.StreamingOutputCallRequest}
-     *
      * <pre>
      * Server-streaming request.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.StreamingOutputCallRequest}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -6183,7 +6177,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.StreamingOutputCallRequest) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -6195,27 +6189,27 @@ public final class Messages {
 
       private int responseType_ = 0;
       /**
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-       *
        * <pre>
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, the payload from each response in the stream
        * might be of different types. This is to simulate a mixed type of payload
        * stream.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        */
       public int getResponseTypeValue() {
         return responseType_;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-       *
        * <pre>
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, the payload from each response in the stream
        * might be of different types. This is to simulate a mixed type of payload
        * stream.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder setResponseTypeValue(int value) {
         responseType_ = value;
@@ -6223,28 +6217,28 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-       *
        * <pre>
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, the payload from each response in the stream
        * might be of different types. This is to simulate a mixed type of payload
        * stream.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadType getResponseType() {
-        io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(responseType_);
+        io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.forNumber(responseType_);
         return result == null ? io.grpc.testing.integration.Messages.PayloadType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-       *
        * <pre>
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, the payload from each response in the stream
        * might be of different types. This is to simulate a mixed type of payload
        * stream.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder setResponseType(io.grpc.testing.integration.Messages.PayloadType value) {
         if (value == null) {
@@ -6256,14 +6250,14 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
-       *
        * <pre>
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, the payload from each response in the stream
        * might be of different types. This is to simulate a mixed type of payload
        * stream.
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder clearResponseType() {
         
@@ -6285,11 +6279,11 @@ public final class Messages {
           io.grpc.testing.integration.Messages.ResponseParameters, io.grpc.testing.integration.Messages.ResponseParameters.Builder, io.grpc.testing.integration.Messages.ResponseParametersOrBuilder> responseParametersBuilder_;
 
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public java.util.List<io.grpc.testing.integration.Messages.ResponseParameters> getResponseParametersList() {
         if (responseParametersBuilder_ == null) {
@@ -6299,11 +6293,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public int getResponseParametersCount() {
         if (responseParametersBuilder_ == null) {
@@ -6313,11 +6307,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public io.grpc.testing.integration.Messages.ResponseParameters getResponseParameters(int index) {
         if (responseParametersBuilder_ == null) {
@@ -6327,11 +6321,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public Builder setResponseParameters(
           int index, io.grpc.testing.integration.Messages.ResponseParameters value) {
@@ -6348,11 +6342,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public Builder setResponseParameters(
           int index, io.grpc.testing.integration.Messages.ResponseParameters.Builder builderForValue) {
@@ -6366,11 +6360,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public Builder addResponseParameters(io.grpc.testing.integration.Messages.ResponseParameters value) {
         if (responseParametersBuilder_ == null) {
@@ -6386,11 +6380,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public Builder addResponseParameters(
           int index, io.grpc.testing.integration.Messages.ResponseParameters value) {
@@ -6407,11 +6401,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public Builder addResponseParameters(
           io.grpc.testing.integration.Messages.ResponseParameters.Builder builderForValue) {
@@ -6425,11 +6419,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public Builder addResponseParameters(
           int index, io.grpc.testing.integration.Messages.ResponseParameters.Builder builderForValue) {
@@ -6443,11 +6437,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public Builder addAllResponseParameters(
           java.lang.Iterable<? extends io.grpc.testing.integration.Messages.ResponseParameters> values) {
@@ -6462,11 +6456,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public Builder clearResponseParameters() {
         if (responseParametersBuilder_ == null) {
@@ -6479,11 +6473,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public Builder removeResponseParameters(int index) {
         if (responseParametersBuilder_ == null) {
@@ -6496,22 +6490,22 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public io.grpc.testing.integration.Messages.ResponseParameters.Builder getResponseParametersBuilder(
           int index) {
         return getResponseParametersFieldBuilder().getBuilder(index);
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public io.grpc.testing.integration.Messages.ResponseParametersOrBuilder getResponseParametersOrBuilder(
           int index) {
@@ -6521,11 +6515,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public java.util.List<? extends io.grpc.testing.integration.Messages.ResponseParametersOrBuilder> 
            getResponseParametersOrBuilderList() {
@@ -6536,22 +6530,22 @@ public final class Messages {
         }
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public io.grpc.testing.integration.Messages.ResponseParameters.Builder addResponseParametersBuilder() {
         return getResponseParametersFieldBuilder().addBuilder(
             io.grpc.testing.integration.Messages.ResponseParameters.getDefaultInstance());
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public io.grpc.testing.integration.Messages.ResponseParameters.Builder addResponseParametersBuilder(
           int index) {
@@ -6559,11 +6553,11 @@ public final class Messages {
             index, io.grpc.testing.integration.Messages.ResponseParameters.getDefaultInstance());
       }
       /**
-       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
-       *
        * <pre>
        * Configuration for each expected response message.
        * </pre>
+       *
+       * <code>repeated .grpc.testing.ResponseParameters response_parameters = 2;</code>
        */
       public java.util.List<io.grpc.testing.integration.Messages.ResponseParameters.Builder> 
            getResponseParametersBuilderList() {
@@ -6588,21 +6582,21 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> payloadBuilder_;
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public boolean hasPayload() {
         return payloadBuilder_ != null || payload_ != null;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.Payload getPayload() {
         if (payloadBuilder_ == null) {
@@ -6612,11 +6606,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public Builder setPayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -6632,11 +6626,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public Builder setPayload(
           io.grpc.testing.integration.Messages.Payload.Builder builderForValue) {
@@ -6650,11 +6644,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public Builder mergePayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -6672,11 +6666,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public Builder clearPayload() {
         if (payloadBuilder_ == null) {
@@ -6690,11 +6684,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.Payload.Builder getPayloadBuilder() {
         
@@ -6702,11 +6696,11 @@ public final class Messages {
         return getPayloadFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
         if (payloadBuilder_ != null) {
@@ -6717,11 +6711,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
-       *
        * <pre>
        * Optional input payload sent along with the request.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> 
@@ -6739,21 +6733,21 @@ public final class Messages {
 
       private int responseCompression_ = 0;
       /**
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-       *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
+       *
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        */
       public int getResponseCompressionValue() {
         return responseCompression_;
       }
       /**
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-       *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
+       *
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder setResponseCompressionValue(int value) {
         responseCompression_ = value;
@@ -6761,22 +6755,22 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-       *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
+       *
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        */
       public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
-        io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
+        io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.forNumber(responseCompression_);
         return result == null ? io.grpc.testing.integration.Messages.CompressionType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-       *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
+       *
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder setResponseCompression(io.grpc.testing.integration.Messages.CompressionType value) {
         if (value == null) {
@@ -6788,11 +6782,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
-       *
        * <pre>
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
+       *
+       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder clearResponseCompression() {
         
@@ -6805,21 +6799,21 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder> responseStatusBuilder_;
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public boolean hasResponseStatus() {
         return responseStatusBuilder_ != null || responseStatus_ != null;
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
         if (responseStatusBuilder_ == null) {
@@ -6829,11 +6823,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder setResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
         if (responseStatusBuilder_ == null) {
@@ -6849,11 +6843,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder setResponseStatus(
           io.grpc.testing.integration.Messages.EchoStatus.Builder builderForValue) {
@@ -6867,11 +6861,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder mergeResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
         if (responseStatusBuilder_ == null) {
@@ -6889,11 +6883,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder clearResponseStatus() {
         if (responseStatusBuilder_ == null) {
@@ -6907,11 +6901,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatus.Builder getResponseStatusBuilder() {
         
@@ -6919,11 +6913,11 @@ public final class Messages {
         return getResponseStatusFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
         if (responseStatusBuilder_ != null) {
@@ -6934,11 +6928,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
-       *
        * <pre>
        * Whether server should return a given status
        * </pre>
+       *
+       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder> 
@@ -6983,16 +6977,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new StreamingOutputCallRequest(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -7016,36 +7001,36 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase response size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     boolean hasPayload();
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase response size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.Payload getPayload();
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase response size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
   }
   /**
-   * Protobuf type {@code grpc.testing.StreamingOutputCallResponse}
-   *
    * <pre>
    * Server-streaming response, as configured by the request and parameters.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.StreamingOutputCallResponse}
    */
   public  static final class StreamingOutputCallResponse extends
       com.google.protobuf.GeneratedMessage implements
@@ -7065,7 +7050,8 @@ public final class Messages {
     }
     private StreamingOutputCallResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -7098,11 +7084,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -7122,31 +7107,31 @@ public final class Messages {
     public static final int PAYLOAD_FIELD_NUMBER = 1;
     private io.grpc.testing.integration.Messages.Payload payload_;
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase response size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     public boolean hasPayload() {
       return payload_ != null;
     }
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase response size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.Payload getPayload() {
       return payload_ == null ? io.grpc.testing.integration.Messages.Payload.getDefaultInstance() : payload_;
     }
     /**
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
-     *
      * <pre>
      * Payload to increase response size.
      * </pre>
+     *
+     * <code>optional .grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
       return getPayload();
@@ -7206,34 +7191,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallResponse parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallResponse parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallResponse parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallResponse parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallResponse parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.StreamingOutputCallResponse parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -7255,11 +7246,11 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.StreamingOutputCallResponse}
-     *
      * <pre>
      * Server-streaming response, as configured by the request and parameters.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.StreamingOutputCallResponse}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -7361,7 +7352,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.StreamingOutputCallResponse) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -7374,21 +7365,21 @@ public final class Messages {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> payloadBuilder_;
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase response size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public boolean hasPayload() {
         return payloadBuilder_ != null || payload_ != null;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase response size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload getPayload() {
         if (payloadBuilder_ == null) {
@@ -7398,11 +7389,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase response size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -7418,11 +7409,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase response size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(
           io.grpc.testing.integration.Messages.Payload.Builder builderForValue) {
@@ -7436,11 +7427,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase response size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder mergePayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -7458,11 +7449,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase response size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public Builder clearPayload() {
         if (payloadBuilder_ == null) {
@@ -7476,11 +7467,11 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase response size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload.Builder getPayloadBuilder() {
         
@@ -7488,11 +7479,11 @@ public final class Messages {
         return getPayloadFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase response size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
         if (payloadBuilder_ != null) {
@@ -7503,11 +7494,11 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
-       *
        * <pre>
        * Payload to increase response size.
        * </pre>
+       *
+       * <code>optional .grpc.testing.Payload payload = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> 
@@ -7552,16 +7543,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new StreamingOutputCallResponse(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -7590,12 +7572,12 @@ public final class Messages {
     int getMaxReconnectBackoffMs();
   }
   /**
-   * Protobuf type {@code grpc.testing.ReconnectParams}
-   *
    * <pre>
    * For reconnect interop test only.
    * Client tells server what reconnection parameters it used.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.ReconnectParams}
    */
   public  static final class ReconnectParams extends
       com.google.protobuf.GeneratedMessage implements
@@ -7616,7 +7598,8 @@ public final class Messages {
     }
     private ReconnectParams(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -7641,11 +7624,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -7725,34 +7707,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.ReconnectParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.ReconnectParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.ReconnectParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -7774,12 +7762,12 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.ReconnectParams}
-     *
      * <pre>
      * For reconnect interop test only.
      * Client tells server what reconnection parameters it used.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.ReconnectParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -7873,7 +7861,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.ReconnectParams) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -7937,16 +7925,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ReconnectParams(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -7988,13 +7967,13 @@ public final class Messages {
     int getBackoffMs(int index);
   }
   /**
-   * Protobuf type {@code grpc.testing.ReconnectInfo}
-   *
    * <pre>
    * For reconnect interop test only.
    * Server tells client whether its reconnects are following the spec and the
    * reconnect backoffs it saw.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.ReconnectInfo}
    */
   public  static final class ReconnectInfo extends
       com.google.protobuf.GeneratedMessage implements
@@ -8016,7 +7995,8 @@ public final class Messages {
     }
     private ReconnectInfo(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -8062,11 +8042,10 @@ public final class Messages {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
           backoffMs_ = java.util.Collections.unmodifiableList(backoffMs_);
@@ -8195,34 +8174,40 @@ public final class Messages {
     }
     public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.ReconnectInfo parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.ReconnectInfo parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.testing.integration.Messages.ReconnectInfo parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -8244,13 +8229,13 @@ public final class Messages {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.ReconnectInfo}
-     *
      * <pre>
      * For reconnect interop test only.
      * Server tells client whether its reconnects are following the spec and the
      * reconnect backoffs it saw.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.ReconnectInfo}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -8364,7 +8349,7 @@ public final class Messages {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.testing.integration.Messages.ReconnectInfo) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -8495,16 +8480,7 @@ public final class Messages {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ReconnectInfo(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -8523,64 +8499,64 @@ public final class Messages {
 
   }
 
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_Payload_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_Payload_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_EchoStatus_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_EchoStatus_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_SimpleRequest_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_SimpleRequest_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_SimpleResponse_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_SimpleResponse_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_SimpleContext_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_SimpleContext_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_StreamingInputCallRequest_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_StreamingInputCallRequest_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_StreamingInputCallResponse_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_StreamingInputCallResponse_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ResponseParameters_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ResponseParameters_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_StreamingOutputCallRequest_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_StreamingOutputCallRequest_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_StreamingOutputCallResponse_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ReconnectParams_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ReconnectParams_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ReconnectInfo_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable;
 
@@ -8588,7 +8564,7 @@ public final class Messages {
       getDescriptor() {
     return descriptor;
   }
-  private static com.google.protobuf.Descriptors.FileDescriptor
+  private static  com.google.protobuf.Descriptors.FileDescriptor
       descriptor;
   static {
     java.lang.String[] descriptorData = {

@@ -125,7 +125,11 @@ dependencies {
 }
 
 sourceSets {
-  testLite {}
+  testLite {
+    proto {
+      setSrcDirs(['src/test/proto'])
+    }
+  }
   testNano {
     proto {
       setSrcDirs(['src/test/proto'])
@@ -136,7 +140,7 @@ sourceSets {
 compileTestLiteJava {
   // Protobuf-generated Lite produces quite a few warnings.
   options.compilerArgs = compileTestJava.options.compilerArgs +
-      ["-Xlint:-unchecked", "-Xlint:-rawtypes"]
+      ["-Xlint:-unchecked", "-Xlint:-rawtypes", "-Xlint:-fallthrough"]
 }
 
 compileTestNanoJava {

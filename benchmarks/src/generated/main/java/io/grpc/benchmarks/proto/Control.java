@@ -16,12 +16,12 @@ public final class Control {
     /**
      * <code>SYNC_CLIENT = 0;</code>
      */
-    SYNC_CLIENT(0, 0),
+    SYNC_CLIENT(0),
     /**
      * <code>ASYNC_CLIENT = 1;</code>
      */
-    ASYNC_CLIENT(1, 1),
-    UNRECOGNIZED(-1, -1),
+    ASYNC_CLIENT(1),
+    UNRECOGNIZED(-1),
     ;
 
     /**
@@ -35,14 +35,22 @@ public final class Control {
 
 
     public final int getNumber() {
-      if (index == -1) {
+      if (this == UNRECOGNIZED) {
         throw new java.lang.IllegalArgumentException(
             "Can't get the number of an unknown enum value.");
       }
       return value;
     }
 
+    /**
+     * @deprecated Use {@link #forNumber(int)} instead.
+     */
+    @java.lang.Deprecated
     public static ClientType valueOf(int value) {
+      return forNumber(value);
+    }
+
+    public static ClientType forNumber(int value) {
       switch (value) {
         case 0: return SYNC_CLIENT;
         case 1: return ASYNC_CLIENT;
@@ -58,13 +66,13 @@ public final class Control {
         ClientType> internalValueMap =
           new com.google.protobuf.Internal.EnumLiteMap<ClientType>() {
             public ClientType findValueByNumber(int number) {
-              return ClientType.valueOf(number);
+              return ClientType.forNumber(number);
             }
           };
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      return getDescriptor().getValues().get(index);
+      return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
         getDescriptorForType() {
@@ -89,11 +97,9 @@ public final class Control {
       return VALUES[desc.getIndex()];
     }
 
-    private final int index;
     private final int value;
 
-    private ClientType(int index, int value) {
-      this.index = index;
+    private ClientType(int value) {
       this.value = value;
     }
 
@@ -108,16 +114,16 @@ public final class Control {
     /**
      * <code>SYNC_SERVER = 0;</code>
      */
-    SYNC_SERVER(0, 0),
+    SYNC_SERVER(0),
     /**
      * <code>ASYNC_SERVER = 1;</code>
      */
-    ASYNC_SERVER(1, 1),
+    ASYNC_SERVER(1),
     /**
      * <code>ASYNC_GENERIC_SERVER = 2;</code>
      */
-    ASYNC_GENERIC_SERVER(2, 2),
-    UNRECOGNIZED(-1, -1),
+    ASYNC_GENERIC_SERVER(2),
+    UNRECOGNIZED(-1),
     ;
 
     /**
@@ -135,14 +141,22 @@ public final class Control {
 
 
     public final int getNumber() {
-      if (index == -1) {
+      if (this == UNRECOGNIZED) {
         throw new java.lang.IllegalArgumentException(
             "Can't get the number of an unknown enum value.");
       }
       return value;
     }
 
+    /**
+     * @deprecated Use {@link #forNumber(int)} instead.
+     */
+    @java.lang.Deprecated
     public static ServerType valueOf(int value) {
+      return forNumber(value);
+    }
+
+    public static ServerType forNumber(int value) {
       switch (value) {
         case 0: return SYNC_SERVER;
         case 1: return ASYNC_SERVER;
@@ -159,13 +173,13 @@ public final class Control {
         ServerType> internalValueMap =
           new com.google.protobuf.Internal.EnumLiteMap<ServerType>() {
             public ServerType findValueByNumber(int number) {
-              return ServerType.valueOf(number);
+              return ServerType.forNumber(number);
             }
           };
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      return getDescriptor().getValues().get(index);
+      return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
         getDescriptorForType() {
@@ -190,11 +204,9 @@ public final class Control {
       return VALUES[desc.getIndex()];
     }
 
-    private final int index;
     private final int value;
 
-    private ServerType(int index, int value) {
-      this.index = index;
+    private ServerType(int value) {
       this.value = value;
     }
 
@@ -209,12 +221,12 @@ public final class Control {
     /**
      * <code>UNARY = 0;</code>
      */
-    UNARY(0, 0),
+    UNARY(0),
     /**
      * <code>STREAMING = 1;</code>
      */
-    STREAMING(1, 1),
-    UNRECOGNIZED(-1, -1),
+    STREAMING(1),
+    UNRECOGNIZED(-1),
     ;
 
     /**
@@ -228,14 +240,22 @@ public final class Control {
 
 
     public final int getNumber() {
-      if (index == -1) {
+      if (this == UNRECOGNIZED) {
         throw new java.lang.IllegalArgumentException(
             "Can't get the number of an unknown enum value.");
       }
       return value;
     }
 
+    /**
+     * @deprecated Use {@link #forNumber(int)} instead.
+     */
+    @java.lang.Deprecated
     public static RpcType valueOf(int value) {
+      return forNumber(value);
+    }
+
+    public static RpcType forNumber(int value) {
       switch (value) {
         case 0: return UNARY;
         case 1: return STREAMING;
@@ -251,13 +271,13 @@ public final class Control {
         RpcType> internalValueMap =
           new com.google.protobuf.Internal.EnumLiteMap<RpcType>() {
             public RpcType findValueByNumber(int number) {
-              return RpcType.valueOf(number);
+              return RpcType.forNumber(number);
             }
           };
 
     public final com.google.protobuf.Descriptors.EnumValueDescriptor
         getValueDescriptor() {
-      return getDescriptor().getValues().get(index);
+      return getDescriptor().getValues().get(ordinal());
     }
     public final com.google.protobuf.Descriptors.EnumDescriptor
         getDescriptorForType() {
@@ -282,11 +302,9 @@ public final class Control {
       return VALUES[desc.getIndex()];
     }
 
-    private final int index;
     private final int value;
 
-    private RpcType(int index, int value) {
-      this.index = index;
+    private RpcType(int value) {
       this.value = value;
     }
 
@@ -298,21 +316,21 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional double offered_load = 1;</code>
-     *
      * <pre>
      * The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
      * </pre>
+     *
+     * <code>optional double offered_load = 1;</code>
      */
     double getOfferedLoad();
   }
   /**
-   * Protobuf type {@code grpc.testing.PoissonParams}
-   *
    * <pre>
    * Parameters of poisson process distribution, which is a good representation
    * of activity coming in from independent identical stationary sources.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.PoissonParams}
    */
   public  static final class PoissonParams extends
       com.google.protobuf.GeneratedMessage implements
@@ -333,7 +351,8 @@ public final class Control {
     }
     private PoissonParams(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -358,11 +377,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -382,11 +400,11 @@ public final class Control {
     public static final int OFFERED_LOAD_FIELD_NUMBER = 1;
     private double offeredLoad_;
     /**
-     * <code>optional double offered_load = 1;</code>
-     *
      * <pre>
      * The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
      * </pre>
+     *
+     * <code>optional double offered_load = 1;</code>
      */
     public double getOfferedLoad() {
       return offeredLoad_;
@@ -446,34 +464,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -495,12 +519,12 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.PoissonParams}
-     *
      * <pre>
      * Parameters of poisson process distribution, which is a good representation
      * of activity coming in from independent identical stationary sources.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.PoissonParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -594,7 +618,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.PoissonParams) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -605,21 +629,21 @@ public final class Control {
 
       private double offeredLoad_ ;
       /**
-       * <code>optional double offered_load = 1;</code>
-       *
        * <pre>
        * The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
        * </pre>
+       *
+       * <code>optional double offered_load = 1;</code>
        */
       public double getOfferedLoad() {
         return offeredLoad_;
       }
       /**
-       * <code>optional double offered_load = 1;</code>
-       *
        * <pre>
        * The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
        * </pre>
+       *
+       * <code>optional double offered_load = 1;</code>
        */
       public Builder setOfferedLoad(double value) {
         
@@ -628,11 +652,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional double offered_load = 1;</code>
-       *
        * <pre>
        * The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
        * </pre>
+       *
+       * <code>optional double offered_load = 1;</code>
        */
       public Builder clearOfferedLoad() {
         
@@ -670,16 +694,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new PoissonParams(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -735,7 +750,8 @@ public final class Control {
     }
     private UniformParams(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -765,11 +781,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -865,34 +880,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -1014,7 +1035,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.UniformParams) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -1104,16 +1125,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new UniformParams(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -1163,7 +1175,8 @@ public final class Control {
     }
     private DeterministicParams(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -1188,11 +1201,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -1272,34 +1284,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -1415,7 +1433,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.DeterministicParams) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -1479,16 +1497,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new DeterministicParams(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -1544,7 +1553,8 @@ public final class Control {
     }
     private ParetoParams(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -1574,11 +1584,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -1674,34 +1683,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -1823,7 +1838,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.ParetoParams) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -1913,16 +1928,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ParetoParams(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -1946,12 +1952,12 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
   }
   /**
-   * Protobuf type {@code grpc.testing.ClosedLoopParams}
-   *
    * <pre>
    * Once an RPC finishes, immediately start a new one.
    * No configuration parameters needed.
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.ClosedLoopParams}
    */
   public  static final class ClosedLoopParams extends
       com.google.protobuf.GeneratedMessage implements
@@ -1971,7 +1977,8 @@ public final class Control {
     }
     private ClosedLoopParams(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       try {
         boolean done = false;
@@ -1990,11 +1997,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -2058,34 +2064,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -2107,12 +2119,12 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.ClosedLoopParams}
-     *
      * <pre>
      * Once an RPC finishes, immediately start a new one.
      * No configuration parameters needed.
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.ClosedLoopParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -2200,7 +2212,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.ClosedLoopParams) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -2238,16 +2250,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ClosedLoopParams(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -2338,7 +2341,8 @@ public final class Control {
     }
     private LoadParams(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -2428,11 +2432,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -2459,11 +2462,19 @@ public final class Control {
       DETERM(4),
       PARETO(5),
       LOAD_NOT_SET(0);
-      private int value = 0;
+      private final int value;
       private LoadCase(int value) {
         this.value = value;
       }
+      /**
+       * @deprecated Use {@link #forNumber(int)} instead.
+       */
+      @java.lang.Deprecated
       public static LoadCase valueOf(int value) {
+        return forNumber(value);
+      }
+
+      public static LoadCase forNumber(int value) {
         switch (value) {
           case 1: return CLOSED_LOOP;
           case 2: return POISSON;
@@ -2471,8 +2482,7 @@ public final class Control {
           case 4: return DETERM;
           case 5: return PARETO;
           case 0: return LOAD_NOT_SET;
-          default: throw new java.lang.IllegalArgumentException(
-            "Value is undefined for this oneof enum.");
+          default: return null;
         }
       }
       public int getNumber() {
@@ -2482,7 +2492,7 @@ public final class Control {
 
     public LoadCase
     getLoadCase() {
-      return LoadCase.valueOf(
+      return LoadCase.forNumber(
           loadCase_);
     }
 
@@ -2668,34 +2678,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -2868,7 +2884,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.LoadParams) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -2880,7 +2896,7 @@ public final class Control {
       private java.lang.Object load_;
       public LoadCase
           getLoadCase() {
-        return LoadCase.valueOf(
+        return LoadCase.forNumber(
             loadCase_);
       }
 
@@ -3571,16 +3587,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new LoadParams(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -3619,11 +3626,11 @@ public final class Control {
         getServerHostOverrideBytes();
   }
   /**
-   * Protobuf type {@code grpc.testing.SecurityParams}
-   *
    * <pre>
    * presence of SecurityParams implies use of TLS
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.SecurityParams}
    */
   public  static final class SecurityParams extends
       com.google.protobuf.GeneratedMessage implements
@@ -3645,7 +3652,8 @@ public final class Control {
     }
     private SecurityParams(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -3676,11 +3684,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -3800,34 +3807,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -3849,11 +3862,11 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.SecurityParams}
-     *
      * <pre>
      * presence of SecurityParams implies use of TLS
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.SecurityParams}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -3954,7 +3967,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.SecurityParams) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -4087,16 +4100,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new SecurityParams(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -4120,36 +4124,36 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>repeated string server_targets = 1;</code>
-     *
      * <pre>
      * List of targets to connect to. At least one target needs to be specified.
      * </pre>
+     *
+     * <code>repeated string server_targets = 1;</code>
      */
     com.google.protobuf.ProtocolStringList
         getServerTargetsList();
     /**
-     * <code>repeated string server_targets = 1;</code>
-     *
      * <pre>
      * List of targets to connect to. At least one target needs to be specified.
      * </pre>
+     *
+     * <code>repeated string server_targets = 1;</code>
      */
     int getServerTargetsCount();
     /**
-     * <code>repeated string server_targets = 1;</code>
-     *
      * <pre>
      * List of targets to connect to. At least one target needs to be specified.
      * </pre>
+     *
+     * <code>repeated string server_targets = 1;</code>
      */
     java.lang.String getServerTargets(int index);
     /**
-     * <code>repeated string server_targets = 1;</code>
-     *
      * <pre>
      * List of targets to connect to. At least one target needs to be specified.
      * </pre>
+     *
+     * <code>repeated string server_targets = 1;</code>
      */
     com.google.protobuf.ByteString
         getServerTargetsBytes(int index);
@@ -4177,31 +4181,31 @@ public final class Control {
     io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder();
 
     /**
-     * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
-     *
      * <pre>
      * How many concurrent RPCs to start for each channel.
      * For synchronous client, use a separate thread for each outstanding RPC.
      * </pre>
+     *
+     * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
      */
     int getOutstandingRpcsPerChannel();
 
     /**
-     * <code>optional int32 client_channels = 5;</code>
-     *
      * <pre>
      * Number of independent client channels to create.
      * i-th channel will connect to server_target[i % server_targets.size()]
      * </pre>
+     *
+     * <code>optional int32 client_channels = 5;</code>
      */
     int getClientChannels();
 
     /**
-     * <code>optional int32 async_client_threads = 7;</code>
-     *
      * <pre>
      * Only for async client. Number of threads to use to start/manage RPCs.
      * </pre>
+     *
+     * <code>optional int32 async_client_threads = 7;</code>
      */
     int getAsyncClientThreads();
 
@@ -4215,27 +4219,27 @@ public final class Control {
     io.grpc.benchmarks.proto.Control.RpcType getRpcType();
 
     /**
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-     *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
+     *
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      */
     boolean hasLoadParams();
     /**
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-     *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
+     *
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      */
     io.grpc.benchmarks.proto.Control.LoadParams getLoadParams();
     /**
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-     *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
+     *
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      */
     io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder getLoadParamsOrBuilder();
 
@@ -4266,27 +4270,27 @@ public final class Control {
     io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder getHistogramParamsOrBuilder();
 
     /**
-     * <code>repeated int32 core_list = 13;</code>
-     *
      * <pre>
      * Specify the cores we should run the client on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 13;</code>
      */
     java.util.List<java.lang.Integer> getCoreListList();
     /**
-     * <code>repeated int32 core_list = 13;</code>
-     *
      * <pre>
      * Specify the cores we should run the client on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 13;</code>
      */
     int getCoreListCount();
     /**
-     * <code>repeated int32 core_list = 13;</code>
-     *
      * <pre>
      * Specify the cores we should run the client on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 13;</code>
      */
     int getCoreList(int index);
 
@@ -4324,7 +4328,8 @@ public final class Control {
     }
     private ClientConfig(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -4458,11 +4463,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
           serverTargets_ = serverTargets_.getUnmodifiableView();
@@ -4489,42 +4493,42 @@ public final class Control {
     public static final int SERVER_TARGETS_FIELD_NUMBER = 1;
     private com.google.protobuf.LazyStringList serverTargets_;
     /**
-     * <code>repeated string server_targets = 1;</code>
-     *
      * <pre>
      * List of targets to connect to. At least one target needs to be specified.
      * </pre>
+     *
+     * <code>repeated string server_targets = 1;</code>
      */
     public com.google.protobuf.ProtocolStringList
         getServerTargetsList() {
       return serverTargets_;
     }
     /**
-     * <code>repeated string server_targets = 1;</code>
-     *
      * <pre>
      * List of targets to connect to. At least one target needs to be specified.
      * </pre>
+     *
+     * <code>repeated string server_targets = 1;</code>
      */
     public int getServerTargetsCount() {
       return serverTargets_.size();
     }
     /**
-     * <code>repeated string server_targets = 1;</code>
-     *
      * <pre>
      * List of targets to connect to. At least one target needs to be specified.
      * </pre>
+     *
+     * <code>repeated string server_targets = 1;</code>
      */
     public java.lang.String getServerTargets(int index) {
       return serverTargets_.get(index);
     }
     /**
-     * <code>repeated string server_targets = 1;</code>
-     *
      * <pre>
      * List of targets to connect to. At least one target needs to be specified.
      * </pre>
+     *
+     * <code>repeated string server_targets = 1;</code>
      */
     public com.google.protobuf.ByteString
         getServerTargetsBytes(int index) {
@@ -4543,7 +4547,7 @@ public final class Control {
      * <code>optional .grpc.testing.ClientType client_type = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClientType getClientType() {
-      io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.valueOf(clientType_);
+      io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.forNumber(clientType_);
       return result == null ? io.grpc.benchmarks.proto.Control.ClientType.UNRECOGNIZED : result;
     }
 
@@ -4571,12 +4575,12 @@ public final class Control {
     public static final int OUTSTANDING_RPCS_PER_CHANNEL_FIELD_NUMBER = 4;
     private int outstandingRpcsPerChannel_;
     /**
-     * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
-     *
      * <pre>
      * How many concurrent RPCs to start for each channel.
      * For synchronous client, use a separate thread for each outstanding RPC.
      * </pre>
+     *
+     * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
      */
     public int getOutstandingRpcsPerChannel() {
       return outstandingRpcsPerChannel_;
@@ -4585,12 +4589,12 @@ public final class Control {
     public static final int CLIENT_CHANNELS_FIELD_NUMBER = 5;
     private int clientChannels_;
     /**
-     * <code>optional int32 client_channels = 5;</code>
-     *
      * <pre>
      * Number of independent client channels to create.
      * i-th channel will connect to server_target[i % server_targets.size()]
      * </pre>
+     *
+     * <code>optional int32 client_channels = 5;</code>
      */
     public int getClientChannels() {
       return clientChannels_;
@@ -4599,11 +4603,11 @@ public final class Control {
     public static final int ASYNC_CLIENT_THREADS_FIELD_NUMBER = 7;
     private int asyncClientThreads_;
     /**
-     * <code>optional int32 async_client_threads = 7;</code>
-     *
      * <pre>
      * Only for async client. Number of threads to use to start/manage RPCs.
      * </pre>
+     *
+     * <code>optional int32 async_client_threads = 7;</code>
      */
     public int getAsyncClientThreads() {
       return asyncClientThreads_;
@@ -4621,38 +4625,38 @@ public final class Control {
      * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
      */
     public io.grpc.benchmarks.proto.Control.RpcType getRpcType() {
-      io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.valueOf(rpcType_);
+      io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.forNumber(rpcType_);
       return result == null ? io.grpc.benchmarks.proto.Control.RpcType.UNRECOGNIZED : result;
     }
 
     public static final int LOAD_PARAMS_FIELD_NUMBER = 10;
     private io.grpc.benchmarks.proto.Control.LoadParams loadParams_;
     /**
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-     *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
+     *
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      */
     public boolean hasLoadParams() {
       return loadParams_ != null;
     }
     /**
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-     *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
+     *
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      */
     public io.grpc.benchmarks.proto.Control.LoadParams getLoadParams() {
       return loadParams_ == null ? io.grpc.benchmarks.proto.Control.LoadParams.getDefaultInstance() : loadParams_;
     }
     /**
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-     *
      * <pre>
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
+     *
+     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
      */
     public io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder getLoadParamsOrBuilder() {
       return getLoadParams();
@@ -4703,32 +4707,32 @@ public final class Control {
     public static final int CORE_LIST_FIELD_NUMBER = 13;
     private java.util.List<java.lang.Integer> coreList_;
     /**
-     * <code>repeated int32 core_list = 13;</code>
-     *
      * <pre>
      * Specify the cores we should run the client on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 13;</code>
      */
     public java.util.List<java.lang.Integer>
         getCoreListList() {
       return coreList_;
     }
     /**
-     * <code>repeated int32 core_list = 13;</code>
-     *
      * <pre>
      * Specify the cores we should run the client on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 13;</code>
      */
     public int getCoreListCount() {
       return coreList_.size();
     }
     /**
-     * <code>repeated int32 core_list = 13;</code>
-     *
      * <pre>
      * Specify the cores we should run the client on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 13;</code>
      */
     public int getCoreList(int index) {
       return coreList_.get(index);
@@ -4894,34 +4898,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -5160,7 +5170,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.ClientConfig) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -5178,53 +5188,53 @@ public final class Control {
          }
       }
       /**
-       * <code>repeated string server_targets = 1;</code>
-       *
        * <pre>
        * List of targets to connect to. At least one target needs to be specified.
        * </pre>
+       *
+       * <code>repeated string server_targets = 1;</code>
        */
       public com.google.protobuf.ProtocolStringList
           getServerTargetsList() {
         return serverTargets_.getUnmodifiableView();
       }
       /**
-       * <code>repeated string server_targets = 1;</code>
-       *
        * <pre>
        * List of targets to connect to. At least one target needs to be specified.
        * </pre>
+       *
+       * <code>repeated string server_targets = 1;</code>
        */
       public int getServerTargetsCount() {
         return serverTargets_.size();
       }
       /**
-       * <code>repeated string server_targets = 1;</code>
-       *
        * <pre>
        * List of targets to connect to. At least one target needs to be specified.
        * </pre>
+       *
+       * <code>repeated string server_targets = 1;</code>
        */
       public java.lang.String getServerTargets(int index) {
         return serverTargets_.get(index);
       }
       /**
-       * <code>repeated string server_targets = 1;</code>
-       *
        * <pre>
        * List of targets to connect to. At least one target needs to be specified.
        * </pre>
+       *
+       * <code>repeated string server_targets = 1;</code>
        */
       public com.google.protobuf.ByteString
           getServerTargetsBytes(int index) {
         return serverTargets_.getByteString(index);
       }
       /**
-       * <code>repeated string server_targets = 1;</code>
-       *
        * <pre>
        * List of targets to connect to. At least one target needs to be specified.
        * </pre>
+       *
+       * <code>repeated string server_targets = 1;</code>
        */
       public Builder setServerTargets(
           int index, java.lang.String value) {
@@ -5237,11 +5247,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>repeated string server_targets = 1;</code>
-       *
        * <pre>
        * List of targets to connect to. At least one target needs to be specified.
        * </pre>
+       *
+       * <code>repeated string server_targets = 1;</code>
        */
       public Builder addServerTargets(
           java.lang.String value) {
@@ -5254,11 +5264,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>repeated string server_targets = 1;</code>
-       *
        * <pre>
        * List of targets to connect to. At least one target needs to be specified.
        * </pre>
+       *
+       * <code>repeated string server_targets = 1;</code>
        */
       public Builder addAllServerTargets(
           java.lang.Iterable<java.lang.String> values) {
@@ -5269,11 +5279,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>repeated string server_targets = 1;</code>
-       *
        * <pre>
        * List of targets to connect to. At least one target needs to be specified.
        * </pre>
+       *
+       * <code>repeated string server_targets = 1;</code>
        */
       public Builder clearServerTargets() {
         serverTargets_ = com.google.protobuf.LazyStringArrayList.EMPTY;
@@ -5282,11 +5292,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>repeated string server_targets = 1;</code>
-       *
        * <pre>
        * List of targets to connect to. At least one target needs to be specified.
        * </pre>
+       *
+       * <code>repeated string server_targets = 1;</code>
        */
       public Builder addServerTargetsBytes(
           com.google.protobuf.ByteString value) {
@@ -5319,7 +5329,7 @@ public final class Control {
        * <code>optional .grpc.testing.ClientType client_type = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClientType getClientType() {
-        io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.valueOf(clientType_);
+        io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.forNumber(clientType_);
         return result == null ? io.grpc.benchmarks.proto.Control.ClientType.UNRECOGNIZED : result;
       }
       /**
@@ -5463,23 +5473,23 @@ public final class Control {
 
       private int outstandingRpcsPerChannel_ ;
       /**
-       * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
-       *
        * <pre>
        * How many concurrent RPCs to start for each channel.
        * For synchronous client, use a separate thread for each outstanding RPC.
        * </pre>
+       *
+       * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
        */
       public int getOutstandingRpcsPerChannel() {
         return outstandingRpcsPerChannel_;
       }
       /**
-       * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
-       *
        * <pre>
        * How many concurrent RPCs to start for each channel.
        * For synchronous client, use a separate thread for each outstanding RPC.
        * </pre>
+       *
+       * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
        */
       public Builder setOutstandingRpcsPerChannel(int value) {
         
@@ -5488,12 +5498,12 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
-       *
        * <pre>
        * How many concurrent RPCs to start for each channel.
        * For synchronous client, use a separate thread for each outstanding RPC.
        * </pre>
+       *
+       * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
        */
       public Builder clearOutstandingRpcsPerChannel() {
         
@@ -5504,23 +5514,23 @@ public final class Control {
 
       private int clientChannels_ ;
       /**
-       * <code>optional int32 client_channels = 5;</code>
-       *
        * <pre>
        * Number of independent client channels to create.
        * i-th channel will connect to server_target[i % server_targets.size()]
        * </pre>
+       *
+       * <code>optional int32 client_channels = 5;</code>
        */
       public int getClientChannels() {
         return clientChannels_;
       }
       /**
-       * <code>optional int32 client_channels = 5;</code>
-       *
        * <pre>
        * Number of independent client channels to create.
        * i-th channel will connect to server_target[i % server_targets.size()]
        * </pre>
+       *
+       * <code>optional int32 client_channels = 5;</code>
        */
       public Builder setClientChannels(int value) {
         
@@ -5529,12 +5539,12 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional int32 client_channels = 5;</code>
-       *
        * <pre>
        * Number of independent client channels to create.
        * i-th channel will connect to server_target[i % server_targets.size()]
        * </pre>
+       *
+       * <code>optional int32 client_channels = 5;</code>
        */
       public Builder clearClientChannels() {
         
@@ -5545,21 +5555,21 @@ public final class Control {
 
       private int asyncClientThreads_ ;
       /**
-       * <code>optional int32 async_client_threads = 7;</code>
-       *
        * <pre>
        * Only for async client. Number of threads to use to start/manage RPCs.
        * </pre>
+       *
+       * <code>optional int32 async_client_threads = 7;</code>
        */
       public int getAsyncClientThreads() {
         return asyncClientThreads_;
       }
       /**
-       * <code>optional int32 async_client_threads = 7;</code>
-       *
        * <pre>
        * Only for async client. Number of threads to use to start/manage RPCs.
        * </pre>
+       *
+       * <code>optional int32 async_client_threads = 7;</code>
        */
       public Builder setAsyncClientThreads(int value) {
         
@@ -5568,11 +5578,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional int32 async_client_threads = 7;</code>
-       *
        * <pre>
        * Only for async client. Number of threads to use to start/manage RPCs.
        * </pre>
+       *
+       * <code>optional int32 async_client_threads = 7;</code>
        */
       public Builder clearAsyncClientThreads() {
         
@@ -5600,7 +5610,7 @@ public final class Control {
        * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
        */
       public io.grpc.benchmarks.proto.Control.RpcType getRpcType() {
-        io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.valueOf(rpcType_);
+        io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.forNumber(rpcType_);
         return result == null ? io.grpc.benchmarks.proto.Control.RpcType.UNRECOGNIZED : result;
       }
       /**
@@ -5629,21 +5639,21 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.LoadParams, io.grpc.benchmarks.proto.Control.LoadParams.Builder, io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder> loadParamsBuilder_;
       /**
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-       *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
+       *
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        */
       public boolean hasLoadParams() {
         return loadParamsBuilder_ != null || loadParams_ != null;
       }
       /**
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-       *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
+       *
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        */
       public io.grpc.benchmarks.proto.Control.LoadParams getLoadParams() {
         if (loadParamsBuilder_ == null) {
@@ -5653,11 +5663,11 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-       *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
+       *
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        */
       public Builder setLoadParams(io.grpc.benchmarks.proto.Control.LoadParams value) {
         if (loadParamsBuilder_ == null) {
@@ -5673,11 +5683,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-       *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
+       *
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        */
       public Builder setLoadParams(
           io.grpc.benchmarks.proto.Control.LoadParams.Builder builderForValue) {
@@ -5691,11 +5701,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-       *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
+       *
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        */
       public Builder mergeLoadParams(io.grpc.benchmarks.proto.Control.LoadParams value) {
         if (loadParamsBuilder_ == null) {
@@ -5713,11 +5723,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-       *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
+       *
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        */
       public Builder clearLoadParams() {
         if (loadParamsBuilder_ == null) {
@@ -5731,11 +5741,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-       *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
+       *
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        */
       public io.grpc.benchmarks.proto.Control.LoadParams.Builder getLoadParamsBuilder() {
         
@@ -5743,11 +5753,11 @@ public final class Control {
         return getLoadParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-       *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
+       *
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        */
       public io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder getLoadParamsOrBuilder() {
         if (loadParamsBuilder_ != null) {
@@ -5758,11 +5768,11 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
-       *
        * <pre>
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
+       *
+       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Control.LoadParams, io.grpc.benchmarks.proto.Control.LoadParams.Builder, io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder> 
@@ -6020,42 +6030,42 @@ public final class Control {
          }
       }
       /**
-       * <code>repeated int32 core_list = 13;</code>
-       *
        * <pre>
        * Specify the cores we should run the client on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 13;</code>
        */
       public java.util.List<java.lang.Integer>
           getCoreListList() {
         return java.util.Collections.unmodifiableList(coreList_);
       }
       /**
-       * <code>repeated int32 core_list = 13;</code>
-       *
        * <pre>
        * Specify the cores we should run the client on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 13;</code>
        */
       public int getCoreListCount() {
         return coreList_.size();
       }
       /**
-       * <code>repeated int32 core_list = 13;</code>
-       *
        * <pre>
        * Specify the cores we should run the client on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 13;</code>
        */
       public int getCoreList(int index) {
         return coreList_.get(index);
       }
       /**
-       * <code>repeated int32 core_list = 13;</code>
-       *
        * <pre>
        * Specify the cores we should run the client on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 13;</code>
        */
       public Builder setCoreList(
           int index, int value) {
@@ -6065,11 +6075,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>repeated int32 core_list = 13;</code>
-       *
        * <pre>
        * Specify the cores we should run the client on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 13;</code>
        */
       public Builder addCoreList(int value) {
         ensureCoreListIsMutable();
@@ -6078,11 +6088,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>repeated int32 core_list = 13;</code>
-       *
        * <pre>
        * Specify the cores we should run the client on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 13;</code>
        */
       public Builder addAllCoreList(
           java.lang.Iterable<? extends java.lang.Integer> values) {
@@ -6093,11 +6103,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>repeated int32 core_list = 13;</code>
-       *
        * <pre>
        * Specify the cores we should run the client on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 13;</code>
        */
       public Builder clearCoreList() {
         coreList_ = java.util.Collections.emptyList();
@@ -6161,16 +6171,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ClientConfig(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -6227,7 +6228,8 @@ public final class Control {
     }
     private ClientStatus(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -6260,11 +6262,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -6356,34 +6357,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -6507,7 +6514,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.ClientStatus) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -6662,16 +6669,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ClientStatus(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -6695,20 +6693,20 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional bool reset = 1;</code>
-     *
      * <pre>
      * if true, the stats will be reset after taking their snapshot.
      * </pre>
+     *
+     * <code>optional bool reset = 1;</code>
      */
     boolean getReset();
   }
   /**
-   * Protobuf type {@code grpc.testing.Mark}
-   *
    * <pre>
    * Request current stats
    * </pre>
+   *
+   * Protobuf type {@code grpc.testing.Mark}
    */
   public  static final class Mark extends
       com.google.protobuf.GeneratedMessage implements
@@ -6729,7 +6727,8 @@ public final class Control {
     }
     private Mark(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -6754,11 +6753,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -6778,11 +6776,11 @@ public final class Control {
     public static final int RESET_FIELD_NUMBER = 1;
     private boolean reset_;
     /**
-     * <code>optional bool reset = 1;</code>
-     *
      * <pre>
      * if true, the stats will be reset after taking their snapshot.
      * </pre>
+     *
+     * <code>optional bool reset = 1;</code>
      */
     public boolean getReset() {
       return reset_;
@@ -6842,34 +6840,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -6891,11 +6895,11 @@ public final class Control {
       return builder;
     }
     /**
-     * Protobuf type {@code grpc.testing.Mark}
-     *
      * <pre>
      * Request current stats
      * </pre>
+     *
+     * Protobuf type {@code grpc.testing.Mark}
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -6989,7 +6993,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.Mark) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -7000,21 +7004,21 @@ public final class Control {
 
       private boolean reset_ ;
       /**
-       * <code>optional bool reset = 1;</code>
-       *
        * <pre>
        * if true, the stats will be reset after taking their snapshot.
        * </pre>
+       *
+       * <code>optional bool reset = 1;</code>
        */
       public boolean getReset() {
         return reset_;
       }
       /**
-       * <code>optional bool reset = 1;</code>
-       *
        * <pre>
        * if true, the stats will be reset after taking their snapshot.
        * </pre>
+       *
+       * <code>optional bool reset = 1;</code>
        */
       public Builder setReset(boolean value) {
         
@@ -7023,11 +7027,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional bool reset = 1;</code>
-       *
        * <pre>
        * if true, the stats will be reset after taking their snapshot.
        * </pre>
+       *
+       * <code>optional bool reset = 1;</code>
        */
       public Builder clearReset() {
         
@@ -7065,16 +7069,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new Mark(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -7138,7 +7133,8 @@ public final class Control {
     }
     private ClientArgs(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -7186,11 +7182,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -7214,17 +7209,24 @@ public final class Control {
       SETUP(1),
       MARK(2),
       ARGTYPE_NOT_SET(0);
-      private int value = 0;
+      private final int value;
       private ArgtypeCase(int value) {
         this.value = value;
       }
+      /**
+       * @deprecated Use {@link #forNumber(int)} instead.
+       */
+      @java.lang.Deprecated
       public static ArgtypeCase valueOf(int value) {
+        return forNumber(value);
+      }
+
+      public static ArgtypeCase forNumber(int value) {
         switch (value) {
           case 1: return SETUP;
           case 2: return MARK;
           case 0: return ARGTYPE_NOT_SET;
-          default: throw new java.lang.IllegalArgumentException(
-            "Value is undefined for this oneof enum.");
+          default: return null;
         }
       }
       public int getNumber() {
@@ -7234,7 +7236,7 @@ public final class Control {
 
     public ArgtypeCase
     getArgtypeCase() {
-      return ArgtypeCase.valueOf(
+      return ArgtypeCase.forNumber(
           argtypeCase_);
     }
 
@@ -7339,34 +7341,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -7506,7 +7514,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.ClientArgs) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -7518,7 +7526,7 @@ public final class Control {
       private java.lang.Object argtype_;
       public ArgtypeCase
           getArgtypeCase() {
-        return ArgtypeCase.valueOf(
+        return ArgtypeCase.forNumber(
             argtypeCase_);
       }
 
@@ -7819,16 +7827,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ClientArgs(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -7874,79 +7873,79 @@ public final class Control {
     io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder();
 
     /**
-     * <code>optional int32 port = 4;</code>
-     *
      * <pre>
      * Port on which to listen. Zero means pick unused port.
      * </pre>
+     *
+     * <code>optional int32 port = 4;</code>
      */
     int getPort();
 
     /**
-     * <code>optional int32 async_server_threads = 7;</code>
-     *
      * <pre>
      * Only for async server. Number of threads used to serve the requests.
      * </pre>
+     *
+     * <code>optional int32 async_server_threads = 7;</code>
      */
     int getAsyncServerThreads();
 
     /**
-     * <code>optional int32 core_limit = 8;</code>
-     *
      * <pre>
      * Specify the number of cores to limit server to, if desired
      * </pre>
+     *
+     * <code>optional int32 core_limit = 8;</code>
      */
     int getCoreLimit();
 
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-     *
      * <pre>
      * payload config, used in generic server
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     boolean hasPayloadConfig();
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-     *
      * <pre>
      * payload config, used in generic server
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig();
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-     *
      * <pre>
      * payload config, used in generic server
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder();
 
     /**
-     * <code>repeated int32 core_list = 10;</code>
-     *
      * <pre>
      * Specify the cores we should run the server on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 10;</code>
      */
     java.util.List<java.lang.Integer> getCoreListList();
     /**
-     * <code>repeated int32 core_list = 10;</code>
-     *
      * <pre>
      * Specify the cores we should run the server on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 10;</code>
      */
     int getCoreListCount();
     /**
-     * <code>repeated int32 core_list = 10;</code>
-     *
      * <pre>
      * Specify the cores we should run the server on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 10;</code>
      */
     int getCoreList(int index);
   }
@@ -7976,7 +7975,8 @@ public final class Control {
     }
     private ServerConfig(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -8064,11 +8064,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         if (((mutable_bitField0_ & 0x00000040) == 0x00000040)) {
           coreList_ = java.util.Collections.unmodifiableList(coreList_);
@@ -8101,7 +8100,7 @@ public final class Control {
      * <code>optional .grpc.testing.ServerType server_type = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ServerType getServerType() {
-      io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.valueOf(serverType_);
+      io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.forNumber(serverType_);
       return result == null ? io.grpc.benchmarks.proto.Control.ServerType.UNRECOGNIZED : result;
     }
 
@@ -8129,11 +8128,11 @@ public final class Control {
     public static final int PORT_FIELD_NUMBER = 4;
     private int port_;
     /**
-     * <code>optional int32 port = 4;</code>
-     *
      * <pre>
      * Port on which to listen. Zero means pick unused port.
      * </pre>
+     *
+     * <code>optional int32 port = 4;</code>
      */
     public int getPort() {
       return port_;
@@ -8142,11 +8141,11 @@ public final class Control {
     public static final int ASYNC_SERVER_THREADS_FIELD_NUMBER = 7;
     private int asyncServerThreads_;
     /**
-     * <code>optional int32 async_server_threads = 7;</code>
-     *
      * <pre>
      * Only for async server. Number of threads used to serve the requests.
      * </pre>
+     *
+     * <code>optional int32 async_server_threads = 7;</code>
      */
     public int getAsyncServerThreads() {
       return asyncServerThreads_;
@@ -8155,11 +8154,11 @@ public final class Control {
     public static final int CORE_LIMIT_FIELD_NUMBER = 8;
     private int coreLimit_;
     /**
-     * <code>optional int32 core_limit = 8;</code>
-     *
      * <pre>
      * Specify the number of cores to limit server to, if desired
      * </pre>
+     *
+     * <code>optional int32 core_limit = 8;</code>
      */
     public int getCoreLimit() {
       return coreLimit_;
@@ -8168,31 +8167,31 @@ public final class Control {
     public static final int PAYLOAD_CONFIG_FIELD_NUMBER = 9;
     private io.grpc.benchmarks.proto.Payloads.PayloadConfig payloadConfig_;
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-     *
      * <pre>
      * payload config, used in generic server
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     public boolean hasPayloadConfig() {
       return payloadConfig_ != null;
     }
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-     *
      * <pre>
      * payload config, used in generic server
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig() {
       return payloadConfig_ == null ? io.grpc.benchmarks.proto.Payloads.PayloadConfig.getDefaultInstance() : payloadConfig_;
     }
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-     *
      * <pre>
      * payload config, used in generic server
      * </pre>
+     *
+     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder() {
       return getPayloadConfig();
@@ -8201,32 +8200,32 @@ public final class Control {
     public static final int CORE_LIST_FIELD_NUMBER = 10;
     private java.util.List<java.lang.Integer> coreList_;
     /**
-     * <code>repeated int32 core_list = 10;</code>
-     *
      * <pre>
      * Specify the cores we should run the server on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 10;</code>
      */
     public java.util.List<java.lang.Integer>
         getCoreListList() {
       return coreList_;
     }
     /**
-     * <code>repeated int32 core_list = 10;</code>
-     *
      * <pre>
      * Specify the cores we should run the server on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 10;</code>
      */
     public int getCoreListCount() {
       return coreList_.size();
     }
     /**
-     * <code>repeated int32 core_list = 10;</code>
-     *
      * <pre>
      * Specify the cores we should run the server on, if desired
      * </pre>
+     *
+     * <code>repeated int32 core_list = 10;</code>
      */
     public int getCoreList(int index) {
       return coreList_.get(index);
@@ -8344,34 +8343,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -8553,7 +8558,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.ServerConfig) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -8582,7 +8587,7 @@ public final class Control {
        * <code>optional .grpc.testing.ServerType server_type = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ServerType getServerType() {
-        io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.valueOf(serverType_);
+        io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.forNumber(serverType_);
         return result == null ? io.grpc.benchmarks.proto.Control.ServerType.UNRECOGNIZED : result;
       }
       /**
@@ -8726,21 +8731,21 @@ public final class Control {
 
       private int port_ ;
       /**
-       * <code>optional int32 port = 4;</code>
-       *
        * <pre>
        * Port on which to listen. Zero means pick unused port.
        * </pre>
+       *
+       * <code>optional int32 port = 4;</code>
        */
       public int getPort() {
         return port_;
       }
       /**
-       * <code>optional int32 port = 4;</code>
-       *
        * <pre>
        * Port on which to listen. Zero means pick unused port.
        * </pre>
+       *
+       * <code>optional int32 port = 4;</code>
        */
       public Builder setPort(int value) {
         
@@ -8749,11 +8754,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional int32 port = 4;</code>
-       *
        * <pre>
        * Port on which to listen. Zero means pick unused port.
        * </pre>
+       *
+       * <code>optional int32 port = 4;</code>
        */
       public Builder clearPort() {
         
@@ -8764,21 +8769,21 @@ public final class Control {
 
       private int asyncServerThreads_ ;
       /**
-       * <code>optional int32 async_server_threads = 7;</code>
-       *
        * <pre>
        * Only for async server. Number of threads used to serve the requests.
        * </pre>
+       *
+       * <code>optional int32 async_server_threads = 7;</code>
        */
       public int getAsyncServerThreads() {
         return asyncServerThreads_;
       }
       /**
-       * <code>optional int32 async_server_threads = 7;</code>
-       *
        * <pre>
        * Only for async server. Number of threads used to serve the requests.
        * </pre>
+       *
+       * <code>optional int32 async_server_threads = 7;</code>
        */
       public Builder setAsyncServerThreads(int value) {
         
@@ -8787,11 +8792,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional int32 async_server_threads = 7;</code>
-       *
        * <pre>
        * Only for async server. Number of threads used to serve the requests.
        * </pre>
+       *
+       * <code>optional int32 async_server_threads = 7;</code>
        */
       public Builder clearAsyncServerThreads() {
         
@@ -8802,21 +8807,21 @@ public final class Control {
 
       private int coreLimit_ ;
       /**
-       * <code>optional int32 core_limit = 8;</code>
-       *
        * <pre>
        * Specify the number of cores to limit server to, if desired
        * </pre>
+       *
+       * <code>optional int32 core_limit = 8;</code>
        */
       public int getCoreLimit() {
         return coreLimit_;
       }
       /**
-       * <code>optional int32 core_limit = 8;</code>
-       *
        * <pre>
        * Specify the number of cores to limit server to, if desired
        * </pre>
+       *
+       * <code>optional int32 core_limit = 8;</code>
        */
       public Builder setCoreLimit(int value) {
         
@@ -8825,11 +8830,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional int32 core_limit = 8;</code>
-       *
        * <pre>
        * Specify the number of cores to limit server to, if desired
        * </pre>
+       *
+       * <code>optional int32 core_limit = 8;</code>
        */
       public Builder clearCoreLimit() {
         
@@ -8842,21 +8847,21 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> payloadConfigBuilder_;
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-       *
        * <pre>
        * payload config, used in generic server
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public boolean hasPayloadConfig() {
         return payloadConfigBuilder_ != null || payloadConfig_ != null;
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-       *
        * <pre>
        * payload config, used in generic server
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig() {
         if (payloadConfigBuilder_ == null) {
@@ -8866,11 +8871,11 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-       *
        * <pre>
        * payload config, used in generic server
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public Builder setPayloadConfig(io.grpc.benchmarks.proto.Payloads.PayloadConfig value) {
         if (payloadConfigBuilder_ == null) {
@@ -8886,11 +8891,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-       *
        * <pre>
        * payload config, used in generic server
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public Builder setPayloadConfig(
           io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder builderForValue) {
@@ -8904,11 +8909,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-       *
        * <pre>
        * payload config, used in generic server
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public Builder mergePayloadConfig(io.grpc.benchmarks.proto.Payloads.PayloadConfig value) {
         if (payloadConfigBuilder_ == null) {
@@ -8926,11 +8931,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-       *
        * <pre>
        * payload config, used in generic server
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public Builder clearPayloadConfig() {
         if (payloadConfigBuilder_ == null) {
@@ -8944,11 +8949,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-       *
        * <pre>
        * payload config, used in generic server
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder getPayloadConfigBuilder() {
         
@@ -8956,11 +8961,11 @@ public final class Control {
         return getPayloadConfigFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-       *
        * <pre>
        * payload config, used in generic server
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder() {
         if (payloadConfigBuilder_ != null) {
@@ -8971,11 +8976,11 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
-       *
        * <pre>
        * payload config, used in generic server
        * </pre>
+       *
+       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       private com.google.protobuf.SingleFieldBuilder<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> 
@@ -8999,42 +9004,42 @@ public final class Control {
          }
       }
       /**
-       * <code>repeated int32 core_list = 10;</code>
-       *
        * <pre>
        * Specify the cores we should run the server on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 10;</code>
        */
       public java.util.List<java.lang.Integer>
           getCoreListList() {
         return java.util.Collections.unmodifiableList(coreList_);
       }
       /**
-       * <code>repeated int32 core_list = 10;</code>
-       *
        * <pre>
        * Specify the cores we should run the server on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 10;</code>
        */
       public int getCoreListCount() {
         return coreList_.size();
       }
       /**
-       * <code>repeated int32 core_list = 10;</code>
-       *
        * <pre>
        * Specify the cores we should run the server on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 10;</code>
        */
       public int getCoreList(int index) {
         return coreList_.get(index);
       }
       /**
-       * <code>repeated int32 core_list = 10;</code>
-       *
        * <pre>
        * Specify the cores we should run the server on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 10;</code>
        */
       public Builder setCoreList(
           int index, int value) {
@@ -9044,11 +9049,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>repeated int32 core_list = 10;</code>
-       *
        * <pre>
        * Specify the cores we should run the server on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 10;</code>
        */
       public Builder addCoreList(int value) {
         ensureCoreListIsMutable();
@@ -9057,11 +9062,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>repeated int32 core_list = 10;</code>
-       *
        * <pre>
        * Specify the cores we should run the server on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 10;</code>
        */
       public Builder addAllCoreList(
           java.lang.Iterable<? extends java.lang.Integer> values) {
@@ -9072,11 +9077,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>repeated int32 core_list = 10;</code>
-       *
        * <pre>
        * Specify the cores we should run the server on, if desired
        * </pre>
+       *
+       * <code>repeated int32 core_list = 10;</code>
        */
       public Builder clearCoreList() {
         coreList_ = java.util.Collections.emptyList();
@@ -9114,16 +9119,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ServerConfig(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -9187,7 +9183,8 @@ public final class Control {
     }
     private ServerArgs(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -9235,11 +9232,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -9263,17 +9259,24 @@ public final class Control {
       SETUP(1),
       MARK(2),
       ARGTYPE_NOT_SET(0);
-      private int value = 0;
+      private final int value;
       private ArgtypeCase(int value) {
         this.value = value;
       }
+      /**
+       * @deprecated Use {@link #forNumber(int)} instead.
+       */
+      @java.lang.Deprecated
       public static ArgtypeCase valueOf(int value) {
+        return forNumber(value);
+      }
+
+      public static ArgtypeCase forNumber(int value) {
         switch (value) {
           case 1: return SETUP;
           case 2: return MARK;
           case 0: return ARGTYPE_NOT_SET;
-          default: throw new java.lang.IllegalArgumentException(
-            "Value is undefined for this oneof enum.");
+          default: return null;
         }
       }
       public int getNumber() {
@@ -9283,7 +9286,7 @@ public final class Control {
 
     public ArgtypeCase
     getArgtypeCase() {
-      return ArgtypeCase.valueOf(
+      return ArgtypeCase.forNumber(
           argtypeCase_);
     }
 
@@ -9388,34 +9391,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -9555,7 +9564,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.ServerArgs) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -9567,7 +9576,7 @@ public final class Control {
       private java.lang.Object argtype_;
       public ArgtypeCase
           getArgtypeCase() {
-        return ArgtypeCase.valueOf(
+        return ArgtypeCase.forNumber(
             argtypeCase_);
       }
 
@@ -9868,16 +9877,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ServerArgs(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -9914,20 +9914,20 @@ public final class Control {
     io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder getStatsOrBuilder();
 
     /**
-     * <code>optional int32 port = 2;</code>
-     *
      * <pre>
      * the port bound by the server
      * </pre>
+     *
+     * <code>optional int32 port = 2;</code>
      */
     int getPort();
 
     /**
-     * <code>optional int32 cores = 3;</code>
-     *
      * <pre>
      * Number of cores available to the server
      * </pre>
+     *
+     * <code>optional int32 cores = 3;</code>
      */
     int getCores();
   }
@@ -9954,7 +9954,8 @@ public final class Control {
     }
     private ServerStatus(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -9997,11 +9998,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -10042,11 +10042,11 @@ public final class Control {
     public static final int PORT_FIELD_NUMBER = 2;
     private int port_;
     /**
-     * <code>optional int32 port = 2;</code>
-     *
      * <pre>
      * the port bound by the server
      * </pre>
+     *
+     * <code>optional int32 port = 2;</code>
      */
     public int getPort() {
       return port_;
@@ -10055,11 +10055,11 @@ public final class Control {
     public static final int CORES_FIELD_NUMBER = 3;
     private int cores_;
     /**
-     * <code>optional int32 cores = 3;</code>
-     *
      * <pre>
      * Number of cores available to the server
      * </pre>
+     *
+     * <code>optional int32 cores = 3;</code>
      */
     public int getCores() {
       return cores_;
@@ -10133,34 +10133,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -10296,7 +10302,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.ServerStatus) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -10424,21 +10430,21 @@ public final class Control {
 
       private int port_ ;
       /**
-       * <code>optional int32 port = 2;</code>
-       *
        * <pre>
        * the port bound by the server
        * </pre>
+       *
+       * <code>optional int32 port = 2;</code>
        */
       public int getPort() {
         return port_;
       }
       /**
-       * <code>optional int32 port = 2;</code>
-       *
        * <pre>
        * the port bound by the server
        * </pre>
+       *
+       * <code>optional int32 port = 2;</code>
        */
       public Builder setPort(int value) {
         
@@ -10447,11 +10453,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional int32 port = 2;</code>
-       *
        * <pre>
        * the port bound by the server
        * </pre>
+       *
+       * <code>optional int32 port = 2;</code>
        */
       public Builder clearPort() {
         
@@ -10462,21 +10468,21 @@ public final class Control {
 
       private int cores_ ;
       /**
-       * <code>optional int32 cores = 3;</code>
-       *
        * <pre>
        * Number of cores available to the server
        * </pre>
+       *
+       * <code>optional int32 cores = 3;</code>
        */
       public int getCores() {
         return cores_;
       }
       /**
-       * <code>optional int32 cores = 3;</code>
-       *
        * <pre>
        * Number of cores available to the server
        * </pre>
+       *
+       * <code>optional int32 cores = 3;</code>
        */
       public Builder setCores(int value) {
         
@@ -10485,11 +10491,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional int32 cores = 3;</code>
-       *
        * <pre>
        * Number of cores available to the server
        * </pre>
+       *
+       * <code>optional int32 cores = 3;</code>
        */
       public Builder clearCores() {
         
@@ -10527,16 +10533,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new ServerStatus(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -10580,7 +10577,8 @@ public final class Control {
     }
     private CoreRequest(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       try {
         boolean done = false;
@@ -10599,11 +10597,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -10667,34 +10664,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -10804,7 +10807,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.CoreRequest) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -10842,16 +10845,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new CoreRequest(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -10875,11 +10869,11 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional int32 cores = 1;</code>
-     *
      * <pre>
      * Number of cores available on the server
      * </pre>
+     *
+     * <code>optional int32 cores = 1;</code>
      */
     int getCores();
   }
@@ -10905,7 +10899,8 @@ public final class Control {
     }
     private CoreResponse(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
       try {
@@ -10930,11 +10925,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -10954,11 +10948,11 @@ public final class Control {
     public static final int CORES_FIELD_NUMBER = 1;
     private int cores_;
     /**
-     * <code>optional int32 cores = 1;</code>
-     *
      * <pre>
      * Number of cores available on the server
      * </pre>
+     *
+     * <code>optional int32 cores = 1;</code>
      */
     public int getCores() {
       return cores_;
@@ -11018,34 +11012,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -11161,7 +11161,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.CoreResponse) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -11172,21 +11172,21 @@ public final class Control {
 
       private int cores_ ;
       /**
-       * <code>optional int32 cores = 1;</code>
-       *
        * <pre>
        * Number of cores available on the server
        * </pre>
+       *
+       * <code>optional int32 cores = 1;</code>
        */
       public int getCores() {
         return cores_;
       }
       /**
-       * <code>optional int32 cores = 1;</code>
-       *
        * <pre>
        * Number of cores available on the server
        * </pre>
+       *
+       * <code>optional int32 cores = 1;</code>
        */
       public Builder setCores(int value) {
         
@@ -11195,11 +11195,11 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional int32 cores = 1;</code>
-       *
        * <pre>
        * Number of cores available on the server
        * </pre>
+       *
+       * <code>optional int32 cores = 1;</code>
        */
       public Builder clearCores() {
         
@@ -11237,16 +11237,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new CoreResponse(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -11290,7 +11281,8 @@ public final class Control {
     }
     private Void(
         com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       try {
         boolean done = false;
@@ -11309,11 +11301,10 @@ public final class Control {
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw new RuntimeException(e.setUnfinishedMessage(this));
+        throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
-        throw new RuntimeException(
-            new com.google.protobuf.InvalidProtocolBufferException(
-                e.getMessage()).setUnfinishedMessage(this));
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
       } finally {
         makeExtensionsImmutable();
       }
@@ -11377,34 +11368,40 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.Void parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Void parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.Void parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Void parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.Void parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Void parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
     public Builder newBuilderForType() { return newBuilder(); }
@@ -11514,7 +11511,7 @@ public final class Control {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (io.grpc.benchmarks.proto.Control.Void) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -11552,16 +11549,7 @@ public final class Control {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        try {
           return new Void(input, extensionRegistry);
-        } catch (RuntimeException e) {
-          if (e.getCause() instanceof
-              com.google.protobuf.InvalidProtocolBufferException) {
-            throw (com.google.protobuf.InvalidProtocolBufferException)
-                e.getCause();
-          }
-          throw e;
-        }
       }
     };
 
@@ -11580,89 +11568,89 @@ public final class Control {
 
   }
 
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_PoissonParams_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_PoissonParams_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_UniformParams_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_UniformParams_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_DeterministicParams_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_DeterministicParams_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ParetoParams_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ParetoParams_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClosedLoopParams_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ClosedLoopParams_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_LoadParams_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_LoadParams_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_SecurityParams_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_SecurityParams_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClientConfig_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ClientConfig_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClientStatus_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ClientStatus_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_Mark_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_Mark_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClientArgs_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ClientArgs_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ServerConfig_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ServerConfig_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ServerArgs_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ServerArgs_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ServerStatus_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_ServerStatus_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_CoreRequest_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_CoreRequest_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_CoreResponse_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_CoreResponse_fieldAccessorTable;
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_Void_descriptor;
-  private static
+  private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_grpc_testing_Void_fieldAccessorTable;
 
@@ -11670,7 +11658,7 @@ public final class Control {
       getDescriptor() {
     return descriptor;
   }
-  private static com.google.protobuf.Descriptors.FileDescriptor
+  private static  com.google.protobuf.Descriptors.FileDescriptor
       descriptor;
   static {
     java.lang.String[] descriptorData = {

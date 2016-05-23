@@ -4,12 +4,12 @@
 package io.grpc.examples.routeguide;
 
 /**
- * Protobuf type {@code routeguide.Rectangle}
- *
  * <pre>
  * A latitude-longitude rectangle, represented as two diagonally opposite
  * points "lo" and "hi".
  * </pre>
+ *
+ * Protobuf type {@code routeguide.Rectangle}
  */
 public  final class Rectangle extends
     com.google.protobuf.GeneratedMessage implements
@@ -29,7 +29,8 @@ public  final class Rectangle extends
   }
   private Rectangle(
       com.google.protobuf.CodedInputStream input,
-      com.google.protobuf.ExtensionRegistryLite extensionRegistry) {
+      com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+      throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
     try {
@@ -75,11 +76,10 @@ public  final class Rectangle extends
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new RuntimeException(e.setUnfinishedMessage(this));
+      throw e.setUnfinishedMessage(this);
     } catch (java.io.IOException e) {
-      throw new RuntimeException(
-          new com.google.protobuf.InvalidProtocolBufferException(
-              e.getMessage()).setUnfinishedMessage(this));
+      throw new com.google.protobuf.InvalidProtocolBufferException(
+          e).setUnfinishedMessage(this);
     } finally {
       makeExtensionsImmutable();
     }
@@ -99,31 +99,31 @@ public  final class Rectangle extends
   public static final int LO_FIELD_NUMBER = 1;
   private io.grpc.examples.routeguide.Point lo_;
   /**
-   * <code>optional .routeguide.Point lo = 1;</code>
-   *
    * <pre>
    * One corner of the rectangle.
    * </pre>
+   *
+   * <code>optional .routeguide.Point lo = 1;</code>
    */
   public boolean hasLo() {
     return lo_ != null;
   }
   /**
-   * <code>optional .routeguide.Point lo = 1;</code>
-   *
    * <pre>
    * One corner of the rectangle.
    * </pre>
+   *
+   * <code>optional .routeguide.Point lo = 1;</code>
    */
   public io.grpc.examples.routeguide.Point getLo() {
     return lo_ == null ? io.grpc.examples.routeguide.Point.getDefaultInstance() : lo_;
   }
   /**
-   * <code>optional .routeguide.Point lo = 1;</code>
-   *
    * <pre>
    * One corner of the rectangle.
    * </pre>
+   *
+   * <code>optional .routeguide.Point lo = 1;</code>
    */
   public io.grpc.examples.routeguide.PointOrBuilder getLoOrBuilder() {
     return getLo();
@@ -132,31 +132,31 @@ public  final class Rectangle extends
   public static final int HI_FIELD_NUMBER = 2;
   private io.grpc.examples.routeguide.Point hi_;
   /**
-   * <code>optional .routeguide.Point hi = 2;</code>
-   *
    * <pre>
    * The other corner of the rectangle.
    * </pre>
+   *
+   * <code>optional .routeguide.Point hi = 2;</code>
    */
   public boolean hasHi() {
     return hi_ != null;
   }
   /**
-   * <code>optional .routeguide.Point hi = 2;</code>
-   *
    * <pre>
    * The other corner of the rectangle.
    * </pre>
+   *
+   * <code>optional .routeguide.Point hi = 2;</code>
    */
   public io.grpc.examples.routeguide.Point getHi() {
     return hi_ == null ? io.grpc.examples.routeguide.Point.getDefaultInstance() : hi_;
   }
   /**
-   * <code>optional .routeguide.Point hi = 2;</code>
-   *
    * <pre>
    * The other corner of the rectangle.
    * </pre>
+   *
+   * <code>optional .routeguide.Point hi = 2;</code>
    */
   public io.grpc.examples.routeguide.PointOrBuilder getHiOrBuilder() {
     return getHi();
@@ -223,34 +223,40 @@ public  final class Rectangle extends
   }
   public static io.grpc.examples.routeguide.Rectangle parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.examples.routeguide.Rectangle parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.examples.routeguide.Rectangle parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.examples.routeguide.Rectangle parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseDelimitedFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.examples.routeguide.Rectangle parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return PARSER.parseFrom(input);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input);
   }
   public static io.grpc.examples.routeguide.Rectangle parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return PARSER.parseFrom(input, extensionRegistry);
+    return com.google.protobuf.GeneratedMessage
+        .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
   public Builder newBuilderForType() { return newBuilder(); }
@@ -272,12 +278,12 @@ public  final class Rectangle extends
     return builder;
   }
   /**
-   * Protobuf type {@code routeguide.Rectangle}
-   *
    * <pre>
    * A latitude-longitude rectangle, represented as two diagonally opposite
    * points "lo" and "hi".
    * </pre>
+   *
+   * Protobuf type {@code routeguide.Rectangle}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessage.Builder<Builder> implements
@@ -393,7 +399,7 @@ public  final class Rectangle extends
         parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
         parsedMessage = (io.grpc.examples.routeguide.Rectangle) e.getUnfinishedMessage();
-        throw e;
+        throw e.unwrapIOException();
       } finally {
         if (parsedMessage != null) {
           mergeFrom(parsedMessage);
@@ -406,21 +412,21 @@ public  final class Rectangle extends
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.examples.routeguide.Point, io.grpc.examples.routeguide.Point.Builder, io.grpc.examples.routeguide.PointOrBuilder> loBuilder_;
     /**
-     * <code>optional .routeguide.Point lo = 1;</code>
-     *
      * <pre>
      * One corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point lo = 1;</code>
      */
     public boolean hasLo() {
       return loBuilder_ != null || lo_ != null;
     }
     /**
-     * <code>optional .routeguide.Point lo = 1;</code>
-     *
      * <pre>
      * One corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point lo = 1;</code>
      */
     public io.grpc.examples.routeguide.Point getLo() {
       if (loBuilder_ == null) {
@@ -430,11 +436,11 @@ public  final class Rectangle extends
       }
     }
     /**
-     * <code>optional .routeguide.Point lo = 1;</code>
-     *
      * <pre>
      * One corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point lo = 1;</code>
      */
     public Builder setLo(io.grpc.examples.routeguide.Point value) {
       if (loBuilder_ == null) {
@@ -450,11 +456,11 @@ public  final class Rectangle extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point lo = 1;</code>
-     *
      * <pre>
      * One corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point lo = 1;</code>
      */
     public Builder setLo(
         io.grpc.examples.routeguide.Point.Builder builderForValue) {
@@ -468,11 +474,11 @@ public  final class Rectangle extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point lo = 1;</code>
-     *
      * <pre>
      * One corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point lo = 1;</code>
      */
     public Builder mergeLo(io.grpc.examples.routeguide.Point value) {
       if (loBuilder_ == null) {
@@ -490,11 +496,11 @@ public  final class Rectangle extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point lo = 1;</code>
-     *
      * <pre>
      * One corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point lo = 1;</code>
      */
     public Builder clearLo() {
       if (loBuilder_ == null) {
@@ -508,11 +514,11 @@ public  final class Rectangle extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point lo = 1;</code>
-     *
      * <pre>
      * One corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point lo = 1;</code>
      */
     public io.grpc.examples.routeguide.Point.Builder getLoBuilder() {
       
@@ -520,11 +526,11 @@ public  final class Rectangle extends
       return getLoFieldBuilder().getBuilder();
     }
     /**
-     * <code>optional .routeguide.Point lo = 1;</code>
-     *
      * <pre>
      * One corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point lo = 1;</code>
      */
     public io.grpc.examples.routeguide.PointOrBuilder getLoOrBuilder() {
       if (loBuilder_ != null) {
@@ -535,11 +541,11 @@ public  final class Rectangle extends
       }
     }
     /**
-     * <code>optional .routeguide.Point lo = 1;</code>
-     *
      * <pre>
      * One corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point lo = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.examples.routeguide.Point, io.grpc.examples.routeguide.Point.Builder, io.grpc.examples.routeguide.PointOrBuilder> 
@@ -559,21 +565,21 @@ public  final class Rectangle extends
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.examples.routeguide.Point, io.grpc.examples.routeguide.Point.Builder, io.grpc.examples.routeguide.PointOrBuilder> hiBuilder_;
     /**
-     * <code>optional .routeguide.Point hi = 2;</code>
-     *
      * <pre>
      * The other corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point hi = 2;</code>
      */
     public boolean hasHi() {
       return hiBuilder_ != null || hi_ != null;
     }
     /**
-     * <code>optional .routeguide.Point hi = 2;</code>
-     *
      * <pre>
      * The other corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point hi = 2;</code>
      */
     public io.grpc.examples.routeguide.Point getHi() {
       if (hiBuilder_ == null) {
@@ -583,11 +589,11 @@ public  final class Rectangle extends
       }
     }
     /**
-     * <code>optional .routeguide.Point hi = 2;</code>
-     *
      * <pre>
      * The other corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point hi = 2;</code>
      */
     public Builder setHi(io.grpc.examples.routeguide.Point value) {
       if (hiBuilder_ == null) {
@@ -603,11 +609,11 @@ public  final class Rectangle extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point hi = 2;</code>
-     *
      * <pre>
      * The other corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point hi = 2;</code>
      */
     public Builder setHi(
         io.grpc.examples.routeguide.Point.Builder builderForValue) {
@@ -621,11 +627,11 @@ public  final class Rectangle extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point hi = 2;</code>
-     *
      * <pre>
      * The other corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point hi = 2;</code>
      */
     public Builder mergeHi(io.grpc.examples.routeguide.Point value) {
       if (hiBuilder_ == null) {
@@ -643,11 +649,11 @@ public  final class Rectangle extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point hi = 2;</code>
-     *
      * <pre>
      * The other corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point hi = 2;</code>
      */
     public Builder clearHi() {
       if (hiBuilder_ == null) {
@@ -661,11 +667,11 @@ public  final class Rectangle extends
       return this;
     }
     /**
-     * <code>optional .routeguide.Point hi = 2;</code>
-     *
      * <pre>
      * The other corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point hi = 2;</code>
      */
     public io.grpc.examples.routeguide.Point.Builder getHiBuilder() {
       
@@ -673,11 +679,11 @@ public  final class Rectangle extends
       return getHiFieldBuilder().getBuilder();
     }
     /**
-     * <code>optional .routeguide.Point hi = 2;</code>
-     *
      * <pre>
      * The other corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point hi = 2;</code>
      */
     public io.grpc.examples.routeguide.PointOrBuilder getHiOrBuilder() {
       if (hiBuilder_ != null) {
@@ -688,11 +694,11 @@ public  final class Rectangle extends
       }
     }
     /**
-     * <code>optional .routeguide.Point hi = 2;</code>
-     *
      * <pre>
      * The other corner of the rectangle.
      * </pre>
+     *
+     * <code>optional .routeguide.Point hi = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilder<
         io.grpc.examples.routeguide.Point, io.grpc.examples.routeguide.Point.Builder, io.grpc.examples.routeguide.PointOrBuilder> 
@@ -737,16 +743,7 @@ public  final class Rectangle extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      try {
         return new Rectangle(input, extensionRegistry);
-      } catch (RuntimeException e) {
-        if (e.getCause() instanceof
-            com.google.protobuf.InvalidProtocolBufferException) {
-          throw (com.google.protobuf.InvalidProtocolBufferException)
-              e.getCause();
-        }
-        throw e;
-      }
     }
   };
 

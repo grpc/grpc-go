@@ -8,38 +8,38 @@ public interface RouteSummaryOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional int32 point_count = 1;</code>
-   *
    * <pre>
    * The number of points received.
    * </pre>
+   *
+   * <code>optional int32 point_count = 1;</code>
    */
   int getPointCount();
 
   /**
-   * <code>optional int32 feature_count = 2;</code>
-   *
    * <pre>
    * The number of known features passed while traversing the route.
    * </pre>
+   *
+   * <code>optional int32 feature_count = 2;</code>
    */
   int getFeatureCount();
 
   /**
-   * <code>optional int32 distance = 3;</code>
-   *
    * <pre>
    * The distance covered in metres.
    * </pre>
+   *
+   * <code>optional int32 distance = 3;</code>
    */
   int getDistance();
 
   /**
-   * <code>optional int32 elapsed_time = 4;</code>
-   *
    * <pre>
    * The duration of the traversal in seconds.
    * </pre>
+   *
+   * <code>optional int32 elapsed_time = 4;</code>
    */
   int getElapsedTime();
 }
