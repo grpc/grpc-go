@@ -229,7 +229,7 @@ public final class Status {
       return value;
     }
 
-    private Status status() {
+    public Status toStatus() {
       return STATUS_LIST.get(value);
     }
 
@@ -256,52 +256,52 @@ public final class Status {
   // A pseudo-enum of Status instances mapped 1:1 with values in Code. This simplifies construction
   // patterns for derived instances of Status.
   /** The operation completed successfully. */
-  public static final Status OK = Code.OK.status();
+  public static final Status OK = Code.OK.toStatus();
   /** The operation was cancelled (typically by the caller). */
-  public static final Status CANCELLED = Code.CANCELLED.status();
+  public static final Status CANCELLED = Code.CANCELLED.toStatus();
   /** Unknown error. See {@link Code#UNKNOWN}. */
-  public static final Status UNKNOWN = Code.UNKNOWN.status();
+  public static final Status UNKNOWN = Code.UNKNOWN.toStatus();
   /** Client specified an invalid argument. See {@link Code#INVALID_ARGUMENT}. */
-  public static final Status INVALID_ARGUMENT = Code.INVALID_ARGUMENT.status();
+  public static final Status INVALID_ARGUMENT = Code.INVALID_ARGUMENT.toStatus();
   /** Deadline expired before operation could complete. See {@link Code#DEADLINE_EXCEEDED}. */
-  public static final Status DEADLINE_EXCEEDED = Code.DEADLINE_EXCEEDED.status();
+  public static final Status DEADLINE_EXCEEDED = Code.DEADLINE_EXCEEDED.toStatus();
   /** Some requested entity (e.g., file or directory) was not found. */
-  public static final Status NOT_FOUND = Code.NOT_FOUND.status();
+  public static final Status NOT_FOUND = Code.NOT_FOUND.toStatus();
   /** Some entity that we attempted to create (e.g., file or directory) already exists. */
-  public static final Status ALREADY_EXISTS = Code.ALREADY_EXISTS.status();
+  public static final Status ALREADY_EXISTS = Code.ALREADY_EXISTS.toStatus();
   /**
    * The caller does not have permission to execute the specified operation. See {@link
    * Code#PERMISSION_DENIED}.
    */
-  public static final Status PERMISSION_DENIED = Code.PERMISSION_DENIED.status();
+  public static final Status PERMISSION_DENIED = Code.PERMISSION_DENIED.toStatus();
   /** The request does not have valid authentication credentials for the operation. */
-  public static final Status UNAUTHENTICATED = Code.UNAUTHENTICATED.status();
+  public static final Status UNAUTHENTICATED = Code.UNAUTHENTICATED.toStatus();
   /**
    * Some resource has been exhausted, perhaps a per-user quota, or perhaps the entire file system
    * is out of space.
    */
-  public static final Status RESOURCE_EXHAUSTED = Code.RESOURCE_EXHAUSTED.status();
+  public static final Status RESOURCE_EXHAUSTED = Code.RESOURCE_EXHAUSTED.toStatus();
   /**
    * Operation was rejected because the system is not in a state required for the operation's
    * execution. See {@link Code#FAILED_PRECONDITION}.
    */
   public static final Status FAILED_PRECONDITION =
-      Code.FAILED_PRECONDITION.status();
+      Code.FAILED_PRECONDITION.toStatus();
   /**
    * The operation was aborted, typically due to a concurrency issue like sequencer check failures,
    * transaction aborts, etc. See {@link Code#ABORTED}.
    */
-  public static final Status ABORTED = Code.ABORTED.status();
+  public static final Status ABORTED = Code.ABORTED.toStatus();
   /** Operation was attempted past the valid range. See {@link Code#OUT_OF_RANGE}. */
-  public static final Status OUT_OF_RANGE = Code.OUT_OF_RANGE.status();
+  public static final Status OUT_OF_RANGE = Code.OUT_OF_RANGE.toStatus();
   /** Operation is not implemented or not supported/enabled in this service. */
-  public static final Status UNIMPLEMENTED = Code.UNIMPLEMENTED.status();
+  public static final Status UNIMPLEMENTED = Code.UNIMPLEMENTED.toStatus();
   /** Internal errors. See {@link Code#INTERNAL}. */
-  public static final Status INTERNAL = Code.INTERNAL.status();
+  public static final Status INTERNAL = Code.INTERNAL.toStatus();
   /** The service is currently unavailable. See {@link Code#UNAVAILABLE}. */
-  public static final Status UNAVAILABLE = Code.UNAVAILABLE.status();
+  public static final Status UNAVAILABLE = Code.UNAVAILABLE.toStatus();
   /** Unrecoverable data loss or corruption. */
-  public static final Status DATA_LOSS = Code.DATA_LOSS.status();
+  public static final Status DATA_LOSS = Code.DATA_LOSS.toStatus();
 
   /**
    * Return a {@link Status} given a canonical error {@link Code} value.
@@ -312,6 +312,13 @@ public final class Status {
     } else {
       return STATUS_LIST.get(codeValue);
     }
+  }
+
+  /**
+   * Return a {@link Status} given a canonical error {@link Code} object.
+   */
+  public static Status fromCode(Code code) {
+    return code.toStatus();
   }
 
   /**
