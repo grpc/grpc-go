@@ -33,7 +33,6 @@ package io.grpc.netty;
 
 import io.grpc.Metadata;
 import io.grpc.Metadata.AsciiMarshaller;
-import io.grpc.netty.Utils;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
 
@@ -56,9 +55,6 @@ import java.util.concurrent.TimeUnit;
 public class HeadersBenchmark {
   @Param({"10", "20", "50", "100"})
   public int headerCount;
-
-  @Param({"false", "true"})
-  public boolean validate;
 
   private final AsciiMarshaller<String> keyMarshaller = new AsciiMarshaller<String>() {
     @Override
@@ -83,14 +79,20 @@ public class HeadersBenchmark {
     for (int i = 0; i < headerCount; i++) {
       metadata.put(Metadata.Key.of("key-" + i, keyMarshaller), UUID.randomUUID().toString());
     }
-    Utils.validateHeaders = validate;
   }
 
   @Benchmark
   @BenchmarkMode(Mode.SampleTime)
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
-  public Http2Headers convertHeaders() {
+  public Http2Headers convertClientHeaders() {
     return Utils.convertClientHeaders(metadata, scheme, defaultPath, authority, userAgent);
+  }
+
+  @Benchmark
+  @BenchmarkMode(Mode.SampleTime)
+  @OutputTimeUnit(TimeUnit.NANOSECONDS)
+  public Http2Headers convertServerHeaders() {
+    return Utils.convertServerHeaders(metadata);
   }
 }
 
