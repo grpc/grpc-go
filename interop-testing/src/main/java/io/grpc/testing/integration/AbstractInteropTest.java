@@ -605,7 +605,7 @@ public abstract class AbstractInteropTest {
     Assert.assertEquals(contextValue, trailersCapture.get().get(METADATA_KEY));
   }
 
-  @Test(timeout = 100000000)
+  @Test(timeout = 10000)
   public void sendsTimeoutHeader() {
     long configuredTimeoutMinutes = 100;
     TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)

@@ -45,7 +45,6 @@ import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.internal.TransportFrameUtil;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
@@ -121,29 +120,18 @@ class Utils {
       AsciiString userAgent) {
     Preconditions.checkNotNull(defaultPath, "defaultPath");
     Preconditions.checkNotNull(authority, "authority");
-    // Add any application-provided headers first.
-    Http2Headers http2Headers = convertMetadata(headers);
 
-    // Now set GRPC-specific default headers.
-    http2Headers.authority(authority)
-        .path(defaultPath)
-        .method(HTTP_METHOD)
-        .scheme(scheme)
-        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC)
-        .set(TE_HEADER, TE_TRAILERS);
-
-    // Set the User-Agent header.
-    //String userAgent = GrpcUtil.getGrpcUserAgent("netty", headers.get(USER_AGENT_KEY));
-    http2Headers.set(USER_AGENT, userAgent);
-
-    return http2Headers;
+    return GrpcHttp2Headers.clientRequestHeaders(
+        TransportFrameUtil.toHttp2Headers(headers),
+        authority,
+        defaultPath,
+        HTTP_METHOD,
+        scheme,
+        userAgent);
   }
 
   public static Http2Headers convertServerHeaders(Metadata headers) {
-    Http2Headers http2Headers = convertMetadata(headers);
-    http2Headers.set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
-    http2Headers.status(STATUS_OK);
-    return http2Headers;
+    return GrpcHttp2Headers.serverResponseHeaders(TransportFrameUtil.toHttp2Headers(headers));
   }
 
   public static Metadata convertTrailers(Http2Headers http2Headers) {
@@ -151,25 +139,10 @@ class Utils {
   }
 
   public static Http2Headers convertTrailers(Metadata trailers, boolean headersSent) {
-    Http2Headers http2Trailers = convertMetadata(trailers);
     if (!headersSent) {
-      http2Trailers.set(Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_GRPC);
-      http2Trailers.status(STATUS_OK);
+      return convertServerHeaders(trailers);
     }
-    return http2Trailers;
-  }
-
-  private static Http2Headers convertMetadata(Metadata headers) {
-    Preconditions.checkNotNull(headers, "headers");
-    Http2Headers http2Headers = new DefaultHttp2Headers(validateHeaders, headers.headerCount());
-    byte[][] serializedHeaders = TransportFrameUtil.toHttp2Headers(headers);
-    for (int i = 0; i < serializedHeaders.length; i += 2) {
-      AsciiString name = new AsciiString(serializedHeaders[i], false);
-      AsciiString value = new AsciiString(serializedHeaders[i + 1], false);
-      http2Headers.add(name, value);
-    }
-
-    return http2Headers;
+    return GrpcHttp2Headers.serverResponseTrailers(TransportFrameUtil.toHttp2Headers(trailers));
   }
 
   public static Status statusFromThrowable(Throwable t) {
