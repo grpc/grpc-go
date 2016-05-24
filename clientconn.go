@@ -65,12 +65,12 @@ var (
 	// ErrClientConnTimeout indicates that the connection could not be
 	// established or re-established within the specified timeout.
 	ErrClientConnTimeout = errors.New("grpc: timed out trying to connect")
-
-	// errNetworkIP indicates that the connection is down due to some network I/O error.
-	errNetworkIO = errors.New("grpc: failed with network I/O error")
-	// errConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
-	errConnDrain   = errors.New("grpc: the connection is drained")
-	errConnClosing = errors.New("grpc: the addrConn is closing")
+	// ErrNetworkIP indicates that the connection is down due to some network I/O error.
+	ErrNetworkIO = errors.New("grpc: failed with network I/O error")
+	// ErrConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
+	ErrConnDrain = errors.New("grpc: the connection is drained")
+	// ErrConnClosing
+	ErrConnClosing = errors.New("grpc: the addrConn is closing")
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
 )
@@ -82,7 +82,6 @@ type dialOptions struct {
 	cp       Compressor
 	dc       Decompressor
 	bs       backoffStrategy
-	resolver naming.Resolver
 	balancer Balancer
 	block    bool
 	insecure bool
@@ -112,13 +111,6 @@ func WithCompressor(cp Compressor) DialOption {
 func WithDecompressor(dc Decompressor) DialOption {
 	return func(o *dialOptions) {
 		o.dc = dc
-	}
-}
-
-// WithNameResolver returns a DialOption which sets a name resolver for service discovery.
-func WithNameResolver(r naming.Resolver) DialOption {
-	return func(o *dialOptions) {
-		o.resolver = r
 	}
 }
 
@@ -231,34 +223,29 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 
 	cc.balancer = cc.dopts.balancer
 	if cc.balancer == nil {
-		cc.balancer = RoundRobin()
+		cc.balancer = RoundRobin(nil)
 	}
-
-	if cc.dopts.resolver == nil {
-		addr := Address{
-			Addr: cc.target,
-		}
-		if err := cc.newAddrConn(addr); err != nil {
+	if err := cc.balancer.Start(target); err != nil {
+		return nil, err
+	}
+	ch := cc.balancer.Notify()
+	if ch == nil {
+		// There is no name resolver installed.
+		addr := Address{Addr: target}
+		if err := cc.newAddrConn(addr, false); err != nil {
 			return nil, err
 		}
 	} else {
-		w, err := cc.dopts.resolver.Resolve(cc.target)
-		if err != nil {
-			return nil, err
+		addrs, ok := <-ch
+		if !ok || len(addrs) == 0 {
+			return nil, fmt.Errorf("grpc: there is no address available to dial")
 		}
-		cc.watcher = w
-		// Get the initial name resolution and dial the first connection.
-		if err := cc.watchAddrUpdates(); err != nil {
-			return nil, err
-		}
-		// Start a goroutine to watch for the future name resolution changes.
-		go func() {
-			for {
-				if err := cc.watchAddrUpdates(); err != nil {
-					return
-				}
+		for _, a := range addrs {
+			if err := cc.newAddrConn(a, false); err != nil {
+				return nil, err
 			}
-		}()
+		}
+		go cc.controller()
 	}
 
 	colonPos := strings.LastIndex(target, ":")
@@ -314,50 +301,48 @@ type ClientConn struct {
 	conns map[Address]*addrConn
 }
 
-func (cc *ClientConn) watchAddrUpdates() error {
-	updates, err := cc.watcher.Next()
-	if err != nil {
-		return err
-	}
-	for _, update := range updates {
-		switch update.Op {
-		case naming.Add:
-			cc.mu.RLock()
-			addr := Address{
-				Addr:     update.Addr,
-				Metadata: update.Metadata,
+func (cc *ClientConn) controller() {
+	for {
+		addrs, ok := <-cc.balancer.Notify()
+		if !ok {
+			// cc has been closed.
+			return
+		}
+		var (
+			add []Address   // Addresses need to setup connections.
+			del []*addrConn // Connections need to tear down.
+		)
+		cc.mu.Lock()
+		for _, a := range addrs {
+			if _, ok := cc.conns[a]; !ok {
+				add = append(add, a)
 			}
-			if _, ok := cc.conns[addr]; ok {
-				cc.mu.RUnlock()
-				grpclog.Println("grpc: The name resolver wanted to add an existing address: ", addr)
-				continue
+		}
+		for k, c := range cc.conns {
+			var keep bool
+			for _, a := range addrs {
+				if k == a {
+					keep = true
+					break
+				}
 			}
-			cc.mu.RUnlock()
-			if err := cc.newAddrConn(addr); err != nil {
-				return err
+			if !keep {
+				del = append(del, c)
 			}
-		case naming.Delete:
-			cc.mu.RLock()
-			addr := Address{
-				Addr:     update.Addr,
-				Metadata: update.Metadata,
+		}
+		cc.mu.Unlock()
+		for _, a := range addrs {
+			if err := cc.newAddrConn(a, true); err != nil {
+
 			}
-			ac, ok := cc.conns[addr]
-			if !ok {
-				cc.mu.RUnlock()
-				grpclog.Println("grpc: The name resolver wanted to delete a non-exist address: ", addr)
-				continue
-			}
-			cc.mu.RUnlock()
-			ac.tearDown(errConnDrain)
-		default:
-			grpclog.Println("Unknown update.Op ", update.Op)
+		}
+		for _, c := range del {
+			c.tearDown(ErrConnDrain)
 		}
 	}
-	return nil
 }
 
-func (cc *ClientConn) newAddrConn(addr Address) error {
+func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 	ac := &addrConn{
 		cc:           cc,
 		addr:         addr,
@@ -394,7 +379,8 @@ func (cc *ClientConn) newAddrConn(addr Address) error {
 	ac.cc.mu.Unlock()
 
 	ac.stateCV = sync.NewCond(&ac.mu)
-	if ac.dopts.block {
+	// skipWait may overwrite the decision in ac.dopts.block.
+	if ac.dopts.block && !skipWait {
 		if err := ac.resetTransport(false); err != nil {
 			ac.tearDown(err)
 			return err
@@ -428,12 +414,16 @@ func (cc *ClientConn) getTransport(ctx context.Context) (transport.ClientTranspo
 	ac, ok := cc.conns[addr]
 	cc.mu.RUnlock()
 	if !ok {
-		put()
+		if put != nil {
+			put()
+		}
 		return nil, nil, transport.StreamErrorf(codes.Internal, "grpc: failed to find the transport to send the rpc")
 	}
 	t, err := ac.wait(ctx)
 	if err != nil {
-		put()
+		if put != nil {
+			put()
+		}
 		return nil, nil, err
 	}
 	return t, put, nil
@@ -538,10 +528,10 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 		if ac.state == Shutdown {
 			// ac.tearDown(...) has been invoked.
 			ac.mu.Unlock()
-			return errConnClosing
+			return ErrConnClosing
 		}
 		if ac.down != nil {
-			ac.down(errNetworkIO)
+			ac.down(ErrNetworkIO)
 			ac.down = nil
 		}
 		ac.state = Connecting
@@ -579,7 +569,7 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			if ac.state == Shutdown {
 				// ac.tearDown(...) has been invoked.
 				ac.mu.Unlock()
-				return errConnClosing
+				return ErrConnClosing
 			}
 			ac.errorf("transient failure: %v", err)
 			ac.state = TransientFailure
@@ -616,7 +606,7 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			// ac.tearDown(...) has been invoked.
 			ac.mu.Unlock()
 			newTransport.Close()
-			return errConnClosing
+			return ErrConnClosing
 		}
 		ac.state = Ready
 		ac.stateCV.Broadcast()
@@ -671,7 +661,7 @@ func (ac *addrConn) wait(ctx context.Context) (transport.ClientTransport, error)
 		switch {
 		case ac.state == Shutdown:
 			ac.mu.Unlock()
-			return nil, errConnClosing
+			return nil, ErrConnClosing
 		case ac.state == Ready:
 			ct := ac.transport
 			ac.mu.Unlock()
@@ -725,7 +715,7 @@ func (ac *addrConn) tearDown(err error) {
 		ac.ready = nil
 	}
 	if ac.transport != nil {
-		if err == errConnDrain {
+		if err == ErrConnDrain {
 			ac.transport.GracefulClose()
 		} else {
 			ac.transport.Close()

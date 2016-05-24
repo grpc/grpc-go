@@ -169,7 +169,10 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		stream, err = sendRequest(ctx, cc.dopts.codec, cc.dopts.cp, callHdr, t, args, topts)
 		if err != nil {
-			put()
+			if put != nil {
+				put()
+				put = nil
+			}
 			if _, ok := err.(transport.ConnectionError); ok {
 				if c.failFast {
 					return toRPCErr(err)
@@ -181,7 +184,9 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		// Receive the response
 		err = recvResponse(cc.dopts, t, &c, stream, reply)
 		if err != nil {
-			put()
+			if put != nil {
+				put()
+			}
 			if _, ok := err.(transport.ConnectionError); ok {
 				if c.failFast {
 					return toRPCErr(err)
@@ -195,7 +200,10 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			c.traceInfo.tr.LazyLog(&payload{sent: false, msg: reply}, true)
 		}
 		t.CloseStream(stream, nil)
-		put()
+		if put != nil {
+			put()
+			put = nil
+		}
 		return Errorf(stream.StatusCode(), "%s", stream.StatusDesc())
 	}
 }

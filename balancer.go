@@ -37,6 +37,8 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/naming"
 	"google.golang.org/grpc/transport"
 )
 
@@ -53,6 +55,10 @@ type Address struct {
 // Balancer chooses network addresses for RPCs.
 // This is the EXPERIMENTAL API and may be changed or extended in the future.
 type Balancer interface {
+	// Start does the initialization work to bootstrap a Balancer. For example,
+	// this function may start the service discovery and watch the name resolution
+	// updates.
+	Start(target string) error
 	// Up informs the balancer that gRPC has a connection to the server at
 	// addr. It returns down which is called once the connection to addr gets
 	// lost or closed. Once down is called, addr may no longer be returned
@@ -64,21 +70,101 @@ type Balancer interface {
 	// is called once the rpc has completed or failed. put can collect and
 	// report rpc stats to remote load balancer.
 	Get(ctx context.Context) (addr Address, put func(), err error)
+	// Notify gRPC internals the list of Address which should be connected. gRPC
+	// internals will compare it with the exisiting connected addresses. If the
+	// address Balancer notified is not in the list of the connected addresses,
+	// gRPC starts to connect the address. If an address in the connected
+	// addresses is not in the notification list, the corresponding connect will be
+	// shutdown gracefully. Otherwise, there are no operations. Note that this
+	// function must return the full list of the Addrresses which should be connected.
+	// It is NOT delta.
+	Notify() <-chan []Address
 	// Close shuts down the balancer.
 	Close() error
 }
 
-// RoundRobin returns a Balancer that selects addresses round-robin.
-func RoundRobin() Balancer {
-	return &roundRobin{}
+// RoundRobin returns a Balancer that selects addresses round-robin. It starts to watch
+// the name resolution updates.
+func RoundRobin(r naming.Resolver) Balancer {
+	return &roundRobin{r: r}
 }
 
 type roundRobin struct {
-	mu     sync.Mutex
-	addrs  []Address
-	next   int           // index of the next address to return for Get()
-	waitCh chan struct{} // channel to block when there is no address available
-	done   bool          // The Balancer is closed.
+	r         naming.Resolver
+	open      []Address // all the known addresses the client can potentially connect
+	mu        sync.Mutex
+	addrCh    chan []Address // the channel to notify gRPC internals the list of addresses the client should connect to.
+	connected []Address      // all the connected addresses
+	next      int            // index of the next address to return for Get()
+	waitCh    chan struct{}  // the channel to block when there is no connected address available
+	done      bool           // The Balancer is closed.
+}
+
+func (rr *roundRobin) watchAddrUpdates(w naming.Watcher) error {
+	updates, err := w.Next()
+	if err != nil {
+		return err
+	}
+	for _, update := range updates {
+		addr := Address{
+			Addr:     update.Addr,
+			Metadata: update.Metadata,
+		}
+		switch update.Op {
+		case naming.Add:
+			var exisit bool
+			for _, v := range rr.open {
+				if addr == v {
+					exisit = true
+					grpclog.Println("grpc: The name resolver wanted to add an existing address: ", addr)
+					break
+				}
+			}
+			if exisit {
+				continue
+			}
+			rr.open = append(rr.open, addr)
+		case naming.Delete:
+			for i, v := range rr.open {
+				if v == addr {
+					copy(rr.open[i:], rr.open[i+1:])
+					rr.open = rr.open[:len(rr.open)-1]
+					break
+				}
+			}
+		default:
+			grpclog.Println("Unknown update.Op ", update.Op)
+		}
+	}
+	// Make a copy of rr.open and write it onto rr.addrCh so that gRPC internals gets notified.
+	open := make([]Address, len(rr.open))
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	copy(open, rr.open)
+	if rr.done {
+		return ErrClientConnClosing
+	}
+	rr.addrCh <- open
+	return nil
+}
+
+func (rr *roundRobin) Start(target string) error {
+	if rr.r == nil {
+		return nil
+	}
+	w, err := rr.r.Resolve(target)
+	if err != nil {
+		return err
+	}
+	rr.addrCh = make(chan []Address)
+	go func() {
+		for {
+			if err := rr.watchAddrUpdates(w); err != nil {
+				return
+			}
+		}
+	}()
+	return nil
 }
 
 // Up appends addr to the end of rr.addrs and sends notification if there
@@ -86,13 +172,13 @@ type roundRobin struct {
 func (rr *roundRobin) Up(addr Address) func(error) {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
-	for _, a := range rr.addrs {
+	for _, a := range rr.connected {
 		if a == addr {
 			return nil
 		}
 	}
-	rr.addrs = append(rr.addrs, addr)
-	if len(rr.addrs) == 1 {
+	rr.connected = append(rr.connected, addr)
+	if len(rr.connected) == 1 {
 		// addr is only one available. Notify the Get() callers who are blocking.
 		if rr.waitCh != nil {
 			close(rr.waitCh)
@@ -108,10 +194,10 @@ func (rr *roundRobin) Up(addr Address) func(error) {
 func (rr *roundRobin) down(addr Address, err error) {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
-	for i, a := range rr.addrs {
+	for i, a := range rr.connected {
 		if a == addr {
-			copy(rr.addrs[i:], rr.addrs[i+1:])
-			rr.addrs = rr.addrs[:len(rr.addrs)-1]
+			copy(rr.connected[i:], rr.connected[i+1:])
+			rr.connected = rr.connected[:len(rr.connected)-1]
 			return
 		}
 	}
@@ -126,16 +212,13 @@ func (rr *roundRobin) Get(ctx context.Context) (addr Address, put func(), err er
 		err = ErrClientConnClosing
 		return
 	}
-	if rr.next >= len(rr.addrs) {
+	if rr.next >= len(rr.connected) {
 		rr.next = 0
 	}
-	if len(rr.addrs) > 0 {
-		addr = rr.addrs[rr.next]
+	if len(rr.connected) > 0 {
+		addr = rr.connected[rr.next]
 		rr.next++
 		rr.mu.Unlock()
-		put = func() {
-			rr.put(ctx, addr)
-		}
 		return
 	}
 	// There is no address available. Wait on rr.waitCh.
@@ -158,26 +241,24 @@ func (rr *roundRobin) Get(ctx context.Context) (addr Address, put func(), err er
 				err = ErrClientConnClosing
 				return
 			}
-			if len(rr.addrs) == 0 {
+			if len(rr.connected) == 0 {
 				// The newly added addr got removed by Down() again.
 				rr.mu.Unlock()
 				continue
 			}
-			if rr.next >= len(rr.addrs) {
+			if rr.next >= len(rr.connected) {
 				rr.next = 0
 			}
-			addr = rr.addrs[rr.next]
+			addr = rr.connected[rr.next]
 			rr.next++
 			rr.mu.Unlock()
-			put = func() {
-				rr.put(ctx, addr)
-			}
 			return
 		}
 	}
 }
 
-func (rr *roundRobin) put(ctx context.Context, addr Address) {
+func (rr *roundRobin) Notify() <-chan []Address {
+	return rr.addrCh
 }
 
 func (rr *roundRobin) Close() error {
@@ -187,6 +268,9 @@ func (rr *roundRobin) Close() error {
 	if rr.waitCh != nil {
 		close(rr.waitCh)
 		rr.waitCh = nil
+	}
+	if rr.addrCh != nil {
+		close(rr.addrCh)
 	}
 	return nil
 }

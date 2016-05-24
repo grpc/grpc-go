@@ -122,7 +122,7 @@ func TestNameDiscovery(t *testing.T) {
 	// Start 2 servers on 2 ports.
 	numServers := 2
 	servers, r := startServers(t, numServers, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithNameResolver(r), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestNameDiscovery(t *testing.T) {
 
 func TestEmptyAddrs(t *testing.T) {
 	servers, r := startServers(t, 1, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithNameResolver(r), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
@@ -167,12 +167,11 @@ func TestEmptyAddrs(t *testing.T) {
 	}
 	// Inject name resolution change to remove the server so that there is no address
 	// available after that.
-	var updates []*naming.Update
-	updates = append(updates, &naming.Update{
+	u := &naming.Update{
 		Op:   naming.Delete,
 		Addr: "127.0.0.1:" + servers[0].port,
-	})
-	r.w.inject(updates)
+	}
+	r.w.inject([]*naming.Update{u})
 	// Loop until the above updates apply.
 	for {
 		time.Sleep(10 * time.Millisecond)
@@ -189,24 +188,32 @@ func TestRoundRobin(t *testing.T) {
 	// Start 3 servers on 3 ports.
 	numServers := 3
 	servers, r := startServers(t, numServers, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithNameResolver(r), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
-	// Add servers[1] and servers[2] to the service discovery.
-	var updates []*naming.Update
-	updates = append(updates, &naming.Update{
+	// Add servers[1] to the service discovery.
+	u := &naming.Update{
 		Op:   naming.Add,
 		Addr: "127.0.0.1:" + servers[1].port,
-	})
-	updates = append(updates, &naming.Update{
-		Op:   naming.Add,
-		Addr: "127.0.0.1:" + servers[2].port,
-	})
-	r.w.inject(updates)
+	}
+	r.w.inject([]*naming.Update{u})
 	req := "port"
 	var reply string
-	// Loop until an RPC is completed by servers[2].
+	// Loop until servers[1] is up
+	for {
+		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[1].port {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// Add server2[2] to the service discovery.
+	u = &naming.Update{
+		Op:   naming.Add,
+		Addr: "127.0.0.1:" + servers[2].port,
+	}
+	r.w.inject([]*naming.Update{u})
+	// Loop until both servers[2] are up.
 	for {
 		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[2].port {
 			break
@@ -216,7 +223,7 @@ func TestRoundRobin(t *testing.T) {
 	// Check the incoming RPCs served in a round-robin manner.
 	for i := 0; i < 10; i++ {
 		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[i%numServers].port {
-			t.Fatalf("Invoke(_, _, _, _, _) = %v, want %s", err, servers[i%numServers].port)
+			t.Fatalf("Index %d: Invoke(_, _, _, _, _) = %v, want %s", i, err, servers[i%numServers].port)
 		}
 	}
 	cc.Close()
@@ -227,7 +234,7 @@ func TestRoundRobin(t *testing.T) {
 
 func TestCloseWithPendingRPC(t *testing.T) {
 	servers, r := startServers(t, 1, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithNameResolver(r), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
@@ -275,7 +282,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 
 func TestGetOnWaitChannel(t *testing.T) {
 	servers, r := startServers(t, 1, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithNameResolver(r), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
