@@ -90,7 +90,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   private boolean cancelCalled;
   private boolean halfCloseCalled;
   private final ClientTransportProvider clientTransportProvider;
-  private String userAgent;
   private ScheduledExecutorService deadlineCancellationExecutor;
   private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
   private CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
@@ -129,11 +128,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     ClientTransport get(CallOptions callOptions);
   }
 
-  ClientCallImpl<ReqT, RespT> setUserAgent(String userAgent) {
-    this.userAgent = userAgent;
-    return this;
-  }
-
   ClientCallImpl<ReqT, RespT> setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
     this.decompressorRegistry = decompressorRegistry;
     return this;
@@ -145,13 +139,10 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   }
 
   @VisibleForTesting
-  static void prepareHeaders(Metadata headers, CallOptions callOptions, String userAgent,
-      DecompressorRegistry decompressorRegistry, Compressor compressor) {
-    // Fill out the User-Agent header.
+  static void prepareHeaders(Metadata headers, DecompressorRegistry decompressorRegistry,
+      Compressor compressor) {
+    // Remove user agent.  Agent are added in the transport.
     headers.removeAll(USER_AGENT_KEY);
-    if (userAgent != null) {
-      headers.put(USER_AGENT_KEY, userAgent);
-    }
 
     headers.removeAll(MESSAGE_ENCODING_KEY);
     if (compressor != Codec.Identity.NONE) {
@@ -213,7 +204,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       compressor = Codec.Identity.NONE;
     }
 
-    prepareHeaders(headers, callOptions, userAgent, decompressorRegistry, compressor);
+    prepareHeaders(headers, decompressorRegistry, compressor);
 
     final boolean deadlineExceeded = effectiveDeadline != null && effectiveDeadline.isExpired();
     if (!deadlineExceeded) {
@@ -265,7 +256,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     logIfContextNarrowedTimeout(effectiveTimeout, effectiveDeadline, outerCallDeadline,
         callDeadline);
   }
-  
+
   private static void logIfContextNarrowedTimeout(long effectiveTimeout,
       Deadline effectiveDeadline, @Nullable Deadline outerCallDeadline,
       @Nullable Deadline callDeadline) {

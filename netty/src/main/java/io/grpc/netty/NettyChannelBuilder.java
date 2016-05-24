@@ -311,23 +311,23 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
 
     @Override
     public ManagedClientTransport newClientTransport(
-        SocketAddress serverAddress, String authority) {
+        SocketAddress serverAddress, String authority, @Nullable String userAgent) {
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
       }
       ProtocolNegotiator negotiator = protocolNegotiator != null ? protocolNegotiator :
           createProtocolNegotiator(authority, negotiationType, sslContext);
-      return newClientTransport(serverAddress, authority, negotiator);
+      return newClientTransport(serverAddress, authority, userAgent, negotiator);
     }
 
     @Internal  // This is strictly for internal use.  Depend on this at your own peril.
     public ManagedClientTransport newClientTransport(SocketAddress serverAddress,
-        String authority, ProtocolNegotiator negotiator) {
+        String authority, String userAgent, ProtocolNegotiator negotiator) {
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
       }
       return new NettyClientTransport(serverAddress, channelType, group, negotiator,
-          flowControlWindow, maxMessageSize, maxHeaderListSize, authority);
+          flowControlWindow, maxMessageSize, maxHeaderListSize, authority, userAgent);
     }
 
     @Override

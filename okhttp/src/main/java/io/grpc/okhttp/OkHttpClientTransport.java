@@ -125,6 +125,7 @@ class OkHttpClientTransport implements ManagedClientTransport {
 
   private final InetSocketAddress address;
   private final String defaultAuthority;
+  private final String userAgent;
   private final Random random = new Random();
   private final Ticker ticker;
   private Listener listener;
@@ -168,8 +169,8 @@ class OkHttpClientTransport implements ManagedClientTransport {
   Runnable connectingCallback;
   SettableFuture<Void> connectedFuture;
 
-  OkHttpClientTransport(InetSocketAddress address, String authority, Executor executor,
-      @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec,
+  OkHttpClientTransport(InetSocketAddress address, String authority, @Nullable String userAgent,
+      Executor executor, @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec,
       int maxMessageSize) {
     this.address = Preconditions.checkNotNull(address, "address");
     this.defaultAuthority = authority;
@@ -182,19 +183,21 @@ class OkHttpClientTransport implements ManagedClientTransport {
     this.sslSocketFactory = sslSocketFactory;
     this.connectionSpec = Preconditions.checkNotNull(connectionSpec, "connectionSpec");
     this.ticker = Ticker.systemTicker();
+    this.userAgent = userAgent;
   }
 
   /**
    * Create a transport connected to a fake peer for test.
    */
   @VisibleForTesting
-  OkHttpClientTransport(Executor executor, FrameReader frameReader, FrameWriter testFrameWriter,
-      int nextStreamId, Socket socket, Ticker ticker,
+  OkHttpClientTransport(String userAgent, Executor executor, FrameReader frameReader,
+      FrameWriter testFrameWriter, int nextStreamId, Socket socket, Ticker ticker,
       @Nullable Runnable connectingCallback, SettableFuture<Void> connectedFuture,
       int maxMessageSize) {
     address = null;
     this.maxMessageSize = maxMessageSize;
     defaultAuthority = "notarealauthority:80";
+    this.userAgent = userAgent;
     this.executor = Preconditions.checkNotNull(executor);
     serializingExecutor = new SerializingExecutor(executor);
     this.testFrameReader = Preconditions.checkNotNull(frameReader);
@@ -247,7 +250,7 @@ class OkHttpClientTransport implements ManagedClientTransport {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     return new OkHttpClientStream(method, headers, frameWriter, OkHttpClientTransport.this,
-        outboundFlow, lock, maxMessageSize, defaultAuthority);
+        outboundFlow, lock, maxMessageSize, defaultAuthority, userAgent);
   }
 
   @GuardedBy("lock")

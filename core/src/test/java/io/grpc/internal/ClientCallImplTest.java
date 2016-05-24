@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -195,19 +196,18 @@ public class ClientCallImplTest {
   }
 
   @Test
-  public void prepareHeaders_userAgentAdded() {
+  public void prepareHeaders_userAgentRemove() {
     Metadata m = new Metadata();
-    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, "user agent", decompressorRegistry,
-        Codec.Identity.NONE);
+    m.put(GrpcUtil.USER_AGENT_KEY, "batmobile");
+    ClientCallImpl.prepareHeaders(m, decompressorRegistry, Codec.Identity.NONE);
 
-    assertEquals(m.get(GrpcUtil.USER_AGENT_KEY), "user agent");
+    assertThat(m.get(GrpcUtil.USER_AGENT_KEY)).isNull();
   }
 
   @Test
   public void prepareHeaders_ignoreIdentityEncoding() {
     Metadata m = new Metadata();
-    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, "user agent", decompressorRegistry,
-        Codec.Identity.NONE);
+    ClientCallImpl.prepareHeaders(m, decompressorRegistry, Codec.Identity.NONE);
 
     assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));
   }
@@ -250,8 +250,7 @@ public class ClientCallImplTest {
       }
     }, false); // not advertised
 
-    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, "user agent", customRegistry,
-        Codec.Identity.NONE);
+    ClientCallImpl.prepareHeaders(m, customRegistry, Codec.Identity.NONE);
 
     Iterable<String> acceptedEncodings =
         ACCEPT_ENCODING_SPLITER.split(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
@@ -267,8 +266,7 @@ public class ClientCallImplTest {
     m.put(GrpcUtil.MESSAGE_ENCODING_KEY, "gzip");
     m.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, "gzip");
 
-    ClientCallImpl.prepareHeaders(m, CallOptions.DEFAULT, null,
-        DecompressorRegistry.newEmptyInstance(), Codec.Identity.NONE);
+    ClientCallImpl.prepareHeaders(m, DecompressorRegistry.newEmptyInstance(), Codec.Identity.NONE);
 
     assertNull(m.get(GrpcUtil.USER_AGENT_KEY));
     assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));

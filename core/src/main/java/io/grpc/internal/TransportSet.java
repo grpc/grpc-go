@@ -67,6 +67,7 @@ final class TransportSet implements WithLogId {
   private final Object lock = new Object();
   private final EquivalentAddressGroup addressGroup;
   private final String authority;
+  private final String userAgent;
   private final BackoffPolicy.Provider backoffPolicyProvider;
   private final Callback callback;
   private final ClientTransportFactory transportFactory;
@@ -122,21 +123,22 @@ final class TransportSet implements WithLogId {
   @Nullable
   private volatile ManagedClientTransport activeTransport;
 
-  TransportSet(EquivalentAddressGroup addressGroup, String authority,
+  TransportSet(EquivalentAddressGroup addressGroup, String authority, String userAgent,
       LoadBalancer<ClientTransport> loadBalancer, BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
       Executor appExecutor, Callback callback) {
-    this(addressGroup, authority, loadBalancer, backoffPolicyProvider, transportFactory,
+    this(addressGroup, authority, userAgent, loadBalancer, backoffPolicyProvider, transportFactory,
         scheduledExecutor, appExecutor, callback, Stopwatch.createUnstarted());
   }
 
   @VisibleForTesting
-  TransportSet(EquivalentAddressGroup addressGroup, String authority,
+  TransportSet(EquivalentAddressGroup addressGroup, String authority, String userAgent,
       LoadBalancer<ClientTransport> loadBalancer, BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
       Executor appExecutor, Callback callback, Stopwatch connectingTimer) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
+    this.userAgent = userAgent;
     this.loadBalancer = loadBalancer;
     this.backoffPolicyProvider = backoffPolicyProvider;
     this.transportFactory = transportFactory;
@@ -186,7 +188,8 @@ final class TransportSet implements WithLogId {
       nextAddressIndex = 0;
     }
 
-    ManagedClientTransport transport = transportFactory.newClientTransport(address, authority);
+    ManagedClientTransport transport =
+        transportFactory.newClientTransport(address, authority, userAgent);
     if (log.isLoggable(Level.FINE)) {
       log.log(Level.FINE, "[{0}] Created {1} for {2}",
           new Object[] {getLogId(), transport.getLogId(), address});

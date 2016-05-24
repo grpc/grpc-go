@@ -94,7 +94,8 @@ public class InProcessChannelBuilder extends
     }
 
     @Override
-    public ManagedClientTransport newClientTransport(SocketAddress addr, String authority) {
+    public ManagedClientTransport newClientTransport(
+        SocketAddress addr, String authority, String userAgent) {
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
       }

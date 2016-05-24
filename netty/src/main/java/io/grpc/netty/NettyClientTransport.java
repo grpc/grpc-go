@@ -56,18 +56,18 @@ import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.Executor;
 
+import javax.annotation.Nullable;
+
 /**
  * A Netty-based {@link ManagedClientTransport} implementation.
  */
 class NettyClientTransport implements ManagedClientTransport {
-  private static final AsciiString DEFAULT_AGENT =
-      new AsciiString(GrpcUtil.getGrpcUserAgent("netty", null));
-
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
   private final ProtocolNegotiator negotiator;
   private final AsciiString authority;
+  private final AsciiString userAgent;
   private final int flowControlWindow;
   private final int maxMessageSize;
   private final int maxHeaderListSize;
@@ -83,7 +83,7 @@ class NettyClientTransport implements ManagedClientTransport {
   NettyClientTransport(SocketAddress address, Class<? extends Channel> channelType,
                        EventLoopGroup group, ProtocolNegotiator negotiator,
                        int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
-                       String authority) {
+                       String authority, @Nullable String userAgent) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
@@ -92,6 +92,7 @@ class NettyClientTransport implements ManagedClientTransport {
     this.maxMessageSize = maxMessageSize;
     this.maxHeaderListSize = maxHeaderListSize;
     this.authority = new AsciiString(authority);
+    this.userAgent = new AsciiString(GrpcUtil.getGrpcUserAgent("netty", userAgent));
   }
 
   @Override
@@ -114,9 +115,6 @@ class NettyClientTransport implements ManagedClientTransport {
   public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
-    AsciiString userAgent = headers.containsKey(GrpcUtil.USER_AGENT_KEY)
-        ? new AsciiString(GrpcUtil.getGrpcUserAgent("netty", headers.get(GrpcUtil.USER_AGENT_KEY)))
-        : DEFAULT_AGENT;
     return new NettyClientStream(method, headers, channel, handler, maxMessageSize, authority,
         negotiationHandler.scheme(), userAgent) {
       @Override

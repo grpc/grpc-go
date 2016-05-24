@@ -97,7 +97,8 @@ final class TestUtils {
         }).when(mockTransport).start(any(ManagedClientTransport.Listener.class));
         return mockTransport;
       }
-    }).when(mockTransportFactory).newClientTransport(any(SocketAddress.class), any(String.class));
+    }).when(mockTransportFactory)
+        .newClientTransport(any(SocketAddress.class), any(String.class), any(String.class));
 
     return captor;
   }

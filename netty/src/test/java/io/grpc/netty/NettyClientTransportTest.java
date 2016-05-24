@@ -132,7 +132,7 @@ public class NettyClientTransportTest {
   }
 
   @Test
-  public void headersShouldAddDefaultUserAgent() throws Exception {
+  public void addDefaultUserAgent() throws Exception {
     startServer();
     NettyClientTransport transport = newTransport(newNegotiator());
     transport.start(clientTransportListener);
@@ -148,21 +148,18 @@ public class NettyClientTransportTest {
   }
 
   @Test
-  public void headersShouldOverrideDefaultUserAgent() throws Exception {
+  public void overrideDefaultUserAgent() throws Exception {
     startServer();
-    NettyClientTransport transport = newTransport(newNegotiator());
+    NettyClientTransport transport = newTransport(newNegotiator(),
+        DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, "testUserAgent");
     transport.start(clientTransportListener);
 
-    // Send a single RPC and wait for the response.
-    String userAgent = "testUserAgent";
-    Metadata sentHeaders = new Metadata();
-    sentHeaders.put(USER_AGENT_KEY, userAgent);
-    new Rpc(transport, sentHeaders).halfClose().waitForResponse();
+    new Rpc(transport, new Metadata()).halfClose().waitForResponse();
 
     // Verify that the received headers contained the User-Agent.
     assertEquals(1, serverListener.streamListeners.size());
     Metadata receivedHeaders = serverListener.streamListeners.get(0).headers;
-    assertEquals(GrpcUtil.getGrpcUserAgent("netty", userAgent),
+    assertEquals(GrpcUtil.getGrpcUserAgent("netty", "testUserAgent"),
         receivedHeaders.get(USER_AGENT_KEY));
   }
 
@@ -171,7 +168,7 @@ public class NettyClientTransportTest {
     startServer();
     // Allow the response payloads of up to 1 byte.
     NettyClientTransport transport = newTransport(newNegotiator(),
-        1, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE);
+        1, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, null);
     transport.start(clientTransportListener);
 
     try {
@@ -248,7 +245,8 @@ public class NettyClientTransportTest {
   public void maxHeaderListSizeShouldBeEnforcedOnClient() throws Exception {
     startServer();
 
-    NettyClientTransport transport = newTransport(newNegotiator(), DEFAULT_MAX_MESSAGE_SIZE, 1);
+    NettyClientTransport transport =
+        newTransport(newNegotiator(), DEFAULT_MAX_MESSAGE_SIZE, 1, null);
     transport.start(clientTransportListener);
 
     try {
@@ -298,13 +296,14 @@ public class NettyClientTransportTest {
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator) {
     return newTransport(negotiator,
-        DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE);
+        DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, null /* user agent */);
   }
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator,
-      int maxMsgSize, int maxHeaderListSize) {
+      int maxMsgSize, int maxHeaderListSize, String userAgent) {
     NettyClientTransport transport = new NettyClientTransport(address, NioSocketChannel.class,
-            group, negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize, authority);
+        group, negotiator, DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize, authority,
+        userAgent);
     transports.add(transport);
     return transport;
   }

@@ -75,7 +75,7 @@ public class OkHttpClientStreamTest {
     methodDescriptor = MethodDescriptor.create(
         MethodType.UNARY, "/testService/test", marshaller, marshaller);
     stream = new OkHttpClientStream(methodDescriptor, new Metadata(), frameWriter, transport,
-        flowController, lock, MAX_MESSAGE_SIZE, "localhost");
+        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "userAgent");
   }
 
   @Test

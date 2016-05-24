@@ -87,6 +87,7 @@ import java.util.concurrent.TimeUnit;
 public class ManagedChannelImplTransportManagerTest {
 
   private static final String authority = "fakeauthority";
+  private static final String userAgent = "mosaic";
 
   private final ExecutorService executor = Executors.newSingleThreadExecutor();
   private final MethodDescriptor<String, String> method = MethodDescriptor.create(
@@ -127,7 +128,7 @@ public class ManagedChannelImplTransportManagerTest {
     channel = new ManagedChannelImpl("fake://target", mockBackoffPolicyProvider,
         mockNameResolverFactory, Attributes.EMPTY, mockLoadBalancerFactory,
         mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
-        CompressorRegistry.getDefaultInstance(), executor, null,
+        CompressorRegistry.getDefaultInstance(), executor, userAgent,
         Collections.<ClientInterceptor>emptyList());
 
     ArgumentCaptor<TransportManager<ClientTransport>> tmCaptor
@@ -150,7 +151,7 @@ public class ManagedChannelImplTransportManagerTest {
     SocketAddress addr = mock(SocketAddress.class);
     EquivalentAddressGroup addressGroup = new EquivalentAddressGroup(addr);
     ClientTransport t1 = tm.getTransport(addressGroup);
-    verify(mockTransportFactory, timeout(1000)).newClientTransport(addr, authority);
+    verify(mockTransportFactory, timeout(1000)).newClientTransport(addr, authority, userAgent);
     // The real transport
     MockClientTransportInfo transportInfo = transports.poll(1, TimeUnit.SECONDS);
     transportInfo.listener.transportReady();
@@ -175,7 +176,7 @@ public class ManagedChannelImplTransportManagerTest {
     // Pick the first transport
     ClientTransport t1 = tm.getTransport(addressGroup);
     assertNotNull(t1);
-    verify(mockTransportFactory, timeout(1000)).newClientTransport(addr1, authority);
+    verify(mockTransportFactory, timeout(1000)).newClientTransport(addr1, authority, userAgent);
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     // Fail the first transport, without setting it to ready
     MockClientTransportInfo transportInfo = transports.poll(1, TimeUnit.SECONDS);
@@ -187,7 +188,7 @@ public class ManagedChannelImplTransportManagerTest {
     assertNotNull(t2);
     t2.newStream(method, new Metadata());
     // Will keep the previous back-off policy, and not consult back-off policy
-    verify(mockTransportFactory, timeout(1000)).newClientTransport(addr2, authority);
+    verify(mockTransportFactory, timeout(1000)).newClientTransport(addr2, authority, userAgent);
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     transportInfo = transports.poll(1, TimeUnit.SECONDS);
     ClientTransport rt2 = transportInfo.transport;
@@ -203,7 +204,8 @@ public class ManagedChannelImplTransportManagerTest {
     // Subsequent getTransport() will use the first address, since last attempt was successful.
     ClientTransport t3 = tm.getTransport(addressGroup);
     t3.newStream(method2, new Metadata());
-    verify(mockTransportFactory, timeout(1000).times(2)).newClientTransport(addr1, authority);
+    verify(mockTransportFactory, timeout(1000).times(2))
+        .newClientTransport(addr1, authority, userAgent);
     // Still no back-off policy creation, because an address succeeded.
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     transportInfo = transports.poll(1, TimeUnit.SECONDS);
@@ -236,7 +238,7 @@ public class ManagedChannelImplTransportManagerTest {
     ClientTransport t1 = tm.getTransport(addressGroup);
     assertNotNull(t1);
     verify(mockTransportFactory, timeout(1000).times(++transportsAddr1))
-        .newClientTransport(addr1, authority);
+        .newClientTransport(addr1, authority, userAgent);
     // Back-off policy was unset initially.
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     MockClientTransportInfo transportInfo = transports.poll(1, TimeUnit.SECONDS);
@@ -250,7 +252,7 @@ public class ManagedChannelImplTransportManagerTest {
     ClientTransport t2 = tm.getTransport(addressGroup);
     assertNotNull(t2);
     verify(mockTransportFactory, timeout(1000).times(++transportsAddr1))
-        .newClientTransport(addr1, authority);
+        .newClientTransport(addr1, authority, userAgent);
     // Back-off policy was not reset.
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     transports.poll(1, TimeUnit.SECONDS).listener.transportShutdown(Status.UNAVAILABLE);
@@ -260,7 +262,7 @@ public class ManagedChannelImplTransportManagerTest {
     ClientTransport t3 = tm.getTransport(addressGroup);
     assertNotNull(t3);
     verify(mockTransportFactory, timeout(1000).times(++transportsAddr2))
-        .newClientTransport(addr2, authority);
+        .newClientTransport(addr2, authority, userAgent);
     // Back-off policy was not reset.
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     transports.poll(1, TimeUnit.SECONDS).listener.transportShutdown(Status.UNAVAILABLE);
@@ -272,7 +274,8 @@ public class ManagedChannelImplTransportManagerTest {
     // If backoff's DelayedTransport is still active, this is necessary. Otherwise it would be racy.
     t4.newStream(method, new Metadata());
     verify(mockTransportFactory, timeout(1000).times(++transportsAddr1))
-        .newClientTransport(addr1, authority);
+
+        .newClientTransport(addr1, authority, userAgent);
     // Back-off policy was reset and consulted.
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
     verify(mockBackoffPolicy, times(++backoffConsulted)).nextBackoffMillis();

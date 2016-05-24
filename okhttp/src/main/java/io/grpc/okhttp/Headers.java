@@ -46,6 +46,8 @@ import okio.ByteString;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.annotation.Nullable;
+
 /**
  * Constants for request/response headers.
  */
@@ -63,7 +65,7 @@ public class Headers {
    * application thread context.
    */
   public static List<Header> createRequestHeaders(Metadata headers, String defaultPath,
-      String authority) {
+      String authority, @Nullable String applicationUserAgent) {
     Preconditions.checkNotNull(headers, "headers");
     Preconditions.checkNotNull(defaultPath, "defaultPath");
     Preconditions.checkNotNull(authority, "authority");
@@ -79,7 +81,7 @@ public class Headers {
     String path = defaultPath;
     okhttpHeaders.add(new Header(Header.TARGET_PATH, path));
 
-    String userAgent = GrpcUtil.getGrpcUserAgent("okhttp", headers.get(USER_AGENT_KEY));
+    String userAgent = GrpcUtil.getGrpcUserAgent("okhttp", applicationUserAgent);
     okhttpHeaders.add(new Header(GrpcUtil.USER_AGENT_KEY.name(), userAgent));
 
     // All non-pseudo headers must come after pseudo headers.

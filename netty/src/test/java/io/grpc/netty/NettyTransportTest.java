@@ -75,12 +75,13 @@ public class NettyTransportTest extends AbstractTransportTest {
   @Override
   protected ManagedClientTransport newClientTransport() {
     return clientFactory.newClientTransport(
-        new InetSocketAddress("localhost", SERVER_PORT), "localhost:" + SERVER_PORT);
+        new InetSocketAddress("localhost", SERVER_PORT),
+        "localhost:" + SERVER_PORT,
+        null /* agent */);
   }
 
-  // TODO(ejona): Flaky
   @Test
-  @Ignore
+  @Ignore("flaky")
   @Override
   public void flowControlPushBack() {}
 }

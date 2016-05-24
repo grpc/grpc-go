@@ -114,6 +114,7 @@ public class ManagedChannelImplTest {
   private final ExecutorService executor = Executors.newSingleThreadExecutor();
   private final String serviceName = "fake.example.com";
   private final String authority = serviceName;
+  private final String userAgent = "userAgent";
   private final String target = "fake://" + serviceName;
   private URI expectedUri;
   private final SocketAddress socketAddress = new SocketAddress() {};
@@ -146,14 +147,15 @@ public class ManagedChannelImplTest {
     return new ManagedChannelImpl(target, new FakeBackoffPolicyProvider(),
         nameResolverFactory, NAME_RESOLVER_PARAMS, loadBalancerFactory,
         mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
-        CompressorRegistry.getDefaultInstance(), executor, null, interceptors);
+        CompressorRegistry.getDefaultInstance(), executor, userAgent, interceptors);
   }
 
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
     expectedUri = new URI(target);
-    when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class)))
+    when(mockTransportFactory.newClientTransport(
+            any(SocketAddress.class), any(String.class), any(String.class)))
         .thenReturn(mockTransport);
   }
 
@@ -195,12 +197,13 @@ public class ManagedChannelImplTest {
     // Create transport and call
     ClientStream mockStream = mock(ClientStream.class);
     Metadata headers = new Metadata();
-    when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class)))
+    when(mockTransportFactory.newClientTransport(
+            any(SocketAddress.class), any(String.class), any(String.class)))
         .thenReturn(mockTransport);
     when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
     call.start(mockCallListener, headers);
     verify(mockTransportFactory, timeout(1000))
-        .newClientTransport(same(socketAddress), eq(authority));
+        .newClientTransport(same(socketAddress), eq(authority), eq(userAgent));
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();
     transportListener.transportReady();
@@ -442,7 +445,7 @@ public class ManagedChannelImplTest {
     nameResolverFactory.allResolved();
 
     verify(mockTransportFactory, never())
-        .newClientTransport(any(SocketAddress.class), any(String.class));
+        .newClientTransport(any(SocketAddress.class), any(String.class), any(String.class));
   }
 
   /**
@@ -467,9 +470,11 @@ public class ManagedChannelImplTest {
     final ManagedClientTransport badTransport = mock(ManagedClientTransport.class);
     when(goodTransport.newStream(any(MethodDescriptor.class), any(Metadata.class)))
         .thenReturn(mock(ClientStream.class));
-    when(mockTransportFactory.newClientTransport(same(goodAddress), any(String.class)))
+    when(mockTransportFactory.newClientTransport(
+            same(goodAddress), any(String.class), any(String.class)))
         .thenReturn(goodTransport);
-    when(mockTransportFactory.newClientTransport(same(badAddress), any(String.class)))
+    when(mockTransportFactory.newClientTransport(
+            same(badAddress), any(String.class), any(String.class)))
         .thenReturn(badTransport);
 
     FakeNameResolverFactory nameResolverFactory =
@@ -483,16 +488,17 @@ public class ManagedChannelImplTest {
     ArgumentCaptor<ManagedClientTransport.Listener> badTransportListenerCaptor =
         ArgumentCaptor.forClass(ManagedClientTransport.Listener.class);
     verify(badTransport, timeout(1000)).start(badTransportListenerCaptor.capture());
-    verify(mockTransportFactory).newClientTransport(same(badAddress), any(String.class));
+    verify(mockTransportFactory)
+        .newClientTransport(same(badAddress), any(String.class), any(String.class));
     verify(mockTransportFactory, times(0))
-          .newClientTransport(same(goodAddress), any(String.class));
+          .newClientTransport(same(goodAddress), any(String.class), any(String.class));
     badTransportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
 
     // The channel then try the second address (goodAddress)
     ArgumentCaptor<ManagedClientTransport.Listener> goodTransportListenerCaptor =
         ArgumentCaptor.forClass(ManagedClientTransport.Listener.class);
     verify(mockTransportFactory, timeout(1000))
-          .newClientTransport(same(goodAddress), any(String.class));
+          .newClientTransport(same(goodAddress), any(String.class), any(String.class));
     verify(goodTransport, timeout(1000)).start(goodTransportListenerCaptor.capture());
     goodTransportListenerCaptor.getValue().transportReady();
     verify(goodTransport, timeout(1000)).newStream(same(method), same(headers));
@@ -519,9 +525,9 @@ public class ManagedChannelImplTest {
     final ResolvedServerInfo server2 = new ResolvedServerInfo(addr2, Attributes.EMPTY);
     final ManagedClientTransport transport1 = mock(ManagedClientTransport.class);
     final ManagedClientTransport transport2 = mock(ManagedClientTransport.class);
-    when(mockTransportFactory.newClientTransport(same(addr1), any(String.class)))
+    when(mockTransportFactory.newClientTransport(same(addr1), any(String.class), any(String.class)))
         .thenReturn(transport1);
-    when(mockTransportFactory.newClientTransport(same(addr2), any(String.class)))
+    when(mockTransportFactory.newClientTransport(same(addr2), any(String.class), any(String.class)))
         .thenReturn(transport2);
 
     FakeNameResolverFactory nameResolverFactory =
@@ -533,14 +539,16 @@ public class ManagedChannelImplTest {
     // Start a call. The channel will starts with the first address, which will fail to connect.
     call.start(mockCallListener, headers);
     verify(transport1, timeout(1000)).start(transportListenerCaptor.capture());
-    verify(mockTransportFactory).newClientTransport(same(addr1), any(String.class));
+    verify(mockTransportFactory)
+        .newClientTransport(same(addr1), any(String.class), any(String.class));
     verify(mockTransportFactory, times(0))
-          .newClientTransport(same(addr2), any(String.class));
+        .newClientTransport(same(addr2), any(String.class), any(String.class));
     transportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
 
     // The channel then try the second address, which will fail to connect too.
     verify(transport2, timeout(1000)).start(transportListenerCaptor.capture());
-    verify(mockTransportFactory).newClientTransport(same(addr2), any(String.class));
+    verify(mockTransportFactory)
+        .newClientTransport(same(addr2), any(String.class), any(String.class));
     verify(transport2, timeout(1000)).start(transportListenerCaptor.capture());
     transportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
 
@@ -577,7 +585,7 @@ public class ManagedChannelImplTest {
         .thenReturn(mock(ClientStream.class));
     when(transport2.newStream(any(MethodDescriptor.class), any(Metadata.class)))
         .thenReturn(mock(ClientStream.class));
-    when(mockTransportFactory.newClientTransport(same(addr1), any(String.class)))
+    when(mockTransportFactory.newClientTransport(same(addr1), any(String.class), any(String.class)))
         .thenReturn(transport1, transport2);
 
     FakeNameResolverFactory nameResolverFactory =
@@ -588,7 +596,8 @@ public class ManagedChannelImplTest {
 
     // First call will use the first address
     call.start(mockCallListener, headers);
-    verify(mockTransportFactory, timeout(1000)).newClientTransport(same(addr1), any(String.class));
+    verify(mockTransportFactory, timeout(1000))
+        .newClientTransport(same(addr1), any(String.class), any(String.class));
     verify(transport1, timeout(1000)).start(transportListenerCaptor.capture());
     transportListenerCaptor.getValue().transportReady();
     verify(transport1, timeout(1000)).newStream(same(method), same(headers));
@@ -598,7 +607,8 @@ public class ManagedChannelImplTest {
     ClientCall<String, Integer> call2 = channel.newCall(method, CallOptions.DEFAULT);
     call2.start(mockCallListener, headers);
     verify(transport2, timeout(1000)).start(transportListenerCaptor.capture());
-    verify(mockTransportFactory, times(2)).newClientTransport(same(addr1), any(String.class));
+    verify(mockTransportFactory, times(2))
+        .newClientTransport(same(addr1), any(String.class), any(String.class));
     transportListenerCaptor.getValue().transportReady();
     verify(transport2, timeout(1000)).newStream(same(method), same(headers));
   }

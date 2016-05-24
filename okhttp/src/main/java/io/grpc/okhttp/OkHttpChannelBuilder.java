@@ -260,13 +260,14 @@ public class OkHttpChannelBuilder extends
     }
 
     @Override
-    public ManagedClientTransport newClientTransport(SocketAddress addr, String authority) {
+    public ManagedClientTransport newClientTransport(
+        SocketAddress addr, String authority, @Nullable String userAgent) {
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
       }
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
-      return new OkHttpClientTransport(inetSocketAddr, authority, executor, socketFactory,
-          Utils.convertSpec(connectionSpec), maxMessageSize);
+      return new OkHttpClientTransport(inetSocketAddr, authority, userAgent, executor,
+          socketFactory, Utils.convertSpec(connectionSpec), maxMessageSize);
     }
 
     @Override

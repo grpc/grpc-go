@@ -159,20 +159,20 @@ public class OkHttpClientTransportTest {
   }
 
   private void initTransport() throws Exception {
-    startTransport(3, null, true, DEFAULT_MAX_MESSAGE_SIZE);
+    startTransport(3, null, true, DEFAULT_MAX_MESSAGE_SIZE, null);
   }
 
   private void initTransport(int startId) throws Exception {
-    startTransport(startId, null, true, DEFAULT_MAX_MESSAGE_SIZE);
+    startTransport(startId, null, true, DEFAULT_MAX_MESSAGE_SIZE, null);
   }
 
   private void initTransportAndDelayConnected() throws Exception {
     delayConnectedCallback = new DelayConnectedCallback();
-    startTransport(3, delayConnectedCallback, false, DEFAULT_MAX_MESSAGE_SIZE);
+    startTransport(3, delayConnectedCallback, false, DEFAULT_MAX_MESSAGE_SIZE, null);
   }
 
   private void startTransport(int startId, @Nullable Runnable connectingCallback,
-      boolean waitingForConnected, int maxMessageSize) throws Exception {
+      boolean waitingForConnected, int maxMessageSize, String userAgent) throws Exception {
     connectedFuture = SettableFuture.create();
     Ticker ticker = new Ticker() {
       @Override
@@ -180,10 +180,9 @@ public class OkHttpClientTransportTest {
         return nanoTime;
       }
     };
-    clientTransport = new OkHttpClientTransport(
-        executor, frameReader, frameWriter, startId,
-        new MockSocket(frameReader), ticker, connectingCallback, connectedFuture,
-        maxMessageSize);
+    clientTransport = new OkHttpClientTransport(userAgent, executor, frameReader,
+        frameWriter, startId, new MockSocket(frameReader), ticker, connectingCallback,
+        connectedFuture, maxMessageSize);
     clientTransport.start(transportListener);
     if (waitingForConnected) {
       connectedFuture.get(TIME_OUT_MS, TimeUnit.MILLISECONDS);
@@ -194,7 +193,7 @@ public class OkHttpClientTransportTest {
   public void testToString() throws Exception {
     InetSocketAddress address = InetSocketAddress.createUnresolved("hostname", 31415);
     clientTransport = new OkHttpClientTransport(
-        address, "hostname", executor, null,
+        address, "hostname", null /* agent */, executor, null,
         Utils.convertSpec(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC), DEFAULT_MAX_MESSAGE_SIZE);
     String s = clientTransport.toString();
     assertTrue("Unexpected: " + s, s.contains("OkHttpClientTransport"));
@@ -204,7 +203,7 @@ public class OkHttpClientTransportTest {
   @Test
   public void maxMessageSizeShouldBeEnforced() throws Exception {
     // Allow the response payloads of up to 1 byte.
-    startTransport(3, null, true, 1);
+    startTransport(3, null, true, 1, null);
 
     MockStreamListener listener = new MockStreamListener();
     OkHttpClientStream stream = clientTransport.newStream(method, new Metadata());
@@ -405,7 +404,7 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
-  public void headersShouldAddDefaultUserAgent() throws Exception {
+  public void addDefaultUserAgent() throws Exception {
     initTransport();
     MockStreamListener listener = new MockStreamListener();
     OkHttpClientStream stream = clientTransport.newStream(method, new Metadata());
@@ -423,19 +422,16 @@ public class OkHttpClientTransportTest {
   }
 
   @Test
-  public void headersShouldOverrideDefaultUserAgent() throws Exception {
-    initTransport();
+  public void overrideDefaultUserAgent() throws Exception {
+    startTransport(3, null, true, DEFAULT_MAX_MESSAGE_SIZE, "fakeUserAgent");
     MockStreamListener listener = new MockStreamListener();
-    String userAgent = "fakeUserAgent";
-    Metadata metadata = new Metadata();
-    metadata.put(GrpcUtil.USER_AGENT_KEY, userAgent);
-    OkHttpClientStream stream = clientTransport.newStream(method, metadata);
+    OkHttpClientStream stream = clientTransport.newStream(method, new Metadata());
     stream.start(listener);
     List<Header> expectedHeaders = Arrays.asList(SCHEME_HEADER, METHOD_HEADER,
         new Header(Header.TARGET_AUTHORITY, "notarealauthority:80"),
         new Header(Header.TARGET_PATH, "/fakemethod"),
         new Header(GrpcUtil.USER_AGENT_KEY.name(),
-            GrpcUtil.getGrpcUserAgent("okhttp", userAgent)),
+            GrpcUtil.getGrpcUserAgent("okhttp", "fakeUserAgent")),
         CONTENT_TYPE_HEADER, TE_HEADER);
     verify(frameWriter, timeout(TIME_OUT_MS))
         .synStream(eq(false), eq(false), eq(3), eq(0), eq(expectedHeaders));
@@ -1311,6 +1307,7 @@ public class OkHttpClientTransportTest {
     clientTransport = new OkHttpClientTransport(
         new InetSocketAddress("host", 1234),
         "invalid_authority",
+        "userAgent",
         executor,
         null,
         ConnectionSpec.CLEARTEXT,
@@ -1328,6 +1325,7 @@ public class OkHttpClientTransportTest {
     clientTransport = new OkHttpClientTransport(
         new InetSocketAddress("localhost", 0),
         "authority",
+        "userAgent",
         executor,
         null,
         ConnectionSpec.CLEARTEXT,

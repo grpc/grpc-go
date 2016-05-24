@@ -34,6 +34,8 @@ package io.grpc.internal;
 import java.io.Closeable;
 import java.net.SocketAddress;
 
+import javax.annotation.Nullable;
+
 /** Pre-configured factory for creating {@link ManagedClientTransport} instances. */
 public interface ClientTransportFactory extends Closeable {
   /**
@@ -42,13 +44,14 @@ public interface ClientTransportFactory extends Closeable {
    * @param serverAddress the address that the transport is connected to
    * @param authority the HTTP/2 authority of the server
    */
-  ManagedClientTransport newClientTransport(SocketAddress serverAddress, String authority);
+  ManagedClientTransport newClientTransport(SocketAddress serverAddress, String authority,
+      @Nullable String userAgent);
 
   /**
    * Releases any resources.
    *
    * <p>After this method has been called, it's no longer valid to call
-   * {@link #newClientTransport(SocketAddress, String)}. No guarantees about thread-safety are made.
+   * {@link #newClientTransport}. No guarantees about thread-safety are made.
    */
   @Override
   void close();

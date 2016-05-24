@@ -92,7 +92,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   private final ClientTransportFactory transportFactory;
   private final Executor executor;
   private final boolean usingSharedExecutor;
-  private final String userAgent;
   private final Object lock = new Object();
 
   private final DecompressorRegistry decompressorRegistry;
@@ -110,6 +109,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
    * any interceptors this will just be {@link RealChannel}.
    */
   private final Channel interceptorChannel;
+  @Nullable private final String userAgent;
 
   private final NameResolver nameResolver;
   private final LoadBalancer<ClientTransport> loadBalancer;
@@ -159,11 +159,11 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
     this.loadBalancer = loadBalancerFactory.newLoadBalancer(nameResolver.getServiceAuthority(), tm);
     this.transportFactory = transportFactory;
-    this.userAgent = userAgent;
     this.interceptorChannel = ClientInterceptors.intercept(new RealChannel(), interceptors);
     scheduledExecutor = SharedResourceHolder.get(TIMER_SERVICE);
     this.decompressorRegistry = decompressorRegistry;
     this.compressorRegistry = compressorRegistry;
+    this.userAgent = userAgent;
 
     this.nameResolver.start(new NameResolver.Listener() {
       @Override
@@ -344,7 +344,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
           callOptions,
           transportProvider,
           scheduledExecutor)
-              .setUserAgent(userAgent)
               .setDecompressorRegistry(decompressorRegistry)
               .setCompressorRegistry(compressorRegistry);
     }
@@ -394,8 +393,9 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         }
         ts = transports.get(addressGroup);
         if (ts == null) {
-          ts = new TransportSet(addressGroup, authority(), loadBalancer, backoffPolicyProvider,
-              transportFactory, scheduledExecutor, executor, new TransportSet.Callback() {
+          ts = new TransportSet(addressGroup, authority(), userAgent, loadBalancer,
+              backoffPolicyProvider, transportFactory, scheduledExecutor, executor,
+              new TransportSet.Callback() {
                 @Override
                 public void onTerminated() {
                   synchronized (lock) {

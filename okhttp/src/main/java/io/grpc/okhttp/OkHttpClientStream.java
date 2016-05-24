@@ -35,7 +35,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import io.grpc.Metadata;
-import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
@@ -73,6 +72,7 @@ class OkHttpClientStream extends Http2ClientStream {
   private final OutboundFlowController outboundFlow;
   private final OkHttpClientTransport transport;
   private final Object lock;
+  private final String userAgent;
   private String authority;
   private Object outboundFlowState;
   private volatile Integer id;
@@ -95,7 +95,8 @@ class OkHttpClientStream extends Http2ClientStream {
       OutboundFlowController outboundFlow,
       Object lock,
       int maxMessageSize,
-      String authority) {
+      String authority,
+      @Nullable String userAgent) {
     super(new OkHttpWritableBufferAllocator(), maxMessageSize);
     this.method = method;
     this.headers = headers;
@@ -104,6 +105,7 @@ class OkHttpClientStream extends Http2ClientStream {
     this.outboundFlow = outboundFlow;
     this.lock = lock;
     this.authority = authority;
+    this.userAgent = userAgent;
   }
 
   /**
@@ -136,7 +138,8 @@ class OkHttpClientStream extends Http2ClientStream {
   public void start(ClientStreamListener listener) {
     super.start(listener);
     String defaultPath = "/" + method.getFullMethodName();
-    List<Header> requestHeaders = Headers.createRequestHeaders(headers, defaultPath, authority);
+    List<Header> requestHeaders =
+        Headers.createRequestHeaders(headers, defaultPath, authority, userAgent);
     headers = null;
     synchronized (lock) {
       this.requestHeaders = requestHeaders;

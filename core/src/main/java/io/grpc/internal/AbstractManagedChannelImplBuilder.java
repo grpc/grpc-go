@@ -163,7 +163,7 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   @Override
-  public final T userAgent(String userAgent) {
+  public final T userAgent(@Nullable String userAgent) {
     this.userAgent = userAgent;
     return thisT();
   }
@@ -232,8 +232,8 @@ public abstract class AbstractManagedChannelImplBuilder
 
     @Override
     public ManagedClientTransport newClientTransport(SocketAddress serverAddress,
-        String authority) {
-      return factory.newClientTransport(serverAddress, authorityOverride);
+        String authority, @Nullable String userAgent) {
+      return factory.newClientTransport(serverAddress, authorityOverride, userAgent);
     }
 
     @Override

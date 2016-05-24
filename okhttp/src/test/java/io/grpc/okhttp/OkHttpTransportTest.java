@@ -73,7 +73,9 @@ public class OkHttpTransportTest extends AbstractTransportTest {
   @Override
   protected ManagedClientTransport newClientTransport() {
     return clientFactory.newClientTransport(
-        new InetSocketAddress("127.0.0.1", SERVER_PORT), "127.0.0.1:" + SERVER_PORT);
+        new InetSocketAddress("127.0.0.1", SERVER_PORT),
+        "127.0.0.1:" + SERVER_PORT,
+        null /* agent */);
   }
 
   // TODO(ejona): Flaky/Broken
