@@ -133,6 +133,8 @@ public abstract class ManagedChannelProvider {
   protected abstract ManagedChannelBuilder<?> builderForTarget(String target);
 
   public static final class ProviderNotFoundException extends RuntimeException {
+    private static final long serialVersionUID = 1;
+
     public ProviderNotFoundException(String msg) {
       super(msg);
     }

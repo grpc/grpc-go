@@ -30,9 +30,13 @@ subprojects {
     }
 
     [compileJava, compileTestJava].each() {
-        it.options.compilerArgs += ["-Xlint:unchecked", "-Xlint:deprecation", "-Xlint:-options",
-            "-Xlint:rawtypes"]
+        it.options.compilerArgs += ["-Xlint:all", "-Xlint:-options"]
         it.options.encoding = "UTF-8"
+    }
+
+    compileTestJava {
+      // serialVersionUID is basically guaranteed to be useless in our tests
+      options.compilerArgs += ["-Xlint:-serial"]
     }
 
     jar.manifest {

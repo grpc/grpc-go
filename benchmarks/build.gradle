@@ -45,6 +45,10 @@ dependencies {
             libraries.math
 }
 
+compileJmhJava {
+  options.compilerArgs = compileJava.options.compilerArgs
+}
+
 configureProtoCompilation()
 
 def vmArgs = [

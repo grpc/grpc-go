@@ -135,7 +135,12 @@ sourceSets {
 
 compileTestLiteJava {
   // Protobuf-generated Lite produces quite a few warnings.
-  it.options.compilerArgs.removeAll(["-Xlint:unchecked", "-Xlint:rawtypes"])
+  options.compilerArgs = compileTestJava.options.compilerArgs +
+      ["-Xlint:-unchecked", "-Xlint:-rawtypes"]
+}
+
+compileTestNanoJava {
+  options.compilerArgs = compileTestJava.options.compilerArgs
 }
 
 protobuf {
