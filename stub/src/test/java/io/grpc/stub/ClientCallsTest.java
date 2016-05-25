@@ -51,6 +51,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.util.Iterator;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 
@@ -113,6 +114,25 @@ public class ClientCallsTest {
       fail("Should fail");
     } catch (CancellationException e) {
       // Exepcted
+    }
+  }
+
+  @Test public void blockingResponseStreamFailed() throws Exception {
+    Integer req = 2;
+    Iterator<String> iter = ClientCalls.blockingServerStreamingCall(call, req);
+    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
+    verify(call).start(listenerCaptor.capture(), any(Metadata.class));
+    ClientCall.Listener<String> listener = listenerCaptor.getValue();
+    Metadata trailers = new Metadata();
+    listener.onClose(Status.INTERNAL, trailers);
+    try {
+      iter.next();
+      fail("Should fail");
+    } catch (Throwable e) {
+      Status status = Status.fromThrowable(e);
+      assertEquals(Status.INTERNAL, status);
+      Metadata metadata = Status.trailersFromThrowable(e);
+      assertSame(trailers, metadata);
     }
   }
 }
