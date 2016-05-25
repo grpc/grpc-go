@@ -207,6 +207,8 @@ func (s *workerServer) QuitWorker(ctx context.Context, in *testpb.Void) (*testpb
 }
 
 func main() {
+	grpc.EnableTracing = false
+
 	flag.Parse()
 	lis, err := net.Listen("tcp", ":"+strconv.Itoa(*driverPort))
 	if err != nil {
