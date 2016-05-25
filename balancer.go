@@ -73,20 +73,25 @@ type Balancer interface {
 	// lost or closed.
 	Up(addr Address) (down func(error))
 	// Get gets the address of a server for the RPC corresponding to ctx.
-	// If it returns
-	// i) a connected address, gRPC internals issues the RPC on the connection to
-	// this address;
-	// ii) an address which is notified but not connected, gRPC internals
+	// i) If it returns a connected address, gRPC internals issues the RPC on the
+	// connection to this address;
+	// ii) If it returns an address on which the connection is under construction
+	// (initiated by Notify(...)) but not connected, gRPC internals
 	//  * fails RPC if the RPC is fail-fast and connection is in the TransientFailure
 	//  or Shutdown state;
+	//  or
 	//  * issues RPC on the connection otherwise.
-	// ii) an address which was not notified, gRPC internals treats it as an error
-	// and will fail the corresponding RPC.
+	// iii) If it returns an address on which the connection does not exist, gRPC
+	// internals treats it as an error and will fail the corresponding RPC.
 	//
-	// Therefore if opts.BlockingWait is true, it should return a connected address or
+	// Therefore, we recommend the following general rule when you write your own
+	// custom Balancer.
+	//
+	// If opts.BlockingWait is true, it should return a connected address or
 	// block if there is no connected address. It respects the timeout or
 	// cancellation of ctx when blocking. If opts.BlockingWait is false (for fail-fast
-	// RPCs), it should return an address it has notified via Notify(...) immediately.
+	// RPCs), it should return an address it has notified via Notify(...) immediately
+	// instead of blocking.
 	//
 	// The function returns put which is called once the rpc has completed or failed.
 	// put can collect and report rpc stats to a remote load balancer.
