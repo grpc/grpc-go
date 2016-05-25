@@ -115,6 +115,8 @@ func (rr *roundRobin) watchAddrUpdates(w naming.Watcher) error {
 	if err != nil {
 		return err
 	}
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
 	for _, update := range updates {
 		addr := Address{
 			Addr:     update.Addr,
@@ -122,15 +124,15 @@ func (rr *roundRobin) watchAddrUpdates(w naming.Watcher) error {
 		}
 		switch update.Op {
 		case naming.Add:
-			var exisit bool
+			var exist bool
 			for _, v := range rr.open {
 				if addr == v {
-					exisit = true
+					exist = true
 					grpclog.Println("grpc: The name resolver wanted to add an existing address: ", addr)
 					break
 				}
 			}
-			if exisit {
+			if exist {
 				continue
 			}
 			rr.open = append(rr.open, addr)
@@ -148,8 +150,6 @@ func (rr *roundRobin) watchAddrUpdates(w naming.Watcher) error {
 	}
 	// Make a copy of rr.open and write it onto rr.addrCh so that gRPC internals gets notified.
 	open := make([]Address, len(rr.open))
-	rr.mu.Lock()
-	defer rr.mu.Unlock()
 	copy(open, rr.open)
 	if rr.done {
 		return ErrClientConnClosing
@@ -160,6 +160,8 @@ func (rr *roundRobin) watchAddrUpdates(w naming.Watcher) error {
 
 func (rr *roundRobin) Start(target string) error {
 	if rr.r == nil {
+		// If there is no name resolver installed, it is not needed to
+		// do name resolution. In this case, rr.addrCh stays nil.
 		return nil
 	}
 	w, err := rr.r.Resolve(target)
@@ -213,7 +215,7 @@ func (rr *roundRobin) down(addr Address, err error) {
 	}
 }
 
-// Get returns the next addr in the rotation. It blocks if there is no address available.
+// Get returns the next addr in the rotation.
 func (rr *roundRobin) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
 	var ch chan struct{}
 	rr.mu.Lock()
