@@ -88,7 +88,7 @@ type Balancer interface {
 	// custom Balancer.
 	//
 	// If opts.BlockingWait is true, it should return a connected address or
-	// block if there is no connected address. It respects the timeout or
+	// block if there is no connected address. It should respect the timeout or
 	// cancellation of ctx when blocking. If opts.BlockingWait is false (for fail-fast
 	// RPCs), it should return an address it has notified via Notify(...) immediately
 	// instead of blocking.
@@ -137,6 +137,7 @@ func RoundRobin(r naming.Resolver) Balancer {
 
 type roundRobin struct {
 	r         naming.Resolver
+	w         []naming.Watcher
 	open      []Address // all the addresses the client should potentially connect
 	mu        sync.Mutex
 	addrCh    chan []Address // the channel to notify gRPC internals the list of addresses the client should connect to.
@@ -149,6 +150,7 @@ type roundRobin struct {
 func (rr *roundRobin) watchAddrUpdates(w naming.Watcher) error {
 	updates, err := w.Next()
 	if err != nil {
+		grpclog.Println("grpc: the naming watcher stops working due to %v.", err)
 		return err
 	}
 	rr.mu.Lock()
@@ -204,6 +206,7 @@ func (rr *roundRobin) Start(target string) error {
 	if err != nil {
 		return err
 	}
+	rr.w = []naming.Watcher{w}
 	rr.addrCh = make(chan []Address)
 	go func() {
 		for {
@@ -314,6 +317,9 @@ func (rr *roundRobin) Close() error {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	rr.done = true
+	for _, w := range rr.w {
+		w.Close()
+	}
 	if rr.waitCh != nil {
 		close(rr.waitCh)
 		rr.waitCh = nil

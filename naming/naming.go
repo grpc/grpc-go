@@ -66,7 +66,8 @@ type Resolver interface {
 // Watcher watches for the updates on the specified target.
 type Watcher interface {
 	// Next blocks until an update or error happens. It may return one or more
-	// updates. The first call should get the full set of the results.
+	// updates. The first call should get the full set of the results. It only
+	// returns the error Watcher cannot recover.
 	Next() ([]*Update, error)
 	// Close closes the Watcher.
 	Close()
