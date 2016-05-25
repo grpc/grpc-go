@@ -41,6 +41,7 @@ import io.grpc.ClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -437,8 +438,10 @@ public class ClientCalls {
           throw Status.CANCELLED.withCause(ie).asRuntimeException();
         }
       }
-      if (last instanceof Status) {
-        throw ((Status) last).asRuntimeException();
+      if (last instanceof StatusRuntimeException) {
+        // Rethrow the exception with a new stacktrace.
+        StatusRuntimeException e = (StatusRuntimeException) last;
+        throw e.getStatus().asRuntimeException(e.getTrailers());
       }
       return last != this;
     }
@@ -482,7 +485,7 @@ public class ClientCalls {
         if (status.isOk()) {
           buffer.add(BlockingResponseStream.this);
         } else {
-          buffer.add(status);
+          buffer.add(status.asRuntimeException(trailers));
         }
         done = true;
       }
