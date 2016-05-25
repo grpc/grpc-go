@@ -1426,7 +1426,7 @@ func testFailedServerStreaming(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if _, err := stream.Recv(); err != grpc.Errorf(codes.DataLoss, "got extra metadata") {
+	if _, err := stream.Recv(); err.Error() != grpc.Errorf(codes.DataLoss, "got extra metadata").Error() {
 		t.Fatalf("%v.Recv() = _, %v, want _, %v", stream, err, grpc.Errorf(codes.DataLoss, "got extra metadata"))
 	}
 }
