@@ -13,6 +13,13 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
 func runUnary(b *testing.B, connCount, rpcCountPerConn int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
@@ -53,9 +60,20 @@ func runUnary(b *testing.B, connCount, rpcCountPerConn int) {
 			}()
 		}
 	}
+	// Exclude firat and last min(1.5*totalCount, 1/10*b.N) rpcs when calculating QPS.
+	qpsStartN := min(connCount*rpcCountPerConn*3/2, b.N/10)
+	qpsEndN := b.N - qpsStartN
 	b.ResetTimer()
 	b.StartTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < qpsStartN; i++ {
+		ch <- i
+	}
+	s.StartQPS()
+	for i := qpsStartN; i < qpsEndN; i++ {
+		ch <- i
+	}
+	s.EndQPS()
+	for i := qpsEndN; i < b.N; i++ {
 		ch <- i
 	}
 	b.StopTimer()
@@ -114,9 +132,20 @@ func runStream(b *testing.B, connCount, rpcCountPerConn int) {
 			}()
 		}
 	}
+	// Exclude firat and last min(1.5*totalCount, 1/10*b.N) rpcs when calculating QPS.
+	qpsStartN := min(connCount*rpcCountPerConn*3/2, b.N/10)
+	qpsEndN := b.N - qpsStartN
 	b.ResetTimer()
 	b.StartTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < qpsStartN; i++ {
+		ch <- i
+	}
+	s.StartQPS()
+	for i := qpsStartN; i < qpsEndN; i++ {
+		ch <- i
+	}
+	s.EndQPS()
+	for i := qpsEndN; i < b.N; i++ {
 		ch <- i
 	}
 	b.StopTimer()
@@ -154,6 +183,11 @@ func BenchmarkClientStreamc64(b *testing.B) {
 	runStream(b, 1, 64)
 }
 
+func BenchmarkClientStreamc100x64(b *testing.B) {
+	grpc.EnableTracing = true
+	runStream(b, 100, 64)
+}
+
 func BenchmarkClientStreamc512(b *testing.B) {
 	grpc.EnableTracing = true
 	runStream(b, 1, 512)
@@ -171,6 +205,11 @@ func BenchmarkClientUnaryc8(b *testing.B) {
 func BenchmarkClientUnaryc64(b *testing.B) {
 	grpc.EnableTracing = true
 	runUnary(b, 1, 64)
+}
+
+func BenchmarkClientUnaryc100x64(b *testing.B) {
+	grpc.EnableTracing = true
+	runUnary(b, 100, 64)
 }
 
 func BenchmarkClientUnaryc512(b *testing.B) {
@@ -193,6 +232,11 @@ func BenchmarkClientStreamNoTracec64(b *testing.B) {
 	runStream(b, 1, 64)
 }
 
+func BenchmarkClientStreamNoTracec100x64(b *testing.B) {
+	grpc.EnableTracing = false
+	runStream(b, 100, 64)
+}
+
 func BenchmarkClientStreamNoTracec512(b *testing.B) {
 	grpc.EnableTracing = false
 	runStream(b, 1, 512)
@@ -210,6 +254,11 @@ func BenchmarkClientUnaryNoTracec8(b *testing.B) {
 func BenchmarkClientUnaryNoTracec64(b *testing.B) {
 	grpc.EnableTracing = false
 	runUnary(b, 1, 64)
+}
+
+func BenchmarkClientUnaryNoTracec100x64(b *testing.B) {
+	grpc.EnableTracing = false
+	runUnary(b, 100, 64)
 }
 
 func BenchmarkClientUnaryNoTracec512(b *testing.B) {
