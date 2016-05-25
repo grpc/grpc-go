@@ -154,7 +154,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
 			if err == ErrClientConnClosing {
-				return toRPCErr(err)
+				return Errorf(codes.FailedPrecondition, "%v", err)
 			}
 			if _, ok := err.(transport.StreamError); ok {
 				return toRPCErr(err)
@@ -189,6 +189,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if err != nil {
 			if put != nil {
 				put()
+				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok {
 				if c.failFast {

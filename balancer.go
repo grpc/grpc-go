@@ -34,6 +34,7 @@
 package grpc
 
 import (
+	"fmt"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -101,6 +102,26 @@ type Balancer interface {
 	Notify() <-chan []Address
 	// Close shuts down the balancer.
 	Close() error
+}
+
+// downErr implements net.Error. It is contructed by gRPC internals and passed to the down
+// call of Balancer.
+type downErr struct {
+	timeout   bool
+	temporary bool
+	desc      string
+}
+
+func (e downErr) Error() string   { return e.desc }
+func (e downErr) Timeout() bool   { return e.timeout }
+func (e downErr) Temporary() bool { return e.temporary }
+
+func downErrorf(timeout, temporary bool, format string, a ...interface{}) downErr {
+	return downErr{
+		timeout:   timeout,
+		temporary: temporary,
+		desc:      fmt.Sprintf(format, a...),
+	}
 }
 
 // RoundRobin returns a Balancer that selects addresses round-robin. It starts to watch
