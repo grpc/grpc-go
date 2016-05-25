@@ -305,10 +305,12 @@ public final class Metadata {
     byte[][] serialized = new byte[storeCount * 2][];
     int i = 0;
     for (Map.Entry<String, List<MetadataEntry>> storeEntry : store.entrySet()) {
-      for (MetadataEntry metadataEntry : storeEntry.getValue()) {
-        serialized[i++] = metadataEntry.key != null
-            ? metadataEntry.key.asciiName() : storeEntry.getKey().getBytes(US_ASCII);
-        serialized[i++] = metadataEntry.getSerialized();
+      // Foreach allocates an iterator per.
+      List<MetadataEntry> values = storeEntry.getValue();
+      for (int k = 0; k < values.size(); k++) {
+        serialized[i++] = values.get(k).key != null
+            ? values.get(k).key.asciiName() : storeEntry.getKey().getBytes(US_ASCII);
+        serialized[i++] = values.get(k).getSerialized();
       }
     }
     return serialized;
