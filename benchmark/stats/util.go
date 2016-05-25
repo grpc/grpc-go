@@ -167,12 +167,13 @@ func injectStatsIfFinished(line string) {
 			// followed by statistical properties and the buckets. Add the stats name
 			// if it is a named stats and indent them as Go testing outputs.
 			lines := strings.Split(stats.String(), "\n")
-			if n := len(lines); n > 0 {
+			if n := len(lines); n > 1 {
 				if name != "" {
 					name = ": " + name
 				}
 				fmt.Fprintf(orgStdout, "--- %s%s\n", lines[0], name)
-				for _, line := range lines[1 : n-1] {
+				fmt.Fprintf(orgStdout, "--- %s%s\n", lines[1], name)
+				for _, line := range lines[2 : n-1] {
 					fmt.Fprintf(orgStdout, "\t%s\n", line)
 				}
 			}
