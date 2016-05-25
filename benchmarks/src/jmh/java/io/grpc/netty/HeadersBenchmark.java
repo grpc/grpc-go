@@ -53,7 +53,7 @@ import java.util.concurrent.TimeUnit;
  */
 @State(Scope.Benchmark)
 public class HeadersBenchmark {
-  @Param({"10", "20", "50", "100"})
+  @Param({"1", "5", "10", "20"})
   public int headerCount;
 
   private final AsciiMarshaller<String> keyMarshaller = new AsciiMarshaller<String>() {
@@ -95,4 +95,3 @@ public class HeadersBenchmark {
     return Utils.convertServerHeaders(metadata);
   }
 }
-
