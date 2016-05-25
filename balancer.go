@@ -43,6 +43,7 @@ import (
 )
 
 // Address represents a server the client connects to.
+// This is the EXPERIMENTAL API and may be changed or extended in the future.
 type Address struct {
 	// Addr is the server address on which a connection will be established.
 	Addr string
@@ -52,10 +53,11 @@ type Address struct {
 	Metadata interface{}
 }
 
-// BalancerGetOption can configure a Get call.
+// BalancerGetOption configures a Get call.
+// This is the EXPERIMENTAL API and may be changed or extended in the future.
 type BalancerGetOptions struct {
 	// BlockingWait specifies whether Get should block when there is no
-	// address ready for transmission.
+	// connected address.
 	BlockingWait bool
 }
 
@@ -63,30 +65,29 @@ type BalancerGetOptions struct {
 // This is the EXPERIMENTAL API and may be changed or extended in the future.
 type Balancer interface {
 	// Start does the initialization work to bootstrap a Balancer. For example,
-	// this function may start the service discovery and watch the name resolution
-	// updates.
+	// this function may start the name resolution and watch the updates.
 	Start(target string) error
-	// Up informs the balancer that gRPC has a connection to the server at
+	// Up informs the Balancer that gRPC has a connection to the server at
 	// addr. It returns down which is called once the connection to addr gets
-	// lost or closed. Once down is called, addr may no longer be returned
-	// by Get.
+	// lost or closed.
 	Up(addr Address) (down func(error))
 	// Get gets the address of a server for the rpc corresponding to ctx.
 	// If opts.BlockingWait is true, it blocks if there is no connection available,
-	// i.e., invocations of Up(...) is equal to that of Down(...). It respects the
+	// i.e., invocations of Up(...) is equal to those of Down(...). It respects the
 	// timeout or cancellation of ctx when blocking. If opts.BlockingWait is
-	// false, it may return any address it has notified via Notify(...). It returns
+	// false, it may return any address it has notified via Notify(...) instead of
+	// blocking. The returned address may or may not be connected. The function returns
 	// put which is called once the rpc has completed or failed. put can collect and
-	// report rpc stats to remote load balancer.
+	// report rpc stats to a remote load balancer.
 	Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error)
-	// Notify gRPC internals the list of Address which should be connected. The list
+	// Notify notifies gRPC internals the list of Address to be connected. The list
 	// may be from a name resolver or remote load balancer. gRPC internals will
 	// compare it with the exisiting connected addresses. If the address Balancer
-	// notified is not in the list of the connected addresses, gRPC starts to connect
-	// the address. If an address in the connected addresses is not in the notification
-	// list, the corresponding connect will be shutdown gracefully. Otherwise, there
-	// are no operations. Note that this function must return the full list of the
-	// Addrresses which should be connected. It is NOT delta.
+	// notified is not in the exisitng connected addresses, gRPC starts to connect
+	// the address. If an address in the exisiting connected addresses is not in
+	// the notification list, the corresponding connection is shutdown gracefully.
+	// Otherwise, there are no operations to take. Note that this function must
+	// return the full list of the Addrresses which should be connected. It is NOT delta.
 	Notify() <-chan []Address
 	// Close shuts down the balancer.
 	Close() error
@@ -100,7 +101,7 @@ func RoundRobin(r naming.Resolver) Balancer {
 
 type roundRobin struct {
 	r         naming.Resolver
-	open      []Address // all the known addresses the client can potentially connect
+	open      []Address // all the addresses the client should potentially connect
 	mu        sync.Mutex
 	addrCh    chan []Address // the channel to notify gRPC internals the list of addresses the client should connect to.
 	connected []Address      // all the connected addresses
