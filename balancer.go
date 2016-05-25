@@ -54,7 +54,7 @@ type Address struct {
 	Metadata interface{}
 }
 
-// BalancerGetOption configures a Get call.
+// BalancerGetOptions configures a Get call.
 // This is the EXPERIMENTAL API and may be changed or extended in the future.
 type BalancerGetOptions struct {
 	// BlockingWait specifies whether Get should block when there is no
@@ -94,22 +94,22 @@ type Balancer interface {
 	// instead of blocking.
 	//
 	// The function returns put which is called once the rpc has completed or failed.
-	// put can collect and report rpc stats to a remote load balancer.
+	// put can collect and report RPC stats to a remote load balancer.
 	Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error)
 	// Notify notifies gRPC internals the list of Address to be connected. The list
 	// may be from a name resolver or remote load balancer. gRPC internals will
-	// compare it with the exisiting connected addresses. If the address Balancer
-	// notified is not in the exisitng connected addresses, gRPC starts to connect
-	// the address. If an address in the exisiting connected addresses is not in
+	// compare it with the existing connected addresses. If the address Balancer
+	// notified is not in the existing connected addresses, gRPC starts to connect
+	// the address. If an address in the existing connected addresses is not in
 	// the notification list, the corresponding connection is shutdown gracefully.
 	// Otherwise, there are no operations to take. Note that this function must
-	// return the full list of the Addrresses which should be connected. It is NOT delta.
+	// return the full list of the Addresses which should be connected. It is NOT delta.
 	Notify() <-chan []Address
 	// Close shuts down the balancer.
 	Close() error
 }
 
-// downErr implements net.Error. It is contructed by gRPC internals and passed to the down
+// downErr implements net.Error. It is constructed by gRPC internals and passed to the down
 // call of Balancer.
 type downErr struct {
 	timeout   bool
