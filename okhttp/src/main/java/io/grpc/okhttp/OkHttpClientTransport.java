@@ -183,7 +183,7 @@ class OkHttpClientTransport implements ManagedClientTransport {
     this.sslSocketFactory = sslSocketFactory;
     this.connectionSpec = Preconditions.checkNotNull(connectionSpec, "connectionSpec");
     this.ticker = Ticker.systemTicker();
-    this.userAgent = userAgent;
+    this.userAgent = GrpcUtil.getGrpcUserAgent("okhttp", userAgent);
   }
 
   /**
@@ -197,7 +197,7 @@ class OkHttpClientTransport implements ManagedClientTransport {
     address = null;
     this.maxMessageSize = maxMessageSize;
     defaultAuthority = "notarealauthority:80";
-    this.userAgent = userAgent;
+    this.userAgent = GrpcUtil.getGrpcUserAgent("okhttp", userAgent);
     this.executor = Preconditions.checkNotNull(executor);
     serializingExecutor = new SerializingExecutor(executor);
     this.testFrameReader = Preconditions.checkNotNull(frameReader);

@@ -96,7 +96,7 @@ class OkHttpClientStream extends Http2ClientStream {
       Object lock,
       int maxMessageSize,
       String authority,
-      @Nullable String userAgent) {
+      String userAgent) {
     super(new OkHttpWritableBufferAllocator(), maxMessageSize);
     this.method = method;
     this.headers = headers;
