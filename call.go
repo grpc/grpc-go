@@ -147,7 +147,10 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()
 		}
-		t, put, err = cc.getTransport(ctx)
+		gopts := BalancerGetOptions{
+			BlockingWait: !c.failFast,
+		}
+		t, put, err = cc.getTransport(ctx, gopts)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
 			if err == ErrClientConnClosing {

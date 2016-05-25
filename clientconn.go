@@ -401,8 +401,9 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 	return nil
 }
 
-func (cc *ClientConn) getTransport(ctx context.Context) (transport.ClientTransport, func(), error) {
-	addr, put, err := cc.balancer.Get(ctx)
+func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(), error) {
+	// TODO(zhaoq): Implement fail-fast logic.
+	addr, put, err := cc.balancer.Get(ctx, opts)
 	if err != nil {
 		return nil, nil, err
 	}

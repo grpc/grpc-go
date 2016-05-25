@@ -105,11 +105,14 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		err error
 		put func()
 	)
-	t, put, err = cc.getTransport(ctx)
+	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
+	gopts := BalancerGetOptions{
+		BlockingWait: false,
+	}
+	t, put, err = cc.getTransport(ctx, gopts)
 	if err != nil {
 		return nil, toRPCErr(err)
 	}
-	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
 		Method: method,
