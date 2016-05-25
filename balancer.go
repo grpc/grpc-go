@@ -71,14 +71,24 @@ type Balancer interface {
 	// addr. It returns down which is called once the connection to addr gets
 	// lost or closed.
 	Up(addr Address) (down func(error))
-	// Get gets the address of a server for the rpc corresponding to ctx.
-	// If opts.BlockingWait is true, it blocks if there is no connection available,
-	// i.e., invocations of Up(...) is equal to those of Down(...). It respects the
-	// timeout or cancellation of ctx when blocking. If opts.BlockingWait is
-	// false, it may return any address it has notified via Notify(...) instead of
-	// blocking. The returned address may or may not be connected. The function returns
-	// put which is called once the rpc has completed or failed. put can collect and
-	// report rpc stats to a remote load balancer.
+	// Get gets the address of a server for the RPC corresponding to ctx.
+	// If it returns
+	// i) a connected address, gRPC internals issues the RPC on the connection to
+	// this address;
+	// ii) an address which is notified but not connected, gRPC internals
+	//  * fails RPC if the RPC is fail-fast and connection is in the TransientFailure
+	//  or Shutdown state;
+	//  * issues RPC on the connection otherwise.
+	// ii) an address which was not notified, gRPC internals treats it as an error
+	// and will fail the corresponding RPC.
+	//
+	// Therefore if opts.BlockingWait is true, it should return a connected address or
+	// block if there is no connected address. It respects the timeout or
+	// cancellation of ctx when blocking. If opts.BlockingWait is false (for fail-fast
+	// RPCs), it should return an address it has notified via Notify(...) immediately.
+	//
+	// The function returns put which is called once the rpc has completed or failed.
+	// put can collect and report rpc stats to a remote load balancer.
 	Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error)
 	// Notify notifies gRPC internals the list of Address to be connected. The list
 	// may be from a name resolver or remote load balancer. gRPC internals will

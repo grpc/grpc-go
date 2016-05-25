@@ -139,7 +139,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			stream *transport.Stream
 			put    func()
 		)
-		// TODO(zhaoq): Need a formal spec of retry strategy for non-failFast rpcs.
+		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
 			Host:   cc.authority,
 			Method: method,
