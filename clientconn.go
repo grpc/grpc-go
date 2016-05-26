@@ -698,14 +698,14 @@ func (ac *addrConn) tearDown(err error) {
 		}
 		ac.cc.mu.Unlock()
 	}()
-	if ac.down != nil {
-		ac.down(downErrorf(false, false, "%v", err))
-		ac.down = nil
-	}
 	if ac.state == Shutdown {
 		return
 	}
 	ac.state = Shutdown
+	if ac.down != nil {
+		ac.down(downErrorf(false, false, "%v", err))
+		ac.down = nil
+	}
 	ac.stateCV.Broadcast()
 	if ac.events != nil {
 		ac.events.Finish()

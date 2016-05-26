@@ -398,7 +398,6 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	t.mu.Lock()
 	if t.activeStreams == nil {
 		t.mu.Unlock()
-		t.Close()
 		return
 	}
 	if t.streamsQuota != nil {

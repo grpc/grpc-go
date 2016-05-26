@@ -66,7 +66,8 @@ type BalancerGetOptions struct {
 // This is the EXPERIMENTAL API and may be changed or extended in the future.
 type Balancer interface {
 	// Start does the initialization work to bootstrap a Balancer. For example,
-	// this function may start the name resolution and watch the updates.
+	// this function may start the name resolution and watch the updates. It will
+	// be called when dialing.
 	Start(target string) error
 	// Up informs the Balancer that gRPC has a connection to the server at
 	// addr. It returns down which is called once the connection to addr gets
