@@ -613,6 +613,16 @@ public class ManagedChannelImplTest {
     verify(transport2, timeout(1000)).newStream(same(method), same(headers));
   }
 
+  @Test
+  public void uriPattern() {
+    assertTrue(ManagedChannelImpl.URI_PATTERN.matcher("a:/").matches());
+    assertTrue(ManagedChannelImpl.URI_PATTERN.matcher("Z019+-.:/!@ #~ ").matches());
+    assertFalse(ManagedChannelImpl.URI_PATTERN.matcher("a/:").matches()); // "/:" not matched
+    assertFalse(ManagedChannelImpl.URI_PATTERN.matcher("0a:/").matches()); // '0' not matched
+    assertFalse(ManagedChannelImpl.URI_PATTERN.matcher("a,:/").matches()); // ',' not matched
+    assertFalse(ManagedChannelImpl.URI_PATTERN.matcher(" a:/").matches()); // space not matched
+  }
+
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {
     @Override
     public BackoffPolicy get() {

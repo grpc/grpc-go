@@ -84,7 +84,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   // Matching this pattern means the target string is a URI target or at least intended to be one.
   // A URI target must be an absolute hierarchical URI.
   // From RFC 2396: scheme = alpha *( alpha | digit | "+" | "-" | "." )
-  private static final Pattern URI_PATTERN = Pattern.compile("[a-zA-Z][a-zA-Z0-9+-.]*:/.*");
+  @VisibleForTesting
+  static final Pattern URI_PATTERN = Pattern.compile("[a-zA-Z][a-zA-Z0-9+.-]*:/.*");
 
   private static final ClientTransport SHUTDOWN_TRANSPORT =
       new FailingClientTransport(Status.UNAVAILABLE.withDescription("Channel is shutdown"));

@@ -70,7 +70,7 @@ public interface ManagedClientTransport extends ClientTransport, WithLogId {
 
   /**
    * Receives notifications for the transport life-cycle events. Implementation does not need to be
-   * thread-safe, so notifications must be properly sychronized externally.
+   * thread-safe, so notifications must be properly synchronized externally.
    */
   interface Listener {
     /**
