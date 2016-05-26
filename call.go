@@ -137,7 +137,9 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			err    error
 			t      transport.ClientTransport
 			stream *transport.Stream
-			put    func()
+			// Record the put handler from Balancer.Get(...). It is called once the
+			// RPC has completed or failed.
+			put func()
 		)
 		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
