@@ -85,9 +85,7 @@ type Balancer interface {
 	// iii) If it returns an address on which the connection does not exist, gRPC
 	// internals treats it as an error and will fail the corresponding RPC.
 	//
-	// Therefore, we recommend the following general rule when you write your own
-	// custom Balancer.
-	//
+	// Therefore, the following is the recommended rule when writing a custom Balancer.
 	// If opts.BlockingWait is true, it should return a connected address or
 	// block if there is no connected address. It should respect the timeout or
 	// cancellation of ctx when blocking. If opts.BlockingWait is false (for fail-fast
@@ -97,14 +95,15 @@ type Balancer interface {
 	// The function returns put which is called once the rpc has completed or failed.
 	// put can collect and report RPC stats to a remote load balancer.
 	Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error)
-	// Notify notifies gRPC internals the list of Address to be connected. The list
-	// may be from a name resolver or remote load balancer. gRPC internals will
-	// compare it with the existing connected addresses. If the address Balancer
-	// notified is not in the existing connected addresses, gRPC starts to connect
-	// the address. If an address in the existing connected addresses is not in
-	// the notification list, the corresponding connection is shutdown gracefully.
-	// Otherwise, there are no operations to take. Note that this function must
-	// return the full list of the Addresses which should be connected. It is NOT delta.
+	// Notify returns a channel that is used by gRPC internals to watch the addresses
+	// gRPC needs to connect. The addresses might be from a name resolver or remote
+	// load balancer. gRPC internals will compare it with the existing connected
+	// addresses. If the address Balancer notified is not in the existing connected
+	// addresses, gRPC starts to connect the address. If an address in the existing
+	// connected addresses is not in the notification list, the corresponding connection
+	// is shutdown gracefully. Otherwise, there are no operations to take. Note that
+	// the Address slice must be the full list of the Addresses which should be connected.
+	// It is NOT delta.
 	Notify() <-chan []Address
 	// Close shuts down the balancer.
 	Close() error
