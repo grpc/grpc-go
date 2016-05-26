@@ -49,8 +49,7 @@ type Address struct {
 	// Addr is the server address on which a connection will be established.
 	Addr string
 	// Metadata is the information associated with Addr, which may be used
-	// to make load balancing decision. This is from the metadata attached
-	// in the address updates from name resolver.
+	// to make load balancing decision.
 	Metadata interface{}
 }
 
