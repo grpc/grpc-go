@@ -41,7 +41,6 @@ import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_JOINER;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
-import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import static java.lang.Math.max;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -141,9 +140,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   @VisibleForTesting
   static void prepareHeaders(Metadata headers, DecompressorRegistry decompressorRegistry,
       Compressor compressor) {
-    // Remove user agent.  Agent are added in the transport.
-    headers.removeAll(USER_AGENT_KEY);
-
     headers.removeAll(MESSAGE_ENCODING_KEY);
     if (compressor != Codec.Identity.NONE) {
       headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());

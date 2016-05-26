@@ -31,6 +31,7 @@
 
 package io.grpc.netty;
 
+import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.netty.NettyTestUtil.messageFrame;
 import static io.grpc.netty.Utils.CONTENT_TYPE_GRPC;
@@ -52,10 +53,13 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.ImmutableListMultimap;
+
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.GrpcUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -70,6 +74,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -367,6 +372,25 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().setHttp2Stream(http2Stream);
     verify(listener).onReady();
     assertTrue(stream.isReady());
+  }
+
+  @Test
+  public void removeUserAgentFromApplicationHeaders() {
+    Metadata metadata = new Metadata();
+    metadata.put(GrpcUtil.USER_AGENT_KEY, "bad agent");
+    listener = mock(ClientStreamListener.class);
+    Mockito.reset(writeQueue);
+    when(writeQueue.enqueue(any(), any(boolean.class))).thenReturn(future);
+
+    stream = new NettyClientStreamImpl(methodDescriptor, new Metadata(), channel, handler,
+        DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"),
+        AsciiString.of("good agent"));
+    stream.start(listener);
+
+    ArgumentCaptor<CreateStreamCommand> cmdCap = ArgumentCaptor.forClass(CreateStreamCommand.class);
+    verify(writeQueue).enqueue(cmdCap.capture(), eq(false));
+    assertThat(ImmutableListMultimap.copyOf(cmdCap.getValue().headers()))
+        .containsEntry(Utils.USER_AGENT, AsciiString.of("good agent"));
   }
 
   @Override

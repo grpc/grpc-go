@@ -39,6 +39,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStream;
 import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
@@ -94,6 +95,7 @@ abstract class NettyClientStream extends Http2ClientStream implements StreamIdHo
 
     // Convert the headers into Netty HTTP/2 headers.
     AsciiString defaultPath = new AsciiString("/" + method.getFullMethodName());
+    headers.removeAll(GrpcUtil.USER_AGENT_KEY);
     Http2Headers http2Headers
         = Utils.convertClientHeaders(headers, scheme, defaultPath, authority, userAgent);
     headers = null;

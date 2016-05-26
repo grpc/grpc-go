@@ -38,6 +38,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStream;
 import io.grpc.internal.WritableBuffer;
 import io.grpc.okhttp.internal.framed.ErrorCode;
@@ -138,6 +139,7 @@ class OkHttpClientStream extends Http2ClientStream {
   public void start(ClientStreamListener listener) {
     super.start(listener);
     String defaultPath = "/" + method.getFullMethodName();
+    headers.removeAll(GrpcUtil.USER_AGENT_KEY);
     List<Header> requestHeaders =
         Headers.createRequestHeaders(headers, defaultPath, authority, userAgent);
     headers = null;
