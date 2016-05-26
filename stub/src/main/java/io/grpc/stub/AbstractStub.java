@@ -106,7 +106,6 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    *
    * @param deadline the deadline or {@code null} for unsetting the deadline.
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1706")
   public final S withDeadline(@Nullable Deadline deadline) {
     return build(channel, callOptions.withDeadline(deadline));
   }

@@ -101,7 +101,6 @@ public final class CallOptions {
    *
    * @param deadline the deadline or {@code null} for unsetting the deadline.
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1706")
   public CallOptions withDeadline(@Nullable Deadline deadline) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.deadline = deadline;
@@ -152,7 +151,6 @@ public final class CallOptions {
   /**
    * Returns the deadline or {@code null} if the deadline is not set.
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1706")
   @Nullable
   public Deadline getDeadline() {
     return deadline;
