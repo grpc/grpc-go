@@ -263,7 +263,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 		defer wg.Done()
 		var reply string
 		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err == nil {
-			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not", err)
+			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
 		}
 	}()
 	go func() {
