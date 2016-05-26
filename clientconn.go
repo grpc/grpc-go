@@ -46,7 +46,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/naming"
 	"google.golang.org/grpc/transport"
 )
 
@@ -293,7 +292,6 @@ func (s ConnectivityState) String() string {
 // ClientConn represents a client connection to an RPC server.
 type ClientConn struct {
 	target    string
-	watcher   naming.Watcher
 	balancer  Balancer
 	authority string
 	dopts     dialOptions
@@ -332,7 +330,7 @@ func (cc *ClientConn) lbWatcher() {
 			}
 		}
 		cc.mu.Unlock()
-		for _, a := range addrs {
+		for _, a := range add {
 			cc.newAddrConn(a, true)
 		}
 		for _, c := range del {
@@ -374,9 +372,15 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 		ac.cc.mu.Unlock()
 		return ErrClientConnClosing
 	}
+	stale := ac.cc.conns[ac.addr]
 	ac.cc.conns[ac.addr] = ac
 	ac.cc.mu.Unlock()
-
+	if stale != nil {
+		// There is an addrConn alive on ac.addr already. This could be due to
+		// i) stale's Close is undergoing;
+		// ii) a buggy Balancer notifies duplicated Addresses.
+		stale.tearDown(errConnDrain)
+	}
 	ac.stateCV = sync.NewCond(&ac.mu)
 	// skipWait may overwrite the decision in ac.dopts.block.
 	if ac.dopts.block && !skipWait {
@@ -440,9 +444,6 @@ func (cc *ClientConn) Close() error {
 	cc.conns = nil
 	cc.mu.Unlock()
 	cc.balancer.Close()
-	if cc.watcher != nil {
-		cc.watcher.Close()
-	}
 	for _, ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
 	}
