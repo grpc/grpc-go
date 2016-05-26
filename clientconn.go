@@ -246,7 +246,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 				return nil, err
 			}
 		}
-		go cc.controller()
+		go cc.lbWatcher()
 	}
 
 	colonPos := strings.LastIndex(target, ":")
@@ -302,7 +302,7 @@ type ClientConn struct {
 	conns map[Address]*addrConn
 }
 
-func (cc *ClientConn) controller() {
+func (cc *ClientConn) lbWatcher() {
 	for {
 		addrs, ok := <-cc.balancer.Notify()
 		if !ok {
@@ -333,9 +333,7 @@ func (cc *ClientConn) controller() {
 		}
 		cc.mu.Unlock()
 		for _, a := range addrs {
-			if err := cc.newAddrConn(a, true); err != nil {
-
-			}
+			cc.newAddrConn(a, true)
 		}
 		for _, c := range del {
 			c.tearDown(errConnDrain)
