@@ -156,8 +156,7 @@ func (rr *roundRobin) watchAddrUpdates() error {
 	defer rr.mu.Unlock()
 	for _, update := range updates {
 		addr := Address{
-			Addr:     update.Addr,
-			Metadata: update.Metadata,
+			Addr: update.Addr,
 		}
 		switch update.Op {
 		case naming.Add:
