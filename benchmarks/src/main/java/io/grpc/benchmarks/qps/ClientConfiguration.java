@@ -82,7 +82,7 @@ public class ClientConfiguration implements Configuration {
   }
 
   public ManagedChannel newChannel() throws IOException {
-    return Utils.newClientChannel(Transport.NETTY_EPOLL, address, tls, testca, authorityOverride,
+    return Utils.newClientChannel(transport, address, tls, testca, authorityOverride,
         useDefaultCiphers, flowControlWindow, directExecutor);
   }
 
