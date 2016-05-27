@@ -31,7 +31,7 @@ func runUnary(b *testing.B, connCount, rpcCountPerConn int) {
 	for ic := 0; ic < connCount; ic++ {
 		conns[ic] = NewClientConn(target, grpc.WithInsecure())
 		tc := testpb.NewBenchmarkServiceClient(conns[ic])
-		// Warm up connection.
+		// Warm up.
 		for i := 0; i < 10; i++ {
 			unaryCaller(tc)
 		}
@@ -44,7 +44,7 @@ func runUnary(b *testing.B, connCount, rpcCountPerConn int) {
 	)
 	wg.Add(connCount * rpcCountPerConn)
 
-	// Distribute the b.N calls over rpcCountPerConn workers.
+	// Distribute the b.N calls over connCount*rpcCountPerConn workers.
 	for _, tc := range clients {
 		for i := 0; i < rpcCountPerConn; i++ {
 			go func() {
@@ -60,7 +60,7 @@ func runUnary(b *testing.B, connCount, rpcCountPerConn int) {
 			}()
 		}
 	}
-	// Exclude firat and last min(1.5*totalCount, 1/10*b.N) rpcs when calculating QPS.
+	// Exclude first and last min(1.5*totalCount, 1/10*b.N) rpcs when calculating QPS.
 	qpsStartN := min(connCount*rpcCountPerConn*3/2, b.N/10)
 	qpsEndN := b.N - qpsStartN
 	b.ResetTimer()
@@ -95,7 +95,7 @@ func runStream(b *testing.B, connCount, rpcCountPerConn int) {
 	for ic := 0; ic < connCount; ic++ {
 		conns[ic] = NewClientConn(target, grpc.WithInsecure())
 		tc := testpb.NewBenchmarkServiceClient(conns[ic])
-		// Warm up connection.
+		// Warm up.
 		stream, err := tc.StreamingCall(context.Background())
 		if err != nil {
 			b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
@@ -112,7 +112,7 @@ func runStream(b *testing.B, connCount, rpcCountPerConn int) {
 	)
 	wg.Add(connCount * rpcCountPerConn)
 
-	// Distribute the b.N calls over rpcCountPerConn workers.
+	// Distribute the b.N calls over connCount*rpcCountPerConn workers.
 	for _, tc := range clients {
 		for i := 0; i < rpcCountPerConn; i++ {
 			go func() {
@@ -132,7 +132,7 @@ func runStream(b *testing.B, connCount, rpcCountPerConn int) {
 			}()
 		}
 	}
-	// Exclude firat and last min(1.5*totalCount, 1/10*b.N) rpcs when calculating QPS.
+	// Exclude first and last min(1.5*totalCount, 1/10*b.N) rpcs when calculating QPS.
 	qpsStartN := min(connCount*rpcCountPerConn*3/2, b.N/10)
 	qpsEndN := b.N - qpsStartN
 	b.ResetTimer()

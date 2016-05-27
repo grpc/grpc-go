@@ -163,16 +163,18 @@ func injectStatsIfFinished(line string) {
 		sort.Strings(names)
 		for _, name := range names {
 			stats := curStats[name]
-			// The output of stats starts with a header like "Histogram (unit: ms)"
+			// The output of stats starts with the QPS number, followed by histogram stats.
+			// The histogram stats starts with a header like "Histogram (unit: ms)",
 			// followed by statistical properties and the buckets. Add the stats name
 			// if it is a named stats and indent them as Go testing outputs.
 			lines := strings.Split(stats.String(), "\n")
 			if n := len(lines); n > 1 {
 				if name != "" {
-					name = ": " + name
+					// Print the header line if the stats is named.
+					fmt.Fprintf(orgStdout, "%s stats: %s %s\n", strings.Repeat("-", 30), name, strings.Repeat("-", 30))
 				}
-				fmt.Fprintf(orgStdout, "--- %s%s\n", lines[0], name)
-				fmt.Fprintf(orgStdout, "--- %s%s\n", lines[1], name)
+				fmt.Fprintf(orgStdout, "--- %s\n", lines[0])
+				fmt.Fprintf(orgStdout, "--- %s\n", lines[1])
 				for _, line := range lines[2 : n-1] {
 					fmt.Fprintf(orgStdout, "\t%s\n", line)
 				}
