@@ -102,6 +102,13 @@ final class TransportSet implements WithLogId {
   private final Collection<ManagedClientTransport> transports =
       new ArrayList<ManagedClientTransport>();
 
+  /**
+   * The to-be active transport, which is not ready yet.
+   */
+  @GuardedBy("lock")
+  @Nullable
+  private ManagedClientTransport pendingTransport;
+
   private final LoadBalancer<ClientTransport> loadBalancer;
 
   @GuardedBy("lock")
@@ -194,6 +201,7 @@ final class TransportSet implements WithLogId {
       log.log(Level.FINE, "[{0}] Created {1} for {2}",
           new Object[] {getLogId(), transport.getLogId(), address});
     }
+    pendingTransport = transport;
     transports.add(transport);
     transport.start(new TransportListener(transport, delayedTransport, address));
   }
@@ -257,6 +265,7 @@ final class TransportSet implements WithLogId {
    */
   final void shutdown() {
     ManagedClientTransport savedActiveTransport;
+    ManagedClientTransport savedPendingTransport;
     boolean runCallback = false;
     synchronized (lock) {
       if (shutdown) {
@@ -265,6 +274,7 @@ final class TransportSet implements WithLogId {
       // Transition to SHUTDOWN
       shutdown = true;
       savedActiveTransport = activeTransport;
+      savedPendingTransport = pendingTransport;
       activeTransport = null;
       if (transports.isEmpty()) {
         runCallback = true;
@@ -273,6 +283,9 @@ final class TransportSet implements WithLogId {
     }
     if (savedActiveTransport != null) {
       savedActiveTransport.shutdown();
+    }
+    if (savedPendingTransport != null) {
+      savedPendingTransport.shutdown();
     }
     if (runCallback) {
       callback.onTerminated();
@@ -358,7 +371,9 @@ final class TransportSet implements WithLogId {
               "Unexpected non-null activeTransport");
         } else if (activeTransport == delayedTransport) {
           // Transition to READY
+          Preconditions.checkState(pendingTransport == transport, "transport mismatch");
           activeTransport = transport;
+          pendingTransport = null;
         }
       }
       delayedTransport.setTransport(transport);

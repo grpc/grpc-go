@@ -499,6 +499,22 @@ public class TransportSetTest {
   }
 
   @Test
+  public void shutdownBeforeTransportReady() throws Exception {
+    SocketAddress addr = mock(SocketAddress.class);
+    createTransportSet(addr);
+
+    ClientTransport pick = transportSet.obtainActiveTransport();
+    MockClientTransportInfo transportInfo = transports.poll();
+    assertNotSame(transportInfo.transport, pick);
+
+    // Shutdown the TransportSet before the pending transport is ready
+    transportSet.shutdown();
+
+    // The transport should've been shut down even though it's not the active transport yet.
+    verify(transportInfo.transport).shutdown();
+  }
+
+  @Test
   public void obtainTransportAfterShutdown() throws Exception {
     SocketAddress addr = mock(SocketAddress.class);
     createTransportSet(addr);
