@@ -114,11 +114,11 @@ type snappyCompressor struct {
 }
 
 func (c *snappyCompressor) Do(w io.Writer, p []byte) error {
-	z := snappy.NewWriter(w)
+	z := snappy.NewBufferedWriter(w)
 	if _, err := z.Write(p); err != nil {
 		return err
 	}
-	return nil
+	return z.Close()
 }
 
 func (c *snappyCompressor) Type() string {
