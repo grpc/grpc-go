@@ -157,7 +157,7 @@ func (d *gzipDecompressor) Type() string {
 type snappyDecompressor struct {
 }
 
-// NewGZIPDecompressor creates a Decompressor based on GZIP.
+// NewSnappyDecompressor creates a Decompressor based on Snappy.
 func NewSnappyDecompressor() Decompressor {
 	return &snappyDecompressor{}
 }
