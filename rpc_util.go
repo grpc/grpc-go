@@ -107,7 +107,7 @@ func (c *gzipCompressor) Type() string {
 
 // NewSnappyCompressor creates a Compressor based on Snappy.
 func NewSnappyCompressor() Compressor {
-	return &gzipCompressor{}
+	return &snappyCompressor{}
 }
 
 type snappyCompressor struct {
