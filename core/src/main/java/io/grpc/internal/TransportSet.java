@@ -107,7 +107,7 @@ final class TransportSet implements WithLogId {
    */
   @GuardedBy("lock")
   @Nullable
-  private ManagedClientTransport pendingTransport;
+  private ConnectionClientTransport pendingTransport;
 
   private final LoadBalancer<ClientTransport> loadBalancer;
 
@@ -195,7 +195,7 @@ final class TransportSet implements WithLogId {
       nextAddressIndex = 0;
     }
 
-    ManagedClientTransport transport =
+    ConnectionClientTransport transport =
         transportFactory.newClientTransport(address, authority, userAgent);
     if (log.isLoggable(Level.FINE)) {
       log.log(Level.FINE, "[{0}] Created {1} for {2}",
@@ -265,7 +265,7 @@ final class TransportSet implements WithLogId {
    */
   final void shutdown() {
     ManagedClientTransport savedActiveTransport;
-    ManagedClientTransport savedPendingTransport;
+    ConnectionClientTransport savedPendingTransport;
     boolean runCallback = false;
     synchronized (lock) {
       if (shutdown) {

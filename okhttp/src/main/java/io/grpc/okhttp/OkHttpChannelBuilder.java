@@ -47,8 +47,8 @@ import io.grpc.Internal;
 import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
-import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
@@ -260,7 +260,7 @@ public class OkHttpChannelBuilder extends
     }
 
     @Override
-    public ManagedClientTransport newClientTransport(
+    public ConnectionClientTransport newClientTransport(
         SocketAddress addr, String authority, @Nullable String userAgent) {
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");

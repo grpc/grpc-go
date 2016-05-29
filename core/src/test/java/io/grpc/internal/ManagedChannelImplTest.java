@@ -127,7 +127,7 @@ public class ManagedChannelImplTest {
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
   @Mock
-  private ManagedClientTransport mockTransport;
+  private ConnectionClientTransport mockTransport;
   @Mock
   private ClientTransportFactory mockTransportFactory;
   @Mock
@@ -581,8 +581,8 @@ public class ManagedChannelImplTest {
       };
     final ResolvedServerInfo goodServer = new ResolvedServerInfo(goodAddress, Attributes.EMPTY);
     final ResolvedServerInfo badServer = new ResolvedServerInfo(badAddress, Attributes.EMPTY);
-    final ManagedClientTransport goodTransport = mock(ManagedClientTransport.class);
-    final ManagedClientTransport badTransport = mock(ManagedClientTransport.class);
+    final ConnectionClientTransport goodTransport = mock(ConnectionClientTransport.class);
+    final ConnectionClientTransport badTransport = mock(ConnectionClientTransport.class);
     when(goodTransport.newStream(any(MethodDescriptor.class), any(Metadata.class)))
         .thenReturn(mock(ClientStream.class));
     when(mockTransportFactory.newClientTransport(
@@ -639,8 +639,8 @@ public class ManagedChannelImplTest {
       };
     final ResolvedServerInfo server1 = new ResolvedServerInfo(addr1, Attributes.EMPTY);
     final ResolvedServerInfo server2 = new ResolvedServerInfo(addr2, Attributes.EMPTY);
-    final ManagedClientTransport transport1 = mock(ManagedClientTransport.class);
-    final ManagedClientTransport transport2 = mock(ManagedClientTransport.class);
+    final ConnectionClientTransport transport1 = mock(ConnectionClientTransport.class);
+    final ConnectionClientTransport transport2 = mock(ConnectionClientTransport.class);
     when(mockTransportFactory.newClientTransport(same(addr1), any(String.class), any(String.class)))
         .thenReturn(transport1);
     when(mockTransportFactory.newClientTransport(same(addr2), any(String.class), any(String.class)))
@@ -695,8 +695,8 @@ public class ManagedChannelImplTest {
     final ResolvedServerInfo server1 = new ResolvedServerInfo(addr1, Attributes.EMPTY);
     final ResolvedServerInfo server2 = new ResolvedServerInfo(addr2, Attributes.EMPTY);
     // Addr1 will have two transports throughout this test.
-    final ManagedClientTransport transport1 = mock(ManagedClientTransport.class);
-    final ManagedClientTransport transport2 = mock(ManagedClientTransport.class);
+    final ConnectionClientTransport transport1 = mock(ConnectionClientTransport.class);
+    final ConnectionClientTransport transport2 = mock(ConnectionClientTransport.class);
     when(transport1.newStream(any(MethodDescriptor.class), any(Metadata.class)))
         .thenReturn(mock(ClientStream.class));
     when(transport2.newStream(any(MethodDescriptor.class), any(Metadata.class)))

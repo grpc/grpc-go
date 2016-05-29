@@ -37,7 +37,7 @@ import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.ClientTransportFactory;
-import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.ConnectionClientTransport;
 
 import java.net.SocketAddress;
 
@@ -94,7 +94,7 @@ public class InProcessChannelBuilder extends
     }
 
     @Override
-    public ManagedClientTransport newClientTransport(
+    public ConnectionClientTransport newClientTransport(
         SocketAddress addr, String authority, String userAgent) {
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");

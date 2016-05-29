@@ -34,6 +34,8 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.Metadata;
@@ -300,5 +302,10 @@ class DelayedStream implements ClientStream {
         }
       });
     }
+  }
+
+  @VisibleForTesting
+  ClientStream getRealStream() {
+    return realStream;
   }
 }

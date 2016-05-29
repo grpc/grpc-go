@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,30 +29,26 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
-import java.io.Closeable;
-import java.net.SocketAddress;
-
-import javax.annotation.Nullable;
-
-/** Pre-configured factory for creating {@link ConnectionClientTransport} instances. */
-public interface ClientTransportFactory extends Closeable {
+/**
+ * The level of security guarantee in communications.
+ */
+@ExperimentalApi
+public enum SecurityLevel {
   /**
-   * Creates an unstarted transport for exclusive use.
-   *
-   * @param serverAddress the address that the transport is connected to
-   * @param authority the HTTP/2 authority of the server
+   * No security guarantee.
    */
-  ConnectionClientTransport newClientTransport(SocketAddress serverAddress, String authority,
-      @Nullable String userAgent);
+  NONE,
 
   /**
-   * Releases any resources.
-   *
-   * <p>After this method has been called, it's no longer valid to call
-   * {@link #newClientTransport}. No guarantees about thread-safety are made.
+   * The other party is authenticated and the data is not tampered with.
    */
-  @Override
-  void close();
+  INTEGRITY,
+
+  /**
+   * In addition to {@code INTEGRITY}, the data is only visible to the intended communication
+   * parties.
+   */
+  PRIVACY_AND_INTEGRITY
 }

@@ -248,7 +248,7 @@ public abstract class AbstractManagedChannelImplBuilder
     }
 
     @Override
-    public ManagedClientTransport newClientTransport(SocketAddress serverAddress,
+    public ConnectionClientTransport newClientTransport(SocketAddress serverAddress,
         String authority, @Nullable String userAgent) {
       return factory.newClientTransport(serverAddress, authorityOverride, userAgent);
     }

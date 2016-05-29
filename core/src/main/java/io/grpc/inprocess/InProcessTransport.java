@@ -43,6 +43,7 @@ import io.grpc.ServerCall;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.NoopClientStream;
@@ -65,7 +66,7 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
 @ThreadSafe
-class InProcessTransport implements ServerTransport, ManagedClientTransport {
+class InProcessTransport implements ServerTransport, ConnectionClientTransport {
   private static final Logger log = Logger.getLogger(InProcessTransport.class.getName());
 
   private final String name;
@@ -204,6 +205,11 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
   @Override
   public String getLogId() {
     return GrpcUtil.getLogId(this);
+  }
+
+  @Override
+  public Attributes getAttrs() {
+    return Attributes.EMPTY;
   }
 
   private synchronized void notifyShutdown(Status s) {

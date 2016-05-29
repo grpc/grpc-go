@@ -39,15 +39,16 @@ import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
 import com.google.common.util.concurrent.SettableFuture;
 
+import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.Status.Code;
+import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
-import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
@@ -88,9 +89,9 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
- * A okhttp-based {@link ManagedClientTransport} implementation.
+ * A okhttp-based {@link ConnectionClientTransport} implementation.
  */
-class OkHttpClientTransport implements ManagedClientTransport {
+class OkHttpClientTransport implements ConnectionClientTransport {
   private static final Map<ErrorCode, Status> ERROR_CODE_TO_STATUS = buildErrorCodeToStatusMap();
   private static final Logger log = Logger.getLogger(OkHttpClientTransport.class.getName());
   private static final OkHttpClientStream[] EMPTY_STREAM_ARRAY = new OkHttpClientStream[0];
@@ -478,6 +479,12 @@ class OkHttpClientTransport implements ManagedClientTransport {
 
       stopIfNecessary();
     }
+  }
+
+  @Override
+  public Attributes getAttrs() {
+    // TODO(zhangkun83): fill channel security attributes
+    return Attributes.EMPTY;
   }
 
   /**

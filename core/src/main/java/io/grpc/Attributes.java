@@ -120,6 +120,11 @@ public final class Attributes {
       return this;
     }
 
+    public <T> Builder setAll(Attributes other) {
+      product.data.putAll(other.data);
+      return this;
+    }
+
     /**
      * Build the attributes. Can only be called once.
      */

@@ -160,10 +160,10 @@ public class ManagedChannelImplTransportManagerTest {
     // The real transport
     MockClientTransportInfo transportInfo = transports.poll(1, TimeUnit.SECONDS);
     transportInfo.listener.transportReady();
-    ClientTransport t2 = tm.getTransport(addressGroup);
+    ForwardingConnectionClientTransport t2 =
+        (ForwardingConnectionClientTransport) tm.getTransport(addressGroup);
     assertTrue(t1 instanceof DelayedClientTransport);
-    assertFalse(t2 instanceof DelayedClientTransport);
-    assertSame(transportInfo.transport, t2);
+    assertSame(transportInfo.transport, t2.delegate());
     verify(mockBackoffPolicyProvider, times(0)).get();
     verify(mockBackoffPolicy, times(0)).nextBackoffMillis();
     verifyNoMoreInteractions(mockTransportFactory);

@@ -62,6 +62,9 @@ public final class CallOptions {
   @Nullable
   private String authority;
 
+  @Nullable
+  private CallCredentials credentials;
+
   private Attributes affinity = Attributes.EMPTY;
 
   @Nullable
@@ -82,6 +85,16 @@ public final class CallOptions {
   public CallOptions withAuthority(@Nullable String authority) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.authority = authority;
+    return newOptions;
+  }
+
+  /**
+   * Returns a new {@code CallOptions} with the given call credentials.
+   */
+  @ExperimentalApi("https//github.com/grpc/grpc-java/issues/1914")
+  public CallOptions withCredentials(@Nullable CallCredentials credentials) {
+    CallOptions newOptions = new CallOptions(this);
+    newOptions.credentials = credentials;
     return newOptions;
   }
 
@@ -202,6 +215,15 @@ public final class CallOptions {
   }
 
   /**
+   * Returns the call credentials.
+   */
+  @ExperimentalApi("https//github.com/grpc/grpc-java/issues/1914")
+  @Nullable
+  public CallCredentials getCredentials() {
+    return credentials;
+  }
+
+  /**
    * Returns a new {@code CallOptions} with {@code executor} to be used instead of the default
    * executor specified with {@link ManagedChannelBuilder#executor}.
    */
@@ -294,6 +316,7 @@ public final class CallOptions {
   private CallOptions(CallOptions other) {
     deadline = other.deadline;
     authority = other.authority;
+    credentials = other.credentials;
     affinity = other.affinity;
     executor = other.executor;
     compressorName = other.compressorName;
@@ -305,6 +328,7 @@ public final class CallOptions {
     MoreObjects.ToStringHelper toStringHelper = MoreObjects.toStringHelper(this);
     toStringHelper.add("deadline", deadline);
     toStringHelper.add("authority", authority);
+    toStringHelper.add("callCredentials", credentials);
     toStringHelper.add("affinity", affinity);
     toStringHelper.add("executor", executor != null ? executor.getClass() : null);
     toStringHelper.add("compressorName", compressorName);

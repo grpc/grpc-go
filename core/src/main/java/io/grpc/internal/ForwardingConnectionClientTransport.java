@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,28 +31,60 @@
 
 package io.grpc.internal;
 
-import java.io.Closeable;
-import java.net.SocketAddress;
+import io.grpc.Attributes;
+import io.grpc.CallOptions;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
+import io.grpc.Status;
 
-import javax.annotation.Nullable;
+import java.util.concurrent.Executor;
 
-/** Pre-configured factory for creating {@link ConnectionClientTransport} instances. */
-public interface ClientTransportFactory extends Closeable {
-  /**
-   * Creates an unstarted transport for exclusive use.
-   *
-   * @param serverAddress the address that the transport is connected to
-   * @param authority the HTTP/2 authority of the server
-   */
-  ConnectionClientTransport newClientTransport(SocketAddress serverAddress, String authority,
-      @Nullable String userAgent);
-
-  /**
-   * Releases any resources.
-   *
-   * <p>After this method has been called, it's no longer valid to call
-   * {@link #newClientTransport}. No guarantees about thread-safety are made.
-   */
+abstract class ForwardingConnectionClientTransport implements ConnectionClientTransport {
   @Override
-  void close();
+  public void start(Listener listener) {
+    delegate().start(listener);
+  }
+
+  @Override
+  public void shutdown() {
+    delegate().shutdown();
+  }
+
+  @Override
+  public void shutdownNow(Status status) {
+    delegate().shutdownNow(status);
+  }
+
+  @Override
+  public ClientStream newStream(
+      MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions) {
+    return delegate().newStream(method, headers, callOptions);
+  }
+
+  @Override
+  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
+    return delegate().newStream(method, headers);
+  }
+
+  @Override
+  public void ping(PingCallback callback, Executor executor) {
+    delegate().ping(callback, executor);
+  }
+
+  @Override
+  public String getLogId() {
+    return delegate().getLogId();
+  }
+
+  @Override
+  public Attributes getAttrs() {
+    return delegate().getAttrs();
+  }
+
+  @Override
+  public String toString() {
+    return getClass().getSimpleName() + "[" + delegate().toString() + "]";
+  }
+
+  protected abstract ConnectionClientTransport delegate();
 }

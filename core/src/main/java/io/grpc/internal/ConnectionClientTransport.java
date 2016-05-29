@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,28 +31,18 @@
 
 package io.grpc.internal;
 
-import java.io.Closeable;
-import java.net.SocketAddress;
+import io.grpc.Attributes;
 
-import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
-/** Pre-configured factory for creating {@link ConnectionClientTransport} instances. */
-public interface ClientTransportFactory extends Closeable {
+/**
+ * A {@link ManagedClientTransport} that is based on a connection.
+ */
+@ThreadSafe
+public interface ConnectionClientTransport extends ManagedClientTransport {
   /**
-   * Creates an unstarted transport for exclusive use.
-   *
-   * @param serverAddress the address that the transport is connected to
-   * @param authority the HTTP/2 authority of the server
+   * Returns a set of attributes, which may vary depending on the state of the transport. The keys
+   * should define in what states they will be present.
    */
-  ConnectionClientTransport newClientTransport(SocketAddress serverAddress, String authority,
-      @Nullable String userAgent);
-
-  /**
-   * Releases any resources.
-   *
-   * <p>After this method has been called, it's no longer valid to call
-   * {@link #newClientTransport}. No guarantees about thread-safety are made.
-   */
-  @Override
-  void close();
+  Attributes getAttrs();
 }

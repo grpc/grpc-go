@@ -39,6 +39,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.mockito.Mockito.mock;
 
 import com.google.common.base.Objects;
 
@@ -59,10 +60,12 @@ public class CallOptionsTest {
   private Deadline sampleDeadline = Deadline.after(1, NANOSECONDS, ticker);
   private Key<String> sampleKey = Attributes.Key.of("sample");
   private Attributes sampleAffinity = Attributes.newBuilder().set(sampleKey, "blah").build();
+  private CallCredentials sampleCreds = mock(CallCredentials.class);
   private CallOptions allSet = CallOptions.DEFAULT
       .withAuthority(sampleAuthority)
       .withDeadline(sampleDeadline)
-      .withAffinity(sampleAffinity);
+      .withAffinity(sampleAffinity)
+      .withCredentials(sampleCreds);
   private CallOptions.Key<String> option1 = CallOptions.Key.of("option1", "default");
   private CallOptions.Key<String> option2 = CallOptions.Key.of("option2", "default");
 
@@ -72,6 +75,7 @@ public class CallOptionsTest {
     assertThat(CallOptions.DEFAULT.getAuthority()).isNull();
     assertThat(CallOptions.DEFAULT.getAffinity()).isEqualTo(Attributes.EMPTY);
     assertThat(CallOptions.DEFAULT.getExecutor()).isNull();
+    assertThat(CallOptions.DEFAULT.getCredentials()).isNull();
   }
 
   @Test
@@ -79,6 +83,7 @@ public class CallOptionsTest {
     assertThat(allSet.getAuthority()).isSameAs(sampleAuthority);
     assertThat(allSet.getDeadline()).isSameAs(sampleDeadline);
     assertThat(allSet.getAffinity()).isSameAs(sampleAffinity);
+    assertThat(allSet.getCredentials()).isSameAs(sampleCreds);
   }
 
   @Test
@@ -92,6 +97,10 @@ public class CallOptionsTest {
     assertThat(
         equal(allSet,
             allSet.withAffinity(Attributes.EMPTY).withAffinity(sampleAffinity)))
+        .isTrue();
+    assertThat(
+        equal(allSet,
+            allSet.withCredentials(mock(CallCredentials.class)).withCredentials(sampleCreds)))
         .isTrue();
   }
 
@@ -129,12 +138,14 @@ public class CallOptionsTest {
 
   @Test
   public void toStringMatches_noDeadline_default() {
-    String expected = "CallOptions{deadline=null, authority=authority, affinity={sample=blah}, "
+    String expected = "CallOptions{deadline=null, authority=authority, callCredentials=null, "
+        + "affinity={sample=blah}, "
         + "executor=class io.grpc.internal.SerializingExecutor, compressorName=null, "
         + "customOptions=[]}";
     String actual = allSet
         .withDeadline(null)
         .withExecutor(new SerializingExecutor(directExecutor()))
+        .withCredentials(null)
         .toString();
 
     assertThat(actual).isEqualTo(expected);
@@ -142,7 +153,7 @@ public class CallOptionsTest {
 
   @Test
   public void toStringMatches_noDeadline() {
-    assertThat("CallOptions{deadline=null, authority=null, "
+    assertThat("CallOptions{deadline=null, authority=null, callCredentials=null, "
         + "affinity={}, executor=null, compressorName=null, customOptions=[]}")
             .isEqualTo(CallOptions.DEFAULT.toString());
   }
@@ -192,11 +203,12 @@ public class CallOptionsTest {
     assertThat(opts.getOption(option1)).isEqualTo("v1");
     assertThat(opts.getOption(option2)).isEqualTo("v2");
   }
-  
+
   // TODO(carl-mastrangelo): consider making a CallOptionsSubject for Truth.
   private static boolean equal(CallOptions o1, CallOptions o2) {
     return Objects.equal(o1.getDeadline(), o2.getDeadline())
         && Objects.equal(o1.getAuthority(), o2.getAuthority())
-        && Objects.equal(o1.getAffinity(), o2.getAffinity());
+        && Objects.equal(o1.getAffinity(), o2.getAffinity())
+        && Objects.equal(o1.getCredentials(), o2.getCredentials());
   }
 }

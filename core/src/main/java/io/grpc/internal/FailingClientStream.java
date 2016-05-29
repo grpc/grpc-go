@@ -58,4 +58,8 @@ class FailingClientStream extends NoopClientStream {
     started = true;
     listener.closed(error, new Metadata());
   }
+
+  Status getError() {
+    return error;
+  }
 }

@@ -166,7 +166,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     this.backoffPolicyProvider = backoffPolicyProvider;
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
     this.loadBalancer = loadBalancerFactory.newLoadBalancer(nameResolver.getServiceAuthority(), tm);
-    this.transportFactory = transportFactory;
+    this.transportFactory =
+        new CallCredentialsApplyingTransportFactory(transportFactory, this.executor);
     this.interceptorChannel = ClientInterceptors.intercept(new RealChannel(), interceptors);
     scheduledExecutor = SharedResourceHolder.get(TIMER_SERVICE);
     this.decompressorRegistry = decompressorRegistry;

@@ -33,6 +33,7 @@ package io.grpc.stub;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptor;
@@ -171,5 +172,13 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    */
   public final S withInterceptors(ClientInterceptor... interceptors) {
     return build(ClientInterceptors.intercept(channel, interceptors), callOptions);
+  }
+
+  /**
+   * Returns a new stub that uses the given call credentials.
+   */
+  @ExperimentalApi("https//github.com/grpc/grpc-java/issues/1914")
+  public final S withCallCredentials(CallCredentials credentials) {
+    return build(channel, callOptions.withCredentials(credentials));
   }
 }

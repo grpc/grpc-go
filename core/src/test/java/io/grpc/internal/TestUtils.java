@@ -56,14 +56,14 @@ final class TestUtils {
     /**
      * A mock transport created by the mock transport factory.
      */
-    final ManagedClientTransport transport;
+    final ConnectionClientTransport transport;
 
     /**
      * The listener passed to the start() of the mock transport.
      */
     final ManagedClientTransport.Listener listener;
 
-    MockClientTransportInfo(ManagedClientTransport transport,
+    MockClientTransportInfo(ConnectionClientTransport transport,
         ManagedClientTransport.Listener listener) {
       this.transport = transport;
       this.listener = listener;
@@ -81,10 +81,10 @@ final class TestUtils {
     final BlockingQueue<MockClientTransportInfo> captor =
         new LinkedBlockingQueue<MockClientTransportInfo>();
 
-    doAnswer(new Answer<ManagedClientTransport>() {
+    doAnswer(new Answer<ConnectionClientTransport>() {
       @Override
-      public ManagedClientTransport answer(InvocationOnMock invocation) throws Throwable {
-        final ManagedClientTransport mockTransport = mock(ManagedClientTransport.class);
+      public ConnectionClientTransport answer(InvocationOnMock invocation) throws Throwable {
+        final ConnectionClientTransport mockTransport = mock(ConnectionClientTransport.class);
         when(mockTransport.newStream(any(MethodDescriptor.class), any(Metadata.class),
             any(CallOptions.class))).thenReturn(mock(ClientStream.class));
         // Save the listener

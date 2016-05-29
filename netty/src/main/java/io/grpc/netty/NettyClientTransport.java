@@ -36,14 +36,15 @@ import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Ticker;
 
+import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
+import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
-import io.grpc.internal.ManagedClientTransport;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -60,9 +61,9 @@ import java.util.concurrent.Executor;
 import javax.annotation.Nullable;
 
 /**
- * A Netty-based {@link ManagedClientTransport} implementation.
+ * A Netty-based {@link ConnectionClientTransport} implementation.
  */
-class NettyClientTransport implements ManagedClientTransport {
+class NettyClientTransport implements ConnectionClientTransport {
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
@@ -218,6 +219,12 @@ class NettyClientTransport implements ManagedClientTransport {
   @Override
   public String getLogId() {
     return GrpcUtil.getLogId(this);
+  }
+
+  @Override
+  public Attributes getAttrs() {
+    // TODO(zhangkun83): fill channel security attributes
+    return Attributes.EMPTY;
   }
 
   /**
