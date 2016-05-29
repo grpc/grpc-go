@@ -44,6 +44,7 @@ import (
 	"os"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -104,6 +105,26 @@ func (c *gzipCompressor) Type() string {
 	return "gzip"
 }
 
+// NewSnappyCompressor creates a Compressor based on Snappy.
+func NewSnappyCompressor() Compressor {
+	return &gzipCompressor{}
+}
+
+type snappyCompressor struct {
+}
+
+func (c *snappyCompressor) Do(w io.Writer, p []byte) error {
+	z := snappy.NewWriter(w)
+	if _, err := z.Write(p); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *snappyCompressor) Type() string {
+	return "snappy"
+}
+
 // Decompressor defines the interface gRPC uses to decompress a message.
 type Decompressor interface {
 	// Do reads the data from r and uncompress them.
@@ -131,6 +152,23 @@ func (d *gzipDecompressor) Do(r io.Reader) ([]byte, error) {
 
 func (d *gzipDecompressor) Type() string {
 	return "gzip"
+}
+
+type snappyDecompressor struct {
+}
+
+// NewGZIPDecompressor creates a Decompressor based on GZIP.
+func NewSnappyDecompressor() Decompressor {
+	return &snappyDecompressor{}
+}
+
+func (d *snappyDecompressor) Do(r io.Reader) ([]byte, error) {
+	z := snappy.NewReader(r)
+	return ioutil.ReadAll(z)
+}
+
+func (d *snappyDecompressor) Type() string {
+	return "snappy"
 }
 
 // callInfo contains all related configuration and information about an RPC.
