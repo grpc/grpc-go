@@ -227,11 +227,10 @@ public class OpenLoopClient {
       }
     }
 
+    private static final double DELAY_EPSILON = Math.nextUp(0d);
+
     private long nextDelay(int targetQps) {
-      // Smallest value so that (1 - epsilon) != 1
-      // See http://en.wikipedia.org/wiki/Machine_epsilon
-      final double epsilon = 1.11E-16;
-      double seconds = -Math.log(Math.max(rnd.nextDouble(), epsilon)) / targetQps;
+      double seconds = -Math.log(Math.max(rnd.nextDouble(), DELAY_EPSILON)) / targetQps;
       double nanos = seconds * 1000 * 1000 * 1000;
       return Math.round(nanos);
     }
