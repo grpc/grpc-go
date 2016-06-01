@@ -31,12 +31,11 @@
 
 package io.grpc.services;
 
-import static io.grpc.health.v1.HealthCheckResponse.ServingStatus;
-
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.health.v1.HealthCheckRequest;
 import io.grpc.health.v1.HealthCheckResponse;
+import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.health.v1.HealthGrpc;
 import io.grpc.stub.StreamObserver;
 

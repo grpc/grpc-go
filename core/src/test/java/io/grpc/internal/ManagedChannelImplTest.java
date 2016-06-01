@@ -697,7 +697,7 @@ public class ManagedChannelImplTest {
     }
   }
 
-  private class FailingNameResolverFactory extends NameResolver.Factory {
+  private static class FailingNameResolverFactory extends NameResolver.Factory {
     final Status error;
 
     FailingNameResolverFactory(Status error) {
@@ -725,7 +725,7 @@ public class ManagedChannelImplTest {
     }
   }
 
-  private class SpyingLoadBalancerFactory extends LoadBalancer.Factory {
+  private static class SpyingLoadBalancerFactory extends LoadBalancer.Factory {
     private final LoadBalancer.Factory delegate;
     private final List<LoadBalancer<?>> balancers = new ArrayList<LoadBalancer<?>>();
 

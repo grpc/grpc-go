@@ -58,7 +58,6 @@ import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
-import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
 
 import org.junit.Before;
@@ -66,7 +65,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -81,9 +79,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
 
   @Mock
   private NettyServerHandler handler;
-
-  @Captor
-  private ArgumentCaptor<Http2Headers> headersCaptor;
 
   private Metadata trailers = new Metadata();
 

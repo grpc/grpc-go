@@ -31,21 +31,19 @@
 
 package io.grpc.services;
 
-import static io.grpc.health.v1.HealthGrpc.Health;
-
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.any;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.health.v1.HealthCheckRequest;
 import io.grpc.health.v1.HealthCheckResponse;
+import io.grpc.health.v1.HealthGrpc.Health;
 import io.grpc.stub.StreamObserver;
 
 import org.junit.Test;

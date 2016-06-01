@@ -554,7 +554,7 @@ public class OkHttpClientTransportTest {
         idCaptor.capture(), eq(messageFrameLength));
     // Should only send window update for the connection.
     assertEquals(1, idCaptor.getAllValues().size());
-    assertEquals(new Integer(0), idCaptor.getValue());
+    assertEquals(0, (int)idCaptor.getValue());
 
     stream.request(1);
     // We return the bytes for the stream window as we read the message.
@@ -1551,7 +1551,7 @@ public class OkHttpClientTransportTest {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
       frameReader.nextFrameAtEndOfStream();
     }
   }
@@ -1590,7 +1590,7 @@ public class OkHttpClientTransportTest {
     frameReader.assertClosed();
   }
 
-  private class DelayConnectedCallback implements Runnable {
+  private static class DelayConnectedCallback implements Runnable {
     SettableFuture<Void> delayed = SettableFuture.create();
 
     @Override
