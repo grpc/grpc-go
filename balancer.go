@@ -71,14 +71,16 @@ type Balancer interface {
 	// Up informs the Balancer that gRPC has a connection to the server at
 	// addr. It returns down which is called once the connection to addr gets
 	// lost or closed.
+	// TODO: It is not clear how to construct and take advantage the meaningful error
+	// parameter for down. Need realistic demands to guide.
 	Up(addr Address) (down func(error))
 	// Get gets the address of a server for the RPC corresponding to ctx.
 	// i) If it returns a connected address, gRPC internals issues the RPC on the
 	// connection to this address;
 	// ii) If it returns an address on which the connection is under construction
 	// (initiated by Notify(...)) but not connected, gRPC internals
-	//  * fails RPC if the RPC is fail-fast and connection is in the TransientFailure
-	//  or Shutdown state;
+	//  * fails RPC if the RPC is fail-fast and connection is in the TransientFailure or
+	//  Shutdown state;
 	//  or
 	//  * issues RPC on the connection otherwise.
 	// iii) If it returns an address on which the connection does not exist, gRPC
@@ -92,7 +94,10 @@ type Balancer interface {
 	// instead of blocking.
 	//
 	// The function returns put which is called once the rpc has completed or failed.
-	// put can collect and report RPC stats to a remote load balancer.
+	// put can collect and report RPC stats to a remote load balancer. gRPC internals
+	// will try to call this again if err is non-nil (unless err is ErrClientConnClosing).
+	//
+	// TODO: Add other non-recoverable errors?
 	Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error)
 	// Notify returns a channel that is used by gRPC internals to watch the addresses
 	// gRPC needs to connect. The addresses might be from a name resolver or remote

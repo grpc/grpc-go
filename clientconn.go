@@ -301,12 +301,7 @@ type ClientConn struct {
 }
 
 func (cc *ClientConn) lbWatcher() {
-	for {
-		addrs, ok := <-cc.balancer.Notify()
-		if !ok {
-			// cc has been closed.
-			return
-		}
+	for addrs := range cc.balancer.Notify() {
 		var (
 			add []Address   // Addresses need to setup connections.
 			del []*addrConn // Connections need to tear down.
