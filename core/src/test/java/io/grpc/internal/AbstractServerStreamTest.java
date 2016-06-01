@@ -39,6 +39,7 @@ import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.Metadata;
@@ -75,6 +76,24 @@ public class AbstractServerStreamTest {
   private AbstractServerStreamBase stream = new AbstractServerStreamBase(
       allocator, sink, new AbstractServerStreamBase.TransportState(MAX_MESSAGE_SIZE));
   private final ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
+
+  /**
+   * Test for issue https://github.com/grpc/grpc-java/issues/1795
+   */
+  @Test
+  public void frameShouldBeIgnoredAfterDeframerClosed() {
+    ServerStreamListener streamListener = mock(ServerStreamListener.class);
+    ReadableBuffer buffer = mock(ReadableBuffer.class);
+
+    stream.transportState().setListener(streamListener);
+    // Close the deframer
+    stream.transportState().complete();
+    // Frame received after deframer closed, should be ignored and not trigger an exception
+    stream.transportState().inboundDataReceived(buffer, true);
+
+    verify(buffer).close();
+    verify(streamListener, times(0)).messageRead(any(InputStream.class));
+  }
 
   @Test
   public void setListener_setOnlyOnce() {
