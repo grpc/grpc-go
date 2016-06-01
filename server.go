@@ -115,12 +115,14 @@ func CustomCodec(codec Codec) ServerOption {
 	}
 }
 
+// RPCCompressor returns a ServerOption that sets a compressor for outbound message.
 func RPCCompressor(cp Compressor) ServerOption {
 	return func(o *options) {
 		o.cp = cp
 	}
 }
 
+// RPCDecompressor returns a ServerOption that sets a decompressor for inbound message.
 func RPCDecompressor(dc Decompressor) ServerOption {
 	return func(o *options) {
 		o.dc = dc
