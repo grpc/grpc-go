@@ -106,8 +106,8 @@ public class CompressionTest {
 
   private Fzip clientCodec = new Fzip("fzip", Codec.Identity.NONE);
   private Fzip serverCodec = new Fzip("fzip", Codec.Identity.NONE);
-  private DecompressorRegistry clientDecompressors = DecompressorRegistry.newEmptyInstance();
-  private DecompressorRegistry serverDecompressors = DecompressorRegistry.newEmptyInstance();
+  private DecompressorRegistry clientDecompressors = DecompressorRegistry.emptyInstance();
+  private DecompressorRegistry serverDecompressors = DecompressorRegistry.emptyInstance();
   private CompressorRegistry clientCompressors = CompressorRegistry.newEmptyInstance();
   private CompressorRegistry serverCompressors = CompressorRegistry.newEmptyInstance();
 
@@ -148,24 +148,8 @@ public class CompressionTest {
 
   @Before
   public void setUp() throws Exception {
-    clientDecompressors.register(Codec.Identity.NONE, false);
-    serverDecompressors.register(Codec.Identity.NONE, false);
-    int serverPort = TestUtils.pickUnusedPort();
-    server = ServerBuilder.forPort(serverPort)
-        .addService(
-            ServerInterceptors.intercept(new LocalServer(), new ServerCompressorInterceptor()))
-        .compressorRegistry(serverCompressors)
-        .decompressorRegistry(serverDecompressors)
-        .build()
-        .start();
-
-    channel = ManagedChannelBuilder.forAddress("localhost", serverPort)
-        .decompressorRegistry(clientDecompressors)
-        .compressorRegistry(clientCompressors)
-        .intercept(new ClientCompressorInterceptor())
-        .usePlaintext(true)
-        .build();
-    stub = TestServiceGrpc.newBlockingStub(channel);
+    clientDecompressors = clientDecompressors.with(Codec.Identity.NONE, false);
+    serverDecompressors = serverDecompressors.with(Codec.Identity.NONE, false);
   }
 
   @After
@@ -201,19 +185,36 @@ public class CompressionTest {
   }
 
   @Test
-  public void compression() {
+  public void compression() throws Exception {
     if (clientAcceptEncoding) {
-      clientDecompressors.register(clientCodec, true);
+      clientDecompressors = clientDecompressors.with(clientCodec, true);
     }
     if (clientEncoding) {
       clientCompressors.register(clientCodec);
     }
     if (serverAcceptEncoding) {
-      serverDecompressors.register(serverCodec, true);
+      serverDecompressors = serverDecompressors.with(serverCodec, true);
     }
     if (serverEncoding) {
       serverCompressors.register(serverCodec);
     }
+
+    int serverPort = TestUtils.pickUnusedPort();
+    server = ServerBuilder.forPort(serverPort)
+        .addService(
+            ServerInterceptors.intercept(new LocalServer(), new ServerCompressorInterceptor()))
+        .compressorRegistry(serverCompressors)
+        .decompressorRegistry(serverDecompressors)
+        .build()
+        .start();
+
+    channel = ManagedChannelBuilder.forAddress("localhost", serverPort)
+        .decompressorRegistry(clientDecompressors)
+        .compressorRegistry(clientCompressors)
+        .intercept(new ClientCompressorInterceptor())
+        .usePlaintext(true)
+        .build();
+    stub = TestServiceGrpc.newBlockingStub(channel);
 
     stub.unaryCall(REQUEST);
 

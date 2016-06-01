@@ -52,7 +52,7 @@ import java.util.Set;
 public class DecompressorRegistryTest {
 
   private final Dummy dummyDecompressor = new Dummy();
-  private final DecompressorRegistry registry = DecompressorRegistry.newEmptyInstance();
+  private DecompressorRegistry registry = DecompressorRegistry.emptyInstance();
 
   @Test
   public void lookupDecompressor_checkDefaultMessageEncodingsExist() {
@@ -83,7 +83,7 @@ public class DecompressorRegistryTest {
 
   @Test
   public void registerDecompressor_advertisedDecompressor() {
-    registry.register(dummyDecompressor, true);
+    registry = registry.with(dummyDecompressor, true);
 
     assertTrue(registry.getAdvertisedMessageEncodings()
         .contains(dummyDecompressor.getMessageEncoding()));
@@ -91,7 +91,7 @@ public class DecompressorRegistryTest {
 
   @Test
   public void registerDecompressor_nonadvertisedDecompressor() {
-    registry.register(dummyDecompressor, false);
+    registry = registry.with(dummyDecompressor, false);
 
     assertFalse(registry.getAdvertisedMessageEncodings()
         .contains(dummyDecompressor.getMessageEncoding()));

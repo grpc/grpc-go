@@ -86,7 +86,9 @@ public class TransportCompressionTest extends AbstractInteropTest {
   private static final Fzip FZIPPER = new Fzip("gzip", new Codec.Gzip());
   private volatile boolean expectFzip;
 
-  private static final DecompressorRegistry decompressors = DecompressorRegistry.newEmptyInstance();
+  private static final DecompressorRegistry decompressors = DecompressorRegistry.emptyInstance()
+      .with(Codec.Identity.NONE, false)
+      .with(FZIPPER, true);
   private static final CompressorRegistry compressors = CompressorRegistry.newEmptyInstance();
 
   @Before
@@ -98,8 +100,6 @@ public class TransportCompressionTest extends AbstractInteropTest {
   /** Start server. */
   @BeforeClass
   public static void startServer() {
-    decompressors.register(Codec.Identity.NONE, false);
-    decompressors.register(FZIPPER, true);
     compressors.register(FZIPPER);
     compressors.register(Codec.Identity.NONE);
     startStaticServer(

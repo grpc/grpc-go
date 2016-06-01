@@ -33,15 +33,14 @@ package io.grpc;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-
-import com.google.common.annotations.VisibleForTesting;
+import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_JOINER;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
@@ -52,38 +51,70 @@ import javax.annotation.concurrent.ThreadSafe;
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
 @ThreadSafe
 public final class DecompressorRegistry {
+  public static DecompressorRegistry emptyInstance() {
+    return new DecompressorRegistry();
+  }
 
-  private static final DecompressorRegistry DEFAULT_INSTANCE = new DecompressorRegistry(
-      new DecompressorInfo(new Codec.Gzip(), true),
-      new DecompressorInfo(Codec.Identity.NONE, false));
+  private static final DecompressorRegistry DEFAULT_INSTANCE =
+      emptyInstance()
+      .with(new Codec.Gzip(), true)
+      .with(Codec.Identity.NONE, false);
 
   public static DecompressorRegistry getDefaultInstance() {
     return DEFAULT_INSTANCE;
   }
 
-  public static DecompressorRegistry newEmptyInstance() {
-    return new DecompressorRegistry();
-  }
-
-  private final ConcurrentMap<String, DecompressorInfo> decompressors;
+  private final Map<String, DecompressorInfo> decompressors;
+  private final String advertisedDecompressors;
 
   /**
-   * Registers a decompressor for both decompression and message encoding negotiation.
+   * Registers a decompressor for both decompression and message encoding negotiation.  Returns a
+   * new registry.
    *
    * @param d The decompressor to register
    * @param advertised If true, the message encoding will be listed in the Accept-Encoding header.
    */
-  public void register(Decompressor d, boolean advertised) {
+  public DecompressorRegistry with(Decompressor d, boolean advertised) {
+    return new DecompressorRegistry(d, advertised, this);
+  }
+
+  private DecompressorRegistry(Decompressor d, boolean advertised, DecompressorRegistry parent) {
     String encoding = d.getMessageEncoding();
     checkArgument(!encoding.contains(","), "Comma is currently not allowed in message encoding");
-    decompressors.put(encoding, new DecompressorInfo(d, advertised));
+
+    int newSize = parent.decompressors.size();
+    if (!parent.decompressors.containsKey(d.getMessageEncoding())) {
+      newSize++;
+    }
+    Map<String, DecompressorInfo> newDecompressors =
+        new LinkedHashMap<String, DecompressorInfo>(newSize);
+    for (DecompressorInfo di : parent.decompressors.values()) {
+      String previousEncoding = di.decompressor.getMessageEncoding();
+      if (!previousEncoding.equals(encoding)) {
+        newDecompressors.put(
+            previousEncoding, new DecompressorInfo(di.decompressor, di.advertised));
+      }
+    }
+    newDecompressors.put(encoding, new DecompressorInfo(d, advertised));
+
+    decompressors = Collections.unmodifiableMap(newDecompressors);
+    advertisedDecompressors = ACCEPT_ENCODING_JOINER.join(getAdvertisedMessageEncodings());
+  }
+
+  private DecompressorRegistry() {
+    decompressors = new LinkedHashMap<String, DecompressorInfo>(0);
+    advertisedDecompressors = "";
   }
 
   /**
    * Provides a list of all message encodings that have decompressors available.
    */
   public Set<String> getKnownMessageEncodings() {
-    return Collections.unmodifiableSet(decompressors.keySet());
+    return decompressors.keySet();
+  }
+
+  public String getRawAdvertisedMessageEncodings() {
+    return advertisedDecompressors;
   }
 
   /**
@@ -118,20 +149,12 @@ public final class DecompressorRegistry {
     return info != null ? info.decompressor : null;
   }
 
-  @VisibleForTesting
-  DecompressorRegistry(DecompressorInfo ...ds) {
-    decompressors = new ConcurrentHashMap<String, DecompressorInfo>();
-    for (DecompressorInfo d : ds) {
-      decompressors.put(d.decompressor.getMessageEncoding(), d);
-    }
-  }
-
   /**
    * Information about a decompressor.
    */
   private static final class DecompressorInfo {
-    private final Decompressor decompressor;
-    private volatile boolean advertised;
+    final Decompressor decompressor;
+    final boolean advertised;
 
     DecompressorInfo(Decompressor decompressor, boolean advertised) {
       this.decompressor = checkNotNull(decompressor);

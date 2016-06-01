@@ -102,7 +102,7 @@ public class ClientCallImplTest {
   private final ScheduledExecutorService deadlineCancellationExecutor =
       fakeClock.scheduledExecutorService;
   private final DecompressorRegistry decompressorRegistry =
-      DecompressorRegistry.getDefaultInstance();
+      DecompressorRegistry.getDefaultInstance().with(new Codec.Gzip(), true);
   private final MethodDescriptor<Void, Void> method = MethodDescriptor.create(
       MethodType.UNARY,
       "service/method",
@@ -136,8 +136,6 @@ public class ClientCallImplTest {
     MockitoAnnotations.initMocks(this);
     when(provider.get(any(CallOptions.class))).thenReturn(transport);
     when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
-
-    decompressorRegistry.register(new Codec.Gzip(), true);
   }
 
   @After
@@ -216,40 +214,40 @@ public class ClientCallImplTest {
   @Test
   public void prepareHeaders_acceptedEncodingsAdded() {
     Metadata m = new Metadata();
-    DecompressorRegistry customRegistry = DecompressorRegistry.newEmptyInstance();
-    customRegistry.register(new Decompressor() {
-      @Override
-      public String getMessageEncoding() {
-        return "a";
-      }
+    DecompressorRegistry customRegistry = DecompressorRegistry.emptyInstance()
+        .with(new Decompressor() {
+          @Override
+          public String getMessageEncoding() {
+            return "a";
+          }
 
-      @Override
-      public InputStream decompress(InputStream is) throws IOException {
-        return null;
-      }
-    }, true);
-    customRegistry.register(new Decompressor() {
-      @Override
-      public String getMessageEncoding() {
-        return "b";
-      }
+          @Override
+          public InputStream decompress(InputStream is) throws IOException {
+            return null;
+          }
+        }, true)
+        .with(new Decompressor() {
+          @Override
+          public String getMessageEncoding() {
+            return "b";
+          }
 
-      @Override
-      public InputStream decompress(InputStream is) throws IOException {
-        return null;
-      }
-    }, true);
-    customRegistry.register(new Decompressor() {
-      @Override
-      public String getMessageEncoding() {
-        return "c";
-      }
+          @Override
+          public InputStream decompress(InputStream is) throws IOException {
+            return null;
+          }
+        }, true)
+        .with(new Decompressor() {
+          @Override
+          public String getMessageEncoding() {
+            return "c";
+          }
 
-      @Override
-      public InputStream decompress(InputStream is) throws IOException {
-        return null;
-      }
-    }, false); // not advertised
+          @Override
+          public InputStream decompress(InputStream is) throws IOException {
+            return null;
+          }
+        }, false); // not advertised
 
     ClientCallImpl.prepareHeaders(m, customRegistry, Codec.Identity.NONE);
 
@@ -266,7 +264,7 @@ public class ClientCallImplTest {
     m.put(GrpcUtil.MESSAGE_ENCODING_KEY, "gzip");
     m.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, "gzip");
 
-    ClientCallImpl.prepareHeaders(m, DecompressorRegistry.newEmptyInstance(), Codec.Identity.NONE);
+    ClientCallImpl.prepareHeaders(m, DecompressorRegistry.emptyInstance(), Codec.Identity.NONE);
 
     assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));
     assertNull(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
